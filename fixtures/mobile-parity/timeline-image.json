@@ -1,0 +1,26 @@
+{
+  "id": "timeline-image-loading",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 1024],
+  "height": 900,
+  "scrollOffsets": [600, 1200, 2000, 4000],
+  "lazyCases": [
+    { "id": "lazy-600", "targetTop": 600, "url": "/timeline-image/landscape.svg?id=lazy-600" },
+    { "id": "lazy-1200", "targetTop": 1200, "url": "/timeline-image/landscape.svg?id=lazy-1200" },
+    { "id": "lazy-2000", "targetTop": 2000, "url": "/timeline-image/landscape.svg?id=lazy-2000" },
+    { "id": "lazy-4000", "targetTop": 4000, "url": "/timeline-image/landscape.svg?id=lazy-4000" }
+  ],
+  "primaryCases": [
+    { "id": "loaded-portrait", "url": "/timeline-image/portrait.svg?id=loaded-portrait" },
+    { "id": "loaded-landscape", "url": "/timeline-image/landscape.svg?id=loaded-landscape" },
+    { "id": "loading-held", "url": "/timeline-image/pending.svg?id=loading-held" },
+    { "id": "broken-http", "url": "/timeline-image/broken.svg?id=broken-http" },
+    { "id": "broken-decode", "url": "/timeline-image/invalid.svg?id=broken-decode" }
+  ],
+  "toolCase": { "id": "tool-image", "url": "/timeline-image/landscape.svg?id=tool-image" },
+  "toolBrokenCase": { "id": "tool-broken", "url": "/timeline-image/broken.svg?id=tool-broken" },
+  "assets": {
+    "portrait": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"420\" height=\"1050\" viewBox=\"0 0 420 1050\"><rect width=\"420\" height=\"1050\" fill=\"#c43b36\"/><circle cx=\"210\" cy=\"210\" r=\"120\" fill=\"#f4c64e\"/><path d=\"M0 700h420v350H0z\" fill=\"#243c80\"/></svg>",
+    "landscape": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1600\" height=\"500\" viewBox=\"0 0 1600 500\"><rect width=\"1600\" height=\"500\" fill=\"#2859a6\"/><circle cx=\"350\" cy=\"250\" r=\"180\" fill=\"#eecc52\"/><path d=\"M700 0h900v500H700z\" fill=\"#de5b48\"/></svg>"
+  }
+}

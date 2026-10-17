@@ -1,0 +1,67 @@
+{
+  "revision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "browser": "154.0.8037.93",
+  "headless": false,
+  "cases": [
+    {
+      "name": "exact Enter",
+      "value": "Asia/Taipei",
+      "keys": [
+        "Enter"
+      ],
+      "submissions": [
+        "Asia/Taipei"
+      ]
+    },
+    {
+      "name": "unlisted Enter",
+      "value": "Europe/Paris",
+      "keys": [
+        "Enter"
+      ],
+      "submissions": [
+        "Europe/Paris"
+      ]
+    },
+    {
+      "name": "empty Enter",
+      "value": "",
+      "keys": [
+        "Enter"
+      ],
+      "submissions": []
+    },
+    {
+      "name": "partial Enter",
+      "value": "Asia",
+      "keys": [
+        "Enter"
+      ],
+      "submissions": [
+        "Asia"
+      ]
+    },
+    {
+      "name": "partial Down Enter",
+      "value": "Asia",
+      "keys": [
+        "ArrowDown",
+        "Enter"
+      ],
+      "submissions": [
+        "Asia"
+      ]
+    },
+    {
+      "name": "partial Escape Enter",
+      "value": "Asia",
+      "keys": [
+        "Escape",
+        "Enter"
+      ],
+      "submissions": [
+        "Asia"
+      ]
+    }
+  ]
+}

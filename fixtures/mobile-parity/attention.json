@@ -1,0 +1,125 @@
+{
+  "id": "attention-baseline-1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "width": 390,
+  "height": 844,
+  "mode": "work",
+  "nodes": [
+    {
+      "id": "device"
+    },
+    {
+      "id": "assistant"
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "assistant:chats",
+      "hostId": "assistant",
+      "displayName": "Chats",
+      "kind": "chat"
+    },
+    {
+      "id": "device:project",
+      "hostId": "device",
+      "displayName": "Project",
+      "kind": "directory",
+      "path": "/workspace/project"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "s",
+      "name": "Review changes",
+      "workspaceId": "device:project",
+      "runStatus": "waiting_input",
+      "updatedAt": 1790960400000
+    },
+    {
+      "id": "recent",
+      "name": "Implement native UI",
+      "workspaceId": "device:project",
+      "runStatus": "idle",
+      "updatedAt": 1790960300000
+    }
+  ],
+  "schedules": [
+    {
+      "id": "daily",
+      "title": "Daily review",
+      "status": "active",
+      "attention": 1,
+      "timezone": "Asia/Taipei",
+      "nextRunAt": 1790964000000
+    }
+  ],
+  "missedRuns": [
+    {
+      "schedule": {
+        "id": "daily",
+        "title": "Daily review",
+        "status": "active",
+        "attention": 1,
+        "timezone": "Asia/Taipei",
+        "nextRunAt": 1790964000000
+      },
+      "run": {
+        "id": "missed-one",
+        "scheduleId": "daily",
+        "dueAt": 1790960400000,
+        "status": "missed"
+      },
+      "wallTime": "2026-10-03 01:00"
+    }
+  ],
+  "memory": {
+    "usage": {
+      "user": {
+        "used": 23,
+        "max": 8000
+      },
+      "note": {
+        "used": 12,
+        "max": 16000
+      }
+    },
+    "user": [
+      {
+        "id": "u",
+        "kind": "user",
+        "content": "I prefer concise answers.",
+        "status": "active",
+        "revision": 1,
+        "origins": [
+          "user"
+        ],
+        "sources": {
+          "sessionId": "chat",
+          "quote": "Keep it concise."
+        },
+        "updatedAt": 1790960400000
+      }
+    ],
+    "notes": [],
+    "removed": [],
+    "sessions": {
+      "chat": "Working preferences"
+    },
+    "proposals": [
+      {
+        "id": "p",
+        "action": "replace",
+        "content": "I prefer concise answers in French.",
+        "quote": "In French, please.",
+        "status": "pending",
+        "sessionId": "chat",
+        "target": {
+          "id": "u",
+          "content": "I prefer concise answers.",
+          "revision": 1
+        },
+        "createdAt": 1790960400000
+      }
+    ]
+  }
+}

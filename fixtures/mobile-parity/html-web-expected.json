@@ -1,0 +1,34 @@
+[
+  {
+    "id": "blocks",
+    "html": "<section><h2>Release summary</h2><p>Use <strong>native content</strong> with <em>emphasis</em>, <del>old text</del> and <mark>highlights</mark>.</p><blockquote>Review before shipping.</blockquote><ul><li>First change</li><li>Second change</li></ul></section>"
+  },
+  {
+    "id": "inline",
+    "html": "<p>Normal <strong>Markdown</strong> and <span style=\"color: #c0392b\">colored <strong>text</strong></span>, H<sub>2</sub>O, x<sup>2</sup>, <kbd>Ctrl</kbd>. Escaped &lt;b&gt;literal&lt;/b&gt; and <code>&lt;i&gt;code&lt;/i&gt;</code>.</p>\n"
+  },
+  {
+    "id": "details",
+    "html": "<details open=\"\">\n<summary>Implementation notes</summary>\n\n<p><strong>Markdown inside</strong> the disclosure.</p>\n<ul>\n<li>Keep the original content</li>\n<li>Keep its links</li>\n</ul>\n</details>\n\n<details><summary>Closed notes</summary><p>Hidden until opened.</p></details>"
+  },
+  {
+    "id": "table",
+    "html": "<table><caption>Native table</caption><thead><tr><th>Area</th><th colspan=\"2\">Status</th></tr></thead><tbody><tr><td rowspan=\"2\">Mobile</td><td>Android</td><td>Testing</td></tr><tr><td>Tablet</td><td>Review</td></tr></tbody></table>"
+  },
+  {
+    "id": "links",
+    "html": "<p><a href=\"/workspace/src/main.ts:12\" data-file-link=\"\">Open source</a> and <a href=\"https://example.com/docs\" target=\"_blank\" rel=\"noopener noreferrer\">documentation</a>.</p><p><a>Inert unsafe link</a>Kept text</p>"
+  },
+  {
+    "id": "image",
+    "html": "<p><a href=\"src/main.ts\" data-file-link=\"\"><img src=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='40'%3E%3Crect width='120' height='40' fill='%234176e6'/%3E%3C/svg%3E\" width=\"120\" height=\"40\" alt=\"Blue example\" title=\"Open source\"></a></p>"
+  },
+  {
+    "id": "svg",
+    "html": "<p><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"160\" height=\"48\" viewBox=\"0 0 160 48\"><title>Native SVG</title><rect x=\"1\" y=\"1\" width=\"158\" height=\"46\" rx=\"8\" fill=\"#4176e6\"></rect><path d=\"M12 24L22 34L42 14\" stroke=\"white\" stroke-width=\"3\" fill=\"none\"></path></svg></p>\n"
+  },
+  {
+    "id": "mixed",
+    "html": "<p>Native widgets in mixed content:</p>\n\n<div class=\"code-block\"><div class=\"code-head\"><span>dart</span><button type=\"button\" class=\"code-copy\" data-copy=\"\">Copy</button></div><pre><code class=\"hljs language-dart\">final ready = true;</code></pre></div>\n<p><span class=\"katex\"><span class=\"katex-mathml\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow><annotation encoding=\"application/x-tex\">x^2</annotation></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\"><span class=\"base\"><span class=\"strut\" style=\"height:0.8141em;\"></span><span class=\"mord\"><span class=\"mord mathnormal\">x</span><span class=\"msupsub\"><span class=\"vlist-t\"><span class=\"vlist-r\"><span class=\"vlist\" style=\"height:0.8141em;\"><span style=\"top:-3.063em;margin-right:0.05em;\"><span class=\"pstrut\" style=\"height:2.7em;\"></span><span class=\"sizing reset-size6 size3 mtight\"><span class=\"mord mtight\">2</span></span></span></span></span></span></span></span></span></span></span></p>\n<div class=\"table-wrap\"><table><thead><tr><th>Item</th><th>Status</th></tr></thead><tbody><tr><td>Renderer</td><td>Native</td></tr></tbody></table></div>\n<ul>\n<li><input checked=\"\" disabled=\"\" type=\"checkbox\"> Preserve task boxes</li>\n</ul>\n<p><span hidden=\"\">NOT VISIBLE</span></p>\n"
+  }
+]

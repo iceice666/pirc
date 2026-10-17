@@ -24,3 +24,12 @@ crates/pirc-providers/src/backends/oauth/page.html
 crates/pirc-node/src/browser/assets/
 # The ptc guest's SDK prelude: guest.ts's template text, kept verbatim.
 crates/pirc-ptc/src/prelude.js
+
+# Flutter generated output and pinned rendering/oracle sources.
+apps/android/.dart_tool/
+apps/android/android/.gradle/
+apps/android/android/.kotlin/
+apps/android/android/app/build/
+apps/android/assets/
+apps/android/tool/parity/
+fixtures/mobile-parity/

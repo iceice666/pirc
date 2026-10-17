@@ -1,0 +1,175 @@
+{
+  "id": "html-control-styles-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "oracle": "Actual Google Chrome 154 reached this raw HTML form through a real submit click after the pinned apps/web renderMarkdown()/DOMPurify path. Computed styles, DOMRects, focus/selection state, reset behavior, and a same-origin final form submission are measured from the live DOM.",
+  "markdownForm": "<form id=\"markdown-controls-form\" action=\"/raw/controls/response?via=markdown-form\" method=\"get\" onsubmit=\"window.unexpectedMarkdownHandler=true\"><input type=\"hidden\" name=\"via\" value=\"markdown-form\"><button id=\"markdown-controls-submit\" type=\"submit\">Open control style fixture</button></form>",
+  "responsePath": "/raw/controls/response",
+  "submitPath": "/raw/controls/submit",
+  "responseHtml": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><link rel=\"icon\" href=\"data:,\"><title>Raw form control styles</title><style>:root{color-scheme:light dark}html,body{margin:0;min-height:100%;}body{padding:12px;background-color:rgb(250,251,252);color:rgb(32,40,48);font:16px/1.4 Arial,sans-serif}h1{font:600 18px/1.2 Arial,sans-serif;margin:0 0 10px}#controls-form{margin:0}.case-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.case-cell{min-width:0}.case-cell.full{grid-column:1/-1}.case-cell label{display:flex;min-width:0;flex-direction:column;gap:3px;font:12px/1.2 Arial,sans-serif}.case-cell input,.case-cell textarea,.case-cell select{display:block;min-width:0;width:100%;height:34px;box-sizing:border-box;font:inherit;line-height:inherit;color:inherit;padding:3px 6px;background-color:rgb(255,255,255);border-top:1px solid rgb(110,120,130);border-right:1px solid rgb(110,120,130);border-bottom:1px solid rgb(110,120,130);border-left:1px solid rgb(110,120,130);border-radius:2px}.case-cell textarea{height:52px;resize:vertical}.case-cell select{height:34px}.actions{display:flex;gap:8px;margin-top:10px}.actions button{font:inherit;padding:4px 10px;border:1px solid rgb(80,90,100);border-radius:4px;background:rgb(235,238,241);color:inherit}.case-cell input:disabled{opacity:1}#text-inherit{font:inherit;line-height:inherit;color:inherit;padding-top:4px;padding-right:7px;padding-bottom:3px;padding-left:5px;border-top:1px solid rgb(140,30,30);border-right:3px dashed rgb(30,100,60);border-bottom:4px double rgb(30,60,140);border-left:2px dotted rgb(120,70,20);border-radius:2px 7px 11px 3px;background-color:rgb(245,248,250)}#text-explicit{font:14px/1.15 Arial,sans-serif;line-height:18px;color:rgb(90,20,120);padding:2px 5px 6px 9px;border-top:1px solid rgb(15,45,75);border-right:3px dashed rgb(45,75,15);border-bottom:4px double rgb(75,15,45);border-left:2px dotted rgb(120,80,40);border-radius:9px 2px 7px 4px;background-color:rgb(250,240,230);box-sizing:content-box;width:130px;min-width:90px;max-width:170px;height:30px}#password-inherit{font:inherit;padding:5px 8px;border-top:2px solid rgb(20,70,120);border-right:1px solid rgb(120,20,70);border-bottom:3px solid rgb(70,120,20);border-left:4px solid rgb(20,120,70);border-radius:7px;background-color:rgb(240,245,250)}#number-explicit{font:15px/1.3 Arial,sans-serif;line-height:19px;color:rgb(60,30,10);padding:2px 9px 4px 3px;border-top:2px groove rgb(80,70,60);border-right:3px solid rgb(40,80,120);border-bottom:1px dashed rgb(120,80,40);border-left:5px solid rgb(90,30,60);border-radius:3px 10px 4px 8px;background-color:rgb(245,240,230);width:100%;height:38px;box-sizing:border-box}#textarea-inherit{font:inherit;line-height:1.45;color:inherit;padding:5px 8px 7px 4px;border-top:1px solid rgb(60,80,100);border-right:2px dashed rgb(80,60,100);border-bottom:3px double rgb(100,80,60);border-left:4px solid rgb(60,100,80);border-radius:5px 11px 3px 9px;background-color:rgb(247,249,251);width:100%;height:56px;min-height:42px;max-height:64px;box-sizing:border-box}#textarea-explicit{font:13px/1.25 Georgia,serif;line-height:22px;color:rgb(20,80,100);padding:2px 11px 8px 6px;border-top:2px solid rgb(40,20,100);border-right:4px double rgb(100,20,40);border-bottom:1px dotted rgb(20,100,40);border-left:3px dashed rgb(100,80,20);border-radius:12px 3px 8px 5px;background-color:rgb(238,248,246);width:72%;min-width:120px;max-width:230px;height:60px;min-height:45px;max-height:70px;box-sizing:content-box;resize:vertical}#select-inherit{font:inherit;line-height:inherit;color:inherit;padding:3px 22px 5px 7px;border-top:1px solid rgb(35,75,115);border-right:2px solid rgb(115,75,35);border-bottom:3px dashed rgb(35,115,75);border-left:4px double rgb(75,35,115);border-radius:4px 12px 6px 10px;background-color:rgb(250,250,244);width:100%;height:38px}#select-explicit{font:14px/1.2 Arial,sans-serif;line-height:17px;color:rgb(110,40,20);padding:6px 24px 2px 3px;border-top:2px solid rgb(20,40,110);border-right:3px dashed rgb(110,40,20);border-bottom:4px double rgb(40,110,20);border-left:1px dotted rgb(20,110,110);border-radius:10px 4px 13px 2px;background-color:rgb(252,241,231);width:100%;height:40px;box-sizing:border-box}#text-readonly{font:inherit;color:rgb(30,60,90);padding:2px 10px 7px 4px;border-top:1px solid rgb(30,60,90);border-right:3px solid rgb(60,90,30);border-bottom:2px solid rgb(90,30,60);border-left:4px solid rgb(30,90,60);border-radius:8px;background-color:rgb(235,240,245)}#text-disabled{font:inherit;color:rgb(90,35,35);padding:5px 4px 2px 10px;border-top:2px solid rgb(90,35,35);border-right:1px dashed rgb(35,90,35);border-bottom:3px double rgb(35,35,90);border-left:4px solid rgb(90,90,35);border-radius:2px 8px 4px 10px;background-color:rgb(244,235,235)}#width-percent{width:72%;min-width:120px;max-width:none;height:36px;box-sizing:content-box;padding:3px 8px;border:2px solid rgb(50,90,130);border-radius:6px;background-color:rgb(238,244,250)}#width-minmax{width:72%;min-width:160px;max-width:280px;height:40px;box-sizing:border-box;padding:7px 3px 2px 11px;border-top:3px solid rgb(80,30,100);border-right:1px dashed rgb(30,100,80);border-bottom:4px double rgb(100,80,30);border-left:2px solid rgb(30,80,100);border-radius:11px 3px 9px 5px;background-color:rgb(245,238,248)}#text-content-box{width:140px;height:34px;min-width:100px;max-width:190px;box-sizing:content-box;padding:4px 8px;border:2px solid rgb(40,80,120);border-radius:5px;background-color:rgb(240,246,252)}#text-border-box{width:140px;height:34px;min-width:100px;max-width:190px;box-sizing:border-box;padding:4px 8px;border:2px solid rgb(40,80,120);border-radius:5px;background-color:rgb(240,246,252)}@media(min-width:600px){body{font-size:18px;padding:16px}.case-grid{gap:12px}#text-inherit{padding-right:12px}#textarea-inherit{line-height:1.6}}@media(prefers-color-scheme:dark){body{background-color:rgb(18,22,28);color:rgb(236,239,244)}#text-inherit{background-color:rgb(30,38,48)}#textarea-inherit{background-color:rgb(26,34,44)}#select-inherit{background-color:rgb(38,42,35)}#width-percent{background-color:rgb(30,40,54)}}</style></head><body><h1>Native form control style matrix</h1><form id=\"controls-form\" action=\"/raw/controls/submit\" method=\"post\" enctype=\"application/x-www-form-urlencoded\"><input type=\"hidden\" name=\"matrix\" value=\"raw-controls\"><div class=\"case-grid\"><div class=\"case-cell\"><label for=\"text-inherit\">Text inherits font and color<input id=\"text-inherit\" type=\"text\" name=\"plain\" value=\"initial text\"></label></div><div class=\"case-cell\"><label for=\"text-explicit\">Text explicit font and asymmetric border<input id=\"text-explicit\" type=\"text\" name=\"explicit\" value=\"explicit text\"></label></div><div class=\"case-cell\"><label for=\"password-inherit\">Password inherited font<input id=\"password-inherit\" type=\"password\" name=\"password\" value=\"initial secret\"></label></div><div class=\"case-cell\"><label for=\"number-explicit\">Number explicit font and per-side border<input id=\"number-explicit\" type=\"number\" name=\"count\" value=\"7\" min=\"0\" max=\"99\" step=\"1\"></label></div><div class=\"case-cell\"><label for=\"textarea-inherit\">Textarea inherited font and bounded height<textarea id=\"textarea-inherit\" name=\"notes\">initial note\nsecond line</textarea></label></div><div class=\"case-cell\"><label for=\"textarea-explicit\">Textarea explicit serif and min/max width<textarea id=\"textarea-explicit\" name=\"notesExplicit\">serif note\nsecond line</textarea></label></div><div class=\"case-cell\"><label for=\"select-inherit\">Select inherited font<select id=\"select-inherit\" name=\"nativeChoice\"><option value=\"alpha\" selected>Alpha choice</option><option value=\"beta\">Beta choice</option><option value=\"gamma\">Gamma choice</option></select></label></div><div class=\"case-cell\"><label for=\"select-explicit\">Select explicit font and border<select id=\"select-explicit\" name=\"styleChoice\"><option value=\"red\" selected>Red choice</option><option value=\"blue\">Blue choice</option><option value=\"cyan\">Cyan choice</option></select></label></div><div class=\"case-cell\"><label for=\"text-readonly\">Readonly text control<input id=\"text-readonly\" type=\"text\" name=\"locked\" value=\"read only\" readonly></label></div><div class=\"case-cell\"><label for=\"text-disabled\">Disabled text control<input id=\"text-disabled\" type=\"text\" name=\"excluded\" value=\"disabled value\" disabled></label></div><div class=\"case-cell full\"><label for=\"width-percent\">72 percent width control<input id=\"width-percent\" type=\"text\" name=\"percent\" value=\"percent width\"></label></div><div class=\"case-cell full\"><label for=\"width-minmax\">Percent width with min and max constraints<input id=\"width-minmax\" type=\"text\" name=\"bounded\" value=\"bounded width\"></label></div><div class=\"case-cell\"><label for=\"text-content-box\">Fixed content-box control<input id=\"text-content-box\" type=\"text\" name=\"contentBox\" value=\"content box\"></label></div><div class=\"case-cell\"><label for=\"text-border-box\">Fixed border-box control<input id=\"text-border-box\" type=\"text\" name=\"borderBox\" value=\"border box\"></label></div></div><div class=\"actions\"><button id=\"reset-controls\" type=\"reset\">Reset fixture values</button><button id=\"submit-controls\" type=\"submit\" name=\"submitter\" value=\"final\">Submit edited values</button></div></form></body></html>",
+  "snapshotControls": {
+    "textInherit": "#text-inherit",
+    "textExplicit": "#text-explicit",
+    "passwordInherit": "#password-inherit",
+    "numberExplicit": "#number-explicit",
+    "textareaInherit": "#textarea-inherit",
+    "textareaExplicit": "#textarea-explicit",
+    "selectInherit": "#select-inherit",
+    "selectExplicit": "#select-explicit",
+    "textReadonly": "#text-readonly",
+    "textDisabled": "#text-disabled",
+    "widthPercent": "#width-percent",
+    "widthMinmax": "#width-minmax",
+    "textContentBox": "#text-content-box",
+    "textBorderBox": "#text-border-box"
+  },
+  "styleProperties": [
+    "appearance",
+    "display",
+    "position",
+    "box-sizing",
+    "width",
+    "height",
+    "min-width",
+    "max-width",
+    "min-height",
+    "max-height",
+    "margin-top",
+    "margin-right",
+    "margin-bottom",
+    "margin-left",
+    "padding-top",
+    "padding-right",
+    "padding-bottom",
+    "padding-left",
+    "border-top-width",
+    "border-top-style",
+    "border-top-color",
+    "border-right-width",
+    "border-right-style",
+    "border-right-color",
+    "border-bottom-width",
+    "border-bottom-style",
+    "border-bottom-color",
+    "border-left-width",
+    "border-left-style",
+    "border-left-color",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "border-bottom-right-radius",
+    "border-bottom-left-radius",
+    "border-radius",
+    "font-family",
+    "font-size",
+    "font-weight",
+    "font-style",
+    "line-height",
+    "letter-spacing",
+    "text-align",
+    "color",
+    "background-color",
+    "background-image",
+    "color-scheme",
+    "resize",
+    "opacity",
+    "vertical-align"
+  ],
+  "interactions": {
+    "editedValues": {
+      "textInherit": "edited tea & honey",
+      "textExplicit": "edited explicit",
+      "passwordInherit": "edited secret",
+      "numberExplicit": "42",
+      "textareaInherit": "edited note\nwith second line",
+      "textareaExplicit": "edited serif\nwith second line",
+      "selectInherit": "beta",
+      "selectExplicit": "blue"
+    },
+    "submitValues": {
+      "textInherit": "submitted tea & honey",
+      "textExplicit": "submitted explicit",
+      "passwordInherit": "submitted secret",
+      "numberExplicit": "42",
+      "textareaInherit": "submitted note\nsecond line",
+      "textareaExplicit": "submitted serif\nsecond line",
+      "selectInherit": "gamma",
+      "selectExplicit": "cyan"
+    },
+    "readonlyAttempt": " blocked",
+    "disabledAttempt": " blocked"
+  },
+  "matrix": {
+    "widths": [
+      390,
+      768
+    ],
+    "height": 844,
+    "colorSchemes": [
+      "light",
+      "dark"
+    ],
+    "deviceScaleFactor": 1
+  },
+  "invariants": [
+    {
+      "appliesTo": "all",
+      "control": "textInherit",
+      "property": "border-top-width",
+      "expected": "1px"
+    },
+    {
+      "appliesTo": "all",
+      "control": "textInherit",
+      "property": "border-right-width",
+      "expected": "3px"
+    },
+    {
+      "appliesTo": "narrow",
+      "control": "textInherit",
+      "property": "padding-right",
+      "expected": "7px"
+    },
+    {
+      "appliesTo": "wide",
+      "control": "textInherit",
+      "property": "padding-right",
+      "expected": "12px"
+    },
+    {
+      "appliesTo": "all",
+      "control": "textExplicit",
+      "property": "box-sizing",
+      "expected": "content-box"
+    },
+    {
+      "appliesTo": "all",
+      "control": "numberExplicit",
+      "property": "font-size",
+      "expected": "15px"
+    },
+    {
+      "appliesTo": "narrow",
+      "control": "widthPercent",
+      "property": "width",
+      "expected": "263.516px"
+    },
+    {
+      "appliesTo": "wide",
+      "control": "widthMinmax",
+      "property": "max-width",
+      "expected": "280px"
+    },
+    {
+      "appliesTo": "dark",
+      "control": "textInherit",
+      "property": "background-color",
+      "expected": "rgb(30, 38, 48)"
+    }
+  ],
+  "notes": {
+    "realNavigation": "Each matrix case renders markdownForm through pinned production renderMarkdown()/DOMPurify and submits it with a real pointer click before the browser loads responseHtml.",
+    "controls": "The response contains fourteen independent input, textarea, and select probes with inherited and explicit font declarations, asymmetric per-side borders/padding, radii, backgrounds, fixed and percentage widths, min/max constraints, and content-box/border-box sizing.",
+    "interaction": "The harness records initial values, keyboard edits and text selection ranges, readonly/disabled attempts, native form reset, pre-submit state, and an actual same-origin POST with raw request bytes.",
+    "responsive": "Capture matrix is 390px and 768px at 1x under both light and dark preferred color schemes. CSS media rules change inherited typography, spacing, and selected control backgrounds.",
+    "safety": "The raw response contains no script and external requests are blocked and reported. All form submissions remain on loopback."
+  }
+}

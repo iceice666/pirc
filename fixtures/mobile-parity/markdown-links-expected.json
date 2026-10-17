@@ -1,0 +1,717 @@
+[
+  {
+    "id": "bare",
+    "links": [
+      {
+        "text": "src/app.ts:12",
+        "href": "src/app.ts:12",
+        "code": false,
+        "target": {
+          "path": "src/app.ts",
+          "line": 12
+        }
+      },
+      {
+        "text": "../lib/parser.dart:3-8",
+        "href": "../lib/parser.dart:3-8",
+        "code": false,
+        "target": {
+          "path": "../lib/parser.dart",
+          "line": 3,
+          "endLine": 8
+        }
+      }
+    ]
+  },
+  {
+    "id": "code",
+    "links": [
+      {
+        "text": "src/app.ts:12:3",
+        "href": "src/app.ts:12:3",
+        "code": true,
+        "target": {
+          "path": "src/app.ts",
+          "line": 12
+        }
+      },
+      {
+        "text": "lib/parser.dart",
+        "href": "lib/parser.dart",
+        "code": true,
+        "target": {
+          "path": "lib/parser.dart"
+        }
+      }
+    ]
+  },
+  {
+    "id": "relative",
+    "links": [
+      {
+        "text": "./docs/guide.md",
+        "href": "./docs/guide.md",
+        "code": false,
+        "target": {
+          "path": "docs/guide.md"
+        }
+      },
+      {
+        "text": "../../src/main.kt:8",
+        "href": "../../src/main.kt:8",
+        "code": false,
+        "target": {
+          "path": "../../src/main.kt",
+          "line": 8
+        }
+      }
+    ]
+  },
+  {
+    "id": "absolute",
+    "links": [
+      {
+        "text": "/Users/me/project/src/app.ts:4",
+        "href": "/Users/me/project/src/app.ts:4",
+        "code": false,
+        "target": {
+          "path": "/Users/me/project/src/app.ts",
+          "line": 4
+        }
+      }
+    ]
+  },
+  {
+    "id": "hidden",
+    "links": [
+      {
+        "text": ".github/workflows/check.yml",
+        "href": ".github/workflows/check.yml",
+        "code": false,
+        "target": {
+          "path": ".github/workflows/check.yml"
+        }
+      },
+      {
+        "text": "src/.env.local",
+        "href": "src/.env.local",
+        "code": false,
+        "target": {
+          "path": "src/.env.local"
+        }
+      }
+    ]
+  },
+  {
+    "id": "scoped",
+    "links": [
+      {
+        "text": "@scope/pkg/src/a.ts",
+        "href": "@scope/pkg/src/a.ts",
+        "code": false,
+        "target": {
+          "path": "@scope/pkg/src/a.ts"
+        }
+      },
+      {
+        "text": "dir/@file.ts",
+        "href": "dir/@file.ts",
+        "code": false,
+        "target": {
+          "path": "dir/@file.ts"
+        }
+      }
+    ]
+  },
+  {
+    "id": "punctuation",
+    "links": [
+      {
+        "text": "src/a.ts:3",
+        "href": "src/a.ts:3",
+        "code": false,
+        "target": {
+          "path": "src/a.ts",
+          "line": 3
+        }
+      },
+      {
+        "text": "src/b.ts:4",
+        "href": "src/b.ts:4",
+        "code": false,
+        "target": {
+          "path": "src/b.ts",
+          "line": 4
+        }
+      },
+      {
+        "text": "src/c.ts",
+        "href": "src/c.ts",
+        "code": false,
+        "target": {
+          "path": "src/c.ts"
+        }
+      }
+    ]
+  },
+  {
+    "id": "negative",
+    "links": [
+      {
+        "text": "www.example.com/a.ts",
+        "href": "http://www.example.com/a.ts",
+        "code": false,
+        "target": null
+      },
+      {
+        "text": "/src/a.ts",
+        "href": "/src/a.ts",
+        "code": false,
+        "target": {
+          "path": "/src/a.ts"
+        }
+      }
+    ]
+  },
+  {
+    "id": "url",
+    "links": [
+      {
+        "text": "https://example.com/src/a.ts",
+        "href": "https://example.com/src/a.ts",
+        "code": false,
+        "target": null
+      },
+      {
+        "text": "http://host/dir/a.ts",
+        "href": "http://host/dir/a.ts",
+        "code": false,
+        "target": null
+      },
+      {
+        "text": "https://example.com/?file=src/a.ts",
+        "href": "https://example.com/?file=src/a.ts",
+        "code": false,
+        "target": null
+      }
+    ]
+  },
+  {
+    "id": "domain",
+    "links": [
+      {
+        "text": "www.example.com/src/a.ts",
+        "href": "http://www.example.com/src/a.ts",
+        "code": false,
+        "target": null
+      },
+      {
+        "text": "email@example.com/dir/a.ts",
+        "href": "email@example.com/dir/a.ts",
+        "code": false,
+        "target": {
+          "path": "email@example.com/dir/a.ts"
+        }
+      }
+    ]
+  },
+  {
+    "id": "explicit",
+    "links": [
+      {
+        "text": "src/a.ts:9",
+        "href": "https://example.com",
+        "code": false,
+        "target": null
+      },
+      {
+        "text": "label",
+        "href": "src/b.ts#L2-L6",
+        "code": false,
+        "target": {
+          "path": "src/b.ts",
+          "line": 2,
+          "endLine": 6
+        }
+      }
+    ]
+  },
+  {
+    "id": "linked-code",
+    "links": [
+      {
+        "text": "src/a.ts:9",
+        "href": "https://example.com",
+        "code": true,
+        "target": null
+      },
+      {
+        "text": "src/b.ts",
+        "href": "docs/link.md",
+        "code": true,
+        "target": {
+          "path": "docs/link.md"
+        }
+      }
+    ]
+  },
+  {
+    "id": "reference",
+    "links": [
+      {
+        "text": "src/a.ts",
+        "href": "https://example.com",
+        "code": false,
+        "target": null
+      },
+      {
+        "text": "src/b.ts",
+        "href": "https://example.com",
+        "code": true,
+        "target": null
+      }
+    ]
+  },
+  {
+    "id": "shortcut",
+    "links": [
+      {
+        "text": "src/a.ts",
+        "href": "docs/guide.md",
+        "code": false,
+        "target": {
+          "path": "docs/guide.md"
+        }
+      }
+    ]
+  },
+  {
+    "id": "unresolved",
+    "links": [
+      {
+        "text": "src/a.ts",
+        "href": "src/a.ts",
+        "code": false,
+        "target": {
+          "path": "src/a.ts"
+        }
+      },
+      {
+        "text": "src/b.ts",
+        "href": "src/b.ts",
+        "code": false,
+        "target": {
+          "path": "src/b.ts"
+        }
+      }
+    ]
+  },
+  {
+    "id": "emphasis",
+    "links": [
+      {
+        "text": "src/a.ts:9",
+        "href": "src/a.ts:9",
+        "code": false,
+        "target": {
+          "path": "src/a.ts",
+          "line": 9
+        }
+      },
+      {
+        "text": "src/b.ts",
+        "href": "src/b.ts",
+        "code": true,
+        "target": {
+          "path": "src/b.ts"
+        }
+      },
+      {
+        "text": "src/c.ts",
+        "href": "src/c.ts",
+        "code": false,
+        "target": {
+          "path": "src/c.ts"
+        }
+      }
+    ]
+  },
+  {
+    "id": "escaped",
+    "links": [
+      {
+        "text": "src/a.ts",
+        "href": "src/a.ts",
+        "code": false,
+        "target": {
+          "path": "src/a.ts"
+        }
+      },
+      {
+        "text": "src/c.ts",
+        "href": "src/c.ts",
+        "code": false,
+        "target": {
+          "path": "src/c.ts"
+        }
+      }
+    ]
+  },
+  {
+    "id": "code-negative",
+    "links": []
+  },
+  {
+    "id": "code-newline",
+    "links": [
+      {
+        "text": "src/b.ts",
+        "href": "src/b.ts",
+        "code": true,
+        "target": {
+          "path": "src/b.ts"
+        }
+      }
+    ]
+  },
+  {
+    "id": "fence",
+    "links": []
+  },
+  {
+    "id": "indented",
+    "links": []
+  },
+  {
+    "id": "list",
+    "links": [
+      {
+        "text": "src/a.ts:5",
+        "href": "src/a.ts:5",
+        "code": false,
+        "target": {
+          "path": "src/a.ts",
+          "line": 5
+        }
+      },
+      {
+        "text": "src/b.ts",
+        "href": "src/b.ts",
+        "code": true,
+        "target": {
+          "path": "src/b.ts"
+        }
+      },
+      {
+        "text": "src/c.ts:7",
+        "href": "src/c.ts:7",
+        "code": false,
+        "target": {
+          "path": "src/c.ts",
+          "line": 7
+        }
+      }
+    ]
+  },
+  {
+    "id": "table",
+    "links": [
+      {
+        "text": "src/a.ts",
+        "href": "src/a.ts",
+        "code": false,
+        "target": {
+          "path": "src/a.ts"
+        }
+      },
+      {
+        "text": "src/b.ts",
+        "href": "docs/guide.md",
+        "code": true,
+        "target": {
+          "path": "docs/guide.md"
+        }
+      }
+    ]
+  },
+  {
+    "id": "suffix",
+    "links": [
+      {
+        "text": "src/a.ts:0",
+        "href": "src/a.ts:0",
+        "code": false,
+        "target": {
+          "path": "src/a.ts"
+        }
+      },
+      {
+        "text": "src/b.ts:3-2",
+        "href": "src/b.ts:3-2",
+        "code": false,
+        "target": {
+          "path": "src/b.ts",
+          "line": 3
+        }
+      },
+      {
+        "text": "src/c.ts:2:9",
+        "href": "src/c.ts:2:9",
+        "code": false,
+        "target": {
+          "path": "src/c.ts",
+          "line": 2
+        }
+      },
+      {
+        "text": "src/d.ts:2-6",
+        "href": "src/d.ts:2-6",
+        "code": false,
+        "target": {
+          "path": "src/d.ts",
+          "line": 2,
+          "endLine": 6
+        }
+      }
+    ]
+  },
+  {
+    "id": "hash-query",
+    "links": [
+      {
+        "text": "src/a.ts",
+        "href": "src/a.ts",
+        "code": false,
+        "target": {
+          "path": "src/a.ts"
+        }
+      },
+      {
+        "text": "src/b.ts",
+        "href": "src/b.ts",
+        "code": false,
+        "target": {
+          "path": "src/b.ts"
+        }
+      },
+      {
+        "text": "file",
+        "href": "src/c.ts#L2C3-L7C4",
+        "code": false,
+        "target": {
+          "path": "src/c.ts",
+          "line": 2,
+          "endLine": 7
+        }
+      }
+    ]
+  },
+  {
+    "id": "encoding",
+    "links": [
+      {
+        "text": "space",
+        "href": "src/a%20b.ts:4",
+        "code": false,
+        "target": {
+          "path": "src/a b.ts",
+          "line": 4
+        }
+      },
+      {
+        "text": "file",
+        "href": "/tmp/a.ts:8",
+        "code": false,
+        "target": {
+          "path": "/tmp/a.ts",
+          "line": 8
+        }
+      },
+      {
+        "text": "local",
+        "href": "/tmp/b.ts#L3",
+        "code": false,
+        "target": {
+          "path": "/tmp/b.ts",
+          "line": 3
+        }
+      }
+    ]
+  },
+  {
+    "id": "base",
+    "links": [
+      {
+        "text": "guide",
+        "href": "../guide.md:4",
+        "code": false,
+        "target": {
+          "path": "docs/guide.md",
+          "line": 4
+        }
+      },
+      {
+        "text": "src/a.ts:5",
+        "href": "src/a.ts:5",
+        "code": true,
+        "target": {
+          "path": "docs/reference/src/a.ts",
+          "line": 5
+        }
+      }
+    ]
+  },
+  {
+    "id": "schemes",
+    "links": [
+      {
+        "text": "anchor",
+        "href": "#part",
+        "code": false,
+        "target": null
+      },
+      {
+        "text": "mail",
+        "href": "mailto:a@example.com",
+        "code": false,
+        "target": null
+      },
+      {
+        "text": "network",
+        "href": "//example.com/a.ts",
+        "code": false,
+        "target": null
+      },
+      {
+        "text": "web",
+        "href": "https://example.com/a.ts",
+        "code": false,
+        "target": null
+      }
+    ]
+  },
+  {
+    "id": "image",
+    "links": [
+      {
+        "text": "",
+        "href": "docs/a.md",
+        "code": false,
+        "target": {
+          "path": "docs/a.md"
+        }
+      }
+    ]
+  },
+  {
+    "id": "numeric",
+    "links": [
+      {
+        "text": "dir/a.1b2",
+        "href": "dir/a.1b2",
+        "code": false,
+        "target": {
+          "path": "dir/a.1b2"
+        }
+      },
+      {
+        "text": "dir/a.123b",
+        "href": "dir/a.123b",
+        "code": false,
+        "target": {
+          "path": "dir/a.123b"
+        }
+      },
+      {
+        "text": "dir/a.b123",
+        "href": "dir/a.b123",
+        "code": false,
+        "target": {
+          "path": "dir/a.b123"
+        }
+      },
+      {
+        "text": "dir/a..ts",
+        "href": "dir/a..ts",
+        "code": false,
+        "target": {
+          "path": "dir/a..ts"
+        }
+      }
+    ]
+  },
+  {
+    "id": "boundaries",
+    "links": [
+      {
+        "text": "prefix-src/a.ts",
+        "href": "prefix-src/a.ts",
+        "code": false,
+        "target": {
+          "path": "prefix-src/a.ts"
+        }
+      },
+      {
+        "text": "src/a.ts",
+        "href": "src/a.ts",
+        "code": false,
+        "target": {
+          "path": "src/a.ts"
+        }
+      },
+      {
+        "text": "src/a.ts",
+        "href": "src/a.ts",
+        "code": false,
+        "target": {
+          "path": "src/a.ts"
+        }
+      }
+    ]
+  },
+  {
+    "id": "cjk",
+    "links": [
+      {
+        "text": "src/a.ts:3",
+        "href": "src/a.ts:3",
+        "code": false,
+        "target": {
+          "path": "src/a.ts",
+          "line": 3
+        }
+      },
+      {
+        "text": "src/b.ts",
+        "href": "src/b.ts",
+        "code": true,
+        "target": {
+          "path": "src/b.ts"
+        }
+      }
+    ]
+  },
+  {
+    "id": "emptycode",
+    "links": []
+  },
+  {
+    "id": "nested",
+    "links": [
+      {
+        "text": "outer [src/a.ts]",
+        "href": "https://example.com",
+        "code": false,
+        "target": null
+      },
+      {
+        "text": "src/b.ts",
+        "href": "src/c.ts",
+        "code": false,
+        "target": {
+          "path": "src/c.ts"
+        }
+      }
+    ]
+  }
+]

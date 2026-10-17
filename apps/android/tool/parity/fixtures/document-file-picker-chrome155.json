@@ -1,0 +1,5227 @@
+{
+  "browserVersion": "155.0.8059.40",
+  "fixtureSha256": "a000e3871cb27aca865fc9633700a6d74d4d8b4d031e7f8e030c33852a113789",
+  "cases": [
+    {
+      "caseId": "connected-click",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "connected-click",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.click",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "connected-click",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=connected-click",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "hidden-click",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "hidden-click",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "none",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "none",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "none",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "none",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "none",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "none",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.click",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "none",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "none",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "hidden-click",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "none"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=hidden-click",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "detached-click",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "detached-click",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": false,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": false,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": false,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": false,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": false,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": false,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.click",
+            "targetId": "file-input",
+            "targetConnected": false,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": false,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": false,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "detached-click",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": false,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": ""
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=detached-click",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "showPicker",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "showPicker",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.showPicker",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "showPicker",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=showPicker",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "hidden-showPicker",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "hidden-showPicker",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "none",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "none",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "none",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.showPicker",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "none",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "none",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "hidden-showPicker",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "none"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=hidden-showPicker",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "readonly-showPicker",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "readonly-showPicker",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": true,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": true,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": true,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.showPicker",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": true,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": true,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "readonly-showPicker",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": true,
+            "accept": "",
+            "multiple": false,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=readonly-showPicker",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "explicit-label-click",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "explicit-label-click",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [
+          {
+            "type": "click",
+            "targetId": "file-label",
+            "currentTargetId": "file-label",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0
+          }
+        ],
+        "attempts": [
+          {
+            "method": "label.click",
+            "targetId": "file-label",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "explicit-label-click",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=explicit-label-click",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "implicit-label-click",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "implicit-label-click",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [
+          {
+            "type": "click",
+            "targetId": "file-label",
+            "currentTargetId": "file-label",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0
+          },
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-label",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0
+          }
+        ],
+        "attempts": [
+          {
+            "method": "label.click",
+            "targetId": "file-label",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "implicit-label-click",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=implicit-label-click",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "mouse-dispatch",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "mouse-dispatch",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "dispatchEvent(MouseEvent)",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "mouse-dispatch",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=mouse-dispatch",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "plain-event-dispatch",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "plain-event-dispatch",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "",
+          "files": []
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "dispatchEvent(Event)",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [],
+        "triggerEvents": [
+          {
+            "caseId": "plain-event-dispatch",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=plain-event-dispatch",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "prevent-default",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "prevent-default",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "",
+          "files": []
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": true,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.click",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [],
+        "triggerEvents": [
+          {
+            "caseId": "prevent-default",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=prevent-default",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "disabled-click",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "disabled-click",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": true,
+          "disabledByFieldset": true,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "",
+          "files": []
+        },
+        "events": [],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.click",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": true,
+              "disabledByFieldset": true,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": true,
+              "disabledByFieldset": true,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [],
+        "triggerEvents": [
+          {
+            "caseId": "disabled-click",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=disabled-click",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "disabled-showPicker",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "disabled-showPicker",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": true,
+          "disabledByFieldset": true,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "",
+          "files": []
+        },
+        "events": [],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.showPicker",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": true,
+              "disabledByFieldset": true,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": "InvalidStateError",
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": true,
+              "disabledByFieldset": true,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [],
+        "triggerEvents": [
+          {
+            "caseId": "disabled-showPicker",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=disabled-showPicker",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "fieldset-disabled-click",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "fieldset-disabled-click",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": true,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "",
+          "files": []
+        },
+        "events": [],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.click",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": true,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": true,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [],
+        "triggerEvents": [
+          {
+            "caseId": "fieldset-disabled-click",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=fieldset-disabled-click",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "fieldset-legend-click",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "fieldset-legend-click",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.click",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "fieldset-legend-click",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=fieldset-legend-click",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "mutate-accept-multiple",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "mutate-accept-multiple",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": "application/octet-stream",
+          "accept": "application/octet-stream",
+          "multipleAttribute": "",
+          "multiple": true,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            },
+            {
+              "name": "picked-binary.bin",
+              "type": "application/macbinary",
+              "size": 6
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": "application/octet-stream",
+              "accept": "application/octet-stream",
+              "multipleAttribute": "",
+              "multiple": true,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": ".txt",
+              "accept": ".txt",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": "application/octet-stream",
+              "accept": "application/octet-stream",
+              "multipleAttribute": "",
+              "multiple": true,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": "application/octet-stream",
+              "accept": "application/octet-stream",
+              "multipleAttribute": "",
+              "multiple": true,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                },
+                {
+                  "name": "picked-binary.bin",
+                  "type": "application/macbinary",
+                  "size": 6
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": "application/octet-stream",
+              "accept": "application/octet-stream",
+              "multipleAttribute": "",
+              "multiple": true,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                },
+                {
+                  "name": "picked-binary.bin",
+                  "type": "application/macbinary",
+                  "size": 6
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.click",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": ".txt",
+              "accept": ".txt",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": "application/octet-stream",
+              "accept": "application/octet-stream",
+              "multipleAttribute": "",
+              "multiple": true,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          },
+          {
+            "name": "picked-binary.bin",
+            "type": "application/macbinary",
+            "size": 6,
+            "bytes": [
+              0,
+              127,
+              128,
+              255,
+              13,
+              10
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "mutate-accept-multiple",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": true,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "application/octet-stream",
+            "multiple": true,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt",
+            "picked-binary.bin"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=mutate-accept-multiple",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "microtask-click",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "microtask-click",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "schedule microtask click",
+            "targetId": "file-input",
+            "thrownName": null
+          },
+          {
+            "method": "click from microtask",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "microtask-click",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=microtask-click",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "timer-click",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "timer-click",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "schedule zero-delay timer click",
+            "targetId": "file-input",
+            "thrownName": null
+          },
+          {
+            "method": "click from zero-delay timer",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "timer-click",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=timer-click",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "repeated-clicks",
+      "invocation": "trusted-visible-button",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "repeated-clicks",
+        "invocation": "visible-button",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "first input.click",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "method": "second input.click",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": [
+          {
+            "caseId": "repeated-clicks",
+            "type": "click",
+            "isTrusted": true,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0
+          }
+        ]
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=repeated-clicks",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "startup-click",
+      "invocation": "parser-startup",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "startup-click",
+        "invocation": "parser-startup",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "",
+          "files": []
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": false,
+            "defaultPrevented": false,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.click",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": null,
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [],
+        "triggerEvents": []
+      },
+      "filechoosers": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=startup-click",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "startup-showPicker",
+      "invocation": "parser-startup",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "startup-showPicker",
+        "invocation": "parser-startup",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "",
+          "files": []
+        },
+        "events": [],
+        "labelEvents": [],
+        "attempts": [
+          {
+            "method": "input.showPicker",
+            "targetId": "file-input",
+            "targetConnected": true,
+            "inputBefore": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "thrownName": "NotAllowedError",
+            "inputAfter": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          }
+        ],
+        "files": [],
+        "triggerEvents": []
+      },
+      "filechoosers": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=startup-showPicker",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "physical-file",
+      "invocation": "trusted-physical-control-click",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "physical-file",
+        "invocation": "prepare-physical",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [],
+        "attempts": [],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": []
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=physical-file",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "physical-label-explicit",
+      "invocation": "trusted-physical-control-click",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "physical-label-explicit",
+        "invocation": "prepare-physical",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [
+          {
+            "type": "click",
+            "targetId": "file-label-text",
+            "currentTargetId": "file-label",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": 1
+          }
+        ],
+        "attempts": [],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": []
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "inline-block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=physical-label-explicit",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "caseId": "physical-label-implicit",
+      "invocation": "trusted-physical-control-click",
+      "fixtureResult": {
+        "status": "DONE",
+        "caseId": "physical-label-implicit",
+        "invocation": "prepare-physical",
+        "input": {
+          "id": "file-input",
+          "type": "file",
+          "connected": true,
+          "disabledProperty": false,
+          "disabledByFieldset": false,
+          "readOnlyProperty": false,
+          "acceptAttribute": null,
+          "accept": "",
+          "multipleAttribute": null,
+          "multiple": false,
+          "inlineDisplay": "",
+          "value": "C:\\fakepath\\picked-雪.txt",
+          "files": [
+            {
+              "name": "picked-雪.txt",
+              "type": "text/plain",
+              "size": 15
+            }
+          ]
+        },
+        "events": [
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": 1,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "defaultPreventedAfterListener": false,
+            "beforeListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            },
+            "afterListenerChanges": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "",
+              "files": []
+            }
+          },
+          {
+            "type": "input",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          },
+          {
+            "type": "change",
+            "targetId": "file-input",
+            "currentTargetId": "file-input",
+            "bubbles": true,
+            "cancelable": false,
+            "composed": false,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "input": {
+              "id": "file-input",
+              "type": "file",
+              "connected": true,
+              "disabledProperty": false,
+              "disabledByFieldset": false,
+              "readOnlyProperty": false,
+              "acceptAttribute": null,
+              "accept": "",
+              "multipleAttribute": null,
+              "multiple": false,
+              "inlineDisplay": "",
+              "value": "C:\\fakepath\\picked-雪.txt",
+              "files": [
+                {
+                  "name": "picked-雪.txt",
+                  "type": "text/plain",
+                  "size": 15
+                }
+              ]
+            }
+          }
+        ],
+        "labelEvents": [
+          {
+            "type": "click",
+            "targetId": "file-label-text",
+            "currentTargetId": "file-label",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": 1
+          },
+          {
+            "type": "click",
+            "targetId": "file-input",
+            "currentTargetId": "file-label",
+            "bubbles": true,
+            "cancelable": true,
+            "composed": true,
+            "isTrusted": true,
+            "defaultPrevented": false,
+            "detail": 1
+          }
+        ],
+        "attempts": [],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "size": 15,
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68,
+              95,
+              83,
+              78,
+              79,
+              87,
+              95,
+              226,
+              156,
+              133
+            ]
+          }
+        ],
+        "triggerEvents": []
+      },
+      "filechoosers": [
+        {
+          "index": 1,
+          "isMultiple": false,
+          "input": {
+            "id": "file-input",
+            "type": "file",
+            "connected": true,
+            "disabledProperty": false,
+            "disabledByFieldset": false,
+            "readOnly": false,
+            "accept": "",
+            "multiple": false,
+            "display": "block"
+          },
+          "selectedPayloadNames": [
+            "picked-雪.txt"
+          ],
+          "setFilesSucceeded": true,
+          "setFilesErrorName": null
+        }
+      ],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/fixture",
+          "query": "?case=physical-label-implicit",
+          "referer": ""
+        }
+      ],
+      "pageErrors": []
+    }
+  ]
+}

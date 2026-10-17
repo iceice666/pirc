@@ -1,0 +1,222 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "oracleMode": "node-pinned-packet-db-parser-only",
+  "usesChromium": false,
+  "source": "apps/web/node_modules/mermaid/dist/chunks/mermaid.core/diagram-Z3DM3KII.mjs",
+  "sourceMap": "apps/web/node_modules/mermaid/dist/chunks/mermaid.core/diagram-Z3DM3KII.mjs.map",
+  "cases": [
+    {
+      "id": "packet-tcp",
+      "source": "packet-beta\ntitle TCP\n0-15: \"Source Port\"\n16-31: \"Destination Port\"\n32-63: \"Sequence Number\"\n64-95: \"Acknowledgment Number\"",
+      "title": "TCP",
+      "accessibleTitle": "",
+      "accessibleDescription": "",
+      "config": {
+        "useMaxWidth": true,
+        "rowHeight": 32,
+        "bitWidth": 32,
+        "bitsPerRow": 32,
+        "showBits": true,
+        "paddingX": 5,
+        "paddingY": 15
+      },
+      "rows": [
+        [
+          {
+            "start": 0,
+            "end": 15,
+            "bits": 16,
+            "label": "Source Port"
+          },
+          {
+            "start": 16,
+            "end": 31,
+            "bits": 16,
+            "label": "Destination Port"
+          }
+        ],
+        [
+          {
+            "start": 32,
+            "end": 63,
+            "bits": 32,
+            "label": "Sequence Number"
+          }
+        ],
+        [
+          {
+            "start": 64,
+            "end": 95,
+            "bits": 32,
+            "label": "Acknowledgment Number"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "packet-cross-row",
+      "source": "packet-beta\n+5: \"Header\"\n+43: \"Cross row\"\n+16: \"Payload\"",
+      "title": "",
+      "accessibleTitle": "",
+      "accessibleDescription": "",
+      "config": {
+        "useMaxWidth": true,
+        "rowHeight": 32,
+        "bitWidth": 32,
+        "bitsPerRow": 32,
+        "showBits": true,
+        "paddingX": 5,
+        "paddingY": 15
+      },
+      "rows": [
+        [
+          {
+            "start": 0,
+            "end": 4,
+            "bits": 5,
+            "label": "Header"
+          },
+          {
+            "start": 5,
+            "end": 31,
+            "bits": 26,
+            "label": "Cross row"
+          }
+        ],
+        [
+          {
+            "start": 32,
+            "end": 47,
+            "bits": 15,
+            "label": "Cross row"
+          },
+          {
+            "start": 48,
+            "end": 63,
+            "bits": 16,
+            "label": "Payload"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "packet-accessible",
+      "source": "packet\naccTitle: Binary frame\naccDescr: Flag and payload fields\n0: \"Flag\"\n1-7: \"Mode\"\n8-31: \"Payload\"",
+      "title": "",
+      "accessibleTitle": "Binary frame",
+      "accessibleDescription": "Flag and payload fields",
+      "config": {
+        "useMaxWidth": true,
+        "rowHeight": 32,
+        "bitWidth": 32,
+        "bitsPerRow": 32,
+        "showBits": true,
+        "paddingX": 5,
+        "paddingY": 15
+      },
+      "rows": [
+        [
+          {
+            "start": 0,
+            "end": 0,
+            "bits": 1,
+            "label": "Flag"
+          },
+          {
+            "start": 1,
+            "end": 7,
+            "bits": 7,
+            "label": "Mode"
+          },
+          {
+            "start": 8,
+            "end": 31,
+            "bits": 24,
+            "label": "Payload"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "packet-configured",
+      "source": "%%{init: {\"packet\": {\"bitsPerRow\":16,\"bitWidth\":24,\"showBits\":false}}}%%\npacket-beta\ntitle Configured header\n+9: \"Control\"\n+23: \"Payload\"",
+      "title": "Configured header",
+      "accessibleTitle": "",
+      "accessibleDescription": "",
+      "config": {
+        "useMaxWidth": true,
+        "rowHeight": 32,
+        "bitWidth": 24,
+        "bitsPerRow": 16,
+        "showBits": false,
+        "paddingX": 5,
+        "paddingY": 5
+      },
+      "rows": [
+        [
+          {
+            "start": 0,
+            "end": 8,
+            "bits": 9,
+            "label": "Control"
+          },
+          {
+            "start": 9,
+            "end": 15,
+            "bits": 6,
+            "label": "Payload"
+          }
+        ],
+        [
+          {
+            "start": 16,
+            "end": 31,
+            "bits": 15,
+            "label": "Payload"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "packet-init-all-fields",
+      "source": "%%{init: {\"packet\": {\"bitsPerRow\":16,\"bitWidth\":24,\"showBits\":true,\"rowHeight\":24,\"paddingX\":0,\"paddingY\":7,\"useMaxWidth\":false}}}%%\npacket-beta\ntitle Custom geometry\n+8: \"Header\"\n+16: \"Body\"",
+      "title": "Custom geometry",
+      "accessibleTitle": "",
+      "accessibleDescription": "",
+      "config": {
+        "useMaxWidth": false,
+        "rowHeight": 24,
+        "bitWidth": 24,
+        "bitsPerRow": 16,
+        "showBits": true,
+        "paddingX": 0,
+        "paddingY": 17
+      },
+      "rows": [
+        [
+          {
+            "start": 0,
+            "end": 7,
+            "bits": 8,
+            "label": "Header"
+          },
+          {
+            "start": 8,
+            "end": 15,
+            "bits": 7,
+            "label": "Body"
+          }
+        ],
+        [
+          {
+            "start": 16,
+            "end": 23,
+            "bits": 7,
+            "label": "Body"
+          }
+        ]
+      ]
+    }
+  ]
+}

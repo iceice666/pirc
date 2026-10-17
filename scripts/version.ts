@@ -2,7 +2,16 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const manifests = ['package.json', 'apps/web/package.json'];
-const android = 'apps/android/app/build.gradle.kts';
+const mobile = 'apps/android/pubspec.yaml';
+function mobileVersion(text: string): { version: string; code: number } {
+  const value = field(text, /(?:^|\n)version:\s*([0-9.]+\+[0-9]+)/);
+  const [version, build] = value.split('+');
+  const code = Number(build);
+  parseVersion(version!);
+  if (!Number.isInteger(code) || code < 1 || code > 2100000000)
+    throw new Error('Invalid Flutter Android versionCode');
+  return { version: version!, code };
+}
 /** The Rust workspace (docs/history/rust-rewrite.md): every member inherits `[workspace.package]`. */
 const cargo = 'Cargo.toml';
 const cargoLock = 'Cargo.lock';
@@ -45,11 +54,7 @@ export function checkVersions(root: string): string {
   parseVersion(version);
   for (const file of manifests.slice(1))
     if (JSON.parse(read(file)).version !== version) throw new Error(`Version mismatch: ${file}`);
-  if (field(read(android), /versionName = "([^"]+)"/) !== version)
-    throw new Error('Android versionName mismatch');
-  const code = Number(field(read(android), /versionCode = (\d+)/));
-  if (!Number.isInteger(code) || code < 1 || code > 2100000000)
-    throw new Error('Invalid Android versionCode');
+  if (mobileVersion(read(mobile)).version !== version) throw new Error('Flutter version mismatch');
   // Bun's lockfile is JSONC; inspect only workspace headers, not dependency versions.
   const lock = read('bun.lock');
   for (const workspace of ['apps/web']) {
@@ -76,11 +81,11 @@ export function bumpVersion(root: string, next: string): void {
   if (different < 0 || after[different]! < before[different]!)
     throw new Error('Version must increase');
   const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
-  const text = read(android);
+  const mobileText = read(mobile);
+  const mobileCurrent = mobileVersion(mobileText);
+  if (mobileCurrent.code >= 2100000000) throw new Error('Flutter Android versionCode exhausted');
   const cargoLines = read(cargo).split('\n');
   const cargoLine = cargoVersionLine(cargoLines);
-  const code = Number(field(text, /versionCode = (\d+)/));
-  if (code >= 2100000000) throw new Error('Android versionCode exhausted');
   // Validate every input before writing anything. No git/network/release side effects.
   const changes = manifests.map((file) => {
     const manifest = JSON.parse(read(file));
@@ -88,17 +93,15 @@ export function bumpVersion(root: string, next: string): void {
     return [file, JSON.stringify(manifest, null, 2) + '\n'] as const;
   });
   for (const [file, content] of changes) writeFileSync(path.join(root, file), content);
+  writeFileSync(
+    path.join(root, mobile),
+    mobileText.replace(/(^|\n)version:[^\n]+/, `$1version: ${next}+${mobileCurrent.code + 1}`),
+  );
   cargoLines[cargoLine.index] = cargoLines[cargoLine.index]!.replace(
     `"${cargoLine.version}"`,
     `"${next}"`,
   );
   writeFileSync(path.join(root, cargo), cargoLines.join('\n'));
-  writeFileSync(
-    path.join(root, android),
-    text
-      .replace(/versionName = "[^"]+"/, `versionName = "${next}"`)
-      .replace(/versionCode = \d+/, `versionCode = ${code + 1}`),
-  );
 }
 if (import.meta.main) {
   const root = path.resolve(import.meta.dir, '..');
@@ -107,7 +110,7 @@ if (import.meta.main) {
   else if (command === 'bump' && version && !extra.length) {
     bumpVersion(root, version);
     console.log(
-      `Bumped to ${version}. Run bun install --lockfile-only and cargo update --workspace, then bun run version:check.`,
+      `Bumped to ${version} (Android build ${mobileVersion(readFileSync(path.join(root, mobile), 'utf8')).code}). Run bun install --lockfile-only and cargo update --workspace, then bun run version:check.`,
     );
   } else throw new Error('Usage: bun scripts/version.ts check | bump <version>');
 }

@@ -240,7 +240,7 @@ describe('session event reducer', () => {
       epoch: 'epoch-a',
       sequence: 3,
       type: 'interaction_answered',
-      data: { interactionId: 'memory:p1:0' },
+      data: { interactionId: 'memory:p1:0', interactionEpoch: 0 },
     });
 
     let state = reduceEvent(fromSnapshot(snapshot), requested);
@@ -250,5 +250,28 @@ describe('session event reducer', () => {
     state = reduceEvent(state, answered);
     expect(state.interactions).toEqual([]);
     expect(state.needsSnapshot).toBe(true);
+  });
+
+  it('keeps epoch-less legacy removals for snapshot reconciliation', () => {
+    const interaction = {
+      id: 'memory:p1:0',
+      runnerEpoch: '5',
+      kind: 'confirm' as const,
+      status: 'pending' as const,
+      title: 'Proposal',
+    };
+    const state = fromSnapshot({ ...snapshot, interactions: [interaction] });
+    const legacyAnswered = normalizeEvent({
+      sessionId: 's1',
+      epoch: 'epoch-a',
+      sequence: 3,
+      type: 'interaction_answered',
+      data: { interactionId: interaction.id },
+    });
+
+    const updated = reduceEvent(state, legacyAnswered);
+
+    expect(updated.interactions).toEqual([interaction]);
+    expect(updated.needsSnapshot).toBe(true);
   });
 });

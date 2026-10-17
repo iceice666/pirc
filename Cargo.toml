@@ -6,9 +6,9 @@ members = ["crates/*"]
 [workspace.package]
 edition = "2024"
 # The product version (scripts/version.ts keeps it in sync with package.json).
-version = "0.6.0"
-# let-chains
-rust-version = "1.88"
+version = "0.6.1"
+# OXC 0.153 in the locked PTC dependencies requires Rust 1.97.
+rust-version = "1.97"
 publish = false
 
 [workspace.dependencies]

@@ -291,7 +291,7 @@ impl Runner {
         let answered = || {
             self.publish(
                 "interaction_answered",
-                json!({ "interactionId": interaction_id }),
+                json!({ "interactionId": interaction_id, "interactionEpoch": self.epoch }),
             );
         };
         let dialog = self.lock().node_dialogs.remove(rpc_id);
@@ -387,7 +387,7 @@ impl Runner {
             if let Ok(Some(interaction)) = cancelled {
                 self.publish(
                     "interaction_answered",
-                    json!({ "interactionId": interaction, "cancelled": true }),
+                    json!({ "interactionId": interaction, "interactionEpoch": self.epoch, "cancelled": true }),
                 );
                 let _ = self.update_current_run(RunStatus::Running);
             }
@@ -555,7 +555,7 @@ impl Runner {
                 if let Some(interaction) = cancelled {
                     self.publish(
                         "interaction_answered",
-                        json!({ "interactionId": interaction, "cancelled": true }),
+                        json!({ "interactionId": interaction, "interactionEpoch": self.epoch, "cancelled": true }),
                     );
                     self.update_current_run(RunStatus::Running)
                         .map_err(thrown)?;

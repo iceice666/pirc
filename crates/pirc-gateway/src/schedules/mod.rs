@@ -1179,7 +1179,7 @@ impl Ctx<'_> {
                 session_id: chat.id,
                 epoch: chat.runner_epoch,
                 kind: "interaction_answered",
-                data: json!({ "interactionId": proposal.id }),
+                data: json!({ "interactionId": proposal.id, "interactionEpoch": 0 }),
             });
         }
         Ok(())
@@ -1603,6 +1603,7 @@ impl Ctx<'_> {
                 Some(session_id) if run.status != "missed" => json!({ "sessionId": session_id }),
                 _ => json!({ "schedules": true, "scheduleId": schedule.id }),
             },
+            interaction: None,
         };
         self.fx
             .0

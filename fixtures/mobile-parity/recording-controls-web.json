@@ -1,0 +1,243 @@
+{
+  "revision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "browser": "154.0.8037.93",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "platform": "desktop macOS Chrome; browser-owned controls use host Chinese UI despite en-US page locale",
+  "menu": [
+    {
+      "role": "menuitem",
+      "name": "下載媒體"
+    },
+    {
+      "role": "menuitem",
+      "name": "顯示播放速度選單"
+    },
+    {
+      "role": "menuitem",
+      "name": "進入子母畫面"
+    }
+  ],
+  "speedMenu": [
+    {
+      "role": "menuitemcheckbox",
+      "name": "0.25",
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "type": "booleanOrUndefined",
+            "value": true
+          }
+        },
+        {
+          "name": "checked",
+          "value": {
+            "type": "tristate",
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "role": "menuitemcheckbox",
+      "name": "0.5",
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "type": "booleanOrUndefined",
+            "value": true
+          }
+        },
+        {
+          "name": "checked",
+          "value": {
+            "type": "tristate",
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "role": "menuitemcheckbox",
+      "name": "0.75",
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "type": "booleanOrUndefined",
+            "value": true
+          }
+        },
+        {
+          "name": "checked",
+          "value": {
+            "type": "tristate",
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "role": "menuitemcheckbox",
+      "name": "一般",
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "type": "booleanOrUndefined",
+            "value": true
+          }
+        },
+        {
+          "name": "focused",
+          "value": {
+            "type": "booleanOrUndefined",
+            "value": true
+          }
+        },
+        {
+          "name": "checked",
+          "value": {
+            "type": "tristate",
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "role": "menuitemcheckbox",
+      "name": "1.25",
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "type": "booleanOrUndefined",
+            "value": true
+          }
+        },
+        {
+          "name": "checked",
+          "value": {
+            "type": "tristate",
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "role": "menuitemcheckbox",
+      "name": "1.5",
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "type": "booleanOrUndefined",
+            "value": true
+          }
+        },
+        {
+          "name": "checked",
+          "value": {
+            "type": "tristate",
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "role": "menuitemcheckbox",
+      "name": "1.75",
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "type": "booleanOrUndefined",
+            "value": true
+          }
+        },
+        {
+          "name": "checked",
+          "value": {
+            "type": "tristate",
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "role": "menuitemcheckbox",
+      "name": "2",
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "type": "booleanOrUndefined",
+            "value": true
+          }
+        },
+        {
+          "name": "checked",
+          "value": {
+            "type": "tristate",
+            "value": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "menuActivation": {
+    "rate": 1.5,
+    "paused": true
+  },
+  "rateResults": [
+    {
+      "requested": 0.25,
+      "actual": 0.25,
+      "paused": true
+    },
+    {
+      "requested": 0.5,
+      "actual": 0.5,
+      "paused": true
+    },
+    {
+      "requested": 0.75,
+      "actual": 0.75,
+      "paused": true
+    },
+    {
+      "requested": 1,
+      "actual": 1,
+      "paused": true
+    },
+    {
+      "requested": 1.25,
+      "actual": 1.25,
+      "paused": true
+    },
+    {
+      "requested": 1.5,
+      "actual": 1.5,
+      "paused": true
+    },
+    {
+      "requested": 1.75,
+      "actual": 1.75,
+      "paused": true
+    },
+    {
+      "requested": 2,
+      "actual": 2,
+      "paused": true
+    }
+  ],
+  "limitations": [
+    "Silent generated WebM; audio behavior not tested.",
+    "Desktop controls do not establish Android controls, PiP availability or geometry.",
+    "Only 1.5x is activated through the native menu; rate assignment confirms accepted values, not measured playback speed."
+  ]
+}

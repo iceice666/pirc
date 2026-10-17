@@ -1,0 +1,32 @@
+# Raw capture outputs: regenerate with apps/android/tool/parity capture tools.
+# Regression tests use the committed compact expectations.
+/app-document-overlays-expected.json
+/app-document-route-actions-expected.json
+/app-document-target-context-expected.json
+/app-status-expected.json
+/html-form-actions-expected.json
+/html-form-date-file-expected.json
+/html-form-date-file-native-summary.json
+/html-form-history-expected.json
+/html-navigation-expected.json
+/html-ranges-expected.json
+/html-select-expected.json
+/html-text-fields-expected.json
+/inline-math-paragraph-expected.json
+/inline-math-paragraph-native-summary.json
+/mermaid-svg-scale-expected.json
+/mermaid-timeline-expected.json
+/mermaid-xy-expected.json
+/notification-matrix-expected.json
+/settings-matrix-expected.json
+/side-panel-matrix-expected.json
+/tex-equation-tags-expected.json
+/tex-equation-tags-native-summary.json
+/tex-unsupported-commands-expected.json
+/tex-unsupported-commands-native-summary.json
+/timeline-image-expected.json
+/timeline-image-native-summary.json
+/workspace-matrix-expected.json
+/workspace-matrix-native-summary.json
+/workspace-settings-states-expected.json
+/workspace-settings-states-native-summary.json

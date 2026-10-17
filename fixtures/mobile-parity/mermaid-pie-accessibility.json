@@ -1,0 +1,36 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "cases": [
+    {
+      "id": "pie-accessibility-multiline",
+      "source": "pie\naccDescr {\nFirst accessible line\n  Second accessible line\n}\n\"Slice\": 1",
+      "description": "First accessible line\nSecond accessible line"
+    },
+    {
+      "id": "literal-comments",
+      "source": "pie\naccDescr {\n  First line %% remains text\n  %% this is also description text\n\n    Second line\n}\n\"Slice\": 1",
+      "description": "First line %% remains text\nSecond line"
+    },
+    {
+      "id": "crlf",
+      "source": "pie\r\naccDescr {\r\nFirst\r\n  Second\r\n}\r\n\"Slice\": 1",
+      "description": "First\nSecond"
+    },
+    {
+      "id": "empty",
+      "source": "pie\naccDescr {\n}\n\"Slice\": 1",
+      "description": ""
+    },
+    {
+      "id": "inline",
+      "source": "pie\naccDescr { One line }\n\"Slice\": 2",
+      "description": "One line"
+    },
+    {
+      "id": "unclosed",
+      "source": "pie\naccDescr {\nNot closed\n\"Slice\": 1",
+      "error": true
+    }
+  ]
+}

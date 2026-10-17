@@ -1,0 +1,27 @@
+{
+  "id": "mermaid-svg-scale-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "widths": [390, 768, 1024],
+  "height": 900,
+  "deviceScaleFactor": 1,
+  "textScales": [1, 2],
+  "themes": ["light", "dark"],
+  "cases": [
+    {
+      "id": "flow-small",
+      "kind": "flowchart",
+      "source": "```mermaid\nflowchart TD\nA[Start] --> B[End]\n```"
+    },
+    {
+      "id": "pieBudget",
+      "kind": "pie",
+      "source": "```mermaid\npie title Budget\n  \"Development\": 60\n  \"Testing\": 30\n  \"Other\": 10\n```"
+    },
+    {
+      "id": "sequenceHello",
+      "kind": "sequenceDiagram",
+      "source": "```mermaid\nsequenceDiagram\nparticipant A as Alice\nparticipant B as Bob\nA->>B: Hello\nB-->>A: Hi\n```"
+    }
+  ]
+}

@@ -1,0 +1,194 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "capture": {
+    "browserExecutable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "width": 900,
+    "height": 1800,
+    "deviceScaleFactor": 1,
+    "fontFamily": "Arial",
+    "paragraphFontSize": 15,
+    "mathFontScale": 1.08,
+    "textScales": [
+      1,
+      2
+    ]
+  },
+  "rendererOptions": {
+    "throwOnError": false,
+    "strict": "ignore",
+    "output": "htmlAndMathml",
+    "trust": false,
+    "maxExpand": 500
+  },
+  "cases": [
+    {
+      "id": "mathchoice-inline",
+      "mode": "inline",
+      "source": "\\mathchoice{\\rule{40pt}{5pt}}{\\rule{30pt}{5pt}}{\\rule{20pt}{5pt}}{\\rule{10pt}{5pt}}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "mathchoice-display",
+      "mode": "display",
+      "source": "\\mathchoice{\\rule{40pt}{5pt}}{\\rule{30pt}{5pt}}{\\rule{20pt}{5pt}}{\\rule{10pt}{5pt}}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "mathchoice-script",
+      "mode": "inline",
+      "source": "x^{\\mathchoice{\\rule{40pt}{5pt}}{\\rule{30pt}{5pt}}{\\rule{20pt}{5pt}}{\\rule{10pt}{5pt}}}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "smash-default",
+      "mode": "inline",
+      "source": "\\smash{\\frac{x}{y}}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "smash-top",
+      "mode": "inline",
+      "source": "\\smash[t]{\\frac{x}{y}}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "smash-bottom",
+      "mode": "inline",
+      "source": "\\smash[b]{\\frac{x}{y}}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "gather-one-row",
+      "mode": "display",
+      "source": "\\begin{gather}a=b\\end{gather}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "gather-three-rows",
+      "mode": "display",
+      "source": "\\begin{gather}a=b\\\\c=d\\\\e=f\\end{gather}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "gather",
+      "mode": "display",
+      "source": "\\begin{gather}a=b\\\\c=d\\end{gather}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "gather-star",
+      "mode": "display",
+      "source": "\\begin{gather*}a=b\\\\c=d\\end{gather*}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "gathered",
+      "mode": "inline",
+      "source": "\\left\\{\\begin{gathered}a=b\\\\c=d\\end{gathered}\\right.",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "gather-tag",
+      "mode": "display",
+      "source": "\\begin{gather}a=b\\tag{1}\\\\c=d\\end{gather}",
+      "browserExpected": "tagged-equation",
+      "nativeExpected": "rendered",
+      "limitation": "Native now parses manual tags separately and supplies automatic numbering for untagged AMS rows. The equation-tag corpus verifies text, numbering and error behavior; remaining font, glyph, layout, grammar and physical-device differences remain unaccepted."
+    },
+    {
+      "id": "mathchoice-mixed-boundary",
+      "mode": "inline",
+      "source": "a\\mathchoice{=}{+}{\\sum}{x}b",
+      "comparisonSource": "a+b",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered",
+      "comparisonMode": "inline"
+    },
+    {
+      "id": "mathchoice-mixed-display-boundary",
+      "mode": "display",
+      "source": "a\\mathchoice{=}{+}{\\sum}{x}b",
+      "comparisonSource": "a=b",
+      "comparisonMode": "display",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "mathchoice-mixed-script-boundary",
+      "mode": "inline",
+      "source": "x^{a\\mathchoice{=}{+}{\\sum}{x}b}",
+      "comparisonSource": "x^{a\\sum b}",
+      "comparisonMode": "inline",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "mathchoice-mixed-scriptscript-boundary",
+      "mode": "inline",
+      "source": "x^{y^{a\\mathchoice{=}{+}{\\sum}{x}b}}",
+      "comparisonSource": "x^{y^{axb}}",
+      "comparisonMode": "inline",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "mathchoice-mixed-explicit-displaystyle",
+      "mode": "inline",
+      "source": "\\displaystyle a\\mathchoice{=}{+}{\\sum}{x}b",
+      "comparisonSource": "\\displaystyle a=b",
+      "comparisonMode": "inline",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "mathchoice-mixed-explicit-textstyle",
+      "mode": "display",
+      "source": "\\textstyle a\\mathchoice{=}{+}{\\sum}{x}b",
+      "comparisonSource": "\\textstyle a+b",
+      "comparisonMode": "display",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "Vmatrix",
+      "mode": "display",
+      "source": "\\begin{Vmatrix}a&b\\\\c&d\\end{Vmatrix}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "array-horizontal-rules",
+      "mode": "display",
+      "source": "\\begin{array}{|c:c|}\\hline a&b\\\\\\hdashline c&d\\\\\\hline\\end{array}",
+      "browserExpected": "rendered",
+      "nativeExpected": "rendered"
+    },
+    {
+      "id": "array-cline",
+      "mode": "display",
+      "source": "\\begin{array}{cc}a&b\\\\\\cline{1-1}c&d\\end{array}",
+      "browserExpected": "red-unsupported-command-in-rendered-equation",
+      "nativeExpected": "rendered-with-unsupported-command",
+      "limitation": "Native now retains the surrounding array with a red unsupported-command leaf, matching the pinned KaTeX presentation category. Full geometry, grammar and physical-device equivalence remain unaccepted; see the tex-unsupported-commands corpus."
+    },
+    {
+      "id": "array-multicolumn",
+      "mode": "display",
+      "source": "\\begin{array}{cc}\\multicolumn{2}{c}{x}\\\\a&b\\end{array}",
+      "browserExpected": "red-unsupported-command-in-rendered-equation",
+      "nativeExpected": "rendered-with-unsupported-command",
+      "limitation": "Native now retains the surrounding array with a red unsupported-command leaf, matching the pinned KaTeX presentation category. Full geometry, grammar and physical-device equivalence remain unaccepted; see the tex-unsupported-commands corpus."
+    }
+  ]
+}

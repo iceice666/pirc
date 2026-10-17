@@ -15,10 +15,10 @@ function fixture() {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     writeFileSync(path.join(root, file), JSON.stringify({ name: 'test', version: '0.1.0' }));
   }
-  mkdirSync(path.join(root, 'apps/android/app'), { recursive: true });
+  mkdirSync(path.join(root, 'apps/android'), { recursive: true });
   writeFileSync(
-    path.join(root, 'apps/android/app/build.gradle.kts'),
-    'versionCode = 1\nversionName = "0.1.0"\n',
+    path.join(root, 'apps/android/pubspec.yaml'),
+    'name: pirc_mobile\nversion: 0.1.0+7\n',
   );
   writeFileSync(
     path.join(root, 'bun.lock'),
@@ -38,13 +38,13 @@ function fixture() {
   );
   return root;
 }
-it('checks manifests and lockfile and bumps Android monotonically', () => {
+it('uses the Flutter manifest as Android version metadata and increments its build number', () => {
   const root = fixture();
   expect(checkVersions(root)).toBe('0.1.0');
   bumpVersion(root, '0.2.0');
   expect(JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version).toBe('0.2.0');
-  expect(readFileSync(path.join(root, 'apps/android/app/build.gradle.kts'), 'utf8')).toContain(
-    'versionCode = 2',
+  expect(readFileSync(path.join(root, 'apps/android/pubspec.yaml'), 'utf8')).toContain(
+    'version: 0.2.0+8',
   );
   expect(() => checkVersions(root)).toThrow('Lockfile mismatch');
   const cargoToml = readFileSync(path.join(root, 'Cargo.toml'), 'utf8');
@@ -80,4 +80,16 @@ it('rejects mismatches and malformed versions without writing', () => {
 });
 it('keeps the actual repository versions synchronized', () => {
   expect(checkVersions(path.resolve(import.meta.dir, '../..'))).toBe(version);
+});
+
+it('rejects a mismatched Flutter version or exhausted Android build number before writing', () => {
+  for (const mobileVersion of ['0.9.0+7', '0.1.0+2100000000']) {
+    const root = fixture();
+    writeFileSync(path.join(root, 'apps/android/pubspec.yaml'), `version: ${mobileVersion}\n`);
+    expect(() => bumpVersion(root, '0.2.0')).toThrow(/Flutter/);
+    expect(JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version).toBe('0.1.0');
+    expect(readFileSync(path.join(root, 'apps/android/pubspec.yaml'), 'utf8')).toContain(
+      `version: ${mobileVersion}`,
+    );
+  }
 });

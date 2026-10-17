@@ -1,0 +1,40 @@
+{
+  "id": "html-form-validation-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "oracle": "Actual Google Chrome 154 evaluating production renderMarkdown() output and native HTMLInputElement validity.",
+  "source": "<form id=\"validation-form\">\n<textarea id=\"textarea-required-empty\" required></textarea>\n<textarea id=\"textarea-required-space\" required> </textarea>\n<textarea id=\"textarea-minlength-user-edit\" minlength=\"3\"></textarea>\n<input id=\"minlength-emoji-user-edit\" type=\"text\" minlength=\"3\">\n<input id=\"text-required-empty\" type=\"text\" required>\n<input id=\"text-required-space\" type=\"text\" required value=\" \">\n<input id=\"email-required-empty\" type=\"email\" required>\n<input id=\"email-invalid\" type=\"email\" value=\"ada@\">\n<input id=\"email-short-valid\" type=\"email\" value=\"a@b\">\n<input id=\"email-multiple-valid\" type=\"email\" multiple value=\"ada@example.com, bob@example.com\">\n<input id=\"email-valid\" type=\"email\" value=\"ada@example.com\">\n<input id=\"email-dot-leading\" type=\"email\" value=\".user@example.com\">\n\n<input id=\"email-dot-trailing\" type=\"email\" value=\"user.@example.com\">\n\n<input id=\"email-dot-repeated\" type=\"email\" value=\"user..name@example.com\">\n\n<input id=\"email-local-dot\" type=\"email\" value=\".@example.com\">\n\n<input id=\"email-ascii-whitespace\" type=\"email\" value=\" ada@example.com \">\n\n<input id=\"email-unicode-whitespace-leading\" type=\"email\" value=\" ada@example.com\">\n\n<input id=\"email-unicode-whitespace-trailing\" type=\"email\" value=\"ada@example.com \">\n\n<input id=\"email-multiple-ascii-whitespace\" type=\"email\" multiple value=\" ada@example.com , bob@example.com \">\n\n<input id=\"email-multiple-unicode-whitespace\" type=\"email\" multiple value=\" ada@example.com , bob@example.com\">\n\n<input id=\"email-multiple-pattern\" type=\"email\" multiple pattern=\"[^,]+@example\\.com\" value=\"a@example.com,b@example.com\">\n<input id=\"email-multiple-invalid\" type=\"email\" multiple value=\"ada@example.com, bad\">\n<input id=\"url-invalid\" type=\"url\" value=\"example.com\">\n<input id=\"url-empty-http\" type=\"url\" value=\"http://\">\n<input id=\"url-empty-https-scheme\" type=\"url\" value=\"https:\">\n<input id=\"url-http-no-authority\" type=\"url\" value=\"http:example.com\">\n<input id=\"url-space-path\" type=\"url\" value=\"https://example.com/a b\">\n<input id=\"url-invalid-percent\" type=\"url\" value=\"https://example.com/%zz\">\n<input id=\"url-valid\" type=\"url\" value=\"https://example.com/path\">\n<input id=\"url-custom-scheme\" type=\"url\" value=\"custom:value\">\n<input id=\"number-required-empty\" type=\"number\" required>\n<input id=\"number-invalid-default\" type=\"number\" value=\"1.\">\n<input id=\"number-underflow\" type=\"number\" min=\"0\" value=\"-1\">\n<input id=\"number-overflow\" type=\"number\" max=\"4\" value=\"5\">\n<input id=\"number-in-range\" type=\"number\" min=\"0\" max=\"4\" value=\"2\">\n<input id=\"step-valid-decimal\" type=\"number\" min=\"0.1\" step=\"0.2\" value=\"0.3\">\n<input id=\"step-mismatch-decimal\" type=\"number\" min=\"0.1\" step=\"0.2\" value=\"0.4\">\n<input id=\"step-mismatch-default\" type=\"number\" min=\"0\" value=\"0.5\">\n<input id=\"step-any\" type=\"number\" step=\"any\" value=\"0.5\">\n<input id=\"number-invalid-min-ignored\" type=\"number\" min=\"not-a-number\" value=\"-1\">\n<input id=\"pattern-mismatch\" type=\"text\" pattern=\"[A-Z]{3}\" value=\"abc\">\n<input id=\"pattern-match\" type=\"text\" pattern=\"[A-Z]{3}\" value=\"ABC\">\n<input id=\"pattern-alternation-backtrack\" type=\"text\" pattern=\"a|ab\" value=\"ab\">\n<input id=\"pattern-empty\" type=\"text\" pattern=\"[A-Z]{3}\" value=\"\">\n<input id=\"pattern-v-intersection\" type=\"text\" pattern=\"[a&&b]\" value=\"a\">\n<input id=\"pattern-v-subtraction\" type=\"text\" pattern=\"[a--b]\" value=\"b\">\n<input id=\"pattern-v-trailing-hyphen\" type=\"text\" pattern=\"[A-Z0-9-]+\" value=\"abc\">\n<input id=\"pattern-invalid\" type=\"text\" pattern=\"[\" value=\"a\">\n<select id=\"select-disabled-placeholder\" required disabled><option value=\"\">Pick</option><option value=\"a\">A</option></select>\n<select id=\"select-required-placeholder\" required><option value=\"\">Pick</option><option value=\"a\">A</option></select>\n<select id=\"select-empty-not-first\" required><option value=\"a\">A</option><option value=\"\" selected>Empty</option></select>\n<select id=\"select-empty-optgroup\" required><optgroup label=\"Group\"><option value=\"\" selected>Empty</option></optgroup><option value=\"a\">A</option></select>\n<select id=\"select-size-two-empty\" required size=\"2\"><option value=\"\" selected>Empty</option><option value=\"a\">A</option></select>\n<select id=\"select-multiple-none\" required multiple><option value=\"a\">A</option></select>\n<select id=\"select-multiple-empty\" required multiple><option value=\"\" selected>Empty</option><option value=\"a\">A</option></select>\n<select id=\"select-disabled-option-placeholder\" required><option value=\"\" disabled>Pick</option><option value=\"a\">A</option></select>\n<fieldset disabled><legend><select id=\"select-fieldset-first-legend\" required><option value=\"\">Pick</option><option value=\"a\">A</option></select></legend><select id=\"select-fieldset-blocked\" required><option value=\"\">Pick</option><option value=\"a\">A</option></select></fieldset>\n<input id=\"checkbox-required-empty\" type=\"checkbox\" required>\n<input id=\"checkbox-required-checked\" type=\"checkbox\" required checked>\n<input id=\"checkbox-required-peer-empty\" type=\"checkbox\" name=\"checks\" required>\n<input id=\"checkbox-checked-peer\" type=\"checkbox\" name=\"checks\" checked>\n<input id=\"radio-required-empty\" type=\"radio\" name=\"radio-empty\" required>\n<input id=\"radio-peer-empty\" type=\"radio\" name=\"radio-empty\">\n<input id=\"radio-required-group-checked\" type=\"radio\" name=\"radio-checked\" required>\n<input id=\"radio-checked-peer\" type=\"radio\" name=\"radio-checked\" checked>\n<input id=\"radio-optional-empty\" type=\"radio\" name=\"radio-optional\">\n<input id=\"disabled-required\" type=\"text\" required disabled>\n<input id=\"readonly-required\" type=\"text\" required readonly>\n<input id=\"range-required\" type=\"range\" required min=\"0\" max=\"5\" step=\"2\" value=\"99\">\n<input id=\"readonly-range\" type=\"range\" required readonly min=\"0\" max=\"5\" step=\"2\" value=\"99\">\n<fieldset id=\"disabled-fieldset\" disabled><legend>First <input id=\"fieldset-first-legend\" type=\"text\" required></legend><input id=\"fieldset-blocked\" type=\"text\" required></fieldset>\n<input id=\"minlength-initial-short\" type=\"text\" minlength=\"3\" value=\"a\">\n<input id=\"minlength-user-edit\" type=\"text\" minlength=\"3\">\n<input id=\"maxlength-initial-long\" type=\"text\" maxlength=\"3\" value=\"abcd\">\n<input id=\"maxlength-user-edit\" type=\"text\" maxlength=\"3\" value=\"abc\">\n<input id=\"date-required-unsupported\" type=\"date\" required>\n<input id=\"file-required-unsupported\" type=\"file\" required>\n</form>",
+  "actions": [
+    {
+      "id": "minlength-after-user-edit",
+      "selector": "#minlength-user-edit",
+      "fieldId": "minlength-user-edit",
+      "value": "a"
+    },
+    {
+      "id": "maxlength-after-user-edit",
+      "selector": "#maxlength-user-edit",
+      "fieldId": "maxlength-user-edit",
+      "value": "abcd"
+    },
+    {
+      "id": "textarea-minlength-after-user-edit",
+      "selector": "#textarea-minlength-user-edit",
+      "fieldId": "textarea-minlength-user-edit",
+      "value": "a"
+    },
+    {
+      "id": "minlength-emoji-after-user-edit",
+      "selector": "#minlength-emoji-user-edit",
+      "fieldId": "minlength-emoji-user-edit",
+      "value": "😀"
+    }
+  ],
+  "unsupportedKinds": [
+    "date",
+    "file"
+  ],
+  "notes": {
+    "inputValueEditing": "Actions use Playwright locator.fill(), which dispatches browser input events.",
+    "expectedPath": "html-form-validation-expected.json is produced by the pinned web sanitizer running in actual Chrome 154."
+  }
+}

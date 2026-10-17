@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use axum::Router;
 use axum::extract::{ConnectInfo, FromRequest, Request, State};
-use axum::http::{HeaderMap, Uri, header};
+use axum::http::{HeaderMap, Method, Uri, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
@@ -23,6 +23,7 @@ use crate::error::{ApiError, ApiResult, json_response};
 use crate::events::EventHub;
 use crate::hints::Hints;
 use crate::http::{self, Body};
+use crate::management::NativeManagementGrants;
 use crate::node_events::LiveActivity;
 use crate::nodes::NodeRegistry;
 use crate::{routes, sockets};
@@ -32,6 +33,7 @@ pub struct App {
     pub config: GatewayConfig,
     pub db: Arc<Db>,
     pub devices: Arc<DeviceTokens>,
+    pub management: Arc<NativeManagementGrants>,
     pub events: Arc<EventHub>,
     pub hints: Hints,
     pub nodes: Arc<NodeRegistry>,
@@ -63,11 +65,13 @@ impl App {
             config.device_token_idle_ms,
             config.device_token_max_age_ms,
         );
+        let management = Arc::new(NativeManagementGrants::new(devices.clone()));
         let app = Arc::new(Self {
             events: EventHub::new(config.event_buffer_size),
             config,
             db,
             devices,
+            management,
             hints: Hints::new(),
             nodes: Arc::new(NodeRegistry::default()),
             activity: Mutex::new(HashMap::new()),
@@ -93,6 +97,7 @@ impl App {
         peer: &SocketAddr,
         headers: &HeaderMap,
         uri: &Uri,
+        method: &Method,
         require_origin: bool,
     ) -> ApiResult<Identity> {
         let peer = auth::peer_address(peer.ip());
@@ -101,10 +106,12 @@ impl App {
                 peer: &peer,
                 headers,
                 path: uri.path(),
+                method,
             },
             &self.config.auth,
             self.devices.as_ref(),
             require_origin,
+            self.management.as_ref(),
         )
     }
 
@@ -328,11 +335,13 @@ pub fn router(app: AppState) -> Router {
             get(routes::recording),
         )
         .merge(routes::feature_routes())
+        .merge(crate::management::routes())
         .merge(crate::project_deletion::routes())
         .merge(crate::backends::routes())
         .fallback(not_found)
         .method_not_allowed_fallback(not_found)
         .layer(middleware::from_fn_with_state(app.clone(), authenticate))
+        .layer(middleware::from_fn(crate::management::response_headers))
         .layer(middleware::from_fn(crate::features::no_store))
         // Outside `no_store`: Fastify's router refused before any scope's hooks.
         .layer(middleware::from_fn(param_length))
@@ -379,6 +388,11 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/sessions/{id}/terminals/{terminal_id}/close"),
     ("POST", "/api/sessions/{id}/panel/background/{task_id}/stop"),
     ("GET", "/api/sessions/{id}/browser/recording"),
+    ("GET", "/api/native-management/requests/{id}"),
+    ("DELETE", "/api/native-management/requests/{id}"),
+    ("POST", "/api/native-management/requests/{id}/approve"),
+    ("POST", "/api/native-management/requests/{id}/deny"),
+    ("POST", "/api/native-management/requests/{id}/claim"),
     ("DELETE", "/api/devices/{id}"),
     ("PUT", "/api/providers/{id}"),
     ("DELETE", "/api/providers/{id}"),
@@ -471,7 +485,13 @@ async fn authenticate(
         return next.run(request).await;
     }
     let require_origin = auth::requires_origin(request.method());
-    match app.validate(&peer, request.headers(), request.uri(), require_origin) {
+    match app.validate(
+        &peer,
+        request.headers(),
+        request.uri(),
+        request.method(),
+        require_origin,
+    ) {
         Ok(identity) => {
             request.extensions_mut().insert(identity);
             next.run(request).await

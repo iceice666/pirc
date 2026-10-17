@@ -1,0 +1,144 @@
+{
+  "id": "mermaid-uml-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 768],
+  "height": 900,
+  "padding": 16,
+  "cases": [
+    {
+      "id": "class-basic-inheritance",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\nAnimal <|-- Dog\nAnimal : +String name\nAnimal : +int age\nDog : +bark() void\n```"
+    },
+    {
+      "id": "class-members-visibility",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\nclass User {\n  +String id\n  +String email\n  -String passwordHash\n  #int retryCount\n  +authenticate(password: String) bool\n  -resetToken() void\n}\n```"
+    },
+    {
+      "id": "class-relationship-types",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\nclass Driver\nclass Car\nclass Engine\nclass Wheel\nDriver \"1\" --> \"1\" Car : drives\nCar *-- \"4\" Wheel : contains\nCar ..> Engine : depends\n```"
+    },
+    {
+      "id": "class-cardinality-direction",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\ndirection LR\nclass Customer\nclass Order\nclass Product\nclass LineItem\nCustomer \"1\" --> \"0..*\" Order : places\nOrder \"1\" *-- \"1..*\" LineItem : contains\nLineItem \"0..*\" --> \"1\" Product : refers to\n```"
+    },
+    {
+      "id": "class-interface-realization",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\nclass IStore {\n  <<interface>>\n  +save(item: Item) bool\n  +load(id: String) Item\n}\nclass MemoryStore {\n  +save(item: Item) bool\n}\nIStore <|.. MemoryStore\n```"
+    },
+    {
+      "id": "class-display-alias",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\nclass Product[\"Catalog Item\"]\nclass Cart\nCart \"1\" o-- \"0..*\" Product : holds\n```"
+    },
+    {
+      "id": "class-generics",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\nclass Repository~T~\nclass User\nRepository~User~ ..> User : returns\n```"
+    },
+    {
+      "id": "class-namespace",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\nnamespace Accounts {\n  class User\n  class Session\n}\nUser \"1\" --> \"0..*\" Session : owns\n```"
+    },
+    {
+      "id": "class-note-and-annotations",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\nclass Shape {\n  <<interface>>\n  +area() double\n}\nclass Circle\nShape <|.. Circle\nnote for Circle \"Uses radius to calculate area\"\n```"
+    },
+    {
+      "id": "class-invalid-relation",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\nA <|--\n```"
+    },
+    {
+      "id": "class-percent-literals",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\nclass A[\"Rate %% literal\"]\nnote for A \"Rate %% literal\"\n```"
+    },
+    {
+      "id": "class-tight-relation",
+      "kind": "class",
+      "source": "```mermaid\nclassDiagram\nA-->B\n```"
+    },
+    {
+      "id": "state-start-end",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\n[*] --> Idle\nIdle --> Processing : request\nProcessing --> [*] : complete\n```"
+    },
+    {
+      "id": "state-multiple-descriptions",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\nIdle : Ready\nIdle : Waiting\n[*] --> Idle\nIdle --> [*]\n```"
+    },
+    {
+      "id": "state-alias-multiple-descriptions",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\nstate \"Waiting for response\" as Waiting\nWaiting : Ready\nWaiting : Later\n[*] --> Waiting\nWaiting --> [*]\n```"
+    },
+    {
+      "id": "state-title",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\ntitle Lifecycle\n[*] --> Idle\nIdle --> [*] : done\n```"
+    },
+    {
+      "id": "state-alias-labels",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\nstate \"Waiting for response\" as Waiting\n[*] --> Waiting\nWaiting --> Done : response received\nDone --> [*]\n```"
+    },
+    {
+      "id": "state-transition-guards",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\n[*] --> Locked\nLocked --> Unlocking : key [valid] / authenticate()\nUnlocking --> Unlocked : success / clearAlarm()\nUnlocking --> Locked : failed [count > 3]\nUnlocked --> [*]\n```"
+    },
+    {
+      "id": "state-composite-nested",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\n[*] --> Active\nstate Active {\n  [*] --> Running\n  Running --> Paused : suspend\n  Paused --> Running : resume\n}\nActive --> [*] : stop\n```"
+    },
+    {
+      "id": "state-choice",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\n[*] --> Check\nstate Check <<choice>>\nCheck --> Approved : valid\nCheck --> Rejected : invalid\nApproved --> [*]\nRejected --> [*]\n```"
+    },
+    {
+      "id": "state-fork-join",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\n[*] --> fork_state\nstate fork_state <<fork>>\nfork_state --> TaskA\nfork_state --> TaskB\nstate join_state <<join>>\nTaskA --> join_state\nTaskB --> join_state\njoin_state --> [*]\n```"
+    },
+    {
+      "id": "state-choice-declared-first",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\nstate Check <<choice>>\n[*] --> Check\nCheck --> Approved : valid\nCheck --> Rejected : invalid\nApproved --> [*]\nRejected --> [*]\n```"
+    },
+    {
+      "id": "state-fork-join-declared-first",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\nstate fork_state <<fork>>\n[*] --> fork_state\nfork_state --> TaskA\nfork_state --> TaskB\nstate join_state <<join>>\nTaskA --> join_state\nTaskB --> join_state\njoin_state --> [*]\n```"
+    },
+    {
+      "id": "state-parallel-regions",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\nstate Composite {\n  state RegionA {\n    [*] --> A1\n    A1 --> A2\n  }\n  --\n  state RegionB {\n    [*] --> B1\n    B1 --> B2\n  }\n}\n[*] --> Composite\nComposite --> [*]\n```"
+    },
+    {
+      "id": "state-direction-left-right",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\ndirection LR\n[*] --> Closed\nClosed --> Open : click\nOpen --> Closed : timeout\nOpen --> [*] : finish\n```"
+    },
+    {
+      "id": "state-notes-and-classes",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\n[*] --> Idle\nnote right of Idle : Waiting for input\nIdle --> Done : finish\nDone --> [*]\nclassDef active fill:#edf3fe,stroke:#4176e6,color:#0f1115\nclass Idle active\n```"
+    },
+    {
+      "id": "state-invalid-transition",
+      "kind": "state",
+      "source": "```mermaid\nstateDiagram-v2\n[*] --> Running\nRunning -->\n```"
+    }
+  ]
+}

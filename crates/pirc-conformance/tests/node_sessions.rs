@@ -1053,3 +1053,155 @@ async fn node_session_interactions() {
     events.close().await;
     insta::assert_json_snapshot!("node_session_interactions", t.into_value());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn node_session_interaction_answer_race_across_devices() {
+    let llm = HeldLlm::start().await;
+    let models = tempfile::tempdir().unwrap();
+    let Some(cluster) = held_cluster(&llm, models.path(), GatewayOptions::default()).await else {
+        return;
+    };
+    let api = cluster.api();
+    let (mut browser, _) = Session::create(&api).await;
+    assert_eq!(browser.acquire().await.status, 200);
+    let mut events = browser.events().await;
+
+    llm.push([
+        Step::ptc(
+            "question",
+            "ask_user_question",
+            json!({ "questions": [{ "question": "Continue?" }] }),
+        ),
+        Step::text("Completed."),
+    ]);
+    assert_eq!(
+        browser
+            .command(json!({ "type": "prompt", "message": "ask" }))
+            .await
+            .status,
+        202
+    );
+    let opened = read_until(&mut events, |frame| frame["type"] == "interaction_created").await;
+    let row = &opened.last().expect("question event")["data"];
+    let interaction_id = row["id"].as_str().expect("interaction id").to_owned();
+    let interaction_epoch = row["runnerEpoch"].clone();
+
+    // A second device takes the lease while the original browser still has
+    // the old question open. Both clients submit at once with their own lease.
+    let phone_lease = browser
+        .post(
+            "/control/acquire",
+            json!({ "clientId": "phone", "force": true }),
+        )
+        .await;
+    assert_eq!(phone_lease.status, 200);
+    let phone_generation = phone_lease.body["lease"]["generation"].clone();
+    let answer_path = format!("{}/interactions/{interaction_id}/answer", browser.base);
+    let browser_body = json!({
+        "clientId": browser.client,
+        "generation": browser.generation,
+        "answer": { "value": "yes" },
+    });
+    let phone_body = json!({
+        "clientId": "phone",
+        "generation": phone_generation,
+        "answer": { "value": "yes" },
+    });
+    let headers = browser_headers();
+    let (browser_answer, phone_answer) = tokio::join!(
+        api.send("POST", &answer_path, &headers, Some(browser_body)),
+        api.send("POST", &answer_path, &headers, Some(phone_body)),
+    );
+
+    assert_eq!(
+        phone_answer.status, 200,
+        "phone answer: {:?}",
+        phone_answer.body
+    );
+    assert_eq!(
+        browser_answer.status, 409,
+        "browser answer: {:?}",
+        browser_answer.body
+    );
+    assert_eq!(browser_answer.body["error"]["code"], "lost_control");
+    let settled = read_until(&mut events, |frame| agent_event(frame, "agent_settled")).await;
+    let answered = settled
+        .iter()
+        .filter(|frame| frame["type"] == "interaction_answered")
+        .collect::<Vec<_>>();
+    assert_eq!(answered.len(), 1, "settled frames: {settled:?}");
+    assert_eq!(answered[0]["data"]["interactionId"], interaction_id);
+    assert_eq!(answered[0]["data"]["interactionEpoch"], interaction_epoch);
+
+    // Two tabs that share the current lease can still race to answer a
+    // question. The interaction row claim is single-use even when both HTTP
+    // requests carry identical, otherwise-valid control credentials.
+    browser.client = "phone".to_owned();
+    browser.generation = phone_generation.clone();
+    llm.push([
+        Step::ptc(
+            "question-2",
+            "ask_user_question",
+            json!({ "questions": [{ "question": "Continue again?" }] }),
+        ),
+        Step::text("Completed again."),
+    ]);
+    assert_eq!(
+        browser
+            .command_with(
+                "phone-prompt-2",
+                json!({ "type": "prompt", "message": "ask again" }),
+            )
+            .await
+            .status,
+        202
+    );
+    let second_opened =
+        read_until(&mut events, |frame| frame["type"] == "interaction_created").await;
+    let second_row = &second_opened.last().expect("second question event")["data"];
+    let second_id = second_row["id"].as_str().expect("second interaction id");
+    let second_epoch = second_row["runnerEpoch"].clone();
+    let second_path = format!("{}/interactions/{second_id}/answer", browser.base);
+    let duplicate_body = json!({
+        "clientId": browser.client,
+        "generation": browser.generation,
+        "answer": { "value": "yes" },
+    });
+    let (first_duplicate, second_duplicate) = tokio::join!(
+        api.send("POST", &second_path, &headers, Some(duplicate_body.clone())),
+        api.send("POST", &second_path, &headers, Some(duplicate_body)),
+    );
+    let responses = [&first_duplicate, &second_duplicate];
+    assert_eq!(
+        responses
+            .iter()
+            .filter(|response| response.status == 200)
+            .count(),
+        1
+    );
+    assert_eq!(
+        responses
+            .iter()
+            .filter(|response| response.status == 409)
+            .count(),
+        1
+    );
+    let rejected = responses
+        .iter()
+        .find(|response| response.status == 409)
+        .unwrap();
+    assert_eq!(rejected.body["error"]["code"], "stale_interaction");
+    let second_settled = read_until(&mut events, |frame| agent_event(frame, "agent_settled")).await;
+    let second_answered = second_settled
+        .iter()
+        .filter(|frame| frame["type"] == "interaction_answered")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        second_answered.len(),
+        1,
+        "settled frames: {second_settled:?}"
+    );
+    assert_eq!(second_answered[0]["data"]["interactionId"], second_id);
+    assert_eq!(second_answered[0]["data"]["interactionEpoch"], second_epoch);
+    events.close().await;
+}

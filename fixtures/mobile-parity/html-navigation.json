@@ -1,0 +1,92 @@
+{
+  "id": "html-navigation-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "oracle": "Actual Google Chrome 154 pointer submissions and top-level navigation over a same-origin local Vite server, with production apps/web renderMarkdown() / DOMPurify for authored HTML and real browser parsing for responses.",
+  "source": "<a id=\"same-document-link\" href=\"#same-document-target\">Same document</a><form id=\"url-relative\" action=\"capture/relative?from=relative&amp;keep=a%20b\" method=\"get\"><input name=\"q\" value=\"tea &amp; honey\"><input name=\"tilde~name\" value=\"value~! +\"><button id=\"url-relative-submit\">Relative</button></form><form id=\"url-empty\" action=\"\" method=\"get\"><input name=\"emptyAction\" value=\"sent\"><button id=\"url-empty-submit\">Empty action</button></form><form id=\"url-query-only\" action=\"?seed=old%20value&amp;keep=1\" method=\"get\"><input name=\"queryOnly\" value=\"sent\"><button id=\"url-query-only-submit\">Query action</button></form><form id=\"url-fragment\" action=\"#form-fragment\" method=\"get\"><input name=\"fragmentOnly\" value=\"sent\"><button id=\"url-fragment-submit\">Fragment action</button></form><form id=\"url-same-path-fragment\" action=\"/parity.html#form-fragment\" method=\"get\"><input name=\"samePath\" value=\"sent\"><button id=\"url-same-path-fragment-submit\">Same path with fragment</button></form><div id=\"same-document-target\">Fragment destination</div><form id=\"history-form\"><label for=\"history-edit\">History value</label><input id=\"history-edit\" name=\"historyValue\" value=\"initial\"></form>",
+  "redirectStatuses": [
+    301,
+    302,
+    303,
+    307,
+    308
+  ],
+  "emptyResponseStatuses": [
+    204,
+    205
+  ],
+  "charsets": [
+    {
+      "id": "utf8-header",
+      "wireEncoding": "utf8",
+      "contentType": "text/html; charset=utf-8",
+      "meta": "utf-8",
+      "bom": ""
+    },
+    {
+      "id": "utf8-meta",
+      "wireEncoding": "utf8",
+      "contentType": "text/html",
+      "meta": "utf-8",
+      "bom": ""
+    },
+    {
+      "id": "utf8-bom-header-conflict",
+      "wireEncoding": "utf8",
+      "contentType": "text/html; charset=windows-1252",
+      "meta": "windows-1252",
+      "bom": "utf8"
+    },
+    {
+      "id": "windows1252-header",
+      "wireEncoding": "windows1252",
+      "contentType": "text/html; charset=windows-1252",
+      "meta": "windows-1252",
+      "bom": ""
+    },
+    {
+      "id": "windows1252-meta",
+      "wireEncoding": "windows1252",
+      "contentType": "text/html",
+      "meta": "windows-1252",
+      "bom": ""
+    },
+    {
+      "id": "utf16le-bom",
+      "wireEncoding": "utf16le",
+      "contentType": "text/html",
+      "meta": "utf-8",
+      "bom": "utf16le"
+    },
+    {
+      "id": "utf16be-bom",
+      "wireEncoding": "utf16be",
+      "contentType": "text/html",
+      "meta": "utf-8",
+      "bom": "utf16be"
+    },
+    {
+      "id": "utf16le-header",
+      "wireEncoding": "utf16le",
+      "contentType": "text/html; charset=utf-16le",
+      "meta": "utf-8",
+      "bom": ""
+    }
+  ],
+  "notes": {
+    "authoredHtml": "The authored source is passed through the pinned web renderMarkdown() / DOMPurify path before real click submissions.",
+    "responseParsing": "Response documents and charset samples are static HTML bytes parsed by Chrome; they contain no scripts and their behavior is not simulated.",
+    "redirectCoverage": "GET and POST forms are submitted through each of 301, 302, 303, 307, and 308 redirects. Raw request URLs and body bytes are recorded at both hops.",
+    "sameDocument": "An anchor fragment click is measured separately from GET form submissions to the same path with a fragment.",
+    "history": "Back/Forward are actual browser history operations. BFCache persisted values are recorded as observed for this Chrome run, without claiming cross-browser guarantees.",
+    "style": "Response documents expose body, h1, p, a, input, and button computed styles and rectangles at 390/768px in light/dark color schemes; a blank viewport corner pixel is sampled from Chrome screenshots.",
+    "networkScope": "Every endpoint and image is served from 127.0.0.1:18921. No outside requests, cookies, or authentication are used.",
+    "unsupported": [
+      "downloads",
+      "JavaScript in response HTML",
+      "external CSS",
+      "cookie/authentication behavior"
+    ],
+    "mime": "Static text/plain and application/json responses record browser document DOM, preformatted text, available controls, and computed styles. Any Chrome viewer UI is recorded as observed."
+  },
+  "responseStyleSource": "<!doctype html><html><head><meta charset=\"utf-8\"><link rel=\"icon\" href=\"data:,\"><title>Local navigation response</title></head><body><h1 id=\"response-heading\">Local navigation response</h1><p id=\"response-paragraph\">Static response body.</p><a id=\"response-link\" href=\"#response-marker\">Same response</a><form><input value=\"response input\"><button type=\"button\">Response button</button></form><main id=\"response-marker\" data-marker=\"style-probe\">Local navigation response</main></body></html>"
+}

@@ -1,0 +1,731 @@
+{
+  "webSha": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "d3SankeyVersion": "0.12.3",
+  "oracle": "Mermaid 11.17.2 resolved config plus d3-sankey 0.12.3 Sankey() with renderer defaults",
+  "resolvedSankeyConfig": {
+    "width": 600,
+    "height": 400,
+    "useMaxWidth": true,
+    "nodeAlignment": "justify",
+    "showValues": true,
+    "nodeWidth": 10,
+    "nodePadding": 12,
+    "labelStyle": "legacy",
+    "prefix": "",
+    "suffix": ""
+  },
+  "defaults": {
+    "extent": [
+      [
+        0,
+        0
+      ],
+      [
+        600,
+        400
+      ]
+    ],
+    "nodeAlignment": "justify",
+    "nodeWidth": 10,
+    "nodePadding": 27,
+    "iterations": 6
+  },
+  "cases": [
+    {
+      "id": "weighted-branching",
+      "source": "sankey-beta\nA,B,5\nA,C,3\nB,D,4\nC,D,4",
+      "parserStatus": "accepted",
+      "graph": {
+        "nodes": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "flows": [
+          {
+            "source": "A",
+            "target": "B",
+            "value": 5,
+            "index": 0
+          },
+          {
+            "source": "A",
+            "target": "C",
+            "value": 3,
+            "index": 1
+          },
+          {
+            "source": "B",
+            "target": "D",
+            "value": 4,
+            "index": 2
+          },
+          {
+            "source": "C",
+            "target": "D",
+            "value": 4,
+            "index": 3
+          }
+        ]
+      },
+      "layoutStatus": "ok",
+      "nodes": [
+        {
+          "id": "A",
+          "value": 8,
+          "layer": 0,
+          "x0": 0,
+          "x1": 10,
+          "y0": 9.842908330359952,
+          "y1": 341.3984638859155
+        },
+        {
+          "id": "B",
+          "value": 5,
+          "layer": 1,
+          "x0": 295,
+          "x1": 305,
+          "y0": 0,
+          "y1": 207.22222222222214
+        },
+        {
+          "id": "C",
+          "value": 4,
+          "layer": 1,
+          "x0": 295,
+          "x1": 305,
+          "y0": 234.22222222222214,
+          "y1": 400
+        },
+        {
+          "id": "D",
+          "value": 8,
+          "layer": 2,
+          "x0": 590,
+          "x1": 600,
+          "y0": 34.10921945026717,
+          "y1": 365.6647750058228
+        }
+      ],
+      "flows": [
+        {
+          "source": "A",
+          "target": "B",
+          "value": 5,
+          "width": 207.22222222222223,
+          "sourceY": 113.45401944147106,
+          "targetY": 103.61111111111111
+        },
+        {
+          "source": "A",
+          "target": "C",
+          "value": 3,
+          "width": 124.33333333333333,
+          "sourceY": 279.23179721924885,
+          "targetY": 296.3888888888888
+        },
+        {
+          "source": "B",
+          "target": "D",
+          "value": 4,
+          "width": 165.77777777777777,
+          "sourceY": 82.88888888888889,
+          "targetY": 116.99810833915606
+        },
+        {
+          "source": "C",
+          "target": "D",
+          "value": 4,
+          "width": 165.77777777777777,
+          "sourceY": 317.11111111111103,
+          "targetY": 282.77588611693386
+        }
+      ]
+    },
+    {
+      "id": "quoted-commas-escaped-quotes-and-duplicates",
+      "source": "sankey-beta\n\"Input, raw\",\"Stage \"\"one\"\"\",4.5\n\"Input, raw\",\"Stage \"\"one\"\"\",1.5\n\"Stage \"\"one\"\"\",Output,6",
+      "parserStatus": "accepted",
+      "graph": {
+        "nodes": [
+          "Input, raw",
+          "Stage \"one\"",
+          "Output"
+        ],
+        "flows": [
+          {
+            "source": "Input, raw",
+            "target": "Stage \"one\"",
+            "value": 4.5,
+            "index": 0
+          },
+          {
+            "source": "Input, raw",
+            "target": "Stage \"one\"",
+            "value": 1.5,
+            "index": 1
+          },
+          {
+            "source": "Stage \"one\"",
+            "target": "Output",
+            "value": 6,
+            "index": 2
+          }
+        ]
+      },
+      "layoutStatus": "ok",
+      "nodes": [
+        {
+          "id": "Input, raw",
+          "value": 6,
+          "layer": 0,
+          "x0": 0,
+          "x1": 10,
+          "y0": 0,
+          "y1": 400.00000000000006
+        },
+        {
+          "id": "Stage \"one\"",
+          "value": 6,
+          "layer": 1,
+          "x0": 295,
+          "x1": 305,
+          "y0": 0,
+          "y1": 400.0000000000001
+        },
+        {
+          "id": "Output",
+          "value": 6,
+          "layer": 2,
+          "x0": 590,
+          "x1": 600,
+          "y0": 0,
+          "y1": 400
+        }
+      ],
+      "flows": [
+        {
+          "source": "Input, raw",
+          "target": "Stage \"one\"",
+          "value": 4.5,
+          "width": 300,
+          "sourceY": 150,
+          "targetY": 150
+        },
+        {
+          "source": "Input, raw",
+          "target": "Stage \"one\"",
+          "value": 1.5,
+          "width": 100,
+          "sourceY": 350,
+          "targetY": 350
+        },
+        {
+          "source": "Stage \"one\"",
+          "target": "Output",
+          "value": 6,
+          "width": 400,
+          "sourceY": 200,
+          "targetY": 200
+        }
+      ]
+    },
+    {
+      "id": "zero-flow-with-positive-flows",
+      "source": "sankey\nA,B,0\nA,C,2\nB,D,1\nC,D,1",
+      "parserStatus": "accepted",
+      "graph": {
+        "nodes": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "flows": [
+          {
+            "source": "A",
+            "target": "B",
+            "value": 0,
+            "index": 0
+          },
+          {
+            "source": "A",
+            "target": "C",
+            "value": 2,
+            "index": 1
+          },
+          {
+            "source": "B",
+            "target": "D",
+            "value": 1,
+            "index": 2
+          },
+          {
+            "source": "C",
+            "target": "D",
+            "value": 1,
+            "index": 3
+          }
+        ]
+      },
+      "layoutStatus": "ok",
+      "nodes": [
+        {
+          "id": "A",
+          "value": 2,
+          "layer": 0,
+          "x0": 0,
+          "x1": 10,
+          "y0": 151.33333333333343,
+          "y1": 400
+        },
+        {
+          "id": "B",
+          "value": 1,
+          "layer": 1,
+          "x0": 295,
+          "x1": 305,
+          "y0": 2.162714451969805e-13,
+          "y1": 124.33333333333348
+        },
+        {
+          "id": "C",
+          "value": 2,
+          "layer": 1,
+          "x0": 295,
+          "x1": 305,
+          "y0": 151.33333333333348,
+          "y1": 400
+        },
+        {
+          "id": "D",
+          "value": 2,
+          "layer": 2,
+          "x0": 590,
+          "x1": 600,
+          "y0": 13.615264504651392,
+          "y1": 262.2819311713181
+        }
+      ],
+      "flows": [
+        {
+          "source": "A",
+          "target": "B",
+          "value": 0,
+          "width": 0,
+          "sourceY": 151.33333333333343,
+          "targetY": 2.162714451969805e-13
+        },
+        {
+          "source": "A",
+          "target": "C",
+          "value": 2,
+          "width": 248.66666666666666,
+          "sourceY": 275.66666666666674,
+          "targetY": 275.6666666666668
+        },
+        {
+          "source": "B",
+          "target": "D",
+          "value": 1,
+          "width": 124.33333333333333,
+          "sourceY": 62.16666666666688,
+          "targetY": 75.78193117131806
+        },
+        {
+          "source": "C",
+          "target": "D",
+          "value": 1,
+          "width": 124.33333333333333,
+          "sourceY": 213.50000000000014,
+          "targetY": 200.11526450465138
+        }
+      ]
+    },
+    {
+      "id": "unbalanced-merge-and-intermediate-layer",
+      "source": "sankey-beta\nNorth,Sorting,7\nNorth,Discard,2\nSorting,Reuse,4\nSorting,Recover,3\nReuse,Output,4\nRecover,Output,3\nDiscard,Output,2",
+      "parserStatus": "accepted",
+      "graph": {
+        "nodes": [
+          "North",
+          "Sorting",
+          "Discard",
+          "Reuse",
+          "Recover",
+          "Output"
+        ],
+        "flows": [
+          {
+            "source": "North",
+            "target": "Sorting",
+            "value": 7,
+            "index": 0
+          },
+          {
+            "source": "North",
+            "target": "Discard",
+            "value": 2,
+            "index": 1
+          },
+          {
+            "source": "Sorting",
+            "target": "Reuse",
+            "value": 4,
+            "index": 2
+          },
+          {
+            "source": "Sorting",
+            "target": "Recover",
+            "value": 3,
+            "index": 3
+          },
+          {
+            "source": "Reuse",
+            "target": "Output",
+            "value": 4,
+            "index": 4
+          },
+          {
+            "source": "Recover",
+            "target": "Output",
+            "value": 3,
+            "index": 5
+          },
+          {
+            "source": "Discard",
+            "target": "Output",
+            "value": 2,
+            "index": 6
+          }
+        ]
+      },
+      "layoutStatus": "ok",
+      "nodes": [
+        {
+          "id": "North",
+          "value": 9,
+          "layer": 0,
+          "x0": 0,
+          "x1": 10,
+          "y0": 6.14089137994721,
+          "y1": 379.1408913799472
+        },
+        {
+          "id": "Sorting",
+          "value": 7,
+          "layer": 1,
+          "x0": 196.66666666666666,
+          "x1": 206.66666666666666,
+          "y0": 0,
+          "y1": 290.1111111111111
+        },
+        {
+          "id": "Discard",
+          "value": 2,
+          "layer": 1,
+          "x0": 196.66666666666666,
+          "x1": 206.66666666666666,
+          "y0": 317.1111111111111,
+          "y1": 400
+        },
+        {
+          "id": "Reuse",
+          "value": 4,
+          "layer": 2,
+          "x0": 393.3333333333333,
+          "x1": 403.3333333333333,
+          "y0": 0,
+          "y1": 165.77777777777771
+        },
+        {
+          "id": "Recover",
+          "value": 3,
+          "layer": 2,
+          "x0": 393.3333333333333,
+          "x1": 403.3333333333333,
+          "y0": 192.77777777777771,
+          "y1": 317.1111111111112
+        },
+        {
+          "id": "Output",
+          "value": 9,
+          "layer": 3,
+          "x0": 590,
+          "x1": 600,
+          "y0": 17.055586226708883,
+          "y1": 390.0555862267088
+        }
+      ],
+      "flows": [
+        {
+          "source": "North",
+          "target": "Sorting",
+          "value": 7,
+          "width": 290.1111111111111,
+          "sourceY": 151.19644693550276,
+          "targetY": 145.05555555555554
+        },
+        {
+          "source": "North",
+          "target": "Discard",
+          "value": 2,
+          "width": 82.88888888888889,
+          "sourceY": 337.69644693550276,
+          "targetY": 358.55555555555554
+        },
+        {
+          "source": "Sorting",
+          "target": "Reuse",
+          "value": 4,
+          "width": 165.77777777777777,
+          "sourceY": 82.88888888888889,
+          "targetY": 82.88888888888889
+        },
+        {
+          "source": "Sorting",
+          "target": "Recover",
+          "value": 3,
+          "width": 124.33333333333333,
+          "sourceY": 227.94444444444443,
+          "targetY": 254.94444444444437
+        },
+        {
+          "source": "Reuse",
+          "target": "Output",
+          "value": 4,
+          "width": 165.77777777777777,
+          "sourceY": 82.88888888888889,
+          "targetY": 99.94447511559777
+        },
+        {
+          "source": "Recover",
+          "target": "Output",
+          "value": 3,
+          "width": 124.33333333333333,
+          "sourceY": 254.94444444444437,
+          "targetY": 245.00003067115333
+        },
+        {
+          "source": "Discard",
+          "target": "Output",
+          "value": 2,
+          "width": 82.88888888888889,
+          "sourceY": 358.55555555555554,
+          "targetY": 348.61114178226444
+        }
+      ]
+    },
+    {
+      "id": "fractional-parallel-and-branching-flows",
+      "source": "sankey\nA,B,0.25\nA,B,0.75\nA,C,2.5\nB,D,1\nC,D,2",
+      "parserStatus": "accepted",
+      "graph": {
+        "nodes": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "flows": [
+          {
+            "source": "A",
+            "target": "B",
+            "value": 0.25,
+            "index": 0
+          },
+          {
+            "source": "A",
+            "target": "B",
+            "value": 0.75,
+            "index": 1
+          },
+          {
+            "source": "A",
+            "target": "C",
+            "value": 2.5,
+            "index": 2
+          },
+          {
+            "source": "B",
+            "target": "D",
+            "value": 1,
+            "index": 3
+          },
+          {
+            "source": "C",
+            "target": "D",
+            "value": 2,
+            "index": 4
+          }
+        ]
+      },
+      "layoutStatus": "ok",
+      "nodes": [
+        {
+          "id": "A",
+          "value": 3.5,
+          "layer": 0,
+          "x0": 0,
+          "x1": 10,
+          "y0": 15.565137612082633,
+          "y1": 388.5651376120826
+        },
+        {
+          "id": "B",
+          "value": 1,
+          "layer": 1,
+          "x0": 295,
+          "x1": 305,
+          "y0": 0,
+          "y1": 106.57142857142857
+        },
+        {
+          "id": "C",
+          "value": 2.5,
+          "layer": 1,
+          "x0": 295,
+          "x1": 305,
+          "y0": 133.5714285714287,
+          "y1": 400
+        },
+        {
+          "id": "D",
+          "value": 3,
+          "layer": 2,
+          "x0": 590,
+          "x1": 600,
+          "y0": 18.0793860070947,
+          "y1": 337.79367172138046
+        }
+      ],
+      "flows": [
+        {
+          "source": "A",
+          "target": "B",
+          "value": 0.25,
+          "width": 26.642857142857142,
+          "sourceY": 28.886566183511206,
+          "targetY": 13.321428571428571
+        },
+        {
+          "source": "A",
+          "target": "B",
+          "value": 0.75,
+          "width": 79.92857142857143,
+          "sourceY": 82.17228046922548,
+          "targetY": 66.60714285714286
+        },
+        {
+          "source": "A",
+          "target": "C",
+          "value": 2.5,
+          "width": 266.42857142857144,
+          "sourceY": 255.35085189779693,
+          "targetY": 266.78571428571445
+        },
+        {
+          "source": "B",
+          "target": "D",
+          "value": 1,
+          "width": 106.57142857142857,
+          "sourceY": 53.285714285714285,
+          "targetY": 71.36510029280899
+        },
+        {
+          "source": "C",
+          "target": "D",
+          "value": 2,
+          "width": 213.14285714285714,
+          "sourceY": 240.14285714285728,
+          "targetY": 231.22224314995185
+        }
+      ]
+    },
+    {
+      "id": "all-zero-flow",
+      "source": "sankey\nA,B,0",
+      "parserStatus": "accepted",
+      "graph": {
+        "nodes": [
+          "A",
+          "B"
+        ],
+        "flows": [
+          {
+            "source": "A",
+            "target": "B",
+            "value": 0,
+            "index": 0
+          }
+        ]
+      },
+      "layoutStatus": "non-finite",
+      "nodes": [
+        {
+          "id": "A",
+          "value": 0,
+          "layer": 0,
+          "x0": 0,
+          "x1": 10,
+          "y0": null,
+          "y1": null
+        },
+        {
+          "id": "B",
+          "value": 0,
+          "layer": 1,
+          "x0": 590,
+          "x1": 600,
+          "y0": null,
+          "y1": null
+        }
+      ],
+      "flows": [
+        {
+          "source": "A",
+          "target": "B",
+          "value": 0,
+          "width": null,
+          "sourceY": null,
+          "targetY": null
+        }
+      ]
+    },
+    {
+      "id": "cycle",
+      "source": "sankey\nA,B,1\nB,A,1",
+      "parserStatus": "accepted",
+      "graph": {
+        "nodes": [
+          "A",
+          "B"
+        ],
+        "flows": [
+          {
+            "source": "A",
+            "target": "B",
+            "value": 1,
+            "index": 0
+          },
+          {
+            "source": "B",
+            "target": "A",
+            "value": 1,
+            "index": 1
+          }
+        ]
+      },
+      "layoutStatus": "error",
+      "layoutError": "circular link"
+    },
+    {
+      "id": "non-ascii-label",
+      "source": "sankey\n台北,A,1",
+      "parserStatus": "error",
+      "parserError": "Parse error on line 2:"
+    }
+  ]
+}

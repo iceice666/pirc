@@ -1,0 +1,5077 @@
+{
+  "fixture": "html-document-styles-v1",
+  "reference": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "browserVersion": "154.0.8037.98",
+  "locale": {
+    "language": "zh-TW",
+    "languages": [
+      "zh-TW",
+      "zh",
+      "en-US",
+      "en"
+    ]
+  },
+  "origin": "http://127.0.0.1:18924",
+  "sanitizer": "apps/web/src/lib/markdown.ts renderMarkdown() / DOMPurify",
+  "captures": [
+    {
+      "width": 390,
+      "height": 844,
+      "colorScheme": "light",
+      "markdownForm": {
+        "action": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+        "method": "get",
+        "target": "",
+        "html": "<form id=\"markdown-style-form\" action=\"/raw/styles/response?via=markdown-form\" method=\"get\"><input type=\"hidden\" name=\"via\" value=\"markdown-form\"><button id=\"markdown-style-submit\" type=\"submit\">Open raw style response</button></form>",
+        "submitter": "<button id=\"markdown-style-submit\" type=\"submit\">Open raw style response</button>"
+      },
+      "documentStatus": 200,
+      "document": {
+        "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+        "title": "Raw CSS response",
+        "characterSet": "UTF-8",
+        "scriptCount": 0,
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "devicePixelRatio": 1
+        },
+        "preferredColorScheme": "light",
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "htmlColorScheme": "light dark",
+        "bodyBackground": "rgb(245, 246, 247)",
+        "bodyColor": "rgb(30, 40, 50)",
+        "bodyRect": {
+          "x": 0,
+          "y": 3,
+          "width": 390,
+          "height": 844
+        },
+        "nodes": {
+          "html": {
+            "tag": "html",
+            "id": null,
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {
+              "lang": "en"
+            },
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 847
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "390px",
+              "height": "847px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(0, 0, 0)",
+              "border-radius": "0px",
+              "font-family": "Times",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "body": {
+            "tag": "body",
+            "id": null,
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {},
+            "rect": {
+              "x": 0,
+              "y": 3,
+              "width": 390,
+              "height": 844
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "390px",
+              "height": "844px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgb(245, 246, 247)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "main": {
+            "tag": "main",
+            "id": "main",
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {
+              "id": "main"
+            },
+            "rect": {
+              "x": 0,
+              "y": 3,
+              "width": 390,
+              "height": 391
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "390px",
+              "height": "391px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "source-order": {
+            "tag": "p",
+            "id": "source-order",
+            "text": "Source order and import",
+            "attributes": {
+              "id": "source-order"
+            },
+            "rect": {
+              "x": 4,
+              "y": 3,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(70, 80, 90)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(70, 80, 90)",
+              "background-color": "rgb(200, 210, 220)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": "rgb(200,210,220)"
+            }
+          },
+          "specificity": {
+            "tag": "p",
+            "id": "specificity",
+            "text": "Specificity chain",
+            "attributes": {
+              "id": "specificity",
+              "class": "sample",
+              "data-state": "ready"
+            },
+            "rect": {
+              "x": 4,
+              "y": 30,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(60, 70, 80)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(60, 70, 80)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "inline-important": {
+            "tag": "p",
+            "id": "inline-important",
+            "text": "Inline important and repeated declarations",
+            "attributes": {
+              "id": "inline-important",
+              "style": "color:rgb(1,2,3);color:rgb(4,5,6)!important;border-top-color:rgb(1,2,3);margin-left:2px;margin-left:8px!important;padding-left:3px;padding-left:7px"
+            },
+            "rect": {
+              "x": 8,
+              "y": 57,
+              "width": 378,
+              "height": 28
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "365px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "8px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "7px",
+              "border-top-width": "2px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(4, 5, 6)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "descendant": {
+            "tag": "p",
+            "id": "descendant",
+            "text": "Descendant selector",
+            "attributes": {
+              "id": "descendant",
+              "class": "descendant"
+            },
+            "rect": {
+              "x": 11,
+              "y": 88,
+              "width": 375,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "371px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "11px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "child": {
+            "tag": "p",
+            "id": "child",
+            "text": "Child selector",
+            "attributes": {
+              "id": "child",
+              "class": "child"
+            },
+            "rect": {
+              "x": 4,
+              "y": 115,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "367px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "13px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "attribute": {
+            "tag": "p",
+            "id": "attribute",
+            "text": "Attribute selector",
+            "attributes": {
+              "id": "attribute",
+              "data-mark": "attr"
+            },
+            "rect": {
+              "x": 4,
+              "y": 142,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgb(180, 190, 200)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "not-target": {
+            "tag": "p",
+            "id": "not-target",
+            "text": "Not selector",
+            "attributes": {
+              "id": "not-target",
+              "class": "not-target"
+            },
+            "rect": {
+              "x": 4,
+              "y": 169,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(31, 32, 33)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(31, 32, 33)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "nth-second": {
+            "tag": "span",
+            "id": "nth-second",
+            "text": "Second child",
+            "attributes": {
+              "id": "nth-second"
+            },
+            "rect": {
+              "x": 70.453125,
+              "y": 195,
+              "width": 93.625,
+              "height": 19
+            },
+            "computed": {
+              "display": "inline",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "auto",
+              "height": "auto",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "1px",
+              "padding-bottom": "1px",
+              "padding-left": "1px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgb(120, 130, 140)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "custom-property": {
+            "tag": "p",
+            "id": "custom-property",
+            "text": "Custom property",
+            "attributes": {
+              "id": "custom-property"
+            },
+            "rect": {
+              "x": 4,
+              "y": 217,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "377px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "3px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(22, 44, 66)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(22, 44, 66)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "rgb(22,44,66)",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "invalid-declaration": {
+            "tag": "p",
+            "id": "invalid-declaration",
+            "text": "Invalid declaration fallback",
+            "attributes": {
+              "id": "invalid-declaration"
+            },
+            "rect": {
+              "x": 4,
+              "y": 244,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(21, 22, 23)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(21, 22, 23)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "unsupported-target": {
+            "tag": "p",
+            "id": "unsupported-target",
+            "text": "Unsupported syntax fallback",
+            "attributes": {
+              "id": "unsupported-target"
+            },
+            "rect": {
+              "x": 4,
+              "y": 271,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(13, 14, 15)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(13, 14, 15)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "media-width": {
+            "tag": "p",
+            "id": "media-width",
+            "text": "Viewport media query",
+            "attributes": {
+              "id": "media-width"
+            },
+            "rect": {
+              "x": 0,
+              "y": 298,
+              "width": 386,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "382px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "0px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "media-scheme": {
+            "tag": "p",
+            "id": "media-scheme",
+            "text": "Color scheme media query",
+            "attributes": {
+              "id": "media-scheme"
+            },
+            "rect": {
+              "x": 4,
+              "y": 325,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgb(220, 230, 240)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "anchor": {
+            "tag": "a",
+            "id": "probe-anchor",
+            "text": "Anchor target",
+            "attributes": {
+              "id": "probe-anchor",
+              "href": "#media-width"
+            },
+            "rect": {
+              "x": 2,
+              "y": 351,
+              "width": 98.0625,
+              "height": 19
+            },
+            "computed": {
+              "display": "inline",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "auto",
+              "height": "auto",
+              "margin-top": "2px",
+              "margin-right": "2px",
+              "margin-bottom": "2px",
+              "margin-left": "2px",
+              "padding-top": "1px",
+              "padding-right": "1px",
+              "padding-bottom": "1px",
+              "padding-left": "1px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(10, 80, 150)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(10, 80, 150)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "input": {
+            "tag": "input",
+            "id": "probe-input",
+            "text": "",
+            "attributes": {
+              "id": "probe-input",
+              "value": "input"
+            },
+            "rect": {
+              "x": 0,
+              "y": 370,
+              "width": 174,
+              "height": 24
+            },
+            "computed": {
+              "display": "inline-block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "166px",
+              "height": "18px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "2px",
+              "padding-bottom": "1px",
+              "padding-left": "2px",
+              "border-top-width": "2px",
+              "border-top-style": "inset",
+              "border-top-color": "rgb(118, 118, 118)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "button": {
+            "tag": "button",
+            "id": "probe-button",
+            "text": "Button",
+            "attributes": {
+              "id": "probe-button",
+              "type": "button"
+            },
+            "rect": {
+              "x": 174,
+              "y": 370,
+              "width": 62.265625,
+              "height": 24
+            },
+            "computed": {
+              "display": "inline-block",
+              "position": "static",
+              "box-sizing": "border-box",
+              "width": "62.2656px",
+              "height": "24px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "6px",
+              "padding-bottom": "1px",
+              "padding-left": "6px",
+              "border-top-width": "2px",
+              "border-top-style": "outset",
+              "border-top-color": "rgb(0, 0, 0)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(239, 239, 239)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          }
+        },
+        "headSources": [
+          {
+            "tag": "link",
+            "id": "base-link",
+            "href": "http://127.0.0.1:18924/raw/styles/css/base.css",
+            "media": null
+          },
+          {
+            "tag": "style",
+            "id": "middle-style",
+            "href": null,
+            "media": null
+          },
+          {
+            "tag": "link",
+            "id": "late-link",
+            "href": "http://127.0.0.1:18924/raw/styles/css/later.css",
+            "media": null
+          }
+        ],
+        "stylesheetTree": [
+          {
+            "href": "http://127.0.0.1:18924/raw/styles/css/base.css",
+            "ownerTag": "link",
+            "ownerId": "base-link",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSStyleRule",
+                "cssText": "body { background-color: rgb(245, 246, 247); font-family: Arial, sans-serif; }",
+                "selectorText": "body",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(10, 20, 30); background-color: rgb(1, 2, 3); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#group > span { padding: 1px; }",
+                "selectorText": "#group > span",
+                "nestedRules": []
+              }
+            ]
+          },
+          {
+            "href": null,
+            "ownerTag": "style",
+            "ownerId": "middle-style",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSStyleRule",
+                "cssText": "html { color-scheme: light dark; }",
+                "selectorText": "html",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "body { margin: 0px; min-height: 100vh; background-color: rgb(245, 246, 247); color: rgb(30, 40, 50); font-family: Arial, sans-serif; font-size: 16px; }",
+                "selectorText": "body",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "p { font-size: 14px; line-height: 20px; margin: 3px 4px; padding: 2px; }",
+                "selectorText": "p",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(40, 50, 60); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": ".sample { color: rgb(2, 2, 2); }",
+                "selectorText": ".sample",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#specificity { color: rgb(3, 3, 3); }",
+                "selectorText": "#specificity",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main .sample { color: rgb(4, 4, 4); }",
+                "selectorText": "#main .sample",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > p[data-state=\"ready\"] { color: rgb(5, 5, 5); }",
+                "selectorText": "#main > p[data-state=\"ready\"]",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > p.sample[data-state=\"ready\"]:not(.excluded):nth-child(2) { color: rgb(60, 70, 80); }",
+                "selectorText": "#main > p.sample[data-state=\"ready\"]:not(.excluded):nth-child(2)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main .descendant { margin-left: 11px; }",
+                "selectorText": "#main .descendant",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > .child { padding-left: 13px; }",
+                "selectorText": "#main > .child",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "[data-mark=\"attr\"] { background-color: rgb(180, 190, 200); }",
+                "selectorText": "[data-mark=\"attr\"]",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": ".not-target:not(.excluded) { color: rgb(31, 32, 33); }",
+                "selectorText": ".not-target:not(.excluded)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#group > span:nth-child(2) { background-color: rgb(120, 130, 140); }",
+                "selectorText": "#group > span:nth-child(2)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#inline-important { padding-left: 2px; color: rgb(255, 0, 0) !important; border: 2px solid rgb(255, 0, 0) !important; margin-left: 12px !important; }",
+                "selectorText": "#inline-important",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#custom-property { --probe-accent: rgb(22,44,66); color: var(--probe-accent); padding-left: var(--probe-space,3px); }",
+                "selectorText": "#custom-property",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#invalid-declaration { color: rgb(21, 22, 23); }",
+                "selectorText": "#invalid-declaration",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#unsupported-target { color: rgb(13, 14, 15); }",
+                "selectorText": "#unsupported-target",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSSupportsRule",
+                "cssText": "@supports (color:not-a-real-color) {\n  #unsupported-target { background-color: rgb(250, 0, 250); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#unsupported-target { background-color: rgb(250, 0, 250); }",
+                    "selectorText": "#unsupported-target",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#media-width { margin-left: 0px; font-size: 16px; }",
+                "selectorText": "#media-width",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (min-width: 600px) {\n  #media-width { margin-left: 17px; font-size: 18px; }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-width { margin-left: 17px; font-size: 18px; }",
+                    "selectorText": "#media-width",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#media-scheme { background-color: rgb(210, 220, 230); }",
+                "selectorText": "#media-scheme",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (prefers-color-scheme: light) {\n  #media-scheme { background-color: rgb(220, 230, 240); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-scheme { background-color: rgb(220, 230, 240); }",
+                    "selectorText": "#media-scheme",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (prefers-color-scheme: dark) {\n  body { background-color: rgb(16, 20, 24); color: rgb(240, 241, 242); }\n  #media-scheme { background-color: rgb(70, 80, 90); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "body { background-color: rgb(16, 20, 24); color: rgb(240, 241, 242); }",
+                    "selectorText": "body",
+                    "nestedRules": []
+                  },
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-scheme { background-color: rgb(70, 80, 90); }",
+                    "selectorText": "#media-scheme",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "a { color: rgb(10, 80, 150); margin: 2px; padding: 1px; }",
+                "selectorText": "a",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "input, button { font: inherit; }",
+                "selectorText": "input, button",
+                "nestedRules": []
+              }
+            ]
+          },
+          {
+            "href": "http://127.0.0.1:18924/raw/styles/css/later.css",
+            "ownerTag": "link",
+            "ownerId": "late-link",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSImportRule",
+                "cssText": "@import url(\"./nested/imported.css\");",
+                "selectorText": null,
+                "importedStyleSheet": {
+                  "href": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+                  "rules": [
+                    {
+                      "type": "CSSStyleRule",
+                      "cssText": "#source-order { --imported-fill: rgb(200,210,220); background-color: var(--imported-fill); color: rgb(100, 110, 120); }",
+                      "selectorText": "#source-order",
+                      "nestedRules": []
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(70, 80, 90); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              }
+            ]
+          }
+        ],
+        "parserSupport": {
+          "customProperty": true,
+          "invalidColorValue": false,
+          "unsupportedPseudo": false
+        }
+      },
+      "canvasPixel": {
+        "x": 1,
+        "y": 1,
+        "r": 245,
+        "g": 246,
+        "b": 247,
+        "a": 255
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+          "method": "GET",
+          "resourceType": "document"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/base.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/later.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/base.css",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/later.css",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+          "status": 200,
+          "method": "GET"
+        }
+      ],
+      "serverRequests": [
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/response?via=markdown-form",
+          "kind": "document"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/base.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/later.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/nested/imported.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "colorScheme": "dark",
+      "markdownForm": {
+        "action": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+        "method": "get",
+        "target": "",
+        "html": "<form id=\"markdown-style-form\" action=\"/raw/styles/response?via=markdown-form\" method=\"get\"><input type=\"hidden\" name=\"via\" value=\"markdown-form\"><button id=\"markdown-style-submit\" type=\"submit\">Open raw style response</button></form>",
+        "submitter": "<button id=\"markdown-style-submit\" type=\"submit\">Open raw style response</button>"
+      },
+      "documentStatus": 200,
+      "document": {
+        "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+        "title": "Raw CSS response",
+        "characterSet": "UTF-8",
+        "scriptCount": 0,
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "devicePixelRatio": 1
+        },
+        "preferredColorScheme": "dark",
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "htmlColorScheme": "light dark",
+        "bodyBackground": "rgb(16, 20, 24)",
+        "bodyColor": "rgb(240, 241, 242)",
+        "bodyRect": {
+          "x": 0,
+          "y": 3,
+          "width": 390,
+          "height": 844
+        },
+        "nodes": {
+          "html": {
+            "tag": "html",
+            "id": null,
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {
+              "lang": "en"
+            },
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 847
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "390px",
+              "height": "847px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(255, 255, 255)",
+              "border-radius": "0px",
+              "font-family": "Times",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "body": {
+            "tag": "body",
+            "id": null,
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {},
+            "rect": {
+              "x": 0,
+              "y": 3,
+              "width": 390,
+              "height": 844
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "390px",
+              "height": "844px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgb(16, 20, 24)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "main": {
+            "tag": "main",
+            "id": "main",
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {
+              "id": "main"
+            },
+            "rect": {
+              "x": 0,
+              "y": 3,
+              "width": 390,
+              "height": 391
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "390px",
+              "height": "391px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "source-order": {
+            "tag": "p",
+            "id": "source-order",
+            "text": "Source order and import",
+            "attributes": {
+              "id": "source-order"
+            },
+            "rect": {
+              "x": 4,
+              "y": 3,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(70, 80, 90)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(70, 80, 90)",
+              "background-color": "rgb(200, 210, 220)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": "rgb(200,210,220)"
+            }
+          },
+          "specificity": {
+            "tag": "p",
+            "id": "specificity",
+            "text": "Specificity chain",
+            "attributes": {
+              "id": "specificity",
+              "class": "sample",
+              "data-state": "ready"
+            },
+            "rect": {
+              "x": 4,
+              "y": 30,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(60, 70, 80)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(60, 70, 80)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "inline-important": {
+            "tag": "p",
+            "id": "inline-important",
+            "text": "Inline important and repeated declarations",
+            "attributes": {
+              "id": "inline-important",
+              "style": "color:rgb(1,2,3);color:rgb(4,5,6)!important;border-top-color:rgb(1,2,3);margin-left:2px;margin-left:8px!important;padding-left:3px;padding-left:7px"
+            },
+            "rect": {
+              "x": 8,
+              "y": 57,
+              "width": 378,
+              "height": 28
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "365px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "8px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "7px",
+              "border-top-width": "2px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(4, 5, 6)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "descendant": {
+            "tag": "p",
+            "id": "descendant",
+            "text": "Descendant selector",
+            "attributes": {
+              "id": "descendant",
+              "class": "descendant"
+            },
+            "rect": {
+              "x": 11,
+              "y": 88,
+              "width": 375,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "371px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "11px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "child": {
+            "tag": "p",
+            "id": "child",
+            "text": "Child selector",
+            "attributes": {
+              "id": "child",
+              "class": "child"
+            },
+            "rect": {
+              "x": 4,
+              "y": 115,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "367px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "13px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "attribute": {
+            "tag": "p",
+            "id": "attribute",
+            "text": "Attribute selector",
+            "attributes": {
+              "id": "attribute",
+              "data-mark": "attr"
+            },
+            "rect": {
+              "x": 4,
+              "y": 142,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgb(180, 190, 200)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "not-target": {
+            "tag": "p",
+            "id": "not-target",
+            "text": "Not selector",
+            "attributes": {
+              "id": "not-target",
+              "class": "not-target"
+            },
+            "rect": {
+              "x": 4,
+              "y": 169,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(31, 32, 33)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(31, 32, 33)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "nth-second": {
+            "tag": "span",
+            "id": "nth-second",
+            "text": "Second child",
+            "attributes": {
+              "id": "nth-second"
+            },
+            "rect": {
+              "x": 70.453125,
+              "y": 195,
+              "width": 93.625,
+              "height": 19
+            },
+            "computed": {
+              "display": "inline",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "auto",
+              "height": "auto",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "1px",
+              "padding-bottom": "1px",
+              "padding-left": "1px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgb(120, 130, 140)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "custom-property": {
+            "tag": "p",
+            "id": "custom-property",
+            "text": "Custom property",
+            "attributes": {
+              "id": "custom-property"
+            },
+            "rect": {
+              "x": 4,
+              "y": 217,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "377px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "3px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(22, 44, 66)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(22, 44, 66)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "rgb(22,44,66)",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "invalid-declaration": {
+            "tag": "p",
+            "id": "invalid-declaration",
+            "text": "Invalid declaration fallback",
+            "attributes": {
+              "id": "invalid-declaration"
+            },
+            "rect": {
+              "x": 4,
+              "y": 244,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(21, 22, 23)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(21, 22, 23)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "unsupported-target": {
+            "tag": "p",
+            "id": "unsupported-target",
+            "text": "Unsupported syntax fallback",
+            "attributes": {
+              "id": "unsupported-target"
+            },
+            "rect": {
+              "x": 4,
+              "y": 271,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(13, 14, 15)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(13, 14, 15)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "media-width": {
+            "tag": "p",
+            "id": "media-width",
+            "text": "Viewport media query",
+            "attributes": {
+              "id": "media-width"
+            },
+            "rect": {
+              "x": 0,
+              "y": 298,
+              "width": 386,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "382px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "0px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "media-scheme": {
+            "tag": "p",
+            "id": "media-scheme",
+            "text": "Color scheme media query",
+            "attributes": {
+              "id": "media-scheme"
+            },
+            "rect": {
+              "x": 4,
+              "y": 325,
+              "width": 382,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "378px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgb(70, 80, 90)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "anchor": {
+            "tag": "a",
+            "id": "probe-anchor",
+            "text": "Anchor target",
+            "attributes": {
+              "id": "probe-anchor",
+              "href": "#media-width"
+            },
+            "rect": {
+              "x": 2,
+              "y": 351,
+              "width": 98.0625,
+              "height": 19
+            },
+            "computed": {
+              "display": "inline",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "auto",
+              "height": "auto",
+              "margin-top": "2px",
+              "margin-right": "2px",
+              "margin-bottom": "2px",
+              "margin-left": "2px",
+              "padding-top": "1px",
+              "padding-right": "1px",
+              "padding-bottom": "1px",
+              "padding-left": "1px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(10, 80, 150)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(10, 80, 150)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "input": {
+            "tag": "input",
+            "id": "probe-input",
+            "text": "",
+            "attributes": {
+              "id": "probe-input",
+              "value": "input"
+            },
+            "rect": {
+              "x": 0,
+              "y": 370,
+              "width": 174,
+              "height": 24
+            },
+            "computed": {
+              "display": "inline-block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "166px",
+              "height": "18px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "2px",
+              "padding-bottom": "1px",
+              "padding-left": "2px",
+              "border-top-width": "2px",
+              "border-top-style": "inset",
+              "border-top-color": "rgb(133, 133, 133)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(59, 59, 59)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "button": {
+            "tag": "button",
+            "id": "probe-button",
+            "text": "Button",
+            "attributes": {
+              "id": "probe-button",
+              "type": "button"
+            },
+            "rect": {
+              "x": 174,
+              "y": 370,
+              "width": 62.265625,
+              "height": 24
+            },
+            "computed": {
+              "display": "inline-block",
+              "position": "static",
+              "box-sizing": "border-box",
+              "width": "62.2656px",
+              "height": "24px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "6px",
+              "padding-bottom": "1px",
+              "padding-left": "6px",
+              "border-top-width": "2px",
+              "border-top-style": "outset",
+              "border-top-color": "rgb(255, 255, 255)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(107, 107, 107)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          }
+        },
+        "headSources": [
+          {
+            "tag": "link",
+            "id": "base-link",
+            "href": "http://127.0.0.1:18924/raw/styles/css/base.css",
+            "media": null
+          },
+          {
+            "tag": "style",
+            "id": "middle-style",
+            "href": null,
+            "media": null
+          },
+          {
+            "tag": "link",
+            "id": "late-link",
+            "href": "http://127.0.0.1:18924/raw/styles/css/later.css",
+            "media": null
+          }
+        ],
+        "stylesheetTree": [
+          {
+            "href": "http://127.0.0.1:18924/raw/styles/css/base.css",
+            "ownerTag": "link",
+            "ownerId": "base-link",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSStyleRule",
+                "cssText": "body { background-color: rgb(245, 246, 247); font-family: Arial, sans-serif; }",
+                "selectorText": "body",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(10, 20, 30); background-color: rgb(1, 2, 3); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#group > span { padding: 1px; }",
+                "selectorText": "#group > span",
+                "nestedRules": []
+              }
+            ]
+          },
+          {
+            "href": null,
+            "ownerTag": "style",
+            "ownerId": "middle-style",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSStyleRule",
+                "cssText": "html { color-scheme: light dark; }",
+                "selectorText": "html",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "body { margin: 0px; min-height: 100vh; background-color: rgb(245, 246, 247); color: rgb(30, 40, 50); font-family: Arial, sans-serif; font-size: 16px; }",
+                "selectorText": "body",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "p { font-size: 14px; line-height: 20px; margin: 3px 4px; padding: 2px; }",
+                "selectorText": "p",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(40, 50, 60); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": ".sample { color: rgb(2, 2, 2); }",
+                "selectorText": ".sample",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#specificity { color: rgb(3, 3, 3); }",
+                "selectorText": "#specificity",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main .sample { color: rgb(4, 4, 4); }",
+                "selectorText": "#main .sample",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > p[data-state=\"ready\"] { color: rgb(5, 5, 5); }",
+                "selectorText": "#main > p[data-state=\"ready\"]",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > p.sample[data-state=\"ready\"]:not(.excluded):nth-child(2) { color: rgb(60, 70, 80); }",
+                "selectorText": "#main > p.sample[data-state=\"ready\"]:not(.excluded):nth-child(2)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main .descendant { margin-left: 11px; }",
+                "selectorText": "#main .descendant",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > .child { padding-left: 13px; }",
+                "selectorText": "#main > .child",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "[data-mark=\"attr\"] { background-color: rgb(180, 190, 200); }",
+                "selectorText": "[data-mark=\"attr\"]",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": ".not-target:not(.excluded) { color: rgb(31, 32, 33); }",
+                "selectorText": ".not-target:not(.excluded)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#group > span:nth-child(2) { background-color: rgb(120, 130, 140); }",
+                "selectorText": "#group > span:nth-child(2)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#inline-important { padding-left: 2px; color: rgb(255, 0, 0) !important; border: 2px solid rgb(255, 0, 0) !important; margin-left: 12px !important; }",
+                "selectorText": "#inline-important",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#custom-property { --probe-accent: rgb(22,44,66); color: var(--probe-accent); padding-left: var(--probe-space,3px); }",
+                "selectorText": "#custom-property",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#invalid-declaration { color: rgb(21, 22, 23); }",
+                "selectorText": "#invalid-declaration",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#unsupported-target { color: rgb(13, 14, 15); }",
+                "selectorText": "#unsupported-target",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSSupportsRule",
+                "cssText": "@supports (color:not-a-real-color) {\n  #unsupported-target { background-color: rgb(250, 0, 250); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#unsupported-target { background-color: rgb(250, 0, 250); }",
+                    "selectorText": "#unsupported-target",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#media-width { margin-left: 0px; font-size: 16px; }",
+                "selectorText": "#media-width",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (min-width: 600px) {\n  #media-width { margin-left: 17px; font-size: 18px; }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-width { margin-left: 17px; font-size: 18px; }",
+                    "selectorText": "#media-width",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#media-scheme { background-color: rgb(210, 220, 230); }",
+                "selectorText": "#media-scheme",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (prefers-color-scheme: light) {\n  #media-scheme { background-color: rgb(220, 230, 240); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-scheme { background-color: rgb(220, 230, 240); }",
+                    "selectorText": "#media-scheme",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (prefers-color-scheme: dark) {\n  body { background-color: rgb(16, 20, 24); color: rgb(240, 241, 242); }\n  #media-scheme { background-color: rgb(70, 80, 90); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "body { background-color: rgb(16, 20, 24); color: rgb(240, 241, 242); }",
+                    "selectorText": "body",
+                    "nestedRules": []
+                  },
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-scheme { background-color: rgb(70, 80, 90); }",
+                    "selectorText": "#media-scheme",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "a { color: rgb(10, 80, 150); margin: 2px; padding: 1px; }",
+                "selectorText": "a",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "input, button { font: inherit; }",
+                "selectorText": "input, button",
+                "nestedRules": []
+              }
+            ]
+          },
+          {
+            "href": "http://127.0.0.1:18924/raw/styles/css/later.css",
+            "ownerTag": "link",
+            "ownerId": "late-link",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSImportRule",
+                "cssText": "@import url(\"./nested/imported.css\");",
+                "selectorText": null,
+                "importedStyleSheet": {
+                  "href": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+                  "rules": [
+                    {
+                      "type": "CSSStyleRule",
+                      "cssText": "#source-order { --imported-fill: rgb(200,210,220); background-color: var(--imported-fill); color: rgb(100, 110, 120); }",
+                      "selectorText": "#source-order",
+                      "nestedRules": []
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(70, 80, 90); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              }
+            ]
+          }
+        ],
+        "parserSupport": {
+          "customProperty": true,
+          "invalidColorValue": false,
+          "unsupportedPseudo": false
+        }
+      },
+      "canvasPixel": {
+        "x": 1,
+        "y": 1,
+        "r": 16,
+        "g": 20,
+        "b": 24,
+        "a": 255
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+          "method": "GET",
+          "resourceType": "document"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/base.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/later.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/base.css",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/later.css",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+          "status": 200,
+          "method": "GET"
+        }
+      ],
+      "serverRequests": [
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/response?via=markdown-form",
+          "kind": "document"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/base.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/later.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/nested/imported.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "height": 844,
+      "colorScheme": "light",
+      "markdownForm": {
+        "action": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+        "method": "get",
+        "target": "",
+        "html": "<form id=\"markdown-style-form\" action=\"/raw/styles/response?via=markdown-form\" method=\"get\"><input type=\"hidden\" name=\"via\" value=\"markdown-form\"><button id=\"markdown-style-submit\" type=\"submit\">Open raw style response</button></form>",
+        "submitter": "<button id=\"markdown-style-submit\" type=\"submit\">Open raw style response</button>"
+      },
+      "documentStatus": 200,
+      "document": {
+        "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+        "title": "Raw CSS response",
+        "characterSet": "UTF-8",
+        "scriptCount": 0,
+        "viewport": {
+          "width": 768,
+          "height": 844,
+          "devicePixelRatio": 1
+        },
+        "preferredColorScheme": "light",
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "htmlColorScheme": "light dark",
+        "bodyBackground": "rgb(245, 246, 247)",
+        "bodyColor": "rgb(30, 40, 50)",
+        "bodyRect": {
+          "x": 0,
+          "y": 3,
+          "width": 768,
+          "height": 844
+        },
+        "nodes": {
+          "html": {
+            "tag": "html",
+            "id": null,
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {
+              "lang": "en"
+            },
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 768,
+              "height": 847
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "768px",
+              "height": "847px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(0, 0, 0)",
+              "border-radius": "0px",
+              "font-family": "Times",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "body": {
+            "tag": "body",
+            "id": null,
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {},
+            "rect": {
+              "x": 0,
+              "y": 3,
+              "width": 768,
+              "height": 844
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "768px",
+              "height": "844px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgb(245, 246, 247)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "main": {
+            "tag": "main",
+            "id": "main",
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {
+              "id": "main"
+            },
+            "rect": {
+              "x": 0,
+              "y": 3,
+              "width": 768,
+              "height": 391
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "768px",
+              "height": "391px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "source-order": {
+            "tag": "p",
+            "id": "source-order",
+            "text": "Source order and import",
+            "attributes": {
+              "id": "source-order"
+            },
+            "rect": {
+              "x": 4,
+              "y": 3,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(70, 80, 90)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(70, 80, 90)",
+              "background-color": "rgb(200, 210, 220)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": "rgb(200,210,220)"
+            }
+          },
+          "specificity": {
+            "tag": "p",
+            "id": "specificity",
+            "text": "Specificity chain",
+            "attributes": {
+              "id": "specificity",
+              "class": "sample",
+              "data-state": "ready"
+            },
+            "rect": {
+              "x": 4,
+              "y": 30,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(60, 70, 80)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(60, 70, 80)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "inline-important": {
+            "tag": "p",
+            "id": "inline-important",
+            "text": "Inline important and repeated declarations",
+            "attributes": {
+              "id": "inline-important",
+              "style": "color:rgb(1,2,3);color:rgb(4,5,6)!important;border-top-color:rgb(1,2,3);margin-left:2px;margin-left:8px!important;padding-left:3px;padding-left:7px"
+            },
+            "rect": {
+              "x": 8,
+              "y": 57,
+              "width": 756,
+              "height": 28
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "743px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "8px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "7px",
+              "border-top-width": "2px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(4, 5, 6)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "descendant": {
+            "tag": "p",
+            "id": "descendant",
+            "text": "Descendant selector",
+            "attributes": {
+              "id": "descendant",
+              "class": "descendant"
+            },
+            "rect": {
+              "x": 11,
+              "y": 88,
+              "width": 753,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "749px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "11px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "child": {
+            "tag": "p",
+            "id": "child",
+            "text": "Child selector",
+            "attributes": {
+              "id": "child",
+              "class": "child"
+            },
+            "rect": {
+              "x": 4,
+              "y": 115,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "745px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "13px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "attribute": {
+            "tag": "p",
+            "id": "attribute",
+            "text": "Attribute selector",
+            "attributes": {
+              "id": "attribute",
+              "data-mark": "attr"
+            },
+            "rect": {
+              "x": 4,
+              "y": 142,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgb(180, 190, 200)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "not-target": {
+            "tag": "p",
+            "id": "not-target",
+            "text": "Not selector",
+            "attributes": {
+              "id": "not-target",
+              "class": "not-target"
+            },
+            "rect": {
+              "x": 4,
+              "y": 169,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(31, 32, 33)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(31, 32, 33)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "nth-second": {
+            "tag": "span",
+            "id": "nth-second",
+            "text": "Second child",
+            "attributes": {
+              "id": "nth-second"
+            },
+            "rect": {
+              "x": 70.453125,
+              "y": 195,
+              "width": 93.625,
+              "height": 19
+            },
+            "computed": {
+              "display": "inline",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "auto",
+              "height": "auto",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "1px",
+              "padding-bottom": "1px",
+              "padding-left": "1px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgb(120, 130, 140)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "custom-property": {
+            "tag": "p",
+            "id": "custom-property",
+            "text": "Custom property",
+            "attributes": {
+              "id": "custom-property"
+            },
+            "rect": {
+              "x": 4,
+              "y": 217,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "755px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "3px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(22, 44, 66)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(22, 44, 66)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "rgb(22,44,66)",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "invalid-declaration": {
+            "tag": "p",
+            "id": "invalid-declaration",
+            "text": "Invalid declaration fallback",
+            "attributes": {
+              "id": "invalid-declaration"
+            },
+            "rect": {
+              "x": 4,
+              "y": 244,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(21, 22, 23)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(21, 22, 23)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "unsupported-target": {
+            "tag": "p",
+            "id": "unsupported-target",
+            "text": "Unsupported syntax fallback",
+            "attributes": {
+              "id": "unsupported-target"
+            },
+            "rect": {
+              "x": 4,
+              "y": 271,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(13, 14, 15)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(13, 14, 15)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "media-width": {
+            "tag": "p",
+            "id": "media-width",
+            "text": "Viewport media query",
+            "attributes": {
+              "id": "media-width"
+            },
+            "rect": {
+              "x": 17,
+              "y": 298,
+              "width": 747,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "743px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "17px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "18px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "media-scheme": {
+            "tag": "p",
+            "id": "media-scheme",
+            "text": "Color scheme media query",
+            "attributes": {
+              "id": "media-scheme"
+            },
+            "rect": {
+              "x": 4,
+              "y": 325,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(30, 40, 50)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(30, 40, 50)",
+              "background-color": "rgb(220, 230, 240)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "anchor": {
+            "tag": "a",
+            "id": "probe-anchor",
+            "text": "Anchor target",
+            "attributes": {
+              "id": "probe-anchor",
+              "href": "#media-width"
+            },
+            "rect": {
+              "x": 2,
+              "y": 351,
+              "width": 98.0625,
+              "height": 19
+            },
+            "computed": {
+              "display": "inline",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "auto",
+              "height": "auto",
+              "margin-top": "2px",
+              "margin-right": "2px",
+              "margin-bottom": "2px",
+              "margin-left": "2px",
+              "padding-top": "1px",
+              "padding-right": "1px",
+              "padding-bottom": "1px",
+              "padding-left": "1px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(10, 80, 150)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(10, 80, 150)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "input": {
+            "tag": "input",
+            "id": "probe-input",
+            "text": "",
+            "attributes": {
+              "id": "probe-input",
+              "value": "input"
+            },
+            "rect": {
+              "x": 0,
+              "y": 370,
+              "width": 174,
+              "height": 24
+            },
+            "computed": {
+              "display": "inline-block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "166px",
+              "height": "18px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "2px",
+              "padding-bottom": "1px",
+              "padding-left": "2px",
+              "border-top-width": "2px",
+              "border-top-style": "inset",
+              "border-top-color": "rgb(118, 118, 118)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "button": {
+            "tag": "button",
+            "id": "probe-button",
+            "text": "Button",
+            "attributes": {
+              "id": "probe-button",
+              "type": "button"
+            },
+            "rect": {
+              "x": 174,
+              "y": 370,
+              "width": 62.265625,
+              "height": 24
+            },
+            "computed": {
+              "display": "inline-block",
+              "position": "static",
+              "box-sizing": "border-box",
+              "width": "62.2656px",
+              "height": "24px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "6px",
+              "padding-bottom": "1px",
+              "padding-left": "6px",
+              "border-top-width": "2px",
+              "border-top-style": "outset",
+              "border-top-color": "rgb(0, 0, 0)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(239, 239, 239)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          }
+        },
+        "headSources": [
+          {
+            "tag": "link",
+            "id": "base-link",
+            "href": "http://127.0.0.1:18924/raw/styles/css/base.css",
+            "media": null
+          },
+          {
+            "tag": "style",
+            "id": "middle-style",
+            "href": null,
+            "media": null
+          },
+          {
+            "tag": "link",
+            "id": "late-link",
+            "href": "http://127.0.0.1:18924/raw/styles/css/later.css",
+            "media": null
+          }
+        ],
+        "stylesheetTree": [
+          {
+            "href": "http://127.0.0.1:18924/raw/styles/css/base.css",
+            "ownerTag": "link",
+            "ownerId": "base-link",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSStyleRule",
+                "cssText": "body { background-color: rgb(245, 246, 247); font-family: Arial, sans-serif; }",
+                "selectorText": "body",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(10, 20, 30); background-color: rgb(1, 2, 3); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#group > span { padding: 1px; }",
+                "selectorText": "#group > span",
+                "nestedRules": []
+              }
+            ]
+          },
+          {
+            "href": null,
+            "ownerTag": "style",
+            "ownerId": "middle-style",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSStyleRule",
+                "cssText": "html { color-scheme: light dark; }",
+                "selectorText": "html",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "body { margin: 0px; min-height: 100vh; background-color: rgb(245, 246, 247); color: rgb(30, 40, 50); font-family: Arial, sans-serif; font-size: 16px; }",
+                "selectorText": "body",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "p { font-size: 14px; line-height: 20px; margin: 3px 4px; padding: 2px; }",
+                "selectorText": "p",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(40, 50, 60); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": ".sample { color: rgb(2, 2, 2); }",
+                "selectorText": ".sample",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#specificity { color: rgb(3, 3, 3); }",
+                "selectorText": "#specificity",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main .sample { color: rgb(4, 4, 4); }",
+                "selectorText": "#main .sample",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > p[data-state=\"ready\"] { color: rgb(5, 5, 5); }",
+                "selectorText": "#main > p[data-state=\"ready\"]",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > p.sample[data-state=\"ready\"]:not(.excluded):nth-child(2) { color: rgb(60, 70, 80); }",
+                "selectorText": "#main > p.sample[data-state=\"ready\"]:not(.excluded):nth-child(2)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main .descendant { margin-left: 11px; }",
+                "selectorText": "#main .descendant",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > .child { padding-left: 13px; }",
+                "selectorText": "#main > .child",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "[data-mark=\"attr\"] { background-color: rgb(180, 190, 200); }",
+                "selectorText": "[data-mark=\"attr\"]",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": ".not-target:not(.excluded) { color: rgb(31, 32, 33); }",
+                "selectorText": ".not-target:not(.excluded)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#group > span:nth-child(2) { background-color: rgb(120, 130, 140); }",
+                "selectorText": "#group > span:nth-child(2)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#inline-important { padding-left: 2px; color: rgb(255, 0, 0) !important; border: 2px solid rgb(255, 0, 0) !important; margin-left: 12px !important; }",
+                "selectorText": "#inline-important",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#custom-property { --probe-accent: rgb(22,44,66); color: var(--probe-accent); padding-left: var(--probe-space,3px); }",
+                "selectorText": "#custom-property",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#invalid-declaration { color: rgb(21, 22, 23); }",
+                "selectorText": "#invalid-declaration",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#unsupported-target { color: rgb(13, 14, 15); }",
+                "selectorText": "#unsupported-target",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSSupportsRule",
+                "cssText": "@supports (color:not-a-real-color) {\n  #unsupported-target { background-color: rgb(250, 0, 250); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#unsupported-target { background-color: rgb(250, 0, 250); }",
+                    "selectorText": "#unsupported-target",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#media-width { margin-left: 0px; font-size: 16px; }",
+                "selectorText": "#media-width",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (min-width: 600px) {\n  #media-width { margin-left: 17px; font-size: 18px; }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-width { margin-left: 17px; font-size: 18px; }",
+                    "selectorText": "#media-width",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#media-scheme { background-color: rgb(210, 220, 230); }",
+                "selectorText": "#media-scheme",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (prefers-color-scheme: light) {\n  #media-scheme { background-color: rgb(220, 230, 240); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-scheme { background-color: rgb(220, 230, 240); }",
+                    "selectorText": "#media-scheme",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (prefers-color-scheme: dark) {\n  body { background-color: rgb(16, 20, 24); color: rgb(240, 241, 242); }\n  #media-scheme { background-color: rgb(70, 80, 90); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "body { background-color: rgb(16, 20, 24); color: rgb(240, 241, 242); }",
+                    "selectorText": "body",
+                    "nestedRules": []
+                  },
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-scheme { background-color: rgb(70, 80, 90); }",
+                    "selectorText": "#media-scheme",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "a { color: rgb(10, 80, 150); margin: 2px; padding: 1px; }",
+                "selectorText": "a",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "input, button { font: inherit; }",
+                "selectorText": "input, button",
+                "nestedRules": []
+              }
+            ]
+          },
+          {
+            "href": "http://127.0.0.1:18924/raw/styles/css/later.css",
+            "ownerTag": "link",
+            "ownerId": "late-link",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSImportRule",
+                "cssText": "@import url(\"./nested/imported.css\");",
+                "selectorText": null,
+                "importedStyleSheet": {
+                  "href": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+                  "rules": [
+                    {
+                      "type": "CSSStyleRule",
+                      "cssText": "#source-order { --imported-fill: rgb(200,210,220); background-color: var(--imported-fill); color: rgb(100, 110, 120); }",
+                      "selectorText": "#source-order",
+                      "nestedRules": []
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(70, 80, 90); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              }
+            ]
+          }
+        ],
+        "parserSupport": {
+          "customProperty": true,
+          "invalidColorValue": false,
+          "unsupportedPseudo": false
+        }
+      },
+      "canvasPixel": {
+        "x": 1,
+        "y": 1,
+        "r": 245,
+        "g": 246,
+        "b": 247,
+        "a": 255
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+          "method": "GET",
+          "resourceType": "document"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/base.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/later.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/base.css",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/later.css",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+          "status": 200,
+          "method": "GET"
+        }
+      ],
+      "serverRequests": [
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/response?via=markdown-form",
+          "kind": "document"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/base.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/later.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/nested/imported.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "height": 844,
+      "colorScheme": "dark",
+      "markdownForm": {
+        "action": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+        "method": "get",
+        "target": "",
+        "html": "<form id=\"markdown-style-form\" action=\"/raw/styles/response?via=markdown-form\" method=\"get\"><input type=\"hidden\" name=\"via\" value=\"markdown-form\"><button id=\"markdown-style-submit\" type=\"submit\">Open raw style response</button></form>",
+        "submitter": "<button id=\"markdown-style-submit\" type=\"submit\">Open raw style response</button>"
+      },
+      "documentStatus": 200,
+      "document": {
+        "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+        "title": "Raw CSS response",
+        "characterSet": "UTF-8",
+        "scriptCount": 0,
+        "viewport": {
+          "width": 768,
+          "height": 844,
+          "devicePixelRatio": 1
+        },
+        "preferredColorScheme": "dark",
+        "htmlBackground": "rgba(0, 0, 0, 0)",
+        "htmlColorScheme": "light dark",
+        "bodyBackground": "rgb(16, 20, 24)",
+        "bodyColor": "rgb(240, 241, 242)",
+        "bodyRect": {
+          "x": 0,
+          "y": 3,
+          "width": 768,
+          "height": 844
+        },
+        "nodes": {
+          "html": {
+            "tag": "html",
+            "id": null,
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {
+              "lang": "en"
+            },
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 768,
+              "height": 847
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "768px",
+              "height": "847px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(255, 255, 255)",
+              "border-radius": "0px",
+              "font-family": "Times",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "body": {
+            "tag": "body",
+            "id": null,
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {},
+            "rect": {
+              "x": 0,
+              "y": 3,
+              "width": 768,
+              "height": 844
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "768px",
+              "height": "844px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgb(16, 20, 24)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "main": {
+            "tag": "main",
+            "id": "main",
+            "text": "Source order and import\n\nSpecificity chain\n\nInline important and repeated declarations\n\nDescendant s",
+            "attributes": {
+              "id": "main"
+            },
+            "rect": {
+              "x": 0,
+              "y": 3,
+              "width": 768,
+              "height": 391
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "768px",
+              "height": "391px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "0px",
+              "padding-right": "0px",
+              "padding-bottom": "0px",
+              "padding-left": "0px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "source-order": {
+            "tag": "p",
+            "id": "source-order",
+            "text": "Source order and import",
+            "attributes": {
+              "id": "source-order"
+            },
+            "rect": {
+              "x": 4,
+              "y": 3,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(70, 80, 90)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(70, 80, 90)",
+              "background-color": "rgb(200, 210, 220)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": "rgb(200,210,220)"
+            }
+          },
+          "specificity": {
+            "tag": "p",
+            "id": "specificity",
+            "text": "Specificity chain",
+            "attributes": {
+              "id": "specificity",
+              "class": "sample",
+              "data-state": "ready"
+            },
+            "rect": {
+              "x": 4,
+              "y": 30,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(60, 70, 80)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(60, 70, 80)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "inline-important": {
+            "tag": "p",
+            "id": "inline-important",
+            "text": "Inline important and repeated declarations",
+            "attributes": {
+              "id": "inline-important",
+              "style": "color:rgb(1,2,3);color:rgb(4,5,6)!important;border-top-color:rgb(1,2,3);margin-left:2px;margin-left:8px!important;padding-left:3px;padding-left:7px"
+            },
+            "rect": {
+              "x": 8,
+              "y": 57,
+              "width": 756,
+              "height": 28
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "743px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "8px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "7px",
+              "border-top-width": "2px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(4, 5, 6)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "descendant": {
+            "tag": "p",
+            "id": "descendant",
+            "text": "Descendant selector",
+            "attributes": {
+              "id": "descendant",
+              "class": "descendant"
+            },
+            "rect": {
+              "x": 11,
+              "y": 88,
+              "width": 753,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "749px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "11px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "child": {
+            "tag": "p",
+            "id": "child",
+            "text": "Child selector",
+            "attributes": {
+              "id": "child",
+              "class": "child"
+            },
+            "rect": {
+              "x": 4,
+              "y": 115,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "745px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "13px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "attribute": {
+            "tag": "p",
+            "id": "attribute",
+            "text": "Attribute selector",
+            "attributes": {
+              "id": "attribute",
+              "data-mark": "attr"
+            },
+            "rect": {
+              "x": 4,
+              "y": 142,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgb(180, 190, 200)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "not-target": {
+            "tag": "p",
+            "id": "not-target",
+            "text": "Not selector",
+            "attributes": {
+              "id": "not-target",
+              "class": "not-target"
+            },
+            "rect": {
+              "x": 4,
+              "y": 169,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(31, 32, 33)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(31, 32, 33)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "nth-second": {
+            "tag": "span",
+            "id": "nth-second",
+            "text": "Second child",
+            "attributes": {
+              "id": "nth-second"
+            },
+            "rect": {
+              "x": 70.453125,
+              "y": 195,
+              "width": 93.625,
+              "height": 19
+            },
+            "computed": {
+              "display": "inline",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "auto",
+              "height": "auto",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "1px",
+              "padding-bottom": "1px",
+              "padding-left": "1px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgb(120, 130, 140)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "custom-property": {
+            "tag": "p",
+            "id": "custom-property",
+            "text": "Custom property",
+            "attributes": {
+              "id": "custom-property"
+            },
+            "rect": {
+              "x": 4,
+              "y": 217,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "755px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "3px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(22, 44, 66)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(22, 44, 66)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "rgb(22,44,66)",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "invalid-declaration": {
+            "tag": "p",
+            "id": "invalid-declaration",
+            "text": "Invalid declaration fallback",
+            "attributes": {
+              "id": "invalid-declaration"
+            },
+            "rect": {
+              "x": 4,
+              "y": 244,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(21, 22, 23)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(21, 22, 23)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "unsupported-target": {
+            "tag": "p",
+            "id": "unsupported-target",
+            "text": "Unsupported syntax fallback",
+            "attributes": {
+              "id": "unsupported-target"
+            },
+            "rect": {
+              "x": 4,
+              "y": 271,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(13, 14, 15)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(13, 14, 15)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "media-width": {
+            "tag": "p",
+            "id": "media-width",
+            "text": "Viewport media query",
+            "attributes": {
+              "id": "media-width"
+            },
+            "rect": {
+              "x": 17,
+              "y": 298,
+              "width": 747,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "743px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "17px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "18px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "media-scheme": {
+            "tag": "p",
+            "id": "media-scheme",
+            "text": "Color scheme media query",
+            "attributes": {
+              "id": "media-scheme"
+            },
+            "rect": {
+              "x": 4,
+              "y": 325,
+              "width": 760,
+              "height": 24
+            },
+            "computed": {
+              "display": "block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "756px",
+              "height": "20px",
+              "margin-top": "3px",
+              "margin-right": "4px",
+              "margin-bottom": "3px",
+              "margin-left": "4px",
+              "padding-top": "2px",
+              "padding-right": "2px",
+              "padding-bottom": "2px",
+              "padding-left": "2px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(240, 241, 242)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "14px",
+              "font-weight": "400",
+              "line-height": "20px",
+              "color": "rgb(240, 241, 242)",
+              "background-color": "rgb(70, 80, 90)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "anchor": {
+            "tag": "a",
+            "id": "probe-anchor",
+            "text": "Anchor target",
+            "attributes": {
+              "id": "probe-anchor",
+              "href": "#media-width"
+            },
+            "rect": {
+              "x": 2,
+              "y": 351,
+              "width": 98.0625,
+              "height": 19
+            },
+            "computed": {
+              "display": "inline",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "auto",
+              "height": "auto",
+              "margin-top": "2px",
+              "margin-right": "2px",
+              "margin-bottom": "2px",
+              "margin-left": "2px",
+              "padding-top": "1px",
+              "padding-right": "1px",
+              "padding-bottom": "1px",
+              "padding-left": "1px",
+              "border-top-width": "0px",
+              "border-top-style": "none",
+              "border-top-color": "rgb(10, 80, 150)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(10, 80, 150)",
+              "background-color": "rgba(0, 0, 0, 0)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "input": {
+            "tag": "input",
+            "id": "probe-input",
+            "text": "",
+            "attributes": {
+              "id": "probe-input",
+              "value": "input"
+            },
+            "rect": {
+              "x": 0,
+              "y": 370,
+              "width": 174,
+              "height": 24
+            },
+            "computed": {
+              "display": "inline-block",
+              "position": "static",
+              "box-sizing": "content-box",
+              "width": "166px",
+              "height": "18px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "2px",
+              "padding-bottom": "1px",
+              "padding-left": "2px",
+              "border-top-width": "2px",
+              "border-top-style": "inset",
+              "border-top-color": "rgb(133, 133, 133)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(59, 59, 59)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          },
+          "button": {
+            "tag": "button",
+            "id": "probe-button",
+            "text": "Button",
+            "attributes": {
+              "id": "probe-button",
+              "type": "button"
+            },
+            "rect": {
+              "x": 174,
+              "y": 370,
+              "width": 62.265625,
+              "height": 24
+            },
+            "computed": {
+              "display": "inline-block",
+              "position": "static",
+              "box-sizing": "border-box",
+              "width": "62.2656px",
+              "height": "24px",
+              "margin-top": "0px",
+              "margin-right": "0px",
+              "margin-bottom": "0px",
+              "margin-left": "0px",
+              "padding-top": "1px",
+              "padding-right": "6px",
+              "padding-bottom": "1px",
+              "padding-left": "6px",
+              "border-top-width": "2px",
+              "border-top-style": "outset",
+              "border-top-color": "rgb(255, 255, 255)",
+              "border-radius": "0px",
+              "font-family": "Arial, sans-serif",
+              "font-size": "16px",
+              "font-weight": "400",
+              "line-height": "normal",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(107, 107, 107)",
+              "background-image": "none",
+              "color-scheme": "light dark",
+              "--probe-accent": "",
+              "--probe-space": "",
+              "--imported-fill": ""
+            }
+          }
+        },
+        "headSources": [
+          {
+            "tag": "link",
+            "id": "base-link",
+            "href": "http://127.0.0.1:18924/raw/styles/css/base.css",
+            "media": null
+          },
+          {
+            "tag": "style",
+            "id": "middle-style",
+            "href": null,
+            "media": null
+          },
+          {
+            "tag": "link",
+            "id": "late-link",
+            "href": "http://127.0.0.1:18924/raw/styles/css/later.css",
+            "media": null
+          }
+        ],
+        "stylesheetTree": [
+          {
+            "href": "http://127.0.0.1:18924/raw/styles/css/base.css",
+            "ownerTag": "link",
+            "ownerId": "base-link",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSStyleRule",
+                "cssText": "body { background-color: rgb(245, 246, 247); font-family: Arial, sans-serif; }",
+                "selectorText": "body",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(10, 20, 30); background-color: rgb(1, 2, 3); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#group > span { padding: 1px; }",
+                "selectorText": "#group > span",
+                "nestedRules": []
+              }
+            ]
+          },
+          {
+            "href": null,
+            "ownerTag": "style",
+            "ownerId": "middle-style",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSStyleRule",
+                "cssText": "html { color-scheme: light dark; }",
+                "selectorText": "html",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "body { margin: 0px; min-height: 100vh; background-color: rgb(245, 246, 247); color: rgb(30, 40, 50); font-family: Arial, sans-serif; font-size: 16px; }",
+                "selectorText": "body",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "p { font-size: 14px; line-height: 20px; margin: 3px 4px; padding: 2px; }",
+                "selectorText": "p",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(40, 50, 60); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": ".sample { color: rgb(2, 2, 2); }",
+                "selectorText": ".sample",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#specificity { color: rgb(3, 3, 3); }",
+                "selectorText": "#specificity",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main .sample { color: rgb(4, 4, 4); }",
+                "selectorText": "#main .sample",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > p[data-state=\"ready\"] { color: rgb(5, 5, 5); }",
+                "selectorText": "#main > p[data-state=\"ready\"]",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > p.sample[data-state=\"ready\"]:not(.excluded):nth-child(2) { color: rgb(60, 70, 80); }",
+                "selectorText": "#main > p.sample[data-state=\"ready\"]:not(.excluded):nth-child(2)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main .descendant { margin-left: 11px; }",
+                "selectorText": "#main .descendant",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#main > .child { padding-left: 13px; }",
+                "selectorText": "#main > .child",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "[data-mark=\"attr\"] { background-color: rgb(180, 190, 200); }",
+                "selectorText": "[data-mark=\"attr\"]",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": ".not-target:not(.excluded) { color: rgb(31, 32, 33); }",
+                "selectorText": ".not-target:not(.excluded)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#group > span:nth-child(2) { background-color: rgb(120, 130, 140); }",
+                "selectorText": "#group > span:nth-child(2)",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#inline-important { padding-left: 2px; color: rgb(255, 0, 0) !important; border: 2px solid rgb(255, 0, 0) !important; margin-left: 12px !important; }",
+                "selectorText": "#inline-important",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#custom-property { --probe-accent: rgb(22,44,66); color: var(--probe-accent); padding-left: var(--probe-space,3px); }",
+                "selectorText": "#custom-property",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#invalid-declaration { color: rgb(21, 22, 23); }",
+                "selectorText": "#invalid-declaration",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#unsupported-target { color: rgb(13, 14, 15); }",
+                "selectorText": "#unsupported-target",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSSupportsRule",
+                "cssText": "@supports (color:not-a-real-color) {\n  #unsupported-target { background-color: rgb(250, 0, 250); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#unsupported-target { background-color: rgb(250, 0, 250); }",
+                    "selectorText": "#unsupported-target",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#media-width { margin-left: 0px; font-size: 16px; }",
+                "selectorText": "#media-width",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (min-width: 600px) {\n  #media-width { margin-left: 17px; font-size: 18px; }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-width { margin-left: 17px; font-size: 18px; }",
+                    "selectorText": "#media-width",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#media-scheme { background-color: rgb(210, 220, 230); }",
+                "selectorText": "#media-scheme",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (prefers-color-scheme: light) {\n  #media-scheme { background-color: rgb(220, 230, 240); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-scheme { background-color: rgb(220, 230, 240); }",
+                    "selectorText": "#media-scheme",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSMediaRule",
+                "cssText": "@media (prefers-color-scheme: dark) {\n  body { background-color: rgb(16, 20, 24); color: rgb(240, 241, 242); }\n  #media-scheme { background-color: rgb(70, 80, 90); }\n}",
+                "selectorText": null,
+                "nestedRules": [
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "body { background-color: rgb(16, 20, 24); color: rgb(240, 241, 242); }",
+                    "selectorText": "body",
+                    "nestedRules": []
+                  },
+                  {
+                    "type": "CSSStyleRule",
+                    "cssText": "#media-scheme { background-color: rgb(70, 80, 90); }",
+                    "selectorText": "#media-scheme",
+                    "nestedRules": []
+                  }
+                ]
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "a { color: rgb(10, 80, 150); margin: 2px; padding: 1px; }",
+                "selectorText": "a",
+                "nestedRules": []
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "input, button { font: inherit; }",
+                "selectorText": "input, button",
+                "nestedRules": []
+              }
+            ]
+          },
+          {
+            "href": "http://127.0.0.1:18924/raw/styles/css/later.css",
+            "ownerTag": "link",
+            "ownerId": "late-link",
+            "media": "",
+            "disabled": false,
+            "rules": [
+              {
+                "type": "CSSImportRule",
+                "cssText": "@import url(\"./nested/imported.css\");",
+                "selectorText": null,
+                "importedStyleSheet": {
+                  "href": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+                  "rules": [
+                    {
+                      "type": "CSSStyleRule",
+                      "cssText": "#source-order { --imported-fill: rgb(200,210,220); background-color: var(--imported-fill); color: rgb(100, 110, 120); }",
+                      "selectorText": "#source-order",
+                      "nestedRules": []
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "CSSStyleRule",
+                "cssText": "#source-order { color: rgb(70, 80, 90); }",
+                "selectorText": "#source-order",
+                "nestedRules": []
+              }
+            ]
+          }
+        ],
+        "parserSupport": {
+          "customProperty": true,
+          "invalidColorValue": false,
+          "unsupportedPseudo": false
+        }
+      },
+      "canvasPixel": {
+        "x": 1,
+        "y": 1,
+        "r": 16,
+        "g": 20,
+        "b": 24,
+        "a": 255
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+          "method": "GET",
+          "resourceType": "document"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/base.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/later.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+          "method": "GET",
+          "resourceType": "stylesheet"
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/response?via=markdown-form",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/base.css",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/later.css",
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:18924/raw/styles/css/nested/imported.css",
+          "status": 200,
+          "method": "GET"
+        }
+      ],
+      "serverRequests": [
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/response?via=markdown-form",
+          "kind": "document"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/base.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/later.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        },
+        {
+          "method": "GET",
+          "rawUrl": "/raw/styles/css/nested/imported.css",
+          "kind": "stylesheet",
+          "accept": "text/css,*/*;q=0.1"
+        }
+      ]
+    }
+  ],
+  "serverResponses": [
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/response?via=markdown-form",
+      "kind": "document"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/base.css",
+      "kind": "stylesheet"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/later.css",
+      "kind": "stylesheet"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/nested/imported.css",
+      "kind": "stylesheet"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/response?via=markdown-form",
+      "kind": "document"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/base.css",
+      "kind": "stylesheet"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/later.css",
+      "kind": "stylesheet"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/nested/imported.css",
+      "kind": "stylesheet"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/response?via=markdown-form",
+      "kind": "document"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/base.css",
+      "kind": "stylesheet"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/later.css",
+      "kind": "stylesheet"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/nested/imported.css",
+      "kind": "stylesheet"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/response?via=markdown-form",
+      "kind": "document"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/base.css",
+      "kind": "stylesheet"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/later.css",
+      "kind": "stylesheet"
+    },
+    {
+      "status": 200,
+      "rawUrl": "/raw/styles/css/nested/imported.css",
+      "kind": "stylesheet"
+    }
+  ],
+  "externalRequests": [],
+  "browserErrors": [],
+  "localRequestsOnly": true,
+  "responseScriptsExecuted": false,
+  "unsupported": [
+    "script behavior in raw responses",
+    "external network resources",
+    "font matching outside Chrome host defaults"
+  ]
+}

@@ -1,0 +1,903 @@
+{
+  "browserVersion": "155.0.8059.40",
+  "fixtureSha256": "a03bb5d704dd6341ae4c8737c9de8a97b5534d48a549fa83fdb00d2b0be052b9",
+  "source": "Independent Chrome155 via verify_document_activation_browser.mjs; full host evidence in build/parity-acceptance/document-activation-20261016/browser-oracle.json",
+  "programmatic": {
+    "status": "DONE",
+    "cases": {
+      "checkbox": {
+        "events": [
+          {
+            "control": "checkbox",
+            "type": "click",
+            "targetId": "checkbox",
+            "currentTargetId": "checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          },
+          {
+            "control": "checkbox",
+            "type": "input",
+            "targetId": "checkbox",
+            "currentTargetId": "checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          },
+          {
+            "control": "checkbox",
+            "type": "change",
+            "targetId": "checkbox",
+            "currentTargetId": "checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          }
+        ],
+        "after": {
+          "checked": true,
+          "indeterminate": false
+        }
+      },
+      "cancelledCheckbox": {
+        "events": [
+          {
+            "control": "cancelledCheckbox",
+            "type": "click",
+            "targetId": "cancelled-checkbox",
+            "currentTargetId": "cancelled-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          }
+        ],
+        "after": {
+          "checked": false,
+          "indeterminate": true
+        },
+        "documentObservation": {
+          "targetId": "cancelled-checkbox",
+          "defaultPrevented": true,
+          "checked": true
+        }
+      },
+      "radio": {
+        "radioOneEvents": [],
+        "radioTwoEvents": [
+          {
+            "control": "radioTwo",
+            "type": "click",
+            "targetId": "radio-two",
+            "currentTargetId": "radio-two",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          },
+          {
+            "control": "radioTwo",
+            "type": "input",
+            "targetId": "radio-two",
+            "currentTargetId": "radio-two",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          },
+          {
+            "control": "radioTwo",
+            "type": "change",
+            "targetId": "radio-two",
+            "currentTargetId": "radio-two",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          },
+          {
+            "control": "radioTwo",
+            "type": "click",
+            "targetId": "radio-two",
+            "currentTargetId": "radio-two",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          }
+        ],
+        "after": {
+          "radioOne": false,
+          "radioTwo": true
+        }
+      },
+      "disabled": {
+        "ownDisabledEvents": [],
+        "fieldsetDescendantEvents": [],
+        "firstLegendEvents": [
+          {
+            "control": "legendCheckbox",
+            "type": "click",
+            "targetId": "legend-checkbox",
+            "currentTargetId": "legend-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          },
+          {
+            "control": "legendCheckbox",
+            "type": "input",
+            "targetId": "legend-checkbox",
+            "currentTargetId": "legend-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          },
+          {
+            "control": "legendCheckbox",
+            "type": "change",
+            "targetId": "legend-checkbox",
+            "currentTargetId": "legend-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          }
+        ],
+        "after": {
+          "ownDisabled": false,
+          "fieldsetDescendant": false,
+          "firstLegend": true
+        }
+      },
+      "submitButtonChildClick": {
+        "childClickEvents": [
+          {
+            "control": "submitButtonChild",
+            "type": "click",
+            "targetId": "submit-button-child",
+            "currentTargetId": "submit-button-child",
+            "checked": null,
+            "indeterminate": null,
+            "value": null,
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          }
+        ],
+        "buttonClickEvents": [
+          {
+            "control": "submitButton",
+            "type": "click",
+            "targetId": "submit-button-child",
+            "currentTargetId": "submit-button",
+            "checked": null,
+            "indeterminate": null,
+            "value": "",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          }
+        ],
+        "submitEvents": [
+          {
+            "control": "submitForm",
+            "type": "submit",
+            "targetId": "submit-form",
+            "currentTargetId": "submit-form",
+            "checked": null,
+            "indeterminate": null,
+            "value": null,
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": "submit-button"
+          }
+        ],
+        "documentObservation": {
+          "targetId": "submit-form",
+          "submitterId": "submit-button",
+          "defaultPrevented": true
+        }
+      },
+      "resetButton": {
+        "events": [
+          {
+            "control": "resetForm",
+            "type": "reset",
+            "targetId": "reset-form",
+            "currentTargetId": "reset-form",
+            "checked": null,
+            "indeterminate": null,
+            "value": null,
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          }
+        ],
+        "valueAfter": "original",
+        "documentObservation": {
+          "targetId": "reset-form",
+          "defaultPrevented": false
+        }
+      },
+      "cancelledResetButton": {
+        "events": [
+          {
+            "control": "cancelResetForm",
+            "type": "reset",
+            "targetId": "cancel-reset-form",
+            "currentTargetId": "cancel-reset-form",
+            "checked": null,
+            "indeterminate": null,
+            "value": null,
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          }
+        ],
+        "valueAfter": "changed",
+        "documentObservation": {
+          "targetId": "cancel-reset-form",
+          "defaultPrevented": true
+        }
+      },
+      "label": {
+        "explicit": {
+          "events": [
+            {
+              "control": "explicitCheckbox",
+              "type": "click",
+              "targetId": "explicit-checkbox",
+              "currentTargetId": "explicit-checkbox",
+              "checked": true,
+              "indeterminate": false,
+              "value": "on",
+              "defaultPrevented": false,
+              "isTrusted": false,
+              "bubbles": true,
+              "cancelable": true,
+              "detail": 0,
+              "button": 0,
+              "buttons": 0,
+              "isMouseEvent": true,
+              "isPointerEvent": true,
+              "submitterId": null
+            },
+            {
+              "control": "explicitCheckbox",
+              "type": "input",
+              "targetId": "explicit-checkbox",
+              "currentTargetId": "explicit-checkbox",
+              "checked": true,
+              "indeterminate": false,
+              "value": "on",
+              "defaultPrevented": false,
+              "isTrusted": true,
+              "bubbles": true,
+              "cancelable": false,
+              "detail": null,
+              "button": null,
+              "buttons": null,
+              "isMouseEvent": false,
+              "isPointerEvent": false,
+              "submitterId": null
+            },
+            {
+              "control": "explicitCheckbox",
+              "type": "change",
+              "targetId": "explicit-checkbox",
+              "currentTargetId": "explicit-checkbox",
+              "checked": true,
+              "indeterminate": false,
+              "value": "on",
+              "defaultPrevented": false,
+              "isTrusted": true,
+              "bubbles": true,
+              "cancelable": false,
+              "detail": null,
+              "button": null,
+              "buttons": null,
+              "isMouseEvent": false,
+              "isPointerEvent": false,
+              "submitterId": null
+            }
+          ],
+          "checked": true
+        },
+        "implicit": {
+          "events": [
+            {
+              "control": "implicitCheckbox",
+              "type": "click",
+              "targetId": "implicit-checkbox",
+              "currentTargetId": "implicit-checkbox",
+              "checked": true,
+              "indeterminate": false,
+              "value": "on",
+              "defaultPrevented": false,
+              "isTrusted": false,
+              "bubbles": true,
+              "cancelable": true,
+              "detail": 0,
+              "button": 0,
+              "buttons": 0,
+              "isMouseEvent": true,
+              "isPointerEvent": true,
+              "submitterId": null
+            },
+            {
+              "control": "implicitCheckbox",
+              "type": "input",
+              "targetId": "implicit-checkbox",
+              "currentTargetId": "implicit-checkbox",
+              "checked": true,
+              "indeterminate": false,
+              "value": "on",
+              "defaultPrevented": false,
+              "isTrusted": true,
+              "bubbles": true,
+              "cancelable": false,
+              "detail": null,
+              "button": null,
+              "buttons": null,
+              "isMouseEvent": false,
+              "isPointerEvent": false,
+              "submitterId": null
+            },
+            {
+              "control": "implicitCheckbox",
+              "type": "change",
+              "targetId": "implicit-checkbox",
+              "currentTargetId": "implicit-checkbox",
+              "checked": true,
+              "indeterminate": false,
+              "value": "on",
+              "defaultPrevented": false,
+              "isTrusted": true,
+              "bubbles": true,
+              "cancelable": false,
+              "detail": null,
+              "button": null,
+              "buttons": null,
+              "isMouseEvent": false,
+              "isPointerEvent": false,
+              "submitterId": null
+            }
+          ],
+          "checked": true
+        },
+        "cancelled": {
+          "events": [],
+          "checked": false,
+          "documentObservation": {
+            "targetId": "cancel-label-text",
+            "defaultPrevented": true,
+            "checked": false
+          }
+        },
+        "interactiveDescendant": {
+          "labelControlEvents": [],
+          "childEvents": [
+            {
+              "control": "interactiveLabelChild",
+              "type": "click",
+              "targetId": "interactive-label-child",
+              "currentTargetId": "interactive-label-child",
+              "checked": null,
+              "indeterminate": null,
+              "value": "",
+              "defaultPrevented": false,
+              "isTrusted": false,
+              "bubbles": true,
+              "cancelable": true,
+              "detail": 0,
+              "button": 0,
+              "buttons": 0,
+              "isMouseEvent": true,
+              "isPointerEvent": true,
+              "submitterId": null
+            }
+          ],
+          "checked": false
+        },
+        "disabledTarget": {
+          "events": [],
+          "checked": false
+        }
+      },
+      "recursiveClick": {
+        "events": [
+          {
+            "control": "recursiveCheckbox",
+            "type": "click",
+            "targetId": "recursive-checkbox",
+            "currentTargetId": "recursive-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          },
+          {
+            "control": "recursiveCheckbox",
+            "type": "input",
+            "targetId": "recursive-checkbox",
+            "currentTargetId": "recursive-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          },
+          {
+            "control": "recursiveCheckbox",
+            "type": "change",
+            "targetId": "recursive-checkbox",
+            "currentTargetId": "recursive-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          }
+        ],
+        "reentryAttempts": 1,
+        "after": true
+      },
+      "disabledMouseEventDispatch": {
+        "events": [
+          {
+            "control": "disabledCheckbox",
+            "type": "click",
+            "targetId": "disabled-checkbox",
+            "currentTargetId": "disabled-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": false,
+            "submitterId": null
+          },
+          {
+            "control": "disabledCheckbox",
+            "type": "input",
+            "targetId": "disabled-checkbox",
+            "currentTargetId": "disabled-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          },
+          {
+            "control": "disabledCheckbox",
+            "type": "change",
+            "targetId": "disabled-checkbox",
+            "currentTargetId": "disabled-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          }
+        ],
+        "after": true
+      },
+      "mouseEventDispatch": {
+        "events": [
+          {
+            "control": "dispatchCheckbox",
+            "type": "click",
+            "targetId": "dispatch-checkbox",
+            "currentTargetId": "dispatch-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": false,
+            "submitterId": null
+          },
+          {
+            "control": "dispatchCheckbox",
+            "type": "input",
+            "targetId": "dispatch-checkbox",
+            "currentTargetId": "dispatch-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          },
+          {
+            "control": "dispatchCheckbox",
+            "type": "change",
+            "targetId": "dispatch-checkbox",
+            "currentTargetId": "dispatch-checkbox",
+            "checked": true,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": true,
+            "bubbles": true,
+            "cancelable": false,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          }
+        ],
+        "after": true
+      },
+      "plainEventDispatch": {
+        "events": [
+          {
+            "control": "plainEventCheckbox",
+            "type": "click",
+            "targetId": "plain-event-checkbox",
+            "currentTargetId": "plain-event-checkbox",
+            "checked": false,
+            "indeterminate": false,
+            "value": "on",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": null,
+            "button": null,
+            "buttons": null,
+            "isMouseEvent": false,
+            "isPointerEvent": false,
+            "submitterId": null
+          }
+        ],
+        "after": false
+      },
+      "disabledSubmitMouseEventDispatch": {
+        "buttonEvents": [
+          {
+            "control": "disabledSubmitButton",
+            "type": "click",
+            "targetId": "disabled-submit-button",
+            "currentTargetId": "disabled-submit-button",
+            "checked": null,
+            "indeterminate": null,
+            "value": "",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": false,
+            "submitterId": null
+          }
+        ],
+        "submitEvents": [],
+        "documentObservation": []
+      },
+      "disabledResetMouseEventDispatch": {
+        "buttonEvents": [
+          {
+            "control": "disabledResetButton",
+            "type": "click",
+            "targetId": "disabled-reset-button",
+            "currentTargetId": "disabled-reset-button",
+            "checked": null,
+            "indeterminate": null,
+            "value": "",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": false,
+            "submitterId": null
+          }
+        ],
+        "resetEvents": [],
+        "documentObservation": [],
+        "valueAfter": "changed"
+      },
+      "disabledFieldsetChildClick": {
+        "childEvents": [
+          {
+            "control": "fieldsetSubmitChild",
+            "type": "click",
+            "targetId": "fieldset-submit-child",
+            "currentTargetId": "fieldset-submit-child",
+            "checked": null,
+            "indeterminate": null,
+            "value": null,
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          }
+        ],
+        "buttonEvents": [
+          {
+            "control": "fieldsetSubmitButton",
+            "type": "click",
+            "targetId": "fieldset-submit-child",
+            "currentTargetId": "fieldset-submit-button",
+            "checked": null,
+            "indeterminate": null,
+            "value": "",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          }
+        ],
+        "submitEvents": [],
+        "documentObservation": []
+      },
+      "eventShapes": {
+        "divClick": [
+          {
+            "control": "genericDiv",
+            "type": "click",
+            "targetId": "generic-div",
+            "currentTargetId": "generic-div",
+            "checked": null,
+            "indeterminate": null,
+            "value": null,
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          }
+        ],
+        "buttonClick": [
+          {
+            "control": "genericButton",
+            "type": "click",
+            "targetId": "generic-button",
+            "currentTargetId": "generic-button",
+            "checked": null,
+            "indeterminate": null,
+            "value": "",
+            "defaultPrevented": false,
+            "isTrusted": false,
+            "bubbles": true,
+            "cancelable": true,
+            "detail": 0,
+            "button": 0,
+            "buttons": 0,
+            "isMouseEvent": true,
+            "isPointerEvent": true,
+            "submitterId": null
+          }
+        ]
+      }
+    },
+    "networkSubmissionCount": 0
+  }
+}

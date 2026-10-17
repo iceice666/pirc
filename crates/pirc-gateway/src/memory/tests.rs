@@ -767,7 +767,9 @@ fn proposals_are_interactions_of_their_chat() {
     super::changed(&app, ME);
     assert_eq!(
         events.lock().unwrap().last(),
-        Some(&json!({ "type": "interaction_answered", "data": { "interactionId": id } }))
+        Some(
+            &json!({ "type": "interaction_answered", "data": { "interactionId": id, "interactionEpoch": 0 } })
+        )
     );
 }
 

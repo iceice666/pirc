@@ -1122,6 +1122,7 @@ expression: t.into_value()
     "observed": [
       {
         "data": {
+          "interactionEpoch": 0,
           "interactionId": "memory:<p5>:0"
         },
         "epoch": 0,
@@ -1394,6 +1395,7 @@ expression: t.into_value()
     "observed": [
       {
         "data": {
+          "interactionEpoch": 0,
           "interactionId": "memory:<p7>:0"
         },
         "epoch": 0,
@@ -1666,6 +1668,7 @@ expression: t.into_value()
     "observed": [
       {
         "data": {
+          "interactionEpoch": 0,
           "interactionId": "memory:<p9>:1"
         },
         "epoch": 0,

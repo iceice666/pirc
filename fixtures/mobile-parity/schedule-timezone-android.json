@@ -1,0 +1,51 @@
+{
+  "revision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "environment": {
+    "avd": "pirc-review",
+    "api": 36,
+    "chrome": "133.0.6943.137",
+    "resolution": [
+      1080,
+      2400
+    ],
+    "density": 420
+  },
+  "input": "Asia",
+  "candidates": [
+    {
+      "text": "Asia/Taipei",
+      "bounds": "[42,1426][248,1482]"
+    },
+    {
+      "text": "Asia/Tokyo",
+      "bounds": "[332,1426][539,1482]"
+    }
+  ],
+  "cases": [
+    {
+      "action": "adb input keyevent 66 without choosing candidate",
+      "value": "Asia",
+      "submissions": [
+        "Asia"
+      ]
+    },
+    {
+      "action": "tap Asia/Taipei after accessibility dump confirms candidates",
+      "value": "Asia/Taipei",
+      "submissions": []
+    },
+    {
+      "action": "then adb input keyevent 66",
+      "value": "Asia/Taipei",
+      "submissions": [
+        "Asia/Taipei"
+      ]
+    }
+  ],
+  "visual": "Horizontal suggestion chips above the software keyboard; current Flutter anchored vertical options differ.",
+  "limitations": [
+    "Isolated input with the pinned list/required/spellcheck attributes, not the full styled application.",
+    "Initial immediate tap before candidate readiness missed; only settled candidate interaction recorded.",
+    "Software keyboard action button, hardware arrows, dark theme and other Android versions are not verified."
+  ]
+}

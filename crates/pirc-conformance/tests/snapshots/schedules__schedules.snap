@@ -2072,6 +2072,7 @@ expression: s.t.into_value()
       },
       {
         "data": {
+          "interactionEpoch": 0,
           "interactionId": "<proposal:1>"
         },
         "epoch": 1,
@@ -2197,6 +2198,7 @@ expression: s.t.into_value()
       },
       {
         "data": {
+          "interactionEpoch": 0,
           "interactionId": "<proposal:2>"
         },
         "epoch": 1,

@@ -1,0 +1,1176 @@
+{
+  "browserVersion": "155.0.8059.80",
+  "browserExecutable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "runner": "apps/mobile/tool/parity/verify_document_storage_browser.mjs",
+  "runnerSha256": "4b86728eac6eafdc7c193bba480da038a50637dd3f03cf1381d83c885e05d243",
+  "browserFlags": {
+    "hostResolverRules": "MAP localhost 127.0.0.1",
+    "backgroundNetworkingDisabled": true,
+    "externalProxyConfigured": true,
+    "externalProxyForwards": false,
+    "pageRequestsRestrictedToSyntheticLoopback": true,
+    "observedChromeCommandLine": "32733 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --disable-background-networking --user-data-dir=<temporary-profile> --remote-debugging-pipe --no-startup-window",
+    "commandLineCaptured": true
+  },
+  "origins": {
+    "a": "http://127.0.0.1:43100",
+    "b": "http://localhost:43100",
+    "relation": "Same ephemeral port, distinct hosts and origins: 127.0.0.1 and localhost. Chrome resolves localhost to 127.0.0.1. Site/origin separation is based on the actual browser URLs and captured requests."
+  },
+  "caseCount": 8,
+  "caseSources": [
+    {
+      "caseId": "domstring-properties-and-ordering",
+      "source": "Actual Storage.setItem DOMString conversions, key()/Object.keys enumeration order, overwrite position, remove-and-reinsert order, and property get/set/delete collisions for getItem, setItem, constructor, length, __proto__, toString, and the empty name."
+    },
+    {
+      "caseId": "localstorage-quota-utf16",
+      "source": "One localStorage value at a time is binary-searched up to 5 * 1024 * 1024 + 64 * 1024 UTF-16 code units. Each probe clears the origin first, records only lengths/hashes/error names, and compares ASCII, non-ASCII BMP, and supplementary code points."
+    },
+    {
+      "caseId": "reload-persistence",
+      "source": "A same-tab reload reads back the real localStorage and sessionStorage entries written before navigation reload."
+    },
+    {
+      "caseId": "cross-origin-storage-separation",
+      "source": "Two actual loopback hostnames on the same port independently read and write localStorage and sessionStorage."
+    },
+    {
+      "caseId": "session-per-window-and-opener-copy",
+      "source": "A same-origin window.open child without noopener starts with a snapshot copy of opener sessionStorage and then diverges. A noopener child has null opener and an empty sessionStorage."
+    },
+    {
+      "caseId": "storage-events-and-pushstate-url",
+      "source": "Actual localStorage storage events in a second same-origin top-level window record key/oldValue/newValue/url/storageArea; source and cross-origin windows receive none. Same-value set, missing remove, and clear-on-empty are no-ops. A mutation after pushState reports the updated source URL."
+    },
+    {
+      "caseId": "blob-document-inherited-origin",
+      "source": "A Blob HTML document created by an HTTP 127.0.0.1 document reads and writes that creator origin localStorage and sessionStorage. A second same-origin HTTP window receives the actual localStorage event; event.url is compared to the Blob document URL."
+    },
+    {
+      "caseId": "opaque-origin-security-error",
+      "source": "An inline data: document attempts to access both Storage getters and records the actual exception names; no external resource is loaded."
+    },
+    {
+      "caseId": "local-server-request-receipts",
+      "source": "All served document requests are captured from the Node loopback server with actual method, host, path, Origin, Referer, authorization presence, cookie presence, Sec-Fetch-Site, body length/hash, and response status."
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "domstring-properties-and-ordering",
+      "source": "Actual Storage.setItem DOMString conversions, key()/Object.keys enumeration order, overwrite position, remove-and-reinsert order, and property get/set/delete collisions for getItem, setItem, constructor, length, __proto__, toString, and the empty name.",
+      "result": {
+        "coercions": {
+          "numericKey": "null",
+          "nullValue": "null",
+          "booleanKey": "x,y",
+          "arrayValue": "x,y",
+          "objectKeyValue": "object-value",
+          "length": 3,
+          "orderedEntries": [
+            [
+              "true",
+              "x,y"
+            ],
+            [
+              "object-key",
+              "object-value"
+            ],
+            [
+              "17",
+              "null"
+            ]
+          ]
+        },
+        "order": {
+          "afterInsert": {
+            "keys": [
+              "gamma",
+              "alpha",
+              "beta"
+            ],
+            "keyOrder": [
+              "gamma",
+              "alpha",
+              "beta"
+            ],
+            "negativeIndex": null,
+            "indexAtLength": null
+          },
+          "afterOverwrite": {
+            "keys": [
+              "gamma",
+              "alpha",
+              "beta"
+            ],
+            "keyOrder": [
+              "gamma",
+              "alpha",
+              "beta"
+            ]
+          },
+          "afterReinsert": {
+            "keys": [
+              "gamma",
+              "alpha",
+              "beta"
+            ],
+            "keyOrder": [
+              "gamma",
+              "alpha",
+              "beta"
+            ],
+            "negativeIndex": null,
+            "indexAtLength": null,
+            "values": [
+              [
+                "gamma",
+                "three"
+              ],
+              [
+                "alpha",
+                "reinserted"
+              ],
+              [
+                "beta",
+                "two-updated"
+              ]
+            ]
+          }
+        },
+        "reservedStorageOnly": {
+          "storedValues": [
+            [
+              "getItem",
+              "stored-getItem"
+            ],
+            [
+              "setItem",
+              "stored-setItem"
+            ],
+            [
+              "constructor",
+              "stored-constructor"
+            ],
+            [
+              "length",
+              "stored-length"
+            ],
+            [
+              "__proto__",
+              "stored-proto"
+            ],
+            [
+              "toString",
+              "stored-toString"
+            ],
+            [
+              "",
+              "stored-empty"
+            ],
+            [
+              "namedProperty",
+              "assigned-value"
+            ]
+          ],
+          "directProperties": [
+            [
+              "getItem",
+              {
+                "type": "function",
+                "stringValue": null,
+                "functionName": "getItem",
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "setItem",
+              {
+                "type": "function",
+                "stringValue": null,
+                "functionName": "setItem",
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "constructor",
+              {
+                "type": "function",
+                "stringValue": null,
+                "functionName": "Storage",
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "length",
+              {
+                "type": "number",
+                "stringValue": null,
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "__proto__",
+              {
+                "type": "object",
+                "stringValue": null,
+                "functionName": null,
+                "equalsStoragePrototype": true
+              }
+            ],
+            [
+              "toString",
+              {
+                "type": "function",
+                "stringValue": null,
+                "functionName": "toString",
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "",
+              {
+                "type": "string",
+                "stringValue": "stored-empty",
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "namedProperty",
+              {
+                "type": "string",
+                "stringValue": "assigned-value",
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            ]
+          ],
+          "objectKeys": [
+            "__proto__",
+            "",
+            "namedProperty",
+            "getItem",
+            "constructor",
+            "setItem",
+            "toString"
+          ],
+          "ownPropertyNames": [
+            "length",
+            "__proto__",
+            "",
+            "namedProperty",
+            "getItem",
+            "constructor",
+            "setItem",
+            "toString"
+          ],
+          "ownPropertyDescriptors": [
+            {
+              "name": "getItem",
+              "present": false,
+              "enumerable": null,
+              "configurable": null,
+              "writable": null,
+              "valueType": null
+            },
+            {
+              "name": "setItem",
+              "present": false,
+              "enumerable": null,
+              "configurable": null,
+              "writable": null,
+              "valueType": null
+            },
+            {
+              "name": "constructor",
+              "present": false,
+              "enumerable": null,
+              "configurable": null,
+              "writable": null,
+              "valueType": null
+            },
+            {
+              "name": "length",
+              "present": false,
+              "enumerable": null,
+              "configurable": null,
+              "writable": null,
+              "valueType": null
+            },
+            {
+              "name": "__proto__",
+              "present": false,
+              "enumerable": null,
+              "configurable": null,
+              "writable": null,
+              "valueType": null
+            },
+            {
+              "name": "toString",
+              "present": false,
+              "enumerable": null,
+              "configurable": null,
+              "writable": null,
+              "valueType": null
+            },
+            {
+              "name": "",
+              "present": true,
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "valueType": "string"
+            },
+            {
+              "name": "namedProperty",
+              "present": true,
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "valueType": "string"
+            }
+          ]
+        },
+        "reserved": {
+          "storedValues": [
+            [
+              "getItem",
+              "stored-getItem"
+            ],
+            [
+              "setItem",
+              "stored-setItem"
+            ],
+            [
+              "constructor",
+              "stored-constructor"
+            ],
+            [
+              "length",
+              "stored-length"
+            ],
+            [
+              "__proto__",
+              "stored-proto"
+            ],
+            [
+              "toString",
+              "stored-toString"
+            ],
+            [
+              "",
+              "assigned-empty"
+            ],
+            [
+              "namedProperty",
+              "assigned-value"
+            ]
+          ],
+          "directProperties": [
+            [
+              "getItem",
+              {
+                "type": "string",
+                "stringValue": "assigned-getItem",
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "setItem",
+              {
+                "type": "string",
+                "stringValue": "assigned-setItem",
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "constructor",
+              {
+                "type": "string",
+                "stringValue": "assigned-constructor",
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "length",
+              {
+                "type": "number",
+                "stringValue": null,
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "__proto__",
+              {
+                "type": "object",
+                "stringValue": null,
+                "functionName": null,
+                "equalsStoragePrototype": true
+              }
+            ],
+            [
+              "toString",
+              {
+                "type": "string",
+                "stringValue": "assigned-toString",
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "",
+              {
+                "type": "string",
+                "stringValue": "assigned-empty",
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            ],
+            [
+              "namedProperty",
+              {
+                "type": "string",
+                "stringValue": "assigned-value",
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            ]
+          ],
+          "propertyAssignments": [
+            {
+              "name": "getItem",
+              "accepted": true,
+              "errorName": null
+            },
+            {
+              "name": "setItem",
+              "accepted": true,
+              "errorName": null
+            },
+            {
+              "name": "constructor",
+              "accepted": true,
+              "errorName": null
+            },
+            {
+              "name": "length",
+              "accepted": false,
+              "errorName": null
+            },
+            {
+              "name": "__proto__",
+              "accepted": true,
+              "errorName": null
+            },
+            {
+              "name": "toString",
+              "accepted": true,
+              "errorName": null
+            },
+            {
+              "name": "",
+              "accepted": true,
+              "errorName": null
+            }
+          ],
+          "propertyDescriptors": [
+            {
+              "name": "getItem",
+              "present": true,
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "descriptorValueType": "string"
+            },
+            {
+              "name": "setItem",
+              "present": true,
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "descriptorValueType": "string"
+            },
+            {
+              "name": "constructor",
+              "present": true,
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "descriptorValueType": "string"
+            },
+            {
+              "name": "length",
+              "present": false,
+              "enumerable": null,
+              "configurable": null,
+              "writable": null,
+              "descriptorValueType": null
+            },
+            {
+              "name": "__proto__",
+              "present": false,
+              "enumerable": null,
+              "configurable": null,
+              "writable": null,
+              "descriptorValueType": null
+            },
+            {
+              "name": "toString",
+              "present": true,
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "descriptorValueType": "string"
+            },
+            {
+              "name": "",
+              "present": true,
+              "enumerable": true,
+              "configurable": true,
+              "writable": true,
+              "descriptorValueType": "string"
+            }
+          ],
+          "getItemType": "string",
+          "lengthProperty": 8,
+          "storagePrototypeUnchanged": true,
+          "objectKeys": [
+            "getItem",
+            "setItem",
+            "constructor",
+            "toString",
+            "__proto__",
+            "",
+            "namedProperty"
+          ],
+          "ownPropertyNames": [
+            "getItem",
+            "setItem",
+            "constructor",
+            "toString",
+            "length",
+            "__proto__",
+            "",
+            "namedProperty"
+          ]
+        },
+        "afterReservedDeletes": {
+          "propertyDeletes": [
+            {
+              "name": "getItem",
+              "accepted": true,
+              "errorName": null,
+              "storedValueAfterDelete": "stored-getItem",
+              "directPropertyAfterDelete": {
+                "type": "function",
+                "stringValue": null,
+                "functionName": "getItem",
+                "equalsStoragePrototype": false
+              }
+            },
+            {
+              "name": "setItem",
+              "accepted": true,
+              "errorName": null,
+              "storedValueAfterDelete": "stored-setItem",
+              "directPropertyAfterDelete": {
+                "type": "function",
+                "stringValue": null,
+                "functionName": "setItem",
+                "equalsStoragePrototype": false
+              }
+            },
+            {
+              "name": "constructor",
+              "accepted": true,
+              "errorName": null,
+              "storedValueAfterDelete": "stored-constructor",
+              "directPropertyAfterDelete": {
+                "type": "function",
+                "stringValue": null,
+                "functionName": "Storage",
+                "equalsStoragePrototype": false
+              }
+            },
+            {
+              "name": "length",
+              "accepted": true,
+              "errorName": null,
+              "storedValueAfterDelete": "stored-length",
+              "directPropertyAfterDelete": {
+                "type": "number",
+                "stringValue": null,
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            },
+            {
+              "name": "__proto__",
+              "accepted": true,
+              "errorName": null,
+              "storedValueAfterDelete": "stored-proto",
+              "directPropertyAfterDelete": {
+                "type": "object",
+                "stringValue": null,
+                "functionName": null,
+                "equalsStoragePrototype": true
+              }
+            },
+            {
+              "name": "toString",
+              "accepted": true,
+              "errorName": null,
+              "storedValueAfterDelete": "stored-toString",
+              "directPropertyAfterDelete": {
+                "type": "function",
+                "stringValue": null,
+                "functionName": "toString",
+                "equalsStoragePrototype": false
+              }
+            },
+            {
+              "name": "",
+              "accepted": true,
+              "errorName": null,
+              "storedValueAfterDelete": null,
+              "directPropertyAfterDelete": {
+                "type": "undefined",
+                "stringValue": null,
+                "functionName": null,
+                "equalsStoragePrototype": false
+              }
+            }
+          ],
+          "storagePrototypeUnchanged": true,
+          "length": 7,
+          "objectKeys": [
+            "__proto__",
+            "namedProperty",
+            "getItem",
+            "constructor",
+            "setItem",
+            "toString"
+          ]
+        },
+        "afterDeleteNamedProperty": {
+          "deleteResult": true,
+          "storedValue": null,
+          "directValue": null,
+          "length": 6
+        },
+        "noOpSetSameValuesPreservedLength": true
+      }
+    },
+    {
+      "caseId": "localstorage-quota-utf16",
+      "source": "One localStorage value at a time is binary-searched up to 5 * 1024 * 1024 + 64 * 1024 UTF-16 code units. Each probe clears the origin first, records only lengths/hashes/error names, and compares ASCII, non-ASCII BMP, and supplementary code points.",
+      "result": {
+        "quotaSearchBoundUtf16CodeUnits": 5308416,
+        "maximumSingleValueOnly": true,
+        "includesKeyAndStorageOverhead": true,
+        "result": [
+          {
+            "id": "ascii",
+            "codePoint": "U+0061",
+            "quotaSearchBoundCodeUnits": 5308416,
+            "acceptedAtBound": false,
+            "maxAcceptedValueUtf16CodeUnits": 5242850,
+            "firstRejectedValueUtf16CodeUnits": 5242851,
+            "maxAcceptedValueUtf16Bytes": 10485700,
+            "firstRejectedValueUtf16Bytes": 10485702,
+            "maxAcceptedValueUtf8Bytes": 5242850,
+            "firstRejectedValueUtf8Bytes": 5242851,
+            "maxAcceptedValueSha256Utf8": "371f0f97b6a5cd62050f54e586180ac494309283318c9fb0d34cd65d43a18695",
+            "acceptedErrorName": null,
+            "rejectedErrorName": "QuotaExceededError"
+          },
+          {
+            "id": "bmp-non-ascii",
+            "codePoint": "U+00E9",
+            "quotaSearchBoundCodeUnits": 5308416,
+            "acceptedAtBound": false,
+            "maxAcceptedValueUtf16CodeUnits": 5242850,
+            "firstRejectedValueUtf16CodeUnits": 5242851,
+            "maxAcceptedValueUtf16Bytes": 10485700,
+            "firstRejectedValueUtf16Bytes": 10485702,
+            "maxAcceptedValueUtf8Bytes": 10485700,
+            "firstRejectedValueUtf8Bytes": 10485702,
+            "maxAcceptedValueSha256Utf8": "66b05fe6536c3c67884505c1c584ed4c880a43ecc8a314f152bdf2fb11032da8",
+            "acceptedErrorName": null,
+            "rejectedErrorName": "QuotaExceededError"
+          },
+          {
+            "id": "supplementary",
+            "codePoint": "U+1F600",
+            "quotaSearchBoundCodeUnits": 5308416,
+            "acceptedAtBound": false,
+            "maxAcceptedValueUtf16CodeUnits": 5242850,
+            "firstRejectedValueUtf16CodeUnits": 5242852,
+            "maxAcceptedValueUtf16Bytes": 10485700,
+            "firstRejectedValueUtf16Bytes": 10485704,
+            "maxAcceptedValueUtf8Bytes": 10485700,
+            "firstRejectedValueUtf8Bytes": 10485704,
+            "maxAcceptedValueSha256Utf8": "ed87d5a5ba457e71fe9a989b1f466f523fd29a48ea83ad90f95184ddafbf01da",
+            "acceptedErrorName": null,
+            "rejectedErrorName": "QuotaExceededError"
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "reload-persistence",
+      "source": "A same-tab reload reads back the real localStorage and sessionStorage entries written before navigation reload.",
+      "beforeReload": {
+        "beforeReloadLocal": "survives-reload",
+        "beforeReloadSession": "survives-reload"
+      },
+      "afterReload": {
+        "href": "http://127.0.0.1:43100/page?case=storage-origin-a",
+        "local": "survives-reload",
+        "session": "survives-reload"
+      }
+    },
+    {
+      "caseId": "cross-origin-storage-separation",
+      "source": "Two actual loopback hostnames on the same port independently read and write localStorage and sessionStorage.",
+      "result": {
+        "originA": {
+          "origin": "http://127.0.0.1:43100",
+          "local": "from-origin-a",
+          "session": "from-origin-a"
+        },
+        "originBBeforeWrite": {
+          "href": "http://localhost:43100/page?case=storage-origin-b",
+          "origin": "http://localhost:43100",
+          "local": null,
+          "session": null
+        },
+        "originBAfterWrite": {
+          "origin": "http://localhost:43100",
+          "local": "from-origin-b",
+          "session": "from-origin-b"
+        },
+        "relation": "127.0.0.1 and localhost use the same port but are distinct origins and distinct sites in this Chrome run."
+      }
+    },
+    {
+      "caseId": "session-per-window-and-opener-copy",
+      "source": "A same-origin window.open child without noopener starts with a snapshot copy of opener sessionStorage and then diverges. A noopener child has null opener and an empty sessionStorage.",
+      "openerCopy": {
+        "openerReturnWasNull": false,
+        "initial": {
+          "href": "http://127.0.0.1:43100/page?case=session-opener-copy",
+          "openerIsNull": false,
+          "entries": [
+            [
+              "opener-only",
+              "parent-before-open"
+            ],
+            [
+              "opener-copy",
+              "original-at-open"
+            ]
+          ]
+        },
+        "parentAfterChildWrite": {
+          "copy": "original-at-open",
+          "childOnly": null,
+          "parentAfterOpen": "parent-value"
+        },
+        "childAfterParentWrite": {
+          "copy": "child-after-open",
+          "childOnly": "child-value",
+          "parentAfterOpen": null
+        }
+      },
+      "noopener": {
+        "windowOpenReturnedNull": true,
+        "result": {
+          "href": "http://127.0.0.1:43100/page?case=session-noopener",
+          "openerIsNull": true,
+          "length": 0,
+          "openerCopy": null,
+          "openerOnly": null
+        }
+      }
+    },
+    {
+      "caseId": "storage-events-and-pushstate-url",
+      "source": "Actual localStorage storage events in a second same-origin top-level window record key/oldValue/newValue/url/storageArea; source and cross-origin windows receive none. Same-value set, missing remove, and clear-on-empty are no-ops. A mutation after pushState reports the updated source URL.",
+      "listenerSourceUrl": "http://127.0.0.1:43100/page?case=storage-events-source",
+      "pushStateSourceUrl": "http://127.0.0.1:43100/events/after-pushstate?case=storage-event-url",
+      "observations": [
+        {
+          "label": "set-new-key",
+          "sourceEventCount": 0,
+          "sourceEvents": [],
+          "sameOriginPeerEventCount": 1,
+          "sameOriginPeerEvents": [
+            {
+              "key": "event-key",
+              "oldValue": null,
+              "newValue": "one",
+              "url": "http://127.0.0.1:43100/page?case=storage-events-source",
+              "storageAreaIsLocalStorage": true
+            }
+          ],
+          "crossOriginEventCount": 0,
+          "crossOriginEvents": [],
+          "expectedPeerCount": 1
+        },
+        {
+          "label": "set-same-value-noop",
+          "sourceEventCount": 0,
+          "sourceEvents": [],
+          "sameOriginPeerEventCount": 1,
+          "sameOriginPeerEvents": [],
+          "crossOriginEventCount": 0,
+          "crossOriginEvents": [],
+          "expectedPeerCount": 1
+        },
+        {
+          "label": "remove-missing-key-noop",
+          "sourceEventCount": 0,
+          "sourceEvents": [],
+          "sameOriginPeerEventCount": 1,
+          "sameOriginPeerEvents": [],
+          "crossOriginEventCount": 0,
+          "crossOriginEvents": [],
+          "expectedPeerCount": 1
+        },
+        {
+          "label": "overwrite-existing-key",
+          "sourceEventCount": 0,
+          "sourceEvents": [],
+          "sameOriginPeerEventCount": 2,
+          "sameOriginPeerEvents": [
+            {
+              "key": "event-key",
+              "oldValue": "one",
+              "newValue": "two",
+              "url": "http://127.0.0.1:43100/page?case=storage-events-source",
+              "storageAreaIsLocalStorage": true
+            }
+          ],
+          "crossOriginEventCount": 0,
+          "crossOriginEvents": [],
+          "expectedPeerCount": 2
+        },
+        {
+          "label": "remove-existing-key",
+          "sourceEventCount": 0,
+          "sourceEvents": [],
+          "sameOriginPeerEventCount": 3,
+          "sameOriginPeerEvents": [
+            {
+              "key": "event-key",
+              "oldValue": "two",
+              "newValue": null,
+              "url": "http://127.0.0.1:43100/page?case=storage-events-source",
+              "storageAreaIsLocalStorage": true
+            }
+          ],
+          "crossOriginEventCount": 0,
+          "crossOriginEvents": [],
+          "expectedPeerCount": 3
+        },
+        {
+          "label": "seed-before-clear",
+          "sourceEventCount": 0,
+          "sourceEvents": [],
+          "sameOriginPeerEventCount": 5,
+          "sameOriginPeerEvents": [
+            {
+              "key": "clear-a",
+              "oldValue": null,
+              "newValue": "a",
+              "url": "http://127.0.0.1:43100/page?case=storage-events-source",
+              "storageAreaIsLocalStorage": true
+            },
+            {
+              "key": "clear-b",
+              "oldValue": null,
+              "newValue": "b",
+              "url": "http://127.0.0.1:43100/page?case=storage-events-source",
+              "storageAreaIsLocalStorage": true
+            }
+          ],
+          "crossOriginEventCount": 0,
+          "crossOriginEvents": [],
+          "expectedPeerCount": 5
+        },
+        {
+          "label": "clear-nonempty-storage",
+          "sourceEventCount": 0,
+          "sourceEvents": [],
+          "sameOriginPeerEventCount": 6,
+          "sameOriginPeerEvents": [
+            {
+              "key": null,
+              "oldValue": null,
+              "newValue": null,
+              "url": "http://127.0.0.1:43100/page?case=storage-events-source",
+              "storageAreaIsLocalStorage": true
+            }
+          ],
+          "crossOriginEventCount": 0,
+          "crossOriginEvents": [],
+          "expectedPeerCount": 6
+        },
+        {
+          "label": "clear-empty-storage-noop",
+          "sourceEventCount": 0,
+          "sourceEvents": [],
+          "sameOriginPeerEventCount": 6,
+          "sameOriginPeerEvents": [],
+          "crossOriginEventCount": 0,
+          "crossOriginEvents": [],
+          "expectedPeerCount": 6
+        },
+        {
+          "label": "mutation-after-pushstate",
+          "sourceEventCount": 0,
+          "sourceEvents": [],
+          "sameOriginPeerEventCount": 7,
+          "sameOriginPeerEvents": [
+            {
+              "key": "after-pushstate",
+              "oldValue": null,
+              "newValue": "written",
+              "url": "http://127.0.0.1:43100/events/after-pushstate?case=storage-event-url",
+              "storageAreaIsLocalStorage": true
+            }
+          ],
+          "crossOriginEventCount": 0,
+          "crossOriginEvents": [],
+          "expectedPeerCount": 7
+        }
+      ]
+    },
+    {
+      "caseId": "blob-document-inherited-origin",
+      "source": "A Blob HTML document created by an HTTP 127.0.0.1 document reads and writes that creator origin localStorage and sessionStorage. A second same-origin HTTP window receives the actual localStorage event; event.url is compared to the Blob document URL.",
+      "result": {
+        "href": "blob:http://127.0.0.1:43100/<object-url>",
+        "origin": "http://127.0.0.1:43100",
+        "localBefore": "created-from-http-origin",
+        "sessionBefore": "created-from-http-origin",
+        "localAfter": "written-from-blob",
+        "sessionAfter": "written-from-blob",
+        "error": null,
+        "complete": true
+      },
+      "creatorSeedStorageEvents": [
+        {
+          "key": "blob-local-seed",
+          "oldValue": null,
+          "newValue": "created-from-http-origin",
+          "url": "http://127.0.0.1:43100/events/after-pushstate?case=storage-event-url",
+          "storageAreaIsLocalStorage": true
+        }
+      ],
+      "sameOriginPeerStorageEvents": [
+        {
+          "key": "blob-local-seed",
+          "oldValue": "created-from-http-origin",
+          "newValue": "written-from-blob",
+          "url": "blob:http://127.0.0.1:43100/<object-url>",
+          "storageAreaIsLocalStorage": true
+        }
+      ]
+    },
+    {
+      "caseId": "opaque-origin-security-error",
+      "source": "An inline data: document attempts to access both Storage getters and records the actual exception names; no external resource is loaded.",
+      "result": {
+        "origin": "null",
+        "localStorage": {
+          "status": "throws",
+          "name": "SecurityError",
+          "message": "Failed to read the 'localStorage' property from 'Window': Storage is disabled inside 'data:' URLs."
+        },
+        "sessionStorage": {
+          "status": "throws",
+          "name": "SecurityError",
+          "message": "Failed to read the 'sessionStorage' property from 'Window': Storage is disabled inside 'data:' URLs."
+        }
+      }
+    }
+  ],
+  "serverRequests": [
+    {
+      "sequence": 1,
+      "caseId": "storage-origin-a",
+      "method": "GET",
+      "host": "127.0.0.1",
+      "path": "/page?case=storage-origin-a",
+      "requestUrl": "http://127.0.0.1:43100/page?case=storage-origin-a",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "cookiePresent": false,
+      "secFetchSite": "none",
+      "contentType": null,
+      "bodyBytes": 0,
+      "bodySha256": null,
+      "responseStatus": 200
+    },
+    {
+      "sequence": 2,
+      "caseId": "storage-origin-a",
+      "method": "GET",
+      "host": "127.0.0.1",
+      "path": "/page?case=storage-origin-a",
+      "requestUrl": "http://127.0.0.1:43100/page?case=storage-origin-a",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "cookiePresent": false,
+      "secFetchSite": "none",
+      "contentType": null,
+      "bodyBytes": 0,
+      "bodySha256": null,
+      "responseStatus": 200
+    },
+    {
+      "sequence": 3,
+      "caseId": "storage-origin-b",
+      "method": "GET",
+      "host": "localhost",
+      "path": "/page?case=storage-origin-b",
+      "requestUrl": "http://localhost:43100/page?case=storage-origin-b",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "cookiePresent": false,
+      "secFetchSite": "none",
+      "contentType": null,
+      "bodyBytes": 0,
+      "bodySha256": null,
+      "responseStatus": 200
+    },
+    {
+      "sequence": 4,
+      "caseId": "session-opener-copy",
+      "method": "GET",
+      "host": "127.0.0.1",
+      "path": "/page?case=session-opener-copy",
+      "requestUrl": "http://127.0.0.1:43100/page?case=session-opener-copy",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=storage-origin-a",
+      "authorizationPresent": false,
+      "cookiePresent": false,
+      "secFetchSite": "same-origin",
+      "contentType": null,
+      "bodyBytes": 0,
+      "bodySha256": null,
+      "responseStatus": 200
+    },
+    {
+      "sequence": 5,
+      "caseId": "session-noopener",
+      "method": "GET",
+      "host": "127.0.0.1",
+      "path": "/page?case=session-noopener",
+      "requestUrl": "http://127.0.0.1:43100/page?case=session-noopener",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=storage-origin-a",
+      "authorizationPresent": false,
+      "cookiePresent": false,
+      "secFetchSite": "same-origin",
+      "contentType": null,
+      "bodyBytes": 0,
+      "bodySha256": null,
+      "responseStatus": 200
+    },
+    {
+      "sequence": 6,
+      "caseId": "storage-events-source",
+      "method": "GET",
+      "host": "127.0.0.1",
+      "path": "/page?case=storage-events-source",
+      "requestUrl": "http://127.0.0.1:43100/page?case=storage-events-source",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "cookiePresent": false,
+      "secFetchSite": "none",
+      "contentType": null,
+      "bodyBytes": 0,
+      "bodySha256": null,
+      "responseStatus": 200
+    },
+    {
+      "sequence": 7,
+      "caseId": "storage-events-peer",
+      "method": "GET",
+      "host": "127.0.0.1",
+      "path": "/page?case=storage-events-peer",
+      "requestUrl": "http://127.0.0.1:43100/page?case=storage-events-peer",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "cookiePresent": false,
+      "secFetchSite": "none",
+      "contentType": null,
+      "bodyBytes": 0,
+      "bodySha256": null,
+      "responseStatus": 200
+    }
+  ],
+  "pageRequests": [
+    {
+      "url": "http://127.0.0.1:43100/page?case=storage-origin-a",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=storage-origin-a",
+      "method": "GET"
+    },
+    {
+      "url": "http://localhost:43100/page?case=storage-origin-b",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=session-opener-copy",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=session-noopener",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=storage-events-source",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=storage-events-peer",
+      "method": "GET"
+    }
+  ],
+  "externalProxy": {
+    "origin": "http://127.0.0.1:43199",
+    "forwardsRequests": false,
+    "blockedRequestCount": 25,
+    "blockedCountsByMethod": {
+      "GET": 1,
+      "CONNECT": 24
+    },
+    "blockedDestinationsRecorded": false,
+    "pageRequestOutsideLoopbackCount": 0,
+    "pageRequestsOutsideLoopback": []
+  },
+  "scope": {
+    "tested": "Storage.setItem DOMString conversion; length/key/Object.keys and observed enumeration ordering; overwrite and reinsertion; named properties and built-in collisions; synchronous localStorage/sessionStorage reads; localStorage reload persistence; per-origin separation; sessionStorage opener snapshot and noopener isolation; inherited HTTP-origin Blob document local/session storage and Blob storage event URL; storage event details and no-op dispatch suppression; event URL after pushState; opaque data: SecurityError; bounded near-5-Mi-code-unit localStorage quota for ASCII, BMP non-ASCII, and supplementary characters.",
+    "quota": "Each quota trial uses one synthetic localStorage value and clears before the next trial. The search bound is 5 Mi UTF-16 code units + 64 Ki code units. The fixture records lengths, UTF-8 SHA-256, accepted/rejected names, and no payload bytes.",
+    "notTested": "Storage persistence across browser restarts/profiles, browser eviction, private browsing, partitioned storage/third-party contexts, file: origins, StorageManager.estimate(), multi-process races, quota under multiple keys or sessionStorage quota, and crash recovery.",
+    "transport": "Plain HTTP is served only from 127.0.0.1; localhost is explicitly mapped to 127.0.0.1. The configured 127.0.0.1 proxy never forwards and page routing allows only loopback HTTP, synthetic data:, and Blob URLs with loopback embedded origins. No TLS is used. Any proxy attempts are locally denied and included in externalProxy."
+  }
+}

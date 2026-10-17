@@ -137,6 +137,41 @@ it('applies chat memory decisions without requiring a node snapshot', () => {
   });
 });
 
+it('normalizes all answered interactions with their row epoch', () => {
+  expect(
+    normalizeEvent({
+      sessionId: 's1',
+      epoch: 999,
+      sequence: 3,
+      type: 'interaction_answered',
+      data: { interactionId: 'interaction:q1', interactionEpoch: 4 },
+    }).event,
+  ).toEqual({
+    type: 'interaction_removed',
+    interactionId: 'interaction:q1',
+    runnerEpoch: '4',
+  });
+
+  expect(
+    normalizeEvent({
+      sessionId: 's1',
+      epoch: 999,
+      sequence: 4,
+      type: 'interaction_created',
+      data: {
+        id: 'interaction:q2',
+        runnerEpoch: 5,
+        kind: 'confirm',
+        status: 'pending',
+        request: { title: 'Continue?' },
+      },
+    }).event,
+  ).toMatchObject({
+    type: 'interaction_updated',
+    interaction: { id: 'interaction:q2', runnerEpoch: '5' },
+  });
+});
+
 it('sends the delegation checkbox only when an approval ticks it', async () => {
   const bodies: any[] = [];
   vi.stubGlobal(

@@ -1,0 +1,56 @@
+{
+  "id": "html-form-actions-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 768],
+  "height": 900,
+  "padding": 16,
+  "cases": [
+    {
+      "id": "reset-mixed-two-forms",
+      "source": "<form id=\"primary\"><label for=\"primary-name\">Name</label><input id=\"primary-name\" name=\"username\" value=\"Initial\" required><label for=\"enabled\">Enabled</label><input id=\"enabled\" name=\"enabled\" type=\"checkbox\" checked><label for=\"answer-a\">Alpha</label><input id=\"answer-a\" name=\"answer\" type=\"radio\" value=\"a\" checked><label for=\"answer-b\">Beta</label><input id=\"answer-b\" name=\"answer\" type=\"radio\" value=\"b\"><label for=\"choice\">Choice</label><select id=\"choice\" name=\"choice\"><option value=\"alpha\" selected>Alpha</option><option value=\"beta\">Beta</option></select><label for=\"quantity\">Quantity</label><input id=\"quantity\" name=\"quantity\" type=\"number\" value=\"3\" min=\"1\" max=\"9\" step=\"2\"><button id=\"primary-reset\" type=\"reset\">Reset primary</button></form><form id=\"secondary\"><label for=\"secondary-name\">Secondary name</label><input id=\"secondary-name\" value=\"Second initial\"><button id=\"secondary-reset\" type=\"reset\">Reset secondary</button></form>",
+      "actions": [
+        {"id": "mutated", "mode": "setValue", "selector": "#primary-name", "value": "Changed"},
+        {"id": "mutated", "mode": "setChecked", "selector": "#enabled", "value": false},
+        {"id": "mutated", "mode": "setChecked", "selector": "#answer-b", "value": true},
+        {"id": "mutated", "mode": "select", "selector": "#choice", "value": "beta"},
+        {"id": "mutated", "mode": "setValue", "selector": "#quantity", "value": "7"},
+        {"id": "mutated", "mode": "setValue", "selector": "#secondary-name", "value": "Other changed"},
+        {"id": "primary-reset", "mode": "click", "selector": "#primary-reset"},
+        {"id": "keyboard-dirty", "mode": "setValue", "selector": "#primary-name", "value": "Keyboard changed"},
+        {"id": "space-resets", "mode": "key", "selector": "#primary-reset", "key": "Space"},
+        {"id": "secondary-reset", "mode": "click", "selector": "#secondary-reset"}
+      ]
+    },
+    {
+      "id": "fieldset-legend-and-labels",
+      "source": "<form id=\"fieldset-form\"><label for=\"outside\">Outside</label><input id=\"outside\" value=\"Outside initial\"><fieldset disabled><legend><label for=\"legend-reset\">Legend reset label</label><button id=\"legend-reset\" type=\"reset\">Reset from first legend</button></legend><label for=\"disabled-value\">Disabled value</label><input id=\"disabled-value\" value=\"Disabled initial\"><button id=\"disabled-reset\" type=\"reset\">Disabled reset</button></fieldset><button id=\"plain-button\" type=\"button\">Plain button</button><label for=\"linked-reset\">Linked reset label</label><button id=\"linked-reset\" type=\"reset\" aria-label=\"ARIA reset name\">Button content name</button><input id=\"input-reset\" type=\"reset\" value=\"Input reset label\"></form>",
+      "actions": [
+        {"id": "dirty", "mode": "setValue", "selector": "#outside", "value": "Outside changed"},
+        {"id": "dirty", "mode": "setValue", "selector": "#disabled-value", "value": "Disabled changed"},
+        {"id": "plain-button-does-not-submit", "mode": "click", "selector": "#plain-button"},
+        {"id": "label-activates-linked-reset", "mode": "click", "selector": "label[for=linked-reset]"},
+        {"id": "disabled-reset-is-inert", "mode": "domClick", "selector": "#disabled-reset"},
+        {"id": "first-legend-reset-works", "mode": "click", "selector": "label[for=legend-reset]"}
+      ]
+    },
+    {
+      "id": "copy-rich-and-input",
+      "source": "<div class=\"code-block\"><div class=\"code-head\"><span>typescript</span><button id=\"rich-copy\" type=\"button\" class=\"code-copy\" data-copy><strong><em>Authored</em> copy label</strong><span>!</span></button></div><pre><code>const answer = \"line one\";\nconsole.log(answer);</code></pre></div><label for=\"input-copy\">Input copy action</label><input id=\"input-copy\" type=\"button\" data-copy value=\"Input copy value\">",
+      "actions": [
+        {"id": "rich-copy-success", "mode": "click", "selector": "#rich-copy"},
+        {"id": "copy-timeout-reset", "mode": "wait", "ms": 1450},
+        {"id": "input-copy-click", "mode": "click", "selector": "#input-copy"}
+      ]
+    },
+    {
+      "id": "copy-without-code-and-rejection",
+      "source": "<button id=\"missing-code-copy\" type=\"button\" data-copy><strong>Missing code</strong></button><form id=\"copy-reset-form\"><label for=\"copy-reset-value\">Reset value</label><input id=\"copy-reset-value\" value=\"Initial\"><button id=\"reject-reset-copy\" type=\"reset\" data-copy>Reset and try copy</button></form>",
+      "actions": [
+        {"id": "missing-code-copy", "mode": "click", "selector": "#missing-code-copy"},
+        {"id": "dirty-form", "mode": "setValue", "selector": "#copy-reset-value", "value": "Changed"},
+        {"id": "clipboard-reject", "mode": "clipboard", "result": "reject"},
+        {"id": "reject-still-resets", "mode": "click", "selector": "#reject-reset-copy"}
+      ]
+    }
+  ]
+}

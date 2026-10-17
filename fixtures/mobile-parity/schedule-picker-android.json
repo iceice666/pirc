@@ -1,0 +1,166 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "inputMarkup": "<input type=\"datetime-local\" value=\"2026-11-05T09:30\" required>",
+  "environment": {
+    "avd": "pirc-review",
+    "androidApi": 36,
+    "chromeVersion": "133.0.6943.137",
+    "physicalSize": [1080, 2400],
+    "densityDpi": 420,
+    "locale": "en-US",
+    "hourCycle": "12-hour"
+  },
+  "scope": "Isolated browser-owned datetime-local picker; not a full ScheduleSettings or Flutter acceptance capture. Colors and geometry are specific to this Android/Chrome environment.",
+  "controls": [
+    {
+      "class": "android.widget.TextView",
+      "text": "Set date and time",
+      "content-desc": "",
+      "bounds": "[91,590][989,668]"
+    },
+    {
+      "class": "android.widget.DatePicker",
+      "text": "",
+      "content-desc": "Date",
+      "bounds": "[204,668][875,1225]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "Oct",
+      "content-desc": "",
+      "bounds": "[245,710][413,883]"
+    },
+    {
+      "class": "android.widget.EditText",
+      "text": "Nov",
+      "content-desc": "",
+      "bounds": "[245,883][413,1009]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "Dec",
+      "content-desc": "",
+      "bounds": "[245,1009][413,1183]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "04",
+      "content-desc": "",
+      "bounds": "[455,710][623,883]"
+    },
+    {
+      "class": "android.widget.EditText",
+      "text": "05",
+      "content-desc": "",
+      "bounds": "[455,883][623,1009]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "06",
+      "content-desc": "",
+      "bounds": "[455,1009][623,1183]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "2025",
+      "content-desc": "",
+      "bounds": "[665,710][833,883]"
+    },
+    {
+      "class": "android.widget.EditText",
+      "text": "2026",
+      "content-desc": "",
+      "bounds": "[665,883][833,1009]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "2027",
+      "content-desc": "",
+      "bounds": "[665,1009][833,1183]"
+    },
+    {
+      "class": "android.widget.TimePicker",
+      "text": "",
+      "content-desc": "Time",
+      "bounds": "[204,1225][875,1782]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "8",
+      "content-desc": "",
+      "bounds": "[246,1267][414,1440]"
+    },
+    {
+      "class": "android.widget.EditText",
+      "text": "9",
+      "content-desc": "",
+      "bounds": "[246,1440][414,1566]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "10",
+      "content-desc": "",
+      "bounds": "[246,1566][414,1740]"
+    },
+    {
+      "class": "android.widget.TextView",
+      "text": ":",
+      "content-desc": "",
+      "bounds": "[430,1478][439,1529]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "29",
+      "content-desc": "",
+      "bounds": "[455,1267][623,1440]"
+    },
+    {
+      "class": "android.widget.EditText",
+      "text": "30",
+      "content-desc": "",
+      "bounds": "[455,1440][623,1566]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "31",
+      "content-desc": "",
+      "bounds": "[455,1566][623,1740]"
+    },
+    {
+      "class": "android.widget.EditText",
+      "text": "AM",
+      "content-desc": "",
+      "bounds": "[665,1440][833,1566]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "PM",
+      "content-desc": "",
+      "bounds": "[665,1566][833,1740]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "Clear",
+      "content-desc": "",
+      "bounds": "[81,1793][249,1919]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "Cancel",
+      "content-desc": "",
+      "bounds": "[647,1793][831,1919]"
+    },
+    {
+      "class": "android.widget.Button",
+      "text": "Set",
+      "content-desc": "",
+      "bounds": "[852,1793][1020,1919]"
+    }
+  ],
+  "page": "fixtures/mobile-parity/schedule-picker.html",
+  "verifiedInteraction": {
+    "initial": "2026-11-05T09:30",
+    "action": "tap next month (Dec), wait for spinner to settle, then Set",
+    "result": "2026-12-05T09:30"
+  }
+}

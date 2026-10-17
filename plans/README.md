@@ -13,17 +13,17 @@ This file is the work queue, not authorization. Every phase still needs the user
 | Phase | Theme                                            | Why here                                                                                 |
 | ----- | ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
 | 1     | Review and release the unreleased assistant work | Schema 1003 and several features sit in Unreleased; the release gets riskier as it grows |
-| 2     | ~~Android approval check (assistant 3a)~~        | Deferred: Android rewrite in progress (see below)                                        |
+| 2     | Android approval acceptance (assistant 3a)       | Active mobile follow-up and physical acceptance (see below)                              |
 | 3     | Network taint (assistant 5)                      | Small; improves memory trust; pairs with browser click/type classification               |
 | 4     | Decision session                                 | Cheap; unblocks phases 5, 6 and 8                                                        |
 | 5     | Security hygiene                                 | Re-audited 2026-10-15; I5 done, M13 gap next                                             |
-| 6     | ~~Android parity batch~~                         | Deferred: Android rewrite in progress (see below)                                        |
+| 6     | Flutter Android follow-up                        | Active mobile follow-up and physical acceptance (see below)                              |
 | 7     | OM model policy (E3), then `secure_delete` (E1)  | Small and independent; E1 must precede hard delete                                       |
 | 8     | Project-only memory (B), then hard delete (D)    | Large designs; need phase 4 decisions                                                    |
 | —     | Manual validation                                | Needs real hardware or hosts; attach to the release that needs it                        |
 | —     | Watch, do not build                              | Waits for evidence from use                                                              |
 
-**Android deferred (2026-10-16).** An Android rewrite is in progress, so phases 2 and 6 and the Android decisions in phase 4 are on hold. Do not implement them against the current client; when the rewrite lands, re-check each item against it and carry over what still applies.
+**Flutter Android update (0.6.1).** The rewrite is integrated under `apps/android`. Active remaining work, validation limits and deferred legacy audit items are maintained in the [mobile plan](mobile.md). The native transport and its contract tests are included in `apps/android/android`; there is no separate legacy UI module.
 
 ## Phase 1 — Review and release
 
@@ -33,7 +33,7 @@ This file is the work queue, not authorization. Every phase still needs the user
 
 Project-isolation E2 (OM config diagnostics) needs no action: it was ported to Rust (`crates/pirc-agent/src/config/memory.rs`) and shipped in 0.4.x.
 
-## Phase 2 — Android approvals (assistant 3a) — deferred (Android rewrite)
+## Phase 2 — Android approvals (assistant 3a)
 
 - [ ] A USER proposal is a `confirm` interaction, which Android already shows in a session. Verify the multi-line body renders and the labels are used. Give delegation confirmations the same check.
 
@@ -126,40 +126,14 @@ Verified fixed in Rust (no action): L1 shared sensitive-path list, L2 `.git/hook
 
 Accepted, not to be reopened without a new decision: S10 (host atomic replacement detaches a protected Linux mount) and S18 (browser WebSocket/non-HTTP egress, DNS rebinding); see the [archived audit](../docs/history/security-audit.md).
 
-## Phase 6 — Android parity — deferred (Android rewrite)
+## Phase 6 — Flutter Android follow-up
 
-Full tables with web/Android file references and fix hints: `git show 7677d24:plans/mobile-audit.md`. Effort: S under an hour, M half a day, L a day or more.
-
-**6a. Settings and memory (assistant 3 + S10)**
-
-- [ ] **S10** settings screen: gateway host, client id, nodes online and workspace counts, settled toggle (fixes **S7** persistence), Unpair, "Backends: set on the web" hint (covers deferred **D1**). M
-- [ ] **Memory screen** in settings: `GET /api/memory` with approve/reject/forget/restore, the web's forget disclosure, `memory=1` subscription for `memory_changed`, pending count on the settings entry.
-- [ ] **Chats in the sidebar:** `chats` and projects first, New chat; chat sessions hide Git and Terminal.
-
-**6b. High-value gaps**
-
-- [ ] **D2** notifications for run finished / `waiting_input` (minimum: local notification while the stream is alive; full: push channel). L
-- [ ] **S2** session list search and node filter. S–M
-- [ ] **O-S2** share-sheet entry (`ACTION_SEND` text/images → session picker). M
-- [ ] **C9** tool card detail (failed auto-expand, duration, `bash`/`write`/`edit` rendering, Error label). M
-
-**6c. Small chat fixes (S each)**
-
-- [ ] C7 editor `language` label · C10 live thinking as Markdown · C11 notice `Source: detail` split and collapse · C12 `custom` entries open · C13 message timestamps
-- [ ] O-C1 dock queue above the composer · O-C2 separate model/level targets · O-C4 single-select submits on tap · O-C5 scrollable long `select` · O-C6 reset "Copied", copy via long-press · O-C8 icon top-bar actions
-
-**6d. Small shell and panel fixes (S each)**
-
-- [ ] S6 add-workspace node preselect and zero-node state · S13 short relative time · O-S3 collapsible groups · O-S4 remember last workspace · O-S5 actionable empty state · O-S6 validate pasted pairing link live · O-S7 pin glyph
-- [ ] F2 symlink icon (both clients) · F4 open file from diff · F7 "No commits yet" and status chip · F8 Tasks details (agentRunning, newest-first, duration, watch count, event time) · F9 scroll task output to tail · F10 memory phase labels and unavailable/disabled split · F12 reflection sources/ids and 3-line clamp
-- [ ] AF3 confirm before stopping a task · AF6 stop terminal polling when empty · O-F1 reveal file in folder · O-F3 Paste/`^C`/copy in terminal key row (S–M) · O-F6 git status colours · O-F7 breadcrumb scrolls to current · O-F8 lazy task output
-
-**6e. Larger items**
-
-- [ ] C14 Markdown math and mermaid (L) · O-F2 keep terminals alive while switching (L) · O-F4 file navigation in multi-file diffs (M) · D3 cached offline session list (M)
-- [ ] Polish: motion, copy menus, large-font and small-screen passes; release signing.
-- [ ] Optional: A7 warn near the 30-day token limit · A14 `setUnlockedDeviceRequired(true)` · L7 Android lint strictness, baseline profile, `androidTest` (skipped on purpose) · web i18n (skipped on purpose).
-- [ ] Port Android-only ideas to web where useful: AC2 attachment limits, AS3 workspace name from path, AS4 online-first sort, AF1 wrap toggle.
+The active checklist is [Mobile app follow-up work](mobile.md). The Flutter client
+now includes the settings, memory, sidebar, notifications, sharing, tool details
+and work panels from the former 6a–6d batches. Physical-device acceptance and
+fine-grained presentation checks remain open there; this does not mark every old
+pixel-level finding as verified. The original item IDs and file references remain
+available at `git show 7677d24:plans/mobile-audit.md`.
 
 ## Phase 7 — Small storage and config items
 

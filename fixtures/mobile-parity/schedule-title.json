@@ -1,0 +1,69 @@
+{
+  "revision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "browser": "154.0.8037.93",
+  "cases": [
+    {
+      "name": "ascii",
+      "old": "",
+      "start": 0,
+      "end": 0,
+      "insert": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "selection": 80
+    },
+    {
+      "name": "emoji",
+      "old": "",
+      "start": 0,
+      "end": 0,
+      "insert": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "value": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "selection": 80
+    },
+    {
+      "name": "combining",
+      "old": "",
+      "start": 0,
+      "end": 0,
+      "insert": "ééééééééééééééééééééééééééééééééééééééééé",
+      "value": "éééééééééééééééééééééééééééééééééééééééé",
+      "selection": 80
+    },
+    {
+      "name": "surrogate boundary",
+      "old": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "start": 79,
+      "end": 79,
+      "insert": "😀x",
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "selection": 79
+    },
+    {
+      "name": "middle insertion",
+      "old": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaZ",
+      "start": 1,
+      "end": 1,
+      "insert": "XYZ",
+      "value": "aXaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaZ",
+      "selection": 4
+    },
+    {
+      "name": "selection replacement",
+      "old": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaZZ",
+      "start": 1,
+      "end": 3,
+      "insert": "XYZQ",
+      "value": "aXYaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaZZ",
+      "selection": 5
+    },
+    {
+      "name": "combining boundary",
+      "old": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "start": 79,
+      "end": 79,
+      "insert": "é",
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaae",
+      "selection": 80
+    }
+  ]
+}

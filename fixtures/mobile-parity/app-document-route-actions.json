@@ -1,0 +1,40 @@
+{
+  "id": "app-document-route-actions-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "apiFixtureReference": "app-document-routes.json",
+  "capture": {
+    "entrypoint": "actual Vite apps/web/index.html and src/main.ts mounting pinned App.svelte",
+    "viewport": { "width": 390, "height": 844, "deviceScaleFactor": 1, "isMobile": true, "hasTouch": true },
+    "browserExecutable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "apiMode": "The existing app-document-routes API fixture is fulfilled same-origin by Playwright; interaction targets are real rendered app controls."
+  },
+  "cases": [
+    {
+      "id": "deep-path-sidebar-session-selection",
+      "kind": "actions",
+      "url": "/deep/client/thread?session=session-second&campaign=preserve#start-fragment",
+      "steps": [
+        { "id": "open-phone-list", "action": "mobile-menu", "label": "Back to the list" },
+        { "id": "select-sidebar-session", "action": "sidebar-session", "sessionId": "session-second", "label": "Second chat" }
+      ]
+    },
+    {
+      "id": "index-path-workspace-and-session-selection",
+      "kind": "actions",
+      "url": "/index.html?campaign=index-preserve#start-fragment",
+      "steps": [
+        { "id": "select-sidebar-workspace", "action": "sidebar-workspace", "workspaceId": "home:notes", "label": "Notes project" },
+        { "id": "select-workspace-session", "action": "workspace-session", "sessionId": "session-second", "label": "Second chat" }
+      ]
+    },
+    {
+      "id": "form-document-history-back-forward",
+      "kind": "form-history",
+      "documentPath": "/__oracle/form-entry",
+      "formValue": "typed from the form document",
+      "actionUrl": "/deep/form-target?campaign=from-form#form-fragment",
+      "sessionId": "session-latest",
+      "sessionLabel": "Latest chat"
+    }
+  ]
+}

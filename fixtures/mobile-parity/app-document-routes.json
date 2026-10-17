@@ -1,0 +1,99 @@
+{
+  "id": "app-document-routes-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "capture": {
+    "entrypoint": "actual Vite apps/web/index.html and src/main.ts mounting pinned App.svelte",
+    "viewport": { "width": 390, "height": 844, "deviceScaleFactor": 1, "isMobile": true, "hasTouch": true },
+    "browserExecutable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "apiMode": "Playwright fulfills same-origin /api requests from the stable source fixture below; no production app state or routing is injected"
+  },
+  "cases": [
+    { "id": "root", "url": "/" },
+    { "id": "index-html", "url": "/index.html" },
+    { "id": "root-hash", "url": "/?campaign=discard#start-here" },
+    { "id": "schedule-hash", "url": "/?open=schedules#start-here" },
+    { "id": "session-valid", "url": "/?session=session-second" },
+    { "id": "session-missing", "url": "/?session=missing" },
+    { "id": "session-empty", "url": "/?session=" },
+    { "id": "empty-session-schedules", "url": "/?session=&open=schedules" },
+    { "id": "workspace-empty", "url": "/?workspace=" },
+    { "id": "open-empty", "url": "/?open=" },
+    { "id": "schedule-empty", "url": "/?open=schedules&schedule=" },
+    { "id": "workspace-chat-project", "url": "/?workspace=home%3Anotes&campaign=keep#workspace-anchor" },
+    { "id": "workspace-directory", "url": "/?workspace=work-local" },
+    { "id": "workspace-missing", "url": "/?workspace=missing" },
+    { "id": "open-schedules", "url": "/?open=schedules" },
+    { "id": "open-schedule-valid", "url": "/?open=schedules&schedule=route-schedule" },
+    { "id": "open-schedule-missing", "url": "/?open=schedules&schedule=missing" },
+    { "id": "open-memory", "url": "/?open=memory" },
+    { "id": "memory-and-workspace", "url": "/?open=memory&workspace=home%3Anotes" },
+    { "id": "encoded-malformed-query", "url": "/?session=session%2Dsecond&broken=%ZZ&badUtf8=%E0%A4%A" },
+    { "id": "unknown-query-and-open", "url": "/?campaign=route-oracle&open=unknown" },
+    { "id": "duplicate-session-first", "url": "/?session=session-second&session=session-latest" },
+    { "id": "duplicate-schedule-first", "url": "/?open=schedules&schedule=missing&schedule=route-schedule" },
+    { "id": "duplicate-workspace-first", "url": "/?workspace=missing&workspace=home%3Anotes" },
+    { "id": "session-target-precedes-open", "url": "/?session=missing&open=schedules" },
+    { "id": "workspace-overrides-open", "url": "/?open=schedules&workspace=home%3Anotes" },
+    { "id": "deep-path-fallback", "url": "/not-a-client-route?open=schedules" }
+  ],
+  "apiFixture": {
+    "workspaces": [
+      { "id": "home:chats", "hostId": "home", "displayName": "Chats", "kind": "chat", "defaults": {} },
+      { "id": "home:notes", "hostId": "home", "displayName": "Notes project", "kind": "chat", "defaults": {} },
+      { "id": "work-local", "hostId": "local", "displayName": "Local workspace", "kind": "directory", "canonicalPath": "/tmp/local-workspace", "defaults": {} }
+    ],
+    "sessions": [
+      { "id": "session-latest", "workspaceId": "home:chats", "name": "Latest chat", "updatedAt": 1760000000000, "runnerState": "stopped", "pinnedAt": null, "settledAt": null },
+      { "id": "session-second", "workspaceId": "home:notes", "name": "Second chat", "updatedAt": 1759999900000, "runnerState": "stopped", "pinnedAt": null, "settledAt": null },
+      { "id": "session-work", "workspaceId": "work-local", "name": "Workspace session", "updatedAt": 1759999800000, "runnerState": "stopped", "pinnedAt": null, "settledAt": null }
+    ],
+    "models": [],
+    "nodes": [
+      { "id": "home", "connectedAt": 1760000000000, "lastSeenAt": 1760000000000, "workspaces": [{ "id": "home:chats", "displayName": "Chats" }, { "id": "home:notes", "displayName": "Notes project" }] },
+      { "id": "local", "connectedAt": 1760000000000, "lastSeenAt": 1760000000000, "workspaces": [{ "id": "work-local", "displayName": "Local workspace" }] }
+    ],
+    "snapshots": {
+      "session-latest": {
+        "session": { "id": "session-latest", "workspaceId": "home:chats", "name": "Latest chat", "runnerState": "stopped", "updatedAt": 1760000000000 },
+        "history": [], "notifications": [], "interactions": [], "queue": { "steering": [], "followUp": [] }, "watermark": { "epoch": 1, "sequence": 0 }
+      },
+      "session-second": {
+        "session": { "id": "session-second", "workspaceId": "home:notes", "name": "Second chat", "runnerState": "stopped", "updatedAt": 1759999900000 },
+        "history": [], "notifications": [], "interactions": [], "queue": { "steering": [], "followUp": [] }, "watermark": { "epoch": 1, "sequence": 0 }
+      },
+      "session-work": {
+        "session": { "id": "session-work", "workspaceId": "work-local", "name": "Workspace session", "runnerState": "stopped", "updatedAt": 1759999800000 },
+        "history": [], "notifications": [], "interactions": [], "queue": { "steering": [], "followUp": [] }, "watermark": { "epoch": 1, "sequence": 0 }
+      }
+    },
+    "controlLease": { "lease": { "clientId": "other-local-client", "expired": false, "generation": 7, "expiresAt": 1760000300000 } },
+    "panelState": { "agentRunning": false, "memory": null, "memoryRuntime": null, "backgroundTasks": [], "team": { "agents": [] } },
+    "memory": { "usage": { "user": { "used": 0, "max": 10000 }, "note": { "used": 0, "max": 10000 } }, "user": [], "notes": [], "removed": [], "proposals": [], "sessions": {} },
+    "schedules": [
+      {
+        "id": "route-schedule",
+        "title": "Route schedule",
+        "prompt": "A local route-oracle schedule.",
+        "workspaceId": "home:chats",
+        "workspace": { "id": "home:chats", "name": "Chats", "kind": "chat", "node": "home", "online": true },
+        "cron": "0 9 * * *",
+        "runAt": null,
+        "timezone": "Asia/Taipei",
+        "model": null,
+        "thinking": null,
+        "notify": "none",
+        "status": "active",
+        "nextRunAt": null,
+        "createdBySession": null,
+        "lastRun": null,
+        "attention": 0,
+        "createdAt": 1760000000000,
+        "updatedAt": 1760000000000
+      }
+    ],
+    "scheduleRuns": [],
+    "providers": { "providers": [], "oauthProviders": [] },
+    "devices": { "devices": [] },
+    "push": { "publicKey": "", "subscriptions": [] }
+  }
+}

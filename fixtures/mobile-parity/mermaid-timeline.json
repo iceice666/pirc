@@ -1,0 +1,78 @@
+{
+  "id": "mermaid-timeline-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "widths": [390, 650, 651, 768, 860, 861, 1024],
+  "height": 900,
+  "deviceScaleFactor": 1,
+  "textScales": [1, 2],
+  "themes": ["light", "dark"],
+  "body": {
+    "fontFamily": "Arial",
+    "fontSize": 15,
+    "lineHeight": 1.65
+  },
+  "cases": [
+    {
+      "id": "timeline-bare-periods",
+      "kind": "timeline",
+      "description": "Unsectioned timeline with bare period entries and multiple events attached to a period.",
+      "source": "~~~mermaid\ntimeline\ntitle Bare periods\n2001\n: first event\n: second event\n2005\n: closing event\n~~~"
+    },
+    {
+      "id": "timeline-sections-and-title",
+      "kind": "timeline",
+      "description": "Title, multiple named sections, multiple periods, and events across sections.",
+      "source": "~~~mermaid\ntimeline\ntitle Sections and events\nsection Foundation\n2001 : founded\n2004 : first release\nsection Growth\n2012 : expansion\n: new market\n2020 : new platform\n~~~"
+    },
+    {
+      "id": "timeline-empty-section",
+      "kind": "timeline",
+      "description": "Empty section followed by a populated section, to capture whether empty sections still get a node and affect layout.",
+      "source": "~~~mermaid\ntimeline\ntitle Empty section\nsection Empty chapter\nsection Populated chapter\n2024 : launch\n~~~"
+    },
+    {
+      "id": "timeline-br-label-wrap",
+      "kind": "timeline",
+      "description": "Explicit br label plus long event text to capture SVG tspan wrapping and text measurement.",
+      "source": "~~~mermaid\ntimeline\ntitle Wrapped labels\nsection Labels\n2023 : First line<br>second line\n: A long event label that must wrap inside the fixed timeline event node width\n~~~"
+    },
+    {
+      "id": "timeline-colon-continuations",
+      "kind": "timeline",
+      "description": "Several colon-prefixed continuation event rows attached to the immediately preceding period.",
+      "source": "~~~mermaid\ntimeline\nsection Continuing\n2019\n: first event\n: second event with detail\n: final event\n~~~"
+    },
+    {
+      "id": "timeline-accessibility",
+      "kind": "timeline",
+      "description": "Accessible title and description directives alongside an ordinary diagram title and content.",
+      "source": "~~~mermaid\ntimeline\ntitle Accessibility metadata\naccTitle: Timeline of releases\naccDescr: A sequence of software milestones from first release to stable release.\nsection Releases\n1.0 : first release\n2.0 : stable release\n~~~"
+    },
+    {
+      "id": "timeline-vertical-td",
+      "kind": "timeline",
+      "description": "Explicit TD header selecting Mermaid's vertical timeline renderer.",
+      "source": "~~~mermaid\ntimeline TD\ntitle Vertical timeline\nsection Milestones\n2018 : project begins\n2020 : first deployment\n: expanded rollout\n2024 : current version\n~~~"
+    },
+    {
+      "id": "timeline-local-period-height-lr",
+      "kind": "timeline",
+      "description": "In LR layout, a wrapped long period is followed by a short period in the same section and another short period in a new section, probing local height propagation and reset.",
+      "source": "~~~mermaid\ntimeline\ntitle Local period heights LR\nsection First group\nA very long period label that wraps across multiple lines to enlarge its timeline node\n: Long-period event\n2024\n: Short-period event\nsection Following group\n2025\n: Next-section event\n~~~"
+    },
+    {
+      "id": "timeline-local-period-height-td",
+      "kind": "timeline",
+      "description": "In TD layout, a wrapped long period is followed by a short period in the same section and another short period in a new section, probing local height propagation and reset.",
+      "source": "~~~mermaid\ntimeline TD\ntitle Local period heights TD\nsection First group\nA very long period label that wraps across multiple lines to enlarge its timeline node\n: Long-period event\n2024\n: Short-period event\nsection Following group\n2025\n: Next-section event\n~~~"
+    },
+    {
+      "id": "timeline-invalid-lexer-token",
+      "kind": "timeline",
+      "expectedStatus": "error",
+      "description": "Invalid lexer token after valid header and period, capturing the pinned Markdown error presentation.",
+      "source": "~~~mermaid\ntimeline\nsection Broken\n2024\n:: malformed event\n~~~"
+    }
+  ]
+}

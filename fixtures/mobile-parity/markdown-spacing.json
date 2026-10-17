@@ -1,0 +1,53 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "cases": [
+    {
+      "id": "first-heading",
+      "source": "# First heading\n\nA paragraph follows the first heading."
+    },
+    {
+      "id": "last-heading",
+      "source": "A paragraph comes before the final heading.\n\n# Last heading"
+    },
+    {
+      "id": "paragraph-heading-paragraph",
+      "source": "Before the heading.\n\n# Middle heading\n\nAfter the heading."
+    },
+    {
+      "id": "heading-scale-sequence",
+      "source": "# Heading one\n\n## Heading two\n\n### Heading three"
+    },
+    {
+      "id": "paragraph-pair",
+      "source": "First paragraph with enough words to occupy one line.\n\nSecond paragraph with enough words to occupy one line."
+    },
+    {
+      "id": "tight-list",
+      "source": "- One compact item\n- Another compact item\n- A final compact item"
+    },
+    {
+      "id": "loose-list",
+      "source": "- First item paragraph\n\n- Second item paragraph\n\n- Third item paragraph"
+    },
+    {
+      "id": "nested-list",
+      "source": "- Outer item one\n  - Nested item one\n  - Nested item two\n- Outer item two"
+    },
+    {
+      "id": "blockquote",
+      "source": "Paragraph before the quotation.\n\n> Quoted paragraph one.\n>\n> Quoted paragraph two.\n\nParagraph after the quotation."
+    },
+    {
+      "id": "list-first-heading",
+      "source": "- # List heading\n\n  Tail paragraph"
+    },
+    {
+      "id": "list-last-heading",
+      "source": "- Lead paragraph\n\n  ## Last list heading"
+    },
+    {
+      "id": "quote-heading",
+      "source": "> # Quoted heading\n>\n> Quoted paragraph"
+    }
+  ]
+}

@@ -1,0 +1,811 @@
+{
+  "id": "workspace-settings-states",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "height": 900,
+  "widths": [
+    390,
+    768
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "textScales": [
+    1,
+    2
+  ],
+  "simulation": {
+    "shell": "Pinned production App.svelte, production app.css/markdown.css, and the production index.html app wrappers. A local fetch fixture provides deterministic App bootstrap and workspace settings responses; no external backend or WebSocket is used.",
+    "interactions": "Transient reads and writes are captured while the actual settings component's fetch is held pending. Retry, save, trust, and revoke are performed through rendered browser controls.",
+    "textScale": "Before every flow step and capture, restore the original font declarations, read every base computed size, then apply a second-pass inline !important multiplier. Actions run with the requested scale; dynamically inserted nodes are scaled without parent/child double scaling. This simulates text sizing, not OS zoom or physical input."
+  },
+  "workspaces": [
+    {
+      "id": "home:chats",
+      "hostId": "home",
+      "displayName": "Chats",
+      "kind": "chat",
+      "defaults": {}
+    },
+    {
+      "id": "home:trip",
+      "hostId": "home",
+      "displayName": "Trip planning",
+      "kind": "chat",
+      "defaults": {
+        "modelId": "gpt-5.4",
+        "thinkingLevel": "medium"
+      }
+    },
+    {
+      "id": "device:repo",
+      "hostId": "device",
+      "displayName": "Pirc workspace",
+      "kind": "directory",
+      "canonicalPath": "/Users/example/Projects/pirc",
+      "defaults": {}
+    }
+  ],
+  "nodes": [
+    {
+      "id": "home",
+      "connectedAt": 1791580800000,
+      "lastSeenAt": 1791580800000,
+      "workspaces": [
+        {
+          "id": "home:chats",
+          "displayName": "Chats"
+        },
+        {
+          "id": "home:trip",
+          "displayName": "Trip planning"
+        }
+      ]
+    },
+    {
+      "id": "device",
+      "connectedAt": 1791580800000,
+      "lastSeenAt": 1791580800000,
+      "workspaces": [
+        {
+          "id": "device:repo",
+          "displayName": "Pirc workspace"
+        }
+      ]
+    }
+  ],
+  "responses": {
+    "instructions": {
+      "status": 200,
+      "body": {
+        "instructions": {
+          "text": "Be curious and precise.",
+          "maxChars": 8000
+        }
+      }
+    },
+    "instructionsSaved": {
+      "status": 200,
+      "body": {
+        "instructions": {
+          "text": "Updated project instructions.",
+          "maxChars": 8000
+        }
+      }
+    },
+    "capabilities": {
+      "status": 200,
+      "body": {
+        "capabilities": {
+          "version": 1,
+          "delegation": true,
+          "memory_search": true,
+          "remote_recall": true,
+          "schedules": true,
+          "web_search": true
+        }
+      }
+    },
+    "capabilitiesSaved": {
+      "status": 200,
+      "body": {
+        "capabilities": {
+          "version": 1,
+          "delegation": false,
+          "memory_search": true,
+          "remote_recall": true,
+          "schedules": true,
+          "web_search": true
+        }
+      }
+    },
+    "projectUntrusted": {
+      "status": 200,
+      "body": {
+        "project": {
+          "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "trustedHash": null,
+          "trusted": false,
+          "empty": false,
+          "hooks": {
+            "sessionStart": [
+              {
+                "command": "npm ci",
+                "timeoutMs": 120000
+              }
+            ],
+            "beforeTool": [
+              {
+                "command": "npm test",
+                "matcher": "Bash",
+                "timeoutMs": 60000
+              }
+            ]
+          },
+          "env": {
+            "NODE_ENV": "development",
+            "PIRC_LOG_LEVEL": "info"
+          },
+          "allowedPaths": [
+            "src",
+            "tests"
+          ]
+        }
+      }
+    },
+    "projectTrusted": {
+      "status": 200,
+      "body": {
+        "project": {
+          "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "trustedHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "trusted": true,
+          "empty": false,
+          "hooks": {
+            "sessionStart": [
+              {
+                "command": "npm ci",
+                "timeoutMs": 120000
+              }
+            ],
+            "beforeTool": [
+              {
+                "command": "npm test",
+                "matcher": "Bash",
+                "timeoutMs": 60000
+              }
+            ]
+          },
+          "env": {
+            "NODE_ENV": "development",
+            "PIRC_LOG_LEVEL": "info"
+          },
+          "allowedPaths": [
+            "src",
+            "tests"
+          ]
+        }
+      }
+    },
+    "projectChanged": {
+      "status": 200,
+      "body": {
+        "project": {
+          "hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "trustedHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "trusted": false,
+          "empty": false,
+          "hooks": {
+            "sessionStart": [
+              {
+                "command": "npm install",
+                "timeoutMs": 120000
+              }
+            ],
+            "beforeTool": [
+              {
+                "command": "npm test",
+                "matcher": "Bash",
+                "timeoutMs": 60000
+              }
+            ]
+          },
+          "env": {
+            "NODE_ENV": "test",
+            "PIRC_LOG_LEVEL": "warn"
+          },
+          "allowedPaths": [
+            "src",
+            "tests",
+            "fixtures"
+          ]
+        }
+      }
+    },
+    "projectRevoked": {
+      "status": 200,
+      "body": {
+        "project": {
+          "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "trustedHash": null,
+          "trusted": false,
+          "empty": false,
+          "hooks": {
+            "sessionStart": [
+              {
+                "command": "npm ci",
+                "timeoutMs": 120000
+              }
+            ],
+            "beforeTool": [
+              {
+                "command": "npm test",
+                "matcher": "Bash",
+                "timeoutMs": 60000
+              }
+            ]
+          },
+          "env": {
+            "NODE_ENV": "development",
+            "PIRC_LOG_LEVEL": "info"
+          },
+          "allowedPaths": [
+            "src",
+            "tests"
+          ]
+        }
+      }
+    },
+    "projectEmpty": {
+      "status": 200,
+      "body": {
+        "project": {
+          "hash": null,
+          "trustedHash": null,
+          "trusted": false,
+          "empty": true,
+          "hooks": {},
+          "env": {},
+          "allowedPaths": []
+        }
+      }
+    },
+    "projectInvalid": {
+      "status": 200,
+      "body": {
+        "project": {
+          "error": "Invalid JSON at line 2",
+          "hash": null,
+          "trustedHash": null,
+          "trusted": false,
+          "empty": true
+        }
+      }
+    },
+    "unavailable": {
+      "status": 503,
+      "body": {
+        "error": {
+          "message": "Settings service is temporarily unavailable"
+        }
+      }
+    },
+    "serverError": {
+      "status": 500,
+      "body": {
+        "error": {
+          "message": "Could not save settings"
+        }
+      }
+    },
+    "trustConflict": {
+      "status": 409,
+      "body": {
+        "error": {
+          "message": "The project config changed since it was shown"
+        }
+      }
+    }
+  },
+  "states": [
+    {
+      "id": "chat-loading",
+      "workspaceId": "home:trip",
+      "hold": {
+        "method": "GET",
+        "endpoint": "instructions",
+        "releaseResponse": "instructions"
+      },
+      "expect": {
+        "stage": "loading",
+        "status": "Loading project instructions\u2026"
+      },
+      "flow": [
+        {
+          "type": "waitHeld",
+          "withOtherSettingsLoaded": true
+        },
+        {
+          "type": "capture",
+          "stage": "loading"
+        },
+        {
+          "type": "releaseHeld"
+        },
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "ready"
+        }
+      ]
+    },
+    {
+      "id": "chat-read-error-retry",
+      "workspaceId": "home:trip",
+      "sequences": {
+        "GET instructions": [
+          "unavailable",
+          "instructions"
+        ]
+      },
+      "expect": {
+        "error": "Settings service is temporarily unavailable",
+        "recovered": "Be curious and precise.",
+        "stage": "error"
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "error"
+        },
+        {
+          "type": "click",
+          "target": "Retry"
+        },
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "recovered"
+        }
+      ]
+    },
+    {
+      "id": "instructions-saving",
+      "workspaceId": "home:trip",
+      "hold": {
+        "method": "PATCH",
+        "endpoint": "instructions",
+        "releaseResponse": "instructionsSaved"
+      },
+      "expect": {
+        "stage": "saving",
+        "buttonLabel": "Saving\u2026"
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "fillInstructions",
+          "text": "Updated project instructions."
+        },
+        {
+          "type": "click",
+          "target": "Save"
+        },
+        {
+          "type": "waitHeld"
+        },
+        {
+          "type": "capture",
+          "stage": "saving"
+        },
+        {
+          "type": "releaseHeld"
+        },
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "saved"
+        }
+      ]
+    },
+    {
+      "id": "instructions-save-error",
+      "workspaceId": "home:trip",
+      "sequences": {
+        "PATCH instructions": [
+          "serverError"
+        ]
+      },
+      "expect": {
+        "error": "Could not save settings"
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "fillInstructions",
+          "text": "Updated project instructions."
+        },
+        {
+          "type": "click",
+          "target": "Save"
+        },
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "error"
+        }
+      ]
+    },
+    {
+      "id": "capabilities-saving",
+      "workspaceId": "home:trip",
+      "hold": {
+        "method": "PATCH",
+        "endpoint": "capabilities",
+        "releaseResponse": "capabilitiesSaved"
+      },
+      "expect": {
+        "stage": "saving",
+        "status": "Saving project capabilities\u2026",
+        "fieldsetDisabled": true
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "clickFirstSwitch"
+        },
+        {
+          "type": "waitHeld"
+        },
+        {
+          "type": "capture",
+          "stage": "saving"
+        },
+        {
+          "type": "releaseHeld"
+        },
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "saved"
+        }
+      ]
+    },
+    {
+      "id": "directory-offline",
+      "workspaceId": "device:repo",
+      "nodes": "home-only",
+      "expect": {
+        "offline": true,
+        "projectConfigRequests": 0
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "final"
+        }
+      ]
+    },
+    {
+      "id": "config-loading",
+      "workspaceId": "device:repo",
+      "hold": {
+        "method": "GET",
+        "endpoint": "project-config",
+        "releaseResponse": "projectUntrusted"
+      },
+      "expect": {
+        "stage": "loading",
+        "status": "Loading project config\u2026"
+      },
+      "flow": [
+        {
+          "type": "waitHeld"
+        },
+        {
+          "type": "capture",
+          "stage": "loading"
+        },
+        {
+          "type": "releaseHeld"
+        },
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "ready"
+        }
+      ]
+    },
+    {
+      "id": "config-read-error-retry",
+      "workspaceId": "device:repo",
+      "sequences": {
+        "GET project-config": [
+          "unavailable",
+          "projectUntrusted"
+        ]
+      },
+      "expect": {
+        "error": "Settings service is temporarily unavailable",
+        "recovered": "Not trusted: ignored",
+        "stage": "error"
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "error"
+        },
+        {
+          "type": "click",
+          "target": "Retry"
+        },
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "recovered"
+        }
+      ]
+    },
+    {
+      "id": "config-invalid",
+      "workspaceId": "device:repo",
+      "sequences": {
+        "GET project-config": [
+          "projectInvalid"
+        ]
+      },
+      "expect": {
+        "text": "The project config is invalid and is not used: Invalid JSON at line 2",
+        "trustButtons": 0
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "final"
+        }
+      ]
+    },
+    {
+      "id": "config-empty",
+      "workspaceId": "device:repo",
+      "sequences": {
+        "GET project-config": [
+          "projectEmpty"
+        ]
+      },
+      "expect": {
+        "text": "This workspace's project config sets no hooks, environment or allowed paths.",
+        "trustButtons": 0
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "final"
+        }
+      ]
+    },
+    {
+      "id": "config-trusted",
+      "workspaceId": "device:repo",
+      "sequences": {
+        "GET project-config": [
+          "projectTrusted"
+        ]
+      },
+      "expect": {
+        "text": "Trusted",
+        "trustButtons": 0,
+        "revokeButtons": 1
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "final"
+        }
+      ]
+    },
+    {
+      "id": "config-changed",
+      "workspaceId": "device:repo",
+      "sequences": {
+        "GET project-config": [
+          "projectChanged"
+        ]
+      },
+      "expect": {
+        "text": "Changed since trusted: ignored until you trust it again",
+        "trustButtons": 1,
+        "revokeButtons": 1
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "final"
+        }
+      ]
+    },
+    {
+      "id": "config-revoked",
+      "workspaceId": "device:repo",
+      "sequences": {
+        "GET project-config": [
+          "projectTrusted"
+        ],
+        "POST project-trust": [
+          "projectRevoked"
+        ]
+      },
+      "expect": {
+        "status": "Trust revoked. New sessions ignore them.",
+        "text": "Not trusted: ignored",
+        "trustButtons": 1,
+        "revokeButtons": 0
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "click",
+          "target": "Revoke trust"
+        },
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "final"
+        }
+      ]
+    },
+    {
+      "id": "trust-saving",
+      "workspaceId": "device:repo",
+      "hold": {
+        "method": "POST",
+        "endpoint": "project-trust",
+        "releaseResponse": "projectTrusted"
+      },
+      "expect": {
+        "stage": "saving",
+        "status": "Saving\u2026",
+        "trustDisabled": true
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "click",
+          "target": "Trust"
+        },
+        {
+          "type": "waitHeld"
+        },
+        {
+          "type": "capture",
+          "stage": "saving"
+        },
+        {
+          "type": "releaseHeld"
+        },
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "saved"
+        }
+      ]
+    },
+    {
+      "id": "trust-error",
+      "workspaceId": "device:repo",
+      "sequences": {
+        "POST project-trust": [
+          "serverError"
+        ]
+      },
+      "expect": {
+        "error": "Could not save settings",
+        "trustDisabled": false
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "click",
+          "target": "Trust"
+        },
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "capture",
+          "stage": "error"
+        }
+      ]
+    },
+    {
+      "id": "trust-409",
+      "workspaceId": "device:repo",
+      "sequences": {
+        "GET project-config": [
+          "projectUntrusted",
+          "projectChanged"
+        ],
+        "POST project-trust": [
+          "trustConflict"
+        ]
+      },
+      "expect": {
+        "error": "The project config changed since it was shown",
+        "text": "Changed since trusted: ignored until you trust it again",
+        "projectConfigGets": 2
+      },
+      "flow": [
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "click",
+          "target": "Trust"
+        },
+        {
+          "type": "waitIdle"
+        },
+        {
+          "type": "waitRequests",
+          "endpoint": "project-config",
+          "count": 2
+        },
+        {
+          "type": "capture",
+          "stage": "final"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,5513 @@
+{
+  "browserVersion": "153.0.8010.12",
+  "viewport": {
+    "height": 1000,
+    "deviceScaleFactor": 1,
+    "widths": [
+      390,
+      768
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ]
+  },
+  "cases": [
+    {
+      "name": "fixed_percent_nested_boxes",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #outer{width:240px;height:150px;margin:7px 9px;padding:10px 12px;border:2px solid} #percent{width:50%;height:50%;margin:3px;padding:4px;border:1px solid} #nested{width:25%;height:30px;margin:2px;padding:2px;border:1px solid}</style></head><body><div id=\"outer\"><div id=\"percent\"><div id=\"nested\"></div></div></div></body></html>",
+      "targets": [
+        "outer",
+        "percent",
+        "nested"
+      ],
+      "viewportWidth": 390,
+      "theme": "light",
+      "expected": {
+        "outer": {
+          "rect": {
+            "x": 9,
+            "y": 7,
+            "width": 268,
+            "height": 174,
+            "top": 7,
+            "right": 277,
+            "bottom": 181,
+            "left": 9
+          },
+          "clientRects": [
+            {
+              "x": 9,
+              "y": 7,
+              "width": 268,
+              "height": 174,
+              "top": 7,
+              "right": 277,
+              "bottom": 181,
+              "left": 9
+            }
+          ],
+          "clientWidth": 264,
+          "clientHeight": 170,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 268,
+          "offsetHeight": 174,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "percent": {
+          "rect": {
+            "x": 26,
+            "y": 22,
+            "width": 130,
+            "height": 85,
+            "top": 22,
+            "right": 156,
+            "bottom": 107,
+            "left": 26
+          },
+          "clientRects": [
+            {
+              "x": 26,
+              "y": 22,
+              "width": 130,
+              "height": 85,
+              "top": 22,
+              "right": 156,
+              "bottom": 107,
+              "left": 26
+            }
+          ],
+          "clientWidth": 128,
+          "clientHeight": 83,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 130,
+          "offsetHeight": 85,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "nested": {
+          "rect": {
+            "x": 33,
+            "y": 29,
+            "width": 36,
+            "height": 36,
+            "top": 29,
+            "right": 69,
+            "bottom": 65,
+            "left": 33
+          },
+          "clientRects": [
+            {
+              "x": 33,
+              "y": 29,
+              "width": 36,
+              "height": 36,
+              "top": 29,
+              "right": 69,
+              "bottom": 65,
+              "left": 33
+            }
+          ],
+          "clientWidth": 34,
+          "clientHeight": 34,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 36,
+          "offsetHeight": 36,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "fixed_percent_nested_boxes",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #outer{width:240px;height:150px;margin:7px 9px;padding:10px 12px;border:2px solid} #percent{width:50%;height:50%;margin:3px;padding:4px;border:1px solid} #nested{width:25%;height:30px;margin:2px;padding:2px;border:1px solid}</style></head><body><div id=\"outer\"><div id=\"percent\"><div id=\"nested\"></div></div></div></body></html>",
+      "targets": [
+        "outer",
+        "percent",
+        "nested"
+      ],
+      "viewportWidth": 390,
+      "theme": "dark",
+      "expected": {
+        "outer": {
+          "rect": {
+            "x": 9,
+            "y": 7,
+            "width": 268,
+            "height": 174,
+            "top": 7,
+            "right": 277,
+            "bottom": 181,
+            "left": 9
+          },
+          "clientRects": [
+            {
+              "x": 9,
+              "y": 7,
+              "width": 268,
+              "height": 174,
+              "top": 7,
+              "right": 277,
+              "bottom": 181,
+              "left": 9
+            }
+          ],
+          "clientWidth": 264,
+          "clientHeight": 170,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 268,
+          "offsetHeight": 174,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "percent": {
+          "rect": {
+            "x": 26,
+            "y": 22,
+            "width": 130,
+            "height": 85,
+            "top": 22,
+            "right": 156,
+            "bottom": 107,
+            "left": 26
+          },
+          "clientRects": [
+            {
+              "x": 26,
+              "y": 22,
+              "width": 130,
+              "height": 85,
+              "top": 22,
+              "right": 156,
+              "bottom": 107,
+              "left": 26
+            }
+          ],
+          "clientWidth": 128,
+          "clientHeight": 83,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 130,
+          "offsetHeight": 85,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "nested": {
+          "rect": {
+            "x": 33,
+            "y": 29,
+            "width": 36,
+            "height": 36,
+            "top": 29,
+            "right": 69,
+            "bottom": 65,
+            "left": 33
+          },
+          "clientRects": [
+            {
+              "x": 33,
+              "y": 29,
+              "width": 36,
+              "height": 36,
+              "top": 29,
+              "right": 69,
+              "bottom": 65,
+              "left": 33
+            }
+          ],
+          "clientWidth": 34,
+          "clientHeight": 34,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 36,
+          "offsetHeight": 36,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "fixed_percent_nested_boxes",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #outer{width:240px;height:150px;margin:7px 9px;padding:10px 12px;border:2px solid} #percent{width:50%;height:50%;margin:3px;padding:4px;border:1px solid} #nested{width:25%;height:30px;margin:2px;padding:2px;border:1px solid}</style></head><body><div id=\"outer\"><div id=\"percent\"><div id=\"nested\"></div></div></div></body></html>",
+      "targets": [
+        "outer",
+        "percent",
+        "nested"
+      ],
+      "viewportWidth": 768,
+      "theme": "light",
+      "expected": {
+        "outer": {
+          "rect": {
+            "x": 9,
+            "y": 7,
+            "width": 268,
+            "height": 174,
+            "top": 7,
+            "right": 277,
+            "bottom": 181,
+            "left": 9
+          },
+          "clientRects": [
+            {
+              "x": 9,
+              "y": 7,
+              "width": 268,
+              "height": 174,
+              "top": 7,
+              "right": 277,
+              "bottom": 181,
+              "left": 9
+            }
+          ],
+          "clientWidth": 264,
+          "clientHeight": 170,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 268,
+          "offsetHeight": 174,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "percent": {
+          "rect": {
+            "x": 26,
+            "y": 22,
+            "width": 130,
+            "height": 85,
+            "top": 22,
+            "right": 156,
+            "bottom": 107,
+            "left": 26
+          },
+          "clientRects": [
+            {
+              "x": 26,
+              "y": 22,
+              "width": 130,
+              "height": 85,
+              "top": 22,
+              "right": 156,
+              "bottom": 107,
+              "left": 26
+            }
+          ],
+          "clientWidth": 128,
+          "clientHeight": 83,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 130,
+          "offsetHeight": 85,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "nested": {
+          "rect": {
+            "x": 33,
+            "y": 29,
+            "width": 36,
+            "height": 36,
+            "top": 29,
+            "right": 69,
+            "bottom": 65,
+            "left": 33
+          },
+          "clientRects": [
+            {
+              "x": 33,
+              "y": 29,
+              "width": 36,
+              "height": 36,
+              "top": 29,
+              "right": 69,
+              "bottom": 65,
+              "left": 33
+            }
+          ],
+          "clientWidth": 34,
+          "clientHeight": 34,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 36,
+          "offsetHeight": 36,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "fixed_percent_nested_boxes",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #outer{width:240px;height:150px;margin:7px 9px;padding:10px 12px;border:2px solid} #percent{width:50%;height:50%;margin:3px;padding:4px;border:1px solid} #nested{width:25%;height:30px;margin:2px;padding:2px;border:1px solid}</style></head><body><div id=\"outer\"><div id=\"percent\"><div id=\"nested\"></div></div></div></body></html>",
+      "targets": [
+        "outer",
+        "percent",
+        "nested"
+      ],
+      "viewportWidth": 768,
+      "theme": "dark",
+      "expected": {
+        "outer": {
+          "rect": {
+            "x": 9,
+            "y": 7,
+            "width": 268,
+            "height": 174,
+            "top": 7,
+            "right": 277,
+            "bottom": 181,
+            "left": 9
+          },
+          "clientRects": [
+            {
+              "x": 9,
+              "y": 7,
+              "width": 268,
+              "height": 174,
+              "top": 7,
+              "right": 277,
+              "bottom": 181,
+              "left": 9
+            }
+          ],
+          "clientWidth": 264,
+          "clientHeight": 170,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 268,
+          "offsetHeight": 174,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "percent": {
+          "rect": {
+            "x": 26,
+            "y": 22,
+            "width": 130,
+            "height": 85,
+            "top": 22,
+            "right": 156,
+            "bottom": 107,
+            "left": 26
+          },
+          "clientRects": [
+            {
+              "x": 26,
+              "y": 22,
+              "width": 130,
+              "height": 85,
+              "top": 22,
+              "right": 156,
+              "bottom": 107,
+              "left": 26
+            }
+          ],
+          "clientWidth": 128,
+          "clientHeight": 83,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 130,
+          "offsetHeight": 85,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "nested": {
+          "rect": {
+            "x": 33,
+            "y": 29,
+            "width": 36,
+            "height": 36,
+            "top": 29,
+            "right": 69,
+            "bottom": 65,
+            "left": 33
+          },
+          "clientRects": [
+            {
+              "x": 33,
+              "y": 29,
+              "width": 36,
+              "height": 36,
+              "top": 29,
+              "right": 69,
+              "bottom": 65,
+              "left": 33
+            }
+          ],
+          "clientWidth": 34,
+          "clientHeight": 34,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 36,
+          "offsetHeight": 36,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "content_box_and_border_box",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} .box{width:120px;height:60px;margin:5px;padding:10px;border:3px solid} #content{box-sizing:content-box} #border{box-sizing:border-box}</style></head><body><div id=\"content\" class=\"box\"></div><div id=\"border\" class=\"box\"></div></body></html>",
+      "targets": [
+        "content",
+        "border"
+      ],
+      "viewportWidth": 390,
+      "theme": "light",
+      "expected": {
+        "content": {
+          "rect": {
+            "x": 5,
+            "y": 5,
+            "width": 146,
+            "height": 86,
+            "top": 5,
+            "right": 151,
+            "bottom": 91,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 5,
+              "width": 146,
+              "height": 86,
+              "top": 5,
+              "right": 151,
+              "bottom": 91,
+              "left": 5
+            }
+          ],
+          "clientWidth": 140,
+          "clientHeight": 80,
+          "clientLeft": 3,
+          "clientTop": 3,
+          "offsetWidth": 146,
+          "offsetHeight": 86,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "border": {
+          "rect": {
+            "x": 5,
+            "y": 96,
+            "width": 120,
+            "height": 60,
+            "top": 96,
+            "right": 125,
+            "bottom": 156,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 96,
+              "width": 120,
+              "height": 60,
+              "top": 96,
+              "right": 125,
+              "bottom": 156,
+              "left": 5
+            }
+          ],
+          "clientWidth": 114,
+          "clientHeight": 54,
+          "clientLeft": 3,
+          "clientTop": 3,
+          "offsetWidth": 120,
+          "offsetHeight": 60,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "content_box_and_border_box",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} .box{width:120px;height:60px;margin:5px;padding:10px;border:3px solid} #content{box-sizing:content-box} #border{box-sizing:border-box}</style></head><body><div id=\"content\" class=\"box\"></div><div id=\"border\" class=\"box\"></div></body></html>",
+      "targets": [
+        "content",
+        "border"
+      ],
+      "viewportWidth": 390,
+      "theme": "dark",
+      "expected": {
+        "content": {
+          "rect": {
+            "x": 5,
+            "y": 5,
+            "width": 146,
+            "height": 86,
+            "top": 5,
+            "right": 151,
+            "bottom": 91,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 5,
+              "width": 146,
+              "height": 86,
+              "top": 5,
+              "right": 151,
+              "bottom": 91,
+              "left": 5
+            }
+          ],
+          "clientWidth": 140,
+          "clientHeight": 80,
+          "clientLeft": 3,
+          "clientTop": 3,
+          "offsetWidth": 146,
+          "offsetHeight": 86,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "border": {
+          "rect": {
+            "x": 5,
+            "y": 96,
+            "width": 120,
+            "height": 60,
+            "top": 96,
+            "right": 125,
+            "bottom": 156,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 96,
+              "width": 120,
+              "height": 60,
+              "top": 96,
+              "right": 125,
+              "bottom": 156,
+              "left": 5
+            }
+          ],
+          "clientWidth": 114,
+          "clientHeight": 54,
+          "clientLeft": 3,
+          "clientTop": 3,
+          "offsetWidth": 120,
+          "offsetHeight": 60,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "content_box_and_border_box",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} .box{width:120px;height:60px;margin:5px;padding:10px;border:3px solid} #content{box-sizing:content-box} #border{box-sizing:border-box}</style></head><body><div id=\"content\" class=\"box\"></div><div id=\"border\" class=\"box\"></div></body></html>",
+      "targets": [
+        "content",
+        "border"
+      ],
+      "viewportWidth": 768,
+      "theme": "light",
+      "expected": {
+        "content": {
+          "rect": {
+            "x": 5,
+            "y": 5,
+            "width": 146,
+            "height": 86,
+            "top": 5,
+            "right": 151,
+            "bottom": 91,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 5,
+              "width": 146,
+              "height": 86,
+              "top": 5,
+              "right": 151,
+              "bottom": 91,
+              "left": 5
+            }
+          ],
+          "clientWidth": 140,
+          "clientHeight": 80,
+          "clientLeft": 3,
+          "clientTop": 3,
+          "offsetWidth": 146,
+          "offsetHeight": 86,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "border": {
+          "rect": {
+            "x": 5,
+            "y": 96,
+            "width": 120,
+            "height": 60,
+            "top": 96,
+            "right": 125,
+            "bottom": 156,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 96,
+              "width": 120,
+              "height": 60,
+              "top": 96,
+              "right": 125,
+              "bottom": 156,
+              "left": 5
+            }
+          ],
+          "clientWidth": 114,
+          "clientHeight": 54,
+          "clientLeft": 3,
+          "clientTop": 3,
+          "offsetWidth": 120,
+          "offsetHeight": 60,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "content_box_and_border_box",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} .box{width:120px;height:60px;margin:5px;padding:10px;border:3px solid} #content{box-sizing:content-box} #border{box-sizing:border-box}</style></head><body><div id=\"content\" class=\"box\"></div><div id=\"border\" class=\"box\"></div></body></html>",
+      "targets": [
+        "content",
+        "border"
+      ],
+      "viewportWidth": 768,
+      "theme": "dark",
+      "expected": {
+        "content": {
+          "rect": {
+            "x": 5,
+            "y": 5,
+            "width": 146,
+            "height": 86,
+            "top": 5,
+            "right": 151,
+            "bottom": 91,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 5,
+              "width": 146,
+              "height": 86,
+              "top": 5,
+              "right": 151,
+              "bottom": 91,
+              "left": 5
+            }
+          ],
+          "clientWidth": 140,
+          "clientHeight": 80,
+          "clientLeft": 3,
+          "clientTop": 3,
+          "offsetWidth": 146,
+          "offsetHeight": 86,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "border": {
+          "rect": {
+            "x": 5,
+            "y": 96,
+            "width": 120,
+            "height": 60,
+            "top": 96,
+            "right": 125,
+            "bottom": 156,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 96,
+              "width": 120,
+              "height": 60,
+              "top": 96,
+              "right": 125,
+              "bottom": 156,
+              "left": 5
+            }
+          ],
+          "clientWidth": 114,
+          "clientHeight": 54,
+          "clientLeft": 3,
+          "clientTop": 3,
+          "offsetWidth": 120,
+          "offsetHeight": 60,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "min_max_constraints",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #min-width{width:80px;min-width:130px;max-width:180px;height:24px} #max-width{width:240px;min-width:100px;max-width:160px;height:24px} #min-height{width:24px;height:40px;min-height:90px;max-height:120px} #max-height{width:24px;height:160px;min-height:80px;max-height:110px}</style></head><body><div id=\"min-width\"></div><div id=\"max-width\"></div><div id=\"min-height\"></div><div id=\"max-height\"></div></body></html>",
+      "targets": [
+        "min-width",
+        "max-width",
+        "min-height",
+        "max-height"
+      ],
+      "viewportWidth": 390,
+      "theme": "light",
+      "expected": {
+        "min-width": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 130,
+            "height": 24,
+            "top": 0,
+            "right": 130,
+            "bottom": 24,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 130,
+              "height": 24,
+              "top": 0,
+              "right": 130,
+              "bottom": 24,
+              "left": 0
+            }
+          ],
+          "clientWidth": 130,
+          "clientHeight": 24,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 130,
+          "offsetHeight": 24,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "max-width": {
+          "rect": {
+            "x": 0,
+            "y": 24,
+            "width": 160,
+            "height": 24,
+            "top": 24,
+            "right": 160,
+            "bottom": 48,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 24,
+              "width": 160,
+              "height": 24,
+              "top": 24,
+              "right": 160,
+              "bottom": 48,
+              "left": 0
+            }
+          ],
+          "clientWidth": 160,
+          "clientHeight": 24,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 160,
+          "offsetHeight": 24,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "min-height": {
+          "rect": {
+            "x": 0,
+            "y": 48,
+            "width": 24,
+            "height": 90,
+            "top": 48,
+            "right": 24,
+            "bottom": 138,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 48,
+              "width": 24,
+              "height": 90,
+              "top": 48,
+              "right": 24,
+              "bottom": 138,
+              "left": 0
+            }
+          ],
+          "clientWidth": 24,
+          "clientHeight": 90,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 24,
+          "offsetHeight": 90,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "max-height": {
+          "rect": {
+            "x": 0,
+            "y": 138,
+            "width": 24,
+            "height": 110,
+            "top": 138,
+            "right": 24,
+            "bottom": 248,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 138,
+              "width": 24,
+              "height": 110,
+              "top": 138,
+              "right": 24,
+              "bottom": 248,
+              "left": 0
+            }
+          ],
+          "clientWidth": 24,
+          "clientHeight": 110,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 24,
+          "offsetHeight": 110,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "min_max_constraints",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #min-width{width:80px;min-width:130px;max-width:180px;height:24px} #max-width{width:240px;min-width:100px;max-width:160px;height:24px} #min-height{width:24px;height:40px;min-height:90px;max-height:120px} #max-height{width:24px;height:160px;min-height:80px;max-height:110px}</style></head><body><div id=\"min-width\"></div><div id=\"max-width\"></div><div id=\"min-height\"></div><div id=\"max-height\"></div></body></html>",
+      "targets": [
+        "min-width",
+        "max-width",
+        "min-height",
+        "max-height"
+      ],
+      "viewportWidth": 390,
+      "theme": "dark",
+      "expected": {
+        "min-width": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 130,
+            "height": 24,
+            "top": 0,
+            "right": 130,
+            "bottom": 24,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 130,
+              "height": 24,
+              "top": 0,
+              "right": 130,
+              "bottom": 24,
+              "left": 0
+            }
+          ],
+          "clientWidth": 130,
+          "clientHeight": 24,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 130,
+          "offsetHeight": 24,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "max-width": {
+          "rect": {
+            "x": 0,
+            "y": 24,
+            "width": 160,
+            "height": 24,
+            "top": 24,
+            "right": 160,
+            "bottom": 48,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 24,
+              "width": 160,
+              "height": 24,
+              "top": 24,
+              "right": 160,
+              "bottom": 48,
+              "left": 0
+            }
+          ],
+          "clientWidth": 160,
+          "clientHeight": 24,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 160,
+          "offsetHeight": 24,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "min-height": {
+          "rect": {
+            "x": 0,
+            "y": 48,
+            "width": 24,
+            "height": 90,
+            "top": 48,
+            "right": 24,
+            "bottom": 138,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 48,
+              "width": 24,
+              "height": 90,
+              "top": 48,
+              "right": 24,
+              "bottom": 138,
+              "left": 0
+            }
+          ],
+          "clientWidth": 24,
+          "clientHeight": 90,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 24,
+          "offsetHeight": 90,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "max-height": {
+          "rect": {
+            "x": 0,
+            "y": 138,
+            "width": 24,
+            "height": 110,
+            "top": 138,
+            "right": 24,
+            "bottom": 248,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 138,
+              "width": 24,
+              "height": 110,
+              "top": 138,
+              "right": 24,
+              "bottom": 248,
+              "left": 0
+            }
+          ],
+          "clientWidth": 24,
+          "clientHeight": 110,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 24,
+          "offsetHeight": 110,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "min_max_constraints",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #min-width{width:80px;min-width:130px;max-width:180px;height:24px} #max-width{width:240px;min-width:100px;max-width:160px;height:24px} #min-height{width:24px;height:40px;min-height:90px;max-height:120px} #max-height{width:24px;height:160px;min-height:80px;max-height:110px}</style></head><body><div id=\"min-width\"></div><div id=\"max-width\"></div><div id=\"min-height\"></div><div id=\"max-height\"></div></body></html>",
+      "targets": [
+        "min-width",
+        "max-width",
+        "min-height",
+        "max-height"
+      ],
+      "viewportWidth": 768,
+      "theme": "light",
+      "expected": {
+        "min-width": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 130,
+            "height": 24,
+            "top": 0,
+            "right": 130,
+            "bottom": 24,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 130,
+              "height": 24,
+              "top": 0,
+              "right": 130,
+              "bottom": 24,
+              "left": 0
+            }
+          ],
+          "clientWidth": 130,
+          "clientHeight": 24,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 130,
+          "offsetHeight": 24,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "max-width": {
+          "rect": {
+            "x": 0,
+            "y": 24,
+            "width": 160,
+            "height": 24,
+            "top": 24,
+            "right": 160,
+            "bottom": 48,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 24,
+              "width": 160,
+              "height": 24,
+              "top": 24,
+              "right": 160,
+              "bottom": 48,
+              "left": 0
+            }
+          ],
+          "clientWidth": 160,
+          "clientHeight": 24,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 160,
+          "offsetHeight": 24,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "min-height": {
+          "rect": {
+            "x": 0,
+            "y": 48,
+            "width": 24,
+            "height": 90,
+            "top": 48,
+            "right": 24,
+            "bottom": 138,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 48,
+              "width": 24,
+              "height": 90,
+              "top": 48,
+              "right": 24,
+              "bottom": 138,
+              "left": 0
+            }
+          ],
+          "clientWidth": 24,
+          "clientHeight": 90,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 24,
+          "offsetHeight": 90,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "max-height": {
+          "rect": {
+            "x": 0,
+            "y": 138,
+            "width": 24,
+            "height": 110,
+            "top": 138,
+            "right": 24,
+            "bottom": 248,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 138,
+              "width": 24,
+              "height": 110,
+              "top": 138,
+              "right": 24,
+              "bottom": 248,
+              "left": 0
+            }
+          ],
+          "clientWidth": 24,
+          "clientHeight": 110,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 24,
+          "offsetHeight": 110,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "min_max_constraints",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #min-width{width:80px;min-width:130px;max-width:180px;height:24px} #max-width{width:240px;min-width:100px;max-width:160px;height:24px} #min-height{width:24px;height:40px;min-height:90px;max-height:120px} #max-height{width:24px;height:160px;min-height:80px;max-height:110px}</style></head><body><div id=\"min-width\"></div><div id=\"max-width\"></div><div id=\"min-height\"></div><div id=\"max-height\"></div></body></html>",
+      "targets": [
+        "min-width",
+        "max-width",
+        "min-height",
+        "max-height"
+      ],
+      "viewportWidth": 768,
+      "theme": "dark",
+      "expected": {
+        "min-width": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 130,
+            "height": 24,
+            "top": 0,
+            "right": 130,
+            "bottom": 24,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 130,
+              "height": 24,
+              "top": 0,
+              "right": 130,
+              "bottom": 24,
+              "left": 0
+            }
+          ],
+          "clientWidth": 130,
+          "clientHeight": 24,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 130,
+          "offsetHeight": 24,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "max-width": {
+          "rect": {
+            "x": 0,
+            "y": 24,
+            "width": 160,
+            "height": 24,
+            "top": 24,
+            "right": 160,
+            "bottom": 48,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 24,
+              "width": 160,
+              "height": 24,
+              "top": 24,
+              "right": 160,
+              "bottom": 48,
+              "left": 0
+            }
+          ],
+          "clientWidth": 160,
+          "clientHeight": 24,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 160,
+          "offsetHeight": 24,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "min-height": {
+          "rect": {
+            "x": 0,
+            "y": 48,
+            "width": 24,
+            "height": 90,
+            "top": 48,
+            "right": 24,
+            "bottom": 138,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 48,
+              "width": 24,
+              "height": 90,
+              "top": 48,
+              "right": 24,
+              "bottom": 138,
+              "left": 0
+            }
+          ],
+          "clientWidth": 24,
+          "clientHeight": 90,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 24,
+          "offsetHeight": 90,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "max-height": {
+          "rect": {
+            "x": 0,
+            "y": 138,
+            "width": 24,
+            "height": 110,
+            "top": 138,
+            "right": 24,
+            "bottom": 248,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 138,
+              "width": 24,
+              "height": 110,
+              "top": 138,
+              "right": 24,
+              "bottom": 248,
+              "left": 0
+            }
+          ],
+          "clientWidth": 24,
+          "clientHeight": 110,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 24,
+          "offsetHeight": 110,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "flex_row",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #row{display:flex;align-items:stretch;gap:10px;width:300px;height:100px;padding:5px;border:2px solid} #row-a{flex:1 1 0;min-width:0} #row-b{flex:2 1 0;min-width:0} #row-c{flex:none;width:50px}</style></head><body><div id=\"row\"><div id=\"row-a\"></div><div id=\"row-b\"></div><div id=\"row-c\"></div></div></body></html>",
+      "targets": [
+        "row",
+        "row-a",
+        "row-b",
+        "row-c"
+      ],
+      "viewportWidth": 390,
+      "theme": "light",
+      "expected": {
+        "row": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 314,
+            "height": 114,
+            "top": 0,
+            "right": 314,
+            "bottom": 114,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 314,
+              "height": 114,
+              "top": 0,
+              "right": 314,
+              "bottom": 114,
+              "left": 0
+            }
+          ],
+          "clientWidth": 310,
+          "clientHeight": 110,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 314,
+          "offsetHeight": 114,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-a": {
+          "rect": {
+            "x": 7,
+            "y": 7,
+            "width": 76.671875,
+            "height": 100,
+            "top": 7,
+            "right": 83.671875,
+            "bottom": 107,
+            "left": 7
+          },
+          "clientRects": [
+            {
+              "x": 7,
+              "y": 7,
+              "width": 76.671875,
+              "height": 100,
+              "top": 7,
+              "right": 83.671875,
+              "bottom": 107,
+              "left": 7
+            }
+          ],
+          "clientWidth": 77,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 77,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-b": {
+          "rect": {
+            "x": 93.671875,
+            "y": 7,
+            "width": 153.328125,
+            "height": 100,
+            "top": 7,
+            "right": 247,
+            "bottom": 107,
+            "left": 93.671875
+          },
+          "clientRects": [
+            {
+              "x": 93.671875,
+              "y": 7,
+              "width": 153.328125,
+              "height": 100,
+              "top": 7,
+              "right": 247,
+              "bottom": 107,
+              "left": 93.671875
+            }
+          ],
+          "clientWidth": 153,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 153,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-c": {
+          "rect": {
+            "x": 257,
+            "y": 7,
+            "width": 50,
+            "height": 100,
+            "top": 7,
+            "right": 307,
+            "bottom": 107,
+            "left": 257
+          },
+          "clientRects": [
+            {
+              "x": 257,
+              "y": 7,
+              "width": 50,
+              "height": 100,
+              "top": 7,
+              "right": 307,
+              "bottom": 107,
+              "left": 257
+            }
+          ],
+          "clientWidth": 50,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 50,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "flex_row",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #row{display:flex;align-items:stretch;gap:10px;width:300px;height:100px;padding:5px;border:2px solid} #row-a{flex:1 1 0;min-width:0} #row-b{flex:2 1 0;min-width:0} #row-c{flex:none;width:50px}</style></head><body><div id=\"row\"><div id=\"row-a\"></div><div id=\"row-b\"></div><div id=\"row-c\"></div></div></body></html>",
+      "targets": [
+        "row",
+        "row-a",
+        "row-b",
+        "row-c"
+      ],
+      "viewportWidth": 390,
+      "theme": "dark",
+      "expected": {
+        "row": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 314,
+            "height": 114,
+            "top": 0,
+            "right": 314,
+            "bottom": 114,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 314,
+              "height": 114,
+              "top": 0,
+              "right": 314,
+              "bottom": 114,
+              "left": 0
+            }
+          ],
+          "clientWidth": 310,
+          "clientHeight": 110,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 314,
+          "offsetHeight": 114,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-a": {
+          "rect": {
+            "x": 7,
+            "y": 7,
+            "width": 76.671875,
+            "height": 100,
+            "top": 7,
+            "right": 83.671875,
+            "bottom": 107,
+            "left": 7
+          },
+          "clientRects": [
+            {
+              "x": 7,
+              "y": 7,
+              "width": 76.671875,
+              "height": 100,
+              "top": 7,
+              "right": 83.671875,
+              "bottom": 107,
+              "left": 7
+            }
+          ],
+          "clientWidth": 77,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 77,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-b": {
+          "rect": {
+            "x": 93.671875,
+            "y": 7,
+            "width": 153.328125,
+            "height": 100,
+            "top": 7,
+            "right": 247,
+            "bottom": 107,
+            "left": 93.671875
+          },
+          "clientRects": [
+            {
+              "x": 93.671875,
+              "y": 7,
+              "width": 153.328125,
+              "height": 100,
+              "top": 7,
+              "right": 247,
+              "bottom": 107,
+              "left": 93.671875
+            }
+          ],
+          "clientWidth": 153,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 153,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-c": {
+          "rect": {
+            "x": 257,
+            "y": 7,
+            "width": 50,
+            "height": 100,
+            "top": 7,
+            "right": 307,
+            "bottom": 107,
+            "left": 257
+          },
+          "clientRects": [
+            {
+              "x": 257,
+              "y": 7,
+              "width": 50,
+              "height": 100,
+              "top": 7,
+              "right": 307,
+              "bottom": 107,
+              "left": 257
+            }
+          ],
+          "clientWidth": 50,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 50,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "flex_row",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #row{display:flex;align-items:stretch;gap:10px;width:300px;height:100px;padding:5px;border:2px solid} #row-a{flex:1 1 0;min-width:0} #row-b{flex:2 1 0;min-width:0} #row-c{flex:none;width:50px}</style></head><body><div id=\"row\"><div id=\"row-a\"></div><div id=\"row-b\"></div><div id=\"row-c\"></div></div></body></html>",
+      "targets": [
+        "row",
+        "row-a",
+        "row-b",
+        "row-c"
+      ],
+      "viewportWidth": 768,
+      "theme": "light",
+      "expected": {
+        "row": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 314,
+            "height": 114,
+            "top": 0,
+            "right": 314,
+            "bottom": 114,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 314,
+              "height": 114,
+              "top": 0,
+              "right": 314,
+              "bottom": 114,
+              "left": 0
+            }
+          ],
+          "clientWidth": 310,
+          "clientHeight": 110,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 314,
+          "offsetHeight": 114,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-a": {
+          "rect": {
+            "x": 7,
+            "y": 7,
+            "width": 76.671875,
+            "height": 100,
+            "top": 7,
+            "right": 83.671875,
+            "bottom": 107,
+            "left": 7
+          },
+          "clientRects": [
+            {
+              "x": 7,
+              "y": 7,
+              "width": 76.671875,
+              "height": 100,
+              "top": 7,
+              "right": 83.671875,
+              "bottom": 107,
+              "left": 7
+            }
+          ],
+          "clientWidth": 77,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 77,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-b": {
+          "rect": {
+            "x": 93.671875,
+            "y": 7,
+            "width": 153.328125,
+            "height": 100,
+            "top": 7,
+            "right": 247,
+            "bottom": 107,
+            "left": 93.671875
+          },
+          "clientRects": [
+            {
+              "x": 93.671875,
+              "y": 7,
+              "width": 153.328125,
+              "height": 100,
+              "top": 7,
+              "right": 247,
+              "bottom": 107,
+              "left": 93.671875
+            }
+          ],
+          "clientWidth": 153,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 153,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-c": {
+          "rect": {
+            "x": 257,
+            "y": 7,
+            "width": 50,
+            "height": 100,
+            "top": 7,
+            "right": 307,
+            "bottom": 107,
+            "left": 257
+          },
+          "clientRects": [
+            {
+              "x": 257,
+              "y": 7,
+              "width": 50,
+              "height": 100,
+              "top": 7,
+              "right": 307,
+              "bottom": 107,
+              "left": 257
+            }
+          ],
+          "clientWidth": 50,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 50,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "flex_row",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #row{display:flex;align-items:stretch;gap:10px;width:300px;height:100px;padding:5px;border:2px solid} #row-a{flex:1 1 0;min-width:0} #row-b{flex:2 1 0;min-width:0} #row-c{flex:none;width:50px}</style></head><body><div id=\"row\"><div id=\"row-a\"></div><div id=\"row-b\"></div><div id=\"row-c\"></div></div></body></html>",
+      "targets": [
+        "row",
+        "row-a",
+        "row-b",
+        "row-c"
+      ],
+      "viewportWidth": 768,
+      "theme": "dark",
+      "expected": {
+        "row": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 314,
+            "height": 114,
+            "top": 0,
+            "right": 314,
+            "bottom": 114,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 314,
+              "height": 114,
+              "top": 0,
+              "right": 314,
+              "bottom": 114,
+              "left": 0
+            }
+          ],
+          "clientWidth": 310,
+          "clientHeight": 110,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 314,
+          "offsetHeight": 114,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-a": {
+          "rect": {
+            "x": 7,
+            "y": 7,
+            "width": 76.671875,
+            "height": 100,
+            "top": 7,
+            "right": 83.671875,
+            "bottom": 107,
+            "left": 7
+          },
+          "clientRects": [
+            {
+              "x": 7,
+              "y": 7,
+              "width": 76.671875,
+              "height": 100,
+              "top": 7,
+              "right": 83.671875,
+              "bottom": 107,
+              "left": 7
+            }
+          ],
+          "clientWidth": 77,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 77,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-b": {
+          "rect": {
+            "x": 93.671875,
+            "y": 7,
+            "width": 153.328125,
+            "height": 100,
+            "top": 7,
+            "right": 247,
+            "bottom": 107,
+            "left": 93.671875
+          },
+          "clientRects": [
+            {
+              "x": 93.671875,
+              "y": 7,
+              "width": 153.328125,
+              "height": 100,
+              "top": 7,
+              "right": 247,
+              "bottom": 107,
+              "left": 93.671875
+            }
+          ],
+          "clientWidth": 153,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 153,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "row-c": {
+          "rect": {
+            "x": 257,
+            "y": 7,
+            "width": 50,
+            "height": 100,
+            "top": 7,
+            "right": 307,
+            "bottom": 107,
+            "left": 257
+          },
+          "clientRects": [
+            {
+              "x": 257,
+              "y": 7,
+              "width": 50,
+              "height": 100,
+              "top": 7,
+              "right": 307,
+              "bottom": 107,
+              "left": 257
+            }
+          ],
+          "clientWidth": 50,
+          "clientHeight": 100,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 50,
+          "offsetHeight": 100,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "flex_column",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #column{display:flex;flex-direction:column;gap:8px;width:180px;height:220px;padding:6px;border:2px solid} #column-a{flex:1 1 0;min-height:0} #column-b{flex:2 1 0;min-height:0} #column-c{flex:none;height:30px}</style></head><body><div id=\"column\"><div id=\"column-a\"></div><div id=\"column-b\"></div><div id=\"column-c\"></div></div></body></html>",
+      "targets": [
+        "column",
+        "column-a",
+        "column-b",
+        "column-c"
+      ],
+      "viewportWidth": 390,
+      "theme": "light",
+      "expected": {
+        "column": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 196,
+            "height": 236,
+            "top": 0,
+            "right": 196,
+            "bottom": 236,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 196,
+              "height": 236,
+              "top": 0,
+              "right": 196,
+              "bottom": 236,
+              "left": 0
+            }
+          ],
+          "clientWidth": 192,
+          "clientHeight": 232,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 196,
+          "offsetHeight": 236,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-a": {
+          "rect": {
+            "x": 8,
+            "y": 8,
+            "width": 180,
+            "height": 58,
+            "top": 8,
+            "right": 188,
+            "bottom": 66,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 8,
+              "width": 180,
+              "height": 58,
+              "top": 8,
+              "right": 188,
+              "bottom": 66,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 58,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 58,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-b": {
+          "rect": {
+            "x": 8,
+            "y": 74,
+            "width": 180,
+            "height": 116,
+            "top": 74,
+            "right": 188,
+            "bottom": 190,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 74,
+              "width": 180,
+              "height": 116,
+              "top": 74,
+              "right": 188,
+              "bottom": 190,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 116,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 116,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-c": {
+          "rect": {
+            "x": 8,
+            "y": 198,
+            "width": 180,
+            "height": 30,
+            "top": 198,
+            "right": 188,
+            "bottom": 228,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 198,
+              "width": 180,
+              "height": 30,
+              "top": 198,
+              "right": 188,
+              "bottom": 228,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 30,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 30,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "flex_column",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #column{display:flex;flex-direction:column;gap:8px;width:180px;height:220px;padding:6px;border:2px solid} #column-a{flex:1 1 0;min-height:0} #column-b{flex:2 1 0;min-height:0} #column-c{flex:none;height:30px}</style></head><body><div id=\"column\"><div id=\"column-a\"></div><div id=\"column-b\"></div><div id=\"column-c\"></div></div></body></html>",
+      "targets": [
+        "column",
+        "column-a",
+        "column-b",
+        "column-c"
+      ],
+      "viewportWidth": 390,
+      "theme": "dark",
+      "expected": {
+        "column": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 196,
+            "height": 236,
+            "top": 0,
+            "right": 196,
+            "bottom": 236,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 196,
+              "height": 236,
+              "top": 0,
+              "right": 196,
+              "bottom": 236,
+              "left": 0
+            }
+          ],
+          "clientWidth": 192,
+          "clientHeight": 232,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 196,
+          "offsetHeight": 236,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-a": {
+          "rect": {
+            "x": 8,
+            "y": 8,
+            "width": 180,
+            "height": 58,
+            "top": 8,
+            "right": 188,
+            "bottom": 66,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 8,
+              "width": 180,
+              "height": 58,
+              "top": 8,
+              "right": 188,
+              "bottom": 66,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 58,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 58,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-b": {
+          "rect": {
+            "x": 8,
+            "y": 74,
+            "width": 180,
+            "height": 116,
+            "top": 74,
+            "right": 188,
+            "bottom": 190,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 74,
+              "width": 180,
+              "height": 116,
+              "top": 74,
+              "right": 188,
+              "bottom": 190,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 116,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 116,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-c": {
+          "rect": {
+            "x": 8,
+            "y": 198,
+            "width": 180,
+            "height": 30,
+            "top": 198,
+            "right": 188,
+            "bottom": 228,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 198,
+              "width": 180,
+              "height": 30,
+              "top": 198,
+              "right": 188,
+              "bottom": 228,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 30,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 30,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "flex_column",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #column{display:flex;flex-direction:column;gap:8px;width:180px;height:220px;padding:6px;border:2px solid} #column-a{flex:1 1 0;min-height:0} #column-b{flex:2 1 0;min-height:0} #column-c{flex:none;height:30px}</style></head><body><div id=\"column\"><div id=\"column-a\"></div><div id=\"column-b\"></div><div id=\"column-c\"></div></div></body></html>",
+      "targets": [
+        "column",
+        "column-a",
+        "column-b",
+        "column-c"
+      ],
+      "viewportWidth": 768,
+      "theme": "light",
+      "expected": {
+        "column": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 196,
+            "height": 236,
+            "top": 0,
+            "right": 196,
+            "bottom": 236,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 196,
+              "height": 236,
+              "top": 0,
+              "right": 196,
+              "bottom": 236,
+              "left": 0
+            }
+          ],
+          "clientWidth": 192,
+          "clientHeight": 232,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 196,
+          "offsetHeight": 236,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-a": {
+          "rect": {
+            "x": 8,
+            "y": 8,
+            "width": 180,
+            "height": 58,
+            "top": 8,
+            "right": 188,
+            "bottom": 66,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 8,
+              "width": 180,
+              "height": 58,
+              "top": 8,
+              "right": 188,
+              "bottom": 66,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 58,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 58,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-b": {
+          "rect": {
+            "x": 8,
+            "y": 74,
+            "width": 180,
+            "height": 116,
+            "top": 74,
+            "right": 188,
+            "bottom": 190,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 74,
+              "width": 180,
+              "height": 116,
+              "top": 74,
+              "right": 188,
+              "bottom": 190,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 116,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 116,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-c": {
+          "rect": {
+            "x": 8,
+            "y": 198,
+            "width": 180,
+            "height": 30,
+            "top": 198,
+            "right": 188,
+            "bottom": 228,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 198,
+              "width": 180,
+              "height": 30,
+              "top": 198,
+              "right": 188,
+              "bottom": 228,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 30,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 30,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "flex_column",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #column{display:flex;flex-direction:column;gap:8px;width:180px;height:220px;padding:6px;border:2px solid} #column-a{flex:1 1 0;min-height:0} #column-b{flex:2 1 0;min-height:0} #column-c{flex:none;height:30px}</style></head><body><div id=\"column\"><div id=\"column-a\"></div><div id=\"column-b\"></div><div id=\"column-c\"></div></div></body></html>",
+      "targets": [
+        "column",
+        "column-a",
+        "column-b",
+        "column-c"
+      ],
+      "viewportWidth": 768,
+      "theme": "dark",
+      "expected": {
+        "column": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 196,
+            "height": 236,
+            "top": 0,
+            "right": 196,
+            "bottom": 236,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 196,
+              "height": 236,
+              "top": 0,
+              "right": 196,
+              "bottom": 236,
+              "left": 0
+            }
+          ],
+          "clientWidth": 192,
+          "clientHeight": 232,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 196,
+          "offsetHeight": 236,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-a": {
+          "rect": {
+            "x": 8,
+            "y": 8,
+            "width": 180,
+            "height": 58,
+            "top": 8,
+            "right": 188,
+            "bottom": 66,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 8,
+              "width": 180,
+              "height": 58,
+              "top": 8,
+              "right": 188,
+              "bottom": 66,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 58,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 58,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-b": {
+          "rect": {
+            "x": 8,
+            "y": 74,
+            "width": 180,
+            "height": 116,
+            "top": 74,
+            "right": 188,
+            "bottom": 190,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 74,
+              "width": 180,
+              "height": 116,
+              "top": 74,
+              "right": 188,
+              "bottom": 190,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 116,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 116,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "column-c": {
+          "rect": {
+            "x": 8,
+            "y": 198,
+            "width": 180,
+            "height": 30,
+            "top": 198,
+            "right": 188,
+            "bottom": 228,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 198,
+              "width": 180,
+              "height": 30,
+              "top": 198,
+              "right": 188,
+              "bottom": 228,
+              "left": 8
+            }
+          ],
+          "clientWidth": 180,
+          "clientHeight": 30,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 180,
+          "offsetHeight": 30,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "display_none_descendants",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #hidden{display:none;width:120px;height:70px;padding:8px;border:2px solid} #hidden-child{width:40px;height:20px} #shown{width:80px;height:30px;margin-top:12px}</style></head><body><div id=\"hidden\"><div id=\"hidden-child\"></div></div><div id=\"shown\"></div></body></html>",
+      "targets": [
+        "hidden",
+        "hidden-child",
+        "shown"
+      ],
+      "viewportWidth": 390,
+      "theme": "light",
+      "expected": {
+        "hidden": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "clientRects": [],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 0,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "hidden-child": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "clientRects": [],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 0,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "shown": {
+          "rect": {
+            "x": 0,
+            "y": 12,
+            "width": 80,
+            "height": 30,
+            "top": 12,
+            "right": 80,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 12,
+              "width": 80,
+              "height": 30,
+              "top": 12,
+              "right": 80,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 80,
+          "clientHeight": 30,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 80,
+          "offsetHeight": 30,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "display_none_descendants",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #hidden{display:none;width:120px;height:70px;padding:8px;border:2px solid} #hidden-child{width:40px;height:20px} #shown{width:80px;height:30px;margin-top:12px}</style></head><body><div id=\"hidden\"><div id=\"hidden-child\"></div></div><div id=\"shown\"></div></body></html>",
+      "targets": [
+        "hidden",
+        "hidden-child",
+        "shown"
+      ],
+      "viewportWidth": 390,
+      "theme": "dark",
+      "expected": {
+        "hidden": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "clientRects": [],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 0,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "hidden-child": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "clientRects": [],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 0,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "shown": {
+          "rect": {
+            "x": 0,
+            "y": 12,
+            "width": 80,
+            "height": 30,
+            "top": 12,
+            "right": 80,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 12,
+              "width": 80,
+              "height": 30,
+              "top": 12,
+              "right": 80,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 80,
+          "clientHeight": 30,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 80,
+          "offsetHeight": 30,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "display_none_descendants",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #hidden{display:none;width:120px;height:70px;padding:8px;border:2px solid} #hidden-child{width:40px;height:20px} #shown{width:80px;height:30px;margin-top:12px}</style></head><body><div id=\"hidden\"><div id=\"hidden-child\"></div></div><div id=\"shown\"></div></body></html>",
+      "targets": [
+        "hidden",
+        "hidden-child",
+        "shown"
+      ],
+      "viewportWidth": 768,
+      "theme": "light",
+      "expected": {
+        "hidden": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "clientRects": [],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 0,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "hidden-child": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "clientRects": [],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 0,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "shown": {
+          "rect": {
+            "x": 0,
+            "y": 12,
+            "width": 80,
+            "height": 30,
+            "top": 12,
+            "right": 80,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 12,
+              "width": 80,
+              "height": 30,
+              "top": 12,
+              "right": 80,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 80,
+          "clientHeight": 30,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 80,
+          "offsetHeight": 30,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "display_none_descendants",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #hidden{display:none;width:120px;height:70px;padding:8px;border:2px solid} #hidden-child{width:40px;height:20px} #shown{width:80px;height:30px;margin-top:12px}</style></head><body><div id=\"hidden\"><div id=\"hidden-child\"></div></div><div id=\"shown\"></div></body></html>",
+      "targets": [
+        "hidden",
+        "hidden-child",
+        "shown"
+      ],
+      "viewportWidth": 768,
+      "theme": "dark",
+      "expected": {
+        "hidden": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "clientRects": [],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 0,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "hidden-child": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "clientRects": [],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 0,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "shown": {
+          "rect": {
+            "x": 0,
+            "y": 12,
+            "width": 80,
+            "height": 30,
+            "top": 12,
+            "right": 80,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 12,
+              "width": 80,
+              "height": 30,
+              "top": 12,
+              "right": 80,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 80,
+          "clientHeight": 30,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 80,
+          "offsetHeight": 30,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "offscreen_boxes_after_scroll",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #before{height:80px} #spacer{height:1100px} #offscreen{width:70px;height:45px;margin:4px;padding:3px;border:2px solid} #after{height:50px}</style></head><body><div id=\"before\"></div><div id=\"spacer\"></div><div id=\"offscreen\"></div><div id=\"after\"></div></body></html>",
+      "targets": [
+        "before",
+        "offscreen",
+        "after"
+      ],
+      "viewportWidth": 390,
+      "theme": "light",
+      "scrollY": 120,
+      "expected": {
+        "before": {
+          "rect": {
+            "x": 0,
+            "y": -120,
+            "width": 390,
+            "height": 80,
+            "top": -120,
+            "right": 390,
+            "bottom": -40,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": -120,
+              "width": 390,
+              "height": 80,
+              "top": -120,
+              "right": 390,
+              "bottom": -40,
+              "left": 0
+            }
+          ],
+          "clientWidth": 390,
+          "clientHeight": 80,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 390,
+          "offsetHeight": 80,
+          "scrollX": 0,
+          "scrollY": 120
+        },
+        "offscreen": {
+          "rect": {
+            "x": 4,
+            "y": 1064,
+            "width": 80,
+            "height": 55,
+            "top": 1064,
+            "right": 84,
+            "bottom": 1119,
+            "left": 4
+          },
+          "clientRects": [
+            {
+              "x": 4,
+              "y": 1064,
+              "width": 80,
+              "height": 55,
+              "top": 1064,
+              "right": 84,
+              "bottom": 1119,
+              "left": 4
+            }
+          ],
+          "clientWidth": 76,
+          "clientHeight": 51,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 80,
+          "offsetHeight": 55,
+          "scrollX": 0,
+          "scrollY": 120
+        },
+        "after": {
+          "rect": {
+            "x": 0,
+            "y": 1123,
+            "width": 390,
+            "height": 50,
+            "top": 1123,
+            "right": 390,
+            "bottom": 1173,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 1123,
+              "width": 390,
+              "height": 50,
+              "top": 1123,
+              "right": 390,
+              "bottom": 1173,
+              "left": 0
+            }
+          ],
+          "clientWidth": 390,
+          "clientHeight": 50,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 390,
+          "offsetHeight": 50,
+          "scrollX": 0,
+          "scrollY": 120
+        }
+      }
+    },
+    {
+      "name": "offscreen_boxes_after_scroll",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #before{height:80px} #spacer{height:1100px} #offscreen{width:70px;height:45px;margin:4px;padding:3px;border:2px solid} #after{height:50px}</style></head><body><div id=\"before\"></div><div id=\"spacer\"></div><div id=\"offscreen\"></div><div id=\"after\"></div></body></html>",
+      "targets": [
+        "before",
+        "offscreen",
+        "after"
+      ],
+      "viewportWidth": 390,
+      "theme": "dark",
+      "scrollY": 120,
+      "expected": {
+        "before": {
+          "rect": {
+            "x": 0,
+            "y": -120,
+            "width": 390,
+            "height": 80,
+            "top": -120,
+            "right": 390,
+            "bottom": -40,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": -120,
+              "width": 390,
+              "height": 80,
+              "top": -120,
+              "right": 390,
+              "bottom": -40,
+              "left": 0
+            }
+          ],
+          "clientWidth": 390,
+          "clientHeight": 80,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 390,
+          "offsetHeight": 80,
+          "scrollX": 0,
+          "scrollY": 120
+        },
+        "offscreen": {
+          "rect": {
+            "x": 4,
+            "y": 1064,
+            "width": 80,
+            "height": 55,
+            "top": 1064,
+            "right": 84,
+            "bottom": 1119,
+            "left": 4
+          },
+          "clientRects": [
+            {
+              "x": 4,
+              "y": 1064,
+              "width": 80,
+              "height": 55,
+              "top": 1064,
+              "right": 84,
+              "bottom": 1119,
+              "left": 4
+            }
+          ],
+          "clientWidth": 76,
+          "clientHeight": 51,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 80,
+          "offsetHeight": 55,
+          "scrollX": 0,
+          "scrollY": 120
+        },
+        "after": {
+          "rect": {
+            "x": 0,
+            "y": 1123,
+            "width": 390,
+            "height": 50,
+            "top": 1123,
+            "right": 390,
+            "bottom": 1173,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 1123,
+              "width": 390,
+              "height": 50,
+              "top": 1123,
+              "right": 390,
+              "bottom": 1173,
+              "left": 0
+            }
+          ],
+          "clientWidth": 390,
+          "clientHeight": 50,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 390,
+          "offsetHeight": 50,
+          "scrollX": 0,
+          "scrollY": 120
+        }
+      }
+    },
+    {
+      "name": "offscreen_boxes_after_scroll",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #before{height:80px} #spacer{height:1100px} #offscreen{width:70px;height:45px;margin:4px;padding:3px;border:2px solid} #after{height:50px}</style></head><body><div id=\"before\"></div><div id=\"spacer\"></div><div id=\"offscreen\"></div><div id=\"after\"></div></body></html>",
+      "targets": [
+        "before",
+        "offscreen",
+        "after"
+      ],
+      "viewportWidth": 768,
+      "theme": "light",
+      "scrollY": 120,
+      "expected": {
+        "before": {
+          "rect": {
+            "x": 0,
+            "y": -120,
+            "width": 768,
+            "height": 80,
+            "top": -120,
+            "right": 768,
+            "bottom": -40,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": -120,
+              "width": 768,
+              "height": 80,
+              "top": -120,
+              "right": 768,
+              "bottom": -40,
+              "left": 0
+            }
+          ],
+          "clientWidth": 768,
+          "clientHeight": 80,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 768,
+          "offsetHeight": 80,
+          "scrollX": 0,
+          "scrollY": 120
+        },
+        "offscreen": {
+          "rect": {
+            "x": 4,
+            "y": 1064,
+            "width": 80,
+            "height": 55,
+            "top": 1064,
+            "right": 84,
+            "bottom": 1119,
+            "left": 4
+          },
+          "clientRects": [
+            {
+              "x": 4,
+              "y": 1064,
+              "width": 80,
+              "height": 55,
+              "top": 1064,
+              "right": 84,
+              "bottom": 1119,
+              "left": 4
+            }
+          ],
+          "clientWidth": 76,
+          "clientHeight": 51,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 80,
+          "offsetHeight": 55,
+          "scrollX": 0,
+          "scrollY": 120
+        },
+        "after": {
+          "rect": {
+            "x": 0,
+            "y": 1123,
+            "width": 768,
+            "height": 50,
+            "top": 1123,
+            "right": 768,
+            "bottom": 1173,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 1123,
+              "width": 768,
+              "height": 50,
+              "top": 1123,
+              "right": 768,
+              "bottom": 1173,
+              "left": 0
+            }
+          ],
+          "clientWidth": 768,
+          "clientHeight": 50,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 768,
+          "offsetHeight": 50,
+          "scrollX": 0,
+          "scrollY": 120
+        }
+      }
+    },
+    {
+      "name": "offscreen_boxes_after_scroll",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #before{height:80px} #spacer{height:1100px} #offscreen{width:70px;height:45px;margin:4px;padding:3px;border:2px solid} #after{height:50px}</style></head><body><div id=\"before\"></div><div id=\"spacer\"></div><div id=\"offscreen\"></div><div id=\"after\"></div></body></html>",
+      "targets": [
+        "before",
+        "offscreen",
+        "after"
+      ],
+      "viewportWidth": 768,
+      "theme": "dark",
+      "scrollY": 120,
+      "expected": {
+        "before": {
+          "rect": {
+            "x": 0,
+            "y": -120,
+            "width": 768,
+            "height": 80,
+            "top": -120,
+            "right": 768,
+            "bottom": -40,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": -120,
+              "width": 768,
+              "height": 80,
+              "top": -120,
+              "right": 768,
+              "bottom": -40,
+              "left": 0
+            }
+          ],
+          "clientWidth": 768,
+          "clientHeight": 80,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 768,
+          "offsetHeight": 80,
+          "scrollX": 0,
+          "scrollY": 120
+        },
+        "offscreen": {
+          "rect": {
+            "x": 4,
+            "y": 1064,
+            "width": 80,
+            "height": 55,
+            "top": 1064,
+            "right": 84,
+            "bottom": 1119,
+            "left": 4
+          },
+          "clientRects": [
+            {
+              "x": 4,
+              "y": 1064,
+              "width": 80,
+              "height": 55,
+              "top": 1064,
+              "right": 84,
+              "bottom": 1119,
+              "left": 4
+            }
+          ],
+          "clientWidth": 76,
+          "clientHeight": 51,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 80,
+          "offsetHeight": 55,
+          "scrollX": 0,
+          "scrollY": 120
+        },
+        "after": {
+          "rect": {
+            "x": 0,
+            "y": 1123,
+            "width": 768,
+            "height": 50,
+            "top": 1123,
+            "right": 768,
+            "bottom": 1173,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 1123,
+              "width": 768,
+              "height": 50,
+              "top": 1123,
+              "right": 768,
+              "bottom": 1173,
+              "left": 0
+            }
+          ],
+          "clientWidth": 768,
+          "clientHeight": 50,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 768,
+          "offsetHeight": 50,
+          "scrollX": 0,
+          "scrollY": 120
+        }
+      }
+    },
+    {
+      "name": "initial_document_root_and_body",
+      "html": "<!doctype html><html id=\"root\"><head><meta charset=\"utf-8\"></head><body id=\"body\"></body></html>",
+      "targets": [
+        "root",
+        "body"
+      ],
+      "viewportWidth": 390,
+      "theme": "light",
+      "expected": {
+        "root": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 8,
+            "top": 0,
+            "right": 390,
+            "bottom": 8,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 8,
+              "top": 0,
+              "right": 390,
+              "bottom": 8,
+              "left": 0
+            }
+          ],
+          "clientWidth": 390,
+          "clientHeight": 1000,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 390,
+          "offsetHeight": 8,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "body": {
+          "rect": {
+            "x": 8,
+            "y": 8,
+            "width": 374,
+            "height": 0,
+            "top": 8,
+            "right": 382,
+            "bottom": 8,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 8,
+              "width": 374,
+              "height": 0,
+              "top": 8,
+              "right": 382,
+              "bottom": 8,
+              "left": 8
+            }
+          ],
+          "clientWidth": 374,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 374,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "initial_document_root_and_body",
+      "html": "<!doctype html><html id=\"root\"><head><meta charset=\"utf-8\"></head><body id=\"body\"></body></html>",
+      "targets": [
+        "root",
+        "body"
+      ],
+      "viewportWidth": 390,
+      "theme": "dark",
+      "expected": {
+        "root": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 8,
+            "top": 0,
+            "right": 390,
+            "bottom": 8,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 8,
+              "top": 0,
+              "right": 390,
+              "bottom": 8,
+              "left": 0
+            }
+          ],
+          "clientWidth": 390,
+          "clientHeight": 1000,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 390,
+          "offsetHeight": 8,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "body": {
+          "rect": {
+            "x": 8,
+            "y": 8,
+            "width": 374,
+            "height": 0,
+            "top": 8,
+            "right": 382,
+            "bottom": 8,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 8,
+              "width": 374,
+              "height": 0,
+              "top": 8,
+              "right": 382,
+              "bottom": 8,
+              "left": 8
+            }
+          ],
+          "clientWidth": 374,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 374,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "initial_document_root_and_body",
+      "html": "<!doctype html><html id=\"root\"><head><meta charset=\"utf-8\"></head><body id=\"body\"></body></html>",
+      "targets": [
+        "root",
+        "body"
+      ],
+      "viewportWidth": 768,
+      "theme": "light",
+      "expected": {
+        "root": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 768,
+            "height": 8,
+            "top": 0,
+            "right": 768,
+            "bottom": 8,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 768,
+              "height": 8,
+              "top": 0,
+              "right": 768,
+              "bottom": 8,
+              "left": 0
+            }
+          ],
+          "clientWidth": 768,
+          "clientHeight": 1000,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 768,
+          "offsetHeight": 8,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "body": {
+          "rect": {
+            "x": 8,
+            "y": 8,
+            "width": 752,
+            "height": 0,
+            "top": 8,
+            "right": 760,
+            "bottom": 8,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 8,
+              "width": 752,
+              "height": 0,
+              "top": 8,
+              "right": 760,
+              "bottom": 8,
+              "left": 8
+            }
+          ],
+          "clientWidth": 752,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 752,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "initial_document_root_and_body",
+      "html": "<!doctype html><html id=\"root\"><head><meta charset=\"utf-8\"></head><body id=\"body\"></body></html>",
+      "targets": [
+        "root",
+        "body"
+      ],
+      "viewportWidth": 768,
+      "theme": "dark",
+      "expected": {
+        "root": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 768,
+            "height": 8,
+            "top": 0,
+            "right": 768,
+            "bottom": 8,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 768,
+              "height": 8,
+              "top": 0,
+              "right": 768,
+              "bottom": 8,
+              "left": 0
+            }
+          ],
+          "clientWidth": 768,
+          "clientHeight": 1000,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 768,
+          "offsetHeight": 8,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "body": {
+          "rect": {
+            "x": 8,
+            "y": 8,
+            "width": 752,
+            "height": 0,
+            "top": 8,
+            "right": 760,
+            "bottom": 8,
+            "left": 8
+          },
+          "clientRects": [
+            {
+              "x": 8,
+              "y": 8,
+              "width": 752,
+              "height": 0,
+              "top": 8,
+              "right": 760,
+              "bottom": 8,
+              "left": 8
+            }
+          ],
+          "clientWidth": 752,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 752,
+          "offsetHeight": 0,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "native_controls_fixed_dimensions",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #controls{display:flex;align-items:flex-start;gap:8px} input,button,select,textarea{box-sizing:border-box;width:150px;height:42px;margin:0;padding:4px;border:2px solid;font:14px Arial,sans-serif} textarea{resize:none}</style></head><body><div id=\"controls\"><input id=\"input\" type=\"text\" value=\"sample\"><button id=\"button\" type=\"button\">button</button><select id=\"select\"><option>option</option></select><textarea id=\"textarea\">sample</textarea></div></body></html>",
+      "targets": [
+        "controls",
+        "input",
+        "button",
+        "select",
+        "textarea"
+      ],
+      "viewportWidth": 390,
+      "theme": "light",
+      "expected": {
+        "controls": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 42,
+            "top": 0,
+            "right": 390,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 42,
+              "top": 0,
+              "right": 390,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 390,
+          "clientHeight": 42,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 390,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "input": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 150,
+            "height": 42,
+            "top": 0,
+            "right": 150,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 150,
+              "height": 42,
+              "top": 0,
+              "right": 150,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 146,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 150,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "button": {
+          "rect": {
+            "x": 158,
+            "y": 0,
+            "width": 72,
+            "height": 42,
+            "top": 0,
+            "right": 230,
+            "bottom": 42,
+            "left": 158
+          },
+          "clientRects": [
+            {
+              "x": 158,
+              "y": 0,
+              "width": 72,
+              "height": 42,
+              "top": 0,
+              "right": 230,
+              "bottom": 42,
+              "left": 158
+            }
+          ],
+          "clientWidth": 68,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 72,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "select": {
+          "rect": {
+            "x": 238,
+            "y": 0,
+            "width": 72,
+            "height": 42,
+            "top": 0,
+            "right": 310,
+            "bottom": 42,
+            "left": 238
+          },
+          "clientRects": [
+            {
+              "x": 238,
+              "y": 0,
+              "width": 72,
+              "height": 42,
+              "top": 0,
+              "right": 310,
+              "bottom": 42,
+              "left": 238
+            }
+          ],
+          "clientWidth": 68,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 72,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "textarea": {
+          "rect": {
+            "x": 318,
+            "y": 0,
+            "width": 72,
+            "height": 42,
+            "top": 0,
+            "right": 390,
+            "bottom": 42,
+            "left": 318
+          },
+          "clientRects": [
+            {
+              "x": 318,
+              "y": 0,
+              "width": 72,
+              "height": 42,
+              "top": 0,
+              "right": 390,
+              "bottom": 42,
+              "left": 318
+            }
+          ],
+          "clientWidth": 68,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 72,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "native_controls_fixed_dimensions",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #controls{display:flex;align-items:flex-start;gap:8px} input,button,select,textarea{box-sizing:border-box;width:150px;height:42px;margin:0;padding:4px;border:2px solid;font:14px Arial,sans-serif} textarea{resize:none}</style></head><body><div id=\"controls\"><input id=\"input\" type=\"text\" value=\"sample\"><button id=\"button\" type=\"button\">button</button><select id=\"select\"><option>option</option></select><textarea id=\"textarea\">sample</textarea></div></body></html>",
+      "targets": [
+        "controls",
+        "input",
+        "button",
+        "select",
+        "textarea"
+      ],
+      "viewportWidth": 390,
+      "theme": "dark",
+      "expected": {
+        "controls": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 42,
+            "top": 0,
+            "right": 390,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 42,
+              "top": 0,
+              "right": 390,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 390,
+          "clientHeight": 42,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 390,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "input": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 150,
+            "height": 42,
+            "top": 0,
+            "right": 150,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 150,
+              "height": 42,
+              "top": 0,
+              "right": 150,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 146,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 150,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "button": {
+          "rect": {
+            "x": 158,
+            "y": 0,
+            "width": 72,
+            "height": 42,
+            "top": 0,
+            "right": 230,
+            "bottom": 42,
+            "left": 158
+          },
+          "clientRects": [
+            {
+              "x": 158,
+              "y": 0,
+              "width": 72,
+              "height": 42,
+              "top": 0,
+              "right": 230,
+              "bottom": 42,
+              "left": 158
+            }
+          ],
+          "clientWidth": 68,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 72,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "select": {
+          "rect": {
+            "x": 238,
+            "y": 0,
+            "width": 72,
+            "height": 42,
+            "top": 0,
+            "right": 310,
+            "bottom": 42,
+            "left": 238
+          },
+          "clientRects": [
+            {
+              "x": 238,
+              "y": 0,
+              "width": 72,
+              "height": 42,
+              "top": 0,
+              "right": 310,
+              "bottom": 42,
+              "left": 238
+            }
+          ],
+          "clientWidth": 68,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 72,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "textarea": {
+          "rect": {
+            "x": 318,
+            "y": 0,
+            "width": 72,
+            "height": 42,
+            "top": 0,
+            "right": 390,
+            "bottom": 42,
+            "left": 318
+          },
+          "clientRects": [
+            {
+              "x": 318,
+              "y": 0,
+              "width": 72,
+              "height": 42,
+              "top": 0,
+              "right": 390,
+              "bottom": 42,
+              "left": 318
+            }
+          ],
+          "clientWidth": 68,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 72,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "native_controls_fixed_dimensions",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #controls{display:flex;align-items:flex-start;gap:8px} input,button,select,textarea{box-sizing:border-box;width:150px;height:42px;margin:0;padding:4px;border:2px solid;font:14px Arial,sans-serif} textarea{resize:none}</style></head><body><div id=\"controls\"><input id=\"input\" type=\"text\" value=\"sample\"><button id=\"button\" type=\"button\">button</button><select id=\"select\"><option>option</option></select><textarea id=\"textarea\">sample</textarea></div></body></html>",
+      "targets": [
+        "controls",
+        "input",
+        "button",
+        "select",
+        "textarea"
+      ],
+      "viewportWidth": 768,
+      "theme": "light",
+      "expected": {
+        "controls": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 768,
+            "height": 42,
+            "top": 0,
+            "right": 768,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 768,
+              "height": 42,
+              "top": 0,
+              "right": 768,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 768,
+          "clientHeight": 42,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 768,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "input": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 150,
+            "height": 42,
+            "top": 0,
+            "right": 150,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 150,
+              "height": 42,
+              "top": 0,
+              "right": 150,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 146,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 150,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "button": {
+          "rect": {
+            "x": 158,
+            "y": 0,
+            "width": 150,
+            "height": 42,
+            "top": 0,
+            "right": 308,
+            "bottom": 42,
+            "left": 158
+          },
+          "clientRects": [
+            {
+              "x": 158,
+              "y": 0,
+              "width": 150,
+              "height": 42,
+              "top": 0,
+              "right": 308,
+              "bottom": 42,
+              "left": 158
+            }
+          ],
+          "clientWidth": 146,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 150,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "select": {
+          "rect": {
+            "x": 316,
+            "y": 0,
+            "width": 150,
+            "height": 42,
+            "top": 0,
+            "right": 466,
+            "bottom": 42,
+            "left": 316
+          },
+          "clientRects": [
+            {
+              "x": 316,
+              "y": 0,
+              "width": 150,
+              "height": 42,
+              "top": 0,
+              "right": 466,
+              "bottom": 42,
+              "left": 316
+            }
+          ],
+          "clientWidth": 146,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 150,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "textarea": {
+          "rect": {
+            "x": 474,
+            "y": 0,
+            "width": 150,
+            "height": 42,
+            "top": 0,
+            "right": 624,
+            "bottom": 42,
+            "left": 474
+          },
+          "clientRects": [
+            {
+              "x": 474,
+              "y": 0,
+              "width": 150,
+              "height": 42,
+              "top": 0,
+              "right": 624,
+              "bottom": 42,
+              "left": 474
+            }
+          ],
+          "clientWidth": 146,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 150,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "native_controls_fixed_dimensions",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #controls{display:flex;align-items:flex-start;gap:8px} input,button,select,textarea{box-sizing:border-box;width:150px;height:42px;margin:0;padding:4px;border:2px solid;font:14px Arial,sans-serif} textarea{resize:none}</style></head><body><div id=\"controls\"><input id=\"input\" type=\"text\" value=\"sample\"><button id=\"button\" type=\"button\">button</button><select id=\"select\"><option>option</option></select><textarea id=\"textarea\">sample</textarea></div></body></html>",
+      "targets": [
+        "controls",
+        "input",
+        "button",
+        "select",
+        "textarea"
+      ],
+      "viewportWidth": 768,
+      "theme": "dark",
+      "expected": {
+        "controls": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 768,
+            "height": 42,
+            "top": 0,
+            "right": 768,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 768,
+              "height": 42,
+              "top": 0,
+              "right": 768,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 768,
+          "clientHeight": 42,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 768,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "input": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 150,
+            "height": 42,
+            "top": 0,
+            "right": 150,
+            "bottom": 42,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 150,
+              "height": 42,
+              "top": 0,
+              "right": 150,
+              "bottom": 42,
+              "left": 0
+            }
+          ],
+          "clientWidth": 146,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 150,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "button": {
+          "rect": {
+            "x": 158,
+            "y": 0,
+            "width": 150,
+            "height": 42,
+            "top": 0,
+            "right": 308,
+            "bottom": 42,
+            "left": 158
+          },
+          "clientRects": [
+            {
+              "x": 158,
+              "y": 0,
+              "width": 150,
+              "height": 42,
+              "top": 0,
+              "right": 308,
+              "bottom": 42,
+              "left": 158
+            }
+          ],
+          "clientWidth": 146,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 150,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "select": {
+          "rect": {
+            "x": 316,
+            "y": 0,
+            "width": 150,
+            "height": 42,
+            "top": 0,
+            "right": 466,
+            "bottom": 42,
+            "left": 316
+          },
+          "clientRects": [
+            {
+              "x": 316,
+              "y": 0,
+              "width": 150,
+              "height": 42,
+              "top": 0,
+              "right": 466,
+              "bottom": 42,
+              "left": 316
+            }
+          ],
+          "clientWidth": 146,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 150,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "textarea": {
+          "rect": {
+            "x": 474,
+            "y": 0,
+            "width": 150,
+            "height": 42,
+            "top": 0,
+            "right": 624,
+            "bottom": 42,
+            "left": 474
+          },
+          "clientRects": [
+            {
+              "x": 474,
+              "y": 0,
+              "width": 150,
+              "height": 42,
+              "top": 0,
+              "right": 624,
+              "bottom": 42,
+              "left": 474
+            }
+          ],
+          "clientWidth": 146,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 150,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "inline_canvas_and_image_with_and_without_padding",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} .line{font-size:0;line-height:0;white-space:nowrap} #padded{margin:11px;padding:9px 13px;border:2px solid} canvas,img{vertical-align:baseline}</style></head><body><div id=\"plain\" class=\"line\"><canvas id=\"canvas-plain\" width=\"40\" height=\"20\"></canvas><img id=\"image-plain\" width=\"30\" height=\"16\" src=\"data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"16\" viewBox=\"0 0 30 16\"%3E%3Crect width=\"30\" height=\"16\" fill=\"%23336699\"/%3E%3C/svg%3E\"></div><div id=\"padded\" class=\"line\"><canvas id=\"canvas-padded\" width=\"40\" height=\"20\"></canvas><img id=\"image-padded\" width=\"30\" height=\"16\" src=\"data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"16\" viewBox=\"0 0 30 16\"%3E%3Crect width=\"30\" height=\"16\" fill=\"%23336699\"/%3E%3C/svg%3E\"></div></body></html>",
+      "targets": [
+        "plain",
+        "canvas-plain",
+        "image-plain",
+        "padded",
+        "canvas-padded",
+        "image-padded"
+      ],
+      "viewportWidth": 390,
+      "theme": "light",
+      "expected": {
+        "plain": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 20,
+            "top": 0,
+            "right": 390,
+            "bottom": 20,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 20,
+              "top": 0,
+              "right": 390,
+              "bottom": 20,
+              "left": 0
+            }
+          ],
+          "clientWidth": 390,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 390,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "canvas-plain": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 40,
+            "height": 20,
+            "top": 0,
+            "right": 40,
+            "bottom": 20,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 40,
+              "height": 20,
+              "top": 0,
+              "right": 40,
+              "bottom": 20,
+              "left": 0
+            }
+          ],
+          "clientWidth": 40,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 40,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "image-plain": {
+          "rect": {
+            "x": 40,
+            "y": 4,
+            "width": 30,
+            "height": 16,
+            "top": 4,
+            "right": 70,
+            "bottom": 20,
+            "left": 40
+          },
+          "clientRects": [
+            {
+              "x": 40,
+              "y": 4,
+              "width": 30,
+              "height": 16,
+              "top": 4,
+              "right": 70,
+              "bottom": 20,
+              "left": 40
+            }
+          ],
+          "clientWidth": 30,
+          "clientHeight": 16,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 30,
+          "offsetHeight": 16,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "padded": {
+          "rect": {
+            "x": 11,
+            "y": 31,
+            "width": 368,
+            "height": 42,
+            "top": 31,
+            "right": 379,
+            "bottom": 73,
+            "left": 11
+          },
+          "clientRects": [
+            {
+              "x": 11,
+              "y": 31,
+              "width": 368,
+              "height": 42,
+              "top": 31,
+              "right": 379,
+              "bottom": 73,
+              "left": 11
+            }
+          ],
+          "clientWidth": 364,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 368,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "canvas-padded": {
+          "rect": {
+            "x": 26,
+            "y": 42,
+            "width": 40,
+            "height": 20,
+            "top": 42,
+            "right": 66,
+            "bottom": 62,
+            "left": 26
+          },
+          "clientRects": [
+            {
+              "x": 26,
+              "y": 42,
+              "width": 40,
+              "height": 20,
+              "top": 42,
+              "right": 66,
+              "bottom": 62,
+              "left": 26
+            }
+          ],
+          "clientWidth": 40,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 40,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "image-padded": {
+          "rect": {
+            "x": 66,
+            "y": 46,
+            "width": 30,
+            "height": 16,
+            "top": 46,
+            "right": 96,
+            "bottom": 62,
+            "left": 66
+          },
+          "clientRects": [
+            {
+              "x": 66,
+              "y": 46,
+              "width": 30,
+              "height": 16,
+              "top": 46,
+              "right": 96,
+              "bottom": 62,
+              "left": 66
+            }
+          ],
+          "clientWidth": 30,
+          "clientHeight": 16,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 30,
+          "offsetHeight": 16,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "inline_canvas_and_image_with_and_without_padding",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} .line{font-size:0;line-height:0;white-space:nowrap} #padded{margin:11px;padding:9px 13px;border:2px solid} canvas,img{vertical-align:baseline}</style></head><body><div id=\"plain\" class=\"line\"><canvas id=\"canvas-plain\" width=\"40\" height=\"20\"></canvas><img id=\"image-plain\" width=\"30\" height=\"16\" src=\"data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"16\" viewBox=\"0 0 30 16\"%3E%3Crect width=\"30\" height=\"16\" fill=\"%23336699\"/%3E%3C/svg%3E\"></div><div id=\"padded\" class=\"line\"><canvas id=\"canvas-padded\" width=\"40\" height=\"20\"></canvas><img id=\"image-padded\" width=\"30\" height=\"16\" src=\"data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"16\" viewBox=\"0 0 30 16\"%3E%3Crect width=\"30\" height=\"16\" fill=\"%23336699\"/%3E%3C/svg%3E\"></div></body></html>",
+      "targets": [
+        "plain",
+        "canvas-plain",
+        "image-plain",
+        "padded",
+        "canvas-padded",
+        "image-padded"
+      ],
+      "viewportWidth": 390,
+      "theme": "dark",
+      "expected": {
+        "plain": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 20,
+            "top": 0,
+            "right": 390,
+            "bottom": 20,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 20,
+              "top": 0,
+              "right": 390,
+              "bottom": 20,
+              "left": 0
+            }
+          ],
+          "clientWidth": 390,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 390,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "canvas-plain": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 40,
+            "height": 20,
+            "top": 0,
+            "right": 40,
+            "bottom": 20,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 40,
+              "height": 20,
+              "top": 0,
+              "right": 40,
+              "bottom": 20,
+              "left": 0
+            }
+          ],
+          "clientWidth": 40,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 40,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "image-plain": {
+          "rect": {
+            "x": 40,
+            "y": 4,
+            "width": 30,
+            "height": 16,
+            "top": 4,
+            "right": 70,
+            "bottom": 20,
+            "left": 40
+          },
+          "clientRects": [
+            {
+              "x": 40,
+              "y": 4,
+              "width": 30,
+              "height": 16,
+              "top": 4,
+              "right": 70,
+              "bottom": 20,
+              "left": 40
+            }
+          ],
+          "clientWidth": 30,
+          "clientHeight": 16,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 30,
+          "offsetHeight": 16,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "padded": {
+          "rect": {
+            "x": 11,
+            "y": 31,
+            "width": 368,
+            "height": 42,
+            "top": 31,
+            "right": 379,
+            "bottom": 73,
+            "left": 11
+          },
+          "clientRects": [
+            {
+              "x": 11,
+              "y": 31,
+              "width": 368,
+              "height": 42,
+              "top": 31,
+              "right": 379,
+              "bottom": 73,
+              "left": 11
+            }
+          ],
+          "clientWidth": 364,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 368,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "canvas-padded": {
+          "rect": {
+            "x": 26,
+            "y": 42,
+            "width": 40,
+            "height": 20,
+            "top": 42,
+            "right": 66,
+            "bottom": 62,
+            "left": 26
+          },
+          "clientRects": [
+            {
+              "x": 26,
+              "y": 42,
+              "width": 40,
+              "height": 20,
+              "top": 42,
+              "right": 66,
+              "bottom": 62,
+              "left": 26
+            }
+          ],
+          "clientWidth": 40,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 40,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "image-padded": {
+          "rect": {
+            "x": 66,
+            "y": 46,
+            "width": 30,
+            "height": 16,
+            "top": 46,
+            "right": 96,
+            "bottom": 62,
+            "left": 66
+          },
+          "clientRects": [
+            {
+              "x": 66,
+              "y": 46,
+              "width": 30,
+              "height": 16,
+              "top": 46,
+              "right": 96,
+              "bottom": 62,
+              "left": 66
+            }
+          ],
+          "clientWidth": 30,
+          "clientHeight": 16,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 30,
+          "offsetHeight": 16,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "inline_canvas_and_image_with_and_without_padding",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} .line{font-size:0;line-height:0;white-space:nowrap} #padded{margin:11px;padding:9px 13px;border:2px solid} canvas,img{vertical-align:baseline}</style></head><body><div id=\"plain\" class=\"line\"><canvas id=\"canvas-plain\" width=\"40\" height=\"20\"></canvas><img id=\"image-plain\" width=\"30\" height=\"16\" src=\"data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"16\" viewBox=\"0 0 30 16\"%3E%3Crect width=\"30\" height=\"16\" fill=\"%23336699\"/%3E%3C/svg%3E\"></div><div id=\"padded\" class=\"line\"><canvas id=\"canvas-padded\" width=\"40\" height=\"20\"></canvas><img id=\"image-padded\" width=\"30\" height=\"16\" src=\"data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"16\" viewBox=\"0 0 30 16\"%3E%3Crect width=\"30\" height=\"16\" fill=\"%23336699\"/%3E%3C/svg%3E\"></div></body></html>",
+      "targets": [
+        "plain",
+        "canvas-plain",
+        "image-plain",
+        "padded",
+        "canvas-padded",
+        "image-padded"
+      ],
+      "viewportWidth": 768,
+      "theme": "light",
+      "expected": {
+        "plain": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 768,
+            "height": 20,
+            "top": 0,
+            "right": 768,
+            "bottom": 20,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 768,
+              "height": 20,
+              "top": 0,
+              "right": 768,
+              "bottom": 20,
+              "left": 0
+            }
+          ],
+          "clientWidth": 768,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 768,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "canvas-plain": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 40,
+            "height": 20,
+            "top": 0,
+            "right": 40,
+            "bottom": 20,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 40,
+              "height": 20,
+              "top": 0,
+              "right": 40,
+              "bottom": 20,
+              "left": 0
+            }
+          ],
+          "clientWidth": 40,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 40,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "image-plain": {
+          "rect": {
+            "x": 40,
+            "y": 4,
+            "width": 30,
+            "height": 16,
+            "top": 4,
+            "right": 70,
+            "bottom": 20,
+            "left": 40
+          },
+          "clientRects": [
+            {
+              "x": 40,
+              "y": 4,
+              "width": 30,
+              "height": 16,
+              "top": 4,
+              "right": 70,
+              "bottom": 20,
+              "left": 40
+            }
+          ],
+          "clientWidth": 30,
+          "clientHeight": 16,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 30,
+          "offsetHeight": 16,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "padded": {
+          "rect": {
+            "x": 11,
+            "y": 31,
+            "width": 746,
+            "height": 42,
+            "top": 31,
+            "right": 757,
+            "bottom": 73,
+            "left": 11
+          },
+          "clientRects": [
+            {
+              "x": 11,
+              "y": 31,
+              "width": 746,
+              "height": 42,
+              "top": 31,
+              "right": 757,
+              "bottom": 73,
+              "left": 11
+            }
+          ],
+          "clientWidth": 742,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 746,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "canvas-padded": {
+          "rect": {
+            "x": 26,
+            "y": 42,
+            "width": 40,
+            "height": 20,
+            "top": 42,
+            "right": 66,
+            "bottom": 62,
+            "left": 26
+          },
+          "clientRects": [
+            {
+              "x": 26,
+              "y": 42,
+              "width": 40,
+              "height": 20,
+              "top": 42,
+              "right": 66,
+              "bottom": 62,
+              "left": 26
+            }
+          ],
+          "clientWidth": 40,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 40,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "image-padded": {
+          "rect": {
+            "x": 66,
+            "y": 46,
+            "width": 30,
+            "height": 16,
+            "top": 46,
+            "right": 96,
+            "bottom": 62,
+            "left": 66
+          },
+          "clientRects": [
+            {
+              "x": 66,
+              "y": 46,
+              "width": 30,
+              "height": 16,
+              "top": 46,
+              "right": 96,
+              "bottom": 62,
+              "left": 66
+            }
+          ],
+          "clientWidth": 30,
+          "clientHeight": 16,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 30,
+          "offsetHeight": 16,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "inline_canvas_and_image_with_and_without_padding",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} .line{font-size:0;line-height:0;white-space:nowrap} #padded{margin:11px;padding:9px 13px;border:2px solid} canvas,img{vertical-align:baseline}</style></head><body><div id=\"plain\" class=\"line\"><canvas id=\"canvas-plain\" width=\"40\" height=\"20\"></canvas><img id=\"image-plain\" width=\"30\" height=\"16\" src=\"data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"16\" viewBox=\"0 0 30 16\"%3E%3Crect width=\"30\" height=\"16\" fill=\"%23336699\"/%3E%3C/svg%3E\"></div><div id=\"padded\" class=\"line\"><canvas id=\"canvas-padded\" width=\"40\" height=\"20\"></canvas><img id=\"image-padded\" width=\"30\" height=\"16\" src=\"data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"16\" viewBox=\"0 0 30 16\"%3E%3Crect width=\"30\" height=\"16\" fill=\"%23336699\"/%3E%3C/svg%3E\"></div></body></html>",
+      "targets": [
+        "plain",
+        "canvas-plain",
+        "image-plain",
+        "padded",
+        "canvas-padded",
+        "image-padded"
+      ],
+      "viewportWidth": 768,
+      "theme": "dark",
+      "expected": {
+        "plain": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 768,
+            "height": 20,
+            "top": 0,
+            "right": 768,
+            "bottom": 20,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 768,
+              "height": 20,
+              "top": 0,
+              "right": 768,
+              "bottom": 20,
+              "left": 0
+            }
+          ],
+          "clientWidth": 768,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 768,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "canvas-plain": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 40,
+            "height": 20,
+            "top": 0,
+            "right": 40,
+            "bottom": 20,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 40,
+              "height": 20,
+              "top": 0,
+              "right": 40,
+              "bottom": 20,
+              "left": 0
+            }
+          ],
+          "clientWidth": 40,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 40,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "image-plain": {
+          "rect": {
+            "x": 40,
+            "y": 4,
+            "width": 30,
+            "height": 16,
+            "top": 4,
+            "right": 70,
+            "bottom": 20,
+            "left": 40
+          },
+          "clientRects": [
+            {
+              "x": 40,
+              "y": 4,
+              "width": 30,
+              "height": 16,
+              "top": 4,
+              "right": 70,
+              "bottom": 20,
+              "left": 40
+            }
+          ],
+          "clientWidth": 30,
+          "clientHeight": 16,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 30,
+          "offsetHeight": 16,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "padded": {
+          "rect": {
+            "x": 11,
+            "y": 31,
+            "width": 746,
+            "height": 42,
+            "top": 31,
+            "right": 757,
+            "bottom": 73,
+            "left": 11
+          },
+          "clientRects": [
+            {
+              "x": 11,
+              "y": 31,
+              "width": 746,
+              "height": 42,
+              "top": 31,
+              "right": 757,
+              "bottom": 73,
+              "left": 11
+            }
+          ],
+          "clientWidth": 742,
+          "clientHeight": 38,
+          "clientLeft": 2,
+          "clientTop": 2,
+          "offsetWidth": 746,
+          "offsetHeight": 42,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "canvas-padded": {
+          "rect": {
+            "x": 26,
+            "y": 42,
+            "width": 40,
+            "height": 20,
+            "top": 42,
+            "right": 66,
+            "bottom": 62,
+            "left": 26
+          },
+          "clientRects": [
+            {
+              "x": 26,
+              "y": 42,
+              "width": 40,
+              "height": 20,
+              "top": 42,
+              "right": 66,
+              "bottom": 62,
+              "left": 26
+            }
+          ],
+          "clientWidth": 40,
+          "clientHeight": 20,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 40,
+          "offsetHeight": 20,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "image-padded": {
+          "rect": {
+            "x": 66,
+            "y": 46,
+            "width": 30,
+            "height": 16,
+            "top": 46,
+            "right": 96,
+            "bottom": 62,
+            "left": 66
+          },
+          "clientRects": [
+            {
+              "x": 66,
+              "y": 46,
+              "width": 30,
+              "height": 16,
+              "top": 46,
+              "right": 96,
+              "bottom": 62,
+              "left": 66
+            }
+          ],
+          "clientWidth": 30,
+          "clientHeight": 16,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 30,
+          "offsetHeight": 16,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "inline_text_wrapping_unsupported_native",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #wrapper{width:140px;padding:4px;border:1px solid;font:16px/20px Arial,sans-serif;white-space:normal} #wrapped{white-space:normal}</style></head><body><div id=\"wrapper\"><span id=\"wrapped\">alpha beta gamma delta epsilon zeta eta theta iota kappa</span></div></body></html>",
+      "targets": [
+        "wrapper",
+        "wrapped"
+      ],
+      "viewportWidth": 390,
+      "theme": "light",
+      "nativeSupport": "unsupported",
+      "expected": {
+        "wrapper": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 150,
+            "height": 90,
+            "top": 0,
+            "right": 150,
+            "bottom": 90,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 150,
+              "height": 90,
+              "top": 0,
+              "right": 150,
+              "bottom": 90,
+              "left": 0
+            }
+          ],
+          "clientWidth": 148,
+          "clientHeight": 88,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 150,
+          "offsetHeight": 90,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "wrapped": {
+          "rect": {
+            "x": 5,
+            "y": 6,
+            "width": 132.53125,
+            "height": 77,
+            "top": 6,
+            "right": 137.53125,
+            "bottom": 83,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 6,
+              "width": 132.53125,
+              "height": 17,
+              "top": 6,
+              "right": 137.53125,
+              "bottom": 23,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 26,
+              "width": 124.53125,
+              "height": 17,
+              "top": 26,
+              "right": 129.53125,
+              "bottom": 43,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 46,
+              "width": 92.515625,
+              "height": 17,
+              "top": 46,
+              "right": 97.515625,
+              "bottom": 63,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 66,
+              "width": 43.59375,
+              "height": 17,
+              "top": 66,
+              "right": 48.59375,
+              "bottom": 83,
+              "left": 5
+            }
+          ],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 133,
+          "offsetHeight": 77,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "inline_text_wrapping_unsupported_native",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #wrapper{width:140px;padding:4px;border:1px solid;font:16px/20px Arial,sans-serif;white-space:normal} #wrapped{white-space:normal}</style></head><body><div id=\"wrapper\"><span id=\"wrapped\">alpha beta gamma delta epsilon zeta eta theta iota kappa</span></div></body></html>",
+      "targets": [
+        "wrapper",
+        "wrapped"
+      ],
+      "viewportWidth": 390,
+      "theme": "dark",
+      "nativeSupport": "unsupported",
+      "expected": {
+        "wrapper": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 150,
+            "height": 90,
+            "top": 0,
+            "right": 150,
+            "bottom": 90,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 150,
+              "height": 90,
+              "top": 0,
+              "right": 150,
+              "bottom": 90,
+              "left": 0
+            }
+          ],
+          "clientWidth": 148,
+          "clientHeight": 88,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 150,
+          "offsetHeight": 90,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "wrapped": {
+          "rect": {
+            "x": 5,
+            "y": 6,
+            "width": 132.53125,
+            "height": 77,
+            "top": 6,
+            "right": 137.53125,
+            "bottom": 83,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 6,
+              "width": 132.53125,
+              "height": 17,
+              "top": 6,
+              "right": 137.53125,
+              "bottom": 23,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 26,
+              "width": 124.53125,
+              "height": 17,
+              "top": 26,
+              "right": 129.53125,
+              "bottom": 43,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 46,
+              "width": 92.515625,
+              "height": 17,
+              "top": 46,
+              "right": 97.515625,
+              "bottom": 63,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 66,
+              "width": 43.59375,
+              "height": 17,
+              "top": 66,
+              "right": 48.59375,
+              "bottom": 83,
+              "left": 5
+            }
+          ],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 133,
+          "offsetHeight": 77,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "inline_text_wrapping_unsupported_native",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #wrapper{width:140px;padding:4px;border:1px solid;font:16px/20px Arial,sans-serif;white-space:normal} #wrapped{white-space:normal}</style></head><body><div id=\"wrapper\"><span id=\"wrapped\">alpha beta gamma delta epsilon zeta eta theta iota kappa</span></div></body></html>",
+      "targets": [
+        "wrapper",
+        "wrapped"
+      ],
+      "viewportWidth": 768,
+      "theme": "light",
+      "nativeSupport": "unsupported",
+      "expected": {
+        "wrapper": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 150,
+            "height": 90,
+            "top": 0,
+            "right": 150,
+            "bottom": 90,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 150,
+              "height": 90,
+              "top": 0,
+              "right": 150,
+              "bottom": 90,
+              "left": 0
+            }
+          ],
+          "clientWidth": 148,
+          "clientHeight": 88,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 150,
+          "offsetHeight": 90,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "wrapped": {
+          "rect": {
+            "x": 5,
+            "y": 6,
+            "width": 132.53125,
+            "height": 77,
+            "top": 6,
+            "right": 137.53125,
+            "bottom": 83,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 6,
+              "width": 132.53125,
+              "height": 17,
+              "top": 6,
+              "right": 137.53125,
+              "bottom": 23,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 26,
+              "width": 124.53125,
+              "height": 17,
+              "top": 26,
+              "right": 129.53125,
+              "bottom": 43,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 46,
+              "width": 92.515625,
+              "height": 17,
+              "top": 46,
+              "right": 97.515625,
+              "bottom": 63,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 66,
+              "width": 43.59375,
+              "height": 17,
+              "top": 66,
+              "right": 48.59375,
+              "bottom": 83,
+              "left": 5
+            }
+          ],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 133,
+          "offsetHeight": 77,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    },
+    {
+      "name": "inline_text_wrapping_unsupported_native",
+      "html": "<!doctype html>\n<html><head><meta name=\"color-scheme\" content=\"light dark\"><meta charset=\"utf-8\">\n<style>body{margin:0} #wrapper{width:140px;padding:4px;border:1px solid;font:16px/20px Arial,sans-serif;white-space:normal} #wrapped{white-space:normal}</style></head><body><div id=\"wrapper\"><span id=\"wrapped\">alpha beta gamma delta epsilon zeta eta theta iota kappa</span></div></body></html>",
+      "targets": [
+        "wrapper",
+        "wrapped"
+      ],
+      "viewportWidth": 768,
+      "theme": "dark",
+      "nativeSupport": "unsupported",
+      "expected": {
+        "wrapper": {
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 150,
+            "height": 90,
+            "top": 0,
+            "right": 150,
+            "bottom": 90,
+            "left": 0
+          },
+          "clientRects": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 150,
+              "height": 90,
+              "top": 0,
+              "right": 150,
+              "bottom": 90,
+              "left": 0
+            }
+          ],
+          "clientWidth": 148,
+          "clientHeight": 88,
+          "clientLeft": 1,
+          "clientTop": 1,
+          "offsetWidth": 150,
+          "offsetHeight": 90,
+          "scrollX": 0,
+          "scrollY": 0
+        },
+        "wrapped": {
+          "rect": {
+            "x": 5,
+            "y": 6,
+            "width": 132.53125,
+            "height": 77,
+            "top": 6,
+            "right": 137.53125,
+            "bottom": 83,
+            "left": 5
+          },
+          "clientRects": [
+            {
+              "x": 5,
+              "y": 6,
+              "width": 132.53125,
+              "height": 17,
+              "top": 6,
+              "right": 137.53125,
+              "bottom": 23,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 26,
+              "width": 124.53125,
+              "height": 17,
+              "top": 26,
+              "right": 129.53125,
+              "bottom": 43,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 46,
+              "width": 92.515625,
+              "height": 17,
+              "top": 46,
+              "right": 97.515625,
+              "bottom": 63,
+              "left": 5
+            },
+            {
+              "x": 5,
+              "y": 66,
+              "width": 43.59375,
+              "height": 17,
+              "top": 66,
+              "right": 48.59375,
+              "bottom": 83,
+              "left": 5
+            }
+          ],
+          "clientWidth": 0,
+          "clientHeight": 0,
+          "clientLeft": 0,
+          "clientTop": 0,
+          "offsetWidth": 133,
+          "offsetHeight": 77,
+          "scrollX": 0,
+          "scrollY": 0
+        }
+      }
+    }
+  ]
+}

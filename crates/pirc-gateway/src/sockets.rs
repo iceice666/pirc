@@ -159,7 +159,7 @@ fn open_events(
     uri: &Uri,
     outbox: &Arc<Outbox>,
 ) -> ApiResult<EventSocket> {
-    let identity = app.validate(peer, headers, uri, true)?;
+    let identity = app.validate(peer, headers, uri, &axum::http::Method::GET, true)?;
     let query = query_map(uri);
     let session_id = single(&query, "sessionId")?
         .filter(|id| !id.is_empty())
@@ -407,7 +407,7 @@ async fn relay(
         tracked: Mutex::new(None),
     });
     let opened = (|| -> ApiResult<(RelayedStream, Option<Tracked>)> {
-        let identity = app.validate(&peer, &headers, &uri, true)?;
+        let identity = app.validate(&peer, &headers, &uri, &axum::http::Method::GET, true)?;
         let claimed = app.claim(&identity, &target.session_id)?;
         let terminal_id = match &target.terminal_id {
             None => "browser".to_owned(),

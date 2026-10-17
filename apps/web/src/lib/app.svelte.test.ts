@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // @vitest-environment-options {"url":"http://localhost"}
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, normalizeEvent } from './api';
+import { api, ApiError, normalizeEvent } from './api';
 import { app } from './app.svelte';
 import { demoSnapshot } from './mock';
 import { fromSnapshot, reduceEvent } from './state';
@@ -70,6 +70,24 @@ if (memoryProposal.event.type !== 'interaction_updated')
   throw new Error('Expected a memory proposal interaction.');
 const proposalInteraction = memoryProposal.event.interaction;
 
+it('keeps a newer interaction when a legacy removal has no row epoch', () => {
+  const session = { ...demoSnapshot.session, id: 's-legacy-event' };
+  const newer = { ...proposalInteraction, id: 'interaction:reused', runnerEpoch: '5' };
+  const state = fromSnapshot(snapshotFor(session, [newer]));
+  const legacyRemoval = normalizeEvent({
+    sessionId: session.id,
+    epoch: state.runnerEpoch,
+    sequence: 1,
+    type: 'interaction_answered',
+    data: { interactionId: newer.id },
+  });
+
+  const updated = reduceEvent(state, legacyRemoval);
+
+  expect(updated.interactions).toEqual([newer]);
+  expect(updated.needsSnapshot).toBe(true);
+});
+
 beforeEach(() => {
   const values = new Map<string, string>();
   vi.stubGlobal('localStorage', {
@@ -93,6 +111,9 @@ afterEach(() => {
   app.workspaces = [];
   app.draft = '';
   app.uploads = [];
+  app.pageError = '';
+  app.interactionNotice = '';
+  app.answeringInteractionIds = [];
   globalThis.localStorage?.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -174,7 +195,10 @@ describe('app asynchronous refreshes', () => {
         epoch: 'demo-epoch',
         sequence: 3,
         type: 'interaction_answered',
-        data: { interactionId: 'memory:p1:0' },
+        data: {
+          interactionId: 'memory:p1:0',
+          interactionEpoch: proposalInteraction.runnerEpoch,
+        },
       }),
       stale: [proposalInteraction],
       fresh: [],
@@ -261,5 +285,138 @@ describe('app asynchronous refreshes', () => {
     expect(app.activeSessionId).toBe(newSession.id);
     expect(app.sessionState?.session.id).toBe(newSession.id);
     expect(app.sessionState?.interactions.map((item) => item.id)).toEqual(['memory:p1:0']);
+  });
+
+  it('confirms a stale answer as handled only after the exact question disappears from a fresh snapshot', async () => {
+    app.demo = undefined;
+    const session = { ...demoSnapshot.session, id: 's-answer' };
+    const interaction = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '4' };
+    app.activeSessionId = session.id;
+    app.sessionState = {
+      ...fromSnapshot(snapshotFor(session, [interaction])),
+      control: { heldByCurrentClient: true, generation: 7 },
+    };
+    const answer = vi
+      .spyOn(api, 'answerInteraction')
+      .mockRejectedValueOnce(new ApiError('Already answered', 409, 'stale_interaction'));
+    vi.spyOn(api, 'snapshot').mockResolvedValue(snapshotFor(session, []));
+
+    await app.answerInteraction(interaction.id, { action: 'answer', value: true });
+
+    expect(answer).toHaveBeenCalledTimes(1);
+    expect(app.interactionNotice).toBe('This request has already been handled.');
+    expect(app.sessionState?.interactions).toEqual([]);
+  });
+
+  it('keeps a conflicting answer available when the exact question is still pending', async () => {
+    app.demo = undefined;
+    const session = { ...demoSnapshot.session, id: 's-answer' };
+    const interaction = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '4' };
+    app.activeSessionId = session.id;
+    app.sessionState = {
+      ...fromSnapshot(snapshotFor(session, [interaction])),
+      control: { heldByCurrentClient: true, generation: 7 },
+    };
+    const answer = vi
+      .spyOn(api, 'answerInteraction')
+      .mockRejectedValueOnce(new ApiError('Control changed', 409, 'lost_control'));
+    vi.spyOn(api, 'snapshot').mockResolvedValue(snapshotFor(session, [interaction]));
+    vi.spyOn(api, 'heartbeatControl').mockResolvedValue({ heldByCurrentClient: false });
+
+    await app.answerInteraction(interaction.id, { action: 'answer', value: true });
+
+    expect(answer).toHaveBeenCalledTimes(1);
+    expect(app.interactionNotice).toBe('This request is still waiting. Take control to answer it.');
+    expect(app.sessionState?.interactions).toEqual([interaction]);
+  });
+
+  it('does not claim an answer was handled when the authoritative check fails', async () => {
+    app.demo = undefined;
+    const session = { ...demoSnapshot.session, id: 's-answer' };
+    const interaction = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '4' };
+    app.activeSessionId = session.id;
+    app.sessionState = {
+      ...fromSnapshot(snapshotFor(session, [interaction])),
+      control: { heldByCurrentClient: true, generation: 7 },
+    };
+    const answer = vi
+      .spyOn(api, 'answerInteraction')
+      .mockRejectedValueOnce(new ApiError('Stale', 409, 'stale_interaction'));
+    vi.spyOn(api, 'snapshot').mockRejectedValueOnce(new Error('offline'));
+
+    await app.answerInteraction(interaction.id, { action: 'answer', value: true });
+
+    expect(answer).toHaveBeenCalledTimes(1);
+    expect(app.interactionNotice).toContain('couldn’t verify');
+    expect(app.sessionState?.interactions).toEqual([interaction]);
+  });
+
+  it('recognizes a stale card callback after remote removal without touching a reused id', async () => {
+    app.demo = undefined;
+    const session = { ...demoSnapshot.session, id: 's-answer' };
+    const oldQuestion = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '4' };
+    const newQuestion = { ...proposalInteraction, id: oldQuestion.id, runnerEpoch: '5' };
+    app.activeSessionId = session.id;
+    app.sessionState = fromSnapshot(snapshotFor(session, [oldQuestion]));
+    const oldState = app.sessionState;
+    app.sessionState = reduceEvent(
+      oldState,
+      normalizeEvent({
+        sessionId: session.id,
+        epoch: oldState.runnerEpoch,
+        sequence: 1,
+        type: 'interaction_answered',
+        data: { interactionId: oldQuestion.id, interactionEpoch: oldQuestion.runnerEpoch },
+      }),
+    );
+    app.sessionState = reduceEvent(app.sessionState, {
+      sessionId: session.id,
+      runnerEpoch: oldState.runnerEpoch,
+      sequence: 2,
+      cursor: 'new-question',
+      event: { type: 'interaction_updated', interaction: newQuestion },
+    });
+    const answer = vi.spyOn(api, 'answerInteraction');
+    vi.spyOn(api, 'snapshot').mockResolvedValue(snapshotFor(session, [newQuestion]));
+
+    await app.answerInteraction(
+      oldQuestion.id,
+      { action: 'answer', value: true },
+      oldQuestion.runnerEpoch,
+    );
+
+    expect(answer).not.toHaveBeenCalled();
+    expect(app.interactionNotice).toBe('This request has already been handled.');
+    expect(app.sessionState?.interactions).toEqual([newQuestion]);
+  });
+
+  it('reports a duplicate callback as processing instead of submitting twice', async () => {
+    app.demo = undefined;
+    const session = { ...demoSnapshot.session, id: 's-answer' };
+    const interaction = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '4' };
+    app.activeSessionId = session.id;
+    app.sessionState = {
+      ...fromSnapshot(snapshotFor(session, [interaction])),
+      control: { heldByCurrentClient: true, generation: 7 },
+    };
+    const pending = deferred<void>();
+    const answer = vi.spyOn(api, 'answerInteraction').mockReturnValueOnce(pending.promise);
+
+    const first = app.answerInteraction(
+      interaction.id,
+      { action: 'answer', value: true },
+      interaction.runnerEpoch,
+    );
+    await Promise.resolve();
+    await app.answerInteraction(
+      interaction.id,
+      { action: 'answer', value: true },
+      interaction.runnerEpoch,
+    );
+
+    expect(answer).toHaveBeenCalledTimes(1);
+    expect(app.interactionNotice).toBe('This request is already being processed.');
+    pending.resolve();
+    await first;
   });
 });

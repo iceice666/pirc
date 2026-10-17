@@ -1,0 +1,182 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [
+    390,
+    768
+  ],
+  "height": 1100,
+  "padding": 14,
+  "source": "# Workspace file references\n\nSee src/app.ts:12 and ../lib/parser.dart:3-8.\n\nOpen `src/app.ts:12:3` and `` lib/parser.dart ``.\n\nRead ./docs/guide.md and ../../src/main.kt:8.\n\nOpen /Users/me/project/src/app.ts:4.\n\nUse .github/workflows/check.yml and src/.env.local.\n\n@scope/pkg/src/a.ts and dir/@file.ts.\n\n(src/a.ts:3), [src/b.ts:4] src/c.ts!\n\n[src/a.ts:9](https://example.com) and [label](src/b.ts#L2-L6).\n\n[`src/a.ts:9`](https://example.com) and [**`src/b.ts`**](docs/link.md).\n\n| File | Link |\n|---|---|\n| src/a.ts | [`src/b.ts`](docs/guide.md) |",
+  "cases": [
+    {
+      "id": "bare",
+      "source": "See src/app.ts:12 and ../lib/parser.dart:3-8.",
+      "base": ""
+    },
+    {
+      "id": "code",
+      "source": "Open `src/app.ts:12:3` and `` lib/parser.dart ``.",
+      "base": ""
+    },
+    {
+      "id": "relative",
+      "source": "Read ./docs/guide.md and ../../src/main.kt:8.",
+      "base": ""
+    },
+    {
+      "id": "absolute",
+      "source": "Open /Users/me/project/src/app.ts:4.",
+      "base": ""
+    },
+    {
+      "id": "hidden",
+      "source": "Use .github/workflows/check.yml and src/.env.local.",
+      "base": ""
+    },
+    {
+      "id": "scoped",
+      "source": "@scope/pkg/src/a.ts and dir/@file.ts.",
+      "base": ""
+    },
+    {
+      "id": "punctuation",
+      "source": "(src/a.ts:3), [src/b.ts:4] src/c.ts!",
+      "base": ""
+    },
+    {
+      "id": "negative",
+      "source": "and/or 1/2.5 www.example.com/a.ts ~/src/a.ts C:\\src\\a.ts",
+      "base": ""
+    },
+    {
+      "id": "url",
+      "source": "https://example.com/src/a.ts http://host/dir/a.ts https://example.com/?file=src/a.ts",
+      "base": ""
+    },
+    {
+      "id": "domain",
+      "source": "www.example.com/src/a.ts email@example.com/dir/a.ts",
+      "base": ""
+    },
+    {
+      "id": "explicit",
+      "source": "[src/a.ts:9](https://example.com) and [label](src/b.ts#L2-L6).",
+      "base": ""
+    },
+    {
+      "id": "linked-code",
+      "source": "[`src/a.ts:9`](https://example.com) and [**`src/b.ts`**](docs/link.md).",
+      "base": ""
+    },
+    {
+      "id": "reference",
+      "source": "[src/a.ts][r] and [`src/b.ts`][r].\n\n[r]: https://example.com",
+      "base": ""
+    },
+    {
+      "id": "shortcut",
+      "source": "[src/a.ts]\n\n[src/a.ts]: docs/guide.md",
+      "base": ""
+    },
+    {
+      "id": "unresolved",
+      "source": "[src/a.ts][missing] and [src/b.ts].",
+      "base": ""
+    },
+    {
+      "id": "emphasis",
+      "source": "**src/a.ts:9** and *`src/b.ts`* and ~~src/c.ts~~.",
+      "base": ""
+    },
+    {
+      "id": "escaped",
+      "source": "\\`src/a.ts\\` and src\\/b.ts and \\[src/c.ts\\].",
+      "base": ""
+    },
+    {
+      "id": "code-negative",
+      "source": "`and/or` `1/2.5` `README.md` ` src/a.ts extra ` `https://host/a.ts`",
+      "base": ""
+    },
+    {
+      "id": "code-newline",
+      "source": "`src/a.ts\n` and ``\nsrc/b.ts\n``",
+      "base": ""
+    },
+    {
+      "id": "fence",
+      "source": "```ts\nconst path = \"src/a.ts\";\n```",
+      "base": ""
+    },
+    {
+      "id": "indented",
+      "source": "    src/a.ts\n    src/b.ts",
+      "base": ""
+    },
+    {
+      "id": "list",
+      "source": "- src/a.ts:5\n- `src/b.ts`\n\n> src/c.ts:7",
+      "base": ""
+    },
+    {
+      "id": "table",
+      "source": "| File | Link |\n|---|---|\n| src/a.ts | [`src/b.ts`](docs/guide.md) |",
+      "base": ""
+    },
+    {
+      "id": "suffix",
+      "source": "src/a.ts:0 src/b.ts:3-2 src/c.ts:2:9 src/d.ts:2-6",
+      "base": ""
+    },
+    {
+      "id": "hash-query",
+      "source": "src/a.ts#L4 src/b.ts?mode=raw [file](src/c.ts#L2C3-L7C4)",
+      "base": ""
+    },
+    {
+      "id": "encoding",
+      "source": "[space](src/a%20b.ts:4) [file](file:///tmp/a.ts:8) [local](file://localhost/tmp/b.ts#L3)",
+      "base": ""
+    },
+    {
+      "id": "base",
+      "source": "[guide](../guide.md:4) and `src/a.ts:5`",
+      "base": "docs/reference"
+    },
+    {
+      "id": "schemes",
+      "source": "[anchor](#part) [mail](mailto:a@example.com) [network](//example.com/a.ts) [web](https://example.com/a.ts)",
+      "base": ""
+    },
+    {
+      "id": "image",
+      "source": "![src/a.ts](https://example.com/img.png) [![preview](https://example.com/x.png)](docs/a.md)",
+      "base": ""
+    },
+    {
+      "id": "numeric",
+      "source": "dir/a.123 dir/a.1b2 dir/a.123b dir/a.b123 dir/a..ts",
+      "base": ""
+    },
+    {
+      "id": "boundaries",
+      "source": "prefix-src/a.ts a:src/a.ts ~src/a.ts \\src/a.ts foo/src/a.ts_end src/a.ts/more",
+      "base": ""
+    },
+    {
+      "id": "cjk",
+      "source": "請看 src/a.ts:3，然後 `src/b.ts`。",
+      "base": ""
+    },
+    {
+      "id": "emptycode",
+      "source": "`` `` and ` ` and ``src/a.ts`suffix``",
+      "base": ""
+    },
+    {
+      "id": "nested",
+      "source": "[outer [src/a.ts]](https://example.com) [**src/b.ts**](src/c.ts)",
+      "base": ""
+    }
+  ]
+}

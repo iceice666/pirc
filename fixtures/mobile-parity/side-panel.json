@@ -1,0 +1,115 @@
+{
+  "id": "native-side-panel",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [
+    390,
+    650,
+    651,
+    768,
+    860,
+    861,
+    1024,
+    1280
+  ],
+  "height": 844,
+  "views": [
+    "files",
+    "context"
+  ],
+  "directory": {
+    "path": "",
+    "entries": [
+      {
+        "name": "docs",
+        "kind": "dir"
+      },
+      {
+        "name": "src",
+        "kind": "dir"
+      },
+      {
+        "name": "README.md",
+        "kind": "file",
+        "size": 256
+      },
+      {
+        "name": "architecture.svg",
+        "kind": "file",
+        "size": 277
+      },
+      {
+        "name": "latest",
+        "kind": "symlink",
+        "size": 12
+      },
+      {
+        "name": "service.socket",
+        "kind": "other"
+      }
+    ],
+    "truncated": false
+  },
+  "panel": {
+    "backgroundTasks": [
+      {
+        "id": "job",
+        "status": "running"
+      }
+    ],
+    "memoryRuntime": {
+      "phase": "observing"
+    }
+  },
+  "context": {
+    "agentRunning": false,
+    "source": "snapshot",
+    "snapshot": {
+      "version": 1,
+      "id": "ctx",
+      "takenAt": 1790960400000,
+      "model": {
+        "provider": "test",
+        "id": "fixture-model",
+        "contextWindow": 16000
+      },
+      "sections": [
+        {
+          "id": "system",
+          "title": "System prompt",
+          "source": "AGENTS.md",
+          "filePath": "AGENTS.md",
+          "text": "Exact system prompt\nPreserve the source text.",
+          "estimatedTokens": 20,
+          "frozen": true
+        }
+      ],
+      "tools": [
+        {
+          "name": "read",
+          "description": "Read a file.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            }
+          },
+          "estimatedTokens": 15
+        }
+      ],
+      "usage": {
+        "estimatedInput": 1000,
+        "reportedInput": 1200,
+        "scale": 1.2,
+        "remaining": 14800,
+        "buckets": {
+          "system": 100,
+          "tools": 200,
+          "messages": 650,
+          "memory": 50
+        }
+      }
+    }
+  }
+}

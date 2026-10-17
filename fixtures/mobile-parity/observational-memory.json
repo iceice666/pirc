@@ -1,0 +1,135 @@
+{
+  "id": "native-observational-memory",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [
+    390,
+    420
+  ],
+  "height": 1200,
+  "views": [
+    "active",
+    "all",
+    "expanded",
+    "working",
+    "disabled",
+    "unavailable"
+  ],
+  "now": 1790991000000,
+  "panel": {
+    "agentRunning": true,
+    "backgroundTasks": [],
+    "team": {
+      "agents": [],
+      "tasks": [],
+      "events": []
+    },
+    "memory": {
+      "enabled": true,
+      "passive": true,
+      "counts": {
+        "reflections": 2,
+        "active": 2,
+        "dropped": 1,
+        "compactions": 3,
+        "observations": 3,
+        "visibleObservations": 2,
+        "visibleReflections": 1
+      },
+      "thresholds": {
+        "observation": {
+          "value": 1250,
+          "max": 4000
+        },
+        "reflection": {
+          "value": 10240,
+          "max": 10000
+        },
+        "compaction": {
+          "value": 900,
+          "max": 24000
+        },
+        "activePool": {
+          "value": 7500,
+          "max": 12000
+        },
+        "visiblePool": {
+          "value": 100,
+          "max": 200
+        }
+      },
+      "observations": [
+        {
+          "id": "a00000000001",
+          "content": "Keep this observation as **plain text**. It must not turn into a Markdown card.\nThe original text can span many lines and should expand when tapped. Additional context for a long observation. Additional context for a long observation. Additional context for a long observation. Additional context for a long observation. Additional context for a long observation. Additional context for a long observation. ",
+          "timestamp": "2026-10-03 09:00",
+          "relevance": "critical",
+          "tokenCount": 180,
+          "dropped": false,
+          "visible": true
+        },
+        {
+          "id": "a00000000002",
+          "content": "An earlier assumption was dropped after the user corrected it.",
+          "timestamp": "2026-10-03 09:02",
+          "relevance": "low",
+          "tokenCount": 24,
+          "dropped": true,
+          "visible": false
+        },
+        {
+          "id": "a00000000003",
+          "content": "Use Flutter for all content and preserve the original interactions.",
+          "timestamp": "2026-10-03 09:04",
+          "relevance": "medium",
+          "tokenCount": 30,
+          "dropped": false,
+          "visible": true
+        }
+      ],
+      "reflections": [
+        {
+          "id": "f00000000001",
+          "content": "Previous reflection, no longer in the context.",
+          "supportingObservationIds": [
+            "a00000000002"
+          ],
+          "tokenCount": 123,
+          "visible": false
+        },
+        {
+          "id": "f00000000002",
+          "content": "The app should preserve the complete web interaction and rendering contract.",
+          "supportingObservationIds": [
+            "a00000000001",
+            "a00000000003"
+          ],
+          "tokenCount": 1450,
+          "visible": true
+        }
+      ]
+    },
+    "memoryRuntime": {
+      "phase": null,
+      "autoCompacting": false,
+      "rateLimited": [],
+      "lastErrors": {}
+    }
+  },
+  "working": {
+    "phase": "observer",
+    "autoCompacting": false,
+    "rateLimited": [
+      {
+        "model": "native-test",
+        "until": 1790991060000
+      },
+      {
+        "model": "expired-model",
+        "until": 1790990990000
+      }
+    ],
+    "lastErrors": {
+      "reflector": "Model is temporarily unavailable."
+    }
+  }
+}

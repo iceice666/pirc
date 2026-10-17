@@ -1,0 +1,39 @@
+{
+  "id": "provider-editor",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 768],
+  "height": 1200,
+  "deviceScaleFactor": 1,
+  "fontFamily": "Arial",
+  "themes": ["light", "dark"],
+  "phases": ["collapsed", "expanded", "expanded-bottom"],
+  "settings": {
+    "providers": [
+      {
+        "id": "custom",
+        "name": "Custom provider",
+        "source": "ui",
+        "readOnly": false,
+        "api": "openai-completions",
+        "baseUrl": "http://localhost:11434/v1",
+        "hasApiKey": true,
+        "models": [
+          {
+            "id": "local-model",
+            "name": "Local model",
+            "contextWindow": 128000,
+            "maxTokens": 4096,
+            "reasoning": true,
+            "input": ["text", "image"]
+          }
+        ]
+      }
+    ],
+    "oauthProviders": [],
+    "defaultModel": {
+      "provider": "custom",
+      "id": "local-model"
+    }
+  },
+  "presets": []
+}

@@ -14,9 +14,12 @@ use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
 use crate::error::{ApiError, ApiResult};
+use crate::management::ManagementGrantAuthorizer;
 
 /// Header the reverse proxy sets to `PIRC_PROXY_SECRET` (and must strip from clients).
 pub const PROXY_SECRET_HEADER: &str = "x-pirc-proxy-secret";
+/// Short-lived, browser-approved native management credential.
+pub const MANAGEMENT_GRANT_HEADER: &str = "x-pirc-management";
 
 /// The authenticated caller of a request.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -24,6 +27,8 @@ pub struct Identity {
     pub user: String,
     /// Set when the caller authenticated with a device token instead of forward auth.
     pub device_id: Option<String>,
+    /// True only when a device bearer presented a valid scoped management grant.
+    pub management_authorized: bool,
 }
 
 /// A live device token's device and owner.
@@ -171,6 +176,7 @@ pub struct RequestInfo<'a> {
     pub headers: &'a HeaderMap,
     /// The path without the query.
     pub path: &'a str,
+    pub method: &'a Method,
 }
 
 /// Identify the caller of a browser-API request (`validateRequest`).
@@ -179,6 +185,7 @@ pub fn validate_request(
     config: &BrowserAuth,
     devices: &dyn DeviceAuthenticator,
     require_origin: bool,
+    management: &dyn ManagementGrantAuthorizer,
 ) -> ApiResult<Identity> {
     let untrusted = || {
         ApiError::new(
@@ -231,16 +238,32 @@ pub fn validate_request(
         if !config.allowed_users.contains(&device.user) {
             return Err(forbidden());
         }
-        if device_denied(request.path) {
-            return Err(ApiError::new(
-                403,
-                "forbidden",
-                "Device tokens cannot reach this route",
-            ));
-        }
+        let management_authorized = if device_denied(request.path) {
+            let grant = header(request.headers, MANAGEMENT_GRANT_HEADER);
+            let authorized = grant.as_deref().is_some_and(|token| {
+                management.authorize(
+                    &device.user,
+                    &device.id,
+                    token,
+                    request.method.as_str(),
+                    request.path,
+                )
+            });
+            if !authorized {
+                return Err(ApiError::new(
+                    403,
+                    "forbidden",
+                    "Device tokens cannot reach this route",
+                ));
+            }
+            true
+        } else {
+            false
+        };
         return Ok(Identity {
             user: device.user,
             device_id: Some(device.id),
+            management_authorized,
         });
     }
     if (require_origin || origin.is_some())
@@ -259,6 +282,7 @@ pub fn validate_request(
     Ok(Identity {
         user: identity,
         device_id: None,
+        management_authorized: false,
     })
 }
 
@@ -293,6 +317,31 @@ mod tests {
                     "Device token is invalid, expired or revoked",
                 )),
             }
+        }
+    }
+
+    struct NoManagement;
+    impl ManagementGrantAuthorizer for NoManagement {
+        fn authorize(&self, _: &str, _: &str, _: &str, _: &str, _: &str) -> bool {
+            false
+        }
+    }
+
+    struct ProviderManagement;
+    impl ManagementGrantAuthorizer for ProviderManagement {
+        fn authorize(
+            &self,
+            user: &str,
+            device_id: &str,
+            token: &str,
+            method: &str,
+            pathname: &str,
+        ) -> bool {
+            user == "u@example.com"
+                && device_id == "dev_1"
+                && token == "approved-grant"
+                && method == "GET"
+                && pathname == "/api/providers"
         }
     }
 
@@ -334,10 +383,12 @@ mod tests {
                 peer,
                 headers: &headers,
                 path,
+                method: &Method::GET,
             },
             &config(secret),
             &Devices,
             require_origin,
+            &NoManagement,
         )
         .map_err(|error| (error.code, error.message))
     }
@@ -455,6 +506,49 @@ mod tests {
         assert_eq!(
             check("127.0.0.1", &other, "/", None, false).unwrap_err().1,
             "Trusted identity header is missing"
+        );
+    }
+
+    #[test]
+    fn device_management_requires_a_matching_scoped_grant() {
+        let pairs = [
+            ("host", "a.example"),
+            ("authorization", "Bearer pirc_dev_good"),
+            (MANAGEMENT_GRANT_HEADER, "approved-grant"),
+        ];
+        let headers = headers(&pairs);
+        let request = RequestInfo {
+            peer: "127.0.0.1",
+            headers: &headers,
+            path: "/api/providers",
+            method: &Method::GET,
+        };
+        let identity = validate_request(
+            &request,
+            &config(None),
+            &Devices,
+            false,
+            &ProviderManagement,
+        )
+        .unwrap();
+        assert!(identity.management_authorized);
+        assert_eq!(identity.device_id.as_deref(), Some("dev_1"));
+
+        let wrong_path = RequestInfo {
+            path: "/api/devices",
+            ..request
+        };
+        assert_eq!(
+            validate_request(
+                &wrong_path,
+                &config(None),
+                &Devices,
+                false,
+                &ProviderManagement,
+            )
+            .unwrap_err()
+            .code,
+            "forbidden"
         );
     }
 

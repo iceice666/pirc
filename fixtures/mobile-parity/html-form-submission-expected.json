@@ -1,0 +1,5689 @@
+{
+  "fixture": "html-form-submission-v1",
+  "reference": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "browserVersion": "154.0.8037.98",
+  "locale": {
+    "language": "zh-TW",
+    "languages": [
+      "zh-TW",
+      "zh",
+      "en-US",
+      "en"
+    ]
+  },
+  "sanitizer": "apps/web/src/lib/markdown.ts renderMarkdown() / DOMPurify",
+  "initial": {
+    "sanitizedDOM": "<form id=\"main-form\" action=\"/capture/cancelled?from=form\" method=\"get\" enctype=\"multipart/form-data\" target=\"_self\"><input id=\"required-first\" name=\"requiredFirst\" required=\"\" value=\"\"><input id=\"required-second\" name=\"requiredSecond\" required=\"\" value=\"already\"><input id=\"text-space\" name=\"q\" value=\"tea &amp; honey\"><input id=\"hidden-field\" type=\"hidden\" value=\"secret\"><input id=\"disabled-field\" name=\"disabled\" disabled=\"\" value=\"excluded\"><input id=\"readonly-field\" name=\"readonly\" readonly=\"\" value=\"read only\"><input id=\"check-one\" type=\"checkbox\" name=\"choice\" value=\"one\" checked=\"\"><input id=\"check-two\" type=\"checkbox\" name=\"choice\" value=\"two\" checked=\"\"><input id=\"check-empty-value\" type=\"checkbox\" name=\"emptyCheck\" required=\"\" checked=\"\" value=\"\"><input id=\"check-off\" type=\"checkbox\" name=\"choice\" value=\"off\"><select id=\"select-many\" name=\"colors\" multiple=\"\"><option value=\"red\" selected=\"\">Red</option><option value=\"green\">Green</option><option value=\"blue\" selected=\"\">Blue</option></select><textarea id=\"textarea-crlf\" name=\"notes\">line one\nline two</textarea><button id=\"main-submit\" name=\"submitter\" value=\"main\">Send</button><button id=\"skip-validation\" name=\"submitter\" value=\"skip\">Skip validation</button><button id=\"override-submit\" name=\"submitter\" value=\"override\">Override</button><button id=\"copy-default\" name=\"submitter\" value=\"copy\" data-copy=\"\">Copy default type</button><button id=\"copy-typebutton\" type=\"button\" name=\"submitter\" value=\"copy-button\" data-copy=\"\">Copy button type</button><input id=\"button-no-value\" type=\"button\"></form><form id=\"novalidate-form\" action=\"/capture/cancelled?from=novalidate\" method=\"get\" novalidate=\"\"><input id=\"novalidate-required\" name=\"must\" required=\"\" value=\"\"><button id=\"novalidate-submit\" name=\"submitter\" value=\"novalidate\">Submit despite invalid</button></form><form id=\"message-locale-form\"><input id=\"locale-required-checkbox\" type=\"checkbox\" name=\"localeCheck\" required=\"\"><select id=\"locale-required-select\" name=\"localeSelect\" required=\"\"><option value=\"\">Choose one</option><option value=\"ok\">Okay</option></select><input id=\"locale-required-radio\" type=\"radio\" name=\"localeRadio\" value=\"one\" required=\"\"><input id=\"locale-radio-peer\" type=\"radio\" name=\"localeRadio\" value=\"two\"><input id=\"locale-invalid-email\" type=\"email\" name=\"email\" value=\"bad\"><input id=\"locale-invalid-url\" type=\"url\" name=\"url\" value=\"bad\"><input id=\"locale-pattern-invalid\" type=\"text\" name=\"pattern\" pattern=\"[A-Z]{3}\" value=\"abc\"></form><form id=\"attributes-form\" action=\"https://outside.invalid/default?a=1&amp;b=two\" method=\"post\" enctype=\"text/plain\" target=\"_blank\" novalidate=\"\"></form><input id=\"form-owner-control\" name=\"owner\" value=\"external\"><button id=\"form-owner-button\" name=\"ownerSubmit\" value=\"yes\">External submitter</button><form id=\"unsafe-action-form\" method=\"get\"><input id=\"unsafe-action-field\" name=\"q\" value=\"safe\"><button id=\"unsafe-formaction-button\">Unsafe override</button></form><form id=\"input-buttons-form\" action=\"/capture/cancelled?from=input-buttons\" method=\"get\"><input id=\"input-default-submit\" type=\"submit\" name=\"send\"><input id=\"input-default-reset\" type=\"reset\" name=\"r\"></form><form id=\"get-network\" action=\"/capture/get?existing=two%20words&amp;keep=1\" method=\"get\" enctype=\"text/plain\" target=\"_self\" data-allow-default=\"\"><input name=\"q\" value=\"tea &amp; honey\"><input name=\"n~!\" value=\"v~!\"><input name=\"台北\" value=\"城市 台北\"><input type=\"checkbox\" name=\"tag\" value=\"red\" checked=\"\"><input type=\"checkbox\" name=\"tag\" value=\"blue\" checked=\"\"><select name=\"sel\" multiple=\"\"><option value=\"one\" selected=\"\">One</option><option value=\"two\" selected=\"\">Two</option></select><textarea name=\"message\">line one\nline two</textarea><button id=\"get-submit\" name=\"go\" value=\"yes &amp; ok\">GET</button></form><form id=\"post-network\" action=\"/capture/post?token=abc%20def\" method=\"post\" enctype=\"application/x-www-form-urlencoded\" target=\"_self\" data-allow-default=\"\"><input name=\"payload\" value=\"post + &amp; ~ ! 台北\"><textarea name=\"message\">line one\nline two</textarea><button id=\"post-submit\" name=\"send\" value=\"post+go\">POST</button></form><form id=\"enter-single\" action=\"/capture/cancelled?from=single\" method=\"get\"><input id=\"enter-single-field\" name=\"q\" value=\"single\"><button id=\"enter-single-submit\" name=\"go\" value=\"single\">Submit</button></form><form id=\"enter-multiple\" action=\"/capture/cancelled?from=multiple\" method=\"get\"><input id=\"enter-multiple-first\" name=\"first\" value=\"one\"><input id=\"enter-multiple-second\" name=\"second\" value=\"two\"><button id=\"enter-multiple-submit\" name=\"go\" value=\"multiple\">Submit</button></form><form id=\"enter-no-submit\" action=\"/capture/cancelled?from=no-submit\" method=\"get\"><input id=\"enter-no-submit-field\" name=\"q\" value=\"no submit button\"></form><form id=\"enter-disabled-submit\" action=\"/capture/cancelled?from=disabled\" method=\"get\"><input id=\"enter-disabled-field\" name=\"q\" value=\"disabled default\"><button id=\"enter-disabled-button\" disabled=\"\">Disabled</button></form>",
+    "forms": [
+      {
+        "id": "main-form",
+        "attributes": {
+          "id": "main-form",
+          "action": "/capture/cancelled?from=form",
+          "method": "get",
+          "enctype": "multipart/form-data",
+          "target": "_self"
+        },
+        "action": "http://127.0.0.1:18919/capture/cancelled?from=form",
+        "method": "get",
+        "enctype": "multipart/form-data",
+        "target": "_self",
+        "noValidate": false,
+        "controls": [
+          "required-first",
+          "required-second",
+          "text-space",
+          "hidden-field",
+          "disabled-field",
+          "readonly-field",
+          "check-one",
+          "check-two",
+          "check-empty-value",
+          "check-off",
+          "select-many",
+          "textarea-crlf",
+          "main-submit",
+          "skip-validation",
+          "override-submit",
+          "copy-default",
+          "copy-typebutton",
+          "button-no-value"
+        ]
+      },
+      {
+        "id": "novalidate-form",
+        "attributes": {
+          "id": "novalidate-form",
+          "action": "/capture/cancelled?from=novalidate",
+          "method": "get",
+          "novalidate": ""
+        },
+        "action": "http://127.0.0.1:18919/capture/cancelled?from=novalidate",
+        "method": "get",
+        "enctype": "application/x-www-form-urlencoded",
+        "target": "",
+        "noValidate": true,
+        "controls": [
+          "novalidate-required",
+          "novalidate-submit"
+        ]
+      },
+      {
+        "id": "message-locale-form",
+        "attributes": {
+          "id": "message-locale-form"
+        },
+        "action": "http://127.0.0.1:18919/parity.html",
+        "method": "get",
+        "enctype": "application/x-www-form-urlencoded",
+        "target": "",
+        "noValidate": false,
+        "controls": [
+          "locale-required-checkbox",
+          "locale-required-select",
+          "locale-required-radio",
+          "locale-radio-peer",
+          "locale-invalid-email",
+          "locale-invalid-url",
+          "locale-pattern-invalid"
+        ]
+      },
+      {
+        "id": "attributes-form",
+        "attributes": {
+          "id": "attributes-form",
+          "action": "https://outside.invalid/default?a=1&b=two",
+          "method": "post",
+          "enctype": "text/plain",
+          "target": "_blank",
+          "novalidate": ""
+        },
+        "action": "https://outside.invalid/default?a=1&b=two",
+        "method": "post",
+        "enctype": "text/plain",
+        "target": "_blank",
+        "noValidate": true,
+        "controls": []
+      },
+      {
+        "id": "unsafe-action-form",
+        "attributes": {
+          "id": "unsafe-action-form",
+          "method": "get"
+        },
+        "action": "http://127.0.0.1:18919/parity.html",
+        "method": "get",
+        "enctype": "application/x-www-form-urlencoded",
+        "target": "",
+        "noValidate": false,
+        "controls": [
+          "unsafe-action-field",
+          "unsafe-formaction-button"
+        ]
+      },
+      {
+        "id": "input-buttons-form",
+        "attributes": {
+          "id": "input-buttons-form",
+          "action": "/capture/cancelled?from=input-buttons",
+          "method": "get"
+        },
+        "action": "http://127.0.0.1:18919/capture/cancelled?from=input-buttons",
+        "method": "get",
+        "enctype": "application/x-www-form-urlencoded",
+        "target": "",
+        "noValidate": false,
+        "controls": [
+          "input-default-submit",
+          "input-default-reset"
+        ]
+      },
+      {
+        "id": "get-network",
+        "attributes": {
+          "id": "get-network",
+          "action": "/capture/get?existing=two%20words&keep=1",
+          "method": "get",
+          "enctype": "text/plain",
+          "target": "_self",
+          "data-allow-default": ""
+        },
+        "action": "http://127.0.0.1:18919/capture/get?existing=two%20words&keep=1",
+        "method": "get",
+        "enctype": "text/plain",
+        "target": "_self",
+        "noValidate": false,
+        "controls": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          "get-submit"
+        ]
+      },
+      {
+        "id": "post-network",
+        "attributes": {
+          "id": "post-network",
+          "action": "/capture/post?token=abc%20def",
+          "method": "post",
+          "enctype": "application/x-www-form-urlencoded",
+          "target": "_self",
+          "data-allow-default": ""
+        },
+        "action": "http://127.0.0.1:18919/capture/post?token=abc%20def",
+        "method": "post",
+        "enctype": "application/x-www-form-urlencoded",
+        "target": "_self",
+        "noValidate": false,
+        "controls": [
+          null,
+          null,
+          "post-submit"
+        ]
+      },
+      {
+        "id": "enter-single",
+        "attributes": {
+          "id": "enter-single",
+          "action": "/capture/cancelled?from=single",
+          "method": "get"
+        },
+        "action": "http://127.0.0.1:18919/capture/cancelled?from=single",
+        "method": "get",
+        "enctype": "application/x-www-form-urlencoded",
+        "target": "",
+        "noValidate": false,
+        "controls": [
+          "enter-single-field",
+          "enter-single-submit"
+        ]
+      },
+      {
+        "id": "enter-multiple",
+        "attributes": {
+          "id": "enter-multiple",
+          "action": "/capture/cancelled?from=multiple",
+          "method": "get"
+        },
+        "action": "http://127.0.0.1:18919/capture/cancelled?from=multiple",
+        "method": "get",
+        "enctype": "application/x-www-form-urlencoded",
+        "target": "",
+        "noValidate": false,
+        "controls": [
+          "enter-multiple-first",
+          "enter-multiple-second",
+          "enter-multiple-submit"
+        ]
+      },
+      {
+        "id": "enter-no-submit",
+        "attributes": {
+          "id": "enter-no-submit",
+          "action": "/capture/cancelled?from=no-submit",
+          "method": "get"
+        },
+        "action": "http://127.0.0.1:18919/capture/cancelled?from=no-submit",
+        "method": "get",
+        "enctype": "application/x-www-form-urlencoded",
+        "target": "",
+        "noValidate": false,
+        "controls": [
+          "enter-no-submit-field"
+        ]
+      },
+      {
+        "id": "enter-disabled-submit",
+        "attributes": {
+          "id": "enter-disabled-submit",
+          "action": "/capture/cancelled?from=disabled",
+          "method": "get"
+        },
+        "action": "http://127.0.0.1:18919/capture/cancelled?from=disabled",
+        "method": "get",
+        "enctype": "application/x-www-form-urlencoded",
+        "target": "",
+        "noValidate": false,
+        "controls": [
+          "enter-disabled-field",
+          "enter-disabled-button"
+        ]
+      }
+    ],
+    "fields": [
+      {
+        "id": "required-first",
+        "tag": "input",
+        "type": "text",
+        "name": "requiredFirst",
+        "value": "",
+        "valueAttribute": "",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "required-first",
+          "name": "requiredFirst",
+          "required": "",
+          "value": ""
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": true,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "請填寫這個欄位。",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": true,
+            "valid": false
+          }
+        },
+        "focused": false,
+        "validationMessage": "請填寫這個欄位。",
+        "rect": {
+          "x": 8,
+          "y": 58,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "required-second",
+        "tag": "input",
+        "type": "text",
+        "name": "requiredSecond",
+        "value": "already",
+        "valueAttribute": "already",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "required-second",
+          "name": "requiredSecond",
+          "required": "",
+          "value": "already"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": true,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 161,
+          "y": 58,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "text-space",
+        "tag": "input",
+        "type": "text",
+        "name": "q",
+        "value": "tea & honey",
+        "valueAttribute": "tea & honey",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "text-space",
+          "name": "q",
+          "value": "tea & honey"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 314,
+          "y": 58,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "hidden-field",
+        "tag": "input",
+        "type": "hidden",
+        "name": null,
+        "value": "secret",
+        "valueAttribute": "secret",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "hidden-field",
+          "type": "hidden",
+          "value": "secret"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": false,
+        "validity": {
+          "willValidate": false,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        }
+      },
+      {
+        "id": "disabled-field",
+        "tag": "input",
+        "type": "text",
+        "name": "disabled",
+        "value": "excluded",
+        "valueAttribute": "excluded",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "disabled-field",
+          "name": "disabled",
+          "disabled": "",
+          "value": "excluded"
+        },
+        "formId": "main-form",
+        "disabled": true,
+        "readOnly": false,
+        "required": false,
+        "willValidate": false,
+        "validity": {
+          "willValidate": false,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 467,
+          "y": 58,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "readonly-field",
+        "tag": "input",
+        "type": "text",
+        "name": "readonly",
+        "value": "read only",
+        "valueAttribute": "read only",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "readonly-field",
+          "name": "readonly",
+          "readonly": "",
+          "value": "read only"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": true,
+        "required": false,
+        "willValidate": false,
+        "validity": {
+          "willValidate": false,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 620,
+          "y": 58,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "check-one",
+        "tag": "input",
+        "type": "checkbox",
+        "name": "choice",
+        "value": "one",
+        "valueAttribute": "one",
+        "checked": true,
+        "selectedValues": null,
+        "attributes": {
+          "id": "check-one",
+          "type": "checkbox",
+          "name": "choice",
+          "value": "one",
+          "checked": ""
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 777,
+          "y": 60,
+          "width": 13,
+          "height": 13
+        }
+      },
+      {
+        "id": "check-two",
+        "tag": "input",
+        "type": "checkbox",
+        "name": "choice",
+        "value": "two",
+        "valueAttribute": "two",
+        "checked": true,
+        "selectedValues": null,
+        "attributes": {
+          "id": "check-two",
+          "type": "checkbox",
+          "name": "choice",
+          "value": "two",
+          "checked": ""
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 797,
+          "y": 60,
+          "width": 13,
+          "height": 13
+        }
+      },
+      {
+        "id": "check-empty-value",
+        "tag": "input",
+        "type": "checkbox",
+        "name": "emptyCheck",
+        "value": "",
+        "valueAttribute": "",
+        "checked": true,
+        "selectedValues": null,
+        "attributes": {
+          "id": "check-empty-value",
+          "type": "checkbox",
+          "name": "emptyCheck",
+          "required": "",
+          "checked": "",
+          "value": ""
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": true,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 817,
+          "y": 60,
+          "width": 13,
+          "height": 13
+        }
+      },
+      {
+        "id": "check-off",
+        "tag": "input",
+        "type": "checkbox",
+        "name": "choice",
+        "value": "off",
+        "valueAttribute": "off",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "check-off",
+          "type": "checkbox",
+          "name": "choice",
+          "value": "off"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 837,
+          "y": 60,
+          "width": 13,
+          "height": 13
+        }
+      },
+      {
+        "id": "select-many",
+        "tag": "select",
+        "type": "select-multiple",
+        "name": "colors",
+        "value": "red",
+        "valueAttribute": null,
+        "checked": null,
+        "selectedValues": [
+          "red",
+          "blue"
+        ],
+        "attributes": {
+          "id": "select-many",
+          "name": "colors",
+          "multiple": ""
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 853,
+          "y": 8,
+          "width": 43.0625,
+          "height": 70
+        }
+      },
+      {
+        "id": "textarea-crlf",
+        "tag": "textarea",
+        "type": "textarea",
+        "name": "notes",
+        "value": "line one\nline two",
+        "valueAttribute": null,
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "textarea-crlf",
+          "name": "notes"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 79,
+          "width": 182,
+          "height": 36
+        }
+      },
+      {
+        "id": "button-no-value",
+        "tag": "input",
+        "type": "button",
+        "name": null,
+        "value": "",
+        "valueAttribute": null,
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "button-no-value",
+          "type": "button"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": false,
+        "validity": {
+          "willValidate": false,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 642.78125,
+          "y": 100,
+          "width": 16,
+          "height": 21
+        }
+      },
+      {
+        "id": "novalidate-required",
+        "tag": "input",
+        "type": "text",
+        "name": "must",
+        "value": "",
+        "valueAttribute": "",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "novalidate-required",
+          "name": "must",
+          "required": "",
+          "value": ""
+        },
+        "formId": "novalidate-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": true,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "請填寫這個欄位。",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": true,
+            "valid": false
+          }
+        },
+        "focused": false,
+        "validationMessage": "請填寫這個欄位。",
+        "rect": {
+          "x": 8,
+          "y": 123,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "locale-required-checkbox",
+        "tag": "input",
+        "type": "checkbox",
+        "name": "localeCheck",
+        "value": "on",
+        "valueAttribute": null,
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "locale-required-checkbox",
+          "type": "checkbox",
+          "name": "localeCheck",
+          "required": ""
+        },
+        "formId": "message-locale-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": true,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "如果你要繼續執行，請勾選這個核取方塊。",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": true,
+            "valid": false
+          }
+        },
+        "focused": false,
+        "validationMessage": "如果你要繼續執行，請勾選這個核取方塊。",
+        "rect": {
+          "x": 12,
+          "y": 148,
+          "width": 13,
+          "height": 13
+        }
+      },
+      {
+        "id": "locale-required-select",
+        "tag": "select",
+        "type": "select-one",
+        "name": "localeSelect",
+        "value": "",
+        "valueAttribute": null,
+        "checked": null,
+        "selectedValues": [
+          ""
+        ],
+        "attributes": {
+          "id": "locale-required-select",
+          "name": "localeSelect",
+          "required": ""
+        },
+        "formId": "message-locale-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": true,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "請選取一個清單中的項目。",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": true,
+            "valid": false
+          }
+        },
+        "focused": false,
+        "validationMessage": "請選取一個清單中的項目。",
+        "rect": {
+          "x": 28,
+          "y": 147,
+          "width": 90,
+          "height": 19
+        }
+      },
+      {
+        "id": "locale-required-radio",
+        "tag": "input",
+        "type": "radio",
+        "name": "localeRadio",
+        "value": "one",
+        "valueAttribute": "one",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "locale-required-radio",
+          "type": "radio",
+          "name": "localeRadio",
+          "value": "one",
+          "required": ""
+        },
+        "formId": "message-locale-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": true,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "請選取其中一個選項。",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": true,
+            "valid": false
+          }
+        },
+        "focused": false,
+        "validationMessage": "請選取其中一個選項。",
+        "rect": {
+          "x": 123,
+          "y": 148,
+          "width": 13,
+          "height": 13
+        }
+      },
+      {
+        "id": "locale-radio-peer",
+        "tag": "input",
+        "type": "radio",
+        "name": "localeRadio",
+        "value": "two",
+        "valueAttribute": "two",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "locale-radio-peer",
+          "type": "radio",
+          "name": "localeRadio",
+          "value": "two"
+        },
+        "formId": "message-locale-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "請選取其中一個選項。",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": true,
+            "valid": false
+          }
+        },
+        "focused": false,
+        "validationMessage": "請選取其中一個選項。",
+        "rect": {
+          "x": 144,
+          "y": 148,
+          "width": 13,
+          "height": 13
+        }
+      },
+      {
+        "id": "locale-invalid-email",
+        "tag": "input",
+        "type": "email",
+        "name": "email",
+        "value": "bad",
+        "valueAttribute": "bad",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "locale-invalid-email",
+          "type": "email",
+          "name": "email",
+          "value": "bad"
+        },
+        "formId": "message-locale-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "請在電子郵件地址中包含「@」。「bad」未包含「@」。",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": true,
+            "valueMissing": false,
+            "valid": false
+          }
+        },
+        "focused": false,
+        "validationMessage": "請在電子郵件地址中包含「@」。「bad」未包含「@」。",
+        "rect": {
+          "x": 160,
+          "y": 146,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "locale-invalid-url",
+        "tag": "input",
+        "type": "url",
+        "name": "url",
+        "value": "bad",
+        "valueAttribute": "bad",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "locale-invalid-url",
+          "type": "url",
+          "name": "url",
+          "value": "bad"
+        },
+        "formId": "message-locale-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "請輸入網址。",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": true,
+            "valueMissing": false,
+            "valid": false
+          }
+        },
+        "focused": false,
+        "validationMessage": "請輸入網址。",
+        "rect": {
+          "x": 313,
+          "y": 146,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "locale-pattern-invalid",
+        "tag": "input",
+        "type": "text",
+        "name": "pattern",
+        "value": "abc",
+        "valueAttribute": "abc",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "locale-pattern-invalid",
+          "type": "text",
+          "name": "pattern",
+          "pattern": "[A-Z]{3}",
+          "value": "abc"
+        },
+        "formId": "message-locale-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "請符合要求的格式。",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": true,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": false
+          }
+        },
+        "focused": false,
+        "validationMessage": "請符合要求的格式。",
+        "rect": {
+          "x": 466,
+          "y": 146,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "form-owner-control",
+        "tag": "input",
+        "type": "text",
+        "name": "owner",
+        "value": "external",
+        "valueAttribute": "external",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "form-owner-control",
+          "name": "owner",
+          "value": "external"
+        },
+        "formId": null,
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 169,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "unsafe-action-field",
+        "tag": "input",
+        "type": "text",
+        "name": "q",
+        "value": "safe",
+        "valueAttribute": "safe",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "unsafe-action-field",
+          "name": "q",
+          "value": "safe"
+        },
+        "formId": "unsafe-action-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 192,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "input-default-submit",
+        "tag": "input",
+        "type": "submit",
+        "name": "send",
+        "value": "",
+        "valueAttribute": null,
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "input-default-submit",
+          "type": "submit",
+          "name": "send"
+        },
+        "formId": "input-buttons-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 213,
+          "width": 42.671875,
+          "height": 25
+        }
+      },
+      {
+        "id": "input-default-reset",
+        "tag": "input",
+        "type": "reset",
+        "name": "r",
+        "value": "",
+        "valueAttribute": null,
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "input-default-reset",
+          "type": "reset",
+          "name": "r"
+        },
+        "formId": "input-buttons-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": false,
+        "validity": {
+          "willValidate": false,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 50.671875,
+          "y": 213,
+          "width": 42.671875,
+          "height": 25
+        }
+      },
+      {
+        "id": null,
+        "tag": "input",
+        "type": "text",
+        "name": "q",
+        "value": "tea & honey",
+        "valueAttribute": "tea & honey",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "name": "q",
+          "value": "tea & honey"
+        },
+        "formId": "get-network",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 288,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": null,
+        "tag": "input",
+        "type": "text",
+        "name": "n~!",
+        "value": "v~!",
+        "valueAttribute": "v~!",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "name": "n~!",
+          "value": "v~!"
+        },
+        "formId": "get-network",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 161,
+          "y": 288,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": null,
+        "tag": "input",
+        "type": "text",
+        "name": "台北",
+        "value": "城市 台北",
+        "valueAttribute": "城市 台北",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "name": "台北",
+          "value": "城市 台北"
+        },
+        "formId": "get-network",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 314,
+          "y": 288,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": null,
+        "tag": "input",
+        "type": "checkbox",
+        "name": "tag",
+        "value": "red",
+        "valueAttribute": "red",
+        "checked": true,
+        "selectedValues": null,
+        "attributes": {
+          "type": "checkbox",
+          "name": "tag",
+          "value": "red",
+          "checked": ""
+        },
+        "formId": "get-network",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 471,
+          "y": 290,
+          "width": 13,
+          "height": 13
+        }
+      },
+      {
+        "id": null,
+        "tag": "input",
+        "type": "checkbox",
+        "name": "tag",
+        "value": "blue",
+        "valueAttribute": "blue",
+        "checked": true,
+        "selectedValues": null,
+        "attributes": {
+          "type": "checkbox",
+          "name": "tag",
+          "value": "blue",
+          "checked": ""
+        },
+        "formId": "get-network",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 491,
+          "y": 290,
+          "width": 13,
+          "height": 13
+        }
+      },
+      {
+        "id": null,
+        "tag": "select",
+        "type": "select-multiple",
+        "name": "sel",
+        "value": "one",
+        "valueAttribute": null,
+        "checked": null,
+        "selectedValues": [
+          "one",
+          "two"
+        ],
+        "attributes": {
+          "name": "sel",
+          "multiple": ""
+        },
+        "formId": "get-network",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 507,
+          "y": 238,
+          "width": 31.203125,
+          "height": 70
+        }
+      },
+      {
+        "id": null,
+        "tag": "textarea",
+        "type": "textarea",
+        "name": "message",
+        "value": "line one\nline two",
+        "valueAttribute": null,
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "name": "message"
+        },
+        "formId": "get-network",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 538.203125,
+          "y": 267,
+          "width": 182,
+          "height": 36
+        }
+      },
+      {
+        "id": null,
+        "tag": "input",
+        "type": "text",
+        "name": "payload",
+        "value": "post + & ~ ! 台北",
+        "valueAttribute": "post + & ~ ! 台北",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "name": "payload",
+          "value": "post + & ~ ! 台北"
+        },
+        "formId": "post-network",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 330,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": null,
+        "tag": "textarea",
+        "type": "textarea",
+        "name": "message",
+        "value": "line one\nline two",
+        "valueAttribute": null,
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "name": "message"
+        },
+        "formId": "post-network",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 161,
+          "y": 309,
+          "width": 182,
+          "height": 36
+        }
+      },
+      {
+        "id": "enter-single-field",
+        "tag": "input",
+        "type": "text",
+        "name": "q",
+        "value": "single",
+        "valueAttribute": "single",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-single-field",
+          "name": "q",
+          "value": "single"
+        },
+        "formId": "enter-single",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 353,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "enter-multiple-first",
+        "tag": "input",
+        "type": "text",
+        "name": "first",
+        "value": "one",
+        "valueAttribute": "one",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-multiple-first",
+          "name": "first",
+          "value": "one"
+        },
+        "formId": "enter-multiple",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 376,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "enter-multiple-second",
+        "tag": "input",
+        "type": "text",
+        "name": "second",
+        "value": "two",
+        "valueAttribute": "two",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-multiple-second",
+          "name": "second",
+          "value": "two"
+        },
+        "formId": "enter-multiple",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 161,
+          "y": 376,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "enter-no-submit-field",
+        "tag": "input",
+        "type": "text",
+        "name": "q",
+        "value": "no submit button",
+        "valueAttribute": "no submit button",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-no-submit-field",
+          "name": "q",
+          "value": "no submit button"
+        },
+        "formId": "enter-no-submit",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 399,
+          "width": 153,
+          "height": 21
+        }
+      },
+      {
+        "id": "enter-disabled-field",
+        "tag": "input",
+        "type": "text",
+        "name": "q",
+        "value": "disabled default",
+        "valueAttribute": "disabled default",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-disabled-field",
+          "name": "q",
+          "value": "disabled default"
+        },
+        "formId": "enter-disabled-submit",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 422,
+          "width": 153,
+          "height": 21
+        }
+      }
+    ],
+    "buttons": [
+      {
+        "id": "main-submit",
+        "tag": "button",
+        "type": "submit",
+        "name": "submitter",
+        "value": "main",
+        "valueAttribute": "main",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "main-submit",
+          "name": "submitter",
+          "value": "main"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 190,
+          "y": 100,
+          "width": 47.140625,
+          "height": 21
+        }
+      },
+      {
+        "id": "skip-validation",
+        "tag": "button",
+        "type": "submit",
+        "name": "submitter",
+        "value": "skip",
+        "valueAttribute": "skip",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "skip-validation",
+          "name": "submitter",
+          "value": "skip"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 237.140625,
+          "y": 100,
+          "width": 101.96875,
+          "height": 21
+        }
+      },
+      {
+        "id": "override-submit",
+        "tag": "button",
+        "type": "submit",
+        "name": "submitter",
+        "value": "override",
+        "valueAttribute": "override",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "override-submit",
+          "name": "submitter",
+          "value": "override"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 339.109375,
+          "y": 100,
+          "width": 67.125,
+          "height": 21
+        }
+      },
+      {
+        "id": "copy-default",
+        "tag": "button",
+        "type": "submit",
+        "name": "submitter",
+        "value": "copy",
+        "valueAttribute": "copy",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "copy-default",
+          "name": "submitter",
+          "value": "copy",
+          "data-copy": ""
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 406.234375,
+          "y": 100,
+          "width": 119.75,
+          "height": 21
+        }
+      },
+      {
+        "id": "copy-typebutton",
+        "tag": "button",
+        "type": "button",
+        "name": "submitter",
+        "value": "copy-button",
+        "valueAttribute": "copy-button",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "copy-typebutton",
+          "type": "button",
+          "name": "submitter",
+          "value": "copy-button",
+          "data-copy": ""
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": false,
+        "validity": {
+          "willValidate": false,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 525.984375,
+          "y": 100,
+          "width": 116.796875,
+          "height": 21
+        }
+      },
+      {
+        "id": "novalidate-submit",
+        "tag": "button",
+        "type": "submit",
+        "name": "submitter",
+        "value": "novalidate",
+        "valueAttribute": "novalidate",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "novalidate-submit",
+          "name": "submitter",
+          "value": "novalidate"
+        },
+        "formId": "novalidate-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 161,
+          "y": 123,
+          "width": 145.671875,
+          "height": 21
+        }
+      },
+      {
+        "id": "form-owner-button",
+        "tag": "button",
+        "type": "submit",
+        "name": "ownerSubmit",
+        "value": "yes",
+        "valueAttribute": "yes",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "form-owner-button",
+          "name": "ownerSubmit",
+          "value": "yes"
+        },
+        "formId": null,
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 161,
+          "y": 169,
+          "width": 123.421875,
+          "height": 21
+        }
+      },
+      {
+        "id": "unsafe-formaction-button",
+        "tag": "button",
+        "type": "submit",
+        "name": null,
+        "value": "",
+        "valueAttribute": null,
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "unsafe-formaction-button"
+        },
+        "formId": "unsafe-action-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 161,
+          "y": 192,
+          "width": 110.109375,
+          "height": 21
+        }
+      },
+      {
+        "id": "get-submit",
+        "tag": "button",
+        "type": "submit",
+        "name": "go",
+        "value": "yes & ok",
+        "valueAttribute": "yes & ok",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "get-submit",
+          "name": "go",
+          "value": "yes & ok"
+        },
+        "formId": "get-network",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 720.203125,
+          "y": 288,
+          "width": 43.40625,
+          "height": 21
+        }
+      },
+      {
+        "id": "post-submit",
+        "tag": "button",
+        "type": "submit",
+        "name": "send",
+        "value": "post+go",
+        "valueAttribute": "post+go",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "post-submit",
+          "name": "send",
+          "value": "post+go"
+        },
+        "formId": "post-network",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 343,
+          "y": 330,
+          "width": 52.296875,
+          "height": 21
+        }
+      },
+      {
+        "id": "enter-single-submit",
+        "tag": "button",
+        "type": "submit",
+        "name": "go",
+        "value": "single",
+        "valueAttribute": "single",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-single-submit",
+          "name": "go",
+          "value": "single"
+        },
+        "formId": "enter-single",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 161,
+          "y": 353,
+          "width": 57.5,
+          "height": 21
+        }
+      },
+      {
+        "id": "enter-multiple-submit",
+        "tag": "button",
+        "type": "submit",
+        "name": "go",
+        "value": "multiple",
+        "valueAttribute": "multiple",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-multiple-submit",
+          "name": "go",
+          "value": "multiple"
+        },
+        "formId": "enter-multiple",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 314,
+          "y": 376,
+          "width": 57.5,
+          "height": 21
+        }
+      },
+      {
+        "id": "enter-disabled-button",
+        "tag": "button",
+        "type": "submit",
+        "name": null,
+        "value": "",
+        "valueAttribute": null,
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-disabled-button",
+          "disabled": ""
+        },
+        "formId": "enter-disabled-submit",
+        "disabled": true,
+        "readOnly": false,
+        "required": false,
+        "willValidate": false,
+        "validity": {
+          "willValidate": false,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 161,
+          "y": 422,
+          "width": 67.875,
+          "height": 21
+        }
+      }
+    ],
+    "sanitizerAttributes": {
+      "main-form": {
+        "action": "/capture/cancelled?from=form",
+        "method": "get",
+        "enctype": "multipart/form-data",
+        "target": "_self",
+        "novalidate": null,
+        "onsubmit": null
+      },
+      "skip-validation": {
+        "formnovalidate": null,
+        "formaction": null,
+        "formmethod": null,
+        "formenctype": null,
+        "formtarget": null,
+        "onclick": null
+      },
+      "override-submit": {
+        "formaction": null,
+        "formmethod": null,
+        "formenctype": null,
+        "formtarget": null,
+        "formnovalidate": null
+      },
+      "copy-default": {
+        "type": null,
+        "name": "submitter",
+        "value": "copy",
+        "data-copy": ""
+      },
+      "copy-typebutton": {
+        "type": "button",
+        "name": "submitter",
+        "value": "copy-button",
+        "data-copy": ""
+      },
+      "attributes-form": {
+        "action": "https://outside.invalid/default?a=1&b=two",
+        "method": "post",
+        "enctype": "text/plain",
+        "target": "_blank",
+        "novalidate": "",
+        "onclick": null
+      },
+      "form-owner-control": {
+        "form": null,
+        "name": "owner",
+        "value": "external"
+      },
+      "form-owner-button": {
+        "form": null,
+        "name": "ownerSubmit",
+        "value": "yes",
+        "formaction": null,
+        "formmethod": null,
+        "formenctype": null,
+        "formtarget": null,
+        "formnovalidate": null,
+        "onclick": null
+      },
+      "unsafe-action-form": {
+        "action": null,
+        "method": "get"
+      },
+      "unsafe-formaction-button": {
+        "formaction": null
+      },
+      "novalidate-form": {
+        "action": "/capture/cancelled?from=novalidate",
+        "method": "get",
+        "novalidate": ""
+      },
+      "novalidate-submit": {
+        "formnovalidate": null,
+        "name": "submitter",
+        "value": "novalidate"
+      },
+      "input-default-submit": {
+        "type": "submit",
+        "name": "send",
+        "value": null,
+        "formaction": null,
+        "formmethod": null
+      },
+      "input-default-reset": {
+        "type": "reset",
+        "name": "r",
+        "value": null
+      }
+    },
+    "focusedId": null
+  },
+  "actions": [
+    {
+      "id": "invalid-required-click",
+      "events": {
+        "submits": [],
+        "invalid": [
+          {
+            "id": "required-first",
+            "formId": "main-form",
+            "selector": "#required-first",
+            "validationMessage": "請填寫這個欄位。",
+            "willValidate": true,
+            "validity": {
+              "willValidate": true,
+              "validationMessage": "請填寫這個欄位。",
+              "flags": {
+                "badInput": false,
+                "customError": false,
+                "patternMismatch": false,
+                "rangeOverflow": false,
+                "rangeUnderflow": false,
+                "stepMismatch": false,
+                "tooLong": false,
+                "tooShort": false,
+                "typeMismatch": false,
+                "valueMissing": true,
+                "valid": false
+              }
+            }
+          }
+        ],
+        "focus": [
+          {
+            "id": "main-submit",
+            "tag": "button",
+            "focusedId": "main-submit",
+            "validationMessage": ""
+          },
+          {
+            "id": "required-first",
+            "tag": "input",
+            "focusedId": "required-first",
+            "validationMessage": "請填寫這個欄位。"
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [],
+        "focusedId": "required-first"
+      },
+      "target": {
+        "id": "main-submit",
+        "tag": "button",
+        "type": "submit",
+        "name": "submitter",
+        "value": "main",
+        "valueAttribute": "main",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "main-submit",
+          "name": "submitter",
+          "value": "main"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 190,
+          "y": 100,
+          "width": 47.140625,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "formnovalidate-click",
+      "events": {
+        "submits": [],
+        "invalid": [
+          {
+            "id": "required-first",
+            "formId": "main-form",
+            "selector": "#required-first",
+            "validationMessage": "請填寫這個欄位。",
+            "willValidate": true,
+            "validity": {
+              "willValidate": true,
+              "validationMessage": "請填寫這個欄位。",
+              "flags": {
+                "badInput": false,
+                "customError": false,
+                "patternMismatch": false,
+                "rangeOverflow": false,
+                "rangeUnderflow": false,
+                "stepMismatch": false,
+                "tooLong": false,
+                "tooShort": false,
+                "typeMismatch": false,
+                "valueMissing": true,
+                "valid": false
+              }
+            }
+          }
+        ],
+        "focus": [
+          {
+            "id": "skip-validation",
+            "tag": "button",
+            "focusedId": "skip-validation",
+            "validationMessage": ""
+          },
+          {
+            "id": "required-first",
+            "tag": "input",
+            "focusedId": "required-first",
+            "validationMessage": "請填寫這個欄位。"
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [],
+        "focusedId": "required-first"
+      },
+      "target": {
+        "id": "skip-validation",
+        "tag": "button",
+        "type": "submit",
+        "name": "submitter",
+        "value": "skip",
+        "valueAttribute": "skip",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "skip-validation",
+          "name": "submitter",
+          "value": "skip"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": false,
+        "validationMessage": "",
+        "rect": {
+          "x": 237.140625,
+          "y": 100,
+          "width": 101.96875,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "form-novalidate-invalid-required-click",
+      "events": {
+        "submits": [
+          {
+            "formId": "novalidate-form",
+            "submitter": {
+              "id": "novalidate-submit",
+              "tag": "button",
+              "type": "submit",
+              "name": "submitter",
+              "value": "novalidate",
+              "attributes": {
+                "id": "novalidate-submit",
+                "name": "submitter",
+                "value": "novalidate"
+              },
+              "formAction": "http://127.0.0.1:18919/parity.html",
+              "formMethod": "",
+              "formEnctype": "",
+              "formTarget": "",
+              "formNoValidate": false
+            },
+            "form": {
+              "action": "http://127.0.0.1:18919/capture/cancelled?from=novalidate",
+              "method": "get",
+              "enctype": "application/x-www-form-urlencoded",
+              "target": "",
+              "noValidate": true
+            },
+            "effectiveFormValid": false,
+            "firstInvalidSelector": "#novalidate-required",
+            "fields": [
+              {
+                "id": "novalidate-required",
+                "willValidate": true,
+                "validationMessage": "請填寫這個欄位。",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": true,
+                  "valid": false
+                }
+              },
+              {
+                "id": "novalidate-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              }
+            ],
+            "entries": [
+              [
+                "must",
+                ""
+              ],
+              [
+                "submitter",
+                "novalidate"
+              ]
+            ],
+            "clipboardWritesAtSubmit": [],
+            "focusedId": "novalidate-submit",
+            "validationMessage": "",
+            "canceled": true
+          }
+        ],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "novalidate-submit",
+            "tag": "button",
+            "focusedId": "novalidate-submit",
+            "validationMessage": ""
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [],
+        "focusedId": "novalidate-submit"
+      },
+      "target": {
+        "id": "novalidate-submit",
+        "tag": "button",
+        "type": "submit",
+        "name": "submitter",
+        "value": "novalidate",
+        "valueAttribute": "novalidate",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "novalidate-submit",
+          "name": "submitter",
+          "value": "novalidate"
+        },
+        "formId": "novalidate-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": true,
+        "validationMessage": "",
+        "rect": {
+          "x": 161,
+          "y": 123,
+          "width": 145.671875,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "fill-required-first",
+      "events": {
+        "submits": [],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "required-first",
+            "tag": "input",
+            "focusedId": "required-first",
+            "validationMessage": "請填寫這個欄位。"
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [],
+        "focusedId": "required-first"
+      },
+      "target": {
+        "id": "required-first",
+        "tag": "input",
+        "type": "text",
+        "name": "requiredFirst",
+        "value": "ready",
+        "valueAttribute": "",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "required-first",
+          "name": "requiredFirst",
+          "required": "",
+          "value": ""
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": true,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": true,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 58,
+          "width": 153,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "valid-required-click",
+      "events": {
+        "submits": [
+          {
+            "formId": "main-form",
+            "submitter": {
+              "id": "main-submit",
+              "tag": "button",
+              "type": "submit",
+              "name": "submitter",
+              "value": "main",
+              "attributes": {
+                "id": "main-submit",
+                "name": "submitter",
+                "value": "main"
+              },
+              "formAction": "http://127.0.0.1:18919/parity.html",
+              "formMethod": "",
+              "formEnctype": "",
+              "formTarget": "",
+              "formNoValidate": false
+            },
+            "form": {
+              "action": "http://127.0.0.1:18919/capture/cancelled?from=form",
+              "method": "get",
+              "enctype": "multipart/form-data",
+              "target": "_self",
+              "noValidate": false
+            },
+            "effectiveFormValid": true,
+            "firstInvalidSelector": null,
+            "fields": [
+              {
+                "id": "required-first",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "required-second",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "text-space",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "hidden-field",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "disabled-field",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "readonly-field",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-one",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-two",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-empty-value",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-off",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "select-many",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "textarea-crlf",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "main-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "skip-validation",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "override-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "copy-default",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "copy-typebutton",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "button-no-value",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              }
+            ],
+            "entries": [
+              [
+                "requiredFirst",
+                "ready"
+              ],
+              [
+                "requiredSecond",
+                "already"
+              ],
+              [
+                "q",
+                "tea & honey"
+              ],
+              [
+                "readonly",
+                "read only"
+              ],
+              [
+                "choice",
+                "one"
+              ],
+              [
+                "choice",
+                "two"
+              ],
+              [
+                "emptyCheck",
+                ""
+              ],
+              [
+                "colors",
+                "red"
+              ],
+              [
+                "colors",
+                "blue"
+              ],
+              [
+                "notes",
+                "line one\nline two"
+              ],
+              [
+                "submitter",
+                "main"
+              ]
+            ],
+            "clipboardWritesAtSubmit": [],
+            "focusedId": "main-submit",
+            "validationMessage": "",
+            "canceled": true
+          }
+        ],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "main-submit",
+            "tag": "button",
+            "focusedId": "main-submit",
+            "validationMessage": ""
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [],
+        "focusedId": "main-submit"
+      },
+      "target": {
+        "id": "main-submit",
+        "tag": "button",
+        "type": "submit",
+        "name": "submitter",
+        "value": "main",
+        "valueAttribute": "main",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "main-submit",
+          "name": "submitter",
+          "value": "main"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": true,
+        "validationMessage": "",
+        "rect": {
+          "x": 190,
+          "y": 100,
+          "width": 47.140625,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "submitter-override-click",
+      "events": {
+        "submits": [
+          {
+            "formId": "main-form",
+            "submitter": {
+              "id": "override-submit",
+              "tag": "button",
+              "type": "submit",
+              "name": "submitter",
+              "value": "override",
+              "attributes": {
+                "id": "override-submit",
+                "name": "submitter",
+                "value": "override"
+              },
+              "formAction": "http://127.0.0.1:18919/parity.html",
+              "formMethod": "",
+              "formEnctype": "",
+              "formTarget": "",
+              "formNoValidate": false
+            },
+            "form": {
+              "action": "http://127.0.0.1:18919/capture/cancelled?from=form",
+              "method": "get",
+              "enctype": "multipart/form-data",
+              "target": "_self",
+              "noValidate": false
+            },
+            "effectiveFormValid": true,
+            "firstInvalidSelector": null,
+            "fields": [
+              {
+                "id": "required-first",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "required-second",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "text-space",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "hidden-field",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "disabled-field",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "readonly-field",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-one",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-two",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-empty-value",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-off",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "select-many",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "textarea-crlf",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "main-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "skip-validation",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "override-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "copy-default",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "copy-typebutton",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "button-no-value",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              }
+            ],
+            "entries": [
+              [
+                "requiredFirst",
+                "ready"
+              ],
+              [
+                "requiredSecond",
+                "already"
+              ],
+              [
+                "q",
+                "tea & honey"
+              ],
+              [
+                "readonly",
+                "read only"
+              ],
+              [
+                "choice",
+                "one"
+              ],
+              [
+                "choice",
+                "two"
+              ],
+              [
+                "emptyCheck",
+                ""
+              ],
+              [
+                "colors",
+                "red"
+              ],
+              [
+                "colors",
+                "blue"
+              ],
+              [
+                "notes",
+                "line one\nline two"
+              ],
+              [
+                "submitter",
+                "override"
+              ]
+            ],
+            "clipboardWritesAtSubmit": [],
+            "focusedId": "override-submit",
+            "validationMessage": "",
+            "canceled": true
+          }
+        ],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "override-submit",
+            "tag": "button",
+            "focusedId": "override-submit",
+            "validationMessage": ""
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [],
+        "focusedId": "override-submit"
+      },
+      "target": {
+        "id": "override-submit",
+        "tag": "button",
+        "type": "submit",
+        "name": "submitter",
+        "value": "override",
+        "valueAttribute": "override",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "override-submit",
+          "name": "submitter",
+          "value": "override"
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": true,
+        "validationMessage": "",
+        "rect": {
+          "x": 339.109375,
+          "y": 100,
+          "width": 67.125,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "data-copy-default-button-click",
+      "events": {
+        "submits": [
+          {
+            "formId": "main-form",
+            "submitter": {
+              "id": "copy-default",
+              "tag": "button",
+              "type": "submit",
+              "name": "submitter",
+              "value": "copy",
+              "attributes": {
+                "id": "copy-default",
+                "name": "submitter",
+                "value": "copy",
+                "data-copy": ""
+              },
+              "formAction": "http://127.0.0.1:18919/parity.html",
+              "formMethod": "",
+              "formEnctype": "",
+              "formTarget": "",
+              "formNoValidate": false
+            },
+            "form": {
+              "action": "http://127.0.0.1:18919/capture/cancelled?from=form",
+              "method": "get",
+              "enctype": "multipart/form-data",
+              "target": "_self",
+              "noValidate": false
+            },
+            "effectiveFormValid": true,
+            "firstInvalidSelector": null,
+            "fields": [
+              {
+                "id": "required-first",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "required-second",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "text-space",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "hidden-field",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "disabled-field",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "readonly-field",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-one",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-two",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-empty-value",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "check-off",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "select-many",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "textarea-crlf",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "main-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "skip-validation",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "override-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "copy-default",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "copy-typebutton",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "button-no-value",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              }
+            ],
+            "entries": [
+              [
+                "requiredFirst",
+                "ready"
+              ],
+              [
+                "requiredSecond",
+                "already"
+              ],
+              [
+                "q",
+                "tea & honey"
+              ],
+              [
+                "readonly",
+                "read only"
+              ],
+              [
+                "choice",
+                "one"
+              ],
+              [
+                "choice",
+                "two"
+              ],
+              [
+                "emptyCheck",
+                ""
+              ],
+              [
+                "colors",
+                "red"
+              ],
+              [
+                "colors",
+                "blue"
+              ],
+              [
+                "notes",
+                "line one\nline two"
+              ],
+              [
+                "submitter",
+                "copy"
+              ]
+            ],
+            "clipboardWritesAtSubmit": [
+              ""
+            ],
+            "focusedId": "copy-default",
+            "validationMessage": "",
+            "canceled": true
+          }
+        ],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "copy-default",
+            "tag": "button",
+            "focusedId": "copy-default",
+            "validationMessage": ""
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [
+          ""
+        ],
+        "focusedId": "copy-default"
+      },
+      "target": {
+        "id": "copy-default",
+        "tag": "button",
+        "type": "submit",
+        "name": "submitter",
+        "value": "copy",
+        "valueAttribute": "copy",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "copy-default",
+          "name": "submitter",
+          "value": "copy",
+          "data-copy": ""
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": true,
+        "validationMessage": "",
+        "rect": {
+          "x": 406.234375,
+          "y": 100,
+          "width": 58.25,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "data-copy-type-button-click",
+      "events": {
+        "submits": [],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "copy-typebutton",
+            "tag": "button",
+            "focusedId": "copy-typebutton",
+            "validationMessage": ""
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [
+          ""
+        ],
+        "focusedId": "copy-typebutton"
+      },
+      "target": {
+        "id": "copy-typebutton",
+        "tag": "button",
+        "type": "button",
+        "name": "submitter",
+        "value": "copy-button",
+        "valueAttribute": "copy-button",
+        "checked": null,
+        "selectedValues": null,
+        "attributes": {
+          "id": "copy-typebutton",
+          "type": "button",
+          "name": "submitter",
+          "value": "copy-button",
+          "data-copy": ""
+        },
+        "formId": "main-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": false,
+        "validity": {
+          "willValidate": false,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": true,
+        "validationMessage": "",
+        "rect": {
+          "x": 464.484375,
+          "y": 100,
+          "width": 58.25,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "enter-single-text",
+      "events": {
+        "submits": [
+          {
+            "formId": "enter-single",
+            "submitter": {
+              "id": "enter-single-submit",
+              "tag": "button",
+              "type": "submit",
+              "name": "go",
+              "value": "single",
+              "attributes": {
+                "id": "enter-single-submit",
+                "name": "go",
+                "value": "single"
+              },
+              "formAction": "http://127.0.0.1:18919/parity.html",
+              "formMethod": "",
+              "formEnctype": "",
+              "formTarget": "",
+              "formNoValidate": false
+            },
+            "form": {
+              "action": "http://127.0.0.1:18919/capture/cancelled?from=single",
+              "method": "get",
+              "enctype": "application/x-www-form-urlencoded",
+              "target": "",
+              "noValidate": false
+            },
+            "effectiveFormValid": true,
+            "firstInvalidSelector": null,
+            "fields": [
+              {
+                "id": "enter-single-field",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "enter-single-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              }
+            ],
+            "entries": [
+              [
+                "q",
+                "single"
+              ],
+              [
+                "go",
+                "single"
+              ]
+            ],
+            "clipboardWritesAtSubmit": [],
+            "focusedId": "enter-single-field",
+            "validationMessage": "",
+            "canceled": true
+          }
+        ],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "enter-single-field",
+            "tag": "input",
+            "focusedId": "enter-single-field",
+            "validationMessage": ""
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [],
+        "focusedId": "enter-single-field"
+      },
+      "target": {
+        "id": "enter-single-field",
+        "tag": "input",
+        "type": "text",
+        "name": "q",
+        "value": "single",
+        "valueAttribute": "single",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-single-field",
+          "name": "q",
+          "value": "single"
+        },
+        "formId": "enter-single",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": true,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 353,
+          "width": 153,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "enter-multiple-text",
+      "events": {
+        "submits": [
+          {
+            "formId": "enter-multiple",
+            "submitter": {
+              "id": "enter-multiple-submit",
+              "tag": "button",
+              "type": "submit",
+              "name": "go",
+              "value": "multiple",
+              "attributes": {
+                "id": "enter-multiple-submit",
+                "name": "go",
+                "value": "multiple"
+              },
+              "formAction": "http://127.0.0.1:18919/parity.html",
+              "formMethod": "",
+              "formEnctype": "",
+              "formTarget": "",
+              "formNoValidate": false
+            },
+            "form": {
+              "action": "http://127.0.0.1:18919/capture/cancelled?from=multiple",
+              "method": "get",
+              "enctype": "application/x-www-form-urlencoded",
+              "target": "",
+              "noValidate": false
+            },
+            "effectiveFormValid": true,
+            "firstInvalidSelector": null,
+            "fields": [
+              {
+                "id": "enter-multiple-first",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "enter-multiple-second",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "enter-multiple-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              }
+            ],
+            "entries": [
+              [
+                "first",
+                "one"
+              ],
+              [
+                "second",
+                "two"
+              ],
+              [
+                "go",
+                "multiple"
+              ]
+            ],
+            "clipboardWritesAtSubmit": [],
+            "focusedId": "enter-multiple-second",
+            "validationMessage": "",
+            "canceled": true
+          }
+        ],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "enter-multiple-second",
+            "tag": "input",
+            "focusedId": "enter-multiple-second",
+            "validationMessage": ""
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [],
+        "focusedId": "enter-multiple-second"
+      },
+      "target": {
+        "id": "enter-multiple-second",
+        "tag": "input",
+        "type": "text",
+        "name": "second",
+        "value": "two",
+        "valueAttribute": "two",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-multiple-second",
+          "name": "second",
+          "value": "two"
+        },
+        "formId": "enter-multiple",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": true,
+        "validationMessage": "",
+        "rect": {
+          "x": 161,
+          "y": 376,
+          "width": 153,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "enter-with-no-submit-button",
+      "events": {
+        "submits": [
+          {
+            "formId": "enter-no-submit",
+            "submitter": null,
+            "form": {
+              "action": "http://127.0.0.1:18919/capture/cancelled?from=no-submit",
+              "method": "get",
+              "enctype": "application/x-www-form-urlencoded",
+              "target": "",
+              "noValidate": false
+            },
+            "effectiveFormValid": true,
+            "firstInvalidSelector": null,
+            "fields": [
+              {
+                "id": "enter-no-submit-field",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              }
+            ],
+            "entries": [
+              [
+                "q",
+                "no submit button"
+              ]
+            ],
+            "clipboardWritesAtSubmit": [],
+            "focusedId": "enter-no-submit-field",
+            "validationMessage": "",
+            "canceled": true
+          }
+        ],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "enter-no-submit-field",
+            "tag": "input",
+            "focusedId": "enter-no-submit-field",
+            "validationMessage": ""
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [],
+        "focusedId": "enter-no-submit-field"
+      },
+      "target": {
+        "id": "enter-no-submit-field",
+        "tag": "input",
+        "type": "text",
+        "name": "q",
+        "value": "no submit button",
+        "valueAttribute": "no submit button",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-no-submit-field",
+          "name": "q",
+          "value": "no submit button"
+        },
+        "formId": "enter-no-submit",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": true,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 399,
+          "width": 153,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "enter-with-disabled-submit-button",
+      "events": {
+        "submits": [],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "enter-disabled-field",
+            "tag": "input",
+            "focusedId": "enter-disabled-field",
+            "validationMessage": ""
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [],
+        "focusedId": "enter-disabled-field"
+      },
+      "target": {
+        "id": "enter-disabled-field",
+        "tag": "input",
+        "type": "text",
+        "name": "q",
+        "value": "disabled default",
+        "valueAttribute": "disabled default",
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "enter-disabled-field",
+          "name": "q",
+          "value": "disabled default"
+        },
+        "formId": "enter-disabled-submit",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": true,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 422,
+          "width": 153,
+          "height": 21
+        }
+      }
+    },
+    {
+      "id": "input-default-submit-click",
+      "events": {
+        "submits": [
+          {
+            "formId": "input-buttons-form",
+            "submitter": {
+              "id": "input-default-submit",
+              "tag": "input",
+              "type": "submit",
+              "name": "send",
+              "value": "",
+              "attributes": {
+                "id": "input-default-submit",
+                "type": "submit",
+                "name": "send"
+              },
+              "formAction": "http://127.0.0.1:18919/parity.html",
+              "formMethod": "",
+              "formEnctype": "",
+              "formTarget": "",
+              "formNoValidate": false
+            },
+            "form": {
+              "action": "http://127.0.0.1:18919/capture/cancelled?from=input-buttons",
+              "method": "get",
+              "enctype": "application/x-www-form-urlencoded",
+              "target": "",
+              "noValidate": false
+            },
+            "effectiveFormValid": true,
+            "firstInvalidSelector": null,
+            "fields": [
+              {
+                "id": "input-default-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "input-default-reset",
+                "willValidate": false,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              }
+            ],
+            "entries": [
+              [
+                "send",
+                "提交"
+              ]
+            ],
+            "clipboardWritesAtSubmit": [],
+            "focusedId": "input-default-submit",
+            "validationMessage": "",
+            "canceled": true
+          }
+        ],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "input-default-submit",
+            "tag": "input",
+            "focusedId": "input-default-submit",
+            "validationMessage": ""
+          }
+        ],
+        "clipboard": [],
+        "clipboardWrites": [],
+        "focusedId": "input-default-submit"
+      },
+      "target": {
+        "id": "input-default-submit",
+        "tag": "input",
+        "type": "submit",
+        "name": "send",
+        "value": "",
+        "valueAttribute": null,
+        "checked": false,
+        "selectedValues": null,
+        "attributes": {
+          "id": "input-default-submit",
+          "type": "submit",
+          "name": "send"
+        },
+        "formId": "input-buttons-form",
+        "disabled": false,
+        "readOnly": false,
+        "required": false,
+        "willValidate": true,
+        "validity": {
+          "willValidate": true,
+          "validationMessage": "",
+          "flags": {
+            "badInput": false,
+            "customError": false,
+            "patternMismatch": false,
+            "rangeOverflow": false,
+            "rangeUnderflow": false,
+            "stepMismatch": false,
+            "tooLong": false,
+            "tooShort": false,
+            "typeMismatch": false,
+            "valueMissing": false,
+            "valid": true
+          }
+        },
+        "focused": true,
+        "validationMessage": "",
+        "rect": {
+          "x": 8,
+          "y": 213,
+          "width": 42.671875,
+          "height": 25
+        }
+      }
+    }
+  ],
+  "defaultNavigations": [
+    {
+      "id": "get-default-navigation",
+      "finalUrl": "http://127.0.0.1:18919/capture/get?q=tea+%26+honey&n%7E%21=v%7E%21&%E5%8F%B0%E5%8C%97=%E5%9F%8E%E5%B8%82+%E5%8F%B0%E5%8C%97&tag=red&tag=blue&sel=one&sel=two&message=line+one%0D%0Aline+two&go=yes+%26+ok",
+      "events": {
+        "submits": [
+          {
+            "formId": "get-network",
+            "submitter": {
+              "id": "get-submit",
+              "tag": "button",
+              "type": "submit",
+              "name": "go",
+              "value": "yes & ok",
+              "attributes": {
+                "id": "get-submit",
+                "name": "go",
+                "value": "yes & ok"
+              },
+              "formAction": "http://127.0.0.1:18919/parity.html",
+              "formMethod": "",
+              "formEnctype": "",
+              "formTarget": "",
+              "formNoValidate": false
+            },
+            "form": {
+              "action": "http://127.0.0.1:18919/capture/get?existing=two%20words&keep=1",
+              "method": "get",
+              "enctype": "text/plain",
+              "target": "_self",
+              "noValidate": false
+            },
+            "effectiveFormValid": true,
+            "firstInvalidSelector": null,
+            "fields": [
+              {
+                "id": null,
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": null,
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": null,
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": null,
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": null,
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": null,
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": null,
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "get-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              }
+            ],
+            "entries": [
+              [
+                "q",
+                "tea & honey"
+              ],
+              [
+                "n~!",
+                "v~!"
+              ],
+              [
+                "台北",
+                "城市 台北"
+              ],
+              [
+                "tag",
+                "red"
+              ],
+              [
+                "tag",
+                "blue"
+              ],
+              [
+                "sel",
+                "one"
+              ],
+              [
+                "sel",
+                "two"
+              ],
+              [
+                "message",
+                "line one\nline two"
+              ],
+              [
+                "go",
+                "yes & ok"
+              ]
+            ],
+            "clipboardWritesAtSubmit": [],
+            "focusedId": "get-submit",
+            "validationMessage": "",
+            "canceled": false
+          }
+        ],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "get-submit",
+            "tag": "button",
+            "focusedId": "get-submit",
+            "validationMessage": ""
+          }
+        ],
+        "focusedId": "get-submit"
+      },
+      "request": {
+        "method": "GET",
+        "pathname": "/capture/get",
+        "rawQuery": "?q=tea+%26+honey&n%7E%21=v%7E%21&%E5%8F%B0%E5%8C%97=%E5%9F%8E%E5%B8%82+%E5%8F%B0%E5%8C%97&tag=red&tag=blue&sel=one&sel=two&message=line+one%0D%0Aline+two&go=yes+%26+ok",
+        "contentType": null,
+        "body": "",
+        "decodedEntries": [
+          [
+            "q",
+            "tea & honey"
+          ],
+          [
+            "n~!",
+            "v~!"
+          ],
+          [
+            "台北",
+            "城市 台北"
+          ],
+          [
+            "tag",
+            "red"
+          ],
+          [
+            "tag",
+            "blue"
+          ],
+          [
+            "sel",
+            "one"
+          ],
+          [
+            "sel",
+            "two"
+          ],
+          [
+            "message",
+            "line one\r\nline two"
+          ],
+          [
+            "go",
+            "yes & ok"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "post-default-navigation",
+      "finalUrl": "http://127.0.0.1:18919/capture/post?token=abc%20def",
+      "events": {
+        "submits": [
+          {
+            "formId": "post-network",
+            "submitter": {
+              "id": "post-submit",
+              "tag": "button",
+              "type": "submit",
+              "name": "send",
+              "value": "post+go",
+              "attributes": {
+                "id": "post-submit",
+                "name": "send",
+                "value": "post+go"
+              },
+              "formAction": "http://127.0.0.1:18919/parity.html",
+              "formMethod": "",
+              "formEnctype": "",
+              "formTarget": "",
+              "formNoValidate": false
+            },
+            "form": {
+              "action": "http://127.0.0.1:18919/capture/post?token=abc%20def",
+              "method": "post",
+              "enctype": "application/x-www-form-urlencoded",
+              "target": "_self",
+              "noValidate": false
+            },
+            "effectiveFormValid": true,
+            "firstInvalidSelector": null,
+            "fields": [
+              {
+                "id": null,
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": null,
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              },
+              {
+                "id": "post-submit",
+                "willValidate": true,
+                "validationMessage": "",
+                "flags": {
+                  "badInput": false,
+                  "customError": false,
+                  "patternMismatch": false,
+                  "rangeOverflow": false,
+                  "rangeUnderflow": false,
+                  "stepMismatch": false,
+                  "tooLong": false,
+                  "tooShort": false,
+                  "typeMismatch": false,
+                  "valueMissing": false,
+                  "valid": true
+                }
+              }
+            ],
+            "entries": [
+              [
+                "payload",
+                "post + & ~ ! 台北"
+              ],
+              [
+                "message",
+                "line one\nline two"
+              ],
+              [
+                "send",
+                "post+go"
+              ]
+            ],
+            "clipboardWritesAtSubmit": [],
+            "focusedId": "post-submit",
+            "validationMessage": "",
+            "canceled": false
+          }
+        ],
+        "invalid": [],
+        "focus": [
+          {
+            "id": "post-submit",
+            "tag": "button",
+            "focusedId": "post-submit",
+            "validationMessage": ""
+          }
+        ],
+        "focusedId": "post-submit"
+      },
+      "request": {
+        "method": "POST",
+        "pathname": "/capture/post",
+        "rawQuery": "?token=abc%20def",
+        "contentType": "application/x-www-form-urlencoded",
+        "body": "payload=post+%2B+%26+%7E+%21+%E5%8F%B0%E5%8C%97&message=line+one%0D%0Aline+two&send=post%2Bgo",
+        "decodedEntries": [
+          [
+            "payload",
+            "post + & ~ ! 台北"
+          ],
+          [
+            "message",
+            "line one\r\nline two"
+          ],
+          [
+            "send",
+            "post+go"
+          ]
+        ]
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "colorScheme": "light",
+      "file": "<repository>/apps/mobile/build/parity/html-form-submission-validation-light.png",
+      "focusedId": "required-first",
+      "invalidCount": 1,
+      "firstInvalidSelector": "#required-first",
+      "validationMessage": "請填寫這個欄位。"
+    },
+    {
+      "colorScheme": "dark",
+      "file": "<repository>/apps/mobile/build/parity/html-form-submission-validation-dark.png",
+      "focusedId": "required-first",
+      "invalidCount": 1,
+      "firstInvalidSelector": "#required-first",
+      "validationMessage": "請填寫這個欄位。"
+    }
+  ],
+  "controlScreenshots": [
+    {
+      "id": "input-default-submit",
+      "file": "<repository>/apps/mobile/build/parity/html-form-submission-input-default-submit.png",
+      "value": "",
+      "valueAttribute": null,
+      "rect": {
+        "x": 8,
+        "y": 213,
+        "width": 42.671875,
+        "height": 25
+      }
+    },
+    {
+      "id": "input-default-reset",
+      "file": "<repository>/apps/mobile/build/parity/html-form-submission-input-default-reset.png",
+      "value": "",
+      "valueAttribute": null,
+      "rect": {
+        "x": 50.671875,
+        "y": 213,
+        "width": 42.671875,
+        "height": 25
+      }
+    }
+  ],
+  "browserIssues": {
+    "pageErrors": [],
+    "consoleErrors": [],
+    "badResponses": []
+  },
+  "localRequestsOnly": true
+}

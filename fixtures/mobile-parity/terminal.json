@@ -1,0 +1,36 @@
+{
+  "id": "native-terminal-panel",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [
+    390,
+    420
+  ],
+  "height": 700,
+  "views": [
+    "empty",
+    "readonly",
+    "active",
+    "lost",
+    "reconnecting",
+    "exited"
+  ],
+  "terminals": [
+    {
+      "id": "a",
+      "title": "bash",
+      "exited": false,
+      "exitCode": null,
+      "cols": 80,
+      "rows": 24
+    },
+    {
+      "id": "b",
+      "title": "bash",
+      "exited": false,
+      "exitCode": null,
+      "cols": 80,
+      "rows": 24
+    }
+  ],
+  "replay": "$ pwd\r\n/workspace/native-parity\r\n$ printf colors\r\n\u001b[31mred\u001b[0m \u001b[32mgreen\u001b[0m \u001b[34mblue\u001b[0m\r\n$ "
+}

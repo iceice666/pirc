@@ -1,0 +1,5 @@
+# Keep local builds aligned with .github/workflows/check.yml and the Nix shell.
+[toolchain]
+channel = "1.98.1"
+profile = "minimal"
+components = ["clippy", "rustfmt"]

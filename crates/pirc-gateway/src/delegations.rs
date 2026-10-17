@@ -1252,6 +1252,7 @@ fn announce(app: &AppState, id: &str) {
                     .target_session_id
                     .unwrap_or(delegation.assistant_session_id),
             }),
+            interaction: None,
         },
     );
 }
@@ -1308,7 +1309,7 @@ fn publish_answered(app: &App, delegation: &Delegation) {
         &chat.id,
         chat.runner_epoch,
         "interaction_answered",
-        json!({ "interactionId": delegation.id }),
+        json!({ "interactionId": delegation.id, "interactionEpoch": 0 }),
     );
 }
 

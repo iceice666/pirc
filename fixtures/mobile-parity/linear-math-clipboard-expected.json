@@ -1,0 +1,451 @@
+{
+  "fixture": "fixtures/mobile-parity/linear-math-clipboard-expected.json",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "capturedAt": "2026-10-13T07:28:12.656Z",
+  "browser": {
+    "name": "Google Chrome",
+    "version": "155.0.8059.40",
+    "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "viewport": {
+      "width": 390,
+      "height": 1100,
+      "deviceScaleFactor": 1
+    },
+    "theme": "light",
+    "textScale": 1,
+    "locale": "en-US"
+  },
+  "renderer": {
+    "api": "apps/web/src/lib/markdown.ts renderMarkdown() -> KaTeX.renderToString()",
+    "stylesheets": [
+      "apps/web/src/app.css",
+      "apps/web/src/markdown.css",
+      "katex/dist/katex.min.css via markdown.ts"
+    ],
+    "katexVersion": "0.16.47"
+  },
+  "captureMethod": {
+    "focus": "Pointer click into the rendered paragraph, then Chrome keyboard Meta+A.",
+    "sourceSelection": "Selection.toString() is recorded as a separate diagnostic value.",
+    "clipboard": "Chrome keyboard Meta+C is sent without a copy handler; navigator.clipboard.read() captures the real clipboard formats.",
+    "permissions": [
+      "clipboard-read",
+      "clipboard-write"
+    ],
+    "noCopyHandler": true,
+    "noTrimOrUnicodeNormalization": true
+  },
+  "normalization": {
+    "textPlain": "Exact text/plain string returned by Chrome Clipboard API; no trimming, Unicode normalization, newline conversion, or reconstruction.",
+    "textHtml": "Exact text/html string returned by Chrome is stored per case; SHA-256 is over its UTF-8 bytes.",
+    "formulaMetadata": "KaTeX annotation and MathML/HTML text are read from the production-rendered DOM and stored separately from clipboard contents."
+  },
+  "cases": [
+    {
+      "id": "a-plus-b",
+      "expression": "a+b",
+      "source": "Before $a+b$ after.",
+      "formulaMetadata": [
+        {
+          "kind": "rendered",
+          "annotation": "a+b",
+          "mathmlText": "a+ba+b",
+          "htmlText": "a+b",
+          "htmlAriaHidden": "true"
+        }
+      ],
+      "rootTextBeforeSelection": "Before \n𝑎\n+\n𝑏\na+b after.",
+      "sourceSelection": {
+        "method": "Chrome keyboard Meta+A; read Selection.toString() separately from clipboard data",
+        "text": "Before \n𝑎\n+\n𝑏\na+b after.",
+        "utf8Bytes": 30,
+        "rangeCount": 1,
+        "isCollapsed": false
+      },
+      "actualClipboard": {
+        "method": "Chrome keyboard Meta+C followed by navigator.clipboard.read()",
+        "copyEventCount": 1,
+        "formats": [
+          "text/html",
+          "text/plain"
+        ],
+        "textPlain": "Before \na\n+\nb\na+b after.",
+        "textPlainUtf8Bytes": 24,
+        "textHtmlAvailable": true,
+        "textHtmlSha256": "8ea4014dfb8ccd702b3dc49c2c776662a8741990dd8ea26eb0972a57c5b11031",
+        "textHtmlUtf8Bytes": 4236
+      }
+    },
+    {
+      "id": "x-plus-y",
+      "expression": "x+y",
+      "source": "Before $x+y$ after.",
+      "formulaMetadata": [
+        {
+          "kind": "rendered",
+          "annotation": "x+y",
+          "mathmlText": "x+yx+y",
+          "htmlText": "x+y",
+          "htmlAriaHidden": "true"
+        }
+      ],
+      "rootTextBeforeSelection": "Before \n𝑥\n+\n𝑦\nx+y after.",
+      "sourceSelection": {
+        "method": "Chrome keyboard Meta+A; read Selection.toString() separately from clipboard data",
+        "text": "Before \n𝑥\n+\n𝑦\nx+y after.",
+        "utf8Bytes": 30,
+        "rangeCount": 1,
+        "isCollapsed": false
+      },
+      "actualClipboard": {
+        "method": "Chrome keyboard Meta+C followed by navigator.clipboard.read()",
+        "copyEventCount": 1,
+        "formats": [
+          "text/html",
+          "text/plain"
+        ],
+        "textPlain": "Before \nx\n+\ny\nx+y after.",
+        "textPlainUtf8Bytes": 24,
+        "textHtmlAvailable": true,
+        "textHtmlSha256": "8d922e6911dcc838fc7114c10a52ea69aa62c7779fe8184e0b47079a324bc0c5",
+        "textHtmlUtf8Bytes": 4286
+      }
+    },
+    {
+      "id": "12-plus-34",
+      "expression": "12+34",
+      "source": "Before $12+34$ after.",
+      "formulaMetadata": [
+        {
+          "kind": "rendered",
+          "annotation": "12+34",
+          "mathmlText": "12+3412+34",
+          "htmlText": "12+34",
+          "htmlAriaHidden": "true"
+        }
+      ],
+      "rootTextBeforeSelection": "Before \n12\n+\n34\n12+34 after.",
+      "sourceSelection": {
+        "method": "Chrome keyboard Meta+A; read Selection.toString() separately from clipboard data",
+        "text": "Before \n12\n+\n34\n12+34 after.",
+        "utf8Bytes": 28,
+        "rangeCount": 1,
+        "isCollapsed": false
+      },
+      "actualClipboard": {
+        "method": "Chrome keyboard Meta+C followed by navigator.clipboard.read()",
+        "copyEventCount": 1,
+        "formats": [
+          "text/html",
+          "text/plain"
+        ],
+        "textPlain": "Before \n12\n+\n34\n12+34 after.",
+        "textPlainUtf8Bytes": 28,
+        "textHtmlAvailable": true,
+        "textHtmlSha256": "c0eb1f4bb4cf121551e3129643cffb8e507d25fa93df478dfb58185e419bced6",
+        "textHtmlUtf8Bytes": 4128
+      }
+    },
+    {
+      "id": "a-minus-b",
+      "expression": "a-b",
+      "source": "Before $a-b$ after.",
+      "formulaMetadata": [
+        {
+          "kind": "rendered",
+          "annotation": "a-b",
+          "mathmlText": "a−ba-b",
+          "htmlText": "a−b",
+          "htmlAriaHidden": "true"
+        }
+      ],
+      "rootTextBeforeSelection": "Before \n𝑎\n−\n𝑏\na−b after.",
+      "sourceSelection": {
+        "method": "Chrome keyboard Meta+A; read Selection.toString() separately from clipboard data",
+        "text": "Before \n𝑎\n−\n𝑏\na−b after.",
+        "utf8Bytes": 34,
+        "rangeCount": 1,
+        "isCollapsed": false
+      },
+      "actualClipboard": {
+        "method": "Chrome keyboard Meta+C followed by navigator.clipboard.read()",
+        "copyEventCount": 1,
+        "formats": [
+          "text/html",
+          "text/plain"
+        ],
+        "textPlain": "Before \na\n−\nb\na−b after.",
+        "textPlainUtf8Bytes": 28,
+        "textHtmlAvailable": true,
+        "textHtmlSha256": "f8a59798f9279c091a28a31b33aad171b236d0a2f5d67611c1eddb466df6978a",
+        "textHtmlUtf8Bytes": 4240
+      }
+    },
+    {
+      "id": "x-equals-y",
+      "expression": "x=y",
+      "source": "Before $x=y$ after.",
+      "formulaMetadata": [
+        {
+          "kind": "rendered",
+          "annotation": "x=y",
+          "mathmlText": "x=yx=y",
+          "htmlText": "x=y",
+          "htmlAriaHidden": "true"
+        }
+      ],
+      "rootTextBeforeSelection": "Before \n𝑥\n=\n𝑦\nx=y after.",
+      "sourceSelection": {
+        "method": "Chrome keyboard Meta+A; read Selection.toString() separately from clipboard data",
+        "text": "Before \n𝑥\n=\n𝑦\nx=y after.",
+        "utf8Bytes": 30,
+        "rangeCount": 1,
+        "isCollapsed": false
+      },
+      "actualClipboard": {
+        "method": "Chrome keyboard Meta+C followed by navigator.clipboard.read()",
+        "copyEventCount": 1,
+        "formats": [
+          "text/html",
+          "text/plain"
+        ],
+        "textPlain": "Before \nx\n=\ny\nx=y after.",
+        "textPlainUtf8Bytes": 24,
+        "textHtmlAvailable": true,
+        "textHtmlSha256": "5b22b80d7d54f9ac74b453b537969193810423f911b6099ba36f71acdee16121",
+        "textHtmlUtf8Bytes": 4259
+      }
+    },
+    {
+      "id": "ab",
+      "expression": "ab",
+      "source": "Before $ab$ after.",
+      "formulaMetadata": [
+        {
+          "kind": "rendered",
+          "annotation": "ab",
+          "mathmlText": "abab",
+          "htmlText": "ab",
+          "htmlAriaHidden": "true"
+        }
+      ],
+      "rootTextBeforeSelection": "Before \n𝑎\n𝑏\nab after.",
+      "sourceSelection": {
+        "method": "Chrome keyboard Meta+A; read Selection.toString() separately from clipboard data",
+        "text": "Before \n𝑎\n𝑏\nab after.",
+        "utf8Bytes": 27,
+        "rangeCount": 1,
+        "isCollapsed": false
+      },
+      "actualClipboard": {
+        "method": "Chrome keyboard Meta+C followed by navigator.clipboard.read()",
+        "copyEventCount": 1,
+        "formats": [
+          "text/html",
+          "text/plain"
+        ],
+        "textPlain": "Before \na\nb\nab after.",
+        "textPlainUtf8Bytes": 21,
+        "textHtmlAvailable": true,
+        "textHtmlSha256": "b6d109281a6c41917917e32dce381cd6aa203a9e8a0e623cfc09f248bb628690",
+        "textHtmlUtf8Bytes": 2934
+      }
+    },
+    {
+      "id": "parenthesized-a-plus-b",
+      "expression": "(a+b)",
+      "source": "Before $(a+b)$ after.",
+      "formulaMetadata": [
+        {
+          "kind": "rendered",
+          "annotation": "(a+b)",
+          "mathmlText": "(a+b)(a+b)",
+          "htmlText": "(a+b)",
+          "htmlAriaHidden": "true"
+        }
+      ],
+      "rootTextBeforeSelection": "Before \n(\n𝑎\n+\n𝑏\n)\n(a+b) after.",
+      "sourceSelection": {
+        "method": "Chrome keyboard Meta+A; read Selection.toString() separately from clipboard data",
+        "text": "Before \n(\n𝑎\n+\n𝑏\n)\n(a+b) after.",
+        "utf8Bytes": 36,
+        "rangeCount": 1,
+        "isCollapsed": false
+      },
+      "actualClipboard": {
+        "method": "Chrome keyboard Meta+C followed by navigator.clipboard.read()",
+        "copyEventCount": 1,
+        "formats": [
+          "text/html",
+          "text/plain"
+        ],
+        "textPlain": "Before \n(\na\n+\nb\n)\n(a+b) after.",
+        "textPlainUtf8Bytes": 30,
+        "textHtmlAvailable": true,
+        "textHtmlSha256": "27be157e2f504eaf4da527e00ee99ebaf29b0e1eebecae56702ec6e02d335add",
+        "textHtmlUtf8Bytes": 4636
+      }
+    },
+    {
+      "id": "a-plus-b-plus-c",
+      "expression": "a+b+c",
+      "source": "Before $a+b+c$ after.",
+      "formulaMetadata": [
+        {
+          "kind": "rendered",
+          "annotation": "a+b+c",
+          "mathmlText": "a+b+ca+b+c",
+          "htmlText": "a+b+c",
+          "htmlAriaHidden": "true"
+        }
+      ],
+      "rootTextBeforeSelection": "Before \n𝑎\n+\n𝑏\n+\n𝑐\na+b+c after.",
+      "sourceSelection": {
+        "method": "Chrome keyboard Meta+A; read Selection.toString() separately from clipboard data",
+        "text": "Before \n𝑎\n+\n𝑏\n+\n𝑐\na+b+c after.",
+        "utf8Bytes": 39,
+        "rangeCount": 1,
+        "isCollapsed": false
+      },
+      "actualClipboard": {
+        "method": "Chrome keyboard Meta+C followed by navigator.clipboard.read()",
+        "copyEventCount": 1,
+        "formats": [
+          "text/html",
+          "text/plain"
+        ],
+        "textPlain": "Before \na\n+\nb\n+\nc\na+b+c after.",
+        "textPlainUtf8Bytes": 30,
+        "textHtmlAvailable": true,
+        "textHtmlSha256": "11076efba5f2f9875276ce57fc22a222e14513b0b4306d34cdea0f75c2bf8ebc",
+        "textHtmlUtf8Bytes": 5549
+      }
+    },
+    {
+      "id": "alpha-plus-beta",
+      "expression": "\\alpha+\\beta",
+      "source": "Before $\\alpha+\\beta$ after.",
+      "formulaMetadata": [
+        {
+          "kind": "rendered",
+          "annotation": "\\alpha+\\beta",
+          "mathmlText": "α+β\\alpha+\\beta",
+          "htmlText": "α+β",
+          "htmlAriaHidden": "true"
+        }
+      ],
+      "rootTextBeforeSelection": "Before \n𝛼\n+\n𝛽\nα+β after.",
+      "sourceSelection": {
+        "method": "Chrome keyboard Meta+A; read Selection.toString() separately from clipboard data",
+        "text": "Before \n𝛼\n+\n𝛽\nα+β after.",
+        "utf8Bytes": 32,
+        "rangeCount": 1,
+        "isCollapsed": false
+      },
+      "actualClipboard": {
+        "method": "Chrome keyboard Meta+C followed by navigator.clipboard.read()",
+        "copyEventCount": 1,
+        "formats": [
+          "text/html",
+          "text/plain"
+        ],
+        "textPlain": "Before \nα\n+\nβ\nα+β after.",
+        "textPlainUtf8Bytes": 28,
+        "textHtmlAvailable": true,
+        "textHtmlSha256": "1ab17da51c4ccd31b9e4949f2776dceba8dc8a90f6f0b564b85ae0f123051d40",
+        "textHtmlUtf8Bytes": 4315
+      }
+    }
+  ],
+  "clipboardHtmlSamplesByCase": {
+    "a-plus-b": {
+      "markup": "<span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\">Before </span><span class=\"katex\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); font: 400 1.08em / 1.2 KaTeX_Main, &quot;Times New Roman&quot;, serif; position: relative; text-indent: 0px; text-rendering: auto; color: rgb(15, 17, 21); letter-spacing: normal; orphans: 2; text-align: start; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;\"><span class=\"katex-mathml\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border: 0px; clip-path: inset(50%); height: 1px; overflow: hidden; padding: 0px; position: absolute; width: 1px;\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mo>+</mo><mi>b</mi></mrow></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\"><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.6667em; vertical-align: -0.0833em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">a</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span><span class=\"mbin\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">+</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span></span><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.6944em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">b</span></span></span></span><span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\"> after.</span>",
+      "sha256": "8ea4014dfb8ccd702b3dc49c2c776662a8741990dd8ea26eb0972a57c5b11031",
+      "utf8Bytes": 4236
+    },
+    "x-plus-y": {
+      "markup": "<span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\">Before </span><span class=\"katex\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); font: 400 1.08em / 1.2 KaTeX_Main, &quot;Times New Roman&quot;, serif; position: relative; text-indent: 0px; text-rendering: auto; color: rgb(15, 17, 21); letter-spacing: normal; orphans: 2; text-align: start; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;\"><span class=\"katex-mathml\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border: 0px; clip-path: inset(50%); height: 1px; overflow: hidden; padding: 0px; position: absolute; width: 1px;\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi><mo>+</mo><mi>y</mi></mrow></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\"><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.6667em; vertical-align: -0.0833em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">x</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span><span class=\"mbin\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">+</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span></span><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.625em; vertical-align: -0.1944em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic; margin-right: 0.0359em;\">y</span></span></span></span><span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\"> after.</span>",
+      "sha256": "8d922e6911dcc838fc7114c10a52ea69aa62c7779fe8184e0b47079a324bc0c5",
+      "utf8Bytes": 4286
+    },
+    "12-plus-34": {
+      "markup": "<span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\">Before </span><span class=\"katex\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); font: 400 1.08em / 1.2 KaTeX_Main, &quot;Times New Roman&quot;, serif; position: relative; text-indent: 0px; text-rendering: auto; color: rgb(15, 17, 21); letter-spacing: normal; orphans: 2; text-align: start; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;\"><span class=\"katex-mathml\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border: 0px; clip-path: inset(50%); height: 1px; overflow: hidden; padding: 0px; position: absolute; width: 1px;\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mn>12</mn><mo>+</mo><mn>34</mn></mrow></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\"><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.7278em; vertical-align: -0.0833em;\"></span><span class=\"mord\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">12</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span><span class=\"mbin\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">+</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span></span><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.6444em;\"></span><span class=\"mord\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">34</span></span></span></span><span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\"> after.</span>",
+      "sha256": "c0eb1f4bb4cf121551e3129643cffb8e507d25fa93df478dfb58185e419bced6",
+      "utf8Bytes": 4128
+    },
+    "a-minus-b": {
+      "markup": "<span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\">Before </span><span class=\"katex\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); font: 400 1.08em / 1.2 KaTeX_Main, &quot;Times New Roman&quot;, serif; position: relative; text-indent: 0px; text-rendering: auto; color: rgb(15, 17, 21); letter-spacing: normal; orphans: 2; text-align: start; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;\"><span class=\"katex-mathml\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border: 0px; clip-path: inset(50%); height: 1px; overflow: hidden; padding: 0px; position: absolute; width: 1px;\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mo>−</mo><mi>b</mi></mrow></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\"><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.6667em; vertical-align: -0.0833em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">a</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span><span class=\"mbin\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">−</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span></span><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.6944em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">b</span></span></span></span><span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\"> after.</span>",
+      "sha256": "f8a59798f9279c091a28a31b33aad171b236d0a2f5d67611c1eddb466df6978a",
+      "utf8Bytes": 4240
+    },
+    "x-equals-y": {
+      "markup": "<span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\">Before </span><span class=\"katex\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); font: 400 1.08em / 1.2 KaTeX_Main, &quot;Times New Roman&quot;, serif; position: relative; text-indent: 0px; text-rendering: auto; color: rgb(15, 17, 21); letter-spacing: normal; orphans: 2; text-align: start; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;\"><span class=\"katex-mathml\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border: 0px; clip-path: inset(50%); height: 1px; overflow: hidden; padding: 0px; position: absolute; width: 1px;\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi><mo>=</mo><mi>y</mi></mrow></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\"><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.4306em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">x</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2778em;\"></span><span class=\"mrel\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">=</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2778em;\"></span></span><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.625em; vertical-align: -0.1944em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic; margin-right: 0.0359em;\">y</span></span></span></span><span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\"> after.</span>",
+      "sha256": "5b22b80d7d54f9ac74b453b537969193810423f911b6099ba36f71acdee16121",
+      "utf8Bytes": 4259
+    },
+    "ab": {
+      "markup": "<span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\">Before </span><span class=\"katex\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); font: 400 1.08em / 1.2 KaTeX_Main, &quot;Times New Roman&quot;, serif; position: relative; text-indent: 0px; text-rendering: auto; color: rgb(15, 17, 21); letter-spacing: normal; orphans: 2; text-align: start; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;\"><span class=\"katex-mathml\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border: 0px; clip-path: inset(50%); height: 1px; overflow: hidden; padding: 0px; position: absolute; width: 1px;\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mi>b</mi></mrow></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\"><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.6944em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">ab</span></span></span></span><span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\"> after.</span>",
+      "sha256": "b6d109281a6c41917917e32dce381cd6aa203a9e8a0e623cfc09f248bb628690",
+      "utf8Bytes": 2934
+    },
+    "parenthesized-a-plus-b": {
+      "markup": "<span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\">Before </span><span class=\"katex\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); font: 400 1.08em / 1.2 KaTeX_Main, &quot;Times New Roman&quot;, serif; position: relative; text-indent: 0px; text-rendering: auto; color: rgb(15, 17, 21); letter-spacing: normal; orphans: 2; text-align: start; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;\"><span class=\"katex-mathml\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border: 0px; clip-path: inset(50%); height: 1px; overflow: hidden; padding: 0px; position: absolute; width: 1px;\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mo stretchy=\"false\">(</mo><mi>a</mi><mo>+</mo><mi>b</mi><mo stretchy=\"false\">)</mo></mrow></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\"><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 1em; vertical-align: -0.25em;\"></span><span class=\"mopen\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">(</span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">a</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span><span class=\"mbin\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">+</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span></span><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 1em; vertical-align: -0.25em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">b</span><span class=\"mclose\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">)</span></span></span></span><span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\"> after.</span>",
+      "sha256": "27be157e2f504eaf4da527e00ee99ebaf29b0e1eebecae56702ec6e02d335add",
+      "utf8Bytes": 4636
+    },
+    "a-plus-b-plus-c": {
+      "markup": "<span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\">Before </span><span class=\"katex\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); font: 400 1.08em / 1.2 KaTeX_Main, &quot;Times New Roman&quot;, serif; position: relative; text-indent: 0px; text-rendering: auto; color: rgb(15, 17, 21); letter-spacing: normal; orphans: 2; text-align: start; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;\"><span class=\"katex-mathml\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border: 0px; clip-path: inset(50%); height: 1px; overflow: hidden; padding: 0px; position: absolute; width: 1px;\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>a</mi><mo>+</mo><mi>b</mi><mo>+</mo><mi>c</mi></mrow></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\"><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.6667em; vertical-align: -0.0833em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">a</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span><span class=\"mbin\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">+</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span></span><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.7778em; vertical-align: -0.0833em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">b</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span><span class=\"mbin\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">+</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span></span><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.4306em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic;\">c</span></span></span></span><span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\"> after.</span>",
+      "sha256": "11076efba5f2f9875276ce57fc22a222e14513b0b4306d34cdea0f75c2bf8ebc",
+      "utf8Bytes": 5549
+    },
+    "alpha-plus-beta": {
+      "markup": "<span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\">Before </span><span class=\"katex\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); font: 400 1.08em / 1.2 KaTeX_Main, &quot;Times New Roman&quot;, serif; position: relative; text-indent: 0px; text-rendering: auto; color: rgb(15, 17, 21); letter-spacing: normal; orphans: 2; text-align: start; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;\"><span class=\"katex-mathml\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border: 0px; clip-path: inset(50%); height: 1px; overflow: hidden; padding: 0px; position: absolute; width: 1px;\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>α</mi><mo>+</mo><mi>β</mi></mrow></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\"><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.6667em; vertical-align: -0.0833em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic; margin-right: 0.0037em;\">α</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span><span class=\"mbin\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor;\">+</span><span class=\"mspace\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; margin-right: 0.2222em;\"></span></span><span class=\"base\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; position: relative; white-space: nowrap; width: min-content; display: inline-block;\"><span class=\"strut\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; display: inline-block; height: 0.8889em; vertical-align: -0.1944em;\"></span><span class=\"mord mathnormal\" style=\"box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0); border-color: currentcolor; font-family: KaTeX_Math; font-style: italic; margin-right: 0.0528em;\">β</span></span></span></span><span style=\"color: rgb(15, 17, 21); font-family: Arial, sans-serif; font-size: 15px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; display: inline !important; float: none;\"> after.</span>",
+      "sha256": "1ab17da51c4ccd31b9e4949f2776dceba8dc8a90f6f0b564b85ae0f123051d40",
+      "utf8Bytes": 4315
+    }
+  },
+  "coverage": {
+    "caseCount": 9,
+    "actualKeyboardCopyCount": 9,
+    "viewportConfigurationCount": 1,
+    "expressions": [
+      {
+        "id": "a-plus-b",
+        "expression": "a+b"
+      },
+      {
+        "id": "x-plus-y",
+        "expression": "x+y"
+      },
+      {
+        "id": "12-plus-34",
+        "expression": "12+34"
+      },
+      {
+        "id": "a-minus-b",
+        "expression": "a-b"
+      },
+      {
+        "id": "x-equals-y",
+        "expression": "x=y"
+      },
+      {
+        "id": "ab",
+        "expression": "ab"
+      },
+      {
+        "id": "parenthesized-a-plus-b",
+        "expression": "(a+b)"
+      },
+      {
+        "id": "a-plus-b-plus-c",
+        "expression": "a+b+c"
+      },
+      {
+        "id": "alpha-plus-beta",
+        "expression": "\\alpha+\\beta"
+      }
+    ],
+    "scope": "Small observed linear-expression corpus; this fixture does not claim full math grammar or pixel parity."
+  }
+}

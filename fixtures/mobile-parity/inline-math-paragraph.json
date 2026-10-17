@@ -1,0 +1,159 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "rendererOptions": {
+    "api": "apps/web/src/lib/markdown.ts renderMarkdown() -> KaTeX.renderToString()",
+    "throwOnError": false,
+    "strict": "ignore",
+    "output": "htmlAndMathml",
+    "trust": false,
+    "maxExpand": 500,
+    "errorColor": "KaTeX default #cc0000"
+  },
+  "capture": {
+    "widths": [390, 650, 651, 768, 860, 861, 1024],
+    "height": 1100,
+    "themes": ["light", "dark"],
+    "textScales": [1, 2],
+    "deviceScaleFactor": 1,
+    "paragraphFontFamily": "Arial, sans-serif",
+    "paragraphFontSize": 15,
+    "paragraphLineHeight": 1.65,
+    "katexScale": 1.08,
+    "sourceCss": [
+      "apps/web/src/app.css",
+      "apps/web/src/markdown.css",
+      "apps/web/node_modules/katex/dist/katex.css"
+    ]
+  },
+  "cases": [
+    {
+      "id": "inline-before-after",
+      "description": "Ordinary inline math between prose fragments in one paragraph.",
+      "source": "Before $a+b$ after the formula.",
+      "expectedMathCount": 1,
+      "expectedKinds": ["rendered"]
+    },
+    {
+      "id": "heading-inline-math",
+      "description": "Inline math in a Markdown heading inherits heading font size, line height, and color.",
+      "source": "## Before $a+b$ after",
+      "expectedMathCount": 1,
+      "expectedKinds": ["rendered"],
+      "expectedAncestor": "h2"
+    },
+    {
+      "id": "inline-html-span-atomic",
+      "description": "An inline formula inside a raw HTML span remains rendered by the pinned Markdown math extension; capture its text flow and inherited styling.",
+      "source": "<span>Before $a+b$ after</span>",
+      "expectedMathCount": 1,
+      "expectedKinds": ["rendered"],
+      "expectedAncestor": "span",
+      "expectedAnnotations": ["a+b"]
+    },
+    {
+      "id": "inline-long-allowbreak",
+      "description": "Long inline expression with explicit KaTeX legal break opportunities; inspect the wrapped base spans at narrow width and 2x text scale.",
+      "source": "A long expression $x_1+\\allowbreak x_2+\\allowbreak x_3+\\allowbreak x_4+\\allowbreak x_5+\\allowbreak x_6+\\allowbreak x_7+\\allowbreak x_8+\\allowbreak x_9+\\allowbreak x_{10}+\\allowbreak x_{11}+\\allowbreak x_{12}$ continues after the math.",
+      "expectedMathCount": 1,
+      "expectedKinds": ["rendered"]
+    },
+    {
+      "id": "inline-long-nobreak",
+      "description": "Long inline expression with KaTeX nobreak controls after operators, paired with the legal-break case.",
+      "source": "A long expression $x_1+\\nobreak x_2+\\nobreak x_3+\\nobreak x_4+\\nobreak x_5+\\nobreak x_6+\\nobreak x_7+\\nobreak x_8+\\nobreak x_9+\\nobreak x_{10}+\\nobreak x_{11}+\\nobreak x_{12}$ continues after the math.",
+      "expectedMathCount": 1,
+      "expectedKinds": ["rendered"]
+    },
+    {
+      "id": "inline-tall-fraction-scripts",
+      "description": "Superscript, subscript, and a nested fraction increase the inline math height and affect the surrounding line box.",
+      "source": "Tall inline math $x^{\\frac{a+b}{c+d}}_{i_0}$ sits between before and after text.",
+      "expectedMathCount": 1,
+      "expectedKinds": ["rendered"]
+    },
+    {
+      "id": "inline-cjk-prose",
+      "description": "CJK prose before and after an inline formula uses browser fallback fonts while the formula remains KaTeX.",
+      "source": "數學文字先行 $x+y$ 然後繼續中文敘述。",
+      "expectedMathCount": 1,
+      "expectedKinds": ["rendered"]
+    },
+    {
+      "id": "inline-rich-text-neighbors",
+      "description": "Bold text, a link, and inline code share a paragraph with two inline formulas.",
+      "source": "**Bold lead** before $a+b$, [a link](https://example.test/path) after, and `code` beside $c+d$.",
+      "expectedMathCount": 2,
+      "expectedKinds": ["rendered", "rendered"]
+    },
+    {
+      "id": "inline-adjacent-formulas",
+      "description": "Two formula spans touch without separating prose or whitespace.",
+      "source": "Adjacent: \\(a+b\\)\\(c+d\\) end.",
+      "expectedMathCount": 2,
+      "expectedKinds": ["rendered", "rendered"]
+    },
+    {
+      "id": "inline-hard-break",
+      "description": "Markdown hard break in the paragraph separates prose and inline formulas into two visual lines.",
+      "source": "First line before $a+b$  \nSecond line after $c+d$.",
+      "expectedMathCount": 2,
+      "expectedKinds": ["rendered", "rendered"]
+    },
+    {
+      "id": "inline-double-dollar-display-tag",
+      "description": "Inline double-dollar syntax becomes display math inside a sentence and keeps its manual tag.",
+      "source": "Before $$x+y\\tag{A}$$ after the display math.",
+      "expectedMathCount": 1,
+      "expectedKinds": ["rendered"],
+      "expectedDisplay": [true],
+      "expectedTagText": ["(A)"]
+    },
+    {
+      "id": "inline-malformed-between-valid",
+      "description": "A malformed expression is rendered as a red whole-expression error between valid inline formulas.",
+      "source": "Valid first $a+b$ then malformed $x+{y$ and valid last $c+d$.",
+      "expectedMathCount": 3,
+      "expectedKinds": ["rendered", "whole-expression-error", "rendered"]
+    },
+    {
+      "id": "inline-in-blockquote",
+      "description": "Inline formulas inside blockquote prose inherit the quote layout and muted text color.",
+      "source": "> Quoted lead $a+b$ and trailing $c+d$.",
+      "expectedMathCount": 2,
+      "expectedKinds": ["rendered", "rendered"],
+      "expectedAncestor": "blockquote"
+    },
+    {
+      "id": "inline-in-list-item",
+      "description": "Inline formulas within a tight list item preserve the list marker and item line geometry.",
+      "source": "- List lead $a+b$ and trailing $c+d$.",
+      "expectedMathCount": 2,
+      "expectedKinds": ["rendered", "rendered"],
+      "expectedAncestor": "li"
+    },
+    {
+      "id": "inline-in-table-cell",
+      "description": "Inline formulas in Markdown table cells use table-cell layout and can wrap independently.",
+      "source": "| Left cell | Right cell |\n| --- | --- |\n| before $a+b$ after | second $c+d$ end |",
+      "expectedMathCount": 2,
+      "expectedKinds": ["rendered", "rendered"],
+      "expectedAncestor": "td"
+    },
+    {
+      "id": "inline-long-unknown-control",
+      "description": "An unknown long Pirc-specific control sequence stays as red text inside a prose formula.",
+      "source": "Before $x+\\pircparagraphunsupportedlongcontrolnamewithmanycharacters+y$ after the red command.",
+      "expectedMathCount": 1,
+      "expectedKinds": ["rendered-with-unsupported-command"],
+      "expectedRedTextIncludes": ["pircparagraphunsupportedlongcontrolnamewithmanycharacters"]
+    },
+    {
+      "id": "inline-unknown-macro-expansion",
+      "description": "A local macro expands to an unknown Pirc-specific command, with valid formulas around it.",
+      "source": "Before $a+b$ mid $\\newcommand{\\pircParaBroken}[1]{#1+\\pircParaUnknownLongRedExpansion}\\pircParaBroken{x}$ end $c+d$.",
+      "expectedMathCount": 3,
+      "expectedKinds": ["rendered", "rendered-with-unsupported-command", "rendered"],
+      "expectedRedTextIncludes": ["pircParaUnknownLongRedExpansion"]
+    }
+  ]
+}

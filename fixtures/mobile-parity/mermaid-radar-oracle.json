@@ -1,0 +1,184 @@
+{
+  "baselineCommit": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "source": "pinned Mermaid radar parser and DB; parser metadata only, no browser rendering",
+  "cases": [
+    {
+      "id": "radar-comparison",
+      "source": "radar-beta\naxis focus[\"Focus\"]\naxis clarity[\"Clarity\"]\naxis speed[\"Speed\"]\ncurve Current{focus: 7, clarity: 5, speed: 8}\ncurve Target{focus: 9, clarity: 8, speed: 7}",
+      "expected": {
+        "title": "",
+        "accessibleTitle": "",
+        "accessibleDescription": "",
+        "axes": [
+          {
+            "name": "focus",
+            "label": "Focus"
+          },
+          {
+            "name": "clarity",
+            "label": "Clarity"
+          },
+          {
+            "name": "speed",
+            "label": "Speed"
+          }
+        ],
+        "curves": [
+          {
+            "name": "Current",
+            "label": "Current",
+            "entries": [
+              7,
+              5,
+              8
+            ]
+          },
+          {
+            "name": "Target",
+            "label": "Target",
+            "entries": [
+              9,
+              8,
+              7
+            ]
+          }
+        ],
+        "options": {
+          "showLegend": true,
+          "ticks": 5,
+          "max": null,
+          "min": 0,
+          "graticule": "circle"
+        },
+        "config": {
+          "useMaxWidth": true,
+          "width": 600,
+          "height": 600,
+          "marginTop": 50,
+          "marginRight": 50,
+          "marginBottom": 50,
+          "marginLeft": 50,
+          "axisScaleFactor": 1,
+          "axisLabelFactor": 1.05,
+          "curveTension": 0.17
+        }
+      }
+    },
+    {
+      "id": "radar-labels",
+      "source": "radar-beta\naxis attack[\"Attack power\"]\naxis defense[\"Defense\"]\naxis speed[\"Speed\"]\ncurve mage[\"Fire mage\"]{attack: 8, defense: 3, speed: 7}\ncurve knight[\"Stone knight\"]{attack: 6, defense: 9, speed: 4}",
+      "expected": {
+        "title": "",
+        "accessibleTitle": "",
+        "accessibleDescription": "",
+        "axes": [
+          {
+            "name": "attack",
+            "label": "Attack power"
+          },
+          {
+            "name": "defense",
+            "label": "Defense"
+          },
+          {
+            "name": "speed",
+            "label": "Speed"
+          }
+        ],
+        "curves": [
+          {
+            "name": "mage",
+            "label": "Fire mage",
+            "entries": [
+              8,
+              3,
+              7
+            ]
+          },
+          {
+            "name": "knight",
+            "label": "Stone knight",
+            "entries": [
+              6,
+              9,
+              4
+            ]
+          }
+        ],
+        "options": {
+          "showLegend": true,
+          "ticks": 5,
+          "max": null,
+          "min": 0,
+          "graticule": "circle"
+        },
+        "config": {
+          "useMaxWidth": true,
+          "width": 600,
+          "height": 600,
+          "marginTop": 50,
+          "marginRight": 50,
+          "marginBottom": 50,
+          "marginLeft": 50,
+          "axisScaleFactor": 1,
+          "axisLabelFactor": 1.05,
+          "curveTension": 0.17
+        }
+      }
+    },
+    {
+      "id": "radar-options",
+      "source": "radar-beta\naxis a[\"A\"]\naxis b[\"B\"]\naxis c[\"C\"]\ncurve Low{a: 2, b: 3, c: 4}\nmax 10\nmin 0\nticks 4\nshowLegend false\ngraticule polygon",
+      "expected": {
+        "title": "",
+        "accessibleTitle": "",
+        "accessibleDescription": "",
+        "axes": [
+          {
+            "name": "a",
+            "label": "A"
+          },
+          {
+            "name": "b",
+            "label": "B"
+          },
+          {
+            "name": "c",
+            "label": "C"
+          }
+        ],
+        "curves": [
+          {
+            "name": "Low",
+            "label": "Low",
+            "entries": [
+              2,
+              3,
+              4
+            ]
+          }
+        ],
+        "options": {
+          "showLegend": false,
+          "ticks": 4,
+          "max": 10,
+          "min": 0,
+          "graticule": "polygon"
+        },
+        "config": {
+          "useMaxWidth": true,
+          "width": 600,
+          "height": 600,
+          "marginTop": 50,
+          "marginRight": 50,
+          "marginBottom": 50,
+          "marginLeft": 50,
+          "axisScaleFactor": 1,
+          "axisLabelFactor": 1.05,
+          "curveTension": 0.17
+        }
+      }
+    }
+  ]
+}

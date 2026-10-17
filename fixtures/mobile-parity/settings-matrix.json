@@ -1,0 +1,473 @@
+{
+  "id": "settings-dialog-matrix",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "height": 900,
+  "widths": [
+    390,
+    650,
+    651,
+    768,
+    860,
+    861,
+    1024
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "textScales": [
+    1,
+    2
+  ],
+  "tabs": [
+    "general",
+    "assistant",
+    "memory",
+    "models",
+    "devices",
+    "about"
+  ],
+  "now": 1791493200000,
+  "clientId": "chrome-host-arial",
+  "nodes": [
+    {
+      "id": "chat-node",
+      "workspaces": [
+        {
+          "id": "chat-node:chats"
+        }
+      ]
+    }
+  ],
+  "binding": {
+    "nodeId": "chat-node",
+    "online": true
+  },
+  "prompts": {
+    "nodeId": "chat-node",
+    "soul": {
+      "text": "Be curious and precise.\nExplain uncertainty clearly.",
+      "path": "/home/pirc/SOUL.md",
+      "writable": true,
+      "maxChars": 12000
+    },
+    "chat": {
+      "text": "Use the user's language.\nKeep shared decisions explicit.",
+      "path": "/home/pirc/CHAT.md",
+      "writable": false,
+      "reason": "nix-store",
+      "maxChars": 12000
+    }
+  },
+  "memory": {
+    "usage": {
+      "user": {
+        "used": 104,
+        "max": 10000
+      },
+      "note": {
+        "used": 642,
+        "max": 20000
+      }
+    },
+    "user": [
+      {
+        "id": "user-response-style",
+        "kind": "user",
+        "content": "Keep routine answers concise, and explain uncertainty clearly.",
+        "status": "active",
+        "revision": 3,
+        "origins": [
+          "user"
+        ],
+        "sources": {
+          "sessionId": "planning",
+          "quote": "Please keep answers concise."
+        },
+        "createdAt": 1791489600000,
+        "updatedAt": 1791492900000
+      },
+      {
+        "id": "user-language",
+        "kind": "user",
+        "content": "Use the language I use in my message.",
+        "status": "active",
+        "revision": 1,
+        "origins": [
+          "user"
+        ],
+        "sources": {
+          "sessionId": "review",
+          "quote": "Use my language."
+        },
+        "createdAt": 1791486000000,
+        "updatedAt": 1791486000000
+      }
+    ],
+    "notes": [
+      {
+        "id": "note-01",
+        "kind": "note",
+        "content": "The mobile client is being checked against the browser settings dialog.",
+        "status": "active",
+        "revision": 2,
+        "origins": [
+          "assistant",
+          "tool:read_file"
+        ],
+        "sources": {
+          "sessionId": "build"
+        },
+        "createdAt": 1791492600000,
+        "updatedAt": 1791492900000
+      },
+      {
+        "id": "note-02",
+        "kind": "note",
+        "content": "The current review focuses on responsive layouts at narrow and wide widths.",
+        "status": "active",
+        "revision": 1,
+        "origins": [
+          "assistant"
+        ],
+        "sources": {
+          "sessionId": "review"
+        },
+        "createdAt": 1791492300000,
+        "updatedAt": 1791492300000
+      },
+      {
+        "id": "note-03",
+        "kind": "note",
+        "content": "A settings change should not silently submit or overwrite user data.",
+        "status": "active",
+        "revision": 4,
+        "origins": [
+          "assistant",
+          "custom:conversation"
+        ],
+        "sources": {
+          "sessionId": "planning",
+          "quote": "Keep edits reviewable."
+        },
+        "createdAt": 1791492000000,
+        "updatedAt": 1791492600000
+      },
+      {
+        "id": "note-04",
+        "kind": "note",
+        "content": "The chat node owns its prompt files and reports whether they can be edited.",
+        "status": "active",
+        "revision": 1,
+        "origins": [
+          "tool:assistant-node"
+        ],
+        "sources": {
+          "sessionId": "build"
+        },
+        "createdAt": 1791491700000,
+        "updatedAt": 1791491700000
+      },
+      {
+        "id": "note-05",
+        "kind": "note",
+        "content": "Memory history keeps the source and revision for each approved change.",
+        "status": "active",
+        "revision": 2,
+        "origins": [
+          "assistant"
+        ],
+        "sources": {
+          "sessionId": "review"
+        },
+        "createdAt": 1791491400000,
+        "updatedAt": 1791492300000
+      },
+      {
+        "id": "note-06",
+        "kind": "note",
+        "content": "Use a local fixture API for browser captures, with no outbound requests.",
+        "status": "active",
+        "revision": 1,
+        "origins": [
+          "assistant",
+          "tool:read_file"
+        ],
+        "sources": {
+          "sessionId": "build"
+        },
+        "createdAt": 1791491100000,
+        "updatedAt": 1791491100000
+      },
+      {
+        "id": "note-07",
+        "kind": "note",
+        "content": "Scale text through computed font sizes; device pixel ratio is a separate setting.",
+        "status": "active",
+        "revision": 1,
+        "origins": [
+          "assistant"
+        ],
+        "sources": {
+          "sessionId": "review"
+        },
+        "createdAt": 1791490800000,
+        "updatedAt": 1791490800000
+      },
+      {
+        "id": "note-08",
+        "kind": "note",
+        "content": "Only the pinned browser implementation is an oracle for these snapshots.",
+        "status": "active",
+        "revision": 3,
+        "origins": [
+          "assistant"
+        ],
+        "sources": {
+          "sessionId": "planning"
+        },
+        "createdAt": 1791490500000,
+        "updatedAt": 1791491400000
+      },
+      {
+        "id": "note-09",
+        "kind": "note",
+        "content": "The General tab includes notification status, session visibility, and layout actions.",
+        "status": "active",
+        "revision": 1,
+        "origins": [
+          "assistant"
+        ],
+        "sources": {
+          "sessionId": "review"
+        },
+        "createdAt": 1791490200000,
+        "updatedAt": 1791490200000
+      },
+      {
+        "id": "note-10",
+        "kind": "note",
+        "content": "Model settings expose provider cards, model lists, and a default model selector.",
+        "status": "active",
+        "revision": 1,
+        "origins": [
+          "assistant",
+          "tool:read_file"
+        ],
+        "sources": {
+          "sessionId": "build"
+        },
+        "createdAt": 1791489900000,
+        "updatedAt": 1791489900000
+      },
+      {
+        "id": "note-11",
+        "kind": "note",
+        "content": "Paired devices show an empty-state message when there are no registered phones.",
+        "status": "active",
+        "revision": 1,
+        "origins": [
+          "assistant"
+        ],
+        "sources": {
+          "sessionId": "planning"
+        },
+        "createdAt": 1791489600000,
+        "updatedAt": 1791489600000
+      },
+      {
+        "id": "note-12",
+        "kind": "note",
+        "content": "The About tab identifies the current browser client without a network request.",
+        "status": "active",
+        "revision": 2,
+        "origins": [
+          "assistant"
+        ],
+        "sources": {
+          "sessionId": "review"
+        },
+        "createdAt": 1791489300000,
+        "updatedAt": 1791490200000
+      }
+    ],
+    "removed": [
+      {
+        "id": "note-removed",
+        "kind": "note",
+        "content": "The old capture used an inconsistent device scale factor.",
+        "status": "removed",
+        "revision": 2,
+        "origins": [
+          "assistant"
+        ],
+        "sources": {
+          "sessionId": "review"
+        },
+        "createdAt": 1791488400000,
+        "updatedAt": 1791490200000
+      }
+    ],
+    "proposals": [
+      {
+        "id": "proposal-style",
+        "action": "replace",
+        "targetId": "user-response-style",
+        "targetRevision": 3,
+        "content": "Keep everyday answers concise and add examples for unfamiliar topics.",
+        "quote": "Please keep answers concise, but include an example when a topic is new.",
+        "sources": {
+          "sessionId": "planning",
+          "quote": "Please keep answers concise, but include an example when a topic is new."
+        },
+        "sessionId": "planning",
+        "status": "pending",
+        "createdAt": 1791492900000,
+        "decidedAt": null,
+        "target": {
+          "id": "user-response-style",
+          "content": "Keep routine answers concise, and explain uncertainty clearly.",
+          "revision": 3
+        }
+      }
+    ],
+    "sessions": {
+      "planning": "Planning preferences",
+      "build": "Build the mobile client",
+      "review": "Review the settings matrix"
+    }
+  },
+  "memoryHistory": {
+    "user-response-style": [
+      {
+        "revision": 1,
+        "op": "add",
+        "content": "Keep answers concise.",
+        "origins": [
+          "user"
+        ],
+        "sources": {
+          "sessionId": "planning",
+          "quote": "Please keep answers concise."
+        },
+        "actor": "user",
+        "at": 1791489600000
+      },
+      {
+        "revision": 2,
+        "op": "replace",
+        "content": "Keep routine answers concise.",
+        "origins": [
+          "user"
+        ],
+        "sources": {
+          "sessionId": "planning"
+        },
+        "actor": "session:planning",
+        "at": 1791491400000
+      },
+      {
+        "revision": 3,
+        "op": "replace",
+        "content": "Keep routine answers concise, and explain uncertainty clearly.",
+        "origins": [
+          "user"
+        ],
+        "sources": {
+          "sessionId": "planning"
+        },
+        "actor": "user",
+        "at": 1791492900000
+      }
+    ]
+  },
+  "providers": {
+    "providers": [
+      {
+        "id": "local",
+        "name": "Local models",
+        "source": "file",
+        "readOnly": true,
+        "api": "openai-completions",
+        "baseUrl": "http://localhost:11434/v1",
+        "hasApiKey": false,
+        "models": [
+          {
+            "id": "local-model",
+            "name": "Local model"
+          }
+        ]
+      },
+      {
+        "id": "custom",
+        "name": "Custom provider",
+        "source": "ui",
+        "readOnly": false,
+        "api": "openai-completions",
+        "baseUrl": "https://example.test/v1",
+        "hasApiKey": true,
+        "models": [
+          {
+            "id": "custom-model",
+            "name": "Custom model"
+          }
+        ]
+      }
+    ],
+    "oauthProviders": [],
+    "defaultModel": {
+      "provider": "custom",
+      "id": "custom-model"
+    }
+  },
+  "devices": {
+    "devices": []
+  },
+  "push": {
+    "publicKey": "",
+    "subscriptions": []
+  },
+  "notificationBaseline": {
+    "state": "off",
+    "permission": "default",
+    "browserPushSupport": true,
+    "registration": "synthetic available registration",
+    "subscription": null,
+    "realPermissionPromptDisplayed": false,
+    "realServiceWorkerRegistered": false,
+    "expectedMessage": "This browser does not get notifications.",
+    "reason": "Keep the Settings General browser reference aligned with the native off baseline; the production pushState() implementation is called against local browser API fakes."
+  },
+  "authContexts": {
+    "adminReference": {
+      "id": "admin-reference-fixture",
+      "description": "Existing 200 fixture responses model the admin/reference browser context."
+    },
+    "deviceToken": {
+      "id": "device-token",
+      "authorizationHeader": "Authorization",
+      "authorizationValue": "Bearer pirc_dev_settings_matrix_fixture",
+      "syntheticCredential": true,
+      "forbiddenResponses": {
+        "/api/providers": {
+          "status": 403,
+          "body": {
+            "error": {
+              "code": "forbidden",
+              "message": "Device tokens cannot reach this route"
+            }
+          }
+        },
+        "/api/devices": {
+          "status": 403,
+          "body": {
+            "error": {
+              "code": "forbidden",
+              "message": "Device tokens cannot manage devices"
+            }
+          }
+        }
+      }
+    }
+  }
+}

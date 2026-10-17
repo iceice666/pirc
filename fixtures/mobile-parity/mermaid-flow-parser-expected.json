@@ -1,0 +1,643 @@
+{
+  "id": "mermaid-flow-parser-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "dependencyVersions": {
+    "mermaid": "11.17.2",
+    "jsdom": "27.4.0"
+  },
+  "nodeVersion": "v26.8.1",
+  "cases": [
+    {
+      "id": "operator-bidirectional-arrow",
+      "source": "flowchart LR\nA <--> B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "double_arrow_point",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "operator-circle-both",
+      "source": "flowchart LR\nA o--o B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "double_arrow_circle",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "operator-cross-both",
+      "source": "flowchart LR\nA x--x B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "double_arrow_cross",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "operator-circle-to-arrow",
+      "source": "flowchart LR\nA o--> B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_point",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "operator-cross-to-arrow",
+      "source": "flowchart LR\nA x--> B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_point",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "operator-circle-to-cross",
+      "source": "flowchart LR\nA o--x B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_cross",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "operator-cross-to-circle",
+      "source": "flowchart LR\nA x--o B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_circle",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "operator-arrow-circle",
+      "source": "flowchart LR\nA --o B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_circle",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "operator-arrow-cross",
+      "source": "flowchart LR\nA --x B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_cross",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "operator-arrow",
+      "source": "flowchart LR\nA --> B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_point",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "operator-reverse-arrow",
+      "source": "flowchart LR\nA <-- B",
+      "status": "error",
+      "error": "Parse error on line 3:",
+      "vertices": [],
+      "edges": []
+    },
+    {
+      "id": "operator-open-line",
+      "source": "flowchart LR\nA --- B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_open",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "operator-two-dash",
+      "source": "flowchart LR\nA -- B",
+      "status": "error",
+      "error": "Parse error on line 3:",
+      "vertices": [],
+      "edges": []
+    },
+    {
+      "id": "operator-dotted-arrow",
+      "source": "flowchart LR\nA -.-> B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_point",
+          "stroke": "dotted"
+        }
+      ]
+    },
+    {
+      "id": "operator-dotted-open-line",
+      "source": "flowchart LR\nA -.- B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_open",
+          "stroke": "dotted"
+        }
+      ]
+    },
+    {
+      "id": "operator-dot-only",
+      "source": "flowchart LR\nA -. B",
+      "status": "error",
+      "error": "Parse error on line 3:",
+      "vertices": [],
+      "edges": []
+    },
+    {
+      "id": "operator-thick-arrow",
+      "source": "flowchart LR\nA ==> B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_point",
+          "stroke": "thick"
+        }
+      ]
+    },
+    {
+      "id": "operator-thick-open-line",
+      "source": "flowchart LR\nA === B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_open",
+          "stroke": "thick"
+        }
+      ]
+    },
+    {
+      "id": "operator-two-equals",
+      "source": "flowchart LR\nA == B",
+      "status": "error",
+      "error": "Parse error on line 3:",
+      "vertices": [],
+      "edges": []
+    },
+    {
+      "id": "operator-circle-open-line",
+      "source": "flowchart LR\nA o-- B",
+      "status": "error",
+      "error": "Parse error on line 3:",
+      "vertices": [],
+      "edges": []
+    },
+    {
+      "id": "operator-cross-open-line",
+      "source": "flowchart LR\nA x-- B",
+      "status": "error",
+      "error": "Parse error on line 3:",
+      "vertices": [],
+      "edges": []
+    },
+    {
+      "id": "chain",
+      "source": "flowchart LR\nA[One]-->B[Two]-->C[Three]",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "One",
+          "type": "square"
+        },
+        {
+          "id": "B",
+          "label": "Two",
+          "type": "square"
+        },
+        {
+          "id": "C",
+          "label": "Three",
+          "type": "square"
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_point",
+          "stroke": "normal"
+        },
+        {
+          "start": "B",
+          "end": "C",
+          "text": "",
+          "type": "arrow_point",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "legacy-arrow-label",
+      "source": "flowchart LR\nA -- text --> B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "text",
+          "type": "arrow_point",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "legacy-open-line-label",
+      "source": "flowchart LR\nA -- text --- B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "text",
+          "type": "arrow_open",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "quoted-pipe-label",
+      "source": "flowchart LR\nA -->|\"yes | no\"| B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "A",
+          "type": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "yes | no",
+          "type": "arrow_point",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "entity-labels",
+      "source": "flowchart LR\nA[\"Rock &amp; Roll\"] --> B[\"#quot;quoted#quot;\"]",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "Rock &amp; Roll",
+          "type": "square"
+        },
+        {
+          "id": "B",
+          "label": "ﬂ°quot¶ßquotedﬂ°quot¶ß",
+          "type": "square"
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_point",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "class-like-node-ids",
+      "source": "flowchart LR\nclassNode[Class node] --> classDefNode[ClassDef node]",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "classDefNode",
+          "label": "ClassDef node",
+          "type": "square"
+        },
+        {
+          "id": "classNode",
+          "label": "Class node",
+          "type": "square"
+        }
+      ],
+      "edges": [
+        {
+          "start": "classNode",
+          "end": "classDefNode",
+          "text": "",
+          "type": "arrow_point",
+          "stroke": "normal"
+        }
+      ]
+    },
+    {
+      "id": "quoted-directive-marker",
+      "source": "flowchart LR\nA[\"literal %%{\"] --> B",
+      "status": "accepted",
+      "vertices": [
+        {
+          "id": "A",
+          "label": "literal %%{",
+          "type": "square"
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "type": null
+        }
+      ],
+      "edges": [
+        {
+          "start": "A",
+          "end": "B",
+          "text": "",
+          "type": "arrow_point",
+          "stroke": "normal"
+        }
+      ]
+    }
+  ]
+}

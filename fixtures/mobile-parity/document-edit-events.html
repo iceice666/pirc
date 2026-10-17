@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Document edit event oracle</title>
+  <style>
+    body { font: 16px sans-serif; margin: 2rem; }
+    label { display: block; margin: 1rem 0; }
+    input, textarea, select { display: block; margin-top: .35rem; min-width: 16rem; }
+  </style>
+</head>
+<body>
+  <h1>Document edit event oracle</h1>
+
+  <form id="cancel-form">
+    <label for="cancel-input">Canceled Enter form
+      <input id="cancel-input" name="value" autocomplete="off">
+    </label>
+    <button type="submit">Canceled submit</button>
+  </form>
+
+  <form id="keydown-cancel-form" action="https://example.test/keydown-cancel-submit" method="get" target="submit-sink">
+    <label for="keydown-cancel-input">Enter canceled at keydown
+      <input id="keydown-cancel-input" name="value" autocomplete="off">
+    </label>
+    <button type="submit">Keydown canceled submit</button>
+  </form>
+
+  <form id="allowed-form" action="https://example.test/allowed-submit" method="get" target="submit-sink">
+    <label for="allowed-input">Allowed Enter form
+      <input id="allowed-input" name="value" autocomplete="off">
+    </label>
+    <button type="submit">Allowed submit</button>
+  </form>
+  <iframe name="submit-sink" title="submission sink" hidden></iframe>
+
+  <label for="click-cancel-input">Text control with canceled click default
+    <input id="click-cancel-input" autocomplete="off">
+  </label>
+
+  <label for="composition-field">Composition target
+    <textarea id="composition-field" rows="2"></textarea>
+  </label>
+
+  <label for="select-normal">Select with normal click default
+    <select id="select-normal">
+      <option value="one">One</option>
+      <option value="two">Two</option>
+    </select>
+  </label>
+  <label for="select-cancel">Select with canceled click default
+    <select id="select-cancel">
+      <option value="one">One</option>
+      <option value="two">Two</option>
+    </select>
+  </label>
+
+  <pre id="event-output" aria-live="polite"></pre>
+
+  <script>
+    (() => {
+      const events = [];
+      const elementName = (element) => {
+        if (!element) return null;
+        return element.id || element.tagName.toLowerCase();
+      };
+      const eventTypes = [
+        'focus', 'blur', 'focusin', 'focusout', 'click',
+        'keydown', 'keyup', 'input', 'change',
+        'compositionstart', 'compositionupdate', 'compositionend',
+        'submit'
+      ];
+
+      function record(event, phase) {
+        const target = event.target;
+        const isTextControl = target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement;
+        events.push({
+          type: event.type,
+          phase,
+          target: elementName(target),
+          activeElement: elementName(document.activeElement),
+          isTrusted: event.isTrusted,
+          defaultPrevented: event.defaultPrevented,
+          key: 'key' in event ? event.key : null,
+          code: 'code' in event ? event.code : null,
+          repeat: 'repeat' in event ? event.repeat : null,
+          modifiers: 'key' in event ? {
+            alt: event.altKey,
+            ctrl: event.ctrlKey,
+            meta: event.metaKey,
+            shift: event.shiftKey
+          } : null,
+          data: 'data' in event ? event.data : null,
+          inputType: 'inputType' in event ? event.inputType : null,
+          isComposing: 'isComposing' in event ? event.isComposing : null,
+          value: isTextControl ? target.value : null,
+          formAction: event.type === 'submit' ? event.target.action : null
+        });
+        document.querySelector('#event-output').textContent =
+          JSON.stringify(events, null, 2);
+      }
+
+      for (const type of eventTypes) {
+        document.addEventListener(type, (event) => record(event, 'capture'), true);
+        document.addEventListener(type, (event) => record(event, 'bubble'));
+      }
+
+      document.querySelector('#cancel-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+      });
+      document.querySelector('#keydown-cancel-input').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') event.preventDefault();
+      });
+      document.querySelector('#select-cancel').addEventListener('click', (event) => {
+        event.preventDefault();
+      });
+      document.querySelector('#click-cancel-input').addEventListener('click', (event) => {
+        event.preventDefault();
+      });
+
+      window.eventOracle = {
+        events,
+        clear() {
+          events.splice(0, events.length);
+          document.querySelector('#event-output').textContent = '';
+        }
+      };
+    })();
+  </script>
+</body>
+</html>

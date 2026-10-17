@@ -1,0 +1,56 @@
+{
+  "baselineCommit": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "cases": [
+    {
+      "id": "packet-tcp",
+      "family": "packet",
+      "source": "packet-beta\ntitle TCP\n0-15: \"Source Port\"\n16-31: \"Destination Port\"\n32-63: \"Sequence Number\"\n64-95: \"Acknowledgment Number\""
+    },
+    {
+      "id": "packet-cross-row",
+      "family": "packet",
+      "source": "packet-beta\n+5: \"Header\"\n+43: \"Cross row\"\n+16: \"Payload\""
+    },
+    {
+      "id": "packet-accessible",
+      "family": "packet",
+      "source": "packet\naccTitle: Binary frame\naccDescr: Flag and payload fields\n0: \"Flag\"\n1-7: \"Mode\"\n8-31: \"Payload\""
+    },
+    {
+      "id": "packet-configured",
+      "family": "packet",
+      "source": "%%{init: {\"packet\": {\"bitsPerRow\":16,\"bitWidth\":24,\"showBits\":false}}}%%\npacket-beta\ntitle Configured header\n+9: \"Control\"\n+23: \"Payload\""
+    },
+    {
+      "id": "radar-comparison",
+      "family": "radar",
+      "source": "radar-beta\naxis focus[\"Focus\"]\naxis clarity[\"Clarity\"]\naxis speed[\"Speed\"]\ncurve Current{focus: 7, clarity: 5, speed: 8}\ncurve Target{focus: 9, clarity: 8, speed: 7}"
+    },
+    {
+      "id": "radar-labels",
+      "family": "radar",
+      "source": "radar-beta\naxis attack[\"Attack power\"]\naxis defense[\"Defense\"]\naxis speed[\"Speed\"]\ncurve mage[\"Fire mage\"]{attack: 8, defense: 3, speed: 7}\ncurve knight[\"Stone knight\"]{attack: 6, defense: 9, speed: 4}"
+    },
+    {
+      "id": "radar-options",
+      "family": "radar",
+      "source": "radar-beta\naxis a[\"A\"]\naxis b[\"B\"]\naxis c[\"C\"]\ncurve Low{a: 2, b: 3, c: 4}\nmax 10\nmin 0\nticks 4\nshowLegend false\ngraticule polygon"
+    },
+    {
+      "id": "architecture-services",
+      "family": "architecture",
+      "source": "architecture-beta\ngroup api(cloud)[API Zone]\nservice web(server)[Web] in api\nservice db(database)[Database] in api\nweb:R --> L:db"
+    },
+    {
+      "id": "architecture-junction",
+      "family": "architecture",
+      "source": "architecture-beta\nservice client(internet)[Client]\njunction fanout\nservice cache(disk)[Cache]\nclient:R --> L:fanout\nfanout:B --> T:cache"
+    },
+    {
+      "id": "architecture-nested",
+      "family": "architecture",
+      "source": "architecture-beta\ngroup outer(cloud)[Region]\ngroup inner(server)[Private Network] in outer\nservice app(server)[App] in inner\nservice ext(internet)[External]\napp{group}:R --> L:ext"
+    }
+  ]
+}

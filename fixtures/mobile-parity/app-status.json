@@ -1,0 +1,138 @@
+{
+  "id": "app-status-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 768],
+  "height": 900,
+  "deviceScaleFactor": 1,
+  "fontOverride": {
+    "fontFamily": "Arial, sans-serif",
+    "mono": "Menlo, monospace"
+  },
+  "runtimeStubs": {
+    "description": "Mount the actual App.svelte component. Before mount, the singleton bootstrap and refresh methods are replaced with no-ops; fetch and WebSocket calls are logged and rejected. This prevents gateway/network access while preserving the production render path and styles.",
+    "singletonMethods": [
+      "bootstrap",
+      "refreshControl",
+      "refreshNodes",
+      "refreshSessions",
+      "refreshMemory",
+      "refreshSchedules",
+      "refreshSnapshot",
+      "loadModels",
+      "resume",
+      "markActiveRead",
+      "dispose"
+    ],
+    "idleHighlighterWarmup": "requestIdleCallback is stubbed to a no-op because syntax highlighting is not part of this global-status reference."
+  },
+  "ui": {
+    "view": "session",
+    "mode": "chat",
+    "sidebarCollapsed": false,
+    "detailsOpen": false,
+    "showSettled": false
+  },
+  "workspaces": [
+    {
+      "id": "home:chats",
+      "hostId": "home",
+      "displayName": "Chats",
+      "kind": "chat",
+      "defaults": {}
+    },
+    {
+      "id": "home:notes",
+      "hostId": "home",
+      "displayName": "Home server notes",
+      "kind": "chat",
+      "defaults": {}
+    }
+  ],
+  "nodes": [
+    {
+      "id": "home",
+      "connectedAt": 1760000000000,
+      "lastSeenAt": 1760000000000,
+      "workspaces": []
+    }
+  ],
+  "models": [
+    {
+      "id": "claude-sonnet",
+      "provider": "Anthropic",
+      "displayName": "Claude Sonnet",
+      "contextWindow": 200000,
+      "thinkingLevels": ["off", "low", "medium", "high"],
+      "available": true
+    }
+  ],
+  "session": {
+    "id": "ui-status-session",
+    "workspaceId": "home:chats",
+    "name": "Global UI status sample",
+    "lastActivityAt": "2020-01-01T00:00:00.000Z",
+    "runnerStatus": "stopped"
+  },
+  "cases": [
+    {
+      "id": "startup-loading",
+      "query": "?case=startup-loading",
+      "loading": true,
+      "hasSession": false,
+      "connection": "reconnecting",
+      "pageError": "",
+      "controlHeld": false,
+      "holderName": null
+    },
+    {
+      "id": "empty-account",
+      "query": "?case=empty-account",
+      "loading": false,
+      "hasSession": false,
+      "connection": "offline",
+      "pageError": "",
+      "controlHeld": false,
+      "holderName": null
+    },
+    {
+      "id": "session-page-error",
+      "query": "?case=session-page-error&session=ui-status-session",
+      "loading": false,
+      "hasSession": true,
+      "connection": "connected",
+      "pageError": "Could not refresh the session.",
+      "controlHeld": true,
+      "holderName": "This browser"
+    },
+    {
+      "id": "session-reconnecting",
+      "query": "?case=session-reconnecting&session=ui-status-session",
+      "loading": false,
+      "hasSession": true,
+      "connection": "reconnecting",
+      "pageError": "",
+      "controlHeld": true,
+      "holderName": "This browser"
+    },
+    {
+      "id": "session-offline",
+      "query": "?case=session-offline&session=ui-status-session",
+      "loading": false,
+      "hasSession": true,
+      "connection": "offline",
+      "pageError": "",
+      "controlHeld": true,
+      "holderName": "This browser"
+    },
+    {
+      "id": "session-viewer",
+      "query": "?case=session-viewer&session=ui-status-session",
+      "loading": false,
+      "hasSession": true,
+      "connection": "connected",
+      "pageError": "",
+      "controlHeld": false,
+      "holderName": "Another device"
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "id": "native-git-panel",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [
+    390,
+    420
+  ],
+  "height": 1100,
+  "views": [
+    "changes",
+    "history",
+    "diff",
+    "commit",
+    "clean",
+    "nonrepo"
+  ],
+  "now": 1790996400000,
+  "status": {
+    "repo": true,
+    "root": "/fixture",
+    "branch": "native-parity",
+    "upstream": "origin/main",
+    "ahead": 2,
+    "behind": 1,
+    "truncated": false,
+    "files": [
+      {
+        "path": "src/main.ts",
+        "index": "M",
+        "worktree": "M"
+      },
+      {
+        "path": "docs/guide.md",
+        "origPath": "README.md",
+        "index": "R",
+        "worktree": " "
+      },
+      {
+        "path": "notes.txt",
+        "index": "?",
+        "worktree": "?"
+      },
+      {
+        "path": "src/old.ts",
+        "index": " ",
+        "worktree": "D"
+      }
+    ]
+  },
+  "diff": {
+    "diff": "diff --git a/src/main.ts b/src/main.ts\nindex 1111111..2222222 100644\n--- a/src/main.ts\n+++ b/src/main.ts\n@@ -1,4 +1,5 @@\n export function greet() {\n-  return \"old\";\n+  const text = \"Flutter native\";\n+  return text;\n }\n // end\n",
+    "truncated": false
+  },
+  "log": {
+    "commits": [
+      {
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "short": "aaaaaaa",
+        "author": "A. Developer",
+        "email": "a@example.invalid",
+        "time": 1790992800000,
+        "refs": [
+          "HEAD -> native-parity",
+          "origin/main",
+          "tag: v1"
+        ],
+        "subject": "Preserve native rendering and interaction parity"
+      },
+      {
+        "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "short": "bbbbbbb",
+        "author": "B. Reviewer",
+        "email": "b@example.invalid",
+        "time": 1790823600000,
+        "refs": [],
+        "subject": "Add baseline fixtures"
+      }
+    ],
+    "more": true
+  },
+  "next": {
+    "commits": [
+      {
+        "sha": "cccccccccccccccccccccccccccccccccccccccc",
+        "short": "ccccccc",
+        "author": "C. Builder",
+        "email": "c@example.invalid",
+        "time": 1788145200000,
+        "refs": [],
+        "subject": "Initial commit"
+      }
+    ],
+    "more": false
+  },
+  "commit": {
+    "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "author": "A. Developer",
+    "email": "a@example.invalid",
+    "time": 1790992800000,
+    "refs": [
+      "HEAD -> native-parity",
+      "origin/main",
+      "tag: v1"
+    ],
+    "message": "Preserve native rendering and interaction parity\n\nKeep the full diff and file navigation.",
+    "diff": "diff --git a/src/main.ts b/src/main.ts\nindex 1111111..2222222 100644\n--- a/src/main.ts\n+++ b/src/main.ts\n@@ -1,4 +1,5 @@\n export function greet() {\n-  return \"old\";\n+  const text = \"Flutter native\";\n+  return text;\n }\n // end\n",
+    "truncated": false
+  }
+}

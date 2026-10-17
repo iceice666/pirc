@@ -1,0 +1,181 @@
+{
+  "id": "app-document-target-context-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "apiFixtureReference": "app-document-routes.json",
+  "capture": {
+    "entrypoint": "Actual pinned Vite App.svelte reached by same-origin native HTML forms",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "deviceScaleFactor": 1,
+      "isMobile": true,
+      "hasTouch": true
+    },
+    "browserExecutable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "httpMode": "Real same-origin Node/Vite HTTP server; no Playwright HTTP routes or fulfilled HTTP requests.",
+    "apiMode": "app-document-routes API fixture served by local HTTP middleware; local WebSocket server accepts the actual app event stream.",
+    "openerFormPath": "/__oracle/target-form",
+    "namedChildFormPath": "/__oracle/named-child-form",
+    "namedTarget": "pirc_named_context"
+  },
+  "namedHistoryDocument": {
+    "responseCacheControl": "no-store",
+    "htmlVersionTokens": {
+      "version": "{{version}}",
+      "number": "{{numberDefault}}",
+      "checkAttribute": "{{checkAttribute}}",
+      "selectOneAttribute": "{{selectOneAttribute}}",
+      "selectTwoAttribute": "{{selectTwoAttribute}}",
+      "range": "{{rangeDefault}}"
+    },
+    "responseHtmlTemplate": "<!doctype html>\n<html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Named target form document</title></head><body><main>\n<h1>Named target form document</h1><p id=\"server-version\">Response {{version}}</p>\n<form id=\"typed-form\" autocomplete=\"on\">\n  <label>Text <input id=\"child-text\" name=\"text\" value=\"text server {{version}}\"></label>\n  <label>Password <input id=\"child-password\" name=\"password\" type=\"password\" value=\"password server {{version}}\"></label>\n  <label>Number <input id=\"child-number\" name=\"number\" type=\"number\" value=\"{{numberDefault}}\"></label>\n  <label>Untouched text <input id=\"untouched-text\" name=\"untouchedText\" value=\"untouched {{version}}\"></label>\n  <label>Edit then revert text <input id=\"history-reverted-text\" name=\"revertedText\" value=\"revert {{version}}\"></label>\n  <label>Untouched range <input id=\"untouched-range\" name=\"range\" type=\"range\" min=\"0\" max=\"100\" value=\"{{rangeDefault}}\"></label>\n  <label>Untouched checkbox <input id=\"untouched-check\" type=\"checkbox\" {{checkAttribute}}></label>\n  <label>Untouched select <select id=\"untouched-select\"><option value=\"one\" {{selectOneAttribute}}>One</option><option value=\"two\" {{selectTwoAttribute}}>Two</option></select></label>\n  <label>Textarea <textarea id=\"child-textarea\" name=\"textarea\">textarea server {{version}}</textarea></label>\n  <label>Checked <input id=\"child-check\" type=\"checkbox\" name=\"check\" checked></label>\n  <label>Red <input id=\"radio-red\" type=\"radio\" name=\"radio\" value=\"red\" checked></label>\n  <label>Blue <input id=\"radio-blue\" type=\"radio\" name=\"radio\" value=\"blue\"></label>\n  <label>Multiple choice <select id=\"child-multiple\" name=\"multiple\" multiple><option value=\"one\" selected>One</option><option value=\"two\">Two</option><option value=\"three\">Three</option></select></label>\n  <label>Duplicate first <input id=\"duplicate-first\" name=\"duplicate\" value=\"duplicate first {{version}}\"></label>\n  <label>Duplicate second <input id=\"duplicate-second\" name=\"duplicate\" value=\"duplicate second {{version}}\"></label>\n  <label>Unnamed <input id=\"child-unnamed\" value=\"unnamed server {{version}}\"></label>\n  <label>Control autocomplete off <input id=\"control-off\" name=\"controlOff\" autocomplete=\"off\" value=\"control off server {{version}}\"></label>\n  <label>Disabled <input id=\"child-disabled\" name=\"disabled\" value=\"disabled server {{version}}\" disabled></label>\n  <label>Readonly <input id=\"child-readonly\" name=\"readonly\" value=\"readonly server {{version}}\" readonly></label>\n  <label>Script default <input id=\"script-default\" name=\"scriptDefault\" value=\"script default server {{version}}\"></label>\n  <button id=\"child-reset\" type=\"reset\">Reset typed form</button>\n</form>\n<form id=\"form-autocomplete-off\" autocomplete=\"off\">\n  <label>Form autocomplete off text <input id=\"form-off-text\" name=\"formOffText\" value=\"form off text server {{version}}\"></label>\n  <label>Form autocomplete off password <input id=\"form-off-password\" name=\"formOffPassword\" type=\"password\" value=\"form off password server {{version}}\"></label>\n</form>\n<div style=\"height:2400px\"></div>\n</main></body></html>"
+  },
+  "cases": [
+    {
+      "id": "blank-to-session-latest",
+      "target": "_blank",
+      "formId": "blank-latest",
+      "actionPath": "/deep/blank-latest?campaign=blank-a#form-fragment",
+      "routeField": {
+        "name": "session",
+        "value": "session-latest"
+      },
+      "sourceValue": "form source latest"
+    },
+    {
+      "id": "blank-to-notes-workspace",
+      "target": "_blank",
+      "formId": "blank-workspace",
+      "actionPath": "/deep/blank-workspace?campaign=blank-b#form-fragment",
+      "routeField": {
+        "name": "workspace",
+        "value": "home:notes"
+      },
+      "sourceValue": "form source workspace"
+    },
+    {
+      "id": "named-target-opens-control-document",
+      "target": "pirc_named_context",
+      "formId": "named-child",
+      "actionPath": "/__oracle/named-child-form?origin=named-target&case=control-state-back",
+      "sourceValue": "named opener value"
+    },
+    {
+      "id": "named-target-reuses-context-for-app",
+      "target": "pirc_named_context",
+      "formId": "named-app",
+      "actionPath": "/deep/named-app?campaign=named#app-fragment",
+      "routeField": {
+        "name": "workspace",
+        "value": "home:notes"
+      },
+      "sourceValue": "named app source"
+    }
+  ],
+  "formBackProbe": {
+    "scrollY": 680,
+    "typedControls": {
+      "text": "typed text before App navigation",
+      "password": "pirc-parity-password",
+      "number": "42",
+      "textarea": "typed textarea first line\ntyped textarea second line",
+      "checkboxChecked": false,
+      "radioValue": "blue",
+      "multipleSelectValues": [
+        "two",
+        "three"
+      ],
+      "duplicateNameValues": [
+        "duplicate first edited",
+        "duplicate second edited"
+      ],
+      "unnamed": "unnamed user value",
+      "controlAutocompleteOff": "control autocomplete off edited",
+      "scriptDefault": "value typed after script reset"
+    },
+    "formAutocompleteOffControls": {
+      "text": "form autocomplete off text edited",
+      "password": "form autocomplete off password edited"
+    },
+    "scriptDefaultReset": {
+      "modifiedDefaultValue": "harness-modified default",
+      "valueBeforeReset": "value before reset",
+      "expectedValueAfterReset": "harness-modified default"
+    }
+  },
+  "historyProbes": {
+    "openerPath": "/__oracle/history-opener",
+    "aPath": "/__oracle/history-a",
+    "bPath": "/__oracle/history-b",
+    "postFormPath": "/__oracle/post-form",
+    "postResultPath": "/__oracle/post-result",
+    "postNextPath": "/__oracle/post-next",
+    "fragmentPath": "/__oracle/fragment-page",
+    "responseStatusCases": [
+      204,
+      205,
+      404
+    ],
+    "postValue": "native-post-body-7f3",
+    "entryForms": [
+      {
+        "id": "named-get-close-opener-back",
+        "formId": "history-close-opener",
+        "target": "pirc_history_close_opener",
+        "actionPath": "/__oracle/history-a?scenario=close-opener"
+      },
+      {
+        "id": "named-post-history",
+        "formId": "history-post",
+        "target": "pirc_history_post",
+        "actionPath": "/__oracle/post-form?scenario=post"
+      },
+      {
+        "id": "named-same-document-fragment",
+        "formId": "history-fragment",
+        "target": "pirc_history_fragment",
+        "actionPath": "/__oracle/fragment-page?scenario=fragment"
+      },
+      {
+        "id": "named-get-cacheable-history",
+        "formId": "history-cacheable",
+        "target": "pirc_history_cacheable",
+        "actionPath": "/__oracle/history-a?scenario=cacheable"
+      },
+      {
+        "id": "blank-noopener-post-history",
+        "formId": "history-post-noopener",
+        "target": "_blank",
+        "actionPath": "/__oracle/post-form?scenario=post-noopener"
+      },
+      {
+        "id": "blank-noopener-post-history-default-cache",
+        "formId": "history-post-default-cache",
+        "target": "_blank",
+        "actionPath": "/__oracle/post-form?scenario=post-default"
+      },
+      {
+        "id": "blank-noopener-post-history-no-cache",
+        "formId": "history-post-no-cache",
+        "target": "_blank",
+        "actionPath": "/__oracle/post-form?scenario=post-no-cache"
+      },
+      {
+        "id": "blank-noopener-post-history-max-age-zero-must-revalidate",
+        "formId": "history-post-max-age-zero",
+        "target": "_blank",
+        "actionPath": "/__oracle/post-form?scenario=post-max-age-zero"
+      }
+    ],
+    "responseHtmlTemplate": "<!doctype html>\n<html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Named history A</title></head><body><main>\n<h1 id=\"history-document\">Named history A</h1><p id=\"history-version\">Response {{version}}</p>\n<form id=\"go-to-b\" method=\"get\" action=\"/__oracle/history-b?scenario={{scenario}}\"><input type=\"hidden\" name=\"scenario\" value=\"{{scenario}}\"><label>Untouched history field <input id=\"history-untouched\" name=\"untouched\" value=\"untouched {{version}}\"></label><label>Edit then revert text <input id=\"history-reverted-text\" name=\"revertedText\" value=\"revert {{version}}\"></label><label>Untouched range <input id=\"history-range\" name=\"range\" type=\"range\" min=\"0\" max=\"100\" value=\"{{rangeDefault}}\"></label><label>Untouched checkbox <input id=\"history-untouched-check\" type=\"checkbox\" {{checkAttribute}}></label><label>Untouched select <select id=\"history-untouched-select\"><option value=\"one\" {{selectOneAttribute}}>One</option><option value=\"two\" {{selectTwoAttribute}}>Two</option></select></label><button type=\"submit\">Continue to B</button></form>\n</main></body></html>",
+    "cacheableCacheControl": "public, max-age=3600",
+    "namedPostCacheControl": "public, max-age=3600"
+  },
+  "appActions": {
+    "blankLatestWorkspace": "home:notes",
+    "blankWorkspaceSession": "session-second",
+    "namedTargetSession": "session-second",
+    "blankLatestDraft": "draft typed in blank latest page",
+    "blankWorkspaceDraft": "draft typed in blank workspace page"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "id": "app-document-overlays-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "apiFixtureReference": "app-document-routes.json",
+  "capture": {
+    "entrypoint": "actual pinned Vite apps/web/index.html and App.svelte; real localhost HTTP documents; no Playwright route interception or fulfill",
+    "viewport": {
+      "width": 1280,
+      "height": 900,
+      "deviceScaleFactor": 1
+    },
+    "browserExecutable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "backForwardCache": "enabled by omitting Chromium's --disable-back-forward-cache default argument"
+  },
+  "routes": {
+    "rawDocumentPath": "/__oracle/raw-document",
+    "slowDocumentPath": "/__oracle/slow-document",
+    "contextOpenerPath": "/__oracle/context-opener",
+    "appSessionUrl": "/?session=session-second",
+    "pendingStatePath": "/__oracle/pending-state"
+  },
+  "memoryFixture": {
+    "entryCount": 14,
+    "noteCount": 3,
+    "proposalCount": 1,
+    "entryTextPrefix": "Memory overlay persistence entry",
+    "noteTextPrefix": "Assistant note for overlay persistence"
+  },
+  "cases": [
+    {
+      "id": "app-settings-memory-bfcache",
+      "description": "Open Settings from the real App sidebar, edit a setting, show Memory, scroll, start a Forget confirmation, navigate by GET form to a same-origin raw HTML document, then Back."
+    },
+    {
+      "id": "app-settings-while-slow-get-pending",
+      "description": "Submit a same-origin GET form to a held HTTP response, then use CDP pointer input at real Settings and Memory tab hit targets measured before navigation. A document click observer reports the live dialog/tab state to the local server before releasing the response; capture the raw document and Back restoration. If Chrome blocks those clicks, record the reason and use the marked direct-navigation fallback."
+    },
+    {
+      "id": "blank-and-named-app-overlays-independent",
+      "description": "Open actual App pages through _blank and named HTML form targets, open different Settings tabs in each, then switch between pages and record each dialog/tab state."
+    }
+  ]
+}

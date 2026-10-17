@@ -1,0 +1,41 @@
+{
+  "id": "native-html-content",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 768],
+  "height": 1500,
+  "padding": 16,
+  "cases": [
+    {
+      "id": "blocks",
+      "source": "<section><h2>Release summary</h2><p>Use <strong>native content</strong> with <em>emphasis</em>, <del>old text</del> and <mark>highlights</mark>.</p><blockquote>Review before shipping.</blockquote><ul><li>First change</li><li>Second change</li></ul></section>"
+    },
+    {
+      "id": "inline",
+      "source": "Normal **Markdown** and <span style=\"color: #c0392b\">colored **text**</span>, H<sub>2</sub>O, x<sup>2</sup>, <kbd>Ctrl</kbd>. Escaped \\<b>literal\\</b> and `<i>code</i>`."
+    },
+    {
+      "id": "details",
+      "source": "<details open>\n<summary>Implementation notes</summary>\n\n**Markdown inside** the disclosure.\n\n- Keep the original content\n- Keep its links\n\n</details>\n\n<details><summary>Closed notes</summary><p>Hidden until opened.</p></details>"
+    },
+    {
+      "id": "table",
+      "source": "<table><caption>Native table</caption><thead><tr><th>Area</th><th colspan=\"2\">Status</th></tr></thead><tbody><tr><td rowspan=\"2\">Mobile</td><td>Android</td><td>Testing</td></tr><tr><td>Tablet</td><td>Review</td></tr></tbody></table>"
+    },
+    {
+      "id": "links",
+      "source": "<p><a href=\"file:///workspace/src/main.ts:12\">Open source</a> and <a href=\"https://example.com/docs\">documentation</a>.</p><p><a href=\"javascript:alert(1)\">Inert unsafe link</a><script>NOT VISIBLE</script><iframe src=\"https://example.com\">NOT VISIBLE</iframe><custom-box>Kept text</custom-box></p>"
+    },
+    {
+      "id": "image",
+      "source": "<p><a href=\"src/main.ts\"><img src=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='40'%3E%3Crect width='120' height='40' fill='%234176e6'/%3E%3C/svg%3E\" width=\"120\" height=\"40\" alt=\"Blue example\" title=\"Open source\"></a></p>"
+    },
+    {
+      "id": "svg",
+      "source": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"160\" height=\"48\" viewBox=\"0 0 160 48\"><title>Native SVG</title><rect x=\"1\" y=\"1\" width=\"158\" height=\"46\" rx=\"8\" fill=\"#4176e6\"/><path d=\"M12 24L22 34L42 14\" stroke=\"white\" stroke-width=\"3\" fill=\"none\"/></svg>"
+    },
+    {
+      "id": "mixed",
+      "source": "<p>Native widgets in mixed content:</p>\n\n```dart\nfinal ready = true;\n```\n\n$x^2$\n\n| Item | Status |\n|---|---|\n| Renderer | Native |\n\n- [x] Preserve task boxes\n\n<span hidden>NOT VISIBLE</span>"
+    }
+  ]
+}

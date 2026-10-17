@@ -1,0 +1,73 @@
+{
+  "id": "html-form-date-file-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "oracle": "Pinned apps/web renderMarkdown() / DOMPurify plus actual Chrome 154 raw HTML document responses. All submissions go to a loopback-only capture endpoint. Generated file bytes are fixture data; no user files or external requests are used.",
+  "height": 844,
+  "widths": [390, 650, 651, 768, 860, 861, 1024],
+  "themes": ["light", "dark"],
+  "textScales": [1, 2],
+  "modes": ["markdown", "rawDocument"],
+  "dateControls": {
+    "leapValid": "#date-leap-valid",
+    "leapInvalid": "#date-leap-invalid",
+    "invalidFormat": "#date-invalid-format",
+    "underflow": "#date-underflow",
+    "overflow": "#date-overflow",
+    "stepMinBase": "#date-step-min-base",
+    "stepValueBase": "#date-step-value-base",
+    "epochStep": "#date-epoch-step",
+    "required": "#date-required",
+    "readonlyRequired": "#date-readonly-required",
+    "disabled": "#date-disabled",
+    "disabledFieldset": "#date-disabled-fieldset",
+    "disabledFieldsetLegend": "#date-disabled-fieldset-legend",
+    "ui": "#date-ui",
+    "resettable": "#date-resettable"
+  },
+  "fileControls": {
+    "requiredSingle": "#file-required-single",
+    "multiple": "#file-multiple",
+    "disabled": "#file-disabled",
+    "disabledFieldset": "#file-disabled-fieldset",
+    "submitGet": "#file-submit-get",
+    "submitUrlencoded": "#file-submit-urlencoded",
+    "submitTextPlain": "#file-submit-text-plain",
+    "submitMultipart": "#file-submit-multipart",
+    "reset": "#file-reset"
+  },
+  "formOverrideProbe": {
+    "form": "#form-override-probe",
+    "submitter": "#form-override-submit"
+  },
+  "formOverrideProbeMarkup": "<form id='form-override-probe' action='/capture/get?original=1' method='get' enctype='application/x-www-form-urlencoded' target='_self'><input name='base' value='form default'><button id='form-override-submit' type='submit' name='override' value='yes' formaction='/capture/override?from=button' formmethod='post' formenctype='text/plain' formtarget='_blank'>Override submitter</button></form>",
+  "submissionCases": [
+    { "encoding": "get", "selection": "empty" },
+    { "encoding": "get", "selection": "twoFiles" },
+    { "encoding": "urlencoded", "selection": "empty" },
+    { "encoding": "urlencoded", "selection": "twoFiles" },
+    { "encoding": "textPlain", "selection": "empty" },
+    { "encoding": "textPlain", "selection": "twoFiles" },
+    { "encoding": "multipart", "selection": "empty" },
+    { "encoding": "multipart", "selection": "twoFiles" }
+  ],
+  "dummyFiles": [
+    {
+      "name": "one résumé-台北.txt",
+      "mimeType": "text/plain",
+      "bytes": [76, 105, 110, 101, 32, 49, 10, 84, 97, 105, 112, 101, 105, 32, 240, 159, 140, 128]
+    },
+    {
+      "name": "two + space.bin",
+      "mimeType": "application/octet-stream",
+      "bytes": [0, 65, 255, 13, 10, 66, 128]
+    }
+  ],
+  "markup": "<section id='date-file-corpus'><h1>Date and file controls</h1><form id='date-form' action='/capture/date' method='get'><fieldset><legend>Date values and validity</legend><label for='date-leap-valid'>Leap day in a leap year</label><input id='date-leap-valid' type='date' name='leapValid' value='2024-02-29'><label for='date-leap-invalid'>Invalid calendar day</label><input id='date-leap-invalid' type='date' name='leapInvalid' value='2023-02-29'><label for='date-invalid-format'>Noncanonical date value</label><input id='date-invalid-format' type='date' name='invalidFormat' value='2024-2-09'><label for='date-underflow'>Below minimum</label><input id='date-underflow' type='date' name='underflow' min='2024-03-01' value='2024-02-29'><label for='date-overflow'>Above maximum</label><input id='date-overflow' type='date' name='overflow' max='2024-02-28' value='2024-02-29'><label for='date-step-min-base'>Seven-day step based on minimum</label><input id='date-step-min-base' type='date' name='stepMinBase' min='2024-02-04' step='7' value='2024-02-11'><label for='date-step-value-base'>Seven-day step based on value attribute</label><input id='date-step-value-base' type='date' name='stepValueBase' step='7' value='2024-02-01'><label for='date-epoch-step'>Seven-day step based on epoch</label><input id='date-epoch-step' type='date' name='epochStep' step='7'><label for='date-required'>Required empty date</label><input id='date-required' type='date' name='requiredDate' required><label for='date-readonly-required'>Readonly required empty date</label><input id='date-readonly-required' type='date' name='readonlyRequiredDate' required readonly><label for='date-disabled'>Disabled date</label><input id='date-disabled' type='date' name='disabledDate' disabled value='2024-06-15'><fieldset disabled><legend><label for='date-disabled-fieldset-legend'>Enabled first-legend date</label><input id='date-disabled-fieldset-legend' type='date' name='firstLegendDate' value='2024-06-15'></legend><label for='date-disabled-fieldset'>Disabled fieldset date</label><input id='date-disabled-fieldset' type='date' name='fieldsetDate' value='2024-06-15'></fieldset><label for='date-ui'>Picker and locale probe</label><input id='date-ui' type='date' name='dateUi' min='2024-06-01' max='2024-06-30' value='2024-06-15'><label for='date-resettable'>Resettable date</label><input id='date-resettable' type='date' name='resettableDate' value='2024-06-15'><button id='date-reset' type='reset'>Reset dates</button></fieldset></form><form id='file-validation-form'><fieldset><legend>File control state</legend><label for='file-required-single'>Required single text file</label><input id='file-required-single' type='file' name='requiredFile' accept='.txt,text/plain' required><label for='file-multiple'>Multiple files</label><input id='file-multiple' type='file' name='multipleFiles' accept='.txt,.bin,text/plain,application/octet-stream' multiple><label for='file-disabled'>Disabled required file input</label><input id='file-disabled' type='file' name='disabledFile' required disabled><fieldset disabled><legend>Disabled file fieldset</legend><label for='file-disabled-fieldset'>Fieldset-disabled required file input</label><input id='file-disabled-fieldset' type='file' name='fieldsetDisabledFile' required></fieldset><button id='file-reset' type='reset'>Reset files</button></fieldset></form><form id='file-form-get' action='/capture/get' method='get'><label for='file-submit-get'>GET file submission</label><input id='file-submit-get' type='file' name='upload' multiple><input type='text' name='q' value='A + B &amp; C ~ ! 台北'><textarea name='notes'>line one&#10;line two</textarea><button type='submit'>Send GET</button></form><form id='file-form-urlencoded' action='/capture/urlencoded' method='post' enctype='application/x-www-form-urlencoded'><label for='file-submit-urlencoded'>URL-encoded file submission</label><input id='file-submit-urlencoded' type='file' name='upload' multiple><input type='text' name='q' value='A + B &amp; C ~ ! 台北'><textarea name='notes'>line one&#10;line two</textarea><button type='submit'>Send URL encoded</button></form><form id='file-form-text-plain' action='/capture/text-plain' method='post' enctype='text/plain'><label for='file-submit-text-plain'>Text plain file submission</label><input id='file-submit-text-plain' type='file' name='upload' multiple><input type='text' name='q' value='A + B &amp; C ~ ! 台北'><textarea name='notes'>line one&#10;line two</textarea><button type='submit'>Send text plain</button></form><form id='file-form-multipart' action='/capture/multipart' method='post' enctype='multipart/form-data'><label for='file-submit-multipart'>Multipart file submission</label><input id='file-submit-multipart' type='file' name='upload' multiple><input type='text' name='q' value='A + B &amp; C ~ ! 台北'><textarea name='notes'>line one&#10;line two</textarea><button type='submit'>Send multipart</button></form></section>",
+  "styleProperties": ["font-family", "font-size", "font-weight", "line-height", "color", "background-color", "color-scheme", "appearance", "box-sizing", "width", "height", "padding", "border", "border-radius", "margin", "opacity"],
+  "notes": {
+    "textScaling": "For each fresh page, restore all authored inline font-size declarations, snapshot every element's baseline computed font size, then apply one uniform scale from that baseline. The browser markup itself is not changed between themes or scale cases.",
+    "fileNames": "The two selected files are generated in-memory fixture bytes. Their names contain Unicode and spaces; their payloads include LF, NUL, 0xff, and non-UTF-8 bytes so multipart encoding must be read as bytes.",
+    "rawDocument": "The raw-document mode serves the same source markup as an HTML response without an embedded script. Capture logic runs from Playwright after the response loads.",
+    "nativeFileText": "Chromium's filename text is rendered inside the file input's browser control and is not a normal DOM node. The capture records the input box and ::file-selector-button computed style, selected FileList, focus/disabled state, and screenshots; it does not invent a filename-subpart rectangle."
+  }
+}

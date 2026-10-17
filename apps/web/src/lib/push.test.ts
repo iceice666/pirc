@@ -1,7 +1,15 @@
 // @vitest-environment jsdom
+// @vitest-environment-options {"url":"http://localhost"}
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from './app.svelte';
-import { currentSubscriptionId, disablePush, enablePush, pushState, targetFromUrl } from './push';
+import {
+  currentSubscriptionId,
+  disablePush,
+  enablePush,
+  interactionFromUrl,
+  pushState,
+  targetFromUrl,
+} from './push';
 
 const response = (value: unknown, status = 200) =>
   new Response(value === undefined ? null : JSON.stringify(value), { status });
@@ -31,7 +39,17 @@ beforeEach(() => {
   calls = [];
   permission = 'default';
   subscription = null;
-  localStorage.clear();
+  const values = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    get length() {
+      return values.size;
+    },
+    key: (index: number) => [...values.keys()][index] ?? null,
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key),
+    clear: () => values.clear(),
+  } satisfies Storage);
   const pushManager = {
     getSubscription: vi.fn(async () => subscription),
     subscribe: vi.fn(async (options: any) => {
@@ -114,6 +132,22 @@ describe('where a notification leads', () => {
     expect(at('?open=schedules')).toEqual({ schedules: true });
     expect(at('?open=memory')).toEqual({ memory: true });
     expect(at('')).toBeUndefined();
+  });
+
+  it('reads only a complete exact interaction tuple from a clicked notification URL', () => {
+    expect(
+      interactionFromUrl(
+        new URL('https://pirc.example/?session=s1&interactionId=q1&interactionEpoch=42'),
+      ),
+    ).toEqual({ sessionId: 's1', interactionId: 'q1', interactionEpoch: '42' });
+    expect(
+      interactionFromUrl(
+        new URL('https://pirc.example/?session=s1&interactionId=q1&interactionEpoch=042'),
+      ),
+    ).toBeUndefined();
+    expect(
+      interactionFromUrl(new URL('https://pirc.example/?session=s1&interactionId=q1')),
+    ).toBeUndefined();
   });
 
   it('shows the schedules page, focused on the one it was about', async () => {

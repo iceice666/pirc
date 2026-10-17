@@ -174,9 +174,15 @@ export function reduceEvent(
         needsSnapshot: true,
       };
     case 'interaction_removed':
+      // Legacy events do not carry the interaction row's runner epoch. An id
+      // can be reused by a later runner, so an epoch-less removal must never
+      // erase a newer question from the current snapshot.
+      if (event.runnerEpoch === undefined) return { ...base, needsSnapshot: true };
       return {
         ...base,
-        interactions: state.interactions.filter((item) => item.id !== event.interactionId),
+        interactions: state.interactions.filter(
+          (item) => item.id !== event.interactionId || item.runnerEpoch !== event.runnerEpoch,
+        ),
         needsSnapshot: true,
       };
     case 'queue_updated':

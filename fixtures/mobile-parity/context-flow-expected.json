@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "file": "side-panel-matrix-expected.json",
+    "sha256": "ca2e755d8af869486244aa9529b9d5ef7f3c0dcf23be670d505c1870ea75adf8",
+    "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+    "browserVersion": "154.0.8037.98"
+  },
+  "cases": {
+    "650-context-light-scale1": {
+      "activePanelRectY": 111,
+      "textNodes": [
+        {
+          "label": "Context",
+          "rectY": 133.71875
+        },
+        {
+          "label": "Saved snapshot",
+          "rectY": 190.4375
+        },
+        {
+          "label": "System sections",
+          "rectY": 433.703125
+        }
+      ]
+    },
+    "650-context-light-scale2": {
+      "activePanelRectY": 111,
+      "textNodes": [
+        {
+          "label": "Context",
+          "rectY": 152.4375
+        },
+        {
+          "label": "Saved snapshot",
+          "rectY": 264.875
+        },
+        {
+          "label": "System sections",
+          "rectY": 849.421875
+        }
+      ]
+    }
+  }
+}

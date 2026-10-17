@@ -1,0 +1,171 @@
+{
+  "id": "native-files-panel",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "width": 390,
+  "height": 844,
+  "views": ["directory", "source", "markdown", "svg", "binary"],
+  "links": [
+    {
+      "href": "src/main.ts:12",
+      "base": "",
+      "expected": {
+        "path": "src/main.ts",
+        "line": 12
+      }
+    },
+    {
+      "href": "src/main.ts:12:3",
+      "base": "",
+      "expected": {
+        "path": "src/main.ts",
+        "line": 12
+      }
+    },
+    {
+      "href": "src/main.ts:12-20",
+      "base": "",
+      "expected": {
+        "path": "src/main.ts",
+        "line": 12,
+        "endLine": 20
+      }
+    },
+    {
+      "href": "../src/main.ts#L2C3-L8C4",
+      "base": "docs",
+      "expected": {
+        "path": "src/main.ts",
+        "line": 2,
+        "endLine": 8
+      }
+    },
+    {
+      "href": "file://localhost/tmp/a%20b.md#L2",
+      "base": "",
+      "expected": {
+        "path": "/tmp/a b.md",
+        "line": 2
+      }
+    },
+    {
+      "href": "/a/../src/./main.ts?raw=1#L4",
+      "base": "",
+      "expected": {
+        "path": "/src/main.ts",
+        "line": 4
+      }
+    },
+    {
+      "href": "#section",
+      "base": "",
+      "expected": null
+    },
+    {
+      "href": "https://example.invalid/src/x.ts:2",
+      "base": "",
+      "expected": null
+    },
+    {
+      "href": "javascript:alert(1)",
+      "base": "",
+      "expected": null
+    },
+    {
+      "href": "//server/file.ts",
+      "base": "",
+      "expected": null
+    },
+    {
+      "href": "README.md",
+      "base": "docs",
+      "expected": {
+        "path": "docs/README.md"
+      }
+    },
+    {
+      "href": "src/x.ts#L0",
+      "base": "",
+      "expected": {
+        "path": "src/x.ts"
+      }
+    },
+    {
+      "href": "src/%ZZ.ts",
+      "base": "",
+      "expected": {
+        "path": "src/%ZZ.ts"
+      }
+    }
+  ],
+  "directory": {
+    "path": "",
+    "entries": [
+      {
+        "name": "docs",
+        "kind": "dir"
+      },
+      {
+        "name": "src",
+        "kind": "dir"
+      },
+      {
+        "name": "README.md",
+        "kind": "file",
+        "size": 256
+      },
+      {
+        "name": "architecture.svg",
+        "kind": "file",
+        "size": 277
+      },
+      {
+        "name": "latest",
+        "kind": "symlink",
+        "size": 12
+      },
+      {
+        "name": "service.socket",
+        "kind": "other"
+      }
+    ],
+    "truncated": false
+  },
+  "files": {
+    "source": {
+      "path": "src/main.ts",
+      "content": "// Native source preview\nexport const message = \"Hello Flutter\";\nexport function sum(a: number, b: number) {\n  return a + b;\n}\n",
+      "size": 127,
+      "modifiedAt": 1790960400000,
+      "binary": false,
+      "truncated": false
+    },
+    "markdown": {
+      "path": "README.md",
+      "content": "# Project notes\n\nOpen [the implementation](src/main.ts#L2-L4).\n\n- [x] Native file preview\n- [ ] Remaining renderer parity\n\n| View | Status |\n| --- | --- |\n| Source | Available |\n| SVG | Native |",
+      "size": 194,
+      "modifiedAt": 1790960400000,
+      "binary": false,
+      "truncated": false
+    },
+    "svg": {
+      "path": "architecture.svg",
+      "content": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"300\" height=\"180\" viewBox=\"0 0 300 180\"><rect x=\"20\" y=\"20\" width=\"260\" height=\"140\" rx=\"18\" fill=\"#4176e6\"/><circle cx=\"150\" cy=\"90\" r=\"46\" fill=\"#ffffff\"/><path d=\"M125 90h50M150 65v50\" stroke=\"#4176e6\" stroke-width=\"10\"/></svg>",
+      "size": 277,
+      "modifiedAt": 1790960400000,
+      "binary": false,
+      "truncated": false,
+      "image": {
+        "mimeType": "image/svg+xml",
+        "dataBase64": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMTgwIiB2aWV3Qm94PSIwIDAgMzAwIDE4MCI+PHJlY3QgeD0iMjAiIHk9IjIwIiB3aWR0aD0iMjYwIiBoZWlnaHQ9IjE0MCIgcng9IjE4IiBmaWxsPSIjNDE3NmU2Ii8+PGNpcmNsZSBjeD0iMTUwIiBjeT0iOTAiIHI9IjQ2IiBmaWxsPSIjZmZmZmZmIi8+PHBhdGggZD0iTTEyNSA5MGg1ME0xNTAgNjV2NTAiIHN0cm9rZT0iIzQxNzZlNiIgc3Ryb2tlLXdpZHRoPSIxMCIvPjwvc3ZnPg=="
+      }
+    },
+    "binary": {
+      "path": "data.bin",
+      "content": "",
+      "size": 12288,
+      "modifiedAt": 1790960400000,
+      "binary": true,
+      "truncated": false
+    }
+  }
+}

@@ -650,11 +650,18 @@ export function normalizeEvent(raw: any): EventEnvelope {
   let event: GatewayEvent = { type: 'reset', reason: 'epoch_changed' };
   if (raw.type === 'reset') event = { type: 'reset', reason: raw.reason ?? 'cursor_expired' };
   else if (raw.type === 'session_deleted') event = { type: 'session_deleted' };
-  else if (raw.type === 'interaction_created' && raw.data?.id?.startsWith('memory:'))
+  else if (raw.type === 'interaction_created' && typeof raw.data?.id === 'string')
     event = { type: 'interaction_updated', interaction: interaction(raw.data) };
-  else if (raw.type === 'interaction_answered' && raw.data?.interactionId?.startsWith('memory:'))
-    event = { type: 'interaction_removed', interactionId: raw.data.interactionId };
-  else if (raw.type === 'pi_event') event = piEvent(raw.data ?? {}, raw.timestamp);
+  else if (raw.type === 'interaction_answered' && typeof raw.data?.interactionId === 'string') {
+    const epoch = raw.data.interactionEpoch ?? raw.data.runnerEpoch;
+    event = {
+      type: 'interaction_removed',
+      interactionId: raw.data.interactionId,
+      ...(typeof epoch === 'string' || (typeof epoch === 'number' && Number.isSafeInteger(epoch))
+        ? { runnerEpoch: String(epoch) }
+        : {}),
+    };
+  } else if (raw.type === 'pi_event') event = piEvent(raw.data ?? {}, raw.timestamp);
   else if (raw.type === 'notification')
     event =
       raw.data?.method === 'notify'

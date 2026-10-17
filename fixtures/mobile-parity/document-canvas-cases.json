@@ -1,0 +1,452 @@
+{
+  "cases": [
+    {
+      "id": "rects-bar-chart",
+      "width": 120,
+      "height": 80,
+      "script": "context.fillStyle = '#e5e7eb'; context.fillRect(0, 0, canvas.width, canvas.height); context.fillStyle = '#2563eb'; context.fillRect(16, 48, 20, 22); context.fillStyle = '#16a34a'; context.fillRect(50, 30, 20, 40); context.fillStyle = '#f97316'; context.fillRect(84, 15, 20, 55); context.strokeStyle = '#111827'; context.lineWidth = 2; context.beginPath(); context.moveTo(10, 71); context.lineTo(110, 71); context.stroke();",
+      "samples": [
+        [
+          5,
+          5
+        ],
+        [
+          25,
+          55
+        ],
+        [
+          60,
+          45
+        ],
+        [
+          94,
+          25
+        ],
+        [
+          60,
+          71
+        ]
+      ]
+    },
+    {
+      "id": "quadratic-and-cubic-filled-paths",
+      "width": 160,
+      "height": 100,
+      "script": "context.fillStyle = '#ef4444'; context.beginPath(); context.moveTo(10, 90); context.quadraticCurveTo(10, 10, 80, 10); context.lineTo(80, 90); context.closePath(); context.fill(); context.fillStyle = '#2563eb'; context.beginPath(); context.moveTo(90, 90); context.bezierCurveTo(90, 10, 150, 10, 150, 90); context.closePath(); context.fill();",
+      "samples": [
+        [
+          30,
+          70
+        ],
+        [
+          60,
+          55
+        ],
+        [
+          110,
+          65
+        ],
+        [
+          140,
+          75
+        ],
+        [
+          85,
+          50
+        ]
+      ]
+    },
+    {
+      "id": "arcs-and-ellipse",
+      "width": 160,
+      "height": 100,
+      "script": "context.fillStyle = '#7c3aed'; context.beginPath(); context.arc(38, 50, 26, 0, Math.PI * 2); context.fill(); context.fillStyle = '#0891b2'; context.beginPath(); context.ellipse(116, 50, 34, 22, 0, 0, Math.PI * 2); context.fill();",
+      "samples": [
+        [
+          38,
+          50
+        ],
+        [
+          22,
+          50
+        ],
+        [
+          116,
+          50
+        ],
+        [
+          116,
+          30
+        ],
+        [
+          80,
+          50
+        ]
+      ]
+    },
+    {
+      "id": "save-restore-transform-and-style",
+      "width": 100,
+      "height": 70,
+      "script": "context.fillStyle = '#dc2626'; context.fillRect(4, 4, 18, 18); context.save(); context.translate(50, 20); context.rotate(Math.PI / 2); context.fillStyle = '#2563eb'; context.fillRect(0, 0, 20, 20); context.restore(); context.fillRect(70, 4, 18, 18);",
+      "samples": [
+        [
+          10,
+          10
+        ],
+        [
+          30,
+          30
+        ],
+        [
+          76,
+          10
+        ],
+        [
+          55,
+          10
+        ]
+      ]
+    },
+    {
+      "id": "path-keeps-construction-transform-before-stroke",
+      "width": 120,
+      "height": 70,
+      "script": "context.strokeStyle = '#16a34a'; context.lineWidth = 6; context.translate(20, 12); context.beginPath(); context.moveTo(10, 18); context.lineTo(70, 18); context.setTransform(1, 0, 0, 1, 0, 0); context.stroke();",
+      "samples": [
+        [
+          40,
+          30
+        ],
+        [
+          80,
+          30
+        ],
+        [
+          40,
+          38
+        ],
+        [
+          15,
+          30
+        ]
+      ]
+    },
+    {
+      "id": "clip-and-clear-rect",
+      "width": 120,
+      "height": 80,
+      "script": "context.fillStyle = '#facc15'; context.fillRect(0, 0, canvas.width, canvas.height); context.beginPath(); context.rect(20, 15, 70, 50); context.clip(); context.fillStyle = '#2563eb'; context.fillRect(0, 0, canvas.width, canvas.height); context.clearRect(35, 25, 20, 20);",
+      "samples": [
+        [
+          10,
+          30
+        ],
+        [
+          30,
+          35
+        ],
+        [
+          45,
+          35
+        ],
+        [
+          75,
+          35
+        ],
+        [
+          100,
+          35
+        ]
+      ]
+    },
+    {
+      "id": "global-alpha-and-destination-out",
+      "width": 80,
+      "height": 70,
+      "script": "context.fillStyle = '#1d4ed8'; context.fillRect(5, 5, 55, 55); context.globalAlpha = 0.5; context.fillStyle = '#ef4444'; context.fillRect(15, 15, 30, 30); context.globalCompositeOperation = 'destination-out'; context.globalAlpha = 0.5; context.fillStyle = '#000000'; context.fillRect(30, 30, 25, 25);",
+      "samples": [
+        [
+          10,
+          10
+        ],
+        [
+          20,
+          20
+        ],
+        [
+          35,
+          35
+        ],
+        [
+          50,
+          50
+        ],
+        [
+          65,
+          10
+        ]
+      ]
+    },
+    {
+      "id": "linear-gradient-created-under-transform",
+      "width": 130,
+      "height": 50,
+      "script": "context.save(); context.translate(20, 0); const gradient = context.createLinearGradient(0, 0, 80, 0); gradient.addColorStop(0, '#ef4444'); gradient.addColorStop(1, '#2563eb'); context.restore(); context.fillStyle = gradient; context.fillRect(0, 0, 120, 40);",
+      "samples": [
+        [
+          10,
+          20
+        ],
+        [
+          30,
+          20
+        ],
+        [
+          60,
+          20
+        ],
+        [
+          90,
+          20
+        ],
+        [
+          115,
+          20
+        ]
+      ]
+    },
+    {
+      "id": "radial-gradient",
+      "width": 110,
+      "height": 100,
+      "script": "const gradient = context.createRadialGradient(55, 50, 6, 55, 50, 42); gradient.addColorStop(0, '#fef08a'); gradient.addColorStop(0.55, '#f97316'); gradient.addColorStop(1, '#7c2d12'); context.fillStyle = gradient; context.fillRect(0, 0, canvas.width, canvas.height);",
+      "samples": [
+        [
+          55,
+          50
+        ],
+        [
+          70,
+          50
+        ],
+        [
+          82,
+          50
+        ],
+        [
+          95,
+          50
+        ],
+        [
+          4,
+          4
+        ]
+      ]
+    },
+    {
+      "id": "line-dash-and-cap",
+      "width": 110,
+      "height": 60,
+      "script": "context.strokeStyle = '#7c3aed'; context.lineWidth = 6; context.lineCap = 'butt'; context.setLineDash([12, 8]); context.beginPath(); context.moveTo(10, 30); context.lineTo(90, 30); context.stroke();",
+      "samples": [
+        [
+          15,
+          30
+        ],
+        [
+          25,
+          30
+        ],
+        [
+          35,
+          30
+        ],
+        [
+          45,
+          30
+        ],
+        [
+          75,
+          30
+        ]
+      ]
+    },
+    {
+      "id": "canvas-width-assignment-resets-context",
+      "width": 120,
+      "height": 80,
+      "script": "context.fillStyle = '#f97316'; context.globalAlpha = 0.5; context.translate(25, 15); context.fillRect(0, 0, 20, 20); canvas.width = 120; context.fillRect(10, 10, 20, 20); context.fillStyle = '#16a34a'; context.fillRect(45, 10, 20, 20);",
+      "samples": [
+        [
+          30,
+          20
+        ],
+        [
+          5,
+          5
+        ],
+        [
+          15,
+          15
+        ],
+        [
+          50,
+          15
+        ],
+        [
+          75,
+          15
+        ]
+      ]
+    },
+    {
+      "id": "sequential-frame-clear-and-redraw",
+      "width": 100,
+      "height": 70,
+      "script": "context.fillStyle = '#ef4444'; context.fillRect(0, 0, canvas.width, canvas.height); context.clearRect(0, 0, canvas.width, canvas.height); context.fillStyle = '#16a34a'; context.fillRect(25, 15, 50, 40);",
+      "samples": [
+        [
+          10,
+          10
+        ],
+        [
+          50,
+          35
+        ],
+        [
+          80,
+          35
+        ],
+        [
+          50,
+          60
+        ]
+      ]
+    },
+    {
+      "id": "fill-and-stroke-text-bounds",
+      "width": 240,
+      "height": 100,
+      "script": "context.font = '24px Arial'; context.textBaseline = 'alphabetic'; context.textAlign = 'left'; context.fillStyle = '#1d4ed8'; context.fillText('Canvas', 12, 42); context.strokeStyle = '#dc2626'; context.lineWidth = 1.5; context.strokeText('2D', 12, 82);",
+      "samples": [
+        [
+          2,
+          2
+        ],
+        [
+          230,
+          95
+        ]
+      ]
+    },
+    {
+      "id": "linear-gradient-drawn-under-translate-and-scale",
+      "width": 140,
+      "height": 50,
+      "script": "const gradient = context.createLinearGradient(0, 0, 40, 0); gradient.addColorStop(0, '#ef4444'); gradient.addColorStop(1, '#2563eb'); context.save(); context.translate(20, 0); context.scale(2, 1); context.fillStyle = gradient; context.fillRect(0, 0, 40, 30); context.restore();",
+      "samples": [
+        [
+          22,
+          10
+        ],
+        [
+          40,
+          10
+        ],
+        [
+          60,
+          10
+        ],
+        [
+          90,
+          10
+        ],
+        [
+          110,
+          10
+        ]
+      ]
+    },
+    {
+      "id": "rgba-hsla-alpha-on-transparent-canvas",
+      "width": 110,
+      "height": 60,
+      "script": "context.fillStyle = 'rgba(255, 0, 0, 0.5)'; context.fillRect(10, 10, 30, 30); context.fillStyle = 'hsla(210, 100%, 50%, 0.25)'; context.fillRect(55, 10, 30, 30); context.fillStyle = 'hsla(120, 100%, 50%, 1)'; context.fillRect(10, 45, 30, 10);",
+      "samples": [
+        [
+          20,
+          20
+        ],
+        [
+          65,
+          20
+        ],
+        [
+          20,
+          50
+        ],
+        [
+          95,
+          20
+        ]
+      ]
+    },
+    {
+      "id": "negative-rects-and-canvas-surface-clip",
+      "width": 100,
+      "height": 80,
+      "script": "context.fillStyle = '#ef4444'; context.fillRect(60, 10, -30, 20); context.fillStyle = '#2563eb'; context.fillRect(70, 50, -30, -20); context.fillStyle = '#16a34a'; context.fillRect(-10, -10, 30, 30); context.fillStyle = '#facc15'; context.fillRect(85, 65, 30, 30);",
+      "samples": [
+        [
+          5,
+          5
+        ],
+        [
+          35,
+          15
+        ],
+        [
+          45,
+          35
+        ],
+        [
+          90,
+          70
+        ],
+        [
+          75,
+          55
+        ]
+      ]
+    },
+    {
+      "id": "source-in-clears-outside-source-shape",
+      "width": 100,
+      "height": 80,
+      "script": "context.fillStyle = '#2563eb'; context.fillRect(0, 0, canvas.width, canvas.height); context.globalCompositeOperation = 'source-in'; context.fillStyle = 'rgba(255, 0, 0, 0.5)'; context.fillRect(30, 20, 40, 40);",
+      "samples": [
+        [
+          50,
+          40
+        ],
+        [
+          10,
+          10
+        ],
+        [
+          80,
+          40
+        ],
+        [
+          10,
+          70
+        ],
+        [
+          90,
+          70
+        ]
+      ]
+    }
+  ]
+}

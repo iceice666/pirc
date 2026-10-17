@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Document select event oracle</title>
+  <style>
+    body { font: 16px sans-serif; margin: 2rem; }
+    label { display: block; margin: 1rem 0; }
+    select { display: block; margin-top: .35rem; min-width: 16rem; }
+    #event-output { position: fixed; left: -10000px; top: 0; width: 1px; height: 1px; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <h1>Document select event oracle</h1>
+
+  <label for="option-list">Native option selection</label>
+  <select id="option-list" size="4">
+    <option value="alpha">Alpha</option>
+    <option value="bravo">Bravo</option>
+    <option value="charlie">Charlie</option>
+    <option value="delta">Delta</option>
+  </select>
+
+  <label for="keyboard-native">Native listbox keyboard baseline</label>
+  <select id="keyboard-native" size="4">
+    <option value="alpha">Alpha</option>
+    <option value="bravo">Bravo</option>
+    <option value="charlie" selected>Charlie</option>
+    <option value="delta">Delta</option>
+  </select>
+
+  <label for="keyboard-cancel">Listbox with keydown cancellation</label>
+  <select id="keyboard-cancel" size="4">
+    <option value="alpha">Alpha</option>
+    <option value="bravo">Bravo</option>
+    <option value="charlie" selected>Charlie</option>
+    <option value="delta">Delta</option>
+  </select>
+
+  <label for="click-cancel">Listbox with click cancellation</label>
+  <select id="click-cancel" size="4">
+    <option value="alpha">Alpha</option>
+    <option value="bravo" selected>Bravo</option>
+    <option value="charlie">Charlie</option>
+    <option value="delta">Delta</option>
+  </select>
+
+  <pre id="event-output" aria-hidden="true"></pre>
+
+  <script>
+    (() => {
+      const events = [];
+      const eventTypes = [
+        'focus', 'blur', 'focusin', 'focusout', 'click',
+        'keydown', 'keyup', 'input', 'change'
+      ];
+      const elementName = (element) => {
+        if (!element) return null;
+        if (element instanceof HTMLOptionElement) return `option:${element.value}`;
+        return element.id || element.tagName.toLowerCase();
+      };
+      const selectFor = (target) => target instanceof HTMLSelectElement
+        ? target
+        : target.closest?.('select') ?? null;
+
+      function render() {
+        document.querySelector('#event-output').textContent = JSON.stringify(events);
+      }
+
+      function record(event, phase) {
+        const select = selectFor(event.target);
+        events.push({
+          type: event.type,
+          phase,
+          target: elementName(event.target),
+          select: select?.id ?? null,
+          activeElement: elementName(document.activeElement),
+          value: select?.value ?? null,
+          selectedIndex: select?.selectedIndex ?? null,
+          key: 'key' in event ? event.key : null,
+          code: 'code' in event ? event.code : null,
+          repeat: 'repeat' in event ? event.repeat : null,
+          modifiers: 'key' in event ? {
+            alt: event.altKey,
+            ctrl: event.ctrlKey,
+            meta: event.metaKey,
+            shift: event.shiftKey
+          } : null,
+          isTrusted: event.isTrusted,
+          defaultPrevented: event.defaultPrevented
+        });
+        render();
+      }
+
+      for (const type of eventTypes) {
+        document.addEventListener(type, (event) => record(event, 'capture'), true);
+        document.addEventListener(type, (event) => record(event, 'bubble'));
+      }
+
+      const canceledKeys = new Set(['ArrowDown', 'Home', 'End', 'b']);
+      document.querySelector('#keyboard-cancel').addEventListener('keydown', (event) => {
+        if (canceledKeys.has(event.key)) event.preventDefault();
+      });
+      document.querySelector('#click-cancel').addEventListener('click', (event) => {
+        event.preventDefault();
+      });
+
+      window.eventOracle = {
+        events,
+        clear() {
+          events.splice(0, events.length);
+          render();
+        }
+      };
+    })();
+  </script>
+</body>
+</html>

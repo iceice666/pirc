@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Touch browser acceptance</title>
+    <style>
+      body {
+        margin: 0;
+        width: 640px;
+        height: 400px;
+        font: 16px Arial;
+        background: #f6f7f9;
+      }
+      input {
+        position: absolute;
+        left: 40px;
+        top: 20px;
+        width: 240px;
+        height: 32px;
+      }
+      #scroll {
+        position: absolute;
+        left: 40px;
+        top: 90px;
+        width: 300px;
+        height: 200px;
+        overflow: auto;
+        background: white;
+      }
+      #content {
+        height: 1200px;
+        background: linear-gradient(#aee, #fea);
+        padding: 8px;
+      }
+      #drag {
+        position: absolute;
+        left: 400px;
+        top: 90px;
+        width: 180px;
+        height: 200px;
+        background: #8ac;
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <input aria-label="Name" placeholder="Tap to type" />
+    <div id="scroll"><div id="content">Swipe this area to scroll its content.</div></div>
+    <div id="drag">Drag this area in drag mode.</div>
+    <script>
+      const status = new URLSearchParams();
+      function report(key, value) {
+        status.set(key, value);
+        history.replaceState(null, '', '/touch?' + status);
+      }
+      const scrollBox = document.querySelector('#scroll');
+      let presses = 0;
+      report('presses', presses);
+      scrollBox.onmousedown = () => report('presses', ++presses);
+      scrollBox.onscroll = () => report('scroll', Math.round(scrollBox.scrollTop));
+      const input = document.querySelector('input');
+      input.onfocus = () => report('focused', 1);
+      input.oninput = () => report('typed', input.value);
+      const drag = document.querySelector('#drag');
+      let origin = null;
+      drag.ondblclick = () => report('double', 1);
+      drag.onmousedown = (e) => {
+        origin = { x: e.clientX, y: e.clientY };
+      };
+      window.onmouseup = (e) => {
+        if (origin) {
+          report('dragged', Math.hypot(e.clientX - origin.x, e.clientY - origin.y) > 40 ? 1 : 0);
+          origin = null;
+        }
+      };
+    </script>
+  </body>
+</html>

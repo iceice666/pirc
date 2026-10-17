@@ -1,0 +1,64 @@
+{
+  "fixture": "mermaid-timeline-v1",
+  "reference": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "source": {
+    "file": "mermaid-timeline-expected.json",
+    "sha256": "55c0439fae11abcb06deb73f535f80d44ac7baec0eb036bc8e68850c6e4143fb"
+  },
+  "geometryCatalog": {
+    "timeline-br-label-wrap-light": {
+      "shared": {
+        "texts": [
+          {
+            "tag": "text",
+            "text": "A   long   event   label   thatmust   wrap   inside   thefixed   timeline   eventnode   width"
+          },
+          {
+            "tag": "tspan",
+            "text": "A   long   event   label   that",
+            "computedTextLength": 135.14990234375,
+            "bbox": {
+              "y": 4.431526184082031
+            }
+          },
+          {
+            "tag": "tspan",
+            "text": "must   wrap   inside   the",
+            "computedTextLength": 125.75825500488281,
+            "bbox": {
+              "y": 18.731525421142578
+            }
+          },
+          {
+            "tag": "tspan",
+            "text": "fixed   timeline   event",
+            "computedTextLength": 117.45169830322266,
+            "bbox": {
+              "y": 33.031524658203125
+            }
+          },
+          {
+            "tag": "tspan",
+            "text": "node   width",
+            "computedTextLength": 67.12594604492188,
+            "bbox": {
+              "y": 47.33152389526367
+            }
+          }
+        ],
+        "timelineNodes": [
+          {
+            "textIndices": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

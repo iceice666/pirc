@@ -1,0 +1,111 @@
+{
+  "id": "markdown-selection",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 768],
+  "height": 1800,
+  "cases": [
+    {
+      "id": "inline",
+      "source": "Before `inline code` after **bold** and [link](https://example.test)."
+    },
+    {
+      "id": "paragraphs",
+      "source": "First paragraph.\n\nSecond `code` paragraph."
+    },
+    {
+      "id": "heading",
+      "source": "# Heading\n\nText.\n\n## Second\n\nEnd."
+    },
+    {
+      "id": "list",
+      "source": "- first\n- second `code`\n  - nested\n- last"
+    },
+    {
+      "id": "quote",
+      "source": "> First\n>\n> Second\n\nAfter"
+    },
+    {
+      "id": "fence",
+      "source": "Before\n\n```dart\nfinal x = 1;\nprint(x);\n```\n\nAfter"
+    },
+    {
+      "id": "table",
+      "source": "| A | B |\n|---|---|\n| one `code` | two |\n| three | four |"
+    },
+    {
+      "id": "empty-cell",
+      "source": "| A | B |\n|---|---|\n| | value |\n| last | |"
+    },
+    {
+      "id": "loose-list",
+      "source": "1. first\n\n2. second\n\n   another paragraph\n\n3. last"
+    },
+    {
+      "id": "heading-list",
+      "source": "# Heading\n\n- first\n- second\n\nAfter"
+    },
+    {
+      "id": "nested-heading",
+      "source": "> # Heading\n>\n> Text\n>\n> ```txt\n> code\n> ```\n>\n> Tail\n\nEnd"
+    },
+    {
+      "id": "code-list",
+      "source": "```txt\ncode\n```\n\n- first\n- last"
+    },
+    {
+      "id": "hard-break",
+      "source": "Before  \nafter\n\nLast"
+    },
+    {
+      "id": "empty-table",
+      "source": "| A | | C |\n|---|---|---|\n| x | | z |\n| | y | |\n| | | |"
+    },
+    {
+      "id": "empty-header",
+      "source": "| | B |\n|---|---|\n| A | |\n\nAfter"
+    },
+    {
+      "id": "table-drag",
+      "source": "| A | B |\n|---|---|\n| alpha | |\n| omega | end |",
+      "ranges": [
+        {
+          "id": "cross-empty",
+          "from": {
+            "text": "alpha",
+            "offset": 2
+          },
+          "to": {
+            "text": "omega",
+            "offset": 3
+          }
+        },
+        {
+          "id": "within-cell",
+          "from": {
+            "text": "alpha",
+            "offset": 1
+          },
+          "to": {
+            "text": "alpha",
+            "offset": 4
+          }
+        },
+        {
+          "id": "to-empty",
+          "from": {
+            "text": "alpha",
+            "offset": 2
+          },
+          "to": {
+            "selector": "tbody tr:first-child td:last-child",
+            "offset": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "files-readme",
+      "source": "# Project notes\n\nOpen [the implementation](src/main.ts#L2-L4).\n\n- [x] Native file preview\n- [ ] Remaining renderer parity\n\n| View | Status |\n| --- | --- |\n| Source | Available |\n| SVG | Native |"
+    }
+  ]
+}

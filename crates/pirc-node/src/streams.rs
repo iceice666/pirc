@@ -12,22 +12,21 @@
 //! (else 4400) and the message's first 120 UTF-16 units; a shell's exit is
 //! the `exit` frame then `terminal_closed` 1000 "terminal exited". Input is
 //! checked against the control lease per message. An already open
-//! `streamId` is ignored. A browser stream's input runs in the order it
-//! arrived, one message at a time (a mouse up after its down, keys after
-//! the navigation sent before them), as TS's single thread sent them.
+//! `streamId` is ignored.
 //!
 //! Locks: the stream table is held while a stream opens (so a shell that
 //! exits meanwhile finds its stream and closes it; TS relied on PTY events
 //! being asynchronous), never while input reaches a terminal.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use pirc_agent::tools::js::string_of;
 use pirc_protocol::{NodeMessage, TerminalKind};
 use serde_json::{Map, Value, json};
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
 use crate::browser::{BrowserTarget, Detach, FrameSink};
 use crate::error::{ApiError, ApiResult};
@@ -48,12 +47,10 @@ enum Connection {
         listener: u64,
     },
     Browser {
-        session_id: String,
-        /// False once detached: late answers are not sent, and queued
-        /// input is dropped.
+        input: UnboundedSender<Map<String, Value>>,
+        target: BrowserTarget,
+        /// False once detached: late answers are not sent.
         open: Arc<AtomicBool>,
-        /// Input for the stream's worker, which handles it in order.
-        queue: mpsc::UnboundedSender<Map<String, Value>>,
         detach: Option<Detach>,
     },
 }
@@ -65,40 +62,32 @@ enum Target {
         terminal_id: String,
     },
     Browser {
-        session_id: String,
-        queue: mpsc::UnboundedSender<Map<String, Value>>,
+        input: UnboundedSender<Map<String, Value>>,
+        target: BrowserTarget,
+        open: Arc<AtomicBool>,
     },
 }
 
-/// A browser stream's worker: its input, one message at a time, in order,
-/// until the stream is detached (its sender dropped).
-async fn browser_inputs(
-    browser: Arc<dyn crate::browser::BrowserService>,
-    link: LinkSender,
-    id: String,
-    target: BrowserTarget,
+/// One worker per viewer preserves input order across awaited CDP actions.
+/// Closing the viewer discards queued actions; observational log reads bypass it.
+fn browser_input_queue<F, Fut>(
     open: Arc<AtomicBool>,
-    mut inputs: mpsc::UnboundedReceiver<Map<String, Value>>,
-) {
-    while let Some(message) = inputs.recv().await {
-        if !open.load(Ordering::Acquire) {
-            return;
+    mut execute: F,
+) -> UnboundedSender<Map<String, Value>>
+where
+    F: FnMut(Map<String, Value>) -> Fut + Send + 'static,
+    Fut: Future<Output = ()> + Send,
+{
+    let (sender, mut receiver) = unbounded_channel();
+    tokio::spawn(async move {
+        while let Some(message) = receiver.recv().await {
+            if !open.load(Ordering::Acquire) {
+                break;
+            }
+            execute(message).await;
         }
-        let answer = browser.input(target.clone(), Value::Object(message)).await;
-        if !open.load(Ordering::Acquire) {
-            return;
-        }
-        match answer {
-            Ok(Some(value)) => frame(&link, &id, value),
-            Ok(None) => {}
-            Err(error) => frame(
-                &link,
-                &id,
-                json!({ "type": "error", "code": error.code,
-                    "message": crate::util::head16(&error.message, 500) }),
-            ),
-        }
-    }
+    });
+    sender
 }
 
 fn frame(link: &LinkSender, stream_id: &str, frame: Value) {
@@ -292,19 +281,49 @@ impl Streams {
         });
         let detach = node.browser.attach(&session.id, sink);
         let open = Arc::new(AtomicBool::new(true));
-        let (queue, inputs) = mpsc::unbounded_channel();
-        tokio::spawn(browser_inputs(
-            node.browser.clone(),
-            node.link.clone(),
-            stream_id.to_owned(),
-            target,
-            open.clone(),
-            inputs,
-        ));
+        let weak = self.node.clone();
+        let worker_open = open.clone();
+        let worker_target = target.clone();
+        let session_id = session.id;
+        let id = stream_id.to_owned();
+        let input = browser_input_queue(open.clone(), move |message| {
+            let weak = weak.clone();
+            let open = worker_open.clone();
+            let target = worker_target.clone();
+            let session_id = session_id.clone();
+            let id = id.clone();
+            async move {
+                let Some(node) = weak.upgrade() else { return };
+                // Control can change while an earlier input is in flight.
+                if !lease_holds(&node, &session_id, &message) {
+                    frame(
+                        &node.link,
+                        &id,
+                        json!({ "type": "error", "code": "lost_control",
+                        "message": "Take control of the session to use the browser" }),
+                    );
+                    return;
+                }
+                let answer = node.browser.input(target, Value::Object(message)).await;
+                if !open.load(Ordering::Acquire) {
+                    return;
+                }
+                match answer {
+                    Ok(Some(value)) => frame(&node.link, &id, value),
+                    Ok(None) => {}
+                    Err(error) => frame(
+                        &node.link,
+                        &id,
+                        json!({ "type": "error", "code": error.code,
+                        "message": crate::util::head16(&error.message, 500) }),
+                    ),
+                }
+            }
+        });
         Ok(Connection::Browser {
-            session_id: session.id,
+            input,
+            target,
             open,
-            queue,
             detach: Some(detach),
         })
     }
@@ -325,10 +344,14 @@ impl Streams {
                 terminal_id: terminal_id.clone(),
             },
             Some(Connection::Browser {
-                session_id, queue, ..
+                input,
+                target,
+                open,
+                ..
             }) => Target::Browser {
-                session_id: session_id.clone(),
-                queue: queue.clone(),
+                input: input.clone(),
+                target: target.clone(),
+                open: open.clone(),
             },
         };
         let message = match message {
@@ -371,19 +394,35 @@ impl Streams {
                     );
                 }
             }
-            Target::Browser { session_id, queue } => {
-                // The action log's images are for anyone who may watch.
-                if kind != Some("log_image") && !lease_holds(&node, &session_id, &message) {
-                    frame(
-                        &node.link,
-                        stream_id,
-                        json!({ "type": "error", "code": "lost_control",
-                            "message": "Take control of the session to use the browser" }),
-                    );
+            Target::Browser {
+                input,
+                target,
+                open,
+            } => {
+                if kind != Some("log_image") {
+                    let _ = input.send(message);
                     return;
                 }
-                // The worker is gone only once the stream is.
-                let _ = queue.send(message);
+                // Log image reads remain available while mutating input is busy.
+                let browser = node.browser.clone();
+                let link = node.link.clone();
+                let id = stream_id.to_owned();
+                tokio::spawn(async move {
+                    let answer = browser.input(target, Value::Object(message)).await;
+                    if !open.load(Ordering::Acquire) {
+                        return;
+                    }
+                    match answer {
+                        Ok(Some(value)) => frame(&link, &id, value),
+                        Ok(None) => {}
+                        Err(error) => frame(
+                            &link,
+                            &id,
+                            json!({ "type": "error", "code": error.code,
+                                "message": crate::util::head16(&error.message, 500) }),
+                        ),
+                    }
+                });
             }
         }
     }
@@ -427,124 +466,70 @@ impl Streams {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-    use std::time::Duration;
-
     use super::*;
-    use crate::browser::{BoxFuture, BrowserService, Detach, FrameSink};
+    use tokio::sync::{Semaphore, mpsc};
 
-    /// Records when each input starts and ends; `"slow"` takes a while, as
-    /// a navigation does.
-    struct Recording(Arc<Mutex<Vec<String>>>);
-
-    impl BrowserService for Recording {
-        fn enabled(&self) -> bool {
-            true
-        }
-
-        fn handle(&self, _: BrowserTarget, _: String, _: Value) -> BoxFuture<'_, ApiResult<Value>> {
-            unreachable!()
-        }
-
-        fn handle_with_abort(
-            &self,
-            _: BrowserTarget,
-            _: String,
-            _: Value,
-            _: tokio::sync::watch::Receiver<bool>,
-        ) -> BoxFuture<'_, ApiResult<Value>> {
-            unreachable!()
-        }
-
-        fn attach(&self, _: &str, _: FrameSink) -> Detach {
-            unreachable!()
-        }
-
-        fn input(
-            &self,
-            _: BrowserTarget,
-            message: Value,
-        ) -> BoxFuture<'_, ApiResult<Option<Value>>> {
-            let log = self.0.clone();
-            Box::pin(async move {
-                let name = message["type"].as_str().unwrap_or_default().to_owned();
-                log.lock().unwrap().push(format!("start {name}"));
-                if name == "slow" {
-                    tokio::time::sleep(Duration::from_millis(200)).await;
-                }
-                log.lock().unwrap().push(format!("end {name}"));
-                Ok(None)
-            })
-        }
-
-        fn close_session(&self, _: &str) -> BoxFuture<'_, ()> {
-            unreachable!()
-        }
-
-        fn shutdown(&self) -> BoxFuture<'_, ()> {
-            unreachable!()
-        }
-    }
-
-    fn message(kind: &str) -> Map<String, Value> {
-        json!({ "type": kind }).as_object().unwrap().clone()
-    }
-
-    /// A viewer's input used to be handled on a task per message, so a key
-    /// or a mouse up could run before the navigation or the mouse down sent
-    /// before it. Each message now starts once the one before has ended.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-    async fn browser_input_runs_in_order() {
-        let log = Arc::new(Mutex::new(Vec::new()));
+    #[tokio::test]
+    async fn browser_actions_stay_ordered_while_first_action_waits() {
         let open = Arc::new(AtomicBool::new(true));
-        let (queue, inputs) = mpsc::unbounded_channel();
-        let worker = tokio::spawn(browser_inputs(
-            Arc::new(Recording(log.clone())),
-            LinkSender::new(),
-            "stream".to_owned(),
-            BrowserTarget {
-                session_id: "s".to_owned(),
-                workspace_id: "w".to_owned(),
-                root: PathBuf::from("/"),
-            },
-            open.clone(),
-            inputs,
-        ));
-        for kind in ["slow", "down", "up", "key", "slow", "text"] {
-            queue.send(message(kind)).unwrap();
-        }
-        drop(queue);
-        tokio::time::timeout(Duration::from_secs(5), worker)
-            .await
-            .unwrap()
+        let gate = Arc::new(Semaphore::new(0));
+        let (seen, mut events) = mpsc::unbounded_channel();
+        let queue = browser_input_queue(open, {
+            let gate = gate.clone();
+            move |message| {
+                let seen = seen.clone();
+                let gate = gate.clone();
+                async move {
+                    let number = message["n"].as_u64().unwrap();
+                    seen.send((number, "start")).unwrap();
+                    if number == 1 {
+                        gate.acquire().await.unwrap().forget();
+                    }
+                    seen.send((number, "end")).unwrap();
+                }
+            }
+        });
+        queue
+            .send(json!({"n":1}).as_object().unwrap().clone())
             .unwrap();
-        let expected: Vec<String> = ["slow", "down", "up", "key", "slow", "text"]
-            .iter()
-            .flat_map(|kind| [format!("start {kind}"), format!("end {kind}")])
-            .collect();
-        assert_eq!(*log.lock().unwrap(), expected);
+        queue
+            .send(json!({"n":2}).as_object().unwrap().clone())
+            .unwrap();
+        assert_eq!(events.recv().await, Some((1, "start")));
+        tokio::task::yield_now().await;
+        assert!(events.try_recv().is_err());
+        gate.add_permits(1);
+        assert_eq!(events.recv().await, Some((1, "end")));
+        assert_eq!(events.recv().await, Some((2, "start")));
+        assert_eq!(events.recv().await, Some((2, "end")));
+    }
 
-        // Once the stream is detached, what is still queued is dropped.
-        log.lock().unwrap().clear();
-        let (queue, inputs) = mpsc::unbounded_channel();
-        let worker = tokio::spawn(browser_inputs(
-            Arc::new(Recording(log.clone())),
-            LinkSender::new(),
-            "stream".to_owned(),
-            BrowserTarget {
-                session_id: "s".to_owned(),
-                workspace_id: "w".to_owned(),
-                root: PathBuf::from("/"),
-            },
-            open.clone(),
-            inputs,
-        ));
-        queue.send(message("slow")).unwrap();
-        queue.send(message("key")).unwrap();
-        tokio::time::sleep(Duration::from_millis(50)).await;
+    #[tokio::test]
+    async fn closed_viewer_discards_actions_queued_behind_in_flight_input() {
+        let open = Arc::new(AtomicBool::new(true));
+        let gate = Arc::new(Semaphore::new(0));
+        let (seen, mut events) = mpsc::unbounded_channel();
+        let queue = browser_input_queue(open.clone(), {
+            let gate = gate.clone();
+            move |message| {
+                let seen = seen.clone();
+                let gate = gate.clone();
+                async move {
+                    seen.send(message["n"].clone()).unwrap();
+                    gate.acquire().await.unwrap().forget();
+                }
+            }
+        });
+        queue
+            .send(json!({"n":1}).as_object().unwrap().clone())
+            .unwrap();
+        queue
+            .send(json!({"n":2}).as_object().unwrap().clone())
+            .unwrap();
+        assert_eq!(events.recv().await, Some(json!(1)));
         open.store(false, Ordering::Release);
+        gate.add_permits(1);
         drop(queue);
-        worker.await.unwrap();
-        assert_eq!(*log.lock().unwrap(), ["start slow", "end slow"]);
+        assert_eq!(events.recv().await, None);
     }
 }

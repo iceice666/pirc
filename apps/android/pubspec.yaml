@@ -1,0 +1,36 @@
+name: pirc_mobile
+description: pirc Flutter Android testing client.
+publish_to: none
+version: 0.6.1+68
+environment:
+  sdk: ^3.12.2
+dependencies:
+  flutter:
+    sdk: flutter
+  csslib: 1.0.2
+  flutter_markdown_plus: 1.0.12
+  xterm: ^4.0.0
+  lucide_icons_flutter: ^3.0.0
+  flutter_math_fork: 0.7.4
+  markdown: ^7.3.1
+  re_highlight: ^0.0.3
+  flutter_svg: 2.3.0
+  xml: 7.0.1
+  flutter_widget_from_html_core: 0.17.4
+  html: 0.15.6
+  qr: 3.0.2
+  mobile_scanner: 7.4.2
+dev_dependencies:
+  integration_test:
+    sdk: flutter
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/design-tokens.json
+    - assets/d3-sankey-license.txt
+    - assets/document-script-runtime.js
+    - assets/document-script-runtime.LICENSE.txt
+    - assets/document-script-runtime.THIRD_PARTY.txt

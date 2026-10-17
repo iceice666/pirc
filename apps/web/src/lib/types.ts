@@ -467,7 +467,7 @@ export type GatewayEvent =
   | { type: 'noop' }
   | { type: 'run_updated'; run: RunState | null; runnerStatus?: RunnerStatus }
   | { type: 'interaction_updated'; interaction: PendingInteraction }
-  | { type: 'interaction_removed'; interactionId: string }
+  | { type: 'interaction_removed'; interactionId: string; runnerEpoch?: string }
   | { type: 'queue_updated'; queue: QueueItem[] }
   | { type: 'approval_mode_changed'; mode: ApprovalMode }
   | { type: 'widget_updated'; key: string; lines?: string[] }

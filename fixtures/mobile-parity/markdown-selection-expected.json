@@ -1,0 +1,87 @@
+[
+  {
+    "id": "inline",
+    "text": "Before inline code after bold and link."
+  },
+  {
+    "id": "paragraphs",
+    "text": "First paragraph.\n\nSecond code paragraph."
+  },
+  {
+    "id": "heading",
+    "text": "Heading\nText.\n\nSecond\nEnd."
+  },
+  {
+    "id": "list",
+    "text": "first\nsecond code\nnested\nlast"
+  },
+  {
+    "id": "quote",
+    "text": "First\n\nSecond\n\nAfter"
+  },
+  {
+    "id": "fence",
+    "text": "Before\n\ndart\nCopy\nfinal x = 1;\nprint(x);\nAfter"
+  },
+  {
+    "id": "table",
+    "text": "A\tB\none code\ttwo\nthree\tfour"
+  },
+  {
+    "id": "empty-cell",
+    "text": "A\tB\nvalue\nlast\t"
+  },
+  {
+    "id": "loose-list",
+    "text": "first\n\nsecond\n\nanother paragraph\n\nlast"
+  },
+  {
+    "id": "heading-list",
+    "text": "Heading\nfirst\nsecond\nAfter"
+  },
+  {
+    "id": "nested-heading",
+    "text": "Heading\nText\n\ntxt\nCopy\ncode\nTail\n\nEnd"
+  },
+  {
+    "id": "code-list",
+    "text": "txt\nCopy\ncode\nfirst\nlast"
+  },
+  {
+    "id": "hard-break",
+    "text": "Before\nafter\n\nLast"
+  },
+  {
+    "id": "empty-table",
+    "text": "A\t\tC\nx\t\tz\ny\t\n"
+  },
+  {
+    "id": "empty-header",
+    "text": "B\nA\t\nAfter"
+  },
+  {
+    "id": "table-drag",
+    "text": "A\tB\nalpha\t\nomega\tend",
+    "ranges": [
+      {
+        "id": "cross-empty",
+        "text": "pha\t\nome",
+        "reverse": "pha\t\nome"
+      },
+      {
+        "id": "within-cell",
+        "text": "lph",
+        "reverse": "lph"
+      },
+      {
+        "id": "to-empty",
+        "text": "pha\t",
+        "reverse": "pha\t"
+      }
+    ]
+  },
+  {
+    "id": "files-readme",
+    "text": "Project notes\nOpen the implementation.\n\n Native file preview\n Remaining renderer parity\nView\tStatus\nSource\tAvailable\nSVG\tNative"
+  }
+]

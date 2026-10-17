@@ -1,0 +1,8 @@
+{
+  "id": "markdown-baseline-1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "width": 390,
+  "height": 844,
+  "padding": 16,
+  "source": "# Rendering check\n\nA **bold** label, *emphasis*, `inline code` and a [link](https://example.com).\n\n## Native mathematics\n\nArea $\\pi r^2$ costs $5 and $10.\n\n$$\n\\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}\n$$\n\n```ts\n// Keep every character\nconst answer = 42;\nconsole.log(\"Hello\");\n```\n\n| Feature | State |\n| --- | --- |\n| Formula | Native |\n| Code | Selectable |\n\n> Quoted content stays visible.\n\n- [x] Completed\n- [ ] Pending\n"
+}

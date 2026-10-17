@@ -1,0 +1,611 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "cases": [
+    {
+      "messages": [
+        {
+          "id": "u",
+          "role": "user",
+          "content": "Check the native client layout.",
+          "createdAt": "2026-10-03T02:30:00Z"
+        },
+        {
+          "id": "a1",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T02:30:00Z",
+          "tools": [
+            {
+              "id": "t1",
+              "name": "read",
+              "input": {
+                "path": "src/main.dart",
+                "offset": 1,
+                "limit": 20
+              },
+              "status": "succeeded",
+              "startedAt": "2026-10-03T02:30:00Z",
+              "endedAt": "2026-10-03T02:30:01.200Z",
+              "output": "class App {}"
+            }
+          ]
+        },
+        {
+          "id": "a2",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T02:30:00Z",
+          "tools": [
+            {
+              "id": "t2",
+              "name": "bash",
+              "input": {
+                "command": "flutter analyze"
+              },
+              "status": "succeeded",
+              "startedAt": "2026-10-03T02:30:00Z",
+              "endedAt": "2026-10-03T02:30:01.200Z",
+              "output": "No issues found!"
+            }
+          ]
+        },
+        {
+          "id": "a3",
+          "role": "assistant",
+          "content": "The layout is ready for review.",
+          "createdAt": "2026-10-03T02:30:00Z",
+          "thinking": "Compare the same viewport and theme.",
+          "model": "Example model"
+        },
+        {
+          "id": "n",
+          "role": "system",
+          "content": "Renderer: A preview is still loading.\nRetry after the next update.",
+          "createdAt": "2026-10-03T02:30:00Z",
+          "systemKind": "notice",
+          "level": "warning",
+          "label": "Renderer"
+        },
+        {
+          "id": "a4",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T02:30:00Z",
+          "tools": [
+            {
+              "id": "t3",
+              "name": "edit",
+              "input": {
+                "path": "src/theme.dart",
+                "edits": [
+                  {
+                    "oldText": "radius: 8",
+                    "newText": "radius: 12"
+                  }
+                ]
+              },
+              "status": "failed",
+              "startedAt": "2026-10-03T02:30:00Z",
+              "endedAt": "2026-10-03T02:30:01.200Z",
+              "output": "The file changed before the edit could be applied."
+            }
+          ]
+        },
+        {
+          "id": "a5",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T02:30:00Z",
+          "stopReason": "aborted",
+          "errorMessage": "Canceled by you."
+        }
+      ],
+      "tools": [
+        {
+          "id": "t1",
+          "name": "read",
+          "input": {
+            "path": "src/main.dart",
+            "offset": 1,
+            "limit": 20
+          },
+          "status": "succeeded",
+          "startedAt": "2026-10-03T02:30:00Z",
+          "endedAt": "2026-10-03T02:30:01.200Z",
+          "output": "class App {}"
+        },
+        {
+          "id": "t2",
+          "name": "bash",
+          "input": {
+            "command": "flutter analyze"
+          },
+          "status": "succeeded",
+          "startedAt": "2026-10-03T02:30:00Z",
+          "endedAt": "2026-10-03T02:30:01.200Z",
+          "output": "No issues found!"
+        },
+        {
+          "id": "t3",
+          "name": "edit",
+          "input": {
+            "path": "src/theme.dart",
+            "edits": [
+              {
+                "oldText": "radius: 8",
+                "newText": "radius: 12"
+              }
+            ]
+          },
+          "status": "failed",
+          "startedAt": "2026-10-03T02:30:00Z",
+          "endedAt": "2026-10-03T02:30:01.200Z",
+          "output": "The file changed before the edit could be applied."
+        }
+      ],
+      "items": [
+        {
+          "kind": "message",
+          "id": "u",
+          "messages": [
+            "u"
+          ]
+        },
+        {
+          "kind": "run",
+          "id": "run:a1",
+          "messages": [
+            "a1",
+            "a2"
+          ]
+        },
+        {
+          "kind": "message",
+          "id": "a3",
+          "messages": [
+            "a3"
+          ]
+        },
+        {
+          "kind": "message",
+          "id": "n",
+          "messages": [
+            "n"
+          ]
+        },
+        {
+          "kind": "message",
+          "id": "a4",
+          "messages": [
+            "a4"
+          ]
+        },
+        {
+          "kind": "message",
+          "id": "a5",
+          "messages": [
+            "a5"
+          ]
+        }
+      ],
+      "summary": {
+        "count": 3,
+        "status": "failed",
+        "durationMs": 1200,
+        "files": [
+          "main.dart",
+          "theme.dart"
+        ]
+      }
+    },
+    {
+      "messages": [],
+      "tools": [],
+      "items": [],
+      "summary": {
+        "count": 0,
+        "status": "succeeded",
+        "files": []
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "a",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T00:00:00Z",
+          "tools": [
+            {
+              "id": "1",
+              "name": "read",
+              "status": "succeeded",
+              "input": {
+                "path": "/src/a.ts"
+              }
+            }
+          ]
+        },
+        {
+          "id": "b",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T00:00:00Z",
+          "tools": [
+            {
+              "id": "2",
+              "name": "read",
+              "status": "succeeded",
+              "input": {
+                "path": "/src/a.ts"
+              }
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "id": "1",
+          "name": "read",
+          "status": "succeeded",
+          "input": {
+            "path": "/src/a.ts"
+          }
+        },
+        {
+          "id": "2",
+          "name": "read",
+          "status": "succeeded",
+          "input": {
+            "path": "/src/a.ts"
+          }
+        }
+      ],
+      "items": [
+        {
+          "kind": "run",
+          "id": "run:a",
+          "messages": [
+            "a",
+            "b"
+          ]
+        }
+      ],
+      "summary": {
+        "count": 2,
+        "status": "succeeded",
+        "files": [
+          "a.ts"
+        ]
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "a",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T00:00:00Z",
+          "tools": [
+            {
+              "id": "1",
+              "name": "read",
+              "status": "succeeded",
+              "input": {
+                "path": "/src/a.ts"
+              }
+            }
+          ]
+        },
+        {
+          "id": "n",
+          "role": "system",
+          "content": "",
+          "createdAt": "2026-10-03T00:00:00Z",
+          "systemKind": "notice"
+        },
+        {
+          "id": "b",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T00:00:00Z",
+          "tools": [
+            {
+              "id": "2",
+              "name": "read",
+              "status": "succeeded",
+              "input": {
+                "path": "/src/a.ts"
+              }
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "id": "1",
+          "name": "read",
+          "status": "succeeded",
+          "input": {
+            "path": "/src/a.ts"
+          }
+        },
+        {
+          "id": "2",
+          "name": "read",
+          "status": "succeeded",
+          "input": {
+            "path": "/src/a.ts"
+          }
+        }
+      ],
+      "items": [
+        {
+          "kind": "message",
+          "id": "a",
+          "messages": [
+            "a"
+          ]
+        },
+        {
+          "kind": "message",
+          "id": "n",
+          "messages": [
+            "n"
+          ]
+        },
+        {
+          "kind": "message",
+          "id": "b",
+          "messages": [
+            "b"
+          ]
+        }
+      ],
+      "summary": {
+        "count": 2,
+        "status": "succeeded",
+        "files": [
+          "a.ts"
+        ]
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "a",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T00:00:00Z",
+          "tools": [
+            {
+              "id": "1",
+              "name": "read",
+              "status": "succeeded",
+              "input": {
+                "path": "/src/a.ts"
+              }
+            }
+          ]
+        },
+        {
+          "id": "b",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T00:00:00Z",
+          "stopReason": "aborted",
+          "tools": [
+            {
+              "id": "2",
+              "name": "read",
+              "status": "succeeded",
+              "input": {
+                "path": "/src/a.ts"
+              }
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "id": "1",
+          "name": "read",
+          "status": "succeeded",
+          "input": {
+            "path": "/src/a.ts"
+          }
+        },
+        {
+          "id": "2",
+          "name": "read",
+          "status": "succeeded",
+          "input": {
+            "path": "/src/a.ts"
+          }
+        }
+      ],
+      "items": [
+        {
+          "kind": "message",
+          "id": "a",
+          "messages": [
+            "a"
+          ]
+        },
+        {
+          "kind": "message",
+          "id": "b",
+          "messages": [
+            "b"
+          ]
+        }
+      ],
+      "summary": {
+        "count": 2,
+        "status": "succeeded",
+        "files": [
+          "a.ts"
+        ]
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "a",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T00:00:00Z",
+          "tools": [
+            {
+              "id": "1",
+              "name": "read",
+              "status": "succeeded",
+              "input": {
+                "path": "/src/a.ts"
+              }
+            }
+          ]
+        },
+        {
+          "id": "b",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T00:00:00Z",
+          "images": [
+            {
+              "url": "data:"
+            }
+          ],
+          "tools": [
+            {
+              "id": "2",
+              "name": "read",
+              "status": "succeeded",
+              "input": {
+                "path": "/src/a.ts"
+              }
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "id": "1",
+          "name": "read",
+          "status": "succeeded",
+          "input": {
+            "path": "/src/a.ts"
+          }
+        },
+        {
+          "id": "2",
+          "name": "read",
+          "status": "succeeded",
+          "input": {
+            "path": "/src/a.ts"
+          }
+        }
+      ],
+      "items": [
+        {
+          "kind": "message",
+          "id": "a",
+          "messages": [
+            "a"
+          ]
+        },
+        {
+          "kind": "message",
+          "id": "b",
+          "messages": [
+            "b"
+          ]
+        }
+      ],
+      "summary": {
+        "count": 2,
+        "status": "succeeded",
+        "files": [
+          "a.ts"
+        ]
+      }
+    },
+    {
+      "messages": [
+        {
+          "id": "a",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T00:00:00Z",
+          "thinking": "thought",
+          "tools": [
+            {
+              "id": "1",
+              "name": "read",
+              "status": "running",
+              "input": {
+                "path": "/src/a.ts"
+              }
+            }
+          ]
+        },
+        {
+          "id": "b",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-03T00:00:00Z",
+          "tools": [
+            {
+              "id": "2",
+              "name": "read",
+              "status": "failed",
+              "input": {
+                "path": "/src/a.ts"
+              },
+              "startedAt": "2026-10-03T00:00:01Z",
+              "endedAt": "2026-10-03T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "id": "1",
+          "name": "read",
+          "status": "running",
+          "input": {
+            "path": "/src/a.ts"
+          }
+        },
+        {
+          "id": "2",
+          "name": "read",
+          "status": "failed",
+          "input": {
+            "path": "/src/a.ts"
+          },
+          "startedAt": "2026-10-03T00:00:01Z",
+          "endedAt": "2026-10-03T00:00:00Z"
+        }
+      ],
+      "items": [
+        {
+          "kind": "run",
+          "id": "run:a",
+          "messages": [
+            "a",
+            "b"
+          ]
+        }
+      ],
+      "summary": {
+        "count": 2,
+        "status": "failed",
+        "durationMs": 0,
+        "files": [
+          "a.ts"
+        ]
+      }
+    }
+  ]
+}

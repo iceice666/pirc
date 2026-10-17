@@ -1,0 +1,144 @@
+{
+  "id": "workspace-matrix",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 650, 651, 768, 860, 861, 1024],
+  "height": 900,
+  "themes": ["light", "dark"],
+  "textScales": [1, 2],
+  "states": [
+    { "id": "sessions", "workspaceId": "device:repo", "tab": "sessions" },
+    { "id": "chat-settings", "workspaceId": "home:trip", "tab": "settings" },
+    { "id": "directory-trust", "workspaceId": "device:repo", "tab": "settings" }
+  ],
+  "workspaces": [
+    {
+      "id": "home:chats",
+      "hostId": "home",
+      "displayName": "Chats",
+      "kind": "chat",
+      "defaults": {}
+    },
+    {
+      "id": "home:trip",
+      "hostId": "home",
+      "displayName": "Trip planning",
+      "kind": "chat",
+      "defaults": { "modelId": "gpt-5.4", "thinkingLevel": "medium" }
+    },
+    {
+      "id": "device:repo",
+      "hostId": "device",
+      "displayName": "Pirc workspace",
+      "kind": "directory",
+      "canonicalPath": "/Users/example/Projects/pirc",
+      "defaults": { "modelId": "gpt-5.4", "thinkingLevel": "medium" }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "home",
+      "connectedAt": 1791580800000,
+      "lastSeenAt": 1791580800000,
+      "workspaces": [
+        { "id": "home:chats", "displayName": "Chats" },
+        { "id": "home:trip", "displayName": "Trip planning" }
+      ]
+    },
+    {
+      "id": "device",
+      "connectedAt": 1791580800000,
+      "lastSeenAt": 1791580800000,
+      "workspaces": [{ "id": "device:repo", "displayName": "Pirc workspace" }]
+    }
+  ],
+  "sessions": [
+    {
+      "id": "session-trip-1",
+      "workspaceId": "home:trip",
+      "name": "Plan the Taipei weekend",
+      "updatedAt": 1791580800000,
+      "runnerState": "stopped",
+      "pinnedAt": 1791580800000,
+      "unread": true
+    },
+    {
+      "id": "session-repo-1",
+      "workspaceId": "device:repo",
+      "name": "Review navigation parity",
+      "updatedAt": 1791580700000,
+      "runnerState": "ready",
+      "writeLease": true
+    },
+    {
+      "id": "session-repo-2",
+      "workspaceId": "device:repo",
+      "name": "Update workspace documentation",
+      "updatedAt": 1791580600000,
+      "runnerState": "stopped",
+      "unread": true
+    },
+    {
+      "id": "session-repo-3",
+      "workspaceId": "device:repo",
+      "name": "Clean up stale branches",
+      "updatedAt": 1791580500000,
+      "runnerState": "stopped",
+      "settledAt": 1791580400000
+    },
+    {
+      "id": "session-repo-4",
+      "workspaceId": "device:repo",
+      "name": "Check release notes and package metadata",
+      "updatedAt": 1791580300000,
+      "runnerState": "stopped"
+    },
+    {
+      "id": "session-chat-1",
+      "workspaceId": "home:chats",
+      "name": "A separate chat",
+      "updatedAt": 1791580200000,
+      "runnerState": "stopped"
+    }
+  ],
+  "models": [
+    {
+      "id": "gpt-5.4",
+      "provider": "openai",
+      "name": "GPT-5.4",
+      "contextWindow": 128000,
+      "reasoning": true
+    }
+  ],
+  "instructions": {
+    "text": "Be curious and precise.\n\nFor code changes, inspect the surrounding implementation and preserve the project's existing conventions. Explain important tradeoffs briefly, and include the checks you ran.\n\nWhen a task touches workspace files, prefer small, reviewable changes and leave generated artifacts out of the repository.",
+    "maxChars": 8000
+  },
+  "capabilities": {
+    "version": 1,
+    "delegation": true,
+    "memory_search": true,
+    "remote_recall": true,
+    "schedules": true,
+    "web_search": true
+  },
+  "projectConfig": {
+    "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "trustedHash": null,
+    "trusted": false,
+    "empty": false,
+    "hooks": {
+      "sessionStart": [{ "command": "npm ci", "timeoutMs": 120000 }],
+      "beforeTool": [{ "command": "npm test", "matcher": "Bash", "timeoutMs": 60000 }]
+    },
+    "env": { "NODE_ENV": "development", "PIRC_LOG_LEVEL": "info" },
+    "allowedPaths": ["src", "tests", "fixtures/mobile-parity"]
+  },
+  "snapshot": {
+    "history": [],
+    "notifications": [],
+    "interactions": [],
+    "queue": {},
+    "watermark": { "epoch": 1, "sequence": 0 },
+    "agent": { "model": { "provider": "openai", "id": "gpt-5.4" }, "thinkingLevel": "medium" }
+  }
+}

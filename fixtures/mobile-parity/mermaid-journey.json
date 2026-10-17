@@ -1,0 +1,70 @@
+{
+  "webSha": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "oracle": "Pinned Mermaid journey Jison parser and journeyDb; DOMPurify methods were identity-stubbed for plain-text parser inputs.",
+  "cases": [
+    {
+      "id": "checkout",
+      "source": "journey\ntitle Checkout\naccTitle: Checkout journey\naccDescr: Browser oracle sample\nsection Discover\n  Search: 5: Customer\n  Compare: 3: Customer, Sales\nsection Purchase\n  Pay: 5: Customer, Sales\n  Inspect<br/>receipt: 4: Customer",
+      "expected": {
+        "title": "Checkout",
+        "accessibleTitle": "Checkout journey",
+        "accessibleDescription": "Browser oracle sample",
+        "sections": ["Discover", "Purchase"],
+        "tasks": [
+          {"label": "Search", "section": "Discover", "score": 5, "actors": ["Customer"]},
+          {"label": "Compare", "section": "Discover", "score": 3, "actors": ["Customer", "Sales"]},
+          {"label": "Pay", "section": "Purchase", "score": 5, "actors": ["Customer", "Sales"]},
+          {"label": "Inspect<br/>receipt", "section": "Purchase", "score": 4, "actors": ["Customer"]}
+        ],
+        "actors": ["Customer", "Sales"]
+      }
+    },
+    {
+      "id": "empty-section",
+      "source": "journey\nsection Warmup\nsection Deliver\n  Pack boxes: 4: Operator\n  Ship: 3: Operator, Driver",
+      "expected": {
+        "title": "",
+        "accessibleTitle": "",
+        "accessibleDescription": "",
+        "sections": ["Warmup", "Deliver"],
+        "tasks": [
+          {"label": "Pack boxes", "section": "Deliver", "score": 4, "actors": ["Operator"]},
+          {"label": "Ship", "section": "Deliver", "score": 3, "actors": ["Operator", "Driver"]}
+        ],
+        "actors": ["Driver", "Operator"]
+      }
+    },
+    {
+      "id": "unsectioned",
+      "source": "journey\ntitle Quick start\nOpen account: 2: Visitor\nInvite: 4",
+      "expected": {
+        "title": "Quick start",
+        "accessibleTitle": "",
+        "accessibleDescription": "",
+        "sections": [],
+        "tasks": [
+          {"label": "Open account", "section": "", "score": 2, "actors": ["Visitor"]},
+          {"label": "Invite", "section": "", "score": 4, "actors": []}
+        ],
+        "actors": ["Visitor"]
+      }
+    },
+    {
+      "id": "score-range",
+      "source": "journey\ntitle Score range\nsection Extremes\n  Below: -2: User\n  Above: 7.5: User\n  No actor: 0",
+      "expected": {
+        "title": "Score range",
+        "accessibleTitle": "",
+        "accessibleDescription": "",
+        "sections": ["Extremes"],
+        "tasks": [
+          {"label": "Below", "section": "Extremes", "score": -2, "actors": ["User"]},
+          {"label": "Above", "section": "Extremes", "score": 7.5, "actors": ["User"]},
+          {"label": "No actor", "section": "Extremes", "score": 0, "actors": []}
+        ],
+        "actors": ["User"]
+      }
+    }
+  ]
+}

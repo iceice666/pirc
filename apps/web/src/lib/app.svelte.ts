@@ -3,12 +3,18 @@
  * open session and its event stream, the draft and uploads, and every command
  * the UI sends. Components read it directly instead of receiving it as props.
  */
-import { api, connectEvents, type EventConnection } from './api';
+import { api, connectEvents, ApiError, type EventConnection } from './api';
 import { isChatWorkspace, type NewWorkspace } from './chats';
 import { memoryApi, type MemoryProposal } from './memory';
 import { projectDeletionApi, type ProjectMemoryDecision } from './project-deletion';
 import { schedulesApi, type Schedule, type ScheduleRun } from './schedules';
-import { targetFromUrl, type PushTarget } from './push';
+import {
+  interactionFromUrl,
+  isPushInteraction,
+  targetFromUrl,
+  type PushInteraction,
+  type PushTarget,
+} from './push';
 import { syncControl } from './control';
 import { errorMessage } from './errors';
 import { GOAL_WIDGET, parseGoalWidget } from './goal';
@@ -121,6 +127,8 @@ class AppState {
   loading = $state(true);
   commandBusy = $state(false);
   pageError = $state('');
+  interactionNotice = $state('');
+  answeringInteractionIds = $state.raw<string[]>([]);
   /** Offline demo data (dev builds without a gateway). */
   demo = $state.raw<Demo>();
   /** Earliest transcript entries not yet mounted. */
@@ -290,6 +298,8 @@ class AppState {
     this.loading = true;
     this.#bootstrapFailed = false;
     this.pageError = '';
+    let linkedTarget: PushTarget | undefined;
+    let linkedInteraction: PushInteraction | undefined;
     try {
       [this.workspaces, this.sessions, this.models, this.nodes] = await Promise.all([
         api.workspaces(),
@@ -300,11 +310,14 @@ class AppState {
       this.#sessionsVersion++;
       this.activeSessionId = this.sessions[0]?.id;
       // A notification or a shared link names what to open.
-      const linked = targetFromUrl(new URL(location.href));
-      if (linked && 'sessionId' in linked) {
-        if (this.sessions.some((session) => session.id === linked.sessionId))
-          this.activeSessionId = linked.sessionId;
-      } else if (linked) this.#request(linked);
+      const bootstrapUrl = new URL(location.href);
+      linkedTarget = targetFromUrl(bootstrapUrl);
+      linkedInteraction = interactionFromUrl(bootstrapUrl);
+      if (linkedTarget && 'sessionId' in linkedTarget) {
+        const linkedSessionId = linkedTarget.sessionId;
+        if (this.sessions.some((session) => session.id === linkedSessionId))
+          this.activeSessionId = linkedSessionId;
+      } else if (linkedTarget) this.#request(linkedTarget);
       pruneDrafts(this.sessions.map((session) => session.id));
       void this.refreshMemory();
       void this.refreshSchedules();
@@ -332,8 +345,17 @@ class AppState {
       this.workspaceViewId = pageWorkspace.id;
       this.view = 'workspace';
     }
-    if (this.activeSessionId)
+    if (this.activeSessionId) {
       await this.openSession(this.activeSessionId, { show: this.view === 'session' });
+      if (
+        linkedInteraction &&
+        linkedTarget &&
+        'sessionId' in linkedTarget &&
+        linkedInteraction.sessionId === linkedTarget.sessionId &&
+        linkedInteraction.sessionId === this.activeSessionId
+      )
+        await this.verifyNotificationInteraction(linkedInteraction);
+    }
     this.loading = false;
   }
 
@@ -434,6 +456,58 @@ class AppState {
       return;
     }
     this.#request(target);
+  }
+
+  /** Open an exact-question notification and check its status against a fresh snapshot. */
+  async openNotificationTarget(target: PushTarget | undefined, interaction: unknown) {
+    await this.openTarget(target);
+    if (
+      !interaction ||
+      !isPushInteraction(interaction) ||
+      !target ||
+      !('sessionId' in target) ||
+      target.sessionId !== interaction.sessionId
+    )
+      return;
+    await this.verifyNotificationInteraction(interaction);
+  }
+
+  /** A clicked notification may outlive its question; never answer on click. */
+  async verifyNotificationInteraction(identity: PushInteraction, showPendingNotice = false) {
+    const sessionId = identity.sessionId;
+    if (this.activeSessionId !== sessionId || this.demo) return;
+    try {
+      const snapshot = await api.snapshot(sessionId);
+      const current = this.sessionState;
+      if (this.activeSessionId !== sessionId || current?.session.id !== sessionId) {
+        if (this.activeSessionId === sessionId)
+          this.interactionNotice =
+            'We couldn’t verify whether this request was handled. Check the session before submitting an answer.';
+        return;
+      }
+      const question = snapshot.interactions.find(
+        (item) =>
+          item.id === identity.interactionId && item.runnerEpoch === identity.interactionEpoch,
+      );
+      if (question?.status === 'pending') {
+        if (showPendingNotice) {
+          this.interactionNotice =
+            'This request is still waiting. Refresh the session before answering.';
+        }
+        return;
+      }
+      this.sessionState = {
+        ...current,
+        interactions: current.interactions.filter(
+          (item) =>
+            item.id !== identity.interactionId || item.runnerEpoch !== identity.interactionEpoch,
+        ),
+      };
+      this.interactionNotice = 'This request has already been handled.';
+    } catch {
+      this.interactionNotice =
+        'We couldn’t verify whether this request was handled. Check the session before submitting an answer.';
+    }
   }
 
   #request(target: Exclude<PushTarget, { sessionId: string }>) {
@@ -896,25 +970,93 @@ class AppState {
     }
   }
 
-  async answerInteraction(interactionId: string, answer: InteractionAnswer) {
+  async answerInteraction(
+    interactionId: string,
+    answer: InteractionAnswer,
+    expectedRunnerEpoch?: string,
+  ) {
     const state = this.sessionState;
-    if (!this.activeSessionId || !state?.control.generation) return;
+    const sessionId = this.activeSessionId;
+    if (!sessionId) return;
+    if (this.answeringInteractionIds.includes(interactionId)) {
+      this.interactionNotice = 'This request is already being processed.';
+      return;
+    }
+    const interaction = state?.interactions.find(
+      (item) =>
+        item.id === interactionId &&
+        (expectedRunnerEpoch === undefined || item.runnerEpoch === expectedRunnerEpoch),
+    );
+    if (!interaction) {
+      if (expectedRunnerEpoch !== undefined && !this.demo)
+        await this.verifyNotificationInteraction(
+          {
+            sessionId,
+            interactionId,
+            interactionEpoch: expectedRunnerEpoch,
+          },
+          true,
+        );
+      return;
+    }
+    if (!state?.control.generation) return;
+    const runnerEpoch = interaction.runnerEpoch;
+    this.answeringInteractionIds = [...this.answeringInteractionIds, interactionId];
+    this.interactionNotice = '';
     try {
       if (!this.demo)
-        await api.answerInteraction(
-          this.activeSessionId,
-          interactionId,
-          answer,
-          state.control.generation,
-        );
+        await api.answerInteraction(sessionId, interactionId, answer, state.control.generation);
       const current = this.sessionState;
-      if (current)
+      if (current?.session.id === sessionId)
         this.sessionState = {
           ...current,
-          interactions: current.interactions.filter((item) => item.id !== interactionId),
+          interactions: current.interactions.filter(
+            (item) => item.id !== interactionId || item.runnerEpoch !== runnerEpoch,
+          ),
         };
     } catch (error) {
+      if (
+        !this.demo &&
+        error instanceof ApiError &&
+        error.status === 409 &&
+        (error.code === 'stale_interaction' || error.code === 'lost_control')
+      ) {
+        try {
+          const snapshot = await api.snapshot(sessionId);
+          if (this.activeSessionId !== sessionId || this.sessionState?.session.id !== sessionId)
+            return;
+          const snapshotQuestion = snapshot.interactions.find(
+            (item) => item.id === interactionId && item.runnerEpoch === runnerEpoch,
+          );
+          const resolved = !snapshotQuestion || snapshotQuestion.status !== 'pending';
+          if (resolved) {
+            const current = this.sessionState;
+            if (current?.session.id === sessionId)
+              this.sessionState = {
+                ...current,
+                interactions: current.interactions.filter(
+                  (item) => item.id !== interactionId || item.runnerEpoch !== runnerEpoch,
+                ),
+              };
+            this.interactionNotice = 'This request has already been handled.';
+          } else {
+            this.interactionNotice =
+              error.code === 'lost_control'
+                ? 'This request is still waiting. Take control to answer it.'
+                : 'This request is still waiting. Your answer was not accepted.';
+          }
+          if (error.code === 'lost_control') void this.refreshControl();
+        } catch {
+          this.interactionNotice =
+            'We couldn’t verify whether this request was handled. Check the session before submitting another answer.';
+        }
+        return;
+      }
       this.pageError = errorMessage(error, 'Your answer was not accepted.');
+    } finally {
+      this.answeringInteractionIds = this.answeringInteractionIds.filter(
+        (id) => id !== interactionId,
+      );
     }
   }
 

@@ -1,0 +1,79 @@
+{
+  "id": "interaction-cards",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "width": 390,
+  "height": 1650,
+  "models": [
+    {
+      "id": "example",
+      "provider": "local",
+      "name": "Example model",
+      "displayName": "Example model",
+      "available": true
+    }
+  ],
+  "questions": [
+    {
+      "id": "select",
+      "epoch": "e",
+      "kind": "select",
+      "status": "pending",
+      "title": "Choose a target",
+      "description": "Use the same layout in both clients.",
+      "options": [
+        {
+          "value": "phone",
+          "label": "Phone",
+          "description": "One conversation at a time."
+        },
+        {
+          "value": "tablet",
+          "label": "Tablet",
+          "description": "Keep the workspace panel visible."
+        }
+      ]
+    },
+    {
+      "id": "delegate",
+      "epoch": "e",
+      "kind": "confirm",
+      "status": "pending",
+      "title": "Run the delegated task?",
+      "description": "Inspect the working tree.\nReport the changed files.",
+      "confirmLabel": "Allow & run",
+      "cancelLabel": "Decline",
+      "modelChoice": {
+        "model": {
+          "provider": "local",
+          "id": "example"
+        },
+        "thinking": "high"
+      }
+    },
+    {
+      "id": "input",
+      "epoch": "e",
+      "kind": "input",
+      "status": "pending",
+      "title": "Name the result",
+      "placeholder": "Type your answer\u2026"
+    },
+    {
+      "id": "editor",
+      "epoch": "e",
+      "kind": "editor",
+      "status": "pending",
+      "title": "Review the response",
+      "initialValue": "Keep all details.\nVerify the same viewport."
+    },
+    {
+      "id": "expired",
+      "epoch": "e",
+      "kind": "confirm",
+      "status": "pending",
+      "title": "Approval window closed",
+      "description": "This action can no longer be approved.",
+      "expiresAt": "2020-01-01T02:30:00Z"
+    }
+  ]
+}

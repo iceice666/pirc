@@ -419,6 +419,7 @@ expression: r.t.into_value()
   {
     "observed": {
       "data": {
+        "interactionEpoch": 0,
         "interactionId": "<delegation:1>"
       },
       "type": "interaction_answered"
@@ -689,6 +690,7 @@ expression: r.t.into_value()
   {
     "observed": {
       "data": {
+        "interactionEpoch": 0,
         "interactionId": "<delegation:2>"
       },
       "type": "interaction_answered"

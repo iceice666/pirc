@@ -1,0 +1,27 @@
+{
+  "id": "mermaid-gantt-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "widths": [390, 768],
+  "height": 900,
+  "deviceScaleFactor": 1,
+  "textScales": [1, 2],
+  "fixedNow": "2026-07-06T00:00:00.000Z",
+  "cases": [
+    {
+      "id": "weekend-dependencies-status",
+      "description": "Two sections with task IDs, auto IDs (including a no-ID task chained across sections), dependencies, weekday exclusion, durations, status tags, and a milestone. The explicit date range demonstrates the default exclusive end.",
+      "source": "```mermaid\ngantt\ntitle Release readiness\ndateFormat YYYY-MM-DD\naxisFormat %a %d\nexcludes weekends\ntodayMarker off\n\nsection Planning\nKickoff :milestone, done, kickoff, 2026-07-06, 0d\nSpecification :done, spec, 2026-07-06, 3d\nReview :active, crit, review, after spec, 2d\nApproval :crit, approval, after spec review, 1d\nNo ID chained task :1d\nExplicit range :range, 2026-07-06, 2026-07-09\n\nsection Delivery\nImplementation :active, impl, 2026-07-09, 4d\nVerification :done, qa, after impl, 1d\nQuick check :short, after qa, 4h\nMinute check :minutes, after short, 30m\nNext week :week, 2026-07-13, 1w\nRelease :milestone, release, after minutes, 0d\nCross-section no-ID chain :1d\n```"
+    },
+    {
+      "id": "clock-units-default-today",
+      "description": "HH:mm parsing, generated IDs and previous-task starts, hour/minute/day/week durations, and the default today marker under a fixed browser clock.",
+      "source": "```mermaid\ngantt\ntitle Clock units\ndateFormat HH:mm\naxisFormat %H:%M\n\nsection Clock\nHour span :hour, 09:00, 1h\nMinute span :minute, after hour, 30m\nDay span :day, after minute, 1d\nWeek span :week, after day, 1w\nNo ID chained task :2h\n```"
+    },
+    {
+      "id": "inclusive-end-date",
+      "description": "Explicit end-date behavior when inclusiveEndDates is enabled.",
+      "source": "```mermaid\ngantt\ntitle Inclusive date range\ndateFormat YYYY-MM-DD\naxisFormat %b %d\ninclusiveEndDates\ntodayMarker off\n\nsection Range\nThree-day duration :duration, 2026-07-06, 3d\nInclusive explicit range :explicit, 2026-07-06, 2026-07-09\n```"
+    }
+  ]
+}

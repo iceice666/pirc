@@ -1,0 +1,82 @@
+{
+  "id": "mermaid-xy-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "widths": [
+    390,
+    650,
+    651,
+    768,
+    860,
+    861,
+    1024
+  ],
+  "height": 900,
+  "deviceScaleFactor": 1,
+  "textScales": [
+    1,
+    2
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "cases": [
+    {
+      "id": "xy-category-derived-y",
+      "kind": "xychart-beta",
+      "description": "Categorical x-axis, implicit y domain derived from both bar and line data, axis titles, and two titled series.",
+      "source": "~~~mermaid\nxychart-beta\ntitle \"Category defaults\"\nx-axis \"Quarter\" [Q1, Q2, Q3, Q4]\ny-axis \"Revenue\"\nbar \"Actual\" [12, 18, 15, 27]\nline \"Forecast\" [10, 20, 17, 25]\n~~~"
+    },
+    {
+      "id": "xy-category-labeled-series",
+      "kind": "xychart-beta",
+      "description": "Categorical x-axis, explicit y domain, bar and line series, quoted per-point labels, and visible bar labels outside the bars.",
+      "source": "~~~mermaid\n%%{init: {\"xyChart\": {\"showDataLabel\": true, \"showDataLabelOutsideBar\": true}}}%%\nxychart-beta\ntitle \"Weekly, signals\"\nx-axis \"Day\" [Mon, Tue, Wed, Thu]\ny-axis \"Index\" 0 --> 100\nbar \"Visits\" [20 \"twenty\", 35 \"thirty five\", 53 \"fifty three\", 72 \"seventy two\"]\nline \"Retention\" [15 \"low\", 49 \"rising\", 57 \"peak\", 84 \"high\"]\n~~~"
+    },
+    {
+      "id": "xy-numeric-explicit-negative",
+      "kind": "xychart-beta",
+      "description": "Numeric x/y domains with negative and positive values in both a line and a bar series.",
+      "source": "~~~mermaid\nxychart-beta\ntitle \"Delta by week\"\nx-axis \"Week\" -2 --> 2\ny-axis \"Change\" -20 --> 40\nbar \"Net\" [-10, 5, -2, 12, 25]\nline \"Trend\" [-12, 8, 3, 21, 29]\n~~~"
+    },
+    {
+      "id": "xy-default-generated-x",
+      "kind": "xychart-beta",
+      "description": "No axis declarations; x coordinates are generated from the data count and y domain is inferred from the line series.",
+      "source": "~~~mermaid\nxychart-beta\ntitle \"Default domains\"\nline [4, 8, 2, 12, 9]\n~~~"
+    },
+    {
+      "id": "xy-horizontal-numeric-bars",
+      "kind": "xychart-beta",
+      "description": "Horizontal orientation with numeric sample coordinates, a nonnegative value domain, bars and a line series, and outside data labels.",
+      "source": "~~~mermaid\n%%{init: {\"xyChart\": {\"showDataLabel\": true, \"showDataLabelOutsideBar\": true}}}%%\nxychart-beta horizontal\ntitle \"Horizontal numeric\"\nx-axis \"Sample\" -2 --> 2\ny-axis \"Value\" 0 --> 60\nbar \"Magnitude\" [12, 18, 34, 50]\nline \"Reference\" [8, 14, 29, 43]\n~~~"
+    },
+    {
+      "id": "xy-horizontal-categorical",
+      "kind": "xychart-beta",
+      "description": "Horizontal orientation with categorical y-positioning, an inferred numeric x domain, and both plot types.",
+      "source": "~~~mermaid\nxychart-beta horizontal\ntitle \"Horizontal categories\"\nx-axis \"Group\" [Alpha, Beta, Gamma, Delta]\ny-axis \"Score\"\nbar \"Observed\" [13, 29, 21, 38]\nline \"Target\" [18, 24, 28, 35]\n~~~"
+    },
+    {
+      "id": "xy-fixed-size-responsive",
+      "kind": "xychart-beta",
+      "description": "Fixed Mermaid chart dimensions and explicit domains recorded across narrow and wide viewports, with rotated numeric tick labels.",
+      "source": "~~~mermaid\n%%{init: {\"xyChart\": {\"width\": 520, \"height\": 340, \"xAxis\": {\"labelRotation\": -35}}}}%%\nxychart-beta\ntitle \"Fixed canvas\"\nx-axis \"Elapsed time\" 0 --> 8\ny-axis \"Requests per minute\" 0 --> 80\nbar \"Requests\" [12, 22, 31, 48, 55, 43, 67, 72]\n~~~"
+    },
+    {
+      "id": "xy-no-plot-error",
+      "kind": "xychart-beta",
+      "expectedStatus": "error",
+      "description": "Valid axes without any plot, capturing Mermaid's actual no-plot render error.",
+      "source": "~~~mermaid\nxychart-beta\ntitle \"No plot\"\nx-axis \"Category\" [A, B]\ny-axis \"Value\" 0 --> 10\n~~~"
+    },
+    {
+      "id": "xy-malformed-data-error",
+      "kind": "xychart-beta",
+      "expectedStatus": "error",
+      "description": "Malformed numeric data token captures the pinned XY parser failure text.",
+      "source": "~~~mermaid\nxychart-beta\ntitle \"Invalid data\"\nx-axis \"Month\" [Jan, Feb, Mar]\nbar \"Invalid\" [5, nope, 9]\n~~~"
+    }
+  ]
+}

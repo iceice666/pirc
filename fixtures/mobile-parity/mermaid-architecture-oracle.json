@@ -1,0 +1,317 @@
+{
+  "fixture": "mermaid-architecture-parser-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "architectureChunk": "dist/chunks/mermaid.core/architectureDiagram-5GKGNRK7.mjs",
+  "oracle": "Pinned Mermaid architecture parser and ArchitectureDB getters before SVG layout. Source cases are read from mermaid-important-cases.json and include groups, services, junctions, directional ports, arrow flags, nested membership, and {group} boundary traversal.",
+  "cases": [
+    {
+      "id": "architecture-services",
+      "source": "architecture-beta\ngroup api(cloud)[API Zone]\nservice web(server)[Web] in api\nservice db(database)[Database] in api\nweb:R --> L:db",
+      "db": {
+        "groups": [
+          {
+            "id": "api",
+            "icon": "cloud",
+            "title": "API Zone"
+          }
+        ],
+        "services": [
+          {
+            "id": "web",
+            "type": "service",
+            "icon": "server",
+            "title": "Web",
+            "in": "api"
+          },
+          {
+            "id": "db",
+            "type": "service",
+            "icon": "database",
+            "title": "Database",
+            "in": "api"
+          }
+        ],
+        "junctions": [],
+        "edges": [
+          {
+            "lhsId": "web",
+            "lhsDir": "R",
+            "lhsInto": false,
+            "lhsGroup": false,
+            "rhsId": "db",
+            "rhsDir": "L",
+            "rhsInto": true,
+            "rhsGroup": false
+          }
+        ],
+        "layoutHints": [],
+        "adjacency": [
+          [
+            "web",
+            [
+              [
+                "RL",
+                "db"
+              ]
+            ]
+          ],
+          [
+            "db",
+            [
+              [
+                "LR",
+                "web"
+              ]
+            ]
+          ]
+        ],
+        "spatialMaps": [
+          [
+            [
+              "web",
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              "db",
+              [
+                1,
+                0
+              ]
+            ]
+          ]
+        ],
+        "groupAlignments": []
+      }
+    },
+    {
+      "id": "architecture-junction",
+      "source": "architecture-beta\nservice client(internet)[Client]\njunction fanout\nservice cache(disk)[Cache]\nclient:R --> L:fanout\nfanout:B --> T:cache",
+      "db": {
+        "groups": [],
+        "services": [
+          {
+            "id": "client",
+            "type": "service",
+            "icon": "internet",
+            "title": "Client"
+          },
+          {
+            "id": "cache",
+            "type": "service",
+            "icon": "disk",
+            "title": "Cache"
+          }
+        ],
+        "junctions": [
+          {
+            "id": "fanout",
+            "type": "junction"
+          }
+        ],
+        "edges": [
+          {
+            "lhsId": "client",
+            "lhsDir": "R",
+            "lhsInto": false,
+            "lhsGroup": false,
+            "rhsId": "fanout",
+            "rhsDir": "L",
+            "rhsInto": true,
+            "rhsGroup": false
+          },
+          {
+            "lhsId": "fanout",
+            "lhsDir": "B",
+            "lhsInto": false,
+            "lhsGroup": false,
+            "rhsId": "cache",
+            "rhsDir": "T",
+            "rhsInto": true,
+            "rhsGroup": false
+          }
+        ],
+        "layoutHints": [],
+        "adjacency": [
+          [
+            "client",
+            [
+              [
+                "RL",
+                "fanout"
+              ]
+            ]
+          ],
+          [
+            "cache",
+            [
+              [
+                "TB",
+                "fanout"
+              ]
+            ]
+          ],
+          [
+            "fanout",
+            [
+              [
+                "LR",
+                "client"
+              ],
+              [
+                "BT",
+                "cache"
+              ]
+            ]
+          ]
+        ],
+        "spatialMaps": [
+          [
+            [
+              "client",
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              "fanout",
+              [
+                1,
+                0
+              ]
+            ],
+            [
+              "cache",
+              [
+                1,
+                -1
+              ]
+            ]
+          ]
+        ],
+        "groupAlignments": []
+      }
+    },
+    {
+      "id": "architecture-nested",
+      "source": "architecture-beta\ngroup outer(cloud)[Region]\ngroup inner(server)[Private Network] in outer\nservice app(server)[App] in inner\nservice ext(internet)[External]\napp{group}:R --> L:ext",
+      "db": {
+        "groups": [
+          {
+            "id": "outer",
+            "icon": "cloud",
+            "title": "Region"
+          },
+          {
+            "id": "inner",
+            "icon": "server",
+            "title": "Private Network",
+            "in": "outer"
+          }
+        ],
+        "services": [
+          {
+            "id": "app",
+            "type": "service",
+            "icon": "server",
+            "title": "App",
+            "in": "inner"
+          },
+          {
+            "id": "ext",
+            "type": "service",
+            "icon": "internet",
+            "title": "External"
+          }
+        ],
+        "junctions": [],
+        "edges": [
+          {
+            "lhsId": "app",
+            "lhsDir": "R",
+            "lhsInto": false,
+            "lhsGroup": true,
+            "rhsId": "ext",
+            "rhsDir": "L",
+            "rhsInto": true,
+            "rhsGroup": false
+          }
+        ],
+        "layoutHints": [],
+        "adjacency": [
+          [
+            "app",
+            [
+              [
+                "RL",
+                "ext"
+              ]
+            ]
+          ],
+          [
+            "ext",
+            [
+              [
+                "LR",
+                "app"
+              ]
+            ]
+          ]
+        ],
+        "spatialMaps": [
+          [
+            [
+              "app",
+              [
+                0,
+                0
+              ]
+            ],
+            [
+              "ext",
+              [
+                1,
+                0
+              ]
+            ]
+          ]
+        ],
+        "groupAlignments": []
+      }
+    }
+  ],
+  "invalidCases": [
+    {
+      "id": "duplicate-service-id",
+      "source": "architecture-beta\nservice api(server)[API]\nservice api(database)[DB]",
+      "accepted": false,
+      "errorName": "Error",
+      "error": "The service id [api] is already in use by another node"
+    },
+    {
+      "id": "missing-edge-endpoint",
+      "source": "architecture-beta\nservice api(server)[API]\napi:R --> L:missing",
+      "accepted": false,
+      "errorName": "Error",
+      "error": "The right-hand id [missing] does not yet exist. Please create the service/group before declaring an edge to it."
+    },
+    {
+      "id": "missing-parent-group",
+      "source": "architecture-beta\nservice api(server)[API] in absent",
+      "accepted": false,
+      "errorName": "Error",
+      "error": "The service [api]'s parent does not exist. Please make sure the parent is created before this service"
+    },
+    {
+      "id": "invalid-group-parent-kind",
+      "source": "architecture-beta\nservice api(server)[API]\ngroup region(cloud)[Region] in api",
+      "accepted": false,
+      "errorName": "Error",
+      "error": "The group [region]'s parent does not exist. Please make sure the parent is created before this group"
+    }
+  ]
+}

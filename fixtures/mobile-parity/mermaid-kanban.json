@@ -1,0 +1,294 @@
+{
+  "webSha": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "oracle": "Pinned Mermaid Kanban Jison parser and kanbanDb.getData; DOMPurify is identity-stubbed for plain parser fixtures. This is parser/DB evidence, not rendered-SVG geometry.",
+  "cases": [
+    {
+      "id": "columns-and-cards",
+      "source": "kanban\n  Backlog\n    task-1[Write parser tests]\n    task-2[Review the fixture]\n  In progress\n    task-3[Render the cards]\n  Done\n    task-4[Ship the change]",
+      "expectedNodes": [
+        {
+          "id": "Backlog",
+          "label": "Backlog",
+          "labelType": "markdown",
+          "isGroup": true,
+          "shape": "kanbanSection",
+          "level": 2,
+          "look": "classic"
+        },
+        {
+          "id": "task-1",
+          "parentId": "Backlog",
+          "label": "Write parser tests",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        },
+        {
+          "id": "task-2",
+          "parentId": "Backlog",
+          "label": "Review the fixture",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        },
+        {
+          "id": "In progress",
+          "label": "In progress",
+          "labelType": "markdown",
+          "isGroup": true,
+          "shape": "kanbanSection",
+          "level": 2,
+          "look": "classic"
+        },
+        {
+          "id": "task-3",
+          "parentId": "In progress",
+          "label": "Render the cards",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        },
+        {
+          "id": "Done",
+          "label": "Done",
+          "labelType": "markdown",
+          "isGroup": true,
+          "shape": "kanbanSection",
+          "level": 2,
+          "look": "classic"
+        },
+        {
+          "id": "task-4",
+          "parentId": "Done",
+          "label": "Ship the change",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        }
+      ]
+    },
+    {
+      "id": "ticket-assignee-priority-and-label-override",
+      "source": "kanban\n  Active\n    upload[Verify upload]@{ticket: APP-12, assigned: Lee, priority: Very High}\n    review[Original label]@{label: Review the patch, ticket: APP-18, assigned: Pat, priority: Medium}\n    cleanup[Trim toolbar]@{priority: Low}\n    plain[Unprioritized]@{ticket: APP-20, assigned: Ren}",
+      "expectedNodes": [
+        {
+          "id": "Active",
+          "label": "Active",
+          "labelType": "markdown",
+          "isGroup": true,
+          "shape": "kanbanSection",
+          "level": 2,
+          "look": "classic"
+        },
+        {
+          "id": "upload",
+          "parentId": "Active",
+          "label": "Verify upload",
+          "labelType": "markdown",
+          "isGroup": false,
+          "ticket": "APP-12",
+          "priority": "Very High",
+          "assigned": "Lee",
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        },
+        {
+          "id": "review",
+          "parentId": "Active",
+          "label": "Review the patch",
+          "labelType": "markdown",
+          "isGroup": false,
+          "ticket": "APP-18",
+          "priority": "Medium",
+          "assigned": "Pat",
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        },
+        {
+          "id": "cleanup",
+          "parentId": "Active",
+          "label": "Trim toolbar",
+          "labelType": "markdown",
+          "isGroup": false,
+          "priority": "Low",
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        },
+        {
+          "id": "plain",
+          "parentId": "Active",
+          "label": "Unprioritized",
+          "labelType": "markdown",
+          "isGroup": false,
+          "ticket": "APP-20",
+          "assigned": "Ren",
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        }
+      ]
+    },
+    {
+      "id": "empty-column-and-deep-item-indent",
+      "source": "kanban\n  Icebox column title that wraps onto a second line\n  Ready\n        card[Six-space child]\n    card-2[Two-space child]",
+      "expectedNodes": [
+        {
+          "id": "Icebox column title that wraps onto a second line",
+          "label": "Icebox column title that wraps onto a second line",
+          "labelType": "markdown",
+          "isGroup": true,
+          "shape": "kanbanSection",
+          "level": 2,
+          "look": "classic"
+        },
+        {
+          "id": "Ready",
+          "label": "Ready",
+          "labelType": "markdown",
+          "isGroup": true,
+          "shape": "kanbanSection",
+          "level": 2,
+          "look": "classic"
+        },
+        {
+          "id": "card",
+          "parentId": "Ready",
+          "label": "Six-space child",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 8,
+          "rx": 5,
+          "ry": 5
+        },
+        {
+          "id": "card-2",
+          "parentId": "Ready",
+          "label": "Two-space child",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        }
+      ]
+    },
+    {
+      "id": "multiline-description",
+      "source": "kanban\n  Doing column heading that wraps onto a second line\n    long[First line\n second **bold** line<br/>\n third `code` line\n fourth line]\n    next[Next card]",
+      "expectedNodes": [
+        {
+          "id": "Doing column heading that wraps onto a second line",
+          "label": "Doing column heading that wraps onto a second line",
+          "labelType": "markdown",
+          "isGroup": true,
+          "shape": "kanbanSection",
+          "level": 2,
+          "look": "classic"
+        },
+        {
+          "id": "long",
+          "parentId": "Doing column heading that wraps onto a second line",
+          "label": "First line\n second **bold** line<br/>\n third `code` line\n fourth line",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        },
+        {
+          "id": "next",
+          "parentId": "Doing column heading that wraps onto a second line",
+          "label": "Next card",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        }
+      ]
+    },
+    {
+      "id": "card-shape-delimiters",
+      "source": "kanban\n  Shapes\n    round(rounded card)\n    circle((circular card))\n    hex{{hexagonal card}}\n    rect[rectangular card]",
+      "expectedNodes": [
+        {
+          "id": "Shapes",
+          "label": "Shapes",
+          "labelType": "markdown",
+          "isGroup": true,
+          "shape": "kanbanSection",
+          "level": 2,
+          "look": "classic"
+        },
+        {
+          "id": "round",
+          "parentId": "Shapes",
+          "label": "rounded card",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        },
+        {
+          "id": "circle",
+          "parentId": "Shapes",
+          "label": "circular card",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        },
+        {
+          "id": "hex",
+          "parentId": "Shapes",
+          "label": "hexagonal card",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        },
+        {
+          "id": "rect",
+          "parentId": "Shapes",
+          "label": "rectangular card",
+          "labelType": "markdown",
+          "isGroup": false,
+          "shape": "kanbanItem",
+          "level": 4,
+          "rx": 5,
+          "ry": 5
+        }
+      ]
+    }
+  ]
+}

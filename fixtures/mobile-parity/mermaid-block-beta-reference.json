@@ -1,0 +1,207 @@
+{
+  "webSha": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "sourceVersion": "mermaid@11.17.2",
+  "cases": [
+    {
+      "id": "columns-shapes",
+      "source": "block-beta\ncolumns 4\na[\"Alpha\"] b(\"Beta\") c((\"Circle\")) d{\"Decision\"}",
+      "parserAst": [
+        {
+          "type": "column-setting",
+          "columns": 4
+        },
+        {
+          "id": "a",
+          "label": "Alpha",
+          "type": "square",
+          "widthInColumns": 1
+        },
+        {
+          "id": "b",
+          "label": "Beta",
+          "type": "round",
+          "widthInColumns": 1
+        },
+        {
+          "id": "c",
+          "label": "Circle",
+          "type": "circle",
+          "widthInColumns": 1
+        },
+        {
+          "id": "d",
+          "label": "Decision",
+          "type": "diamond",
+          "widthInColumns": 1
+        }
+      ]
+    },
+    {
+      "id": "spans-and-space",
+      "source": "block-beta\ncolumns 3\nwide[\"Wide\"]:2 space:1 tail[\"Tail\"]",
+      "parserAst": [
+        {
+          "type": "column-setting",
+          "columns": 3
+        },
+        {
+          "id": "wide",
+          "label": "Wide",
+          "type": "square",
+          "widthInColumns": 2
+        },
+        {
+          "id": "generated-1",
+          "type": "space",
+          "label": "",
+          "width": 1,
+          "children": []
+        },
+        {
+          "id": "tail",
+          "label": "Tail",
+          "type": "square",
+          "widthInColumns": 1
+        }
+      ]
+    },
+    {
+      "id": "nested-columns",
+      "source": "block-beta\ncolumns 2\nblock:group\ncolumns 2\na[\"A\"] b[\"B\"]\nend\nc[\"C\"]",
+      "parserAst": [
+        {
+          "type": "column-setting",
+          "columns": 2
+        },
+        {
+          "id": "group",
+          "type": "composite",
+          "widthInColumns": 1,
+          "children": [
+            {
+              "type": "column-setting",
+              "columns": 2
+            },
+            {
+              "id": "a",
+              "label": "A",
+              "type": "square",
+              "widthInColumns": 1
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "square",
+              "widthInColumns": 1
+            }
+          ]
+        },
+        {
+          "id": "c",
+          "label": "C",
+          "type": "square",
+          "widthInColumns": 1
+        }
+      ]
+    },
+    {
+      "id": "labeled-and-styled-arrows",
+      "source": "block-beta\na[\"Start\"] -- \"labeled\" --> b[\"End\"]\nb ==x c\nc -.-> d",
+      "parserAst": [
+        [
+          {
+            "id": "a",
+            "label": "Start",
+            "type": "square"
+          },
+          {
+            "id": "a-b",
+            "start": "a",
+            "end": "b",
+            "label": "labeled",
+            "type": "edge",
+            "thickness": "normal",
+            "pattern": "solid",
+            "arrowTypeEnd": "arrow_point",
+            "arrowTypeStart": "arrow_open"
+          },
+          {
+            "id": "b",
+            "label": "End",
+            "type": "square"
+          }
+        ],
+        [
+          {
+            "id": "b",
+            "type": "na"
+          },
+          {
+            "id": "b-c",
+            "start": "b",
+            "end": "c",
+            "label": "",
+            "type": "edge",
+            "thickness": "thick",
+            "pattern": "solid",
+            "arrowTypeEnd": "arrow_cross",
+            "arrowTypeStart": "arrow_open"
+          },
+          {
+            "id": "c",
+            "type": "na"
+          }
+        ],
+        {
+          "id": "c",
+          "type": "na"
+        },
+        {
+          "id": "c-d",
+          "start": "c",
+          "end": "d",
+          "label": "",
+          "type": "edge",
+          "thickness": "normal",
+          "pattern": "dotted",
+          "arrowTypeEnd": "arrow_point",
+          "arrowTypeStart": "arrow_open"
+        },
+        {
+          "id": "d",
+          "type": "na"
+        }
+      ]
+    },
+    {
+      "id": "extended-shapes",
+      "source": "block-beta\na[[\"Subroutine\"]] b{{\"Hexagon\"}} c([\"Stadium\"]) d[(\"Cylinder\")]",
+      "parserAst": [
+        {
+          "id": "a",
+          "label": "Subroutine",
+          "type": "subroutine",
+          "widthInColumns": 1
+        },
+        {
+          "id": "b",
+          "label": "Hexagon",
+          "type": "hexagon",
+          "widthInColumns": 1
+        },
+        {
+          "id": "c",
+          "label": "Stadium",
+          "type": "stadium",
+          "widthInColumns": 1
+        },
+        {
+          "id": "d",
+          "label": "Cylinder",
+          "type": "cylinder",
+          "widthInColumns": 1
+        }
+      ]
+    }
+  ]
+}

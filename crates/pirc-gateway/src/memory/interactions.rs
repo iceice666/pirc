@@ -159,7 +159,7 @@ pub fn changed(app: &App, user: &str) {
                 publish(
                     card["sessionId"].as_str().unwrap_or_default(),
                     "interaction_answered",
-                    json!({ "interactionId": id }),
+                    json!({ "interactionId": id, "interactionEpoch": 0 }),
                 );
             }
         }

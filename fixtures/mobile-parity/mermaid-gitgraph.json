@@ -1,0 +1,84 @@
+{
+  "webSha": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "oracle": "mermaidAPI.getDiagramFromText().db getters from the pinned local Mermaid package",
+  "cases": [
+    {
+      "id": "branch-merge",
+      "source": "gitGraph LR:\n  commit id: \"c0\" msg: \"root\"\n  branch feature order: 1\n  commit id: \"f1\" msg: \"feature\" tag: \"preview\"\n  checkout main\n  commit id: \"m1\" msg: \"main work\"\n  merge feature id: \"m2\" tag: \"v1\"",
+      "direction": "lr",
+      "currentBranch": "main",
+      "branches": [
+        {"name": "main", "order": 0, "headId": "m2"},
+        {"name": "feature", "order": 1, "headId": "f1"}
+      ],
+      "commits": [
+        {"id": "c0", "message": "root", "sequence": 0, "type": "normal", "tags": [], "parents": [], "branch": "main"},
+        {"id": "f1", "message": "feature", "sequence": 1, "type": "normal", "tags": ["preview"], "parents": ["c0"], "branch": "feature"},
+        {"id": "m1", "message": "main work", "sequence": 2, "type": "normal", "tags": [], "parents": ["c0"], "branch": "main"},
+        {"id": "m2", "message": "merged branch feature into main", "sequence": 3, "type": "merge", "customId": true, "tags": ["v1"], "parents": ["m1", "f1"], "branch": "main"}
+      ]
+    },
+    {
+      "id": "commit-types",
+      "source": "gitGraph\n  commit id: \"c0\" type: HIGHLIGHT\n  commit id: \"c1\" type: REVERSE tag: \"undo\"\n  commit id: \"c2\" msg: \"normal\"",
+      "direction": "lr",
+      "currentBranch": "main",
+      "branches": [
+        {"name": "main", "order": 0, "headId": "c2"}
+      ],
+      "commits": [
+        {"id": "c0", "message": "", "sequence": 0, "type": "highlight", "tags": [], "parents": [], "branch": "main"},
+        {"id": "c1", "message": "", "sequence": 1, "type": "reverse", "tags": ["undo"], "parents": ["c0"], "branch": "main"},
+        {"id": "c2", "message": "normal", "sequence": 2, "type": "normal", "tags": [], "parents": ["c1"], "branch": "main"}
+      ]
+    },
+    {
+      "id": "cherry-pick-simple",
+      "source": "gitGraph\n  commit id: \"root\"\n  branch source\n  commit id: \"src\" msg: \"picked work\"\n  checkout main\n  commit id: \"main\"\n  cherry-pick id: \"src\" tag: \"picked\"",
+      "direction": "lr",
+      "currentBranch": "main",
+      "branches": [
+        {"name": "main", "order": 0, "headId": "auto:3"},
+        {"name": "source", "order": 0, "headId": "src"}
+      ],
+      "commits": [
+        {"id": "root", "message": "", "sequence": 0, "type": "normal", "tags": [], "parents": [], "branch": "main"},
+        {"id": "src", "message": "picked work", "sequence": 1, "type": "normal", "tags": [], "parents": ["root"], "branch": "source"},
+        {"id": "main", "message": "", "sequence": 2, "type": "normal", "tags": [], "parents": ["root"], "branch": "main"},
+        {"id": "auto:3", "message": "cherry-picked picked work into main", "sequence": 3, "type": "cherryPick", "tags": ["picked"], "parents": ["main", "src"], "branch": "main"}
+      ]
+    },
+    {
+      "id": "cherry-pick-merge-parent",
+      "source": "gitGraph TB:\n  commit id: \"root\"\n  branch topic order: 1\n  commit id: \"topic\"\n  branch consumer order: 2\n  checkout main\n  commit id: \"base\"\n  merge topic id: \"merge\"\n  checkout consumer\n  cherry-pick id: \"merge\" parent: \"base\" tag: \"picked-merge\"",
+      "direction": "tb",
+      "currentBranch": "consumer",
+      "branches": [
+        {"name": "main", "order": 0, "headId": "merge"},
+        {"name": "topic", "order": 1, "headId": "topic"},
+        {"name": "consumer", "order": 2, "headId": "auto:4"}
+      ],
+      "commits": [
+        {"id": "root", "message": "", "sequence": 0, "type": "normal", "tags": [], "parents": [], "branch": "main"},
+        {"id": "topic", "message": "", "sequence": 1, "type": "normal", "tags": [], "parents": ["root"], "branch": "topic"},
+        {"id": "base", "message": "", "sequence": 2, "type": "normal", "tags": [], "parents": ["root"], "branch": "main"},
+        {"id": "merge", "message": "merged branch topic into main", "sequence": 3, "type": "merge", "customId": true, "tags": [], "parents": ["base", "topic"], "branch": "main"},
+        {"id": "auto:4", "message": "cherry-picked merged branch topic into main into consumer", "sequence": 4, "type": "cherryPick", "tags": ["picked-merge"], "parents": ["topic", "merge"], "branch": "consumer"}
+      ]
+    },
+    {
+      "id": "bottom-to-top",
+      "source": "gitGraph BT:\n  commit id: \"start\"\n  commit id: \"end\" msg: \"finish\"",
+      "direction": "bt",
+      "currentBranch": "main",
+      "branches": [
+        {"name": "main", "order": 0, "headId": "end"}
+      ],
+      "commits": [
+        {"id": "start", "message": "", "sequence": 0, "type": "normal", "tags": [], "parents": [], "branch": "main"},
+        {"id": "end", "message": "finish", "sequence": 1, "type": "normal", "tags": [], "parents": ["start"], "branch": "main"}
+      ]
+    }
+  ]
+}

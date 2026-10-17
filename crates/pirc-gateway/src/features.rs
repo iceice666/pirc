@@ -67,7 +67,7 @@ pub async fn no_store(request: axum::extract::Request, next: Next) -> Response {
 /// Device management needs forward auth: a device token can neither mint
 /// nor revoke tokens (the auth middleware refuses it; checked again here).
 fn owner(identity: &Identity) -> ApiResult<&str> {
-    if identity.device_id.is_some() {
+    if identity.device_id.is_some() && !identity.management_authorized {
         return Err(ApiError::new(
             403,
             "forbidden",

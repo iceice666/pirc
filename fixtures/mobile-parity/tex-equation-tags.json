@@ -1,0 +1,173 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "rendererOptions": {
+    "api": "apps/web/src/lib/markdown.ts renderMarkdown() -> KaTeX.renderToString()",
+    "throwOnError": false,
+    "strict": "ignore",
+    "output": "htmlAndMathml",
+    "trust": false,
+    "maxExpand": 500,
+    "errorColor": "KaTeX default #cc0000"
+  },
+  "capture": {
+    "widths": [
+      390,
+      768
+    ],
+    "height": 1200,
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "textScales": [
+      1,
+      2
+    ],
+    "deviceScaleFactor": 1,
+    "paragraphFontFamily": "Arial, sans-serif",
+    "paragraphFontSize": 15,
+    "paragraphLineHeight": 1.65,
+    "katexScale": 1.08,
+    "sourceCss": [
+      "apps/web/src/app.css",
+      "apps/web/src/markdown.css",
+      "apps/web/node_modules/katex/dist/katex.css"
+    ]
+  },
+  "cases": [
+    {
+      "id": "display-tag-manual",
+      "description": "Manual standalone display tag.",
+      "source": "$$\nx+y\\tag{A}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "display-tag-star",
+      "description": "Starred manual display tag omits the automatic surrounding parentheses.",
+      "source": "$$\nx+y\\tag*{A}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "display-tag-first",
+      "description": "Manual tag appears before the formula source.",
+      "source": "$$\n\\tag{T}x+y\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "inline-tag-invalid",
+      "description": "A manual tag inside ordinary inline math is invalid.",
+      "source": "Before $x+y\\tag{I}$ after.",
+      "rerenderSources": []
+    },
+    {
+      "id": "inline-double-dollar-display-valid",
+      "description": "Double-dollar math inside prose invokes display-mode rendering and permits a manual tag.",
+      "source": "Before $$x+y\\tag{D}$$ after.",
+      "rerenderSources": []
+    },
+    {
+      "id": "duplicate-tags-error",
+      "description": "Two manual tags in one expression exercise duplicate-tag parse-error behavior.",
+      "source": "$$\nx+y\\tag{A}\\tag{B}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "gathered-outer-tag",
+      "description": "Nested gathered rows have one outer manual tag.",
+      "source": "$$\n\\begin{gathered}a=b\\\\c=d\\end{gathered}\\tag{G}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "gathered-inner-and-outer-tag",
+      "description": "A tag in a nested gathered row plus an outer tag probes nested/duplicate handling.",
+      "source": "$$\n\\begin{gathered}a=b\\tag{inner}\\\\c=d\\end{gathered}\\tag{outer}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "array-outer-tag",
+      "description": "A two-row array with one outer manual tag.",
+      "source": "$$\n\\begin{array}{cc}a&b\\\\c&d\\end{array}\\tag{AR}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "gather-auto-multiline",
+      "description": "Two rows in the automatically numbered gather environment.",
+      "source": "$$\n\\begin{gather}a=b\\\\c=d\\end{gather}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "gather-star-multiline",
+      "description": "Two rows in the unnumbered gather* environment.",
+      "source": "$$\n\\begin{gather*}a=b\\\\c=d\\end{gather*}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "align-auto-notag-multiline",
+      "description": "Three align rows with one \notag row between automatically numbered rows.",
+      "source": "$$\n\\begin{align}a&=b\\\\c&=d\\notag\\\\e&=f\\end{align}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "align-star-multiline",
+      "description": "Two rows in the unnumbered align* environment.",
+      "source": "$$\n\\begin{align*}a&=b\\\\c&=d\\end{align*}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "equation-auto",
+      "description": "A single automatically numbered equation environment.",
+      "source": "$$\n\\begin{equation}x+y\\end{equation}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "equation-star",
+      "description": "A single unnumbered equation* environment.",
+      "source": "$$\n\\begin{equation*}x+y\\end{equation*}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "equation-manual-tag",
+      "description": "Manual tag overrides automatic equation numbering.",
+      "source": "$$\n\\begin{equation}x+y\\tag{E}\\end{equation}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "gather-manual-and-nonumber",
+      "description": "Manual first row tag, nonnumber second row, automatic third row.",
+      "source": "$$\n\\begin{gather}a=b\\tag{M}\\\\c=d\\nonumber\\\\e=f\\end{gather}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "tag-math-content",
+      "description": "Manual tag argument contains supported math content.",
+      "source": "$$\n\\tag{\\alpha+x}x+y\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "tag-in-text-mode",
+      "description": "A tag command inside text mode probes how KaTeX extracts tag metadata.",
+      "source": "$$\n\\text{\\tag{T}}\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "macro-tag-expansion",
+      "description": "A local macro expands to a manual equation tag.",
+      "source": "$$\n\\newcommand{\\pircEqTag}{\\tag{M}}\\pircEqTag x+y\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "macro-scope-across-formulas",
+      "description": "A macro declared in one display formula is followed by a separate formula that references it.",
+      "source": "First.\n\n$$\n\\newcommand{\\pircEqTag}{\\tag{M}}\\pircEqTag x+y\n$$\n\nSecond.\n\n$$\n\\pircEqTag z+w\n$$",
+      "rerenderSources": []
+    },
+    {
+      "id": "counter-continuation-and-rerender",
+      "description": "Two numbered formulas separated by ordinary prose, then replacement content to probe counter re-render behavior.",
+      "source": "Opening text.\n\n$$\n\\begin{equation}x=1\\end{equation}\n$$\n\nOrdinary prose between numbered formulas.\n\n$$\n\\begin{equation}y=2\\end{equation}\n$$",
+      "rerenderSources": [
+        "Replacement prose.\n\n$$\n\\begin{equation}z=3\\end{equation}\n$$"
+      ]
+    }
+  ]
+}

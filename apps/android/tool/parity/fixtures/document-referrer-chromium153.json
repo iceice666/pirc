@@ -1,0 +1,2612 @@
+{
+  "browserVersion": "153.0.8010.12",
+  "browserExecutable": "chrome-headless-shell",
+  "oracle": "Dedicated Chromium 153 headless shell; real HTTP navigation requests served only by two 127.0.0.1 loopback listeners.",
+  "runner": "apps/android/tool/parity/verify_document_referrer_browser.mjs",
+  "runnerSha256": "3dbed150817b6b3562d9135dd83f2e6d3f37bc8a71aab15e03970d289e59a043",
+  "origins": {
+    "sameOrigin": "http://127.0.0.1:43178",
+    "crossOrigin": "http://127.0.0.1:43179"
+  },
+  "policyNames": [
+    "no-referrer",
+    "no-referrer-when-downgrade",
+    "origin",
+    "origin-when-cross-origin",
+    "same-origin",
+    "strict-origin",
+    "strict-origin-when-cross-origin",
+    "unsafe-url"
+  ],
+  "headerMetaPriority": "meta-overrides-response-header",
+  "headerCaseSensitivity": "case-insensitive",
+  "cases": [
+    {
+      "caseId": "lower-no-referrer-same",
+      "group": "policy-lowercase",
+      "policy": "no-referrer",
+      "headerPolicy": "unsafe-url",
+      "metaPolicy": null,
+      "elementPolicy": "no-referrer",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-no-referrer-same",
+      "targetUrl": "http://127.0.0.1:43178/target?case=lower-no-referrer-same",
+      "sourceDocument": {
+        "urlLength": 57,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=lower-no-referrer-same",
+        "pathname": "/target",
+        "documentReferrer": ""
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-no-referrer-same",
+          "path": "/target",
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "documentReferrer": ""
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-no-referrer-same",
+          "path": "/source",
+          "caseId": "lower-no-referrer-same",
+          "queryLength": 28,
+          "referer": "",
+          "responseReferrerPolicy": "unsafe-url",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-no-referrer-same",
+          "path": "/target",
+          "caseId": "lower-no-referrer-same",
+          "queryLength": 28,
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-no-referrer-cross",
+      "group": "policy-lowercase",
+      "policy": "no-referrer",
+      "headerPolicy": "unsafe-url",
+      "metaPolicy": null,
+      "elementPolicy": "no-referrer",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-no-referrer-cross",
+      "targetUrl": "http://127.0.0.1:43179/target?case=lower-no-referrer-cross",
+      "sourceDocument": {
+        "urlLength": 58,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43179/target?case=lower-no-referrer-cross",
+        "pathname": "/target",
+        "documentReferrer": ""
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-no-referrer-cross",
+          "path": "/target",
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "documentReferrer": ""
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-no-referrer-cross",
+          "path": "/source",
+          "caseId": "lower-no-referrer-cross",
+          "queryLength": 29,
+          "referer": "",
+          "responseReferrerPolicy": "unsafe-url",
+          "authorizationPresent": false
+        },
+        {
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-no-referrer-cross",
+          "path": "/target",
+          "caseId": "lower-no-referrer-cross",
+          "queryLength": 29,
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "uppercase-no-referrer",
+      "group": "policy-uppercase",
+      "policy": "NO-REFERRER",
+      "headerPolicy": "unsafe-url",
+      "metaPolicy": null,
+      "elementPolicy": "NO-REFERRER",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=uppercase-no-referrer",
+      "targetUrl": "http://127.0.0.1:43178/target?case=uppercase-no-referrer",
+      "sourceDocument": {
+        "urlLength": 56,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=uppercase-no-referrer",
+        "pathname": "/target",
+        "documentReferrer": ""
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-no-referrer",
+          "path": "/target",
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "documentReferrer": ""
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=uppercase-no-referrer",
+          "path": "/source",
+          "caseId": "uppercase-no-referrer",
+          "queryLength": 27,
+          "referer": "",
+          "responseReferrerPolicy": "unsafe-url",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-no-referrer",
+          "path": "/target",
+          "caseId": "uppercase-no-referrer",
+          "queryLength": 27,
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-no-referrer-when-downgrade-same",
+      "group": "policy-lowercase",
+      "policy": "no-referrer-when-downgrade",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "no-referrer-when-downgrade",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-same",
+      "targetUrl": "http://127.0.0.1:43178/target?case=lower-no-referrer-when-downgrade-same",
+      "sourceDocument": {
+        "urlLength": 72,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=lower-no-referrer-when-downgrade-same",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-same"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-no-referrer-when-downgrade-same",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-same",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-same"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-same",
+          "path": "/source",
+          "caseId": "lower-no-referrer-when-downgrade-same",
+          "queryLength": 43,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-no-referrer-when-downgrade-same",
+          "path": "/target",
+          "caseId": "lower-no-referrer-when-downgrade-same",
+          "queryLength": 43,
+          "referer": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-same",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-no-referrer-when-downgrade-cross",
+      "group": "policy-lowercase",
+      "policy": "no-referrer-when-downgrade",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "no-referrer-when-downgrade",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-cross",
+      "targetUrl": "http://127.0.0.1:43179/target?case=lower-no-referrer-when-downgrade-cross",
+      "sourceDocument": {
+        "urlLength": 73,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43179/target?case=lower-no-referrer-when-downgrade-cross",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-cross"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-no-referrer-when-downgrade-cross",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-cross",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-cross"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-cross",
+          "path": "/source",
+          "caseId": "lower-no-referrer-when-downgrade-cross",
+          "queryLength": 44,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-no-referrer-when-downgrade-cross",
+          "path": "/target",
+          "caseId": "lower-no-referrer-when-downgrade-cross",
+          "queryLength": 44,
+          "referer": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-cross",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "uppercase-no-referrer-when-downgrade",
+      "group": "policy-uppercase",
+      "policy": "NO-REFERRER-WHEN-DOWNGRADE",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "NO-REFERRER-WHEN-DOWNGRADE",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=uppercase-no-referrer-when-downgrade",
+      "targetUrl": "http://127.0.0.1:43178/target?case=uppercase-no-referrer-when-downgrade",
+      "sourceDocument": {
+        "urlLength": 71,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=uppercase-no-referrer-when-downgrade",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=uppercase-no-referrer-when-downgrade"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-no-referrer-when-downgrade",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=uppercase-no-referrer-when-downgrade",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=uppercase-no-referrer-when-downgrade"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=uppercase-no-referrer-when-downgrade",
+          "path": "/source",
+          "caseId": "uppercase-no-referrer-when-downgrade",
+          "queryLength": 42,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-no-referrer-when-downgrade",
+          "path": "/target",
+          "caseId": "uppercase-no-referrer-when-downgrade",
+          "queryLength": 42,
+          "referer": "http://127.0.0.1:43178/source?case=uppercase-no-referrer-when-downgrade",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-origin-same",
+      "group": "policy-lowercase",
+      "policy": "origin",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "origin",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-origin-same",
+      "targetUrl": "http://127.0.0.1:43178/target?case=lower-origin-same",
+      "sourceDocument": {
+        "urlLength": 52,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=lower-origin-same",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-origin-same",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-origin-same",
+          "path": "/source",
+          "caseId": "lower-origin-same",
+          "queryLength": 23,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-origin-same",
+          "path": "/target",
+          "caseId": "lower-origin-same",
+          "queryLength": 23,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-origin-cross",
+      "group": "policy-lowercase",
+      "policy": "origin",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "origin",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-origin-cross",
+      "targetUrl": "http://127.0.0.1:43179/target?case=lower-origin-cross",
+      "sourceDocument": {
+        "urlLength": 53,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43179/target?case=lower-origin-cross",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-origin-cross",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-origin-cross",
+          "path": "/source",
+          "caseId": "lower-origin-cross",
+          "queryLength": 24,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-origin-cross",
+          "path": "/target",
+          "caseId": "lower-origin-cross",
+          "queryLength": 24,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "uppercase-header-origin",
+      "group": "header-uppercase",
+      "policy": "ORIGIN",
+      "headerPolicy": "ORIGIN",
+      "metaPolicy": null,
+      "elementPolicy": null,
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=uppercase-header-origin",
+      "targetUrl": "http://127.0.0.1:43178/target?case=uppercase-header-origin",
+      "sourceDocument": {
+        "urlLength": 58,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=uppercase-header-origin",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-header-origin",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=uppercase-header-origin",
+          "path": "/source",
+          "caseId": "uppercase-header-origin",
+          "queryLength": 29,
+          "referer": "",
+          "responseReferrerPolicy": "ORIGIN",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-header-origin",
+          "path": "/target",
+          "caseId": "uppercase-header-origin",
+          "queryLength": 29,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-origin-when-cross-origin-same",
+      "group": "policy-lowercase",
+      "policy": "origin-when-cross-origin",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "origin-when-cross-origin",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-origin-when-cross-origin-same",
+      "targetUrl": "http://127.0.0.1:43178/target?case=lower-origin-when-cross-origin-same",
+      "sourceDocument": {
+        "urlLength": 70,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=lower-origin-when-cross-origin-same",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=lower-origin-when-cross-origin-same"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-origin-when-cross-origin-same",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=lower-origin-when-cross-origin-same",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=lower-origin-when-cross-origin-same"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-origin-when-cross-origin-same",
+          "path": "/source",
+          "caseId": "lower-origin-when-cross-origin-same",
+          "queryLength": 41,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-origin-when-cross-origin-same",
+          "path": "/target",
+          "caseId": "lower-origin-when-cross-origin-same",
+          "queryLength": 41,
+          "referer": "http://127.0.0.1:43178/source?case=lower-origin-when-cross-origin-same",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-origin-when-cross-origin-cross",
+      "group": "policy-lowercase",
+      "policy": "origin-when-cross-origin",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "origin-when-cross-origin",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-origin-when-cross-origin-cross",
+      "targetUrl": "http://127.0.0.1:43179/target?case=lower-origin-when-cross-origin-cross",
+      "sourceDocument": {
+        "urlLength": 71,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43179/target?case=lower-origin-when-cross-origin-cross",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-origin-when-cross-origin-cross",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-origin-when-cross-origin-cross",
+          "path": "/source",
+          "caseId": "lower-origin-when-cross-origin-cross",
+          "queryLength": 42,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-origin-when-cross-origin-cross",
+          "path": "/target",
+          "caseId": "lower-origin-when-cross-origin-cross",
+          "queryLength": 42,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "uppercase-origin-when-cross-origin",
+      "group": "policy-uppercase",
+      "policy": "ORIGIN-WHEN-CROSS-ORIGIN",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "ORIGIN-WHEN-CROSS-ORIGIN",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=uppercase-origin-when-cross-origin",
+      "targetUrl": "http://127.0.0.1:43178/target?case=uppercase-origin-when-cross-origin",
+      "sourceDocument": {
+        "urlLength": 69,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=uppercase-origin-when-cross-origin",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=uppercase-origin-when-cross-origin"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-origin-when-cross-origin",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=uppercase-origin-when-cross-origin",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=uppercase-origin-when-cross-origin"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=uppercase-origin-when-cross-origin",
+          "path": "/source",
+          "caseId": "uppercase-origin-when-cross-origin",
+          "queryLength": 40,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-origin-when-cross-origin",
+          "path": "/target",
+          "caseId": "uppercase-origin-when-cross-origin",
+          "queryLength": 40,
+          "referer": "http://127.0.0.1:43178/source?case=uppercase-origin-when-cross-origin",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-same-origin-same",
+      "group": "policy-lowercase",
+      "policy": "same-origin",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "same-origin",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-same-origin-same",
+      "targetUrl": "http://127.0.0.1:43178/target?case=lower-same-origin-same",
+      "sourceDocument": {
+        "urlLength": 57,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=lower-same-origin-same",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=lower-same-origin-same"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-same-origin-same",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=lower-same-origin-same",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=lower-same-origin-same"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-same-origin-same",
+          "path": "/source",
+          "caseId": "lower-same-origin-same",
+          "queryLength": 28,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-same-origin-same",
+          "path": "/target",
+          "caseId": "lower-same-origin-same",
+          "queryLength": 28,
+          "referer": "http://127.0.0.1:43178/source?case=lower-same-origin-same",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-same-origin-cross",
+      "group": "policy-lowercase",
+      "policy": "same-origin",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "same-origin",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-same-origin-cross",
+      "targetUrl": "http://127.0.0.1:43179/target?case=lower-same-origin-cross",
+      "sourceDocument": {
+        "urlLength": 58,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43179/target?case=lower-same-origin-cross",
+        "pathname": "/target",
+        "documentReferrer": ""
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-same-origin-cross",
+          "path": "/target",
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "documentReferrer": ""
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-same-origin-cross",
+          "path": "/source",
+          "caseId": "lower-same-origin-cross",
+          "queryLength": 29,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-same-origin-cross",
+          "path": "/target",
+          "caseId": "lower-same-origin-cross",
+          "queryLength": 29,
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "uppercase-same-origin",
+      "group": "policy-uppercase",
+      "policy": "SAME-ORIGIN",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "SAME-ORIGIN",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=uppercase-same-origin",
+      "targetUrl": "http://127.0.0.1:43178/target?case=uppercase-same-origin",
+      "sourceDocument": {
+        "urlLength": 56,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=uppercase-same-origin",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=uppercase-same-origin"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-same-origin",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=uppercase-same-origin",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=uppercase-same-origin"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=uppercase-same-origin",
+          "path": "/source",
+          "caseId": "uppercase-same-origin",
+          "queryLength": 27,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-same-origin",
+          "path": "/target",
+          "caseId": "uppercase-same-origin",
+          "queryLength": 27,
+          "referer": "http://127.0.0.1:43178/source?case=uppercase-same-origin",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-strict-origin-same",
+      "group": "policy-lowercase",
+      "policy": "strict-origin",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "strict-origin",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-strict-origin-same",
+      "targetUrl": "http://127.0.0.1:43178/target?case=lower-strict-origin-same",
+      "sourceDocument": {
+        "urlLength": 59,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=lower-strict-origin-same",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-strict-origin-same",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-strict-origin-same",
+          "path": "/source",
+          "caseId": "lower-strict-origin-same",
+          "queryLength": 30,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-strict-origin-same",
+          "path": "/target",
+          "caseId": "lower-strict-origin-same",
+          "queryLength": 30,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-strict-origin-cross",
+      "group": "policy-lowercase",
+      "policy": "strict-origin",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "strict-origin",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-strict-origin-cross",
+      "targetUrl": "http://127.0.0.1:43179/target?case=lower-strict-origin-cross",
+      "sourceDocument": {
+        "urlLength": 60,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43179/target?case=lower-strict-origin-cross",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-strict-origin-cross",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-strict-origin-cross",
+          "path": "/source",
+          "caseId": "lower-strict-origin-cross",
+          "queryLength": 31,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-strict-origin-cross",
+          "path": "/target",
+          "caseId": "lower-strict-origin-cross",
+          "queryLength": 31,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "uppercase-strict-origin",
+      "group": "policy-uppercase",
+      "policy": "STRICT-ORIGIN",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "STRICT-ORIGIN",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=uppercase-strict-origin",
+      "targetUrl": "http://127.0.0.1:43178/target?case=uppercase-strict-origin",
+      "sourceDocument": {
+        "urlLength": 58,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=uppercase-strict-origin",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-strict-origin",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=uppercase-strict-origin",
+          "path": "/source",
+          "caseId": "uppercase-strict-origin",
+          "queryLength": 29,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-strict-origin",
+          "path": "/target",
+          "caseId": "uppercase-strict-origin",
+          "queryLength": 29,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-strict-origin-when-cross-origin-same",
+      "group": "policy-lowercase",
+      "policy": "strict-origin-when-cross-origin",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "strict-origin-when-cross-origin",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-strict-origin-when-cross-origin-same",
+      "targetUrl": "http://127.0.0.1:43178/target?case=lower-strict-origin-when-cross-origin-same",
+      "sourceDocument": {
+        "urlLength": 77,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=lower-strict-origin-when-cross-origin-same",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=lower-strict-origin-when-cross-origin-same"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-strict-origin-when-cross-origin-same",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=lower-strict-origin-when-cross-origin-same",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=lower-strict-origin-when-cross-origin-same"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-strict-origin-when-cross-origin-same",
+          "path": "/source",
+          "caseId": "lower-strict-origin-when-cross-origin-same",
+          "queryLength": 48,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-strict-origin-when-cross-origin-same",
+          "path": "/target",
+          "caseId": "lower-strict-origin-when-cross-origin-same",
+          "queryLength": 48,
+          "referer": "http://127.0.0.1:43178/source?case=lower-strict-origin-when-cross-origin-same",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-strict-origin-when-cross-origin-cross",
+      "group": "policy-lowercase",
+      "policy": "strict-origin-when-cross-origin",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "strict-origin-when-cross-origin",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-strict-origin-when-cross-origin-cross",
+      "targetUrl": "http://127.0.0.1:43179/target?case=lower-strict-origin-when-cross-origin-cross",
+      "sourceDocument": {
+        "urlLength": 78,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43179/target?case=lower-strict-origin-when-cross-origin-cross",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-strict-origin-when-cross-origin-cross",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-strict-origin-when-cross-origin-cross",
+          "path": "/source",
+          "caseId": "lower-strict-origin-when-cross-origin-cross",
+          "queryLength": 49,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-strict-origin-when-cross-origin-cross",
+          "path": "/target",
+          "caseId": "lower-strict-origin-when-cross-origin-cross",
+          "queryLength": 49,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "uppercase-strict-origin-when-cross-origin",
+      "group": "policy-uppercase",
+      "policy": "STRICT-ORIGIN-WHEN-CROSS-ORIGIN",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "STRICT-ORIGIN-WHEN-CROSS-ORIGIN",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=uppercase-strict-origin-when-cross-origin",
+      "targetUrl": "http://127.0.0.1:43178/target?case=uppercase-strict-origin-when-cross-origin",
+      "sourceDocument": {
+        "urlLength": 76,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=uppercase-strict-origin-when-cross-origin",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=uppercase-strict-origin-when-cross-origin"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-strict-origin-when-cross-origin",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=uppercase-strict-origin-when-cross-origin",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=uppercase-strict-origin-when-cross-origin"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=uppercase-strict-origin-when-cross-origin",
+          "path": "/source",
+          "caseId": "uppercase-strict-origin-when-cross-origin",
+          "queryLength": 47,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-strict-origin-when-cross-origin",
+          "path": "/target",
+          "caseId": "uppercase-strict-origin-when-cross-origin",
+          "queryLength": 47,
+          "referer": "http://127.0.0.1:43178/source?case=uppercase-strict-origin-when-cross-origin",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-unsafe-url-same",
+      "group": "policy-lowercase",
+      "policy": "unsafe-url",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "unsafe-url",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-unsafe-url-same",
+      "targetUrl": "http://127.0.0.1:43178/target?case=lower-unsafe-url-same",
+      "sourceDocument": {
+        "urlLength": 56,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=lower-unsafe-url-same",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=lower-unsafe-url-same"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-unsafe-url-same",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=lower-unsafe-url-same",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=lower-unsafe-url-same"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-unsafe-url-same",
+          "path": "/source",
+          "caseId": "lower-unsafe-url-same",
+          "queryLength": 27,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=lower-unsafe-url-same",
+          "path": "/target",
+          "caseId": "lower-unsafe-url-same",
+          "queryLength": 27,
+          "referer": "http://127.0.0.1:43178/source?case=lower-unsafe-url-same",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "lower-unsafe-url-cross",
+      "group": "policy-lowercase",
+      "policy": "unsafe-url",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "unsafe-url",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=lower-unsafe-url-cross",
+      "targetUrl": "http://127.0.0.1:43179/target?case=lower-unsafe-url-cross",
+      "sourceDocument": {
+        "urlLength": 57,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43179/target?case=lower-unsafe-url-cross",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=lower-unsafe-url-cross"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-unsafe-url-cross",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=lower-unsafe-url-cross",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=lower-unsafe-url-cross"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=lower-unsafe-url-cross",
+          "path": "/source",
+          "caseId": "lower-unsafe-url-cross",
+          "queryLength": 28,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=lower-unsafe-url-cross",
+          "path": "/target",
+          "caseId": "lower-unsafe-url-cross",
+          "queryLength": 28,
+          "referer": "http://127.0.0.1:43178/source?case=lower-unsafe-url-cross",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "uppercase-unsafe-url",
+      "group": "policy-uppercase",
+      "policy": "UNSAFE-URL",
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "UNSAFE-URL",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=uppercase-unsafe-url",
+      "targetUrl": "http://127.0.0.1:43178/target?case=uppercase-unsafe-url",
+      "sourceDocument": {
+        "urlLength": 55,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=uppercase-unsafe-url",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=uppercase-unsafe-url"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-unsafe-url",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=uppercase-unsafe-url",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=uppercase-unsafe-url"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=uppercase-unsafe-url",
+          "path": "/source",
+          "caseId": "uppercase-unsafe-url",
+          "queryLength": 26,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=uppercase-unsafe-url",
+          "path": "/target",
+          "caseId": "uppercase-unsafe-url",
+          "queryLength": 26,
+          "referer": "http://127.0.0.1:43178/source?case=uppercase-unsafe-url",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "rel-noreferrer",
+      "group": "rel-override",
+      "policy": null,
+      "headerPolicy": "unsafe-url",
+      "metaPolicy": null,
+      "elementPolicy": "unsafe-url",
+      "rel": "noreferrer",
+      "sourceUrl": "http://127.0.0.1:43178/source?case=rel-noreferrer",
+      "targetUrl": "http://127.0.0.1:43178/target?case=rel-noreferrer",
+      "sourceDocument": {
+        "urlLength": 49,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=rel-noreferrer",
+        "pathname": "/target",
+        "documentReferrer": ""
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=rel-noreferrer",
+          "path": "/target",
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "documentReferrer": ""
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=rel-noreferrer",
+          "path": "/source",
+          "caseId": "rel-noreferrer",
+          "queryLength": 20,
+          "referer": "",
+          "responseReferrerPolicy": "unsafe-url",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=rel-noreferrer",
+          "path": "/target",
+          "caseId": "rel-noreferrer",
+          "queryLength": 20,
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "header-meta-priority",
+      "group": "policy-source-priority",
+      "policy": null,
+      "headerPolicy": "unsafe-url",
+      "metaPolicy": "no-referrer",
+      "elementPolicy": null,
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=header-meta-priority",
+      "targetUrl": "http://127.0.0.1:43179/target?case=header-meta-priority",
+      "sourceDocument": {
+        "urlLength": 55,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43179/target?case=header-meta-priority",
+        "pathname": "/target",
+        "documentReferrer": ""
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=header-meta-priority",
+          "path": "/target",
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "documentReferrer": ""
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=header-meta-priority",
+          "path": "/source",
+          "caseId": "header-meta-priority",
+          "queryLength": 26,
+          "referer": "",
+          "responseReferrerPolicy": "unsafe-url",
+          "authorizationPresent": false
+        },
+        {
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/target?case=header-meta-priority",
+          "path": "/target",
+          "caseId": "header-meta-priority",
+          "queryLength": 26,
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "element-policy-and-redirect-tightening",
+      "group": "policy-source-priority-and-redirect",
+      "policy": null,
+      "headerPolicy": "no-referrer",
+      "metaPolicy": "origin",
+      "elementPolicy": "unsafe-url",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=element-policy-and-redirect-tightening",
+      "targetUrl": "http://127.0.0.1:43179/redirect/tighten?case=element-policy-and-redirect-tightening",
+      "sourceDocument": {
+        "urlLength": 73,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/final?case=element-policy-and-redirect-tightening",
+        "pathname": "/final",
+        "documentReferrer": "http://127.0.0.1:43178/"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/redirect/tighten?case=element-policy-and-redirect-tightening",
+          "path": "/redirect/tighten",
+          "referer": "http://127.0.0.1:43178/source?case=element-policy-and-redirect-tightening",
+          "responseReferrerPolicy": "origin",
+          "documentReferrer": null
+        },
+        {
+          "hop": 2,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/final?case=element-policy-and-redirect-tightening",
+          "path": "/final",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=element-policy-and-redirect-tightening",
+          "path": "/source",
+          "caseId": "element-policy-and-redirect-tightening",
+          "queryLength": 44,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/redirect/tighten?case=element-policy-and-redirect-tightening",
+          "path": "/redirect/tighten",
+          "caseId": "element-policy-and-redirect-tightening",
+          "queryLength": 44,
+          "referer": "http://127.0.0.1:43178/source?case=element-policy-and-redirect-tightening",
+          "responseReferrerPolicy": "origin",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/final?case=element-policy-and-redirect-tightening",
+          "path": "/final",
+          "caseId": "element-policy-and-redirect-tightening",
+          "queryLength": 44,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "redirect-cross-to-same",
+      "group": "redirect-chain",
+      "policy": null,
+      "headerPolicy": null,
+      "metaPolicy": null,
+      "elementPolicy": "strict-origin-when-cross-origin",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=redirect-cross-to-same",
+      "targetUrl": "http://127.0.0.1:43179/redirect/cross-to-same?case=redirect-cross-to-same",
+      "sourceDocument": {
+        "urlLength": 57,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/final?case=redirect-cross-to-same",
+        "pathname": "/final",
+        "documentReferrer": "http://127.0.0.1:43178/"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/redirect/cross-to-same?case=redirect-cross-to-same",
+          "path": "/redirect/cross-to-same",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": null
+        },
+        {
+          "hop": 2,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/final?case=redirect-cross-to-same",
+          "path": "/final",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=redirect-cross-to-same",
+          "path": "/source",
+          "caseId": "redirect-cross-to-same",
+          "queryLength": 28,
+          "referer": "",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        },
+        {
+          "server": "cross",
+          "method": "GET",
+          "url": "http://127.0.0.1:43179/redirect/cross-to-same?case=redirect-cross-to-same",
+          "path": "/redirect/cross-to-same",
+          "caseId": "redirect-cross-to-same",
+          "queryLength": 28,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/final?case=redirect-cross-to-same",
+          "path": "/final",
+          "caseId": "redirect-cross-to-same",
+          "queryLength": 28,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "source-url-over-4096",
+      "group": "url-sanitization",
+      "policy": null,
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "unsafe-url",
+      "rel": null,
+      "sourceUrl": "http://127.0.0.1:43178/source?case=source-url-over-4096&pad=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "targetUrl": "http://127.0.0.1:43178/target?case=source-url-over-4096",
+      "sourceDocument": {
+        "urlLength": 4260,
+        "hasCredentials": false,
+        "hasFragment": false,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": false,
+        "hasFragment": false
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=source-url-over-4096",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=source-url-over-4096",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=source-url-over-4096&pad=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "path": "/source",
+          "caseId": "source-url-over-4096",
+          "queryLength": 4231,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=source-url-over-4096",
+          "path": "/target",
+          "caseId": "source-url-over-4096",
+          "queryLength": 26,
+          "referer": "http://127.0.0.1:43178/",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "source-credentials-and-fragment",
+      "group": "url-sanitization",
+      "policy": null,
+      "headerPolicy": "no-referrer",
+      "metaPolicy": null,
+      "elementPolicy": "unsafe-url",
+      "rel": null,
+      "sourceUrl": "http://oracle-user:oracle-pass@127.0.0.1:43178/source?case=source-credentials-and-fragment#private-fragment",
+      "targetUrl": "http://127.0.0.1:43178/target?case=source-credentials-and-fragment",
+      "sourceDocument": {
+        "urlLength": 83,
+        "hasCredentials": false,
+        "hasFragment": true,
+        "pathname": "/source"
+      },
+      "sourceUrlInput": {
+        "hasCredentials": true,
+        "hasFragment": true
+      },
+      "finalDocument": {
+        "url": "http://127.0.0.1:43178/target?case=source-credentials-and-fragment",
+        "pathname": "/target",
+        "documentReferrer": "http://127.0.0.1:43178/source?case=source-credentials-and-fragment"
+      },
+      "requestHops": [
+        {
+          "hop": 1,
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=source-credentials-and-fragment",
+          "path": "/target",
+          "referer": "http://127.0.0.1:43178/source?case=source-credentials-and-fragment",
+          "responseReferrerPolicy": null,
+          "documentReferrer": "http://127.0.0.1:43178/source?case=source-credentials-and-fragment"
+        }
+      ],
+      "requests": [
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/source?case=source-credentials-and-fragment",
+          "path": "/source",
+          "caseId": "source-credentials-and-fragment",
+          "queryLength": 37,
+          "referer": "",
+          "responseReferrerPolicy": "no-referrer",
+          "authorizationPresent": false
+        },
+        {
+          "server": "same",
+          "method": "GET",
+          "url": "http://127.0.0.1:43178/target?case=source-credentials-and-fragment",
+          "path": "/target",
+          "caseId": "source-credentials-and-fragment",
+          "queryLength": 37,
+          "referer": "http://127.0.0.1:43178/source?case=source-credentials-and-fragment",
+          "responseReferrerPolicy": null,
+          "authorizationPresent": false
+        }
+      ]
+    }
+  ],
+  "serverRequests": [
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-no-referrer-same",
+      "path": "/source",
+      "caseId": "lower-no-referrer-same",
+      "queryLength": 28,
+      "referer": "",
+      "responseReferrerPolicy": "unsafe-url",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=lower-no-referrer-same",
+      "path": "/target",
+      "caseId": "lower-no-referrer-same",
+      "queryLength": 28,
+      "referer": "",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-no-referrer-cross",
+      "path": "/source",
+      "caseId": "lower-no-referrer-cross",
+      "queryLength": 29,
+      "referer": "",
+      "responseReferrerPolicy": "unsafe-url",
+      "authorizationPresent": false
+    },
+    {
+      "server": "cross",
+      "method": "GET",
+      "url": "http://127.0.0.1:43179/target?case=lower-no-referrer-cross",
+      "path": "/target",
+      "caseId": "lower-no-referrer-cross",
+      "queryLength": 29,
+      "referer": "",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=uppercase-no-referrer",
+      "path": "/source",
+      "caseId": "uppercase-no-referrer",
+      "queryLength": 27,
+      "referer": "",
+      "responseReferrerPolicy": "unsafe-url",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=uppercase-no-referrer",
+      "path": "/target",
+      "caseId": "uppercase-no-referrer",
+      "queryLength": 27,
+      "referer": "",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-same",
+      "path": "/source",
+      "caseId": "lower-no-referrer-when-downgrade-same",
+      "queryLength": 43,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=lower-no-referrer-when-downgrade-same",
+      "path": "/target",
+      "caseId": "lower-no-referrer-when-downgrade-same",
+      "queryLength": 43,
+      "referer": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-same",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-cross",
+      "path": "/source",
+      "caseId": "lower-no-referrer-when-downgrade-cross",
+      "queryLength": 44,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "cross",
+      "method": "GET",
+      "url": "http://127.0.0.1:43179/target?case=lower-no-referrer-when-downgrade-cross",
+      "path": "/target",
+      "caseId": "lower-no-referrer-when-downgrade-cross",
+      "queryLength": 44,
+      "referer": "http://127.0.0.1:43178/source?case=lower-no-referrer-when-downgrade-cross",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=uppercase-no-referrer-when-downgrade",
+      "path": "/source",
+      "caseId": "uppercase-no-referrer-when-downgrade",
+      "queryLength": 42,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=uppercase-no-referrer-when-downgrade",
+      "path": "/target",
+      "caseId": "uppercase-no-referrer-when-downgrade",
+      "queryLength": 42,
+      "referer": "http://127.0.0.1:43178/source?case=uppercase-no-referrer-when-downgrade",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-origin-same",
+      "path": "/source",
+      "caseId": "lower-origin-same",
+      "queryLength": 23,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=lower-origin-same",
+      "path": "/target",
+      "caseId": "lower-origin-same",
+      "queryLength": 23,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-origin-cross",
+      "path": "/source",
+      "caseId": "lower-origin-cross",
+      "queryLength": 24,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "cross",
+      "method": "GET",
+      "url": "http://127.0.0.1:43179/target?case=lower-origin-cross",
+      "path": "/target",
+      "caseId": "lower-origin-cross",
+      "queryLength": 24,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=uppercase-header-origin",
+      "path": "/source",
+      "caseId": "uppercase-header-origin",
+      "queryLength": 29,
+      "referer": "",
+      "responseReferrerPolicy": "ORIGIN",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=uppercase-header-origin",
+      "path": "/target",
+      "caseId": "uppercase-header-origin",
+      "queryLength": 29,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-origin-when-cross-origin-same",
+      "path": "/source",
+      "caseId": "lower-origin-when-cross-origin-same",
+      "queryLength": 41,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=lower-origin-when-cross-origin-same",
+      "path": "/target",
+      "caseId": "lower-origin-when-cross-origin-same",
+      "queryLength": 41,
+      "referer": "http://127.0.0.1:43178/source?case=lower-origin-when-cross-origin-same",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-origin-when-cross-origin-cross",
+      "path": "/source",
+      "caseId": "lower-origin-when-cross-origin-cross",
+      "queryLength": 42,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "cross",
+      "method": "GET",
+      "url": "http://127.0.0.1:43179/target?case=lower-origin-when-cross-origin-cross",
+      "path": "/target",
+      "caseId": "lower-origin-when-cross-origin-cross",
+      "queryLength": 42,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=uppercase-origin-when-cross-origin",
+      "path": "/source",
+      "caseId": "uppercase-origin-when-cross-origin",
+      "queryLength": 40,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=uppercase-origin-when-cross-origin",
+      "path": "/target",
+      "caseId": "uppercase-origin-when-cross-origin",
+      "queryLength": 40,
+      "referer": "http://127.0.0.1:43178/source?case=uppercase-origin-when-cross-origin",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-same-origin-same",
+      "path": "/source",
+      "caseId": "lower-same-origin-same",
+      "queryLength": 28,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=lower-same-origin-same",
+      "path": "/target",
+      "caseId": "lower-same-origin-same",
+      "queryLength": 28,
+      "referer": "http://127.0.0.1:43178/source?case=lower-same-origin-same",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-same-origin-cross",
+      "path": "/source",
+      "caseId": "lower-same-origin-cross",
+      "queryLength": 29,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "cross",
+      "method": "GET",
+      "url": "http://127.0.0.1:43179/target?case=lower-same-origin-cross",
+      "path": "/target",
+      "caseId": "lower-same-origin-cross",
+      "queryLength": 29,
+      "referer": "",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=uppercase-same-origin",
+      "path": "/source",
+      "caseId": "uppercase-same-origin",
+      "queryLength": 27,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=uppercase-same-origin",
+      "path": "/target",
+      "caseId": "uppercase-same-origin",
+      "queryLength": 27,
+      "referer": "http://127.0.0.1:43178/source?case=uppercase-same-origin",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-strict-origin-same",
+      "path": "/source",
+      "caseId": "lower-strict-origin-same",
+      "queryLength": 30,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=lower-strict-origin-same",
+      "path": "/target",
+      "caseId": "lower-strict-origin-same",
+      "queryLength": 30,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-strict-origin-cross",
+      "path": "/source",
+      "caseId": "lower-strict-origin-cross",
+      "queryLength": 31,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "cross",
+      "method": "GET",
+      "url": "http://127.0.0.1:43179/target?case=lower-strict-origin-cross",
+      "path": "/target",
+      "caseId": "lower-strict-origin-cross",
+      "queryLength": 31,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=uppercase-strict-origin",
+      "path": "/source",
+      "caseId": "uppercase-strict-origin",
+      "queryLength": 29,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=uppercase-strict-origin",
+      "path": "/target",
+      "caseId": "uppercase-strict-origin",
+      "queryLength": 29,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-strict-origin-when-cross-origin-same",
+      "path": "/source",
+      "caseId": "lower-strict-origin-when-cross-origin-same",
+      "queryLength": 48,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=lower-strict-origin-when-cross-origin-same",
+      "path": "/target",
+      "caseId": "lower-strict-origin-when-cross-origin-same",
+      "queryLength": 48,
+      "referer": "http://127.0.0.1:43178/source?case=lower-strict-origin-when-cross-origin-same",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-strict-origin-when-cross-origin-cross",
+      "path": "/source",
+      "caseId": "lower-strict-origin-when-cross-origin-cross",
+      "queryLength": 49,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "cross",
+      "method": "GET",
+      "url": "http://127.0.0.1:43179/target?case=lower-strict-origin-when-cross-origin-cross",
+      "path": "/target",
+      "caseId": "lower-strict-origin-when-cross-origin-cross",
+      "queryLength": 49,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=uppercase-strict-origin-when-cross-origin",
+      "path": "/source",
+      "caseId": "uppercase-strict-origin-when-cross-origin",
+      "queryLength": 47,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=uppercase-strict-origin-when-cross-origin",
+      "path": "/target",
+      "caseId": "uppercase-strict-origin-when-cross-origin",
+      "queryLength": 47,
+      "referer": "http://127.0.0.1:43178/source?case=uppercase-strict-origin-when-cross-origin",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-unsafe-url-same",
+      "path": "/source",
+      "caseId": "lower-unsafe-url-same",
+      "queryLength": 27,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=lower-unsafe-url-same",
+      "path": "/target",
+      "caseId": "lower-unsafe-url-same",
+      "queryLength": 27,
+      "referer": "http://127.0.0.1:43178/source?case=lower-unsafe-url-same",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=lower-unsafe-url-cross",
+      "path": "/source",
+      "caseId": "lower-unsafe-url-cross",
+      "queryLength": 28,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "cross",
+      "method": "GET",
+      "url": "http://127.0.0.1:43179/target?case=lower-unsafe-url-cross",
+      "path": "/target",
+      "caseId": "lower-unsafe-url-cross",
+      "queryLength": 28,
+      "referer": "http://127.0.0.1:43178/source?case=lower-unsafe-url-cross",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=uppercase-unsafe-url",
+      "path": "/source",
+      "caseId": "uppercase-unsafe-url",
+      "queryLength": 26,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=uppercase-unsafe-url",
+      "path": "/target",
+      "caseId": "uppercase-unsafe-url",
+      "queryLength": 26,
+      "referer": "http://127.0.0.1:43178/source?case=uppercase-unsafe-url",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=rel-noreferrer",
+      "path": "/source",
+      "caseId": "rel-noreferrer",
+      "queryLength": 20,
+      "referer": "",
+      "responseReferrerPolicy": "unsafe-url",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=rel-noreferrer",
+      "path": "/target",
+      "caseId": "rel-noreferrer",
+      "queryLength": 20,
+      "referer": "",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=header-meta-priority",
+      "path": "/source",
+      "caseId": "header-meta-priority",
+      "queryLength": 26,
+      "referer": "",
+      "responseReferrerPolicy": "unsafe-url",
+      "authorizationPresent": false
+    },
+    {
+      "server": "cross",
+      "method": "GET",
+      "url": "http://127.0.0.1:43179/target?case=header-meta-priority",
+      "path": "/target",
+      "caseId": "header-meta-priority",
+      "queryLength": 26,
+      "referer": "",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=element-policy-and-redirect-tightening",
+      "path": "/source",
+      "caseId": "element-policy-and-redirect-tightening",
+      "queryLength": 44,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "cross",
+      "method": "GET",
+      "url": "http://127.0.0.1:43179/redirect/tighten?case=element-policy-and-redirect-tightening",
+      "path": "/redirect/tighten",
+      "caseId": "element-policy-and-redirect-tightening",
+      "queryLength": 44,
+      "referer": "http://127.0.0.1:43178/source?case=element-policy-and-redirect-tightening",
+      "responseReferrerPolicy": "origin",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/final?case=element-policy-and-redirect-tightening",
+      "path": "/final",
+      "caseId": "element-policy-and-redirect-tightening",
+      "queryLength": 44,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=redirect-cross-to-same",
+      "path": "/source",
+      "caseId": "redirect-cross-to-same",
+      "queryLength": 28,
+      "referer": "",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "cross",
+      "method": "GET",
+      "url": "http://127.0.0.1:43179/redirect/cross-to-same?case=redirect-cross-to-same",
+      "path": "/redirect/cross-to-same",
+      "caseId": "redirect-cross-to-same",
+      "queryLength": 28,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/final?case=redirect-cross-to-same",
+      "path": "/final",
+      "caseId": "redirect-cross-to-same",
+      "queryLength": 28,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=source-url-over-4096&pad=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "path": "/source",
+      "caseId": "source-url-over-4096",
+      "queryLength": 4231,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=source-url-over-4096",
+      "path": "/target",
+      "caseId": "source-url-over-4096",
+      "queryLength": 26,
+      "referer": "http://127.0.0.1:43178/",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/source?case=source-credentials-and-fragment",
+      "path": "/source",
+      "caseId": "source-credentials-and-fragment",
+      "queryLength": 37,
+      "referer": "",
+      "responseReferrerPolicy": "no-referrer",
+      "authorizationPresent": false
+    },
+    {
+      "server": "same",
+      "method": "GET",
+      "url": "http://127.0.0.1:43178/target?case=source-credentials-and-fragment",
+      "path": "/target",
+      "caseId": "source-credentials-and-fragment",
+      "queryLength": 37,
+      "referer": "http://127.0.0.1:43178/source?case=source-credentials-and-fragment",
+      "responseReferrerPolicy": null,
+      "authorizationPresent": false
+    }
+  ],
+  "blockedRequests": []
+}

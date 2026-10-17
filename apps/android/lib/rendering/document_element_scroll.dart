@@ -1,0 +1,1284 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart';
+
+import 'html_document_box.dart';
+
+/// The CSS overflow behavior for one physical axis.
+enum NativeDocumentOverflow { visible, hidden, clip, auto, scroll }
+
+/// Whether [object] is a native document scroll viewport clipping [globalPoint].
+///
+/// This lets other native inline-overflow paths preserve nested CSS scrollport
+/// clips when they walk render-object descendants for hit testing.
+bool nativeDocumentScrollClipsGlobalPoint(
+  RenderObject object,
+  Offset globalPoint,
+) {
+  if (object is! _RenderNativeDocumentElementScrollViewportRender ||
+      !object.attached ||
+      !object.hasSize) {
+    return false;
+  }
+  final local = object.globalToLocal(globalPoint);
+  return (object._clipsX && (local.dx < 0 || local.dx > object.size.width)) ||
+      (object._clipsY && (local.dy < 0 || local.dy > object.size.height));
+}
+
+/// Owns native scroll offsets for elements in one fetched document.
+///
+/// A controller may be shared by the layout bridge and script host for a view.
+/// Offsets survive ordinary element detach/reattach while the document owner
+/// remains the same. [beginDocument] retires all current attachments and starts
+/// a fresh offset/event scope.
+class NativeDocumentElementScrollController extends ChangeNotifier {
+  NativeDocumentElementScrollController({Object? documentOwner})
+    : _documentOwner = documentOwner ?? Object();
+
+  static const int maximumPendingScrollEvents = 8192;
+  static const Duration smoothScrollDuration = Duration(milliseconds: 250);
+
+  Object _documentOwner;
+  bool _disposed = false;
+  bool _notificationScheduled = false;
+  bool _coalescingClearScheduled = false;
+  int _coalescingGeneration = 0;
+  final Map<String, int> _coalescedSequences = <String, int>{};
+  final Map<String, Set<_NativeDocumentScrollAttachment>> _attachments = {};
+  final Map<String, Offset> _savedOffsets = {};
+  final List<_NativeDocumentScrollEvent> _events =
+      <_NativeDocumentScrollEvent>[];
+  int _nextSequence = 1;
+  int droppedScrollEventCount = 0;
+
+  /// Starts a new document lifetime. Old render objects can detach later; their
+  /// ScrollControllers are kept alive until their Scrollables have detached.
+  void beginDocument(Object owner) {
+    if (_disposed || identical(owner, _documentOwner)) return;
+    _documentOwner = owner;
+    _savedOffsets.clear();
+    _events.clear();
+    _coalescedSequences.clear();
+    _coalescingGeneration++;
+    _coalescingClearScheduled = false;
+    for (final attachment in _allAttachments) {
+      attachment.retired = true;
+      attachment.hasMetrics = false;
+      _scheduleRetirement(attachment);
+    }
+    _scheduleNotification();
+  }
+
+  /// Discards saved offsets for elements that have been removed from the DOM.
+  ///
+  /// An empty set is ignored because some callers only have IDs for script
+  /// observed elements, not the native renderer's generated fallback IDs.
+  void retainIds(Set<String> ids) {
+    if (_disposed || ids.isEmpty) return;
+    _savedOffsets.removeWhere((id, _) => !ids.contains(id));
+  }
+
+  /// Latest native scroll metrics for an unambiguous, laid-out element.
+  ///
+  /// Width and height are the actual scrollable content extents, including
+  /// padding. They are not estimated from CSS values.
+  Map<String, double>? metricsFor(String id) {
+    if (_disposed) return null;
+    final matches = _activeAttachments(id);
+    if (matches.length != 1) return null;
+    final attachment = matches.single;
+    if (!attachment.hasMetrics ||
+        !attachment.hasLayoutRevision ||
+        attachment.revision != attachment.layoutRevision) {
+      return null;
+    }
+    final left = _isProgrammaticallyScrollable(attachment.overflowX)
+        ? _currentPixels(attachment.horizontalController, attachment.lastLeft)
+        : 0.0;
+    final top = _isProgrammaticallyScrollable(attachment.overflowY)
+        ? _currentPixels(attachment.verticalController, attachment.lastTop)
+        : 0.0;
+    final width = attachment.contentWidth;
+    final height = attachment.contentHeight;
+    if (width == null || height == null) {
+      return null;
+    }
+    return <String, double>{
+      'left': left,
+      'top': top,
+      'width': width,
+      'height': height,
+    };
+  }
+
+  /// Events waiting to be included in an accepted native layout packet.
+  ///
+  /// A target contributes at most one event in each frame. [sequence] is
+  /// assigned at its first actual offset change, preserving nested event order.
+  List<Map<String, dynamic>> get pendingScrollEvents =>
+      List<Map<String, dynamic>>.unmodifiable(
+        _events.map(
+          (event) => <String, dynamic>{
+            'id': event.id,
+            'sequence': event.sequence,
+          },
+        ),
+      );
+
+  /// Removes events included in an accepted packet through [throughSequence].
+  void acknowledgeScrollEvents(int throughSequence) {
+    if (_disposed || _events.isEmpty) return;
+    for (final event in _events) {
+      if (event.sequence <= throughSequence &&
+          _coalescedSequences[event.id] == event.sequence) {
+        _coalescedSequences.remove(event.id);
+      }
+    }
+    _events.removeWhere((event) => event.sequence <= throughSequence);
+  }
+
+  /// Applies native script scroll commands in their original order.
+  ///
+  /// Commands with the same target are folded to one final offset per axis.
+  /// Missing axes retain their previous value. Smooth behavior uses Flutter's
+  /// native animation with a 250 ms ease-in-out curve; its timing is not a
+  /// pixel-for-pixel reproduction of CSS smooth scrolling.
+  void applyActions(List<Map<String, dynamic>> actions) {
+    if (_disposed || actions.isEmpty) return;
+    final folded = <String, _FoldedScrollAction>{};
+
+    for (final action in actions) {
+      final rawId = action['id'];
+      if (rawId is! String || rawId.isEmpty) continue;
+      final matches = _activeAttachments(rawId);
+      if (matches.length != 1) continue;
+      final attachment = matches.single;
+      if (attachment.retired) continue;
+
+      final rawOperation = action['op'];
+      final operation = switch (rawOperation) {
+        'by' || 'scrollBy' => 'by',
+        'to' || 'scrollTo' => 'to',
+        _ => null,
+      };
+      if (operation == null) continue;
+      final behavior = action['behavior'] == 'smooth' ? 'smooth' : 'auto';
+      final target = folded.putIfAbsent(
+        rawId,
+        () => _FoldedScrollAction(attachment),
+      );
+      if (!identical(target.attachment, attachment)) continue;
+
+      final left = _number(action['left']);
+      if (left != null && _isProgrammaticallyScrollable(attachment.overflowX)) {
+        final current = target.left ?? _pixels(attachment.horizontalController);
+        if (current != null) {
+          final clamped = _clampCommandTarget(
+            attachment.horizontalController,
+            operation == 'by' ? current + left : left,
+          );
+          if (clamped != null) {
+            target.left = clamped;
+            target.leftBehavior = behavior;
+          }
+        }
+      }
+
+      final top = _number(action['top']);
+      if (top != null && _isProgrammaticallyScrollable(attachment.overflowY)) {
+        final current = target.top ?? _pixels(attachment.verticalController);
+        if (current != null) {
+          final clamped = _clampCommandTarget(
+            attachment.verticalController,
+            operation == 'by' ? current + top : top,
+          );
+          if (clamped != null) {
+            target.top = clamped;
+            target.topBehavior = behavior;
+          }
+        }
+      }
+    }
+
+    for (final action in folded.values) {
+      _applyAxis(
+        action.attachment.horizontalController,
+        action.left,
+        action.leftBehavior,
+      );
+      _applyAxis(
+        action.attachment.verticalController,
+        action.top,
+        action.topBehavior,
+      );
+    }
+  }
+
+  Set<_NativeDocumentScrollAttachment> get _allAttachments =>
+      _attachments.values.expand((value) => value).toSet();
+
+  Set<_NativeDocumentScrollAttachment> _activeAttachments(String id) {
+    final result = <_NativeDocumentScrollAttachment>{};
+    for (final attachment
+        in _attachments[id] ?? const <_NativeDocumentScrollAttachment>{}) {
+      if (!attachment.retired &&
+          identical(attachment.documentOwner, _documentOwner)) {
+        result.add(attachment);
+      }
+    }
+    return result;
+  }
+
+  _NativeDocumentScrollAttachment _attach(
+    String id,
+    int revision,
+    NativeDocumentOverflow overflowX,
+    NativeDocumentOverflow overflowY,
+  ) {
+    final activeBefore = _activeAttachments(id);
+    final previous =
+        _readCurrentOffsets(id) ?? _savedOffsets[id] ?? Offset.zero;
+    final attachment = _NativeDocumentScrollAttachment(
+      controller: this,
+      id: id,
+      revision: revision,
+      documentOwner: _documentOwner,
+      overflowX: overflowX,
+      overflowY: overflowY,
+      initialOffset: previous,
+    );
+    (_attachments[id] ??= <_NativeDocumentScrollAttachment>{}).add(attachment);
+    if (activeBefore.isNotEmpty) {
+      for (final active in activeBefore) {
+        active.hasMetrics = false;
+        active.viewportRenderObject?.markNeedsLayout();
+      }
+    }
+    attachment.horizontalController.addListener(attachment.horizontalListener);
+    attachment.verticalController.addListener(attachment.verticalListener);
+    _scheduleNotification();
+    return attachment;
+  }
+
+  void _updateAttachment(
+    _NativeDocumentScrollAttachment attachment, {
+    required int revision,
+    required NativeDocumentOverflow overflowX,
+    required NativeDocumentOverflow overflowY,
+  }) {
+    if (attachment.retired) return;
+    final changed =
+        attachment.revision != revision ||
+        attachment.overflowX != overflowX ||
+        attachment.overflowY != overflowY;
+    if (!changed) return;
+    if (!_isProgrammaticallyScrollable(attachment.overflowX) &&
+        _isProgrammaticallyScrollable(overflowX) &&
+        !attachment.horizontalController.hasClients) {
+      attachment.replaceHorizontalController();
+    }
+    if (!_isProgrammaticallyScrollable(attachment.overflowY) &&
+        _isProgrammaticallyScrollable(overflowY) &&
+        !attachment.verticalController.hasClients) {
+      attachment.replaceVerticalController();
+    }
+    attachment.revision = revision;
+    attachment.overflowX = overflowX;
+    attachment.overflowY = overflowY;
+    attachment.hasMetrics = false;
+    _scheduleNotification();
+  }
+
+  void _detach(_NativeDocumentScrollAttachment attachment) {
+    if (attachment.retired) {
+      _scheduleRetirement(attachment);
+      return;
+    }
+    if (identical(attachment.documentOwner, _documentOwner) &&
+        _activeAttachments(attachment.id).length == 1) {
+      _saveOffset(attachment);
+    }
+    attachment.retired = true;
+    attachment.hasMetrics = false;
+    final owners = _attachments[attachment.id];
+    owners?.remove(attachment);
+    if (owners != null && owners.isEmpty) _attachments.remove(attachment.id);
+    final remaining = _activeAttachments(attachment.id);
+    if (remaining.length == 1) {
+      final survivor = remaining.single;
+      survivor.hasMetrics = false;
+      survivor.viewportRenderObject?.markNeedsLayout();
+      _scheduleSurvivorRelayout(survivor);
+    }
+    _scheduleRetirement(attachment);
+    _scheduleNotification();
+  }
+
+  void _scheduleSurvivorRelayout(_NativeDocumentScrollAttachment survivor) {
+    final scheduler = SchedulerBinding.instance;
+    scheduler.addPostFrameCallback((_) {
+      if (_disposed ||
+          survivor.retired ||
+          !identical(survivor.documentOwner, _documentOwner) ||
+          _activeAttachments(survivor.id).length != 1) {
+        return;
+      }
+      final renderObject = survivor.viewportRenderObject;
+      if (renderObject == null || !renderObject.attached) return;
+      renderObject.markNeedsLayout();
+      scheduler.ensureVisualUpdate();
+    });
+    scheduler.ensureVisualUpdate();
+  }
+
+  void _recordMetrics(
+    _NativeDocumentScrollAttachment attachment, {
+    required int revision,
+    required double contentWidth,
+    required double contentHeight,
+  }) {
+    if (_disposed ||
+        attachment.retired ||
+        !identical(attachment.documentOwner, _documentOwner) ||
+        attachment.revision != revision ||
+        _activeAttachments(attachment.id).length != 1) {
+      return;
+    }
+    final changed =
+        !attachment.hasMetrics ||
+        !attachment.hasLayoutRevision ||
+        attachment.layoutRevision != revision ||
+        attachment.contentWidth != contentWidth ||
+        attachment.contentHeight != contentHeight;
+    attachment
+      ..layoutRevision = revision
+      ..hasLayoutRevision = true
+      ..contentWidth = contentWidth
+      ..contentHeight = contentHeight
+      ..hasMetrics = true;
+    if (changed) _scheduleNotification();
+  }
+
+  void _offsetChanged(_NativeDocumentScrollAttachment attachment) {
+    if (_disposed ||
+        attachment.retired ||
+        !identical(attachment.documentOwner, _documentOwner)) {
+      return;
+    }
+    final left = _currentPixels(
+      attachment.horizontalController,
+      attachment.lastLeft,
+    );
+    final top = _currentPixels(
+      attachment.verticalController,
+      attachment.lastTop,
+    );
+
+    final changed =
+        (attachment.lastLeft - left).abs() > 0.0001 ||
+        (attachment.lastTop - top).abs() > 0.0001;
+    attachment
+      ..lastLeft = left
+      ..lastTop = top;
+    if (!changed) return;
+
+    if (_activeAttachments(attachment.id).length == 1) {
+      _savedOffsets[attachment.id] = Offset(left, top);
+      _queueScrollEvent(attachment.id);
+    }
+    _scheduleNotification();
+  }
+
+  void _queueScrollEvent(String id) {
+    if (_coalescedSequences.containsKey(id)) return;
+
+    final sequence = _nextSequence++;
+    _coalescedSequences[id] = sequence;
+    _events.add(_NativeDocumentScrollEvent(id: id, sequence: sequence));
+    if (_events.length > maximumPendingScrollEvents) {
+      final dropped = _events.removeAt(0);
+      if (_coalescedSequences[dropped.id] == dropped.sequence) {
+        _coalescedSequences.remove(dropped.id);
+      }
+      droppedScrollEventCount++;
+    }
+
+    if (_coalescingClearScheduled) return;
+    _coalescingClearScheduled = true;
+    final generation = ++_coalescingGeneration;
+    final scheduler = SchedulerBinding.instance;
+    unawaited(
+      scheduler.endOfFrame.then((_) {
+        if (_disposed || generation != _coalescingGeneration) return;
+        _coalescedSequences.clear();
+        _coalescingClearScheduled = false;
+      }),
+    );
+  }
+
+  Offset? _readCurrentOffsets(String id) {
+    final matches = _activeAttachments(id);
+    if (matches.length != 1) return null;
+    final attachment = matches.single;
+    final left = _currentPixels(
+      attachment.horizontalController,
+      attachment.lastLeft,
+    );
+    final top = _currentPixels(
+      attachment.verticalController,
+      attachment.lastTop,
+    );
+    return Offset(left, top);
+  }
+
+  void _saveOffset(_NativeDocumentScrollAttachment attachment) {
+    final left = _currentPixels(
+      attachment.horizontalController,
+      attachment.lastLeft,
+    );
+    final top = _currentPixels(
+      attachment.verticalController,
+      attachment.lastTop,
+    );
+    _savedOffsets[attachment.id] = Offset(left, top);
+  }
+
+  void _scheduleRetirement(_NativeDocumentScrollAttachment attachment) {
+    if (!attachment.retired || attachment.retirementScheduled) return;
+    attachment.retirementScheduled = true;
+    scheduleMicrotask(() {
+      attachment.retirementScheduled = false;
+      if (!attachment.retired) return;
+      if (attachment.horizontalController.hasClients ||
+          attachment.verticalController.hasClients) {
+        return;
+      }
+      _disposeAttachment(attachment);
+    });
+  }
+
+  void _disposeAttachment(_NativeDocumentScrollAttachment attachment) {
+    if (attachment.controllersDisposed) return;
+    attachment.controllersDisposed = true;
+    attachment.horizontalController
+      ..removeListener(attachment.horizontalListener)
+      ..dispose();
+    attachment.verticalController
+      ..removeListener(attachment.verticalListener)
+      ..dispose();
+    final owners = _attachments[attachment.id];
+    owners?.remove(attachment);
+    if (owners != null && owners.isEmpty) _attachments.remove(attachment.id);
+  }
+
+  void _scheduleNotification() {
+    if (_disposed || _notificationScheduled) return;
+    _notificationScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _notificationScheduled = false;
+      if (!_disposed) notifyListeners();
+    });
+    SchedulerBinding.instance.ensureVisualUpdate();
+  }
+
+  static double? _pixels(ScrollController controller) =>
+      controller.hasClients && controller.positions.length == 1
+      ? controller.position.pixels
+      : 0.0;
+
+  static double _currentPixels(ScrollController controller, double fallback) =>
+      controller.hasClients && controller.positions.length == 1
+      ? controller.position.pixels
+      : fallback;
+
+  static double? _clampCommandTarget(
+    ScrollController controller,
+    double target,
+  ) {
+    if (!controller.hasClients || controller.positions.length != 1) {
+      return null;
+    }
+    final position = controller.position;
+    if (!position.hasContentDimensions || !position.hasViewportDimension) {
+      return null;
+    }
+    return target
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+  }
+
+  static double? _number(Object? value) {
+    if (value is num && value.isFinite) return value.toDouble();
+    return null;
+  }
+
+  static bool _isProgrammaticallyScrollable(NativeDocumentOverflow overflow) =>
+      overflow == NativeDocumentOverflow.hidden ||
+      overflow == NativeDocumentOverflow.auto ||
+      overflow == NativeDocumentOverflow.scroll;
+
+  static void _applyAxis(
+    ScrollController controller,
+    double? target,
+    String? behavior,
+  ) {
+    if (target == null ||
+        !controller.hasClients ||
+        controller.positions.length != 1) {
+      return;
+    }
+    final position = controller.position;
+    if (!position.hasContentDimensions || !position.hasViewportDimension) {
+      return;
+    }
+    final clamped = target
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    if ((position.pixels - clamped).abs() <= 0.0001) return;
+    if (behavior == 'smooth') {
+      unawaited(
+        controller.animateTo(
+          clamped,
+          duration: smoothScrollDuration,
+          curve: Curves.easeInOut,
+        ),
+      );
+    } else {
+      controller.jumpTo(clamped);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    _events.clear();
+    _savedOffsets.clear();
+    _coalescingGeneration++;
+    _coalescingClearScheduled = false;
+    _coalescedSequences.clear();
+    for (final attachment in _allAttachments) {
+      attachment
+        ..retired = true
+        ..hasMetrics = false;
+      _scheduleRetirement(attachment);
+    }
+    super.dispose();
+  }
+}
+
+/// Places a native CSS overflow viewport around one document element.
+///
+/// The child should include the element's padding, but not its border. The
+/// surrounding border remains stationary while padding and content scroll.
+class NativeDocumentElementScroll extends StatefulWidget {
+  const NativeDocumentElementScroll({
+    super.key,
+    required this.controller,
+    required this.id,
+    required this.revision,
+    required this.overflowX,
+    required this.overflowY,
+    required this.child,
+  });
+
+  final NativeDocumentElementScrollController controller;
+  final String id;
+  final int revision;
+  final NativeDocumentOverflow overflowX;
+  final NativeDocumentOverflow overflowY;
+  final Widget child;
+
+  @override
+  State<NativeDocumentElementScroll> createState() =>
+      _NativeDocumentElementScrollState();
+}
+
+class _NativeDocumentElementScrollState
+    extends State<NativeDocumentElementScroll> {
+  late _NativeDocumentScrollAttachment _attachment;
+
+  @override
+  void initState() {
+    super.initState();
+    _attachment = widget.controller._attach(
+      widget.id,
+      widget.revision,
+      widget.overflowX,
+      widget.overflowY,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant NativeDocumentElementScroll oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller) ||
+        oldWidget.id != widget.id ||
+        _attachment.retired ||
+        !identical(
+          _attachment.documentOwner,
+          widget.controller._documentOwner,
+        )) {
+      oldWidget.controller._detach(_attachment);
+      _attachment = widget.controller._attach(
+        widget.id,
+        widget.revision,
+        widget.overflowX,
+        widget.overflowY,
+      );
+    } else {
+      widget.controller._updateAttachment(
+        _attachment,
+        revision: widget.revision,
+        overflowX: widget.overflowX,
+        overflowY: widget.overflowY,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller._detach(_attachment);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget viewport(ViewportOffset horizontal, ViewportOffset vertical) =>
+        _NativeDocumentElementScrollViewport(
+          attachment: _attachment,
+          revision: widget.revision,
+          overflowX: widget.overflowX,
+          overflowY: widget.overflowY,
+          horizontalOffset: horizontal,
+          verticalOffset: vertical,
+          child: widget.child,
+        );
+
+    Widget withHorizontal(ViewportOffset vertical) {
+      if (!_needsScrollable(widget.overflowX)) {
+        return viewport(ViewportOffset.fixed(0.0), vertical);
+      }
+      return Scrollable(
+        key: ObjectKey(_attachment),
+        axisDirection: AxisDirection.right,
+        controller: _attachment.horizontalController,
+        physics: _allowsUserScroll(widget.overflowX)
+            ? const ClampingScrollPhysics()
+            : const NeverScrollableScrollPhysics(),
+        scrollBehavior: const ScrollBehavior(),
+        viewportBuilder: (context, horizontal) =>
+            viewport(horizontal, vertical),
+      );
+    }
+
+    if (!_needsScrollable(widget.overflowY)) {
+      return withHorizontal(ViewportOffset.fixed(0.0));
+    }
+    return Scrollable(
+      key: ObjectKey(_attachment),
+      axisDirection: AxisDirection.down,
+      controller: _attachment.verticalController,
+      physics: _allowsUserScroll(widget.overflowY)
+          ? const ClampingScrollPhysics()
+          : const NeverScrollableScrollPhysics(),
+      scrollBehavior: const ScrollBehavior(),
+      viewportBuilder: (context, vertical) => withHorizontal(vertical),
+    );
+  }
+
+  static bool _needsScrollable(NativeDocumentOverflow overflow) =>
+      overflow == NativeDocumentOverflow.hidden ||
+      overflow == NativeDocumentOverflow.auto ||
+      overflow == NativeDocumentOverflow.scroll;
+
+  static bool _allowsUserScroll(NativeDocumentOverflow overflow) =>
+      overflow == NativeDocumentOverflow.auto ||
+      overflow == NativeDocumentOverflow.scroll;
+}
+
+class _NativeDocumentElementScrollViewport
+    extends SingleChildRenderObjectWidget {
+  const _NativeDocumentElementScrollViewport({
+    required this.attachment,
+    required this.revision,
+    required this.overflowX,
+    required this.overflowY,
+    required this.horizontalOffset,
+    required this.verticalOffset,
+    required super.child,
+  });
+
+  final _NativeDocumentScrollAttachment attachment;
+  final int revision;
+  final NativeDocumentOverflow overflowX;
+  final NativeDocumentOverflow overflowY;
+  final ViewportOffset horizontalOffset;
+  final ViewportOffset verticalOffset;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderNativeDocumentElementScrollViewportRender(
+        attachment: attachment,
+        revision: revision,
+        overflowX: overflowX,
+        overflowY: overflowY,
+        horizontalOffset: horizontalOffset,
+        verticalOffset: verticalOffset,
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant RenderObject renderObject,
+  ) {
+    (renderObject as _RenderNativeDocumentElementScrollViewportRender).update(
+      attachment: attachment,
+      revision: revision,
+      overflowX: overflowX,
+      overflowY: overflowY,
+      horizontalOffset: horizontalOffset,
+      verticalOffset: verticalOffset,
+    );
+  }
+}
+
+class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox {
+  _RenderNativeDocumentElementScrollViewportRender({
+    required this._attachment,
+    required this._revision,
+    required this._overflowX,
+    required this._overflowY,
+    required this._horizontalOffset,
+    required this._verticalOffset,
+  });
+
+  _NativeDocumentScrollAttachment _attachment;
+  int _revision;
+  NativeDocumentOverflow _overflowX;
+  NativeDocumentOverflow _overflowY;
+  ViewportOffset _horizontalOffset;
+  ViewportOffset _verticalOffset;
+  Rect _contentBounds = Rect.zero;
+  double _scrollWidth = 0;
+  double _scrollHeight = 0;
+
+  double get scrollWidth => _scrollWidth;
+  double get scrollHeight => _scrollHeight;
+  Rect get contentBounds => _contentBounds;
+
+  void update({
+    required _NativeDocumentScrollAttachment attachment,
+    required int revision,
+    required NativeDocumentOverflow overflowX,
+    required NativeDocumentOverflow overflowY,
+    required ViewportOffset horizontalOffset,
+    required ViewportOffset verticalOffset,
+  }) {
+    final offsetsChanged =
+        !identical(_horizontalOffset, horizontalOffset) ||
+        !identical(_verticalOffset, verticalOffset);
+    final changed =
+        !identical(_attachment, attachment) ||
+        _revision != revision ||
+        _overflowX != overflowX ||
+        _overflowY != overflowY ||
+        offsetsChanged;
+    if (!changed) return;
+
+    if (offsetsChanged) {
+      if (attached) {
+        _horizontalOffset.removeListener(_offsetPaintChanged);
+        _verticalOffset.removeListener(_offsetPaintChanged);
+      }
+      _horizontalOffset = horizontalOffset;
+      _verticalOffset = verticalOffset;
+      if (attached) {
+        _horizontalOffset.addListener(_offsetPaintChanged);
+        _verticalOffset.addListener(_offsetPaintChanged);
+      }
+    }
+    if (!identical(_attachment, attachment)) {
+      if (identical(_attachment.viewportRenderObject, this)) {
+        _attachment.viewportRenderObject = null;
+      }
+      _attachment = attachment;
+      if (attached) _attachment.viewportRenderObject = this;
+    }
+    _revision = revision;
+    _overflowX = overflowX;
+    _overflowY = overflowY;
+    markNeedsLayout();
+  }
+
+  void _offsetPaintChanged() => markNeedsPaint();
+
+  bool get _clipsX => _overflowX != NativeDocumentOverflow.visible;
+  bool get _clipsY => _overflowY != NativeDocumentOverflow.visible;
+  bool get _scrollsX =>
+      NativeDocumentElementScrollController._isProgrammaticallyScrollable(
+        _overflowX,
+      );
+  bool get _scrollsY =>
+      NativeDocumentElementScrollController._isProgrammaticallyScrollable(
+        _overflowY,
+      );
+
+  BoxConstraints _childConstraints(BoxConstraints constraints) {
+    return BoxConstraints(
+      minWidth: constraints.minWidth,
+      maxWidth: constraints.maxWidth,
+      minHeight: _scrollsY ? 0.0 : constraints.minHeight,
+      maxHeight: _scrollsY ? double.infinity : constraints.maxHeight,
+    );
+  }
+
+  @override
+  void performLayout() {
+    final childConstraints = _childConstraints(constraints);
+    if (child == null) {
+      size = constraints.smallest;
+    } else {
+      child!.layout(childConstraints, parentUsesSize: true);
+      size = constraints.constrain(child!.size);
+    }
+
+    _horizontalOffset.applyViewportDimension(size.width);
+    _verticalOffset.applyViewportDimension(size.height);
+
+    Rect? measuredBounds;
+    invokeLayoutCallback<BoxConstraints>((_) {
+      measuredBounds = _measureContentBounds();
+    });
+    _contentBounds =
+        measuredBounds ?? Rect.fromLTWH(0, 0, size.width, size.height);
+    _scrollWidth = math.max(size.width, _contentBounds.right);
+    _scrollHeight = math.max(size.height, _contentBounds.bottom);
+    final horizontalMax = _scrollsX
+        ? math.max(0.0, _scrollWidth - size.width)
+        : 0.0;
+    final verticalMax = _scrollsY
+        ? math.max(0.0, _scrollHeight - size.height)
+        : 0.0;
+
+    _applyDimensions(_horizontalOffset, horizontalMax);
+    _applyDimensions(_verticalOffset, verticalMax);
+    if (_scrollsX) _attachment.lastLeft = _horizontalOffset.pixels;
+    if (_scrollsY) _attachment.lastTop = _verticalOffset.pixels;
+
+    _attachment.controller._recordMetrics(
+      _attachment,
+      revision: _revision,
+      contentWidth: _scrollWidth,
+      contentHeight: _scrollHeight,
+    );
+  }
+
+  static void _applyDimensions(ViewportOffset offset, double maximum) {
+    var accepted = offset.applyContentDimensions(0.0, maximum);
+    var attempts = 0;
+    while (!accepted && attempts++ < 4) {
+      accepted = offset.applyContentDimensions(0.0, maximum);
+    }
+  }
+
+  Rect _measureContentBounds() {
+    final unscroll = Offset(_horizontalOffset.pixels, _verticalOffset.pixels);
+    final viewportBounds = Rect.fromLTWH(0, 0, size.width, size.height);
+
+    Rect union(Rect first, Rect second) => Rect.fromLTRB(
+      math.min(first.left, second.left),
+      math.min(first.top, second.top),
+      math.max(first.right, second.right),
+      math.max(first.bottom, second.bottom),
+    );
+
+    bool clipsDescendants(RenderObject object) => switch (object) {
+      RenderClipRect value => value.clipBehavior != Clip.none,
+      RenderClipRRect value => value.clipBehavior != Clip.none,
+      RenderClipOval value => value.clipBehavior != Clip.none,
+      RenderClipPath value => value.clipBehavior != Clip.none,
+      RenderPhysicalModel value => value.clipBehavior != Clip.none,
+      RenderPhysicalShape value => value.clipBehavior != Clip.none,
+      _ => false,
+    };
+
+    Rect? visit(RenderObject object) {
+      if (object is RenderBox && (!object.attached || !object.hasSize)) {
+        return null;
+      }
+
+      Rect? bounds;
+      if (object is RenderBox) {
+        bounds = MatrixUtils.transformRect(
+          object.getTransformTo(this),
+          Offset.zero & object.size,
+        ).shift(unscroll);
+
+        if (object is _RenderNativeDocumentElementScrollViewportRender) {
+          final visibleBounds = Rect.fromLTRB(
+            object._overflowX == NativeDocumentOverflow.visible
+                ? object._contentBounds.left
+                : 0.0,
+            object._overflowY == NativeDocumentOverflow.visible
+                ? object._contentBounds.top
+                : 0.0,
+            object._overflowX == NativeDocumentOverflow.visible
+                ? object._contentBounds.right
+                : object.size.width,
+            object._overflowY == NativeDocumentOverflow.visible
+                ? object._contentBounds.bottom
+                : object.size.height,
+          );
+          return union(
+            bounds,
+            MatrixUtils.transformRect(
+              object.getTransformTo(this),
+              visibleBounds,
+            ).shift(unscroll),
+          );
+        }
+        if (clipsDescendants(object)) return bounds;
+      }
+
+      final childBounds = <Rect>[];
+      object.visitChildren((child) {
+        final measured = visit(child);
+        if (measured != null) childBounds.add(measured);
+      });
+      for (final childRect in childBounds) {
+        bounds = bounds == null ? childRect : union(bounds, childRect);
+      }
+
+      if (object is RenderBox && bounds != null) {
+        final padding = nativeDocumentPaddingInsets(object);
+        if (padding != null) {
+          final ownRect = MatrixUtils.transformRect(
+            object.getTransformTo(this),
+            Offset.zero & object.size,
+          ).shift(unscroll);
+          final paddedRight = bounds.right > ownRect.right
+              ? bounds.right + padding.right
+              : bounds.right;
+          final paddedBottom = bounds.bottom > ownRect.bottom
+              ? bounds.bottom + padding.bottom
+              : bounds.bottom;
+          bounds = Rect.fromLTRB(
+            bounds.left,
+            bounds.top,
+            paddedRight,
+            paddedBottom,
+          );
+        }
+      }
+      return bounds;
+    }
+
+    var bounds = viewportBounds;
+    final currentChild = child;
+    if (currentChild != null) {
+      final childBounds = visit(currentChild);
+      if (childBounds != null) bounds = union(bounds, childBounds);
+    }
+    return Rect.fromLTRB(
+      math.min(0.0, bounds.left),
+      math.min(0.0, bounds.top),
+      math.max(size.width, bounds.right),
+      math.max(size.height, bounds.bottom),
+    );
+  }
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    final childConstraints = _childConstraints(constraints);
+    return constraints.constrain(
+      child?.getDryLayout(childConstraints) ?? constraints.smallest,
+    );
+  }
+
+  @override
+  double? computeDryBaseline(
+    BoxConstraints constraints,
+    TextBaseline baseline,
+  ) => child?.getDryBaseline(_childConstraints(constraints), baseline);
+
+  @override
+  double computeMinIntrinsicWidth(double height) =>
+      child?.getMinIntrinsicWidth(height) ?? 0.0;
+
+  @override
+  double computeMaxIntrinsicWidth(double height) =>
+      child?.getMaxIntrinsicWidth(height) ?? 0.0;
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      child?.getMinIntrinsicHeight(width) ?? 0.0;
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      child?.getMaxIntrinsicHeight(width) ?? 0.0;
+
+  @override
+  double? computeDistanceToActualBaseline(TextBaseline baseline) =>
+      child?.getDistanceToActualBaseline(baseline) ??
+      super.computeDistanceToActualBaseline(baseline);
+
+  @override
+  void applyPaintTransform(RenderObject child, Matrix4 transform) {
+    transform.translateByDouble(
+      -_horizontalOffset.pixels,
+      -_verticalOffset.pixels,
+      0,
+      1,
+    );
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    final withinX = !_clipsX || (position.dx >= 0 && position.dx <= size.width);
+    final withinY =
+        !_clipsY || (position.dy >= 0 && position.dy <= size.height);
+    if (!withinX || !withinY) return false;
+    if (hitTestChildren(result, position: position)) {
+      result.add(BoxHitTestEntry(this, position));
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    final currentChild = child;
+    if (currentChild == null) return false;
+    final hitNormally = result.addWithPaintOffset(
+      offset: Offset(-_horizontalOffset.pixels, -_verticalOffset.pixels),
+      position: position,
+      hitTest: (result, transformed) =>
+          currentChild.hitTest(result, position: transformed),
+    );
+    if (hitNormally) return true;
+
+    // OverflowBox and Stack descendants can paint in the scrollport while an
+    // intermediate box remains only viewport-sized. Flutter's ordinary box
+    // hit test rejects the point at that intermediate box. Walk only this
+    // subtree as a fallback, preserving descendant transforms and clip nodes.
+    return _hitTestOverflowingDescendants(
+      result,
+      currentChild,
+      position,
+      localToGlobal(position),
+    );
+  }
+
+  bool _hitTestOverflowingDescendants(
+    BoxHitTestResult result,
+    RenderObject object,
+    Offset viewportPosition,
+    Offset globalPosition,
+  ) {
+    if (object is RenderIgnorePointer && object.ignoring) return false;
+    if (object is RenderOffstage && object.offstage) return false;
+    if (nativeDocumentScrollClipsGlobalPoint(object, globalPosition)) {
+      return false;
+    }
+
+    Matrix4? paintTransform;
+    if (object is RenderBox) {
+      if (!object.attached || !object.hasSize) return false;
+      paintTransform = object.getTransformTo(this);
+      final hitInsideBounds = result.addWithPaintTransform(
+        transform: paintTransform,
+        position: viewportPosition,
+        hitTest: (result, localPosition) =>
+            object.size.contains(localPosition) &&
+            object.hitTest(result, position: localPosition),
+      );
+      if (hitInsideBounds) return true;
+      if (object is RenderAbsorbPointer && object.absorbing) return false;
+      if (_clipsDescendantsForHitTesting(object)) return false;
+    }
+
+    final children = <RenderObject>[];
+    object.visitChildren(children.add);
+    for (final descendant in children.reversed) {
+      if (_hitTestOverflowingDescendants(
+        result,
+        descendant,
+        viewportPosition,
+        globalPosition,
+      )) {
+        if (object is RenderBox && paintTransform != null) {
+          result.addWithPaintTransform(
+            transform: paintTransform,
+            position: viewportPosition,
+            hitTest: (result, localPosition) {
+              result.add(BoxHitTestEntry(object, localPosition));
+              return true;
+            },
+          );
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _clipsDescendantsForHitTesting(RenderObject object) =>
+      switch (object) {
+        RenderClipRect value => value.clipBehavior != Clip.none,
+        RenderClipRRect value => value.clipBehavior != Clip.none,
+        RenderClipOval value => value.clipBehavior != Clip.none,
+        RenderClipPath value => value.clipBehavior != Clip.none,
+        RenderPhysicalModel value => value.clipBehavior != Clip.none,
+        RenderPhysicalShape value => value.clipBehavior != Clip.none,
+        _ => false,
+      };
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child == null) return;
+
+    void paintTranslated(PaintingContext context, Offset offset) {
+      context.pushTransform(
+        needsCompositing,
+        offset,
+        Matrix4.translationValues(
+          -_horizontalOffset.pixels,
+          -_verticalOffset.pixels,
+          0,
+        ),
+        super.paint,
+      );
+    }
+
+    if (!_clipsX && !_clipsY) {
+      paintTranslated(context, offset);
+      return;
+    }
+
+    final canvasBounds = context.canvas.getLocalClipBounds().shift(-offset);
+    final clipRect = Rect.fromLTRB(
+      _clipsX ? 0.0 : canvasBounds.left,
+      _clipsY ? 0.0 : canvasBounds.top,
+      _clipsX ? size.width : canvasBounds.right,
+      _clipsY ? size.height : canvasBounds.bottom,
+    );
+    context.pushClipRect(
+      needsCompositing,
+      offset,
+      clipRect,
+      paintTranslated,
+      clipBehavior: Clip.hardEdge,
+    );
+  }
+
+  @override
+  void detach() {
+    _horizontalOffset.removeListener(_offsetPaintChanged);
+    _verticalOffset.removeListener(_offsetPaintChanged);
+    if (identical(_attachment.viewportRenderObject, this)) {
+      _attachment.viewportRenderObject = null;
+    }
+    super.detach();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _attachment.viewportRenderObject = this;
+    _horizontalOffset.addListener(_offsetPaintChanged);
+    _verticalOffset.addListener(_offsetPaintChanged);
+  }
+}
+
+class _NativeDocumentScrollAttachment {
+  _NativeDocumentScrollAttachment({
+    required this.controller,
+    required this.id,
+    required this.revision,
+    required this.documentOwner,
+    required this.overflowX,
+    required this.overflowY,
+    required Offset initialOffset,
+  }) : lastLeft = initialOffset.dx,
+       lastTop = initialOffset.dy {
+    horizontalListener = () => controller._offsetChanged(this);
+    verticalListener = () => controller._offsetChanged(this);
+    horizontalController = ScrollController(
+      initialScrollOffset: initialOffset.dx,
+      keepScrollOffset: false,
+      debugLabel: 'document:$id:x',
+      onDetach: (_) => controller._scheduleRetirement(this),
+    );
+    verticalController = ScrollController(
+      initialScrollOffset: initialOffset.dy,
+      keepScrollOffset: false,
+      debugLabel: 'document:$id:y',
+      onDetach: (_) => controller._scheduleRetirement(this),
+    );
+  }
+
+  final NativeDocumentElementScrollController controller;
+  final String id;
+  final Object documentOwner;
+  late final VoidCallback horizontalListener;
+  late final VoidCallback verticalListener;
+  late ScrollController horizontalController;
+  late ScrollController verticalController;
+  int revision;
+  int? layoutRevision;
+  NativeDocumentOverflow overflowX;
+  NativeDocumentOverflow overflowY;
+  double lastLeft;
+  double lastTop;
+  double? contentWidth;
+  double? contentHeight;
+  bool hasLayoutRevision = false;
+  bool hasMetrics = false;
+  _RenderNativeDocumentElementScrollViewportRender? viewportRenderObject;
+  bool retired = false;
+  bool retirementScheduled = false;
+  bool controllersDisposed = false;
+
+  void replaceHorizontalController() {
+    horizontalController.removeListener(horizontalListener);
+    horizontalController.dispose();
+    horizontalController = ScrollController(
+      initialScrollOffset: lastLeft,
+      keepScrollOffset: false,
+      debugLabel: 'document:$id:x',
+      onDetach: (_) => controller._scheduleRetirement(this),
+    )..addListener(horizontalListener);
+  }
+
+  void replaceVerticalController() {
+    verticalController.removeListener(verticalListener);
+    verticalController.dispose();
+    verticalController = ScrollController(
+      initialScrollOffset: lastTop,
+      keepScrollOffset: false,
+      debugLabel: 'document:$id:y',
+      onDetach: (_) => controller._scheduleRetirement(this),
+    )..addListener(verticalListener);
+  }
+}
+
+class _NativeDocumentScrollEvent {
+  const _NativeDocumentScrollEvent({required this.id, required this.sequence});
+
+  final String id;
+  final int sequence;
+}
+
+class _FoldedScrollAction {
+  _FoldedScrollAction(this.attachment);
+
+  final _NativeDocumentScrollAttachment attachment;
+  double? left;
+  double? top;
+  String? leftBehavior;
+  String? topBehavior;
+}

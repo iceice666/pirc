@@ -1,0 +1,1869 @@
+{
+  "browserVersion": "153.0.8010.12",
+  "browserProduct": "Playwright chromium-headless-shell dedicated test browser",
+  "browserExecutable": "<repository>/.pirc/test-browsers/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+  "runner": "apps/mobile/tool/parity/verify_document_stylesheets_browser.mjs",
+  "runnerSha256": "9072e8d2d1fe8fad9617d44d9b00f006c7d7d2c2e25b5998835de78ad6e2c088",
+  "captureProvenance": {
+    "frozenOriginalSixCasesRunnerSha256": "718239561a60c25739bfb51838f90d2c6301114d0397fff92c130efcab263c50",
+    "appendedFourCasesRunnerSha256": "9072e8d2d1fe8fad9617d44d9b00f006c7d7d2c2e25b5998835de78ad6e2c088"
+  },
+  "browserFlags": {
+    "hostResolverRules": "MAP localhost 127.0.0.1",
+    "backgroundNetworkingDisabled": true,
+    "nonForwardingLoopbackProxyConfigured": true,
+    "proxyForwardsRequests": false,
+    "pageRequestsRestrictedToSyntheticLoopback": true
+  },
+  "origins": {
+    "a": "http://127.0.0.1:43100",
+    "b": "http://localhost:43100",
+    "relation": "Same ephemeral port but distinct hosts/origins: 127.0.0.1 and localhost. localhost is explicitly resolved to 127.0.0.1. The second origin is used only for cross-origin stylesheet/CORS behavior."
+  },
+  "caseCount": 10,
+  "cases": [
+    {
+      "caseId": "inline-cssom-mutations",
+      "source": "Actual inline HTMLStyleElement.sheet insertRule, CSSStyleRule.style.setProperty, deleteRule, and style.textContent reset observations with computed colors and dimensions.",
+      "result": {
+        "initial": {
+          "sheetPresent": true,
+          "href": null,
+          "ruleCount": 1,
+          "target": {
+            "color": "rgb(1, 2, 3)",
+            "width": "10px",
+            "height": "12px",
+            "rectWidth": 10,
+            "rectHeight": 12
+          }
+        },
+        "afterInsert": {
+          "insertedIndex": 1,
+          "cssText": "#inlineProbe { color: rgb(9, 19, 29); width: 31px; height: 17px; }",
+          "target": {
+            "color": "rgb(9, 19, 29)",
+            "width": "31px",
+            "height": "17px",
+            "rectWidth": 31,
+            "rectHeight": 17
+          }
+        },
+        "afterSetProperty": {
+          "cssText": "#inlineProbe { color: rgb(4, 5, 6); width: 31px; height: 23px; }",
+          "inlineStyleLength": 3,
+          "colorPriority": "",
+          "target": {
+            "color": "rgb(4, 5, 6)",
+            "width": "31px",
+            "height": "23px",
+            "rectWidth": 31,
+            "rectHeight": 23
+          }
+        },
+        "afterDelete": {
+          "ruleCount": 1,
+          "cssText": "#inlineProbe { color: rgb(1, 2, 3); width: 10px; height: 12px; }",
+          "target": {
+            "color": "rgb(1, 2, 3)",
+            "width": "10px",
+            "height": "12px",
+            "rectWidth": 10,
+            "rectHeight": 12
+          }
+        },
+        "afterTextReset": {
+          "sameSheetObject": false,
+          "ruleCount": 1,
+          "cssText": "#inlineProbe { color: rgb(17, 27, 37); width: 41px; height: 19px; }",
+          "target": {
+            "color": "rgb(17, 27, 37)",
+            "width": "41px",
+            "height": "19px",
+            "rectWidth": 41,
+            "rectHeight": 19
+          }
+        }
+      }
+    },
+    {
+      "caseId": "media-and-disabled-stylesheets",
+      "source": "Inline style media mismatch/all and HTMLStyleElement.disabled/CSSStyleSheet.disabled toggles, with actual computed color and layout measurements.",
+      "result": {
+        "initial": {
+          "label": "media-mismatch",
+          "mediaAttribute": "(min-width: 99999px)",
+          "mediaText": "(min-width: 99999px)",
+          "matchesQuery": false,
+          "styleDisabled": false,
+          "sheetDisabled": false,
+          "color": "rgb(0, 0, 0)",
+          "width": "1264px",
+          "height": "18px",
+          "rectWidth": 1264,
+          "rectHeight": 18
+        },
+        "mediaEnabled": {
+          "label": "media-all",
+          "mediaAttribute": "all",
+          "mediaText": "all",
+          "matchesQuery": true,
+          "styleDisabled": false,
+          "sheetDisabled": false,
+          "color": "rgb(99, 1, 2)",
+          "width": "42px",
+          "height": "18px",
+          "rectWidth": 42,
+          "rectHeight": 18
+        },
+        "sheetDisabled": {
+          "label": "sheet-disabled",
+          "mediaAttribute": "all",
+          "mediaText": "all",
+          "matchesQuery": true,
+          "styleDisabled": true,
+          "sheetDisabled": true,
+          "color": "rgb(0, 0, 0)",
+          "width": "1264px",
+          "height": "18px",
+          "rectWidth": 1264,
+          "rectHeight": 18
+        },
+        "elementDisabled": {
+          "label": "style-element-disabled",
+          "mediaAttribute": "all",
+          "mediaText": "all",
+          "matchesQuery": true,
+          "styleDisabled": true,
+          "sheetDisabled": true,
+          "color": "rgb(0, 0, 0)",
+          "width": "1264px",
+          "height": "18px",
+          "rectWidth": 1264,
+          "rectHeight": 18
+        },
+        "reenabled": {
+          "label": "reenabled",
+          "mediaAttribute": "all",
+          "mediaText": "all",
+          "matchesQuery": true,
+          "styleDisabled": false,
+          "sheetDisabled": false,
+          "color": "rgb(99, 1, 2)",
+          "width": "42px",
+          "height": "18px",
+          "rectWidth": 42,
+          "rectHeight": 18
+        }
+      }
+    },
+    {
+      "caseId": "dynamic-link-lifecycle-and-errors",
+      "source": "A dynamic link stylesheet loads, changes href to another real stylesheet, is removed and re-added, and a 404 link reports its actual error event. The fixture records event timing, sheet state, CSSOM, computed color/size, and real request receipts.",
+      "linkFirst": {
+        "events": [
+          {
+            "id": "switch-link",
+            "type": "load",
+            "elapsedMs": 16.7,
+            "href": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+            "sheetHref": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+            "ruleCount": 1
+          }
+        ],
+        "link": {
+          "hrefAttribute": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+          "href": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+          "crossOrigin": null,
+          "sheetPresent": true,
+          "sheetHref": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+          "disabled": false,
+          "media": "",
+          "cssRules": [
+            "#linkProbe { color: rgb(201, 0, 0); width: 11px; height: 9px; }"
+          ],
+          "cssRulesError": null
+        }
+      },
+      "linkFirstStyle": {
+        "color": "rgb(201, 0, 0)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "display": "block",
+        "width": "11px",
+        "height": "9px",
+        "marginLeft": "0px",
+        "rectWidth": 11,
+        "rectHeight": 9
+      },
+      "linkHrefChangeBefore": {
+        "eventCount": 1,
+        "href": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+        "sheetHref": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a"
+      },
+      "linkAfterHrefChange": {
+        "events": [
+          {
+            "id": "switch-link",
+            "type": "load",
+            "elapsedMs": 16.7,
+            "href": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+            "sheetHref": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+            "ruleCount": 1
+          },
+          {
+            "id": "switch-link",
+            "type": "load",
+            "elapsedMs": 24.9,
+            "href": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+            "sheetHref": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+            "ruleCount": 1
+          }
+        ],
+        "link": {
+          "hrefAttribute": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+          "href": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+          "sheetPresent": true,
+          "sheetHref": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+          "cssRules": [
+            "#linkProbe { color: rgb(0, 201, 0); width: 22px; height: 12px; }"
+          ]
+        }
+      },
+      "linkSecondStyle": {
+        "color": "rgb(0, 201, 0)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "display": "block",
+        "width": "22px",
+        "height": "12px",
+        "marginLeft": "0px",
+        "rectWidth": 22,
+        "rectHeight": 12
+      },
+      "removedLink": {
+        "sheetPresentAfterRemove": false,
+        "eventCount": 2,
+        "style": {
+          "color": "rgb(0, 0, 0)",
+          "width": "1264px",
+          "height": "18px",
+          "rectWidth": 1264,
+          "rectHeight": 18
+        },
+        "styleSheets": []
+      },
+      "readdedLink": {
+        "events": [
+          {
+            "id": "switch-link",
+            "type": "load",
+            "elapsedMs": 16.7,
+            "href": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+            "sheetHref": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+            "ruleCount": 1
+          },
+          {
+            "id": "switch-link",
+            "type": "load",
+            "elapsedMs": 24.9,
+            "href": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+            "sheetHref": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+            "ruleCount": 1
+          },
+          {
+            "id": "switch-link",
+            "type": "load",
+            "elapsedMs": 41.6,
+            "href": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+            "sheetHref": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+            "ruleCount": 1
+          }
+        ],
+        "href": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+        "sheetHref": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+        "styleSheets": [
+          "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b"
+        ]
+      },
+      "linkReaddedStyle": {
+        "color": "rgb(0, 201, 0)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "display": "block",
+        "width": "22px",
+        "height": "12px",
+        "marginLeft": "0px",
+        "rectWidth": 22,
+        "rectHeight": 12
+      },
+      "missingLink": {
+        "events": [
+          {
+            "id": "missing-link",
+            "type": "error",
+            "elapsedMs": 57.2,
+            "href": "http://127.0.0.1:43100/css/missing.css?case=dynamic-missing",
+            "sheetHref": "http://127.0.0.1:43100/css/missing.css?case=dynamic-missing",
+            "ruleCount": 0
+          }
+        ],
+        "link": {
+          "hrefAttribute": "http://127.0.0.1:43100/css/missing.css?case=dynamic-missing",
+          "href": "http://127.0.0.1:43100/css/missing.css?case=dynamic-missing",
+          "crossOrigin": null,
+          "sheetPresent": true,
+          "sheetHref": "http://127.0.0.1:43100/css/missing.css?case=dynamic-missing",
+          "disabled": false,
+          "media": "",
+          "cssRules": [],
+          "cssRulesError": null
+        }
+      }
+    },
+    {
+      "caseId": "base-href-existing-and-new-links",
+      "source": "An existing relative stylesheet link is loaded under /base/one/, then the document base href changes to /base/two/. The existing link property/sheet and request count are observed before a newly inserted relative link resolves and loads.",
+      "initialLink": {
+        "events": [
+          {
+            "id": "base-existing-link",
+            "type": "load",
+            "elapsedMs": 14.8,
+            "href": "http://127.0.0.1:43100/base/one/styles.css?case=base-existing",
+            "sheetHref": "http://127.0.0.1:43100/base/one/styles.css?case=base-existing",
+            "ruleCount": 1
+          }
+        ],
+        "link": {
+          "hrefAttribute": "styles.css?case=base-existing",
+          "href": "http://127.0.0.1:43100/base/one/styles.css?case=base-existing",
+          "crossOrigin": null,
+          "sheetPresent": true,
+          "sheetHref": "http://127.0.0.1:43100/base/one/styles.css?case=base-existing",
+          "disabled": false,
+          "media": "",
+          "cssRules": [
+            "#baseProbe { color: rgb(145, 0, 0); width: 41px; height: 13px; }"
+          ],
+          "cssRulesError": null
+        }
+      },
+      "initialStyle": {
+        "color": "rgb(145, 0, 0)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "display": "block",
+        "width": "41px",
+        "height": "13px",
+        "marginLeft": "0px",
+        "rectWidth": 41,
+        "rectHeight": 13
+      },
+      "existingBeforeBaseChange": {
+        "baseHref": "http://127.0.0.1:43100/base/one/",
+        "linkAttribute": "styles.css?case=base-existing",
+        "href": "http://127.0.0.1:43100/base/one/styles.css?case=base-existing",
+        "sheetHref": "http://127.0.0.1:43100/base/one/styles.css?case=base-existing",
+        "styleSheets": [
+          "http://127.0.0.1:43100/base/one/styles.css?case=base-existing"
+        ]
+      },
+      "existingAfterBaseChange": {
+        "baseHref": "http://127.0.0.1:43100/base/two/",
+        "linkAttribute": "styles.css?case=base-existing",
+        "href": "http://127.0.0.1:43100/base/two/styles.css?case=base-existing",
+        "sheetHref": "http://127.0.0.1:43100/base/one/styles.css?case=base-existing",
+        "color": "rgb(145, 0, 0)",
+        "width": "41px",
+        "rectWidth": 41,
+        "rectHeight": 13,
+        "eventCount": 1,
+        "styleSheets": [
+          "http://127.0.0.1:43100/base/one/styles.css?case=base-existing"
+        ]
+      },
+      "requestCountBeforeBaseChange": 9,
+      "requestCountAfterBaseChange": 9,
+      "existingLinkTriggeredRequestOnBaseChange": false,
+      "newLink": {
+        "events": [
+          {
+            "id": "base-new-link",
+            "type": "load",
+            "elapsedMs": 210.7,
+            "href": "http://127.0.0.1:43100/base/two/styles.css?case=base-new",
+            "sheetHref": "http://127.0.0.1:43100/base/two/styles.css?case=base-new",
+            "ruleCount": 1
+          }
+        ],
+        "link": {
+          "hrefAttribute": "styles.css?case=base-new",
+          "href": "http://127.0.0.1:43100/base/two/styles.css?case=base-new",
+          "crossOrigin": null,
+          "sheetPresent": true,
+          "sheetHref": "http://127.0.0.1:43100/base/two/styles.css?case=base-new",
+          "disabled": false,
+          "media": "",
+          "cssRules": [
+            "#baseProbe { color: rgb(0, 0, 145); width: 52px; height: 17px; }"
+          ],
+          "cssRulesError": null
+        }
+      },
+      "newLinkStyle": {
+        "color": "rgb(0, 0, 145)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "display": "block",
+        "width": "52px",
+        "height": "17px",
+        "marginLeft": "0px",
+        "rectWidth": 52,
+        "rectHeight": 17
+      }
+    },
+    {
+      "caseId": "import-completion-relative-assets-and-order",
+      "source": "A same-origin external stylesheet uses a delayed @import, a relative SVG background URL, and equal-specificity cascade rules. A later link overrides the cascade and removing it reveals the earlier rule. CSSOM, Resource Timing, computed geometry, event timing, and actual request sequence are captured.",
+      "link": {
+        "events": [
+          {
+            "id": "primary-import-link",
+            "type": "load",
+            "elapsedMs": 162.4,
+            "href": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+            "sheetHref": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+            "ruleCount": 4
+          }
+        ],
+        "link": {
+          "hrefAttribute": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+          "href": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+          "crossOrigin": null,
+          "sheetPresent": true,
+          "sheetHref": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+          "disabled": false,
+          "media": "",
+          "cssRules": [
+            "@import url(\"/css/imported.css?case=css-import\");",
+            "#externalProbe { color: rgb(7, 8, 9); width: 35px; height: 19px; background-image: url(\"../assets/texture.svg?case=css-relative-asset\"); }",
+            "#importProbe { color: rgb(210, 0, 0); width: 29px; }",
+            "#orderProbe { color: rgb(200, 0, 0); width: 31px; }"
+          ],
+          "cssRulesError": null
+        }
+      },
+      "snapshot": {
+        "href": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+        "sheetHref": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+        "loadEvents": [
+          {
+            "id": "primary-import-link",
+            "type": "load",
+            "elapsedMs": 162.4,
+            "href": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+            "sheetHref": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+            "ruleCount": 4
+          }
+        ],
+        "loadElapsedMs": 162.4,
+        "cssRules": [
+          "@import url(\"/css/imported.css?case=css-import\");",
+          "#externalProbe { color: rgb(7, 8, 9); width: 35px; height: 19px; background-image: url(\"../assets/texture.svg?case=css-relative-asset\"); }",
+          "#importProbe { color: rgb(210, 0, 0); width: 29px; }",
+          "#orderProbe { color: rgb(200, 0, 0); width: 31px; }"
+        ],
+        "import": {
+          "href": "/css/imported.css?case=css-import",
+          "cssText": "@import url(\"/css/imported.css?case=css-import\");",
+          "sheetPresent": true,
+          "rules": [
+            "#importProbe { color: rgb(0, 0, 210); height: 43px; }",
+            "#orderProbe { color: rgb(0, 0, 200); }"
+          ]
+        },
+        "resources": [
+          {
+            "name": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+            "initiatorType": "link",
+            "startTime": 10.1,
+            "responseEnd": 13.7,
+            "duration": 3.6
+          },
+          {
+            "name": "http://127.0.0.1:43100/css/imported.css?case=css-import",
+            "initiatorType": "css",
+            "startTime": 17.4,
+            "responseEnd": 161.3,
+            "duration": 143.9
+          },
+          {
+            "name": "http://127.0.0.1:43100/assets/texture.svg?case=css-relative-asset",
+            "initiatorType": "css",
+            "startTime": 170.8,
+            "responseEnd": 175,
+            "duration": 4.2
+          }
+        ],
+        "targets": {
+          "external": {
+            "color": "rgb(7, 8, 9)",
+            "backgroundImage": "url(\"http://127.0.0.1:43100/assets/texture.svg?case=css-relative-asset\")",
+            "width": "35px",
+            "height": "19px",
+            "rectWidth": 35,
+            "rectHeight": 19
+          },
+          "imported": {
+            "color": "rgb(210, 0, 0)",
+            "backgroundImage": "none",
+            "width": "29px",
+            "height": "43px",
+            "rectWidth": 29,
+            "rectHeight": 43
+          },
+          "order": {
+            "color": "rgb(200, 0, 0)",
+            "backgroundImage": "none",
+            "width": "31px",
+            "height": "18px",
+            "rectWidth": 31,
+            "rectHeight": 18
+          }
+        },
+        "styleSheetsBeforeCascadeAppend": [
+          "http://127.0.0.1:43100/css/primary.css?case=primary-sheet"
+        ]
+      },
+      "laterOrderLink": {
+        "events": [
+          {
+            "id": "later-order-link",
+            "type": "load",
+            "elapsedMs": 185.9,
+            "href": "http://127.0.0.1:43100/css/order-later.css?case=stylesheet-order-later",
+            "sheetHref": "http://127.0.0.1:43100/css/order-later.css?case=stylesheet-order-later",
+            "ruleCount": 1
+          }
+        ],
+        "link": {
+          "hrefAttribute": "http://127.0.0.1:43100/css/order-later.css?case=stylesheet-order-later",
+          "href": "http://127.0.0.1:43100/css/order-later.css?case=stylesheet-order-later",
+          "crossOrigin": null,
+          "sheetPresent": true,
+          "sheetHref": "http://127.0.0.1:43100/css/order-later.css?case=stylesheet-order-later",
+          "disabled": false,
+          "media": "",
+          "cssRules": [
+            "#orderProbe { color: rgb(0, 170, 0); }"
+          ],
+          "cssRulesError": null
+        }
+      },
+      "cascadeAfterLater": {
+        "target": {
+          "color": "rgb(0, 170, 0)",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "backgroundImage": "none",
+          "display": "block",
+          "width": "31px",
+          "height": "18px",
+          "marginLeft": "0px",
+          "rectWidth": 31,
+          "rectHeight": 18
+        },
+        "styleSheets": [
+          "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+          "http://127.0.0.1:43100/css/order-later.css?case=stylesheet-order-later"
+        ]
+      },
+      "cascadeAfterRemove": {
+        "color": "rgb(200, 0, 0)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "display": "block",
+        "width": "31px",
+        "height": "18px",
+        "marginLeft": "0px",
+        "rectWidth": 31,
+        "rectHeight": 18
+      },
+      "importStartedAtPerformanceMs": 8.2
+    },
+    {
+      "caseId": "cross-origin-cssom-and-cors",
+      "source": "A cross-origin stylesheet without crossorigin applies but cssRules access is attempted; a second link uses crossorigin=anonymous and ACAO:* so its rules can be read. Actual computed styles and request Origin/Referer are retained.",
+      "opaqueLink": {
+        "events": [
+          {
+            "id": "opaque-cross-link",
+            "type": "load",
+            "elapsedMs": 15.1,
+            "href": "http://localhost:43100/css/cross.css?case=css-cross-no-cors",
+            "sheetHref": "http://localhost:43100/css/cross.css?case=css-cross-no-cors",
+            "ruleCount": null
+          }
+        ],
+        "link": {
+          "hrefAttribute": "http://localhost:43100/css/cross.css?case=css-cross-no-cors",
+          "href": "http://localhost:43100/css/cross.css?case=css-cross-no-cors",
+          "crossOrigin": null,
+          "sheetPresent": true,
+          "sheetHref": "http://localhost:43100/css/cross.css?case=css-cross-no-cors",
+          "disabled": false,
+          "media": "",
+          "cssRulesError": {
+            "name": "SecurityError",
+            "message": "Failed to read the 'cssRules' property from 'CSSStyleSheet': Cannot access rules"
+          }
+        }
+      },
+      "opaqueComputedStyle": {
+        "color": "rgb(44, 55, 66)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "display": "block",
+        "width": "37px",
+        "height": "21px",
+        "marginLeft": "0px",
+        "rectWidth": 37,
+        "rectHeight": 21
+      },
+      "corsLink": {
+        "events": [
+          {
+            "id": "cors-cross-link",
+            "type": "load",
+            "elapsedMs": 18.7,
+            "href": "http://localhost:43100/css/cors.css?case=css-cross-cors",
+            "sheetHref": "http://localhost:43100/css/cors.css?case=css-cross-cors",
+            "ruleCount": 1
+          }
+        ],
+        "link": {
+          "hrefAttribute": "http://localhost:43100/css/cors.css?case=css-cross-cors",
+          "href": "http://localhost:43100/css/cors.css?case=css-cross-cors",
+          "crossOrigin": "anonymous",
+          "sheetPresent": true,
+          "sheetHref": "http://localhost:43100/css/cors.css?case=css-cross-cors",
+          "disabled": false,
+          "media": "",
+          "cssRules": [
+            "#corsProbe { color: rgb(66, 55, 44); width: 47px; height: 26px; }"
+          ],
+          "cssRulesError": null
+        }
+      },
+      "corsComputedStyle": {
+        "color": "rgb(66, 55, 44)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "display": "block",
+        "width": "47px",
+        "height": "26px",
+        "marginLeft": "0px",
+        "rectWidth": 47,
+        "rectHeight": 26
+      }
+    },
+    {
+      "caseId": "link-href-change-pending-state",
+      "source": "After a same-origin link stylesheet has loaded, change href to a 450 ms synthetic CSS response. Capture link.sheet, CSSOM, load-event count, and computed style while the request is in flight and after the new sheet completes.",
+      "initial": {
+        "events": [
+          {
+            "id": "slow-switch-link",
+            "type": "load",
+            "elapsedMs": 13.6,
+            "href": "http://127.0.0.1:43100/css/link-a.css?case=slow-switch-initial",
+            "sheetHref": "http://127.0.0.1:43100/css/link-a.css?case=slow-switch-initial",
+            "ruleCount": 1
+          }
+        ],
+        "link": {
+          "hrefAttribute": "http://127.0.0.1:43100/css/link-a.css?case=slow-switch-initial",
+          "href": "http://127.0.0.1:43100/css/link-a.css?case=slow-switch-initial",
+          "crossOrigin": null,
+          "sheetPresent": true,
+          "sheetHref": "http://127.0.0.1:43100/css/link-a.css?case=slow-switch-initial",
+          "disabled": false,
+          "media": "",
+          "cssRules": [
+            "#linkProbe { color: rgb(201, 0, 0); width: 11px; height: 9px; }"
+          ],
+          "cssRulesError": null
+        }
+      },
+      "plannedServerDelayMs": 450,
+      "slowRequestReceived": true,
+      "whileSlowResponsePending": {
+        "eventCount": 1,
+        "href": "http://127.0.0.1:43100/css/link-slow.css?case=slow-switch-response",
+        "sheetPresent": true,
+        "sheetHref": "http://127.0.0.1:43100/css/link-a.css?case=slow-switch-initial",
+        "sameSheetAsBeforeSwap": true,
+        "cssRules": [
+          "#linkProbe { color: rgb(201, 0, 0); width: 11px; height: 9px; }"
+        ],
+        "computed": {
+          "color": "rgb(0, 0, 0)",
+          "width": "1264px",
+          "height": "18px",
+          "rectWidth": 1264,
+          "rectHeight": 18
+        }
+      },
+      "slowLoadSeen": true,
+      "afterSlowResponse": {
+        "events": [
+          {
+            "id": "slow-switch-link",
+            "type": "load",
+            "elapsedMs": 13.6,
+            "href": "http://127.0.0.1:43100/css/link-a.css?case=slow-switch-initial",
+            "sheetHref": "http://127.0.0.1:43100/css/link-a.css?case=slow-switch-initial",
+            "ruleCount": 1
+          },
+          {
+            "id": "slow-switch-link",
+            "type": "load",
+            "elapsedMs": 468.5,
+            "href": "http://127.0.0.1:43100/css/link-slow.css?case=slow-switch-response",
+            "sheetHref": "http://127.0.0.1:43100/css/link-slow.css?case=slow-switch-response",
+            "ruleCount": 1
+          }
+        ],
+        "href": "http://127.0.0.1:43100/css/link-slow.css?case=slow-switch-response",
+        "sheetPresent": true,
+        "sheetHref": "http://127.0.0.1:43100/css/link-slow.css?case=slow-switch-response",
+        "sameSheetAsBeforeSwap": false,
+        "cssRules": [
+          "#linkProbe { color: rgb(0, 33, 201); width: 33px; height: 15px; }"
+        ],
+        "computed": {
+          "color": "rgb(0, 33, 201)",
+          "width": "33px",
+          "height": "15px",
+          "rectWidth": 33,
+          "rectHeight": 15
+        }
+      }
+    },
+    {
+      "caseId": "successful-root-with-failed-imports",
+      "source": "A valid root stylesheet imports one 404 resource and one 200 text/plain resource. Record each owner link load/error event, import CSSOM state, root declaration computed style, and actual response status/content type.",
+      "failedImport404": {
+        "rootLink": {
+          "events": [
+            {
+              "id": "failed-import-404-link",
+              "type": "error",
+              "elapsedMs": 109.5,
+              "href": "http://127.0.0.1:43100/css/root-import-fail-404.css?case=import-fail-root-404",
+              "sheetHref": "http://127.0.0.1:43100/css/root-import-fail-404.css?case=import-fail-root-404",
+              "ruleCount": 2
+            }
+          ],
+          "link": {
+            "hrefAttribute": "http://127.0.0.1:43100/css/root-import-fail-404.css?case=import-fail-root-404",
+            "href": "http://127.0.0.1:43100/css/root-import-fail-404.css?case=import-fail-root-404",
+            "crossOrigin": null,
+            "sheetPresent": true,
+            "sheetHref": "http://127.0.0.1:43100/css/root-import-fail-404.css?case=import-fail-root-404",
+            "disabled": false,
+            "media": "",
+            "cssRules": [
+              "@import url(\"/css/import-fail-404.css?case=import-fail-404\");",
+              "#importProbe { color: rgb(120, 0, 0); width: 33px; height: 16px; }"
+            ],
+            "cssRulesError": null
+          }
+        },
+        "computed": {
+          "color": "rgb(120, 0, 0)",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "backgroundImage": "none",
+          "display": "block",
+          "width": "33px",
+          "height": "16px",
+          "marginLeft": "0px",
+          "rectWidth": 33,
+          "rectHeight": 16
+        },
+        "cssom": {
+          "sheetPresent": true,
+          "sheetHref": "http://127.0.0.1:43100/css/root-import-fail-404.css?case=import-fail-root-404",
+          "rootRules": [
+            "@import url(\"/css/import-fail-404.css?case=import-fail-404\");",
+            "#importProbe { color: rgb(120, 0, 0); width: 33px; height: 16px; }"
+          ],
+          "importHref": "/css/import-fail-404.css?case=import-fail-404",
+          "importedSheetPresent": true,
+          "importedRules": []
+        },
+        "requests": [
+          {
+            "sequence": 23,
+            "elapsedMs": 1338.5,
+            "method": "GET",
+            "hostname": "127.0.0.1",
+            "path": "/css/root-import-fail-404.css?case=import-fail-root-404",
+            "url": "http://127.0.0.1:43100/css/root-import-fail-404.css?case=import-fail-root-404",
+            "origin": null,
+            "referer": "http://127.0.0.1:43100/page?case=import-failure-404",
+            "authorizationPresent": false,
+            "secFetchSite": "same-origin",
+            "secFetchMode": "no-cors",
+            "secFetchDest": "style",
+            "responseStatus": 200,
+            "responseContentType": "text/css; charset=utf-8"
+          },
+          {
+            "sequence": 24,
+            "elapsedMs": 1343.3,
+            "method": "GET",
+            "hostname": "127.0.0.1",
+            "path": "/css/import-fail-404.css?case=import-fail-404",
+            "url": "http://127.0.0.1:43100/css/import-fail-404.css?case=import-fail-404",
+            "origin": null,
+            "referer": "http://127.0.0.1:43100/css/root-import-fail-404.css?case=import-fail-root-404",
+            "authorizationPresent": false,
+            "secFetchSite": "same-origin",
+            "secFetchMode": "no-cors",
+            "secFetchDest": "style",
+            "responseStatus": 404,
+            "responseContentType": "text/plain; charset=utf-8"
+          }
+        ]
+      },
+      "failedImportMime": {
+        "rootLink": {
+          "events": [
+            {
+              "id": "failed-import-mime-link",
+              "type": "load",
+              "elapsedMs": 109,
+              "href": "http://127.0.0.1:43100/css/root-import-fail-mime.css?case=import-fail-root-mime",
+              "sheetHref": "http://127.0.0.1:43100/css/root-import-fail-mime.css?case=import-fail-root-mime",
+              "ruleCount": 2
+            }
+          ],
+          "link": {
+            "hrefAttribute": "http://127.0.0.1:43100/css/root-import-fail-mime.css?case=import-fail-root-mime",
+            "href": "http://127.0.0.1:43100/css/root-import-fail-mime.css?case=import-fail-root-mime",
+            "crossOrigin": null,
+            "sheetPresent": true,
+            "sheetHref": "http://127.0.0.1:43100/css/root-import-fail-mime.css?case=import-fail-root-mime",
+            "disabled": false,
+            "media": "",
+            "cssRules": [
+              "@import url(\"/css/import-fail-mime.css?case=import-fail-mime\");",
+              "#importProbe { color: rgb(120, 0, 0); width: 33px; height: 16px; }"
+            ],
+            "cssRulesError": null
+          }
+        },
+        "computed": {
+          "color": "rgb(120, 0, 0)",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "backgroundImage": "none",
+          "display": "block",
+          "width": "33px",
+          "height": "16px",
+          "marginLeft": "0px",
+          "rectWidth": 33,
+          "rectHeight": 16
+        },
+        "cssom": {
+          "sheetPresent": true,
+          "sheetHref": "http://127.0.0.1:43100/css/root-import-fail-mime.css?case=import-fail-root-mime",
+          "rootRules": [
+            "@import url(\"/css/import-fail-mime.css?case=import-fail-mime\");",
+            "#importProbe { color: rgb(120, 0, 0); width: 33px; height: 16px; }"
+          ],
+          "importHref": "/css/import-fail-mime.css?case=import-fail-mime",
+          "importedSheetPresent": true,
+          "importedRules": []
+        },
+        "requests": [
+          {
+            "sequence": 26,
+            "elapsedMs": 1496.4,
+            "method": "GET",
+            "hostname": "127.0.0.1",
+            "path": "/css/root-import-fail-mime.css?case=import-fail-root-mime",
+            "url": "http://127.0.0.1:43100/css/root-import-fail-mime.css?case=import-fail-root-mime",
+            "origin": null,
+            "referer": "http://127.0.0.1:43100/page?case=import-failure-mime",
+            "authorizationPresent": false,
+            "secFetchSite": "same-origin",
+            "secFetchMode": "no-cors",
+            "secFetchDest": "style",
+            "responseStatus": 200,
+            "responseContentType": "text/css; charset=utf-8"
+          },
+          {
+            "sequence": 27,
+            "elapsedMs": 1501,
+            "method": "GET",
+            "hostname": "127.0.0.1",
+            "path": "/css/import-fail-mime.css?case=import-fail-mime",
+            "url": "http://127.0.0.1:43100/css/import-fail-mime.css?case=import-fail-mime",
+            "origin": null,
+            "referer": "http://127.0.0.1:43100/css/root-import-fail-mime.css?case=import-fail-root-mime",
+            "authorizationPresent": false,
+            "secFetchSite": "same-origin",
+            "secFetchMode": "no-cors",
+            "secFetchDest": "style",
+            "responseStatus": 200,
+            "responseContentType": "text/plain; charset=utf-8"
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "inline-style-load-event-behavior",
+      "source": "Observe load/error listeners on a dynamically inserted inline style with no import, after textContent and insertRule mutations, after an imported stylesheet finishes, and after further mutations.",
+      "result": {
+        "eventRecords": [
+          {
+            "type": "load",
+            "phase": "initial-no-import",
+            "elapsedMs": 8.1,
+            "sheetHref": null
+          },
+          {
+            "type": "load",
+            "phase": "textContent-no-import",
+            "elapsedMs": 100.2,
+            "sheetHref": null
+          },
+          {
+            "type": "load",
+            "phase": "textContent-no-import",
+            "elapsedMs": 100.2,
+            "sheetHref": null
+          },
+          {
+            "type": "load",
+            "phase": "textContent-with-import",
+            "elapsedMs": 245.6,
+            "sheetHref": null
+          },
+          {
+            "type": "load",
+            "phase": "textContent-with-import",
+            "elapsedMs": 414.1,
+            "sheetHref": null
+          },
+          {
+            "type": "load",
+            "phase": "textContent-after-import",
+            "elapsedMs": 650.2,
+            "sheetHref": null
+          },
+          {
+            "type": "load",
+            "phase": "textContent-after-import",
+            "elapsedMs": 650.2,
+            "sheetHref": null
+          }
+        ],
+        "stages": {
+          "initialWithoutImport": {
+            "label": "initial-no-import",
+            "phase": "initial-no-import",
+            "eventCount": 1,
+            "color": "rgb(1, 1, 1)",
+            "width": "20px",
+            "height": "12px",
+            "rectWidth": 20,
+            "rectHeight": 12,
+            "sheetPresent": true,
+            "sheetHref": null,
+            "cssRules": [
+              "#importProbe { color: rgb(1, 1, 1); width: 20px; height: 12px; }"
+            ]
+          },
+          "afterTextContentWithoutImport": {
+            "label": "textContent-no-import",
+            "phase": "textContent-no-import",
+            "eventCount": 3,
+            "color": "rgb(2, 2, 2)",
+            "width": "21px",
+            "height": "13px",
+            "rectWidth": 21,
+            "rectHeight": 13,
+            "sheetPresent": true,
+            "sheetHref": null,
+            "cssRules": [
+              "#importProbe { color: rgb(2, 2, 2); width: 21px; height: 13px; }"
+            ]
+          },
+          "afterInsertRuleWithoutImport": {
+            "label": "insertRule-no-import",
+            "phase": "insertRule-no-import",
+            "eventCount": 3,
+            "color": "rgb(3, 3, 3)",
+            "width": "21px",
+            "height": "14px",
+            "rectWidth": 21,
+            "rectHeight": 14,
+            "sheetPresent": true,
+            "sheetHref": null,
+            "cssRules": [
+              "#importProbe { color: rgb(2, 2, 2); width: 21px; height: 13px; }",
+              "#importProbe { color: rgb(3, 3, 3); height: 14px; }"
+            ]
+          },
+          "withImport": {
+            "label": "import-settled",
+            "phase": "textContent-with-import",
+            "eventCount": 5,
+            "color": "rgb(4, 4, 4)",
+            "width": "23px",
+            "height": "27px",
+            "rectWidth": 23,
+            "rectHeight": 27,
+            "sheetPresent": true,
+            "sheetHref": null,
+            "cssRules": [
+              "@import url(\"http://127.0.0.1:43100/css/inline-style-import.css?case=inline-style-import\");",
+              "#importProbe { color: rgb(4, 4, 4); width: 23px; }"
+            ]
+          },
+          "afterInsertRuleWithImport": {
+            "label": "insertRule-with-import",
+            "phase": "insertRule-with-import",
+            "eventCount": 5,
+            "color": "rgb(7, 7, 7)",
+            "width": "23px",
+            "height": "27px",
+            "rectWidth": 23,
+            "rectHeight": 27,
+            "sheetPresent": true,
+            "sheetHref": null,
+            "cssRules": [
+              "@import url(\"http://127.0.0.1:43100/css/inline-style-import.css?case=inline-style-import\");",
+              "#importProbe { color: rgb(4, 4, 4); width: 23px; }",
+              "#importProbe { color: rgb(7, 7, 7); }"
+            ]
+          },
+          "afterTextContentFollowingImport": {
+            "label": "textContent-after-import",
+            "phase": "textContent-after-import",
+            "eventCount": 7,
+            "color": "rgb(5, 5, 5)",
+            "width": "24px",
+            "height": "18px",
+            "rectWidth": 24,
+            "rectHeight": 18,
+            "sheetPresent": true,
+            "sheetHref": null,
+            "cssRules": [
+              "#importProbe { color: rgb(5, 5, 5); width: 24px; height: 18px; }"
+            ]
+          },
+          "afterInsertRuleFollowingImport": {
+            "label": "insertRule-after-import",
+            "phase": "insertRule-after-import",
+            "eventCount": 7,
+            "color": "rgb(6, 6, 6)",
+            "width": "24px",
+            "height": "18px",
+            "rectWidth": 24,
+            "rectHeight": 18,
+            "sheetPresent": true,
+            "sheetHref": null,
+            "cssRules": [
+              "#importProbe { color: rgb(5, 5, 5); width: 24px; height: 18px; }",
+              "#importProbe { color: rgb(6, 6, 6); }"
+            ]
+          }
+        },
+        "importHref": "http://127.0.0.1:43100/css/inline-style-import.css?case=inline-style-import",
+        "importedSheetPresent": true,
+        "importedRules": [
+          "#importProbe { color: rgb(0, 0, 120); height: 27px; }"
+        ],
+        "resources": [
+          {
+            "name": "http://127.0.0.1:43100/css/inline-style-import.css?case=inline-style-import",
+            "initiatorType": "css",
+            "startTime": 245.1,
+            "responseEnd": 411.9
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "disabled-link-fetch-and-reenable",
+      "source": "Insert a disabled link with href, observe fetch/sheet/events/computed style, enable it, then disable and re-enable the successfully loaded link while counting actual requests.",
+      "disabledRequestCountBeforeEnable": 0,
+      "disabledLinkBeforeEnable": {
+        "disabled": true,
+        "href": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link",
+        "sheetPresent": false,
+        "sheetHref": null,
+        "cssRules": [],
+        "events": [],
+        "computed": {
+          "color": "rgb(0, 0, 0)",
+          "width": "1264px",
+          "height": "18px",
+          "rectWidth": 1264,
+          "rectHeight": 18
+        }
+      },
+      "enabledRequestSeen": true,
+      "disabledLinkAfterEnable": {
+        "disabled": false,
+        "href": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link",
+        "sheetPresent": true,
+        "sheetHref": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link",
+        "events": [
+          {
+            "type": "load",
+            "elapsedMs": 414.4,
+            "href": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link"
+          }
+        ],
+        "computed": {
+          "color": "rgb(123, 45, 67)",
+          "width": "38px",
+          "height": "24px",
+          "rectWidth": 38,
+          "rectHeight": 24
+        }
+      },
+      "requestCountAfterEnable": 1,
+      "disabledLinkAfterLoadDisabled": {
+        "color": "rgb(0, 0, 0)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "backgroundImage": "none",
+        "display": "block",
+        "width": "1264px",
+        "height": "18px",
+        "marginLeft": "0px",
+        "rectWidth": 1264,
+        "rectHeight": 18
+      },
+      "disabledLinkAfterReenable": {
+        "disabled": false,
+        "href": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link",
+        "sheetPresent": true,
+        "sheetHref": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link",
+        "events": [
+          {
+            "type": "load",
+            "elapsedMs": 414.4,
+            "href": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link"
+          },
+          {
+            "type": "load",
+            "elapsedMs": 653.4,
+            "href": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link"
+          }
+        ],
+        "computed": {
+          "color": "rgb(123, 45, 67)",
+          "width": "38px",
+          "height": "24px",
+          "rectWidth": 38,
+          "rectHeight": 24
+        }
+      },
+      "requestCountAfterReenable": 2
+    }
+  ],
+  "serverRequests": [
+    {
+      "sequence": 1,
+      "elapsedMs": 114.9,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/page?case=inline-cssom",
+      "url": "http://127.0.0.1:43100/page?case=inline-cssom",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "secFetchSite": "none",
+      "secFetchMode": "navigate",
+      "secFetchDest": "document",
+      "responseStatus": 200,
+      "responseContentType": "text/html; charset=utf-8"
+    },
+    {
+      "sequence": 2,
+      "elapsedMs": 145.9,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/page?case=media-disabled",
+      "url": "http://127.0.0.1:43100/page?case=media-disabled",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "secFetchSite": "none",
+      "secFetchMode": "navigate",
+      "secFetchDest": "document",
+      "responseStatus": 200,
+      "responseContentType": "text/html; charset=utf-8"
+    },
+    {
+      "sequence": 3,
+      "elapsedMs": 176.2,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/page?case=dynamic-link-lifecycle",
+      "url": "http://127.0.0.1:43100/page?case=dynamic-link-lifecycle",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "secFetchSite": "none",
+      "secFetchMode": "navigate",
+      "secFetchDest": "document",
+      "responseStatus": 200,
+      "responseContentType": "text/html; charset=utf-8"
+    },
+    {
+      "sequence": 4,
+      "elapsedMs": 187.4,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/link-a.css?case=dynamic-a",
+      "url": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=dynamic-link-lifecycle",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 5,
+      "elapsedMs": 199.8,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/link-b.css?case=dynamic-b",
+      "url": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=dynamic-link-lifecycle",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 6,
+      "elapsedMs": 216.4,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/link-b.css?case=dynamic-b",
+      "url": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=dynamic-link-lifecycle",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 7,
+      "elapsedMs": 232,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/missing.css?case=dynamic-missing",
+      "url": "http://127.0.0.1:43100/css/missing.css?case=dynamic-missing",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=dynamic-link-lifecycle",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 404,
+      "responseContentType": "text/plain; charset=utf-8"
+    },
+    {
+      "sequence": 8,
+      "elapsedMs": 269.2,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/page?case=base-href-effects",
+      "url": "http://127.0.0.1:43100/page?case=base-href-effects",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "secFetchSite": "none",
+      "secFetchMode": "navigate",
+      "secFetchDest": "document",
+      "responseStatus": 200,
+      "responseContentType": "text/html; charset=utf-8"
+    },
+    {
+      "sequence": 9,
+      "elapsedMs": 279.9,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/base/one/styles.css?case=base-existing",
+      "url": "http://127.0.0.1:43100/base/one/styles.css?case=base-existing",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=base-href-effects",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 10,
+      "elapsedMs": 477.6,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/base/two/styles.css?case=base-new",
+      "url": "http://127.0.0.1:43100/base/two/styles.css?case=base-new",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=base-href-effects",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 11,
+      "elapsedMs": 535.6,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/page?case=import-relative-resource-and-order",
+      "url": "http://127.0.0.1:43100/page?case=import-relative-resource-and-order",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "secFetchSite": "none",
+      "secFetchMode": "navigate",
+      "secFetchDest": "document",
+      "responseStatus": 200,
+      "responseContentType": "text/html; charset=utf-8"
+    },
+    {
+      "sequence": 12,
+      "elapsedMs": 547.8,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/primary.css?case=primary-sheet",
+      "url": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=import-relative-resource-and-order",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 13,
+      "elapsedMs": 552.7,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/imported.css?case=css-import",
+      "url": "http://127.0.0.1:43100/css/imported.css?case=css-import",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 14,
+      "elapsedMs": 708.9,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/assets/texture.svg?case=css-relative-asset",
+      "url": "http://127.0.0.1:43100/assets/texture.svg?case=css-relative-asset",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "image",
+      "responseStatus": 200,
+      "responseContentType": "image/svg+xml"
+    },
+    {
+      "sequence": 15,
+      "elapsedMs": 719.6,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/order-later.css?case=stylesheet-order-later",
+      "url": "http://127.0.0.1:43100/css/order-later.css?case=stylesheet-order-later",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=import-relative-resource-and-order",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 16,
+      "elapsedMs": 762.1,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/page?case=cross-origin-css-rules",
+      "url": "http://127.0.0.1:43100/page?case=cross-origin-css-rules",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "secFetchSite": "none",
+      "secFetchMode": "navigate",
+      "secFetchDest": "document",
+      "responseStatus": 200,
+      "responseContentType": "text/html; charset=utf-8"
+    },
+    {
+      "sequence": 17,
+      "elapsedMs": 773,
+      "method": "GET",
+      "hostname": "localhost",
+      "path": "/css/cross.css?case=css-cross-no-cors",
+      "url": "http://localhost:43100/css/cross.css?case=css-cross-no-cors",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/",
+      "authorizationPresent": false,
+      "secFetchSite": "cross-site",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 18,
+      "elapsedMs": 779.3,
+      "method": "GET",
+      "hostname": "localhost",
+      "path": "/css/cors.css?case=css-cross-cors",
+      "url": "http://localhost:43100/css/cors.css?case=css-cross-cors",
+      "origin": "http://127.0.0.1:43100",
+      "referer": "http://127.0.0.1:43100/",
+      "authorizationPresent": false,
+      "secFetchSite": "cross-site",
+      "secFetchMode": "cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 19,
+      "elapsedMs": 796,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/page?case=link-href-swap-pending",
+      "url": "http://127.0.0.1:43100/page?case=link-href-swap-pending",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "secFetchSite": "none",
+      "secFetchMode": "navigate",
+      "secFetchDest": "document",
+      "responseStatus": 200,
+      "responseContentType": "text/html; charset=utf-8"
+    },
+    {
+      "sequence": 20,
+      "elapsedMs": 805.3,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/link-a.css?case=slow-switch-initial",
+      "url": "http://127.0.0.1:43100/css/link-a.css?case=slow-switch-initial",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=link-href-swap-pending",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 21,
+      "elapsedMs": 810.8,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/link-slow.css?case=slow-switch-response",
+      "url": "http://127.0.0.1:43100/css/link-slow.css?case=slow-switch-response",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=link-href-swap-pending",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 22,
+      "elapsedMs": 1326.4,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/page?case=import-failure-404",
+      "url": "http://127.0.0.1:43100/page?case=import-failure-404",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "secFetchSite": "none",
+      "secFetchMode": "navigate",
+      "secFetchDest": "document",
+      "responseStatus": 200,
+      "responseContentType": "text/html; charset=utf-8"
+    },
+    {
+      "sequence": 23,
+      "elapsedMs": 1338.5,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/root-import-fail-404.css?case=import-fail-root-404",
+      "url": "http://127.0.0.1:43100/css/root-import-fail-404.css?case=import-fail-root-404",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=import-failure-404",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 24,
+      "elapsedMs": 1343.3,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/import-fail-404.css?case=import-fail-404",
+      "url": "http://127.0.0.1:43100/css/import-fail-404.css?case=import-fail-404",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/css/root-import-fail-404.css?case=import-fail-root-404",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 404,
+      "responseContentType": "text/plain; charset=utf-8"
+    },
+    {
+      "sequence": 25,
+      "elapsedMs": 1484.8,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/page?case=import-failure-mime",
+      "url": "http://127.0.0.1:43100/page?case=import-failure-mime",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "secFetchSite": "none",
+      "secFetchMode": "navigate",
+      "secFetchDest": "document",
+      "responseStatus": 200,
+      "responseContentType": "text/html; charset=utf-8"
+    },
+    {
+      "sequence": 26,
+      "elapsedMs": 1496.4,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/root-import-fail-mime.css?case=import-fail-root-mime",
+      "url": "http://127.0.0.1:43100/css/root-import-fail-mime.css?case=import-fail-root-mime",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=import-failure-mime",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 27,
+      "elapsedMs": 1501,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/import-fail-mime.css?case=import-fail-mime",
+      "url": "http://127.0.0.1:43100/css/import-fail-mime.css?case=import-fail-mime",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/css/root-import-fail-mime.css?case=import-fail-root-mime",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/plain; charset=utf-8"
+    },
+    {
+      "sequence": 28,
+      "elapsedMs": 1644.6,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/page?case=inline-style-load-events",
+      "url": "http://127.0.0.1:43100/page?case=inline-style-load-events",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "secFetchSite": "none",
+      "secFetchMode": "navigate",
+      "secFetchDest": "document",
+      "responseStatus": 200,
+      "responseContentType": "text/html; charset=utf-8"
+    },
+    {
+      "sequence": 29,
+      "elapsedMs": 1892.8,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/inline-style-import.css?case=inline-style-import",
+      "url": "http://127.0.0.1:43100/css/inline-style-import.css?case=inline-style-import",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=inline-style-load-events",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 30,
+      "elapsedMs": 2496.7,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/page?case=disabled-link-fetch",
+      "url": "http://127.0.0.1:43100/page?case=disabled-link-fetch",
+      "origin": null,
+      "referer": null,
+      "authorizationPresent": false,
+      "secFetchSite": "none",
+      "secFetchMode": "navigate",
+      "secFetchDest": "document",
+      "responseStatus": 200,
+      "responseContentType": "text/html; charset=utf-8"
+    },
+    {
+      "sequence": 31,
+      "elapsedMs": 2744.9,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/disabled-link.css?case=disabled-link",
+      "url": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=disabled-link-fetch",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    },
+    {
+      "sequence": 32,
+      "elapsedMs": 2985.4,
+      "method": "GET",
+      "hostname": "127.0.0.1",
+      "path": "/css/disabled-link.css?case=disabled-link",
+      "url": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link",
+      "origin": null,
+      "referer": "http://127.0.0.1:43100/page?case=disabled-link-fetch",
+      "authorizationPresent": false,
+      "secFetchSite": "same-origin",
+      "secFetchMode": "no-cors",
+      "secFetchDest": "style",
+      "responseStatus": 200,
+      "responseContentType": "text/css; charset=utf-8"
+    }
+  ],
+  "pageRequests": [
+    {
+      "url": "http://127.0.0.1:43100/page?case=inline-cssom",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=media-disabled",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=dynamic-link-lifecycle",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/link-a.css?case=dynamic-a",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/link-b.css?case=dynamic-b",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/missing.css?case=dynamic-missing",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=base-href-effects",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:43100/base/one/styles.css?case=base-existing",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/base/two/styles.css?case=base-new",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=import-relative-resource-and-order",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/primary.css?case=primary-sheet",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/imported.css?case=css-import",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/assets/texture.svg?case=css-relative-asset",
+      "method": "GET",
+      "resourceType": "image"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/order-later.css?case=stylesheet-order-later",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=cross-origin-css-rules",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://localhost:43100/css/cross.css?case=css-cross-no-cors",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://localhost:43100/css/cors.css?case=css-cross-cors",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=link-href-swap-pending",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/link-a.css?case=slow-switch-initial",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/link-slow.css?case=slow-switch-response",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=import-failure-404",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/root-import-fail-404.css?case=import-fail-root-404",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/import-fail-404.css?case=import-fail-404",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=import-failure-mime",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/root-import-fail-mime.css?case=import-fail-root-mime",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/import-fail-mime.css?case=import-fail-mime",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=inline-style-load-events",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/inline-style-import.css?case=inline-style-import",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/page?case=disabled-link-fetch",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    },
+    {
+      "url": "http://127.0.0.1:43100/css/disabled-link.css?case=disabled-link",
+      "method": "GET",
+      "resourceType": "stylesheet"
+    }
+  ],
+  "externalProxy": {
+    "origin": "http://127.0.0.1:43199",
+    "forwardsRequests": false,
+    "blockedRequestCount": 0,
+    "blockedCountsByMethod": {},
+    "nonLoopbackPageRequestCount": 0,
+    "nonLoopbackPageRequests": []
+  },
+  "scope": {
+    "tested": "Inline CSSOM insertRule/deleteRule and CSSStyleDeclaration.setProperty; replacing style.textContent; style media and disabled toggles; dynamic link insert/href change/remove/readd and 404 error; old-sheet state while a replacement href is pending; root stylesheet success with imported 404 and wrong-MIME responses; inline style load/error events across creation, textContent, CSSOM, and @import; disabled-link fetch, enable, disable, and re-enable; existing/new relative links after base href change; delayed @import load completion; CSS-relative SVG resource URL; stylesheet cascade order; cross-origin cssRules SecurityError versus CORS-enabled access; computed colors and layout sizes.",
+    "notTested": "AdoptedStyleSheets, constructable stylesheets, CSS modules, shadow-root stylesheet scoping, import maps, unusual CSS parser edge cases, CSP, integrity/crossorigin credentials modes, TLS, and filesystem origins.",
+    "transport": "The Node server binds only to 127.0.0.1. Chrome Headless Shell 153 uses only the synthetic 127.0.0.1/localhost origins. The configured loopback proxy never forwards. Playwright request routing aborts any other page request; background attempts are counted as locally blocked proxy requests."
+  }
+}

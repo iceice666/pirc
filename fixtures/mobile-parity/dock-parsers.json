@@ -1,0 +1,309 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "goals": [
+    {
+      "lines": [],
+      "expected": null
+    },
+    {
+      "lines": [
+        "not a goal"
+      ],
+      "expected": null
+    },
+    {
+      "lines": [
+        "GOAL · active · 3",
+        "An objective"
+      ],
+      "expected": {
+        "phase": "active",
+        "disarmed": false,
+        "rounds": 3,
+        "objective": "An objective"
+      }
+    },
+    {
+      "lines": [
+        "GOAL · active · disarmed · 0/10",
+        "Resume after restart"
+      ],
+      "expected": {
+        "phase": "active",
+        "disarmed": true,
+        "rounds": 0,
+        "maxRounds": 10,
+        "objective": "Resume after restart"
+      }
+    },
+    {
+      "lines": [
+        "GOAL · paused · 4/4",
+        "At limit",
+        "Maximum rounds reached"
+      ],
+      "expected": {
+        "phase": "paused",
+        "disarmed": false,
+        "rounds": 4,
+        "maxRounds": 4,
+        "objective": "At limit",
+        "reason": "Maximum rounds reached"
+      }
+    },
+    {
+      "lines": [
+        "GOAL · blocked · 2/8",
+        "Blocked",
+        "Needs a device"
+      ],
+      "expected": {
+        "phase": "blocked",
+        "disarmed": false,
+        "rounds": 2,
+        "maxRounds": 8,
+        "objective": "Blocked",
+        "reason": "Needs a device"
+      }
+    },
+    {
+      "lines": [
+        "GOAL · complete · 8",
+        "Done"
+      ],
+      "expected": {
+        "phase": "complete",
+        "disarmed": false,
+        "rounds": 8,
+        "objective": "Done"
+      }
+    },
+    {
+      "lines": [
+        "GOAL · paused · 0"
+      ],
+      "expected": {
+        "phase": "paused",
+        "disarmed": false,
+        "rounds": 0,
+        "objective": ""
+      }
+    },
+    {
+      "lines": [
+        "GOAL · invalid · 1",
+        "Bad phase"
+      ],
+      "expected": null
+    },
+    {
+      "lines": [
+        "GOAL · active · -1",
+        "Bad rounds"
+      ],
+      "expected": null
+    },
+    {
+      "lines": [
+        "GOAL · paused · 1",
+        "",
+        ""
+      ],
+      "expected": {
+        "phase": "paused",
+        "disarmed": false,
+        "rounds": 1,
+        "objective": ""
+      }
+    },
+    {
+      "lines": [
+        "GOAL · complete · disarmed · 1/2",
+        "Restored"
+      ],
+      "expected": {
+        "phase": "complete",
+        "disarmed": true,
+        "rounds": 1,
+        "maxRounds": 2,
+        "objective": "Restored"
+      }
+    }
+  ],
+  "todos": [
+    {
+      "lines": [],
+      "expected": null
+    },
+    {
+      "lines": [
+        "nothing"
+      ],
+      "expected": null
+    },
+    {
+      "lines": [
+        "TODO · 0/0"
+      ],
+      "expected": null
+    },
+    {
+      "lines": [
+        "✓ Done",
+        "▶ [App] Working",
+        "☐ [Test] Later (blocked)",
+        "… 4 more"
+      ],
+      "expected": {
+        "items": [
+          {
+            "status": "completed",
+            "text": "Done",
+            "blocked": false
+          },
+          {
+            "status": "in_progress",
+            "text": "Working",
+            "blocked": false,
+            "category": "App"
+          },
+          {
+            "status": "pending",
+            "text": "Later",
+            "blocked": true,
+            "category": "Test"
+          }
+        ],
+        "done": 1,
+        "total": 3
+      }
+    },
+    {
+      "lines": [
+        "TODO · 1/3",
+        "✓ [UI] Same",
+        "▶ [] Same",
+        "☐ [API] Same (blocked)"
+      ],
+      "expected": {
+        "items": [
+          {
+            "status": "completed",
+            "text": "Same",
+            "blocked": false,
+            "category": "UI"
+          },
+          {
+            "status": "in_progress",
+            "text": "Same",
+            "blocked": false
+          },
+          {
+            "status": "pending",
+            "text": "Same",
+            "blocked": true,
+            "category": "API"
+          }
+        ],
+        "done": 1,
+        "total": 3
+      }
+    },
+    {
+      "lines": [
+        "TODO · 2/2",
+        "✓ First",
+        "✓ Second"
+      ],
+      "expected": {
+        "items": [
+          {
+            "status": "completed",
+            "text": "First",
+            "blocked": false
+          },
+          {
+            "status": "completed",
+            "text": "Second",
+            "blocked": false
+          }
+        ],
+        "done": 2,
+        "total": 2
+      }
+    },
+    {
+      "lines": [
+        "TODO · 1/4",
+        "▶ One",
+        "▶ Two",
+        "☐ Later"
+      ],
+      "expected": {
+        "items": [
+          {
+            "status": "in_progress",
+            "text": "One",
+            "blocked": false
+          },
+          {
+            "status": "in_progress",
+            "text": "Two",
+            "blocked": false
+          },
+          {
+            "status": "pending",
+            "text": "Later",
+            "blocked": false
+          }
+        ],
+        "done": 1,
+        "total": 4
+      }
+    },
+    {
+      "lines": [
+        "TODO · 2/8"
+      ],
+      "expected": {
+        "items": [],
+        "done": 2,
+        "total": 8
+      }
+    },
+    {
+      "lines": [
+        "TODO · invalid",
+        "☐ Legacy"
+      ],
+      "expected": {
+        "items": [
+          {
+            "status": "pending",
+            "text": "Legacy",
+            "blocked": false
+          }
+        ],
+        "done": 0,
+        "total": 1
+      }
+    },
+    {
+      "lines": [
+        "☐ [nested] Text [other] (blocked)"
+      ],
+      "expected": {
+        "items": [
+          {
+            "status": "pending",
+            "text": "Text [other]",
+            "blocked": true,
+            "category": "nested"
+          }
+        ],
+        "done": 0,
+        "total": 1
+      }
+    }
+  ]
+}

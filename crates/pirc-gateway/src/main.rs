@@ -18,6 +18,7 @@ mod features;
 mod hints;
 mod http;
 mod log;
+mod management;
 mod memory;
 mod memory_records;
 mod node_events;

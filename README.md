@@ -41,7 +41,7 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 
 - No Bun, Node, Deno or V8 runtime is shipped or needed by the servers.
 - `git`, bubblewrap (`bwrap`) on Linux, and the system `sandbox-exec` on macOS; Chromium/Chrome and optional ffmpeg for browser features.
-- Development/build only: [Bun](https://bun.sh) for web/tooling, and Rust with `clippy`/`rustfmt` (`nix develop` provides them).
+- Development/build only: [Bun](https://bun.sh) for web/tooling, and Rust **1.98.1** with `clippy`/`rustfmt` (`rust-toolchain.toml` and CI pin it; `nix develop` provides the matching tools). The locked PTC dependencies require at least Rust 1.97.
 - A model backend, configured on the gateway: a subscription login (Claude Pro/Max, GitHub Copilot, ChatGPT/Codex) or an API-key/custom endpoint from the web **Settings**, and/or `models.json` (see [Model backends](docs/guides/model-backends.md))
 - A trusted forward-auth reverse proxy
 
@@ -76,6 +76,8 @@ SQLite is bundled; the node embeds native QuickJS for PTC, not a general-purpose
 The Nix gateway includes the static Web UI; the node includes native sandbox/browser drivers and supplies bubblewrap on Linux. Neither ships srt, Playwright's Node package or a JS sidecar. Keep all roles on protocol **10**. Version **0.4.0 requires fresh state**: re-pair devices, re-login providers and start new sessions; do not reuse 0.3.0 databases. See [migration guidance](docs/deploy/upgrades.md). Account separation, filesystem permissions and sandboxing remain the security boundaries.
 
 ## Documentation
+
+The native Flutter Android app is in [apps/android](apps/android/README.md); its [remaining work and validation limits](plans/mobile.md) are tracked separately.
 
 Start with the [documentation index](docs/README.md). Current usage guides and architecture references are separate from [implementation plans](plans/README.md) and historical designs.
 

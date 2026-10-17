@@ -1,0 +1,1926 @@
+{
+  "source": {
+    "file": "mermaid-xy-expected.json",
+    "sha256": "b151d0424dc553ba796263ffbea99fa97310cb1db5b3e7f4ecf5905b20110580",
+    "reference": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+    "mermaidVersion": "11.17.2",
+    "deviceScaleFactor": 1
+  },
+  "themes": {
+    "light": {
+      "widths": [
+        {
+          "width": 390,
+          "scales": [
+            {
+              "textScale": 1,
+              "cases": [
+                {
+                  "id": "xy-category-derived-y",
+                  "svg": {
+                    "geometryId": "xy-category-derived-y-light",
+                    "box": {
+                      "width": 332,
+                      "height": 237.140625
+                    }
+                  }
+                },
+                {
+                  "id": "xy-category-labeled-series",
+                  "svg": {
+                    "geometryId": "xy-category-labeled-series-light",
+                    "box": {
+                      "width": 332,
+                      "height": 237.140625
+                    }
+                  }
+                },
+                {
+                  "id": "xy-numeric-explicit-negative",
+                  "svg": {
+                    "geometryId": "xy-numeric-explicit-negative-light",
+                    "box": {
+                      "width": 332,
+                      "height": 237.140625
+                    }
+                  }
+                },
+                {
+                  "id": "xy-default-generated-x",
+                  "svg": {
+                    "geometryId": "xy-default-generated-x-light",
+                    "box": {
+                      "width": 332,
+                      "height": 237.140625
+                    }
+                  }
+                },
+                {
+                  "id": "xy-horizontal-numeric-bars",
+                  "svg": {
+                    "geometryId": "xy-horizontal-numeric-bars-light",
+                    "box": {
+                      "width": 332,
+                      "height": 237.140625
+                    }
+                  }
+                },
+                {
+                  "id": "xy-horizontal-categorical",
+                  "svg": {
+                    "geometryId": "xy-horizontal-categorical-light",
+                    "box": {
+                      "width": 332,
+                      "height": 237.140625
+                    }
+                  }
+                },
+                {
+                  "id": "xy-fixed-size-responsive",
+                  "svg": {
+                    "geometryId": "xy-fixed-size-responsive-light",
+                    "box": {
+                      "width": 332,
+                      "height": 217.0625
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "width": 650,
+          "scales": [
+            {
+              "textScale": 1,
+              "cases": [
+                {
+                  "id": "xy-category-derived-y",
+                  "svg": {
+                    "geometryId": "xy-category-derived-y-light-variant-3",
+                    "box": {
+                      "width": 592,
+                      "height": 422.84375
+                    }
+                  }
+                },
+                {
+                  "id": "xy-category-labeled-series",
+                  "svg": {
+                    "geometryId": "xy-category-labeled-series-light-variant-3",
+                    "box": {
+                      "width": 592,
+                      "height": 422.84375
+                    }
+                  }
+                },
+                {
+                  "id": "xy-numeric-explicit-negative",
+                  "svg": {
+                    "geometryId": "xy-numeric-explicit-negative-light-variant-3",
+                    "box": {
+                      "width": 592,
+                      "height": 422.84375
+                    }
+                  }
+                },
+                {
+                  "id": "xy-default-generated-x",
+                  "svg": {
+                    "geometryId": "xy-default-generated-x-light-variant-3",
+                    "box": {
+                      "width": 592,
+                      "height": 422.84375
+                    }
+                  }
+                },
+                {
+                  "id": "xy-horizontal-numeric-bars",
+                  "svg": {
+                    "geometryId": "xy-horizontal-numeric-bars-light-variant-3",
+                    "box": {
+                      "width": 592,
+                      "height": 422.84375
+                    }
+                  }
+                },
+                {
+                  "id": "xy-horizontal-categorical",
+                  "svg": {
+                    "geometryId": "xy-horizontal-categorical-light-variant-3",
+                    "box": {
+                      "width": 592,
+                      "height": 422.84375
+                    }
+                  }
+                },
+                {
+                  "id": "xy-fixed-size-responsive",
+                  "svg": {
+                    "geometryId": "xy-fixed-size-responsive-light-variant-3",
+                    "box": {
+                      "width": 520,
+                      "height": 340
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "width": 768,
+          "scales": [
+            {
+              "textScale": 1,
+              "cases": [
+                {
+                  "id": "xy-category-derived-y",
+                  "svg": {
+                    "geometryId": "xy-category-derived-y-light-variant-7",
+                    "box": {
+                      "width": 700,
+                      "height": 500
+                    }
+                  }
+                },
+                {
+                  "id": "xy-category-labeled-series",
+                  "svg": {
+                    "geometryId": "xy-category-labeled-series-light-variant-7",
+                    "box": {
+                      "width": 700,
+                      "height": 500
+                    }
+                  }
+                },
+                {
+                  "id": "xy-numeric-explicit-negative",
+                  "svg": {
+                    "geometryId": "xy-numeric-explicit-negative-light-variant-7",
+                    "box": {
+                      "width": 700,
+                      "height": 500
+                    }
+                  }
+                },
+                {
+                  "id": "xy-default-generated-x",
+                  "svg": {
+                    "geometryId": "xy-default-generated-x-light-variant-7",
+                    "box": {
+                      "width": 700,
+                      "height": 500
+                    }
+                  }
+                },
+                {
+                  "id": "xy-horizontal-numeric-bars",
+                  "svg": {
+                    "geometryId": "xy-horizontal-numeric-bars-light-variant-7",
+                    "box": {
+                      "width": 700,
+                      "height": 500
+                    }
+                  }
+                },
+                {
+                  "id": "xy-horizontal-categorical",
+                  "svg": {
+                    "geometryId": "xy-horizontal-categorical-light-variant-7",
+                    "box": {
+                      "width": 700,
+                      "height": 500
+                    }
+                  }
+                },
+                {
+                  "id": "xy-fixed-size-responsive",
+                  "svg": {
+                    "geometryId": "xy-fixed-size-responsive-light-variant-3",
+                    "box": {
+                      "width": 520,
+                      "height": 340
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "geometryCatalog": {
+    "xy-category-derived-y-light": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "49.999999046325684",
+              "y": "398.8887257295496",
+              "width": "95",
+              "height": "53.111274270450394"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "211.95520769755046",
+              "y": "254.55490291819854",
+              "width": "95",
+              "height": "197.44509708180146"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "373.91041634877524",
+              "y": "326.72181432387407",
+              "width": "95",
+              "height": "125.27818567612593"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "535.865625",
+              "y": "38.054168701171875",
+              "width": "95",
+              "height": "413.9458312988281"
+            }
+          }
+        ],
+        "texts": []
+      }
+    },
+    "xy-category-derived-y-light-variant-3": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "62.143750000000004",
+              "y": "387.05882352941177",
+              "width": "87.39999999999999",
+              "height": "52.94117647058823"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "215.70833333333331",
+              "y": "252.23529411764707",
+              "width": "87.39999999999999",
+              "height": "187.76470588235293"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "369.2729166666667",
+              "y": "319.6470588235294",
+              "width": "87.39999999999999",
+              "height": "120.35294117647061"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "522.8375",
+              "y": "50",
+              "width": "87.39999999999999",
+              "height": "390"
+            }
+          }
+        ],
+        "texts": []
+      }
+    },
+    "xy-category-derived-y-light-variant-7": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "64.36250000000001",
+              "y": "385.02941176470586",
+              "width": "87.39999999999999",
+              "height": "52.970588235294144"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "215.83854166666669",
+              "y": "251.61764705882354",
+              "width": "87.39999999999999",
+              "height": "186.38235294117646"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "367.31458333333336",
+              "y": "318.32352941176464",
+              "width": "87.39999999999999",
+              "height": "119.67647058823536"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "518.790625",
+              "y": "51.5",
+              "width": "87.39999999999999",
+              "height": "386.5"
+            }
+          }
+        ],
+        "texts": []
+      }
+    },
+    "xy-category-labeled-series-light": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "53.6375",
+              "y": "365.2108337402344",
+              "width": "93.1",
+              "height": "86.78916625976558"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "213.99374872843424",
+              "y": "303.8689590454102",
+              "width": "93.1",
+              "height": "148.13104095458982"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "374.3499974568685",
+              "y": "230.25870941162106",
+              "width": "93.1",
+              "height": "221.74129058837894"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "534.7062461853028",
+              "y": "152.55900146484376",
+              "width": "93.1",
+              "height": "299.44099853515627"
+            }
+          }
+        ],
+        "texts": [
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "20",
+            "attrs": {
+              "x": "100.1875",
+              "y": "355.2108337402344",
+              "font-size": "65px",
+              "text-anchor": "middle"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "35",
+            "attrs": {
+              "x": "260.54374872843425",
+              "y": "293.8689590454102",
+              "font-size": "65px",
+              "text-anchor": "middle"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "53",
+            "attrs": {
+              "x": "420.8999974568685",
+              "y": "220.25870941162106",
+              "font-size": "65px",
+              "text-anchor": "middle"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "72",
+            "attrs": {
+              "x": "581.2562461853028",
+              "y": "142.55900146484376",
+              "font-size": "65px",
+              "text-anchor": "middle"
+            }
+          }
+        ]
+      }
+    },
+    "xy-category-labeled-series-light-variant-3": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "68.234375",
+              "y": "355.6",
+              "width": "85.5",
+              "height": "84.39999999999998"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "218.67916666666667",
+              "y": "298.3",
+              "width": "85.5",
+              "height": "141.7"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "369.12395833333335",
+              "y": "229.54",
+              "width": "85.5",
+              "height": "210.46"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "519.56875",
+              "y": "156.96",
+              "width": "85.5",
+              "height": "283.03999999999996"
+            }
+          }
+        ],
+        "texts": [
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "20",
+            "attrs": {
+              "x": "110.984375",
+              "y": "345.6",
+              "font-size": "61px",
+              "text-anchor": "middle"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "35",
+            "attrs": {
+              "x": "261.4291666666667",
+              "y": "288.3",
+              "font-size": "61px",
+              "text-anchor": "middle"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "53",
+            "attrs": {
+              "x": "411.87395833333335",
+              "y": "219.54",
+              "font-size": "61px",
+              "text-anchor": "middle"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "72",
+            "attrs": {
+              "x": "562.31875",
+              "y": "146.96",
+              "font-size": "61px",
+              "text-anchor": "middle"
+            }
+          }
+        ]
+      }
+    },
+    "xy-category-labeled-series-light-variant-7": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "70.8875",
+              "y": "353.90000000000003",
+              "width": "83.6",
+              "height": "84.09999999999997"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "219.61354166666666",
+              "y": "297.2",
+              "width": "83.6",
+              "height": "140.8"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "368.33958333333334",
+              "y": "229.15999999999997",
+              "width": "83.6",
+              "height": "208.84000000000003"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "517.0656250000001",
+              "y": "157.34",
+              "width": "83.6",
+              "height": "280.65999999999997"
+            }
+          }
+        ],
+        "texts": [
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "20",
+            "attrs": {
+              "x": "112.6875",
+              "y": "343.90000000000003",
+              "font-size": "58px",
+              "text-anchor": "middle"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "35",
+            "attrs": {
+              "x": "261.4135416666667",
+              "y": "287.2",
+              "font-size": "58px",
+              "text-anchor": "middle"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "53",
+            "attrs": {
+              "x": "410.13958333333335",
+              "y": "219.15999999999997",
+              "font-size": "58px",
+              "text-anchor": "middle"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "72",
+            "attrs": {
+              "x": "558.865625",
+              "y": "147.34",
+              "font-size": "58px",
+              "text-anchor": "middle"
+            }
+          }
+        ]
+      }
+    },
+    "xy-default-generated-x-light": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [],
+        "texts": []
+      }
+    },
+    "xy-default-generated-x-light-variant-3": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [],
+        "texts": []
+      }
+    },
+    "xy-default-generated-x-light-variant-7": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [],
+        "texts": []
+      }
+    },
+    "xy-fixed-size-responsive-light": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 520 340"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "55.85625095367432",
+              "y": "243.1994612169599",
+              "width": "26.599999999999998",
+              "height": "41.15284609711057"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "106.77901867457798",
+              "y": "213.90542280270108",
+              "width": "26.599999999999998",
+              "height": "70.44688451136938"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "157.70178639548163",
+              "y": "187.54078822986818",
+              "width": "26.599999999999998",
+              "height": "96.81151908420227"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "208.6245541163853",
+              "y": "137.74092292562818",
+              "width": "26.599999999999998",
+              "height": "146.61138438844227"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "259.54732183728896",
+              "y": "117.23509603564702",
+              "width": "26.599999999999998",
+              "height": "167.11721127842344"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "310.4700895581926",
+              "y": "152.3879421327576",
+              "width": "26.599999999999998",
+              "height": "131.96436518131287"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "361.3928572790963",
+              "y": "82.08224993853645",
+              "width": "26.599999999999998",
+              "height": "202.270057375534"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "412.315625",
+              "y": "67.43523073140705",
+              "width": "26.599999999999998",
+              "height": "216.9170765826634"
+            }
+          }
+        ],
+        "texts": []
+      }
+    },
+    "xy-fixed-size-responsive-light-variant-3": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 520 340"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "63.18125",
+              "y": "235.09395353034614",
+              "width": "24.7",
+              "height": "40.89893297594347"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "111.19330357142857",
+              "y": "208.09484271705995",
+              "width": "24.7",
+              "height": "67.89804378922966"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "159.20535714285714",
+              "y": "183.7956429851024",
+              "width": "24.7",
+              "height": "92.1972435211872"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "207.2174107142857",
+              "y": "137.89715460251585",
+              "width": "24.7",
+              "height": "138.09573190377375"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "255.22946428571427",
+              "y": "118.9977770332155",
+              "width": "24.7",
+              "height": "156.9951094730741"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "303.2415178571428",
+              "y": "151.39671000915894",
+              "width": "24.7",
+              "height": "124.59617649713067"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "351.2535714285714",
+              "y": "86.59884405727206",
+              "width": "24.7",
+              "height": "189.39404244901755"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "399.265625",
+              "y": "73.09928865062895",
+              "width": "24.7",
+              "height": "202.89359785566066"
+            }
+          }
+        ],
+        "texts": []
+      }
+    },
+    "xy-horizontal-categorical-light": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "65.5625",
+              "y": "82.80416870117188",
+              "width": "4.8671875",
+              "height": "66.5"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "65.5625",
+              "y": "199.11944580078125",
+              "width": "359.6411850585938",
+              "height": "66.5"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "65.5625",
+              "y": "315.4347229003906",
+              "width": "182.2541862792969",
+              "height": "66.5"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "65.5625",
+              "y": "431.75",
+              "width": "559.2015586853028",
+              "height": "66.5"
+            }
+          }
+        ],
+        "texts": []
+      }
+    },
+    "xy-horizontal-categorical-light-variant-3": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "89.95312118530273",
+              "y": "103.65",
+              "width": "8.1171875",
+              "height": "62.699999999999996"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "89.95312118530273",
+              "y": "214.3166666666667",
+              "width": "328.1811899414063",
+              "height": "62.699999999999996"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "89.95312118530273",
+              "y": "324.98333333333335",
+              "width": "168.14918872070314",
+              "height": "62.699999999999996"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "89.95312118530273",
+              "y": "435.65",
+              "width": "508.2171913146973",
+              "height": "62.699999999999996"
+            }
+          }
+        ],
+        "texts": []
+      }
+    },
+    "xy-horizontal-categorical-light-variant-7": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "94.515625",
+              "y": "106.65",
+              "width": "8.75",
+              "height": "62.699999999999996"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "94.515625",
+              "y": "216.3166666666667",
+              "width": "322.18399999999997",
+              "height": "62.699999999999996"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "94.515625",
+              "y": "325.98333333333335",
+              "width": "165.46699999999998",
+              "height": "62.699999999999996"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "94.515625",
+              "y": "435.65",
+              "width": "498.490625",
+              "height": "62.699999999999996"
+            }
+          }
+        ],
+        "texts": []
+      }
+    },
+    "xy-horizontal-numeric-bars-light": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "52.828125",
+              "y": "470.75",
+              "width": "117.64656145095827",
+              "height": "28.5"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "52.828125",
+              "y": "341.08333333333337",
+              "width": "174.02843616485595",
+              "height": "28.5"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "52.828125",
+              "y": "211.41666666666669",
+              "width": "324.3801020685832",
+              "height": "28.5"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "52.828125",
+              "y": "81.75",
+              "width": "474.7317679723104",
+              "height": "28.5"
+            }
+          }
+        ],
+        "texts": [
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "12",
+            "attrs": {
+              "x": "180.47468645095827",
+              "y": "485",
+              "font-size": "19px",
+              "text-anchor": "start"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "18",
+            "attrs": {
+              "x": "236.85656116485595",
+              "y": "355.33333333333337",
+              "font-size": "19px",
+              "text-anchor": "start"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "34",
+            "attrs": {
+              "x": "387.2082270685832",
+              "y": "225.66666666666669",
+              "font-size": "19px",
+              "text-anchor": "start"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "50",
+            "attrs": {
+              "x": "537.5598929723104",
+              "y": "96",
+              "font-size": "19px",
+              "text-anchor": "start"
+            }
+          }
+        ]
+      }
+    },
+    "xy-horizontal-numeric-bars-light-variant-3": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "68.71875",
+              "y": "472.7",
+              "width": "111.32156326293946",
+              "height": "26.599999999999998"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "68.71875",
+              "y": "349.36666666666673",
+              "width": "162.91593864440915",
+              "height": "26.599999999999998"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "68.71875",
+              "y": "226.03333333333336",
+              "width": "300.5009396616618",
+              "height": "26.599999999999998"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "68.71875",
+              "y": "102.7",
+              "width": "438.0859406789144",
+              "height": "26.599999999999998"
+            }
+          }
+        ],
+        "texts": [
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "12",
+            "attrs": {
+              "x": "190.04031326293946",
+              "y": "486",
+              "font-size": "18px",
+              "text-anchor": "start"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "18",
+            "attrs": {
+              "x": "241.63468864440915",
+              "y": "362.66666666666674",
+              "font-size": "18px",
+              "text-anchor": "start"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "34",
+            "attrs": {
+              "x": "379.2196896616618",
+              "y": "239.33333333333337",
+              "font-size": "18px",
+              "text-anchor": "start"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "50",
+            "attrs": {
+              "x": "516.8046906789144",
+              "y": "116",
+              "font-size": "18px",
+              "text-anchor": "start"
+            }
+          }
+        ]
+      }
+    },
+    "xy-horizontal-numeric-bars-light-variant-7": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "71.640625",
+              "y": "472.7",
+              "width": "110.12625000000003",
+              "height": "26.599999999999998"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "71.640625",
+              "y": "350.36666666666673",
+              "width": "160.80656249999998",
+              "height": "26.599999999999998"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "71.640625",
+              "y": "228.03333333333336",
+              "width": "295.9540625",
+              "height": "26.599999999999998"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "71.640625",
+              "y": "105.7",
+              "width": "431.10156250000006",
+              "height": "26.599999999999998"
+            }
+          }
+        ],
+        "texts": [
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "12",
+            "attrs": {
+              "x": "191.76687500000003",
+              "y": "486",
+              "font-size": "18px",
+              "text-anchor": "start"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "18",
+            "attrs": {
+              "x": "242.44718749999998",
+              "y": "363.66666666666674",
+              "font-size": "18px",
+              "text-anchor": "start"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "34",
+            "attrs": {
+              "x": "377.5946875",
+              "y": "241.33333333333337",
+              "font-size": "18px",
+              "text-anchor": "start"
+            }
+          },
+          {
+            "tag": "text",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "text": "50",
+            "attrs": {
+              "x": "512.7421875",
+              "y": "119",
+              "font-size": "18px",
+              "text-anchor": "start"
+            }
+          }
+        ]
+      }
+    },
+    "xy-numeric-explicit-negative-light": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "52.146875",
+              "y": "378.8366953531901",
+              "width": "41.8",
+              "height": "73.16330464680988"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "189.38671827316284",
+              "y": "276.5917383829752",
+              "width": "41.8",
+              "height": "175.40826161702478"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "326.6265615463257",
+              "y": "324.30605163574216",
+              "width": "41.8",
+              "height": "127.69394836425784"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "463.8664048194886",
+              "y": "228.87742513020834",
+              "width": "41.8",
+              "height": "223.12257486979166"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "601.1062480926514",
+              "y": "140.26512908935547",
+              "width": "41.8",
+              "height": "311.73487091064453"
+            }
+          }
+        ],
+        "texts": []
+      }
+    },
+    "xy-numeric-explicit-negative-light-variant-3": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "66.73437309265137",
+              "y": "368.3333333333333",
+              "width": "38",
+              "height": "71.66666666666669"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "197.86874856948853",
+              "y": "272.8333333333333",
+              "width": "38",
+              "height": "167.16666666666669"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "329.0031240463257",
+              "y": "317.4",
+              "width": "38",
+              "height": "122.60000000000002"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "460.1374995231629",
+              "y": "228.26666666666665",
+              "width": "38",
+              "height": "211.73333333333335"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "591.271875",
+              "y": "145.5",
+              "width": "38",
+              "height": "294.5"
+            }
+          }
+        ],
+        "texts": []
+      }
+    },
+    "xy-numeric-explicit-negative-light-variant-7": {
+      "shared": {
+        "attrs": {
+          "viewBox": "0 0 700 500"
+        },
+        "shapes": [
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "69.421875",
+              "y": "366.5",
+              "width": "38",
+              "height": "71.5"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "199.21640625",
+              "y": "271.99999999999994",
+              "width": "38",
+              "height": "166.00000000000006"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "329.0109375",
+              "y": "316.09999999999997",
+              "width": "38",
+              "height": "121.90000000000003"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "458.80546875000005",
+              "y": "227.9",
+              "width": "38",
+              "height": "210.1"
+            }
+          },
+          {
+            "tag": "rect",
+            "groupPath": [
+              "main",
+              "plot",
+              "bar-plot-0"
+            ],
+            "attrs": {
+              "x": "588.6",
+              "y": "146",
+              "width": "38",
+              "height": "292"
+            }
+          }
+        ],
+        "texts": []
+      }
+    }
+  }
+}

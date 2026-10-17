@@ -1,0 +1,69 @@
+{
+  "id": "mermaid-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 768],
+  "height": 900,
+  "padding": 16,
+  "cases": [
+    {
+      "id": "flowchart-td",
+      "source": "```mermaid\nflowchart TD\nA[Start] --> B{Ready?}\nB -- yes --> C[Run]\nB -- no --> D[Wait]\n```"
+    },
+    {
+      "id": "flowchart-lr",
+      "source": "```mermaid\nflowchart LR\nA[One] --> B[Two] --> C[Three]\n```"
+    },
+    {
+      "id": "sequence-greeting",
+      "source": "```mermaid\nsequenceDiagram\nparticipant A as Alice\nparticipant B as Bob\nA->>B: Hello\nB-->>A: Hi\n```"
+    },
+    {
+      "id": "sequence-self-note",
+      "source": "```mermaid\nsequenceDiagram\nparticipant A as Alice\nA->>A: Think\nNote right of A: Decision made\n```"
+    },
+    {
+      "id": "pie-budget",
+      "source": "```mermaid\npie title Budget\n  \"Development\": 60\n  \"Testing\": 30\n  \"Other\": 10\n```"
+    },
+    {
+      "id": "pie-show-data",
+      "source": "```mermaid\npie showData\n  title Budget\n  \"Development\": 60\n  \"Testing\": 30\n  \"Other\": 10\n```"
+    },
+    {
+      "id": "invalid-syntax",
+      "source": "```mermaid\nflowchart TD\nA -->\n```"
+    },
+    {
+      "id": "pie-palette-12",
+      "source": "```mermaid\npie title Twelve colors\n  \"Category 1\": 1\n  \"Category 2\": 2\n  \"Category 3\": 3\n  \"Category 4\": 4\n  \"Category 5\": 5\n  \"Category 6\": 6\n  \"Category 7\": 7\n  \"Category 8\": 8\n  \"Category 9\": 9\n  \"Category 10\": 10\n  \"Category 11\": 11\n  \"Category 12\": 12\n```"
+    },
+    {
+      "id": "pie-duplicate-label",
+      "source": "```mermaid\npie title Duplicate labels\n  \"A\": 2\n  \"A\": 3\n  \"B\": 5\n```"
+    },
+    {
+      "id": "pie-nonpositive-values",
+      "source": "```mermaid\npie title Non-positive values\n  \"Zero\": 0\n  \"Negative\": -2\n  \"Positive\": 5\n```"
+    },
+    {
+      "id": "pie-under-one-percent",
+      "source": "```mermaid\npie title Tiny slice\n  \"Large A\": 1000\n  \"Tiny\": 5\n  \"Large B\": 995\n```"
+    },
+    {
+      "id": "pie-inline-title-show-data",
+      "source": "```mermaid\npie showData title Inline budget\n  \"Rent\": 50\n  \"Food\": 35\n  \"Travel\": 15\n```"
+    },
+    {
+      "id": "pie-escaped-quote-comment",
+      "source": "```mermaid\npie title Escaped quote and comment marker\n  \"Research \\\"quoted\\\" %% literal\": 60\n  \"Build\": 40\n```"
+    },
+    {
+      "id": "pie-zero-value",
+      "source": "~~~mermaid\npie showData\n  title Zero value\n  \"Zero\": 0\n  \"Positive\": 5\n~~~"
+    },
+    {
+      "id": "pie-negative-value",
+      "source": "~~~mermaid\npie title Negative value\n  \"Negative\": -2\n  \"Positive\": 5\n~~~"
+    }
+  ]
+}

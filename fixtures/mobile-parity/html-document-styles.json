@@ -1,0 +1,73 @@
+{
+  "id": "html-document-styles-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "oracle": "Actual Chrome 154 loads a same-origin raw HTML document after a real form submission produced by the pinned production renderMarkdown()/DOMPurify path. CSS is served from a local Vite middleware only.",
+  "markdownForm": "<form id=\"markdown-style-form\" action=\"/raw/styles/response?via=markdown-form\" method=\"get\"><input type=\"hidden\" name=\"via\" value=\"markdown-form\"><button id=\"markdown-style-submit\" type=\"submit\">Open raw style response</button></form>",
+  "responsePath": "/raw/styles/response",
+  "responseHtml": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><link rel=\"icon\" href=\"data:,\"><title>Raw CSS response</title><link id=\"base-link\" rel=\"stylesheet\" href=\"css/base.css\"><style id=\"middle-style\">html{color-scheme:light dark}body{margin:0;min-height:100vh;background-color:rgb(245,246,247);color:rgb(30,40,50);font-family:Arial,sans-serif;font-size:16px}p{font-size:14px;line-height:20px;margin:3px 4px;padding:2px}#source-order{color:rgb(40,50,60)}.sample{color:rgb(2,2,2)}#specificity{color:rgb(3,3,3)}#main .sample{color:rgb(4,4,4)}#main>p[data-state=ready]{color:rgb(5,5,5)}#main>p.sample[data-state=ready]:not(.excluded):nth-child(2){color:rgb(60,70,80)}#main .descendant{margin-left:11px}#main>.child{padding-left:13px}[data-mark=attr]{background-color:rgb(180,190,200)}.not-target:not(.excluded){color:rgb(31,32,33)}#group>span:nth-child(2){background-color:rgb(120,130,140)}#inline-important{color:rgb(255,0,0)!important;border:2px solid rgb(255,0,0)!important;padding-left:1px;padding-left:2px;margin-left:12px!important}#custom-property{--probe-accent:rgb(22,44,66);color:var(--probe-accent);padding-left:var(--probe-space,3px)}#invalid-declaration{color:rgb(21,22,23);color:not-a-real-color}#unsupported-target{color:rgb(13,14,15)}#unsupported-target:future-pseudo{color:rgb(255,0,255)}@supports (color:not-a-real-color){#unsupported-target{background-color:rgb(250,0,250)}}#media-width{margin-left:0;font-size:16px}@media (min-width:600px){#media-width{margin-left:17px;font-size:18px}}#media-scheme{background-color:rgb(210,220,230)}@media (prefers-color-scheme:light){#media-scheme{background-color:rgb(220,230,240)}}@media (prefers-color-scheme:dark){body{background-color:rgb(16,20,24);color:rgb(240,241,242)}#media-scheme{background-color:rgb(70,80,90)}}a{color:rgb(10,80,150);margin:2px;padding:1px}input,button{font:inherit}</style><link id=\"late-link\" rel=\"stylesheet\" href=\"css/later.css\"></head><body><main id=\"main\"><p id=\"source-order\">Source order and import</p><p id=\"specificity\" class=\"sample\" data-state=\"ready\">Specificity chain</p><p id=\"inline-important\" style=\"color:rgb(1,2,3);color:rgb(4,5,6)!important;border-top-color:rgb(1,2,3);margin-left:2px;margin-left:8px!important;padding-left:3px;padding-left:7px\">Inline important and repeated declarations</p><section id=\"nested\"><p id=\"descendant\" class=\"descendant\">Descendant selector</p></section><p id=\"child\" class=\"child\">Child selector</p><p id=\"attribute\" data-mark=\"attr\">Attribute selector</p><p id=\"not-target\" class=\"not-target\">Not selector</p><div id=\"group\"><span id=\"nth-first\">First child</span><span id=\"nth-second\">Second child</span><span id=\"nth-third\">Third child</span></div><p id=\"custom-property\">Custom property</p><p id=\"invalid-declaration\">Invalid declaration fallback</p><p id=\"unsupported-target\">Unsupported syntax fallback</p><p id=\"media-width\">Viewport media query</p><p id=\"media-scheme\">Color scheme media query</p><a id=\"probe-anchor\" href=\"#media-width\">Anchor target</a><form id=\"raw-controls\"><input id=\"probe-input\" value=\"input\"><button id=\"probe-button\" type=\"button\">Button</button></form></main></body></html>",
+  "stylesheets": {
+    "/raw/styles/css/base.css": "body{background-color:rgb(245,246,247);font-family:Arial,sans-serif}#source-order{color:rgb(10,20,30);background-color:rgb(1,2,3)}#group>span{padding:1px}",
+    "/raw/styles/css/later.css": "@import url('./nested/imported.css');#source-order{color:rgb(70,80,90)}",
+    "/raw/styles/css/nested/imported.css": "#source-order{--imported-fill:rgb(200,210,220);background-color:var(--imported-fill);color:rgb(100,110,120)}"
+  },
+  "snapshotNodes": {
+    "html": "html",
+    "body": "body",
+    "main": "#main",
+    "source-order": "#source-order",
+    "specificity": "#specificity",
+    "inline-important": "#inline-important",
+    "descendant": "#descendant",
+    "child": "#child",
+    "attribute": "#attribute",
+    "not-target": "#not-target",
+    "nth-second": "#nth-second",
+    "custom-property": "#custom-property",
+    "invalid-declaration": "#invalid-declaration",
+    "unsupported-target": "#unsupported-target",
+    "media-width": "#media-width",
+    "media-scheme": "#media-scheme",
+    "anchor": "#probe-anchor",
+    "input": "#probe-input",
+    "button": "#probe-button"
+  },
+  "styleProperties": [
+    "display", "position", "box-sizing", "width", "height",
+    "margin-top", "margin-right", "margin-bottom", "margin-left",
+    "padding-top", "padding-right", "padding-bottom", "padding-left",
+    "border-top-width", "border-top-style", "border-top-color", "border-radius",
+    "font-family", "font-size", "font-weight", "line-height",
+    "color", "background-color", "background-image", "color-scheme",
+    "--probe-accent", "--probe-space", "--imported-fill"
+  ],
+  "invariants": [
+    { "appliesTo": "all", "node": "source-order", "property": "color", "expected": "rgb(70, 80, 90)" },
+    { "appliesTo": "all", "node": "source-order", "property": "background-color", "expected": "rgb(200, 210, 220)" },
+    { "appliesTo": "all", "node": "specificity", "property": "color", "expected": "rgb(60, 70, 80)" },
+    { "appliesTo": "all", "node": "inline-important", "property": "color", "expected": "rgb(4, 5, 6)" },
+    { "appliesTo": "all", "node": "inline-important", "property": "border-top-color", "expected": "rgb(255, 0, 0)" },
+    { "appliesTo": "all", "node": "descendant", "property": "margin-left", "expected": "11px" },
+    { "appliesTo": "all", "node": "child", "property": "padding-left", "expected": "13px" },
+    { "appliesTo": "all", "node": "attribute", "property": "background-color", "expected": "rgb(180, 190, 200)" },
+    { "appliesTo": "all", "node": "not-target", "property": "color", "expected": "rgb(31, 32, 33)" },
+    { "appliesTo": "all", "node": "nth-second", "property": "background-color", "expected": "rgb(120, 130, 140)" },
+    { "appliesTo": "all", "node": "custom-property", "property": "color", "expected": "rgb(22, 44, 66)" },
+    { "appliesTo": "all", "node": "invalid-declaration", "property": "color", "expected": "rgb(21, 22, 23)" },
+    { "appliesTo": "all", "node": "unsupported-target", "property": "color", "expected": "rgb(13, 14, 15)" },
+    { "appliesTo": "narrow", "node": "media-width", "property": "font-size", "expected": "16px" },
+    { "appliesTo": "wide", "node": "media-width", "property": "font-size", "expected": "18px" },
+    { "appliesTo": "light", "node": "media-scheme", "property": "background-color", "expected": "rgb(220, 230, 240)" },
+    { "appliesTo": "dark", "node": "media-scheme", "property": "background-color", "expected": "rgb(70, 80, 90)" },
+    { "appliesTo": "light", "node": "body", "property": "background-color", "expected": "rgb(245, 246, 247)" },
+    { "appliesTo": "dark", "node": "body", "property": "background-color", "expected": "rgb(16, 20, 24)" }
+  ],
+  "notes": {
+    "realNavigation": "Each of the four captures starts at the Vite harness, renders markdownForm through the pinned apps/web renderMarkdown() / DOMPurify code, and pointer-clicks its submit button to navigate to this raw response document.",
+    "cascade": "The document places a relative external sheet before an inline style and another external sheet after it. The latter imports a relative nested sheet. CSSOM rule trees and actual stylesheet requests are captured.",
+    "selectors": "The snapshot records tag, class, ID, descendant, child, attribute, :not(), and :nth-child() cascade results, repeated declarations, inline style, and !important.",
+    "responsive": "The browser captures 390px and 768px widths under both light and dark preferred color schemes at device scale factor 1.",
+    "customAndUnsupported": "Custom properties are recorded as computed values. An unsupported pseudo-class selector, invalid declaration, and false @supports block remain in the source; the browser's resulting CSSOM and computed output are recorded without pre-interpreting them.",
+    "canvas": "The HTML root remains transparent and body fills the viewport. A screenshot corner pixel records the actual canvas/body paint result for each color scheme.",
+    "network": "All document and stylesheet resources use loopback only; script or external-resource behavior in the raw response is not part of this probe."
+  }
+}

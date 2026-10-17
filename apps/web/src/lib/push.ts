@@ -22,6 +22,13 @@ export type PushTarget =
   | { schedules: true; scheduleId?: string }
   | { memory: true };
 
+/** Exact question identity carried by an interaction notification click. */
+export interface PushInteraction {
+  sessionId: string;
+  interactionId: string;
+  interactionEpoch: string;
+}
+
 export type PushState =
   /** No service worker or Push API (an older browser, plain http, dev mode). */
   | 'unsupported'
@@ -178,4 +185,35 @@ export function targetFromUrl(url: URL): PushTarget | undefined {
   }
   if (open === 'memory') return { memory: true };
   return undefined;
+}
+
+export function interactionFromUrl(url: URL): PushInteraction | undefined {
+  const sessionId = url.searchParams.get('session');
+  const interactionId = url.searchParams.get('interactionId');
+  const interactionEpoch = url.searchParams.get('interactionEpoch');
+  if (
+    !sessionId ||
+    sessionId.length > 512 ||
+    !interactionId ||
+    interactionId.length > 512 ||
+    !interactionEpoch ||
+    !/^(0|[1-9]\d{0,19})$/.test(interactionEpoch)
+  )
+    return undefined;
+  return { sessionId, interactionId, interactionEpoch };
+}
+
+export function isPushInteraction(value: unknown): value is PushInteraction {
+  if (!value || typeof value !== 'object') return false;
+  const identity = value as Partial<PushInteraction>;
+  return (
+    typeof identity.sessionId === 'string' &&
+    identity.sessionId.length > 0 &&
+    identity.sessionId.length <= 512 &&
+    typeof identity.interactionId === 'string' &&
+    identity.interactionId.length > 0 &&
+    identity.interactionId.length <= 512 &&
+    typeof identity.interactionEpoch === 'string' &&
+    /^(0|[1-9]\d{0,19})$/.test(identity.interactionEpoch)
+  );
 }

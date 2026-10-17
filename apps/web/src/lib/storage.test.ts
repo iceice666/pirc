@@ -1,11 +1,35 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+// @vitest-environment-options {"url":"http://localhost"}
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuid } from './id';
 import { loadDraft, loadLayout, pruneDrafts, saveDraft, saveLayout } from './storage';
+
+function memoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => values.delete(key),
+    setItem: (key, value) => values.set(key, String(value)),
+  };
+}
+
+let storage: Storage;
+
+beforeEach(() => {
+  // Node 26's localStorage global is unavailable without --localstorage-file.
+  storage = memoryStorage();
+  vi.stubGlobal('localStorage', storage);
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 describe('uuid', () => {
@@ -24,10 +48,10 @@ describe('uuid', () => {
 
 describe('storage', () => {
   it('survives unavailable storage', () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    vi.spyOn(storage, 'getItem').mockImplementation(() => {
       throw new DOMException('denied', 'SecurityError');
     });
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    vi.spyOn(storage, 'setItem').mockImplementation(() => {
       throw new DOMException('denied', 'SecurityError');
     });
     expect(loadDraft('s1')).toBe('');
@@ -38,9 +62,9 @@ describe('storage', () => {
 
   it('makes room for a draft by dropping other drafts on quota errors', () => {
     saveDraft('old', 'old draft');
-    const setItem = Storage.prototype.setItem;
+    const setItem = storage.setItem;
     let failures = 1;
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+    vi.spyOn(storage, 'setItem').mockImplementation(function (this: Storage, key, value) {
       if (failures-- > 0) throw new DOMException('full', 'QuotaExceededError');
       setItem.call(this, key, value);
     });

@@ -1,0 +1,169 @@
+{
+  "id": "html-interactions-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [
+    390,
+    768
+  ],
+  "height": 1000,
+  "padding": 16,
+  "cases": [
+    {
+      "id": "gfm-task-checkboxes",
+      "source": "- [ ] GFM unchecked task\n- [x] GFM checked task",
+      "actions": [
+        {
+          "id": "click-disabled-unchecked",
+          "selector": "ul li:nth-child(1) input",
+          "mode": "dom-click"
+        },
+        {
+          "id": "click-disabled-checked",
+          "selector": "ul li:nth-child(2) input",
+          "mode": "dom-click"
+        },
+        {
+          "id": "reinsert-same-markdown",
+          "mode": "replace-markdown"
+        }
+      ]
+    },
+    {
+      "id": "html-checkbox-states",
+      "source": "<div class=\"interaction-row\"><input id=\"enabled-unchecked\" type=\"checkbox\" aria-label=\"Enabled unchecked checkbox\" aria-describedby=\"check-help\"><label id=\"enabled-unchecked-label\" for=\"enabled-unchecked\">Enable the option</label></div>\n<div class=\"interaction-row\"><input id=\"enabled-checked\" type=\"checkbox\" checked=\"checked\"><label id=\"enabled-checked-label\" for=\"enabled-checked\">Keep this option</label></div>\n<div class=\"interaction-row\"><input id=\"disabled-unchecked\" type=\"checkbox\" disabled=\"disabled\"><label id=\"disabled-unchecked-label\" for=\"disabled-unchecked\">Unavailable option</label></div>\n<p id=\"check-help\">Checking the first option enables the related action.</p>",
+      "actions": [
+        {
+          "id": "label-check-unchecked",
+          "selector": "#enabled-unchecked-label"
+        },
+        {
+          "id": "space-unchecks-checkbox",
+          "selector": "#enabled-unchecked",
+          "mode": "key",
+          "key": "Space"
+        },
+        {
+          "id": "enter-does-not-toggle-checkbox",
+          "selector": "#enabled-unchecked",
+          "mode": "key",
+          "key": "Enter"
+        },
+        {
+          "id": "label-uncheck-checked",
+          "selector": "#enabled-checked-label"
+        },
+        {
+          "id": "label-click-disabled",
+          "selector": "#disabled-unchecked-label",
+          "mode": "pointer-click"
+        },
+        {
+          "id": "dom-click-disabled",
+          "selector": "#disabled-unchecked",
+          "mode": "dom-click"
+        },
+        {
+          "id": "reinsert-same-markdown",
+          "mode": "replace-markdown"
+        },
+        {
+          "id": "replace-with-changed-source",
+          "mode": "replace-markdown",
+          "source": "<div><input id=\"changed-checkbox\" type=\"checkbox\" checked=\"checked\"><label for=\"changed-checkbox\">Changed source checkbox</label></div>"
+        }
+      ]
+    },
+    {
+      "id": "html-radio-label-group",
+      "source": "<div class=\"interaction-row\"><input id=\"radio-alpha\" type=\"radio\" name=\"answer\" value=\"alpha\" checked=\"checked\"><label id=\"radio-alpha-label\" for=\"radio-alpha\">Alpha answer</label></div>\n<div class=\"interaction-row\"><input id=\"radio-beta\" type=\"radio\" name=\"answer\" value=\"beta\" aria-label=\"Beta answer\"><label id=\"radio-beta-label\" for=\"radio-beta\">Beta answer</label></div>\n<div class=\"interaction-row\"><input id=\"radio-gamma\" type=\"radio\" name=\"answer\" value=\"gamma\" disabled=\"disabled\"><label id=\"radio-gamma-label\" for=\"radio-gamma\">Unavailable gamma answer</label></div>\n<div class=\"interaction-row\"><input id=\"radio-delta\" type=\"radio\" name=\"answer\" value=\"delta\"><label id=\"radio-delta-label\" for=\"radio-delta\">Delta answer</label></div>\n<p id=\"radio-help\">Choose exactly one answer.</p>",
+      "actions": [
+        {
+          "id": "choose-beta-by-label",
+          "selector": "#radio-beta-label"
+        },
+        {
+          "id": "arrow-right-skips-disabled-radio",
+          "selector": "#radio-beta",
+          "mode": "key",
+          "key": "ArrowRight"
+        },
+        {
+          "id": "arrow-right-cycles-group",
+          "selector": "#radio-delta",
+          "mode": "key",
+          "key": "ArrowRight"
+        },
+        {
+          "id": "enter-on-radio",
+          "selector": "#radio-alpha",
+          "mode": "key",
+          "key": "Enter"
+        },
+        {
+          "id": "reinsert-same-markdown",
+          "mode": "replace-markdown"
+        },
+        {
+          "id": "replace-with-changed-source",
+          "mode": "replace-markdown",
+          "source": "<div><input id=\"changed-radio\" type=\"radio\" name=\"updated\" value=\"new\" checked=\"checked\"><label for=\"changed-radio\">Changed source radio</label></div>"
+        }
+      ]
+    },
+    {
+      "id": "html-details-groups",
+      "source": "<details id=\"details-closed\" aria-label=\"Collapsed details\"><summary id=\"summary-closed\">Closed details</summary><p>Hidden content for the closed disclosure.</p></details>\n\n<details id=\"details-open\" open=\"open\"><summary id=\"summary-open\">Initially open details</summary><p>Visible content for the open disclosure.</p></details>\n\n<details id=\"exclusive-first\" name=\"exclusive\" open=\"open\"><summary id=\"summary-exclusive-first\">First named disclosure</summary><p>First disclosure content.</p></details>\n\n<details id=\"exclusive-second\" name=\"exclusive\"><summary id=\"summary-exclusive-second\">Second named disclosure</summary><p>Second disclosure content.</p></details>\n\n<details id=\"nested-outer\"><summary id=\"summary-nested-outer\">Outer disclosure</summary><p>Outer visible text.</p><details id=\"nested-inner\" open=\"open\"><summary id=\"summary-nested-inner\">Nested disclosure</summary><p>Nested content.</p></details></details>",
+      "actions": [
+        {
+          "id": "open-closed-details",
+          "selector": "#summary-closed"
+        },
+        {
+          "id": "space-closes-details-summary",
+          "selector": "#summary-closed",
+          "mode": "key",
+          "key": "Space"
+        },
+        {
+          "id": "enter-opens-details-summary",
+          "selector": "#summary-closed",
+          "mode": "key",
+          "key": "Enter"
+        },
+        {
+          "id": "close-initial-details",
+          "selector": "#summary-open"
+        },
+        {
+          "id": "open-second-named-details",
+          "selector": "#summary-exclusive-second"
+        },
+        {
+          "id": "open-nested-outer-details",
+          "selector": "#summary-nested-outer"
+        },
+        {
+          "id": "space-closes-nested-details",
+          "selector": "#summary-nested-inner",
+          "mode": "key",
+          "key": "Space"
+        },
+        {
+          "id": "enter-opens-nested-details",
+          "selector": "#summary-nested-inner",
+          "mode": "key",
+          "key": "Enter"
+        },
+        {
+          "id": "reinsert-same-markdown",
+          "mode": "replace-markdown"
+        },
+        {
+          "id": "replace-with-changed-source",
+          "mode": "replace-markdown",
+          "source": "<details id=\"changed-details\" open=\"open\"><summary>Changed source disclosure</summary><p>Changed source details body.</p></details>"
+        }
+      ]
+    }
+  ]
+}

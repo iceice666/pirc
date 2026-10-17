@@ -1,0 +1,43 @@
+{
+  "id": "jobs-phone-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "width": 390,
+  "height": 600,
+  "now": 1791000000000,
+  "backgroundTasks": [
+    {
+      "id": "build",
+      "status": "completed",
+      "command": "bun run build",
+      "startedAt": 1790999900000,
+      "endedAt": 1790999950000,
+      "exitCode": 0
+    },
+    {
+      "id": "test",
+      "status": "failed",
+      "command": "bun test",
+      "startedAt": 1790999960000,
+      "endedAt": 1790999972000,
+      "exitCode": 1
+    },
+    {
+      "id": "dev",
+      "status": "running",
+      "command": "bun run dev",
+      "startedAt": 1790999980000,
+      "tty": true
+    }
+  ],
+  "team": {
+    "agents": [
+      {
+        "name": "reviewer",
+        "status": "working",
+        "mode": "subagent",
+        "task": "Check the pending changes"
+      }
+    ]
+  },
+  "output": "$ bun run dev\nVITE ready in 412 ms\nLocal: http://localhost:5173/"
+}

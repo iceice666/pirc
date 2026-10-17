@@ -28,7 +28,9 @@ Phones pair from the web (**Settings → Devices → Phones**) and then send `Au
 2. strip the identity header,
 3. still route to the same gateway, which checks the token's hash, the trusted peer and `Host`.
 
-Device tokens cannot reach `/api/devices*`, `/api/providers*` or `/api/provider-auth/*`; everything else acts as the paired user. Expiry is `PIRC_DEVICE_TOKEN_IDLE_DAYS` / `PIRC_DEVICE_TOKEN_MAX_DAYS` on the gateway.
+Ordinary device tokens cannot reach `/api/devices*`, `/api/providers*` or `/api/provider-auth/*`; everything else acts as the paired user. A paired App can request temporary management access through `/api/native-management/requests`. A same-owner browser must explicitly approve the displayed capabilities through normal forward auth. The device then redeems a verifier once and sends `X-Pirc-Management` beside its ordinary paired bearer on the approved management routes for up to 15 minutes. Preserve that header on device requests; it never replaces bearer authentication or the stripped identity policy. The confirmation URL `/?nativeManagement=<request-id>` must use the normal static bundle/SPA fallback and browser forward auth. Update both Gateway and web bundle to enable this flow.
+
+Pairing expiry is `PIRC_DEVICE_TOKEN_IDLE_DAYS` / `PIRC_DEVICE_TOKEN_MAX_DAYS` on the gateway. Revoking or expiring the primary device token also prevents use of any temporary management grant. See [native management authorization](../architecture/native-management.md) for cancellation, restart and offline behavior.
 
 ## nginx (Authelia `auth_request`)
 

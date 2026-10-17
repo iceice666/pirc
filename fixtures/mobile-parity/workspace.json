@@ -1,0 +1,76 @@
+{
+  "id": "workspace-baseline-1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "width": 390,
+  "height": 844,
+  "mode": "work",
+  "nodes": [
+    {
+      "id": "device"
+    },
+    {
+      "id": "assistant"
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "assistant:chats",
+      "hostId": "assistant",
+      "displayName": "Chats",
+      "kind": "chat"
+    },
+    {
+      "id": "device:project",
+      "hostId": "device",
+      "displayName": "Project",
+      "kind": "directory",
+      "path": "/workspace/project"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "s",
+      "name": "Review changes",
+      "workspaceId": "device:project",
+      "runStatus": "waiting_input",
+      "updatedAt": 1790960400000
+    },
+    {
+      "id": "recent",
+      "name": "Implement native UI",
+      "workspaceId": "device:project",
+      "runStatus": "idle",
+      "updatedAt": 1790960300000
+    },
+    {
+      "id": "scheduled-1",
+      "name": "Morning review",
+      "workspaceId": "device:project",
+      "updatedAt": 1790960200000,
+      "origin": {
+        "kind": "schedule",
+        "scheduleId": "daily",
+        "title": "Daily review"
+      }
+    },
+    {
+      "id": "scheduled-2",
+      "name": "Yesterday review",
+      "workspaceId": "device:project",
+      "updatedAt": 1790950200000,
+      "origin": {
+        "kind": "schedule",
+        "scheduleId": "daily",
+        "title": "Daily review"
+      }
+    },
+    {
+      "id": "completed",
+      "name": "Completed work",
+      "workspaceId": "device:project",
+      "settledAt": 1790950000000,
+      "updatedAt": 1790950000000
+    }
+  ],
+  "workspaceId": "device:project"
+}

@@ -1,0 +1,2321 @@
+import 'package:csslib/parser.dart' as css_parser;
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:html/parser.dart' as html;
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../rendering/html_form_submission.dart';
+import '../rendering/html_document_urls.dart';
+import '../rendering/html_syntax.dart';
+import '../rendering/html_document_styles.dart';
+import '../rendering/native_html.dart';
+import '../rendering/document_layout.dart';
+import '../rendering/document_layout_visibility.dart';
+import '../rendering/document_element_scroll.dart';
+import 'common.dart';
+import 'gateway.dart';
+import 'document_navigation_state.dart';
+import 'document_scripts.dart';
+import 'document_environment.dart';
+import 'document_object_urls.dart';
+import 'document_download.dart';
+import 'document_referrer.dart';
+import 'document_origin.dart';
+import 'document_window_manager.dart';
+import 'markdown_image.dart';
+import 'web_controls.dart';
+
+/// Saves supported HTML download links without replacing their source page.
+/// Returns false when browser download-attribute rules require ordinary navigation.
+Future<bool> saveNativeDocumentLink(
+  BuildContext context,
+  Gateway gateway,
+  NativeHtmlLink link, {
+  NativeDocumentScope? scope,
+  NativeDocumentBlob? activatedBlob,
+}) async {
+  if (link.download == null) return false;
+  final scheme = Uri.tryParse(link.href)?.scheme.toLowerCase() ?? '';
+  if (scheme.isNotEmpty &&
+      !['http', 'https', 'data', 'blob'].contains(scheme)) {
+    return false;
+  }
+  final windows = scope?.windows;
+  final identity = scope?.accountIdentity;
+  final document = scope?.window?.current?.document;
+  bool current() =>
+      context.mounted &&
+      (scope == null ||
+          !scope.windows.disposed &&
+              identity == scope.windows.accountIdentity &&
+              scope.window?.disposed != true &&
+              scope.window?.closing != true &&
+              (scope.window == null ||
+                  scope.window!.current?.document == document));
+  if (!current()) return true;
+  final boot = windows == null
+      ? obj(await gateway.call('boot'))
+      : await windows.connection();
+  if (!current()) return true;
+  final source = scope?.documentUrl ?? '${boot['origin']}/';
+  final base = document?.effectiveBase ?? source;
+  final data = scheme == 'data';
+  final blob = scheme == 'blob';
+  final url = data || blob
+      ? link.href
+      : resolveNativeDocumentUrl(link.href, base);
+  final destination = Uri.parse(url),
+      origin = Uri.parse(
+        source.startsWith('blob:') ? source.substring(5) : source,
+      );
+  if (!data &&
+      !blob &&
+      (destination.scheme != origin.scheme ||
+          destination.host != origin.host ||
+          destination.port != origin.port)) {
+    return false;
+  }
+  final NativeDocumentDownload download;
+  if (blob) {
+    final scripts = document?.scripts;
+    if (scripts == null) {
+      throw StateError('Object URL document is unavailable.');
+    }
+    final contents =
+        activatedBlob ??
+        NativeDocumentBlob.fromBridge(url, await scripts.readObjectURL(url));
+    if (contents.url != url.split('#').first) {
+      throw const FormatException('Captured Blob URL changed.');
+    }
+    if (!current()) return true;
+    download = NativeDocumentDownload(
+      bytes: contents.bytes,
+      name: documentDownloadName(url, const {}, hint: link.download),
+      mimeType: contents.mimeType.isEmpty
+          ? 'application/octet-stream'
+          : contents.mimeType,
+    );
+  } else if (data) {
+    download = NativeDocumentDownload.dataUri(url, hint: link.download);
+  } else {
+    final args = <String, dynamic>{
+      'url': url,
+      'baseUrl': base,
+      'method': 'GET',
+      'pairingStamp': boot['pairingStamp'],
+      'originUrl': nativeDocumentOrigin(
+        scope?.window?.current?.url ?? scope?.documentUrl ?? '',
+      ),
+      ...nativeDocumentReferrer(
+        document,
+        url: scope?.window?.current?.url ?? scope?.documentUrl ?? '',
+        elementPolicy: link.referrerPolicy,
+        noreferrer: link.noreferrer,
+      ).requestArguments,
+    };
+    final response = windows == null
+        ? obj(await gateway.call('document', args))
+        : await windows.responses.load(args, isCurrent: current);
+    if (!current()) return true;
+    if ((response['status'] as num) >= 400) throw StateError('下載失敗，請重試。');
+    download = NativeDocumentDownload.response(response, hint: link.download);
+  }
+  if (current()) await download.save(gateway, '${boot['pairingStamp']}');
+  return true;
+}
+
+/// Starts the real navigation while its source remains interactive. A 204/205
+/// response never replaces that source. The response viewer uses Flutter only.
+Future<void> openNativeDocument(
+  BuildContext context,
+  NativeDocumentScope scope,
+  NativeHtmlFormRequest request, {
+  ValueChanged<NativeDocumentWindow>? onStarted,
+}) async {
+  final windows = scope.windows;
+  final identity = scope.accountIdentity;
+  final selection = windows.selectionRevision;
+  final appNavigation =
+      scope.window?.appNavigation ?? windows.appNavigationIdentity?.call();
+  if (identity != windows.accountIdentity || scope.window?.disposed == true) {
+    return;
+  }
+  if (scope.window == null && windows.active == null) {
+    windows.captureSourceAppState();
+  }
+  final sourceUrl = scope.window?.current?.url ?? scope.documentUrl;
+  if (sourceUrl == null) throw StateError('Document URL is unavailable.');
+  final window = windows.target(
+    request.target,
+    scope.window,
+    sourceUrl: sourceUrl,
+  );
+  if (scope.window == null || window.currentAppRoute != null) {
+    window.captureCurrentAppState();
+  }
+  final host = NativeDocumentHost.maybeOf(context);
+  final loaded = window.load(
+    request,
+    baseUrl: scope.window?.current?.document?.effectiveBase ?? sourceUrl,
+    origin: nativeDocumentOrigin(sourceUrl),
+    referrer: nativeDocumentReferrer(
+      scope.window?.currentDocument,
+      url: sourceUrl,
+    ),
+    blobSource: scope.window?.currentDocument == null
+        ? null
+        : windows.blobSourceFor(
+            scope.window!.currentDocument!,
+            url: request.url,
+          ),
+  );
+  onStarted?.call(window);
+  final result = await loaded;
+  if (!context.mounted ||
+      identity != windows.accountIdentity ||
+      result == NativeDocumentLoadResult.stale ||
+      window.disposed) {
+    return;
+  }
+  if (result == NativeDocumentLoadResult.retained) {
+    if (window.history.isEmpty) windows.close(window);
+    return;
+  }
+  if (result == NativeDocumentLoadResult.appRoute) {
+    final route = window.pendingAppRoute;
+    if (route != null &&
+        (host != null || !windows.presented) &&
+        (scope.window?.appNavigation ??
+                windows.appNavigationIdentity?.call()) ==
+            appNavigation) {
+      if (host != null) {
+        await host.showApp(window, expectedSelectionRevision: selection);
+      } else if (windows.selectionRevision == selection) {
+        window.pendingAppRoute = null;
+        await windows.onAppRoute?.call(route);
+      }
+    }
+    return;
+  }
+  if (!windows.select(window, expectedSelectionRevision: selection)) return;
+  if (host != null) return;
+  if (!windows.presented) {
+    windows.presented = true;
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => NativeDocumentWorkspace(windows: windows),
+          settings: const RouteSettings(name: 'native-document'),
+        ),
+      );
+    } finally {
+      windows.presented = false;
+    }
+  }
+}
+
+/// Keeps response widgets mounted across App/document history traversal.
+/// The live App remains a sibling; offstage documents cannot receive focus,
+/// pointer input or active tickers. Account invalidation removes their trees.
+class NativeDocumentHost extends StatefulWidget {
+  const NativeDocumentHost({
+    super.key,
+    required this.windows,
+    required this.child,
+  });
+  final NativeDocumentWindows windows;
+  final Widget child;
+  static NativeDocumentHostState? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<_NativeDocumentHostScope>()
+      ?.state;
+  @override
+  NativeDocumentHostState createState() => NativeDocumentHostState();
+}
+
+class _NativeDocumentHostScope extends InheritedWidget {
+  const _NativeDocumentHostScope({required this.state, required super.child});
+  final NativeDocumentHostState state;
+  @override
+  bool updateShouldNotify(_NativeDocumentHostScope oldWidget) =>
+      state != oldWidget.state;
+}
+
+class NativeDocumentBackIntent extends Intent {
+  const NativeDocumentBackIntent();
+}
+
+class NativeDocumentForwardIntent extends Intent {
+  const NativeDocumentForwardIntent();
+}
+
+class NativeDocumentHostState extends State<NativeDocumentHost> {
+  bool _showing = false;
+  Future<void> _lifecycle = Future.value();
+  int _restoration = 0;
+  final _historyFocus = FocusNode(debugLabel: "document-history");
+  FocusNode? _sourceFocus;
+  NativeDocumentWindows get windows => widget.windows;
+  bool get _canHandleBack {
+    final active = windows.active;
+    if (active?.currentDocument == null &&
+        active?.error == null &&
+        ((active?.appCanPop ?? windows.appCanPop)?.call() ?? false)) {
+      return false;
+    }
+    return active != null &&
+        (active.canBack ||
+            active.independentApp && active.currentAppRoute != null ||
+            active.currentDocument != null ||
+            active.error != null);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    windows.managedPresentation = true;
+    windows.addListener(_changed);
+  }
+
+  void _changed() {
+    if (!mounted || windows.disposed) return;
+    final active = windows.active;
+    final next =
+        active?.currentDocument != null ||
+        active?.error != null ||
+        (active?.independentApp == true && active?.currentAppRoute != null);
+    if (next != _showing) {
+      if (next) {
+        _sourceFocus = FocusManager.instance.primaryFocus;
+      }
+      _showing = next;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _showing != next) return;
+        // Requesting an offscreen document editor would scroll its caret into
+        // view and overwrite the history offset. Keep keyboard navigation on
+        // the host until the user focuses a document control again.
+        final focus = next ? null : _sourceFocus;
+        if (focus?.context != null && focus!.canRequestFocus) {
+          focus.requestFocus();
+        } else {
+          _historyFocus.requestFocus();
+        }
+      });
+      windows.presented = next;
+      final account = windows.accountIdentity;
+      _lifecycle = _lifecycle.catchError((Object _) {}).then((_) async {
+        if (!mounted ||
+            windows.disposed ||
+            windows.accountIdentity != account) {
+          return;
+        }
+        if (next) {
+          await windows.owner?.coverDocument();
+        } else {
+          await windows.owner?.uncoverDocument();
+        }
+      });
+    }
+    setState(() {});
+  }
+
+  Future<void> selectWindow(NativeDocumentWindow? window) async {
+    if (windows.disposed ||
+        window?.closing == true ||
+        window?.disposed == true ||
+        window != null && !windows.windows.contains(window)) {
+      return;
+    }
+    final previous = windows.active;
+    if (previous == null) windows.captureSourceAppState();
+    if (previous?.currentDocument == null) previous?.captureCurrentAppState();
+    if (window == null) {
+      _restoration++;
+      windows.select(null);
+      await _lifecycle;
+    } else if (window.currentDocument == null && window.error == null) {
+      await showApp(window);
+    } else {
+      _restoration++;
+      windows.select(window);
+      await _lifecycle;
+    }
+  }
+
+  Future<void> closeWindow(NativeDocumentWindow window) async {
+    if (windows.disposed ||
+        window.disposed ||
+        window.closing ||
+        !windows.windows.contains(window)) {
+      return;
+    }
+    final account = windows.accountIdentity;
+    window.setClosing(true);
+    try {
+      await window.beforeClose?.call();
+      if (!mounted ||
+          windows.disposed ||
+          window.disposed ||
+          account != windows.accountIdentity) {
+        return;
+      }
+      final wasActive = windows.active == window;
+      windows.close(window);
+      if (wasActive) {
+        _restoration++;
+        final returning = windows.active;
+        if (returning != null &&
+            returning.currentDocument == null &&
+            returning.error == null) {
+          await showApp(returning);
+        } else {
+          await _lifecycle;
+        }
+      }
+    } finally {
+      if (!window.disposed && !windows.disposed) {
+        window.setClosing(false);
+      }
+    }
+  }
+
+  Future<void> showApp(
+    NativeDocumentWindow window, {
+    int? expectedSelectionRevision,
+  }) async {
+    if (!windows.select(
+      window,
+      expectedSelectionRevision: expectedSelectionRevision,
+    )) {
+      return;
+    }
+    final ticket = ++_restoration;
+    final account = windows.accountIdentity;
+    final generation = window.navigationGeneration;
+    final entry = window.current;
+    final selection = windows.selectionRevision;
+    if (window.independentApp) {
+      await WidgetsBinding.instance.endOfFrame;
+      await window.appReady;
+    }
+    final navigation = window.appNavigation;
+    await _lifecycle;
+    bool current() =>
+        mounted &&
+        !windows.disposed &&
+        !window.disposed &&
+        ticket == _restoration &&
+        windows.active == window &&
+        windows.selectionRevision == selection &&
+        account == windows.accountIdentity &&
+        generation == window.navigationGeneration &&
+        window.current == entry;
+    if (!current() || window.appNavigation != navigation) {
+      return;
+    }
+    final state =
+        entry?.appState ?? (window.index < 0 ? window.sourceState : null);
+    window.pendingAppRoute = null;
+    final restore = window.restoreAppState ?? windows.restoreAppState;
+    if (state != null && restore != null) {
+      await restore(state);
+    } else if (entry?.appRoute != null) {
+      final route = window.onAppRoute ?? windows.onAppRoute;
+      await route?.call(entry!.appRoute!);
+    }
+    if (current()) window.captureCurrentAppState();
+  }
+
+  Future<void> back() async {
+    final window = windows.active;
+    if (window == null || window.closing) return;
+    if (!window.canBack) {
+      if (window.canReturnToSource &&
+          window.index < 0 &&
+          window.error != null) {
+        window.dismissFailureToSource();
+      } else if (window.currentDocument != null || window.independentApp) {
+        await closeWindow(window);
+      }
+      return;
+    }
+    if (window.currentDocument == null) window.captureCurrentAppState();
+    _restoration++;
+    final selection = windows.selectionRevision;
+    final result = await window.traverseHistory(window.historyCursor - 1);
+    if (result != NativeDocumentLoadResult.stale &&
+        windows.active == window &&
+        windows.selectionRevision == selection &&
+        window.currentDocument == null) {
+      await showApp(window);
+    }
+  }
+
+  Future<void> forward() async {
+    final window = windows.active;
+    if (window == null || window.closing || !window.canForward) return;
+    if (window.currentDocument == null) window.captureCurrentAppState();
+    _restoration++;
+    final selection = windows.selectionRevision;
+    final result = await window.traverseHistory(window.historyCursor + 1);
+    if (result != NativeDocumentLoadResult.stale &&
+        windows.active == window &&
+        windows.selectionRevision == selection &&
+        window.currentDocument == null) {
+      await showApp(window);
+    }
+  }
+
+  @override
+  void dispose() {
+    _restoration++;
+    windows.removeListener(_changed);
+    windows.managedPresentation = false;
+    if (_showing && !windows.disposed) {
+      unawaited(windows.owner?.uncoverDocument() ?? Future.value());
+    }
+    windows.presented = false;
+    _historyFocus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ownsBack = _canHandleBack;
+    return _NativeDocumentHostScope(
+      state: this,
+      child: Shortcuts(
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true):
+              NativeDocumentBackIntent(),
+          SingleActivator(LogicalKeyboardKey.arrowRight, alt: true):
+              NativeDocumentForwardIntent(),
+        },
+        child: Actions(
+          actions: {
+            NativeDocumentBackIntent: CallbackAction<NativeDocumentBackIntent>(
+              onInvoke: (_) {
+                unawaited(back());
+                return null;
+              },
+            ),
+            NativeDocumentForwardIntent:
+                CallbackAction<NativeDocumentForwardIntent>(
+                  onInvoke: (_) {
+                    unawaited(forward());
+                    return null;
+                  },
+                ),
+          },
+          child: Focus(
+            focusNode: _historyFocus,
+            autofocus: true,
+            child: PopScope(
+              canPop: !ownsBack,
+              onPopInvokedWithResult: (popped, _) {
+                if (!popped && ownsBack) unawaited(back());
+              },
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Offstage(
+                    offstage: _showing,
+                    child: ExcludeFocus(
+                      excluding: _showing || windows.active?.closing == true,
+                      child: TickerMode(
+                        enabled: !_showing,
+                        child: AbsorbPointer(
+                          absorbing: windows.active?.closing == true,
+                          child: widget.child,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Offstage(
+                    offstage: !_showing,
+                    child: ExcludeFocus(
+                      excluding: !_showing,
+                      child: TickerMode(
+                        enabled: _showing,
+                        child: NativeDocumentWorkspace(
+                          windows: windows,
+                          managed: true,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class NativeDocumentWorkspace extends StatefulWidget {
+  const NativeDocumentWorkspace({
+    super.key,
+    required this.windows,
+    this.managed = false,
+  });
+  final NativeDocumentWindows windows;
+  final bool managed;
+  @override
+  State<NativeDocumentWorkspace> createState() =>
+      _NativeDocumentWorkspaceState();
+}
+
+class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
+  final Map<(int, int), Widget> _views = {};
+  final Map<int, Widget> _appViews = {};
+  Future<void>? _uncover;
+  bool _returningToApp = false;
+
+  Future<void> _uncoverSource() =>
+      _uncover ??= widget.windows.owner?.uncoverDocument() ?? Future.value();
+
+  Future<void> _returnToApp(NativeDocumentWindow window) async {
+    final windows = widget.windows;
+    final route = window.pendingAppRoute;
+    if (_returningToApp || route == null || !mounted) return;
+    if (widget.managed) {
+      await NativeDocumentHost.maybeOf(context)?.showApp(window);
+      return;
+    }
+    _returningToApp = true;
+    final identity = windows.accountIdentity;
+    final handler = windows.onAppRoute;
+    final appNavigation = windows.appNavigationIdentity?.call();
+    window.pendingAppRoute = null;
+    final generation = window.navigationGeneration;
+    Navigator.of(context).pop();
+    // Restore the controller lifecycle before selecting a session; otherwise
+    // a delayed uncover could rewatch the session we have just replaced.
+    await _uncoverSource();
+    if (windows.disposed ||
+        windows.accountIdentity != identity ||
+        window.disposed ||
+        window.navigationGeneration != generation ||
+        windows.appNavigationIdentity?.call() != appNavigation) {
+      return;
+    }
+    await handler?.call(route);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.managed) {
+      unawaited(widget.windows.owner?.coverDocument() ?? Future.value());
+    }
+  }
+
+  @override
+  void dispose() {
+    final window = widget.windows.active;
+    if (!widget.managed &&
+        !_returningToApp &&
+        window?.canReturnToSource == true) {
+      window!.returnToSource();
+    }
+    if (!widget.managed) unawaited(_uncoverSource());
+    super.dispose();
+  }
+
+  Future<void> _back() async {
+    if (widget.managed) {
+      unawaited(NativeDocumentHost.maybeOf(context)?.back() ?? Future.value());
+      return;
+    }
+    final window = widget.windows.active;
+    if (window?.canBack == true) {
+      final revision = widget.windows.selectionRevision;
+      final result = await window!.traverseHistory(window.index - 1);
+      if (!mounted ||
+          window.disposed ||
+          widget.windows.active != window ||
+          widget.windows.selectionRevision != revision ||
+          result == NativeDocumentLoadResult.stale) {
+        return;
+      }
+      if (window.currentAppRoute != null) {
+        unawaited(_returnToApp(window));
+      } else if (window.index < 0) {
+        Navigator.of(context).pop();
+      }
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _forward() async {
+    if (widget.managed) {
+      unawaited(
+        NativeDocumentHost.maybeOf(context)?.forward() ?? Future.value(),
+      );
+      return;
+    }
+    final window = widget.windows.active;
+    if (window == null) return;
+    final revision = widget.windows.selectionRevision;
+    final result = await window.traverseHistory(window.historyCursor + 1);
+    if (!mounted ||
+        window.disposed ||
+        widget.windows.active != window ||
+        widget.windows.selectionRevision != revision ||
+        result == NativeDocumentLoadResult.stale) {
+      return;
+    }
+    if (window.currentAppRoute != null) unawaited(_returnToApp(window));
+  }
+
+  Future<void> _closeWindow() async {
+    final windows = widget.windows;
+    final window = windows.active;
+    if (widget.managed && window != null) {
+      await NativeDocumentHost.maybeOf(context)?.closeWindow(window);
+      return;
+    }
+    if (window != null) {
+      await window.beforeClose?.call();
+      if (!mounted || windows.disposed || window.disposed) return;
+      windows.close(window);
+    }
+    if (!widget.managed && windows.windows.isEmpty) Navigator.of(context).pop();
+  }
+
+  Future<void> _retry(NativeDocumentWindow window) async {
+    final selection = widget.windows.selectionRevision;
+    final result = await window.retryRead();
+    if (mounted &&
+        !window.disposed &&
+        widget.windows.selectionRevision == selection &&
+        result == NativeDocumentLoadResult.appRoute) {
+      await _returnToApp(window);
+    }
+  }
+
+  Future<void> _reload(
+    NativeDocumentWindow window, {
+    bool scripted = false,
+  }) async {
+    if (window.loading && !scripted) {
+      window.stop();
+      return;
+    }
+    if (window.disposed || window.closing) return;
+
+    final windows = widget.windows;
+    final account = windows.accountIdentity;
+    final current = window.current;
+    final document = current?.document;
+    final currentUrl = current?.url ?? window.sourceUrl;
+    final savedRequest = document?.reloadRequest;
+    final request = savedRequest?.method.toUpperCase() == 'POST'
+        ? NativeHtmlFormRequest(
+            url: currentUrl,
+            method: 'POST',
+            body: savedRequest!.body,
+            bodyBytes: savedRequest.bodyBytes,
+            contentType: savedRequest.contentType,
+            target: '',
+          )
+        : NativeHtmlFormRequest(url: currentUrl, method: 'GET', target: '');
+
+    if (request.method.toUpperCase() == 'POST') {
+      final confirmed =
+          await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => WebDialog(
+              title: '重新送出表單？',
+              actions: [
+                WebButton(
+                  '取消',
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                ),
+                WebButton(
+                  '重新送出',
+                  primary: true,
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                ),
+              ],
+              children: const [Text('重新載入會再次送出這份表單。')],
+            ),
+          ) ??
+          false;
+      if (!confirmed ||
+          !mounted ||
+          windows.disposed ||
+          windows.accountIdentity != account ||
+          windows.active != window ||
+          window.disposed ||
+          window.current != current ||
+          window.current?.document != document) {
+        return;
+      }
+    }
+
+    final selection = windows.selectionRevision;
+    final result = await window.load(
+      request,
+      baseUrl: request.url.isEmpty ? currentUrl : request.url,
+      blobSource: document?.blobSource,
+      revalidate: true,
+      replaceCurrent: true,
+      origin: document?.navigationOrigin ?? 'null',
+      referrer:
+          document?.navigationReferrer ??
+          const NativeDocumentReferrer('', 'no-referrer'),
+    );
+    if (mounted &&
+        !window.disposed &&
+        widget.windows.selectionRevision == selection &&
+        result == NativeDocumentLoadResult.appRoute) {
+      await _returnToApp(window);
+    }
+  }
+
+  Future<void> _link(
+    NativeDocumentWindow window,
+    NativeFetchedDocument document,
+    NativeHtmlLink link, {
+    bool replaceCurrent = false,
+    bool allowFragmentRemoval = false,
+    NativeDocumentBlob? activatedBlob,
+  }) async {
+    if (window.disposed ||
+        window.closing ||
+        window.historyPostResubmissionRequired ||
+        window.current?.document != document) {
+      return;
+    }
+    var saved = false;
+    var downloadFailed = false;
+    await guarded(context, () async {
+      try {
+        saved = await saveNativeDocumentLink(
+          context,
+          widget.windows.gateway,
+          link,
+          activatedBlob: activatedBlob,
+          scope: NativeDocumentScope(
+            windows: widget.windows,
+            documentUrl: document.url,
+            window: window,
+            child: const SizedBox(),
+          ),
+        );
+      } catch (_) {
+        downloadFailed = true;
+        rethrow;
+      }
+    });
+    if (saved ||
+        downloadFailed ||
+        !mounted ||
+        window.disposed ||
+        window.closing ||
+        window.current?.document != document) {
+      return;
+    }
+    final scheme = Uri.tryParse(link.href)?.scheme.toLowerCase();
+    if (scheme == 'mailto') {
+      await guarded(
+        context,
+        () => widget.windows.gateway
+            .call('external', {'url': link.href})
+            .then((_) {}),
+      );
+      return;
+    }
+    final target = link.targetSpecified || link.target.isNotEmpty
+        ? link.target
+        : document.content.baseTarget ?? '';
+    final selection = widget.windows.selectionRevision;
+    final selected = widget.windows.target(
+      target,
+      window,
+      sourceUrl: window.current!.url,
+      noopener: link.noreferrer ? true : link.noopener,
+    );
+    final result = await selected.load(
+      NativeHtmlFormRequest(url: link.href, method: 'GET', target: target),
+      baseUrl: document.effectiveBase,
+      origin: nativeDocumentOrigin(window.current!.url),
+      referrer: nativeDocumentReferrer(
+        document,
+        url: window.current!.url,
+        elementPolicy: link.referrerPolicy,
+        noreferrer: link.noreferrer,
+      ),
+      blobSource: widget.windows.blobSourceFor(
+        document,
+        url: link.href,
+        referrerPolicy: link.referrerPolicy,
+        noreferrer: link.noreferrer,
+        initialBlob: activatedBlob,
+      ),
+      fragmentAllowed: true,
+      replaceCurrent: replaceCurrent,
+      allowFragmentRemoval: allowFragmentRemoval,
+    );
+    if (!mounted ||
+        selected.disposed ||
+        result == NativeDocumentLoadResult.stale) {
+      return;
+    }
+    if (result == NativeDocumentLoadResult.appRoute) {
+      if (widget.windows.selectionRevision == selection) {
+        await _returnToApp(selected);
+      }
+      return;
+    }
+    if (result == NativeDocumentLoadResult.retained &&
+        selected.history.isEmpty) {
+      widget.windows.close(selected);
+    } else {
+      widget.windows.select(selected, expectedSelectionRevision: selection);
+    }
+  }
+
+  Future<void> _scriptNavigate(
+    NativeDocumentWindow window,
+    NativeFetchedDocument document,
+    Json action,
+  ) async {
+    if (!mounted ||
+        widget.windows.active != window ||
+        window.disposed ||
+        window.closing ||
+        window.historyPostResubmissionRequired ||
+        window.currentDocument != document) {
+      return;
+    }
+    if (action['kind'] == 'history') {
+      await guarded(context, () async {
+        final method = action['method'] as String;
+        if (method == 'go') {
+          final delta = action['delta'] as int;
+          if (delta == 0) {
+            await _reload(window, scripted: true);
+          } else {
+            final selection = widget.windows.selectionRevision;
+            final result = await window.traverseHistory(
+              (action['index'] as int) - (window.canReturnToSource ? 1 : 0),
+            );
+            if (!mounted ||
+                window.disposed ||
+                widget.windows.active != window ||
+                widget.windows.selectionRevision != selection ||
+                result == NativeDocumentLoadResult.stale) {
+              return;
+            }
+            if (window.currentDocument == null) {
+              if (widget.managed) {
+                await NativeDocumentHost.maybeOf(context)?.showApp(window);
+              } else if (window.currentAppRoute != null) {
+                await _returnToApp(window);
+              } else if (window.index < 0) {
+                Navigator.of(context).pop();
+              }
+            }
+          }
+        } else if (method == 'scroll') {
+          window.setHistoryScrollRestoration(
+            document,
+            action['scrollRestoration'] as String,
+            action['revision'] as int,
+          );
+        } else {
+          window.applyHistoryApiMutation(
+            document: document,
+            method: method,
+            revision: action['revision'] as int,
+            url: action['url'] as String,
+            stateGraph: obj(action['stateGraph']),
+            entryKey: action['entryKey'] as String,
+            scrollRestoration: action['scrollRestoration'] as String,
+          );
+        }
+      });
+    } else if (action['kind'] == 'reload') {
+      await _reload(window, scripted: true);
+    } else {
+      await _link(
+        window,
+        document,
+        NativeHtmlLink(
+          action['url'] as String,
+          target: action['target'] as String,
+          targetSpecified: true,
+          download: action['kind'] == 'anchor'
+              ? action['download'] as String?
+              : null,
+          referrerPolicy: action['referrerPolicy'] as String?,
+          noreferrer: action['noreferrer'] == true,
+          noopener: action['noopener'] as bool?,
+        ),
+        activatedBlob: action['capturedBlob'] is Map
+            ? NativeDocumentBlob.fromBridge(
+                action['url'] as String,
+                obj(action['capturedBlob']),
+              )
+            : null,
+        replaceCurrent: action['replace'] == true,
+        allowFragmentRemoval: action['sameDocument'] == true,
+      );
+    }
+  }
+
+  Future<void> _submit(
+    NativeDocumentWindow window,
+    NativeFetchedDocument document,
+    NativeHtmlFormSubmission submission,
+  ) async {
+    if (window.disposed ||
+        window.closing ||
+        window.historyPostResubmissionRequired ||
+        window.current?.document != document) {
+      return;
+    }
+    final request = submission.buildRequest(documentUrl: window.current!.url);
+    final target = request.targetSpecified || request.target.isNotEmpty
+        ? request.target
+        : document.content.baseTarget ?? '';
+    final selection = widget.windows.selectionRevision;
+    final selected = widget.windows.target(
+      target,
+      window,
+      sourceUrl: window.current!.url,
+      noopener: request.noopener,
+    );
+    final result = await selected.load(
+      request,
+      baseUrl: document.effectiveBase,
+      origin: nativeDocumentOrigin(window.current!.url),
+      referrer: nativeDocumentReferrer(document, url: window.current!.url),
+      blobSource: widget.windows.blobSourceFor(document, url: request.url),
+    );
+    if (!mounted ||
+        selected.disposed ||
+        result == NativeDocumentLoadResult.stale) {
+      return;
+    }
+    if (result == NativeDocumentLoadResult.appRoute) {
+      if (widget.windows.selectionRevision == selection) {
+        await _returnToApp(selected);
+      }
+      return;
+    }
+    if (result == NativeDocumentLoadResult.retained &&
+        selected.history.isEmpty) {
+      widget.windows.close(selected);
+    } else {
+      widget.windows.select(selected, expectedSelectionRevision: selection);
+    }
+  }
+
+  NativeDocumentHistoryItem? _revealed;
+  void _revealFragment(NativeDocumentWindow? window) {
+    final current = window?.current;
+    if (current == null || current.document == null) {
+      _revealed = null;
+      return;
+    }
+    if (_revealed == current) return;
+    _revealed = current;
+    if (window?.historyChangeKind == 'pushState' ||
+        window?.historyChangeKind == 'replaceState' ||
+        window?.historyChangeKind == 'traverse' &&
+            current.scrollRestoration == 'manual') {
+      return;
+    }
+    final savedOffset = current.scrollOffset;
+    final hash = current.url.indexOf('#');
+    if (savedOffset == null && hash < 0) return;
+    var id = hash < 0 ? '' : current.url.substring(hash + 1);
+    try {
+      id = Uri.decodeComponent(id);
+    } catch (_) {}
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || window?.current != current) return;
+      final document = current.document!;
+      if (savedOffset != null) {
+        if (document.scroll.hasClients) {
+          document.scroll.jumpTo(
+            savedOffset.clamp(0, document.scroll.position.maxScrollExtent),
+          );
+        }
+      } else if (id.isEmpty || id.toLowerCase() == 'top') {
+        if (document.scroll.hasClients) document.scroll.jumpTo(0);
+      } else {
+        await document.viewport.scrollToAnchor(id);
+      }
+    });
+  }
+
+  Widget _body(NativeDocumentWindow window, NativeFetchedDocument document) =>
+      _views.putIfAbsent(
+        (window.id, document.id),
+        () => NativeDocumentScope(
+          windows: widget.windows,
+          window: window,
+          documentUrl: document.url,
+          sourceIdentity: widget.windows.accountIdentity,
+          child: NativeFetchedDocumentView(
+            key: ValueKey((window.id, document.id)),
+            document: document,
+            gateway: widget.windows.gateway,
+            onLink: (link) => unawaited(_link(window, document, link)),
+            onSubmit: (s) => unawaited(_submit(window, document, s)),
+            onScriptNavigation: (action) =>
+                _scriptNavigate(window, document, action),
+          ),
+        ),
+      );
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.windows,
+    builder: (context, _) {
+      final windows = widget.windows;
+      final window = windows.active;
+      final current = window?.current;
+      final blockedPost = window?.historyPostResubmissionRequired == true;
+      _revealFragment(blockedPost ? null : window);
+      final liveDocuments = <(int, int)>{
+        for (final w in windows.windows)
+          for (final entry in w.history)
+            if (entry.document != null) (w.id, entry.document!.id),
+      };
+      _views.removeWhere((key, _) => !liveDocuments.contains(key));
+      _appViews.removeWhere((id, _) => !windows.windows.any((w) => w.id == id));
+      final documents = <(NativeDocumentWindow, NativeFetchedDocument)>[];
+      for (final w in windows.windows) {
+        for (final d
+            in w.history
+                .map((e) => e.document)
+                .whereType<NativeFetchedDocument>()
+                .toSet()) {
+          documents.add((w, d));
+        }
+      }
+      final alive = {for (final item in documents) (item.$1.id, item.$2.id)};
+      _views.removeWhere((key, _) => !alive.contains(key));
+      final apps = windows.windows
+          .where(
+            (w) => w.independentApp && w.history.any((h) => h.appRoute != null),
+          )
+          .toList();
+      _appViews.removeWhere((id, _) => !apps.any((w) => w.id == id));
+      final independentVisible =
+          window?.independentApp == true && current?.appRoute != null;
+
+      return PopScope(
+        canPop: widget.managed || window?.canBack != true,
+        onPopInvokedWithResult: (popped, _) {
+          if (!widget.managed && !popped) _back();
+        },
+        child: Scaffold(
+          appBar: independentVisible
+              ? null
+              : PreferredSize(
+                  preferredSize: const Size.fromHeight(48),
+                  child: SafeArea(
+                    bottom: false,
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 48),
+                      decoration: BoxDecoration(
+                        color: palette(context)['surface.page'],
+                        border: Border(
+                          bottom: BorderSide(
+                            color: palette(context)['line.default'],
+                          ),
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          WebIconButton(
+                            LucideIcons.chevronLeft,
+                            '返回',
+                            onPressed: _back,
+                          ),
+                          WebIconButton(
+                            LucideIcons.chevronRight,
+                            '下一頁',
+                            onPressed: window?.canForward == true
+                                ? _forward
+                                : null,
+                          ),
+                          WebIconButton(
+                            window?.loading == true
+                                ? LucideIcons.x
+                                : LucideIcons.rotateCw,
+                            window?.loading == true ? '停止' : '重新載入',
+                            onPressed: window == null
+                                ? null
+                                : () => unawaited(_reload(window)),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Tooltip(
+                              message: current?.url ?? window?.sourceUrl ?? '',
+                              child: Text(
+                                current?.document?.content.title
+                                            ?.trim()
+                                            .isNotEmpty ==
+                                        true
+                                    ? current!.document!.content.title!
+                                    : current?.url ?? '網頁內容',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: webText(context),
+                              ),
+                            ),
+                          ),
+                          WebIconButton(
+                            LucideIcons.panelsTopLeft,
+                            'App 視窗',
+                            onPressed: widget.managed
+                                ? () {
+                                    final host = NativeDocumentHost.maybeOf(
+                                      context,
+                                    );
+                                    if (host != null) {
+                                      showNativeDocumentWindowManager(
+                                        context,
+                                        windows,
+                                        host,
+                                      );
+                                    }
+                                  }
+                                : null,
+                          ),
+                          WebIconButton(
+                            LucideIcons.x,
+                            '關閉頁面',
+                            onPressed: _closeWindow,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+          body: Column(
+            children: [
+              if (window?.loading == true)
+                const LinearProgressIndicator(minHeight: 2),
+              if (windows.connectionError != null || window?.error != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  color: palette(context)['surface.subtle'],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        windows.connectionError ?? window!.error!,
+                        style: webText(context, color: 'status.danger'),
+                      ),
+                      if (windows.connectionError == null &&
+                          window?.mutationOutcomeUnknown == true)
+                        const Text('送出結果尚未確認，請先檢查伺服器狀態。'),
+                      if (windows.connectionError == null &&
+                          window?.failedRequest?.method == 'GET')
+                        WebButton(
+                          '重試',
+                          onPressed: () => unawaited(_retry(window!)),
+                        ),
+                    ],
+                  ),
+                ),
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (blockedPost) const _NativeHistoryPostResubmissionPage(),
+                    for (final appWindow in apps)
+                      Offstage(
+                        offstage:
+                            appWindow != window || current?.appRoute == null,
+                        child: ExcludeFocus(
+                          excluding:
+                              appWindow != window ||
+                              current?.appRoute == null ||
+                              appWindow.closing,
+                          child: TickerMode(
+                            enabled:
+                                appWindow == window &&
+                                current?.appRoute != null,
+                            child: AbsorbPointer(
+                              absorbing: appWindow.closing,
+                              child: _appViews.putIfAbsent(
+                                appWindow.id,
+                                () => windows.appBuilder!(appWindow),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    for (final item in documents)
+                      Offstage(
+                        offstage:
+                            item.$1 != window ||
+                            item.$2 != current?.document ||
+                            blockedPost,
+                        child: TickerMode(
+                          enabled:
+                              item.$1 == window &&
+                              item.$2 == current?.document &&
+                              !blockedPost,
+                          child: ExcludeFocus(
+                            excluding:
+                                item.$1 != window ||
+                                item.$2 != current?.document ||
+                                item.$1.closing ||
+                                blockedPost,
+                            child: AbsorbPointer(
+                              absorbing: item.$1.closing || blockedPost,
+                              child: _body(item.$1, item.$2),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// Full response documents use their own default HTML typography and canvas;
+/// the source conversation's Markdown theme is not a page stylesheet.
+class NativeFetchedDocumentView extends StatefulWidget {
+  const NativeFetchedDocumentView({
+    super.key,
+    required this.document,
+    required this.gateway,
+    required this.onLink,
+    required this.onSubmit,
+    this.onScriptNavigation,
+  });
+  final NativeFetchedDocument document;
+  final Gateway gateway;
+  final ValueChanged<NativeHtmlLink> onLink;
+  final ValueChanged<NativeHtmlFormSubmission> onSubmit;
+  final FutureOr<void> Function(Json)? onScriptNavigation;
+  @override
+  State<NativeFetchedDocumentView> createState() =>
+      _NativeFetchedDocumentViewState();
+}
+
+class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
+  Widget? _body;
+  NativeDocumentScripts? _scripts;
+  NativeDocumentObjectUrlBinding? _objectUrls;
+  NativeDocumentScope? _scope;
+  NativeDocumentWindow? _window;
+  NativeDocumentWindows? _windows;
+  bool _tickerVisible = true;
+  final _layout = NativeDocumentLayoutController();
+  final _elementScroll = NativeDocumentElementScrollController();
+  Size _layoutViewport = Size.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _elementScroll.beginDocument(widget.document);
+    _elementScroll.addListener(_nativeLayoutChanged);
+    widget.document.scroll.addListener(_nativeScrollChanged);
+    _layout.addListener(_nativeLayoutChanged);
+  }
+
+  void _nativeScrollChanged() => _scripts?.refreshLayout();
+  void _nativeLayoutChanged() => _scripts?.refreshLayout();
+
+  Future<Json?> _captureLayout(int revision, int generation) async {
+    final document = widget.document;
+    final scripts = _scripts;
+    // The DOM snapshot has already been published by the serialized script
+    // host. Wait for its actual Flutter layout, never infer boxes from CSS.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted ||
+          !identical(widget.document, document) ||
+          !identical(_scripts, scripts) ||
+          scripts?.layoutRevision != revision) {
+        return null;
+      }
+      final pendingScrollEvents = _elementScroll.pendingScrollEvents;
+      final packet = _layout.capture(
+        revision: revision,
+        generation: generation,
+        viewport: _layoutViewport,
+        elementScrollMetrics: _elementScroll.metricsFor,
+
+        contentSize:
+            document.scroll.hasClients &&
+                document.scroll.position.hasContentDimensions
+            ? Size(
+                _layoutViewport.width,
+                document.scroll.position.maxScrollExtent +
+                    document.scroll.position.viewportDimension,
+              )
+            : null,
+        scrollOffset: Offset(
+          0,
+          document.scroll.hasClients ? document.scroll.offset : 0,
+        ),
+      );
+      if (packet != null) {
+        final eligible = <Object?>{
+          for (final raw in packet['boxes'] as List)
+            if (obj(raw)['kind'] == 'box' && obj(raw)['scroll'] is Map)
+              obj(raw)['id'],
+        };
+        final events = <String, Map<String, dynamic>>{};
+        for (final event in pendingScrollEvents) {
+          if (eligible.contains(event['id'])) {
+            events.putIfAbsent(event['id'] as String, () => event);
+          }
+        }
+        if (events.isNotEmpty) packet['scrollEvents'] = events.values.toList();
+        if (pendingScrollEvents.isNotEmpty) {
+          packet['nativeScrollEventThrough'] =
+              pendingScrollEvents.last['sequence'];
+        }
+        return packet;
+      }
+    }
+    return null;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _tickerVisible = TickerMode.valuesOf(context).enabled;
+    final scope = NativeDocumentScope.maybeOf(context);
+    if (!identical(_scope, scope)) {
+      _scope = scope;
+      _bindLifecycleListeners(scope);
+    }
+    if (_scripts == null) _attachScripts();
+    _syncScriptActivity();
+  }
+
+  void _bindLifecycleListeners(NativeDocumentScope? scope) {
+    final window = scope?.window;
+    if (!identical(_window, window)) {
+      _window?.removeListener(_syncScriptActivity);
+      _window = window;
+      _window?.addListener(_syncScriptActivity);
+    }
+    final windows = scope?.windows;
+    if (!identical(_windows, windows)) {
+      _windows?.removeListener(_syncScriptActivity);
+      _windows = windows;
+      _windows?.addListener(_syncScriptActivity);
+    }
+  }
+
+  void _syncScriptActivity() {
+    final scripts = _scripts;
+    if (scripts == null) return;
+    final scope = _scope;
+    final window = scope?.window;
+    final attached =
+        scope == null ||
+        !scope.windows.disposed &&
+            scope.accountIdentity == scope.windows.accountIdentity &&
+            window?.disposed != true &&
+            window?.closing != true &&
+            window?.historyPostResubmissionRequired != true &&
+            (window == null ||
+                identical(window.currentDocument, widget.document));
+    scripts.setActivity(
+      attached: attached,
+      visible: attached && _tickerVisible,
+    );
+    if (attached && window?.current?.url != null) {
+      unawaited(scripts.updateHistory(window!.scriptHistorySnapshot));
+    }
+  }
+
+  void _attachScripts() {
+    final document = widget.document;
+    if (documentIsAttachment(document.headers) ||
+        !NativeDocumentScripts.needsRuntime(document.content)) {
+      return;
+    }
+    _scripts = document.scripts ??= NativeDocumentScripts(widget.gateway);
+    final scripts = _scripts!;
+    scripts.bindLayout(
+      this,
+      _captureLayout,
+      onAccepted: (packet) {
+        final through = packet['nativeScrollEventThrough'];
+        if (through is int) _elementScroll.acknowledgeScrollEvents(through);
+      },
+    );
+    scripts.configureStyles(
+      encoding: document.content.encoding,
+      prepared: document.preparedStyles,
+    );
+    _objectUrls = NativeDocumentObjectUrlBinding(
+      owner: scripts,
+      isCurrent: () =>
+          mounted &&
+          identical(widget.document, document) &&
+          identical(_scripts, scripts) &&
+          scripts.ready &&
+          (_scope == null ||
+              !_scope!.windows.disposed &&
+                  _scope!.accountIdentity == _scope!.windows.accountIdentity &&
+                  _scope!.window?.disposed != true &&
+                  _scope!.window?.closing != true &&
+                  (_scope!.window == null ||
+                      identical(_scope!.window!.currentDocument, document))),
+      readBytes: scripts.readObjectURL,
+    );
+    _scripts!.addListener(_scriptChanged);
+    _syncScriptActivity();
+    // LayoutBuilder publishes the real document viewport before scripts run.
+    // A navigation that leaves this widget before layout must not start a VM.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !identical(widget.document, document) ||
+          !identical(_scripts, scripts)) {
+        return;
+      }
+      unawaited(
+        _scope?.windows.startDocumentScripts(document, scripts) ??
+            scripts.start(
+              source: document.content.text,
+              url: document.url,
+              referrerPolicy:
+                  document.headers['referrer-policy'] ??
+                  document.inheritedReferrerPolicy,
+              blobCreatorUrl: document.blobCreatorUrl,
+              referrer: document.referrer,
+            ),
+      );
+    });
+  }
+
+  void _scriptChanged() {
+    if (mounted) {
+      _syncScriptActivity();
+      setState(() {});
+    }
+  }
+
+  bool _scrollScheduled = false;
+  void _scheduleScroll() {
+    final scripts = _scripts;
+    if (_scrollScheduled || scripts == null || scripts.scrollActions.isEmpty) {
+      return;
+    }
+    _scrollScheduled = true;
+    final document = widget.document;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollScheduled = false;
+      if (!mounted ||
+          !identical(widget.document, document) ||
+          !identical(_scripts, scripts) ||
+          !document.scroll.hasClients ||
+          !document.scroll.position.hasContentDimensions) {
+        return;
+      }
+      final actions = scripts.takeScrollActions();
+      if (actions.isEmpty) return;
+      final position = document.scroll.position;
+      double target = position.pixels;
+      final windowActions = <Json>[];
+      _elementScroll.applyActions([
+        for (final action in actions)
+          if (action['elementId'] is String &&
+              scripts.layoutElementIds.contains(action['elementId']))
+            {
+              'id': action['elementId'],
+              'op': action['kind'] == 'by' ? 'scrollBy' : 'scrollTo',
+              'left': action['x'],
+              'top': action['y'],
+              'behavior': action['behavior'],
+            },
+      ]);
+      windowActions.addAll(
+        actions.where((action) => !action.containsKey('elementId')),
+      );
+      for (final action in windowActions) {
+        final y = action['y'] as num?;
+        if (y != null) {
+          target = action['kind'] == 'by'
+              ? target + y.toDouble()
+              : y.toDouble();
+        }
+        target = target.clamp(
+          position.minScrollExtent,
+          position.maxScrollExtent,
+        );
+      }
+      // Position changes are reported back only after native layout. Multiple
+      // same-turn calls compose in order against the real scroll extent.
+      if (windowActions.isNotEmpty &&
+          windowActions.last['behavior'] == 'smooth') {
+        unawaited(
+          document.scroll.animateTo(
+            target,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+          ),
+        );
+      } else if (windowActions.isNotEmpty) {
+        document.scroll.jumpTo(target);
+      }
+      scripts.refreshLayout();
+    });
+  }
+
+  bool _navigationScheduled = false, _navigationRunning = false;
+  void _scheduleNavigation() {
+    final scripts = _scripts;
+    if (_navigationScheduled ||
+        _navigationRunning ||
+        scripts == null ||
+        widget.onScriptNavigation == null ||
+        scripts.navigationActions.isEmpty) {
+      return;
+    }
+    _navigationScheduled = true;
+    final document = widget.document;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _navigationScheduled = false;
+      if (!mounted || widget.document != document || _scripts != scripts) {
+        return;
+      }
+      _navigationRunning = true;
+      try {
+        // Consume one current command at a time. A save picker can await the
+        // user; newer navigation may supersede pending navigation meanwhile,
+        // without deleting an independent download or reviving a stale command.
+        while (mounted && widget.document == document && _scripts == scripts) {
+          final next =
+              scripts.navigationActions
+                  .where(
+                    (action) =>
+                        action['kind'] == 'history' && action['method'] != 'go',
+                  )
+                  .firstOrNull ??
+              scripts.navigationActions.firstOrNull;
+          if (next == null) break;
+          final actions = scripts.takeNavigationActions([
+            next['sequence'] as int,
+          ]);
+          if (actions.isEmpty) break;
+          await widget.onScriptNavigation?.call(actions.single);
+        }
+      } finally {
+        _navigationRunning = false;
+        if (mounted) _scheduleNavigation();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant NativeFetchedDocumentView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.document != widget.document) {
+      _elementScroll.beginDocument(widget.document);
+      oldWidget.document.scroll.removeListener(_nativeScrollChanged);
+      widget.document.scroll.addListener(_nativeScrollChanged);
+      _scripts?.bindLayout(this, null);
+      _scripts?.setActivity(attached: false, visible: false);
+      _scripts?.removeListener(_scriptChanged);
+      _scripts = null;
+      _objectUrls = null;
+      _body = null;
+      _attachScripts();
+      _syncScriptActivity();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.document.scroll.removeListener(_nativeScrollChanged);
+    _scripts?.bindLayout(this, null);
+    _layout.removeListener(_nativeLayoutChanged);
+    _layout.dispose();
+    _elementScroll.removeListener(_nativeLayoutChanged);
+    _elementScroll.dispose();
+    _scripts?.setActivity(attached: false, visible: false);
+    _scripts?.removeListener(_scriptChanged);
+    _window?.removeListener(_syncScriptActivity);
+    _windows?.removeListener(_syncScriptActivity);
+    super.dispose();
+  }
+
+  NativeDocumentEnvironment _displayEnvironment({
+    required double width,
+    required double height,
+    required bool dark,
+  }) {
+    final media = MediaQuery.of(context);
+    final touch = const {
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    }.contains(Theme.of(context).platform);
+    return NativeDocumentEnvironment(
+      width: width.isFinite ? width : media.size.width,
+      height: height.isFinite ? height : media.size.height,
+      screenWidth: media.size.width,
+      screenHeight: media.size.height,
+      devicePixelRatio: media.devicePixelRatio,
+      dark: dark,
+      reducedMotion: media.disableAnimations,
+      pointer: touch ? 'coarse' : 'fine',
+      hover: touch ? 'none' : 'hover',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _scheduleNavigation();
+    _scheduleScroll();
+    final document = widget.document;
+    final base = Theme.of(context);
+    final pageTheme = base.copyWith(
+      brightness: Brightness.light,
+      colorScheme: base.colorScheme.copyWith(
+        brightness: Brightness.light,
+        primary: const Color(0xff005fcc),
+      ),
+    );
+    return ColoredBox(
+      color: Colors.white,
+      child: Theme(
+        data: pageTheme,
+        child: DefaultTextStyle(
+          style: const TextStyle(
+            inherit: false,
+            color: Colors.black,
+            fontFamily: 'serif',
+            fontSize: 16,
+            height: kTextHeightNone,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final environment = _displayEnvironment(
+                width: constraints.maxWidth,
+                height: constraints.maxHeight,
+                dark: base.brightness == Brightness.dark,
+              );
+              _layoutViewport = Size(environment.width, environment.height);
+              final scripts = _scripts;
+              if (scripts != null) {
+                unawaited(scripts.updateEnvironment(environment));
+              }
+              return SingleChildScrollView(
+                controller: document.scroll,
+                child: document.content.isHtml
+                    ? _buildContent(
+                        document,
+                        width: constraints.maxWidth,
+                        height: constraints.maxHeight,
+                        dark: base.brightness == Brightness.dark,
+                      )
+                    : (_body ??= _buildContent(document)),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(
+    NativeFetchedDocument document, {
+    double width = 390,
+    double height = 844,
+    bool dark = false,
+  }) {
+    final content = _scripts?.content ?? document.content;
+    if (documentIsAttachment(document.headers)) {
+      final download = NativeDocumentDownload(
+        bytes: document.bytes,
+        name: documentDownloadName(document.url, document.headers),
+        mimeType: document.mimeType,
+      );
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(download.name),
+            const SizedBox(height: 12),
+            WebButton(
+              '儲存檔案',
+              onPressed: () => guarded(context, () async {
+                final scope = NativeDocumentScope.maybeOf(context);
+                final account = scope?.windows.accountIdentity;
+                final connection = scope == null
+                    ? obj(await widget.gateway.call('boot'))
+                    : await scope.windows.connection();
+                if (!mounted ||
+                    (scope != null &&
+                        (account != scope.windows.accountIdentity ||
+                            scope.window?.disposed == true))) {
+                  return;
+                }
+                await download.save(
+                  widget.gateway,
+                  '${connection['pairingStamp']}',
+                );
+              }),
+            ),
+          ],
+        ),
+      );
+    }
+    if (document.mimeType.startsWith('image/')) {
+      return NativeMarkdownImage(
+        gateway: widget.gateway,
+        source: Uri.dataFromBytes(document.bytes, mimeType: document.mimeType),
+        borderRadius: 0,
+      );
+    }
+    if (!content.isHtml) {
+      if (!document.mimeType.startsWith('text/') &&
+          document.mimeType != 'application/json' &&
+          !document.mimeType.endsWith('+json')) {
+        return const Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('此內容格式目前無法呈現。'),
+        );
+      }
+      return Padding(
+        padding: const EdgeInsets.all(8),
+        child: SelectableText(
+          content.text,
+          style: const TextStyle(
+            inherit: false,
+            fontFamily: 'monospace',
+            fontSize: 13,
+            textBaseline: TextBaseline.alphabetic,
+            height: kTextHeightNone,
+            color: Colors.black,
+          ),
+        ),
+      );
+    }
+    final parsed = html.parseFragment(content.bodyInnerHtml);
+    for (final node in parsed.querySelectorAll(
+      'script,style,head,title,meta,base,link',
+    )) {
+      node.remove();
+    }
+    final scriptedEmpty =
+        content.hasScripts &&
+        (parsed.text?.trim().isEmpty ?? true) &&
+        parsed.querySelector('img,input,button,textarea,select,table,canvas') ==
+            null;
+    if (scriptedEmpty && _scripts == null) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          _scripts?.loading == true
+              ? '正在載入互動內容…'
+              : (_scripts?.diagnostics.join('\n') ?? '此頁面由腳本產生內容，尚未完成原生呈現。'),
+        ),
+      );
+    }
+    final styled = html.parse(content.text);
+    final environment = _displayEnvironment(
+      width: width,
+      height: height,
+      dark: dark,
+    );
+    final result = NativeDocumentStyleEngine(
+      viewportHeight: environment.height,
+      devicePixelRatio: environment.devicePixelRatio,
+      reducedMotion: environment.reducedMotion,
+      pointer: environment.pointer,
+      hover: environment.hover,
+      documentBaseUrl: _scripts?.documentBaseUrl ?? document.effectiveBase,
+      stylesheets: _scripts?.stylesheets ?? document.stylesheets,
+      viewportWidth: width,
+      dark: dark,
+    ).apply(styled);
+    document.renderingDiagnostics = result.diagnostics
+        .map((entry) => entry.toString())
+        .toList();
+    final declaredScheme =
+        result.stylesByElement[styled.documentElement]?['color-scheme'] ??
+        result.stylesByElement[styled.body]?['color-scheme'] ??
+        'normal';
+    final schemes = declaredScheme.toLowerCase().split(RegExp(r'\s+'));
+    final schemeDark =
+        schemes.contains('dark') && (dark || !schemes.contains('light'));
+    final indexStyles = <String, Map<String, String>>{};
+    var next = 0;
+    for (final element in styled.querySelectorAll('*')) {
+      final key = '${next++}';
+      element.attributes['data-pirc-document-style'] = key;
+      indexStyles[key] = Map.of(result.stylesByElement[element] ?? {});
+      // Author inline declarations already participate in the cascade. Keeping
+      // them here would let HtmlWidget override an external important winner.
+      element.attributes.remove('style');
+    }
+    final root = styled.documentElement!;
+    final body = styled.body!;
+    final rootKey = root.attributes['data-pirc-document-style']!;
+    final bodyKey = body.attributes['data-pirc-document-style']!;
+    final rootStyles = indexStyles[rootKey]!;
+    final bodyStyles = indexStyles[bodyKey]!;
+    final bodyBackground = Map.fromEntries(
+      bodyStyles.entries.where(
+        (entry) =>
+            entry.key == 'background' || entry.key.startsWith('background-'),
+      ),
+    );
+    final rootHasBackground = rootStyles.entries.any((entry) {
+      if (!const {
+        'background',
+        'background-color',
+        'background-image',
+      }.contains(entry.key)) {
+        return false;
+      }
+      final value = entry.value.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+      return !const {
+        'none',
+        'transparent',
+        'rgba(0,0,0,0)',
+        '#0000',
+        '#00000000',
+      }.contains(value);
+    });
+    if (!rootHasBackground) {
+      rootStyles.addAll(bodyBackground);
+      for (final key in bodyBackground.keys) {
+        bodyStyles.remove(key);
+      }
+    }
+    // These are UA defaults and only fill properties absent from author CSS.
+    indexStyles[bodyKey] = {'margin': '8px', ...bodyStyles};
+    String attrs(Map<Object, String> attributes) => attributes.entries
+        .map((e) => ' ${e.key}="${const HtmlEscape().convert(e.value)}"')
+        .join();
+    Color? canvasColor;
+    final canvasBackground = rootStyles['background-color'];
+    if (canvasBackground != null && canvasBackground != 'transparent') {
+      try {
+        final color = css_parser.Color.css(canvasBackground).rgba;
+        canvasColor = Color.fromRGBO(
+          color.r,
+          color.g,
+          color.b,
+          (color.a ?? 1).toDouble(),
+        );
+      } catch (_) {
+        document.renderingDiagnostics.add(
+          'Document canvas color is not supported: $canvasBackground',
+        );
+      }
+    }
+    final markup =
+        '<div${attrs(root.attributes)}>'
+        '<div${attrs(body.attributes)}>${body.innerHtml}</div></div>';
+    final noBoxIds = nativeDocumentNoBoxIds(
+      document: styled,
+      knownIds: _scripts?.layoutElementIds ?? const {},
+      stylesByElement: result.stylesByElement,
+    );
+    final rendered = NativeHtmlDocument(
+      layoutController: _scripts == null ? null : _layout,
+      elementScrollController: _elementScroll,
+      layoutRevision: _scripts?.layoutRevision ?? 0,
+      layoutKnownIds: _scripts?.layoutElementIds ?? const {},
+      layoutNoBoxIds: noBoxIds,
+      nodes: [NativeHtmlRaw(markup)],
+      authorStylesBuilder: (element) =>
+          indexStyles[element.attributes['data-pirc-document-style']],
+      style: TextStyle(
+        inherit: false,
+        fontFamily: 'serif',
+        fontSize: 16,
+        height: kTextHeightNone,
+        color: schemeDark ? Colors.white : Colors.black,
+        letterSpacing: 0,
+      ),
+      styles: MarkdownStyleSheet(),
+      builders: const {},
+      markdownStyles: false,
+      imageViewport: Size(
+        width,
+        height.isFinite ? height : MediaQuery.sizeOf(context).height,
+      ),
+      imageDark: dark,
+      viewport: document.viewport,
+      historyController: document.historyControls,
+      onNavigate: widget.onLink,
+      onFormSubmit: widget.onSubmit,
+      onScriptEvent: _scripts?.dispatch,
+      onScriptDetailedEvent: _scripts?.dispatchDetailed,
+      onScriptControlClick: _scripts?.ready == true ? _scripts!.click : null,
+      scriptFocusActions: _scripts?.focusActions ?? const [],
+      takeScriptFocusActions: _scripts?.takeFocusActions,
+      scriptFilePickerActions: _scripts?.filePickerActions ?? const [],
+      takeScriptFilePickerActions: _scripts?.takeFilePickerActions,
+      onScriptFilePickerResult: _scripts?.completeFilePicker,
+      scriptFileSelections: document.scriptFileSelections,
+      scriptFormActions: _scripts?.formActions ?? const [],
+      onScriptFormActionsConsumed: _scripts?.acknowledgeFormActions,
+      takeScriptFormActions: _scripts?.takeFormActions,
+      scriptDocument: document,
+      scriptSnapshot: _scripts?.content,
+      onScriptRestoreControls: _scripts?.restoreControls,
+      canvases: _scripts?.canvases ?? const {},
+      canvasImages: _scripts?.canvasImages ?? const {},
+      imageBuilder: (uri, title, alt) => NativeMarkdownImage(
+        gateway: widget.gateway,
+        source: uri,
+        title: title,
+        alt: alt,
+        baseUrl: document.effectiveBase,
+        borderRadius: 0,
+      ),
+    );
+    final theme = Theme.of(context);
+    final brightness = schemeDark ? Brightness.dark : Brightness.light;
+    return Theme(
+      data: theme.copyWith(
+        brightness: brightness,
+        colorScheme: theme.colorScheme.copyWith(brightness: brightness),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: height),
+        child: ColoredBox(
+          color: canvasColor ?? Colors.white,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_scripts?.loading == true)
+                const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text('正在載入互動內容…'),
+                ),
+              if (_scripts?.diagnostics.isNotEmpty == true)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(
+                    _scripts!.diagnostics.join('\n'),
+                    style: const TextStyle(
+                      fontFamily: 'sans-serif',
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              if (_objectUrls case final binding?)
+                NativeDocumentObjectUrlScope(binding: binding, child: rendered)
+              else
+                rendered,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Owns an initial submission's lifetime without creating network work during
+/// ordinary rich-text builds. App-scoped windows outlive individual messages.
+class NativeDocumentSubmissionHost extends StatefulWidget {
+  const NativeDocumentSubmissionHost({
+    super.key,
+    required this.gateway,
+    required this.builder,
+  });
+  final Gateway gateway;
+  final Widget Function(ValueChanged<NativeHtmlFormSubmission>) builder;
+  @override
+  State<NativeDocumentSubmissionHost> createState() =>
+      _NativeDocumentSubmissionHostState();
+}
+
+class _NativeDocumentSubmissionHostState
+    extends State<NativeDocumentSubmissionHost> {
+  NativeDocumentWindows? _local;
+  int _ticket = 0;
+  NativeDocumentScope? _lastScope;
+  final Map<NativeDocumentWindow, int> _pending = {};
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = NativeDocumentScope.maybeOf(context);
+    if (_lastScope != null &&
+        (_lastScope!.documentUrl != next?.documentUrl ||
+            _lastScope!.accountIdentity != next?.accountIdentity)) {
+      _cancelInitial();
+    }
+    _lastScope = next;
+  }
+
+  void _cancelInitial() {
+    _ticket++;
+    for (final entry in _pending.entries) {
+      if (!entry.key.disposed &&
+          entry.key.loading &&
+          !entry.key.windows.presented) {
+        entry.key.stop(expectedGeneration: entry.value);
+      }
+    }
+    _pending.clear();
+  }
+
+  Future<void> _submit(
+    NativeHtmlFormSubmission submission,
+    NativeDocumentScope? captured,
+  ) async {
+    final ticket = ++_ticket;
+    final windows =
+        captured?.windows ?? (_local ??= NativeDocumentWindows(widget.gateway));
+    final identity = captured?.accountIdentity ?? windows.accountIdentity;
+    if (identity != windows.accountIdentity) return;
+    try {
+      var url = captured?.documentUrl;
+      if (url == null) {
+        final boot = await windows.connection();
+        url = '${boot['origin']}/';
+      }
+      if (!mounted ||
+          ticket != _ticket ||
+          identity != windows.accountIdentity) {
+        return;
+      }
+      final scope =
+          captured ??
+          NativeDocumentScope(
+            windows: windows,
+            documentUrl: url,
+            sourceIdentity: identity,
+            child: const SizedBox(),
+          );
+      final request = submission.buildRequest(documentUrl: url);
+      NativeDocumentWindow? started;
+      final opened = openNativeDocument(
+        context,
+        scope,
+        request,
+        onStarted: (window) {
+          started = window;
+          _pending[window] = window.navigationGeneration;
+        },
+      );
+      await opened;
+      if (started != null) _pending.remove(started);
+    } catch (e) {
+      if (mounted && ticket == _ticket) {
+        showNotice(context, LiveController.describe(e));
+      }
+    } finally {
+      if (!mounted && _local?.presented == false) {
+        _local?.dispose();
+        _local = null;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _cancelInitial();
+    if (_local?.presented != true) {
+      _local?.dispose();
+      _local = null;
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final captured = NativeDocumentScope.maybeOf(context);
+    return widget.builder((s) => unawaited(_submit(s, captured)));
+  }
+}
+
+Future<void> showNativeDocumentWindowManager(
+  BuildContext context,
+  NativeDocumentWindows windows,
+  NativeDocumentHostState host,
+) async {
+  final appNavigator = Navigator.of(context);
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final account = windows.accountIdentity;
+  await navigator.push<void>(
+    MaterialPageRoute(
+      builder: (_) => NativeDocumentWindowManagerPage(
+        windows: windows,
+        onSelect: (window) async {
+          await host.selectWindow(window);
+          if (navigator.mounted &&
+              !windows.disposed &&
+              account == windows.accountIdentity &&
+              windows.active == window) {
+            if (appNavigator.mounted && appNavigator != navigator) {
+              appNavigator.popUntil((route) => route.isFirst);
+            }
+            navigator.popUntil((route) => route.isFirst);
+          }
+        },
+        onClose: host.closeWindow,
+        onBack: (window) async {
+          await host.selectWindow(window);
+          if (!windows.disposed &&
+              windows.active == window &&
+              account == windows.accountIdentity) {
+            await host.back();
+          }
+        },
+        onForward: (window) async {
+          await host.selectWindow(window);
+          if (!windows.disposed &&
+              windows.active == window &&
+              account == windows.accountIdentity) {
+            await host.forward();
+          }
+        },
+      ),
+    ),
+  );
+}
+
+class _NativeHistoryPostResubmissionPage extends StatelessWidget {
+  const _NativeHistoryPostResubmissionPage();
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, size) {
+      final width = size.maxWidth;
+      final height = size.maxHeight;
+      final portrait = height >= width;
+      final mobile = width <= 420 && portrait || height <= 560;
+      var top = height * .14;
+      if (mobile) top = height * .07;
+      if (width > 420 && height >= 500 && height <= 560 ||
+          width <= 414 && portrait && height >= 650) {
+        top = height * .10;
+      }
+      final maxWidth = width <= 420 && height >= 401 ? 736.0 : 600.0;
+      final wrapperWidth = width.clamp(0.0, maxWidth);
+      final side = mobile
+          ? 24.0
+          : width <= 700
+          ? wrapperWidth * .10
+          : 0.0;
+      final dark = Theme.of(context).brightness == Brightness.dark;
+      final text = dark ? const Color(0xff9aa0a6) : const Color(0xff5f6368);
+      final heading = dark ? text : const Color(0xff202124);
+      TextStyle style(double fontSize, double lineHeight, Color color) =>
+          TextStyle(
+            fontFamily: 'system-ui',
+            fontFamilyFallback: const ['PingFang TC', 'Heiti TC', 'sans-serif'],
+            fontSize: fontSize,
+            height: lineHeight / fontSize,
+            fontWeight: FontWeight.w400,
+            color: color,
+          );
+      return ColoredBox(
+        color: dark ? const Color(0xff202124) : Colors.white,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(
+            top: top,
+            bottom: portrait && height >= 400 ? 145 : 40,
+          ),
+          child: Center(
+            child: SizedBox(
+              width: wrapperWidth,
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: side),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const ExcludeSemantics(
+                      child: SizedBox(
+                        width: 72,
+                        height: 72,
+                        child: CustomPaint(painter: _NativePostErrorIcon()),
+                      ),
+                    ),
+                    SizedBox(height: (mobile ? height * .0569 : 40) + 6),
+                    Text(
+                      '確認重新提交表單',
+                      style: style(
+                        mobile ? 22.5 : 24,
+                        mobile ? 28.125 : 30,
+                        heading,
+                      ),
+                    ),
+                    SizedBox(height: mobile ? 15 : 16),
+                    Text(
+                      '這個網頁需要使用你先前輸入的資料才能正確顯示。你可以重新傳送這些資料，不過這麼做會重複執行這個網頁先前執行過的任何動作。',
+                      style: style(14.25, 22.9425, text),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('按下重新載入按鈕，重新提交載入網頁所需的資料。', style: style(15, 24, text)),
+                    const SizedBox(height: 12),
+                    Text('ERR_CACHE_MISS', style: style(12, 24, text)),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// Native line art for the browser's failed-document status icon.
+class _NativePostErrorIcon extends CustomPainter {
+  const _NativePostErrorIcon();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final outline = Paint()
+      ..color = const Color(0xff535353)
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(
+      Path()
+        ..moveTo(1.5, 31.5)
+        ..lineTo(24, 31.5)
+        ..lineTo(31, 38.5)
+        ..lineTo(31, 70.5)
+        ..lineTo(1.5, 70.5)
+        ..close(),
+      outline,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(23, 31.5)
+        ..lineTo(23, 40)
+        ..lineTo(31, 40),
+      outline,
+    );
+    final pixels = Paint()..color = const Color(0xff535353);
+    canvas.drawRect(const Rect.fromLTWH(9, 45, 3, 3), pixels);
+    canvas.drawRect(const Rect.fromLTWH(21, 45, 3, 3), pixels);
+    canvas.drawRect(const Rect.fromLTWH(11, 58, 11, 3), pixels);
+    canvas.drawRect(const Rect.fromLTWH(9, 61, 3, 3), pixels);
+    canvas.drawRect(const Rect.fromLTWH(21, 61, 3, 3), pixels);
+  }
+
+  @override
+  bool shouldRepaint(_NativePostErrorIcon oldDelegate) => false;
+}

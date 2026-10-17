@@ -4,6 +4,12 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-17
+
+### Changed
+
+- Updated the Android app with a native Flutter interface, richer content rendering and synchronized interactions across the app and web.
+
 ## [0.6.0] - 2026-10-17
 
 The node protocol moves to 11: upgrade the gateway and every node together (a node on protocol 10 is refused, and a protocol 11 node by an older gateway). The gateway's database moves to schema 1004 and each node's to 2001 on first start (automatic); older versions refuse them afterwards, so keep a backup to downgrade. See [Upgrades](docs/deploy/upgrades.md).

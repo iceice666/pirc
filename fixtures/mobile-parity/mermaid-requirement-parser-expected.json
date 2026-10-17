@@ -1,0 +1,1511 @@
+{
+  "fixture": "mermaid-requirement-parser-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "requirementChunk": "dist/chunks/mermaid.core/requirementDiagram-BXWQKSXE.mjs",
+  "oracle": "Pinned Mermaid requirement parser, RequirementDB raw maps, and RequirementDB.getData graph projection before SVG layout. Production light initialization is copied from apps/web/src/lib/markdown.ts. Node DOMPurify is identity-stubbed only for parser input; Chrome captures use the real production Markdown, sanitizer, CSS, and color-scheme initialization.",
+  "parserInitialization": {
+    "securityLevel": "strict",
+    "theme": "base",
+    "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "directionDefault": "TB from RequirementDB initialization"
+  },
+  "databaseProjection": [
+    "requirements",
+    "elements",
+    "relations",
+    "direction",
+    "title",
+    "accTitle",
+    "accDescription",
+    "classes"
+  ],
+  "cases": [
+    {
+      "id": "basic-requirement-element-satisfies",
+      "description": "One requirement, one element, all common fields, and a satisfying relationship.",
+      "source": "requirementDiagram\nrequirement SignIn {\nid: REQ1\ntext: The service shall authenticate each user.\nrisk: high\nverifyMethod: test\n}\nelement Gateway {\ntype: service\ndocRef: API1\n}\nGateway - satisfies -> SignIn",
+      "parser": {
+        "accepted": true,
+        "diagramType": "requirement",
+        "db": {
+          "raw": {
+            "requirements": [
+              [
+                "SignIn",
+                {
+                  "name": "SignIn",
+                  "type": "Requirement",
+                  "requirementId": "REQ1",
+                  "text": "The service shall authenticate each user.",
+                  "risk": "High",
+                  "verifyMethod": "Test",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ]
+            ],
+            "elements": [
+              [
+                "Gateway",
+                {
+                  "name": "Gateway",
+                  "type": "service",
+                  "docRef": "API1",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ]
+            ],
+            "relations": [
+              {
+                "type": "satisfies",
+                "src": "Gateway",
+                "dst": "SignIn"
+              }
+            ],
+            "direction": "TB",
+            "title": "",
+            "accTitle": "",
+            "accDescription": "",
+            "classes": []
+          },
+          "graphData": {
+            "nodes": [
+              {
+                "name": "SignIn",
+                "type": "Requirement",
+                "requirementId": "REQ1",
+                "text": "The service shall authenticate each user.",
+                "risk": "High",
+                "verifyMethod": "Test",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "SignIn",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 0
+              },
+              {
+                "name": "Gateway",
+                "type": "service",
+                "docRef": "API1",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "shape": "requirementBox",
+                "look": "classic",
+                "id": "Gateway",
+                "cssClasses": "default",
+                "colorIndex": 1
+              }
+            ],
+            "edges": [
+              {
+                "id": "Gateway-SignIn-0",
+                "start": "Gateway",
+                "end": "SignIn",
+                "label": "&lt;&lt;satisfies&gt;&gt;",
+                "classes": "relationshipLine",
+                "style": [
+                  "fill:none",
+                  "stroke-dasharray: 10,7"
+                ],
+                "labelpos": "c",
+                "thickness": "normal",
+                "type": "normal",
+                "pattern": "dashed",
+                "arrowTypeStart": "",
+                "arrowTypeEnd": "requirement_arrow",
+                "look": "classic",
+                "labelType": "markdown"
+              }
+            ],
+            "other": {},
+            "direction": "TB"
+          },
+          "enumerations": {
+            "requirementTypes": {
+              "REQUIREMENT": "Requirement",
+              "FUNCTIONAL_REQUIREMENT": "Functional Requirement",
+              "INTERFACE_REQUIREMENT": "Interface Requirement",
+              "PERFORMANCE_REQUIREMENT": "Performance Requirement",
+              "PHYSICAL_REQUIREMENT": "Physical Requirement",
+              "DESIGN_CONSTRAINT": "Design Constraint"
+            },
+            "risks": {
+              "LOW_RISK": "Low",
+              "MED_RISK": "Medium",
+              "HIGH_RISK": "High"
+            },
+            "verificationMethods": {
+              "VERIFY_ANALYSIS": "Analysis",
+              "VERIFY_DEMONSTRATION": "Demonstration",
+              "VERIFY_INSPECTION": "Inspection",
+              "VERIFY_TEST": "Test"
+            },
+            "relationships": {
+              "CONTAINS": "contains",
+              "COPIES": "copies",
+              "DERIVES": "derives",
+              "SATISFIES": "satisfies",
+              "VERIFIES": "verifies",
+              "REFINES": "refines",
+              "TRACES": "traces"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "all-requirement-types-risks-verification-methods",
+      "description": "All six requirement types, all risk levels, and all verification methods.",
+      "source": "requirementDiagram\nrequirement General {\nid: R1\ntext: General constraint.\nrisk: low\nverifyMethod: analysis\n}\nfunctionalRequirement Functional {\nid: R2\ntext: Functional behavior.\nrisk: medium\nverifyMethod: demonstration\n}\ninterfaceRequirement Interface {\nid: R3\ntext: Interface contract.\nrisk: high\nverifyMethod: inspection\n}\nperformanceRequirement Performance {\nid: R4\ntext: Latency bound.\nrisk: low\nverifyMethod: test\n}\nphysicalRequirement Physical {\nid: R5\ntext: Physical dimensions.\nrisk: medium\nverifyMethod: analysis\n}\ndesignConstraint Design {\nid: R6\ntext: Design constraint.\nrisk: high\nverifyMethod: test\n}",
+      "parser": {
+        "accepted": true,
+        "diagramType": "requirement",
+        "db": {
+          "raw": {
+            "requirements": [
+              [
+                "General",
+                {
+                  "name": "General",
+                  "type": "Requirement",
+                  "requirementId": "R1",
+                  "text": "General constraint.",
+                  "risk": "Low",
+                  "verifyMethod": "Analysis",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ],
+              [
+                "Functional",
+                {
+                  "name": "Functional",
+                  "type": "Functional Requirement",
+                  "requirementId": "R2",
+                  "text": "Functional behavior.",
+                  "risk": "Medium",
+                  "verifyMethod": "Demonstration",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ],
+              [
+                "Interface",
+                {
+                  "name": "Interface",
+                  "type": "Interface Requirement",
+                  "requirementId": "R3",
+                  "text": "Interface contract.",
+                  "risk": "High",
+                  "verifyMethod": "Inspection",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ],
+              [
+                "Performance",
+                {
+                  "name": "Performance",
+                  "type": "Performance Requirement",
+                  "requirementId": "R4",
+                  "text": "Latency bound.",
+                  "risk": "Low",
+                  "verifyMethod": "Test",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ],
+              [
+                "Physical",
+                {
+                  "name": "Physical",
+                  "type": "Physical Requirement",
+                  "requirementId": "R5",
+                  "text": "Physical dimensions.",
+                  "risk": "Medium",
+                  "verifyMethod": "Analysis",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ],
+              [
+                "Design",
+                {
+                  "name": "Design",
+                  "type": "Design Constraint",
+                  "requirementId": "R6",
+                  "text": "Design constraint.",
+                  "risk": "High",
+                  "verifyMethod": "Test",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ]
+            ],
+            "elements": [],
+            "relations": [],
+            "direction": "TB",
+            "title": "",
+            "accTitle": "",
+            "accDescription": "",
+            "classes": []
+          },
+          "graphData": {
+            "nodes": [
+              {
+                "name": "General",
+                "type": "Requirement",
+                "requirementId": "R1",
+                "text": "General constraint.",
+                "risk": "Low",
+                "verifyMethod": "Analysis",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "General",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 0
+              },
+              {
+                "name": "Functional",
+                "type": "Functional Requirement",
+                "requirementId": "R2",
+                "text": "Functional behavior.",
+                "risk": "Medium",
+                "verifyMethod": "Demonstration",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "Functional",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 1
+              },
+              {
+                "name": "Interface",
+                "type": "Interface Requirement",
+                "requirementId": "R3",
+                "text": "Interface contract.",
+                "risk": "High",
+                "verifyMethod": "Inspection",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "Interface",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 2
+              },
+              {
+                "name": "Performance",
+                "type": "Performance Requirement",
+                "requirementId": "R4",
+                "text": "Latency bound.",
+                "risk": "Low",
+                "verifyMethod": "Test",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "Performance",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 3
+              },
+              {
+                "name": "Physical",
+                "type": "Physical Requirement",
+                "requirementId": "R5",
+                "text": "Physical dimensions.",
+                "risk": "Medium",
+                "verifyMethod": "Analysis",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "Physical",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 4
+              },
+              {
+                "name": "Design",
+                "type": "Design Constraint",
+                "requirementId": "R6",
+                "text": "Design constraint.",
+                "risk": "High",
+                "verifyMethod": "Test",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "Design",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 5
+              }
+            ],
+            "edges": [],
+            "other": {},
+            "direction": "TB"
+          },
+          "enumerations": {
+            "requirementTypes": {
+              "REQUIREMENT": "Requirement",
+              "FUNCTIONAL_REQUIREMENT": "Functional Requirement",
+              "INTERFACE_REQUIREMENT": "Interface Requirement",
+              "PERFORMANCE_REQUIREMENT": "Performance Requirement",
+              "PHYSICAL_REQUIREMENT": "Physical Requirement",
+              "DESIGN_CONSTRAINT": "Design Constraint"
+            },
+            "risks": {
+              "LOW_RISK": "Low",
+              "MED_RISK": "Medium",
+              "HIGH_RISK": "High"
+            },
+            "verificationMethods": {
+              "VERIFY_ANALYSIS": "Analysis",
+              "VERIFY_DEMONSTRATION": "Demonstration",
+              "VERIFY_INSPECTION": "Inspection",
+              "VERIFY_TEST": "Test"
+            },
+            "relationships": {
+              "CONTAINS": "contains",
+              "COPIES": "copies",
+              "DERIVES": "derives",
+              "SATISFIES": "satisfies",
+              "VERIFIES": "verifies",
+              "REFINES": "refines",
+              "TRACES": "traces"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "all-relations-forward-reverse",
+      "description": "All seven relationship types, with right-facing and left-facing source arrows.",
+      "source": "requirementDiagram\nrequirement R1 {\nid: R1\ntext: Top level.\n}\nrequirement R2 {\nid: R2\ntext: Derived level.\n}\nrequirement R3 {\nid: R3\ntext: Trace target.\n}\nelement E1 {\ntype: service\ndocRef: E1REF\n}\nelement E2 {\ntype: client\ndocRef: E2REF\n}\nR1 - contains -> R2\nR2 <- copies - R1\nR2 - derives -> E1\nE1 <- satisfies - R1\nR1 - verifies -> E2\nE2 <- refines - R2\nE2 - traces -> R3",
+      "parser": {
+        "accepted": true,
+        "diagramType": "requirement",
+        "db": {
+          "raw": {
+            "requirements": [
+              [
+                "R1",
+                {
+                  "name": "R1",
+                  "type": "Requirement",
+                  "requirementId": "R1",
+                  "text": "Top level.",
+                  "risk": "",
+                  "verifyMethod": "",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ],
+              [
+                "R2",
+                {
+                  "name": "R2",
+                  "type": "Requirement",
+                  "requirementId": "R2",
+                  "text": "Derived level.",
+                  "risk": "",
+                  "verifyMethod": "",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ],
+              [
+                "R3",
+                {
+                  "name": "R3",
+                  "type": "Requirement",
+                  "requirementId": "R3",
+                  "text": "Trace target.",
+                  "risk": "",
+                  "verifyMethod": "",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ]
+            ],
+            "elements": [
+              [
+                "E1",
+                {
+                  "name": "E1",
+                  "type": "service",
+                  "docRef": "E1REF",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ],
+              [
+                "E2",
+                {
+                  "name": "E2",
+                  "type": "client",
+                  "docRef": "E2REF",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ]
+            ],
+            "relations": [
+              {
+                "type": "contains",
+                "src": "R1",
+                "dst": "R2"
+              },
+              {
+                "type": "copies",
+                "src": "R1",
+                "dst": "R2"
+              },
+              {
+                "type": "derives",
+                "src": "R2",
+                "dst": "E1"
+              },
+              {
+                "type": "satisfies",
+                "src": "R1",
+                "dst": "E1"
+              },
+              {
+                "type": "verifies",
+                "src": "R1",
+                "dst": "E2"
+              },
+              {
+                "type": "refines",
+                "src": "R2",
+                "dst": "E2"
+              },
+              {
+                "type": "traces",
+                "src": "E2",
+                "dst": "R3"
+              }
+            ],
+            "direction": "TB",
+            "title": "",
+            "accTitle": "",
+            "accDescription": "",
+            "classes": []
+          },
+          "graphData": {
+            "nodes": [
+              {
+                "name": "R1",
+                "type": "Requirement",
+                "requirementId": "R1",
+                "text": "Top level.",
+                "risk": "",
+                "verifyMethod": "",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "R1",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 0
+              },
+              {
+                "name": "R2",
+                "type": "Requirement",
+                "requirementId": "R2",
+                "text": "Derived level.",
+                "risk": "",
+                "verifyMethod": "",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "R2",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 1
+              },
+              {
+                "name": "R3",
+                "type": "Requirement",
+                "requirementId": "R3",
+                "text": "Trace target.",
+                "risk": "",
+                "verifyMethod": "",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "R3",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 2
+              },
+              {
+                "name": "E1",
+                "type": "service",
+                "docRef": "E1REF",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "shape": "requirementBox",
+                "look": "classic",
+                "id": "E1",
+                "cssClasses": "default",
+                "colorIndex": 3
+              },
+              {
+                "name": "E2",
+                "type": "client",
+                "docRef": "E2REF",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "shape": "requirementBox",
+                "look": "classic",
+                "id": "E2",
+                "cssClasses": "default",
+                "colorIndex": 4
+              }
+            ],
+            "edges": [
+              {
+                "id": "R1-R2-0",
+                "start": "R1",
+                "end": "R2",
+                "label": "&lt;&lt;contains&gt;&gt;",
+                "classes": "relationshipLine",
+                "style": [
+                  "fill:none",
+                  ""
+                ],
+                "labelpos": "c",
+                "thickness": "normal",
+                "type": "normal",
+                "pattern": "normal",
+                "arrowTypeStart": "requirement_contains",
+                "arrowTypeEnd": "",
+                "look": "classic",
+                "labelType": "markdown"
+              },
+              {
+                "id": "R1-R2-1",
+                "start": "R1",
+                "end": "R2",
+                "label": "&lt;&lt;copies&gt;&gt;",
+                "classes": "relationshipLine",
+                "style": [
+                  "fill:none",
+                  "stroke-dasharray: 10,7"
+                ],
+                "labelpos": "c",
+                "thickness": "normal",
+                "type": "normal",
+                "pattern": "dashed",
+                "arrowTypeStart": "",
+                "arrowTypeEnd": "requirement_arrow",
+                "look": "classic",
+                "labelType": "markdown"
+              },
+              {
+                "id": "R2-E1-2",
+                "start": "R2",
+                "end": "E1",
+                "label": "&lt;&lt;derives&gt;&gt;",
+                "classes": "relationshipLine",
+                "style": [
+                  "fill:none",
+                  "stroke-dasharray: 10,7"
+                ],
+                "labelpos": "c",
+                "thickness": "normal",
+                "type": "normal",
+                "pattern": "dashed",
+                "arrowTypeStart": "",
+                "arrowTypeEnd": "requirement_arrow",
+                "look": "classic",
+                "labelType": "markdown"
+              },
+              {
+                "id": "R1-E1-3",
+                "start": "R1",
+                "end": "E1",
+                "label": "&lt;&lt;satisfies&gt;&gt;",
+                "classes": "relationshipLine",
+                "style": [
+                  "fill:none",
+                  "stroke-dasharray: 10,7"
+                ],
+                "labelpos": "c",
+                "thickness": "normal",
+                "type": "normal",
+                "pattern": "dashed",
+                "arrowTypeStart": "",
+                "arrowTypeEnd": "requirement_arrow",
+                "look": "classic",
+                "labelType": "markdown"
+              },
+              {
+                "id": "R1-E2-4",
+                "start": "R1",
+                "end": "E2",
+                "label": "&lt;&lt;verifies&gt;&gt;",
+                "classes": "relationshipLine",
+                "style": [
+                  "fill:none",
+                  "stroke-dasharray: 10,7"
+                ],
+                "labelpos": "c",
+                "thickness": "normal",
+                "type": "normal",
+                "pattern": "dashed",
+                "arrowTypeStart": "",
+                "arrowTypeEnd": "requirement_arrow",
+                "look": "classic",
+                "labelType": "markdown"
+              },
+              {
+                "id": "R2-E2-5",
+                "start": "R2",
+                "end": "E2",
+                "label": "&lt;&lt;refines&gt;&gt;",
+                "classes": "relationshipLine",
+                "style": [
+                  "fill:none",
+                  "stroke-dasharray: 10,7"
+                ],
+                "labelpos": "c",
+                "thickness": "normal",
+                "type": "normal",
+                "pattern": "dashed",
+                "arrowTypeStart": "",
+                "arrowTypeEnd": "requirement_arrow",
+                "look": "classic",
+                "labelType": "markdown"
+              },
+              {
+                "id": "E2-R3-6",
+                "start": "E2",
+                "end": "R3",
+                "label": "&lt;&lt;traces&gt;&gt;",
+                "classes": "relationshipLine",
+                "style": [
+                  "fill:none",
+                  "stroke-dasharray: 10,7"
+                ],
+                "labelpos": "c",
+                "thickness": "normal",
+                "type": "normal",
+                "pattern": "dashed",
+                "arrowTypeStart": "",
+                "arrowTypeEnd": "requirement_arrow",
+                "look": "classic",
+                "labelType": "markdown"
+              }
+            ],
+            "other": {},
+            "direction": "TB"
+          },
+          "enumerations": {
+            "requirementTypes": {
+              "REQUIREMENT": "Requirement",
+              "FUNCTIONAL_REQUIREMENT": "Functional Requirement",
+              "INTERFACE_REQUIREMENT": "Interface Requirement",
+              "PERFORMANCE_REQUIREMENT": "Performance Requirement",
+              "PHYSICAL_REQUIREMENT": "Physical Requirement",
+              "DESIGN_CONSTRAINT": "Design Constraint"
+            },
+            "risks": {
+              "LOW_RISK": "Low",
+              "MED_RISK": "Medium",
+              "HIGH_RISK": "High"
+            },
+            "verificationMethods": {
+              "VERIFY_ANALYSIS": "Analysis",
+              "VERIFY_DEMONSTRATION": "Demonstration",
+              "VERIFY_INSPECTION": "Inspection",
+              "VERIFY_TEST": "Test"
+            },
+            "relationships": {
+              "CONTAINS": "contains",
+              "COPIES": "copies",
+              "DERIVES": "derives",
+              "SATISFIES": "satisfies",
+              "VERIFIES": "verifies",
+              "REFINES": "refines",
+              "TRACES": "traces"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "direction-lr-disconnected-nodes",
+      "description": "Left-to-right layout direction and disconnected requirement/element nodes.",
+      "source": "requirementDiagram\ndirection LR\nrequirement Left {\nid: LEFT\ntext: Connected source.\n}\nelement Processor {\ntype: service\ndocRef: PROC1\n}\nrequirement Right {\nid: RIGHT\ntext: Connected target.\n}\nrequirement Isolated {\nid: SOLO\ntext: This node has no relationships.\n}\nProcessor - satisfies -> Left",
+      "parser": {
+        "accepted": true,
+        "diagramType": "requirement",
+        "db": {
+          "raw": {
+            "requirements": [
+              [
+                "Left",
+                {
+                  "name": "Left",
+                  "type": "Requirement",
+                  "requirementId": "LEFT",
+                  "text": "Connected source.",
+                  "risk": "",
+                  "verifyMethod": "",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ],
+              [
+                "Right",
+                {
+                  "name": "Right",
+                  "type": "Requirement",
+                  "requirementId": "RIGHT",
+                  "text": "Connected target.",
+                  "risk": "",
+                  "verifyMethod": "",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ],
+              [
+                "Isolated",
+                {
+                  "name": "Isolated",
+                  "type": "Requirement",
+                  "requirementId": "SOLO",
+                  "text": "This node has no relationships.",
+                  "risk": "",
+                  "verifyMethod": "",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ]
+            ],
+            "elements": [
+              [
+                "Processor",
+                {
+                  "name": "Processor",
+                  "type": "service",
+                  "docRef": "PROC1",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ]
+            ],
+            "relations": [
+              {
+                "type": "satisfies",
+                "src": "Processor",
+                "dst": "Left"
+              }
+            ],
+            "direction": "LR",
+            "title": "",
+            "accTitle": "",
+            "accDescription": "",
+            "classes": []
+          },
+          "graphData": {
+            "nodes": [
+              {
+                "name": "Left",
+                "type": "Requirement",
+                "requirementId": "LEFT",
+                "text": "Connected source.",
+                "risk": "",
+                "verifyMethod": "",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "Left",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 0
+              },
+              {
+                "name": "Right",
+                "type": "Requirement",
+                "requirementId": "RIGHT",
+                "text": "Connected target.",
+                "risk": "",
+                "verifyMethod": "",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "Right",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 1
+              },
+              {
+                "name": "Isolated",
+                "type": "Requirement",
+                "requirementId": "SOLO",
+                "text": "This node has no relationships.",
+                "risk": "",
+                "verifyMethod": "",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "Isolated",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 2
+              },
+              {
+                "name": "Processor",
+                "type": "service",
+                "docRef": "PROC1",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "shape": "requirementBox",
+                "look": "classic",
+                "id": "Processor",
+                "cssClasses": "default",
+                "colorIndex": 3
+              }
+            ],
+            "edges": [
+              {
+                "id": "Processor-Left-0",
+                "start": "Processor",
+                "end": "Left",
+                "label": "&lt;&lt;satisfies&gt;&gt;",
+                "classes": "relationshipLine",
+                "style": [
+                  "fill:none",
+                  "stroke-dasharray: 10,7"
+                ],
+                "labelpos": "c",
+                "thickness": "normal",
+                "type": "normal",
+                "pattern": "dashed",
+                "arrowTypeStart": "",
+                "arrowTypeEnd": "requirement_arrow",
+                "look": "classic",
+                "labelType": "markdown"
+              }
+            ],
+            "other": {},
+            "direction": "LR"
+          },
+          "enumerations": {
+            "requirementTypes": {
+              "REQUIREMENT": "Requirement",
+              "FUNCTIONAL_REQUIREMENT": "Functional Requirement",
+              "INTERFACE_REQUIREMENT": "Interface Requirement",
+              "PERFORMANCE_REQUIREMENT": "Performance Requirement",
+              "PHYSICAL_REQUIREMENT": "Physical Requirement",
+              "DESIGN_CONSTRAINT": "Design Constraint"
+            },
+            "risks": {
+              "LOW_RISK": "Low",
+              "MED_RISK": "Medium",
+              "HIGH_RISK": "High"
+            },
+            "verificationMethods": {
+              "VERIFY_ANALYSIS": "Analysis",
+              "VERIFY_DEMONSTRATION": "Demonstration",
+              "VERIFY_INSPECTION": "Inspection",
+              "VERIFY_TEST": "Test"
+            },
+            "relationships": {
+              "CONTAINS": "contains",
+              "COPIES": "copies",
+              "DERIVES": "derives",
+              "SATISFIES": "satisfies",
+              "VERIFIES": "verifies",
+              "REFINES": "refines",
+              "TRACES": "traces"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "long-quoted-html-entities-accessibility",
+      "description": "Long quoted field text, escaped quotes, HTML/entity source text, and accessibility metadata.",
+      "source": "requirementDiagram\naccTitle: Extended authentication requirements\naccDescr {\nA multiline accessibility description for the long requirement diagram.\nIt preserves an &amp; entity and literal <b>HTML</b> input.\n}\nfunctionalRequirement LongLabel {\nid: REQLONG\ntext: \"The service shall preserve a deliberately long quoted statement with an &amp; entity, literal <b>HTML</b>, and &quot;quoted words&quot; for inspection across multiple rendered lines.\"\nrisk: medium\nverifyMethod: inspection\n}\nelement LongService {\ntype: \"A deliberately long service type label\"\ndocRef: DOCLONG\n}\nLongService - satisfies -> LongLabel",
+      "parser": {
+        "accepted": true,
+        "diagramType": "requirement",
+        "db": {
+          "raw": {
+            "requirements": [
+              [
+                "LongLabel",
+                {
+                  "name": "LongLabel",
+                  "type": "Functional Requirement",
+                  "requirementId": "REQLONG",
+                  "text": "The service shall preserve a deliberately long quoted statement with an &amp; entity, literal <b>HTML</b>, and &quot;quoted words&quot; for inspection across multiple rendered lines.",
+                  "risk": "Medium",
+                  "verifyMethod": "Inspection",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ]
+            ],
+            "elements": [
+              [
+                "LongService",
+                {
+                  "name": "LongService",
+                  "type": "A deliberately long service type label",
+                  "docRef": "DOCLONG",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ]
+            ],
+            "relations": [
+              {
+                "type": "satisfies",
+                "src": "LongService",
+                "dst": "LongLabel"
+              }
+            ],
+            "direction": "TB",
+            "title": "",
+            "accTitle": "Extended authentication requirements",
+            "accDescription": "A multiline accessibility description for the long requirement diagram.\nIt preserves an &amp; entity and literal <b>HTML</b> input.",
+            "classes": []
+          },
+          "graphData": {
+            "nodes": [
+              {
+                "name": "LongLabel",
+                "type": "Functional Requirement",
+                "requirementId": "REQLONG",
+                "text": "The service shall preserve a deliberately long quoted statement with an &amp; entity, literal <b>HTML</b>, and &quot;quoted words&quot; for inspection across multiple rendered lines.",
+                "risk": "Medium",
+                "verifyMethod": "Inspection",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "LongLabel",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 0
+              },
+              {
+                "name": "LongService",
+                "type": "A deliberately long service type label",
+                "docRef": "DOCLONG",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "shape": "requirementBox",
+                "look": "classic",
+                "id": "LongService",
+                "cssClasses": "default",
+                "colorIndex": 1
+              }
+            ],
+            "edges": [
+              {
+                "id": "LongService-LongLabel-0",
+                "start": "LongService",
+                "end": "LongLabel",
+                "label": "&lt;&lt;satisfies&gt;&gt;",
+                "classes": "relationshipLine",
+                "style": [
+                  "fill:none",
+                  "stroke-dasharray: 10,7"
+                ],
+                "labelpos": "c",
+                "thickness": "normal",
+                "type": "normal",
+                "pattern": "dashed",
+                "arrowTypeStart": "",
+                "arrowTypeEnd": "requirement_arrow",
+                "look": "classic",
+                "labelType": "markdown"
+              }
+            ],
+            "other": {},
+            "direction": "TB"
+          },
+          "enumerations": {
+            "requirementTypes": {
+              "REQUIREMENT": "Requirement",
+              "FUNCTIONAL_REQUIREMENT": "Functional Requirement",
+              "INTERFACE_REQUIREMENT": "Interface Requirement",
+              "PERFORMANCE_REQUIREMENT": "Performance Requirement",
+              "PHYSICAL_REQUIREMENT": "Physical Requirement",
+              "DESIGN_CONSTRAINT": "Design Constraint"
+            },
+            "risks": {
+              "LOW_RISK": "Low",
+              "MED_RISK": "Medium",
+              "HIGH_RISK": "High"
+            },
+            "verificationMethods": {
+              "VERIFY_ANALYSIS": "Analysis",
+              "VERIFY_DEMONSTRATION": "Demonstration",
+              "VERIFY_INSPECTION": "Inspection",
+              "VERIFY_TEST": "Test"
+            },
+            "relationships": {
+              "CONTAINS": "contains",
+              "COPIES": "copies",
+              "DERIVES": "derives",
+              "SATISFIES": "satisfies",
+              "VERIFIES": "verifies",
+              "REFINES": "refines",
+              "TRACES": "traces"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "classes-styles-duplicates-default-class",
+      "description": "::: classes, class/classDef/style statements, default styles, duplicate fields, and duplicate names.",
+      "source": "requirementDiagram\nclassDef default fill:#fff1cc,stroke:#92400e,color:#1f2937\nrequirement PlainDefault {\nid: DEFAULT\ntext: Default class probe.\n}\nrequirement R {\nid: FIRST\nid: SECOND\ntext: First field value.\ntext: Second field value.\nrisk: low\nrisk: high\n}\nrequirement R {\nid: REPLACEMENT\ntext: Duplicate name value.\n}\nelement E {\ntype: first\ntype: second\ndocRef: FIRSTREF\ndocRef: SECONDREF\n}\nelement E {\ntype: duplicate\n}\nrequirement Urgent:::hot {\nid: URGENT\ntext: Urgent requirement.\n}\nelement Worker:::cool {\ntype: processor\ndocRef: WORKERREF\n}\nclass R,E hot\nstyle R fill:#dbeafe,stroke:#1d4ed8,color:#123456\nclassDef hot fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d\nclassDef cool fill:#dcfce7,stroke:#15803d,color:#14532d\nR - satisfies -> E",
+      "parser": {
+        "accepted": true,
+        "diagramType": "requirement",
+        "db": {
+          "raw": {
+            "requirements": [
+              [
+                "PlainDefault",
+                {
+                  "name": "PlainDefault",
+                  "type": "Requirement",
+                  "requirementId": "DEFAULT",
+                  "text": "Default class probe.",
+                  "risk": "",
+                  "verifyMethod": "",
+                  "cssStyles": [],
+                  "classes": [
+                    "default"
+                  ]
+                }
+              ],
+              [
+                "R",
+                {
+                  "name": "R",
+                  "type": "Requirement",
+                  "requirementId": "FIRST",
+                  "text": "First field value.",
+                  "risk": "Low",
+                  "verifyMethod": "",
+                  "cssStyles": [
+                    "fill:#dbeafe",
+                    "stroke:#1d4ed8",
+                    "color:#123456",
+                    "fill:#fee2e2",
+                    "stroke:#b91c1c",
+                    "color:#7f1d1d"
+                  ],
+                  "classes": [
+                    "default",
+                    "hot"
+                  ]
+                }
+              ],
+              [
+                "Urgent",
+                {
+                  "name": "Urgent",
+                  "type": "Requirement",
+                  "requirementId": "URGENT",
+                  "text": "Urgent requirement.",
+                  "risk": "",
+                  "verifyMethod": "",
+                  "cssStyles": [
+                    "fill:#fee2e2",
+                    "stroke:#b91c1c",
+                    "color:#7f1d1d"
+                  ],
+                  "classes": [
+                    "default",
+                    "hot"
+                  ]
+                }
+              ]
+            ],
+            "elements": [
+              [
+                "E",
+                {
+                  "name": "E",
+                  "type": "first",
+                  "docRef": "FIRSTREF",
+                  "cssStyles": [
+                    "fill:#fee2e2",
+                    "stroke:#b91c1c",
+                    "color:#7f1d1d"
+                  ],
+                  "classes": [
+                    "default",
+                    "hot"
+                  ]
+                }
+              ],
+              [
+                "Worker",
+                {
+                  "name": "Worker",
+                  "type": "processor",
+                  "docRef": "WORKERREF",
+                  "cssStyles": [
+                    "fill:#dcfce7",
+                    "stroke:#15803d",
+                    "color:#14532d"
+                  ],
+                  "classes": [
+                    "default",
+                    "cool"
+                  ]
+                }
+              ]
+            ],
+            "relations": [
+              {
+                "type": "satisfies",
+                "src": "R",
+                "dst": "E"
+              }
+            ],
+            "direction": "TB",
+            "title": "",
+            "accTitle": "",
+            "accDescription": "",
+            "classes": [
+              [
+                "default",
+                {
+                  "id": "default",
+                  "styles": [
+                    "fill:#fff1cc",
+                    "stroke:#92400e",
+                    "color:#1f2937"
+                  ],
+                  "textStyles": [
+                    "color:#1f2937"
+                  ]
+                }
+              ],
+              [
+                "hot",
+                {
+                  "id": "hot",
+                  "styles": [
+                    "fill:#fee2e2",
+                    "stroke:#b91c1c",
+                    "color:#7f1d1d"
+                  ],
+                  "textStyles": [
+                    "color:#7f1d1d"
+                  ]
+                }
+              ],
+              [
+                "cool",
+                {
+                  "id": "cool",
+                  "styles": [
+                    "fill:#dcfce7",
+                    "stroke:#15803d",
+                    "color:#14532d"
+                  ],
+                  "textStyles": [
+                    "color:#14532d"
+                  ]
+                }
+              ]
+            ]
+          },
+          "graphData": {
+            "nodes": [
+              {
+                "name": "PlainDefault",
+                "type": "Requirement",
+                "requirementId": "DEFAULT",
+                "text": "Default class probe.",
+                "risk": "",
+                "verifyMethod": "",
+                "cssStyles": [],
+                "classes": [
+                  "default"
+                ],
+                "id": "PlainDefault",
+                "cssClasses": "default",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 0
+              },
+              {
+                "name": "R",
+                "type": "Requirement",
+                "requirementId": "FIRST",
+                "text": "First field value.",
+                "risk": "Low",
+                "verifyMethod": "",
+                "cssStyles": [
+                  "fill:#dbeafe",
+                  "stroke:#1d4ed8",
+                  "color:#123456",
+                  "fill:#fee2e2",
+                  "stroke:#b91c1c",
+                  "color:#7f1d1d"
+                ],
+                "classes": [
+                  "default",
+                  "hot"
+                ],
+                "id": "R",
+                "cssClasses": "default hot",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 1
+              },
+              {
+                "name": "Urgent",
+                "type": "Requirement",
+                "requirementId": "URGENT",
+                "text": "Urgent requirement.",
+                "risk": "",
+                "verifyMethod": "",
+                "cssStyles": [
+                  "fill:#fee2e2",
+                  "stroke:#b91c1c",
+                  "color:#7f1d1d"
+                ],
+                "classes": [
+                  "default",
+                  "hot"
+                ],
+                "id": "Urgent",
+                "cssClasses": "default hot",
+                "shape": "requirementBox",
+                "look": "classic",
+                "colorIndex": 2
+              },
+              {
+                "name": "E",
+                "type": "first",
+                "docRef": "FIRSTREF",
+                "cssStyles": [
+                  "fill:#fee2e2",
+                  "stroke:#b91c1c",
+                  "color:#7f1d1d"
+                ],
+                "classes": [
+                  "default",
+                  "hot"
+                ],
+                "shape": "requirementBox",
+                "look": "classic",
+                "id": "E",
+                "cssClasses": "default hot",
+                "colorIndex": 3
+              },
+              {
+                "name": "Worker",
+                "type": "processor",
+                "docRef": "WORKERREF",
+                "cssStyles": [
+                  "fill:#dcfce7",
+                  "stroke:#15803d",
+                  "color:#14532d"
+                ],
+                "classes": [
+                  "default",
+                  "cool"
+                ],
+                "shape": "requirementBox",
+                "look": "classic",
+                "id": "Worker",
+                "cssClasses": "default cool",
+                "colorIndex": 4
+              }
+            ],
+            "edges": [
+              {
+                "id": "R-E-0",
+                "start": "R",
+                "end": "E",
+                "label": "&lt;&lt;satisfies&gt;&gt;",
+                "classes": "relationshipLine",
+                "style": [
+                  "fill:none",
+                  "stroke-dasharray: 10,7"
+                ],
+                "labelpos": "c",
+                "thickness": "normal",
+                "type": "normal",
+                "pattern": "dashed",
+                "arrowTypeStart": "",
+                "arrowTypeEnd": "requirement_arrow",
+                "look": "classic",
+                "labelType": "markdown"
+              }
+            ],
+            "other": {},
+            "direction": "TB"
+          },
+          "enumerations": {
+            "requirementTypes": {
+              "REQUIREMENT": "Requirement",
+              "FUNCTIONAL_REQUIREMENT": "Functional Requirement",
+              "INTERFACE_REQUIREMENT": "Interface Requirement",
+              "PERFORMANCE_REQUIREMENT": "Performance Requirement",
+              "PHYSICAL_REQUIREMENT": "Physical Requirement",
+              "DESIGN_CONSTRAINT": "Design Constraint"
+            },
+            "risks": {
+              "LOW_RISK": "Low",
+              "MED_RISK": "Medium",
+              "HIGH_RISK": "High"
+            },
+            "verificationMethods": {
+              "VERIFY_ANALYSIS": "Analysis",
+              "VERIFY_DEMONSTRATION": "Demonstration",
+              "VERIFY_INSPECTION": "Inspection",
+              "VERIFY_TEST": "Test"
+            },
+            "relationships": {
+              "CONTAINS": "contains",
+              "COPIES": "copies",
+              "DERIVES": "derives",
+              "SATISFIES": "satisfies",
+              "VERIFIES": "verifies",
+              "REFINES": "refines",
+              "TRACES": "traces"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "invalidCases": [
+    {
+      "id": "invalid-risk-value",
+      "description": "A risk value outside Mermaid’s low/medium/high grammar.",
+      "source": "requirementDiagram\nrequirement InvalidRisk {\nid: RISK1\ntext: Invalid risk.\nrisk: critical\nverifyMethod: test\n}",
+      "parser": {
+        "accepted": false,
+        "errorName": "Error",
+        "error": "Parse error on line 5:\n...Invalid risk.risk: criticalverifyMetho\n----------------------^\nExpecting 'LOW_RISK', 'MED_RISK', 'HIGH_RISK', got 'unqString'"
+      }
+    },
+    {
+      "id": "invalid-unclosed-requirement",
+      "description": "A requirement body without its closing brace.",
+      "source": "requirementDiagram\nrequirement Unclosed {\nid: OPEN1\ntext: Missing the closing brace.",
+      "parser": {
+        "accepted": false,
+        "errorName": "Error",
+        "error": "Parse error on line 5:\n... the closing brace.\n----------------------^\nExpecting 'NEWLINE', 'ID', 'TEXT', 'RISK', 'VERIFYMTHD', 'STRUCT_STOP', got 'EOF'"
+      }
+    }
+  ],
+  "knownGrammarLimits": {
+    "title": {
+      "source": "requirementDiagram\ntitle Requirement diagram title",
+      "accepted": false,
+      "errorName": "Error",
+      "error": "Parse error on line 2:\nrequirementDiagramtitle Requirement di...\n------------------^\nExpecting 'NEWLINE', 'EOF', 'acc_title', 'acc_descr', 'acc_descr_multiline_value', 'direction_tb', 'direction_bt', 'direction_rl', 'direction_lr', 'REQUIREMENT', 'FUNCTIONAL_REQUIREMENT', 'INTERFACE_REQUIREMENT', 'PERFORMANCE_REQUIREMENT', 'PHYSICAL_REQUIREMENT', 'DESIGN_CONSTRAINT', 'ELEMENT', 'CLASSDEF', 'CLASS', 'STYLE', 'unqString', 'qString', got 'title'",
+      "note": "The requirement lexer recognizes title syntax, but its generated parser rejects it. RequirementDB.getDiagramTitle() is captured as the actual empty string in valid cases."
+    },
+    "escapedQuotes": {
+      "source": "requirementDiagram\nrequirement EscapedQuote {\nid: ESC1\ntext: \"A requirement field with \\\"escaped quotes\\\".\"\n}",
+      "accepted": false,
+      "errorName": "Error",
+      "error": "Parse error on line 4:\n...rement field with \\\"escaped quotes\\\".\"}\n-----------------------^\nExpecting 'NEWLINE', got 'unqString'",
+      "note": "Requirement values may be quoted, but backslash-escaped quote characters are rejected by this parser. The valid rich-text case uses the supported &quot; entity."
+    }
+  }
+}

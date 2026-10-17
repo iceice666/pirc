@@ -1,0 +1,94 @@
+{
+  "id": "document-cache-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "apiFixtureReference": "app-document-routes.json",
+  "capture": {
+    "entrypoint": "actual Vite apps/web/index.html and src/main.ts mounting pinned App.svelte",
+    "viewport": { "width": 390, "height": 844, "deviceScaleFactor": 1, "isMobile": true, "hasTouch": true },
+    "browserExecutable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "httpMode": "Real same-origin Node/Vite HTTP server; no Playwright HTTP routing or fulfilled HTTP requests.",
+    "apiMode": "The existing app-document-routes API fixture is served by local HTTP middleware; the event stream uses a local WebSocket server."
+  },
+  "cacheCases": [
+    {
+      "id": "no-store-back-fetches-changed-body",
+      "path": "/oracle/cache/no-store-back-fetches-changed-body",
+      "cacheControl": "no-store",
+      "validator": "none",
+      "initialVersion": "v1",
+      "versionOnBack": "v2"
+    },
+    {
+      "id": "max-age-back-then-reload",
+      "path": "/oracle/cache/max-age-back-then-reload",
+      "cacheControl": "max-age=600",
+      "validator": "none",
+      "initialVersion": "v1",
+      "versionOnBack": "v2",
+      "versionOnReload": "v2",
+      "reloadAfterBack": true
+    },
+    {
+      "id": "no-cache-etag-304",
+      "path": "/oracle/cache/no-cache-etag-304",
+      "cacheControl": "no-cache",
+      "validator": "etag",
+      "validatorChangesWithBody": false,
+      "initialVersion": "v1",
+      "versionOnBack": "v1",
+      "versionOnReload": "v1",
+      "formStateProbe": true,
+      "reloadMode": "normal",
+      "reloadAfterBack": true
+    },
+    {
+      "id": "no-cache-etag-changed-200",
+      "path": "/oracle/cache/no-cache-etag-changed-200",
+      "cacheControl": "no-cache",
+      "validator": "etag",
+      "validatorChangesWithBody": true,
+      "initialVersion": "v1",
+      "versionOnBack": "v2",
+      "versionOnReload": "v2",
+      "formStateProbe": true,
+      "reloadMode": "hard",
+      "reloadAfterBack": true
+    },
+    {
+      "id": "no-cache-last-modified-304",
+      "path": "/oracle/cache/no-cache-last-modified-304",
+      "cacheControl": "no-cache",
+      "validator": "last-modified",
+      "validatorChangesWithBody": false,
+      "initialVersion": "v1",
+      "versionOnBack": "v1",
+      "versionOnReload": "v1",
+      "reloadAfterBack": true
+    },
+    {
+      "id": "no-cache-last-modified-changed-200",
+      "path": "/oracle/cache/no-cache-last-modified-changed-200",
+      "cacheControl": "no-cache",
+      "validator": "last-modified",
+      "validatorChangesWithBody": true,
+      "initialVersion": "v1",
+      "versionOnBack": "v2",
+      "versionOnReload": "v2",
+      "reloadAfterBack": true
+    }
+  ],
+  "postCase": {
+    "id": "post-resubmission-confirmation",
+    "keyboardHistoryCaseId": "post-keyboard-reload-and-history-back",
+    "entryPath": "/oracle/post-entry",
+    "resultPath": "/oracle/post-result",
+    "formValue": "native POST fixture value"
+  },
+  "backForwardCacheCase": {
+    "id": "pageshow-bfcache-eligibility",
+    "path": "/oracle/cache/pageshow-bfcache-eligibility",
+    "cacheControl": "max-age=600",
+    "initialVersion": "v1",
+    "versionOnBack": "v2"
+  }
+}

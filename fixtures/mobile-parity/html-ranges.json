@@ -1,0 +1,393 @@
+{
+  "id": "native-html-ranges-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [
+    390,
+    768
+  ],
+  "height": 900,
+  "deviceScaleFactor": 1,
+  "cases": [
+    {
+      "id": "default",
+      "source": "<p><label for=\"default\">Default range</label> <input id=\"default\" type=\"range\"></p>",
+      "selector": "#default",
+      "actions": [
+        {
+          "id": "arrow-up",
+          "kind": "key",
+          "key": "ArrowUp"
+        },
+        {
+          "id": "arrow-right",
+          "kind": "key",
+          "key": "ArrowRight"
+        },
+        {
+          "id": "arrow-repeat",
+          "kind": "key-repeat",
+          "key": "ArrowRight"
+        },
+        {
+          "id": "arrow-down",
+          "kind": "key",
+          "key": "ArrowDown"
+        },
+        {
+          "id": "page-up",
+          "kind": "key",
+          "key": "PageUp"
+        },
+        {
+          "id": "home",
+          "kind": "key",
+          "key": "Home"
+        },
+        {
+          "id": "end",
+          "kind": "key",
+          "key": "End"
+        },
+        {
+          "id": "touch-drag",
+          "kind": "touch-drag",
+          "to": 0.75
+        }
+      ]
+    },
+    {
+      "id": "step-off-grid",
+      "source": "<p><label for=\"stepped\">Step off grid</label> <input id=\"stepped\" type=\"range\" min=\"0\" max=\"10\" step=\"3\" value=\"4\"></p>",
+      "selector": "#stepped",
+      "actions": [
+        {
+          "id": "arrow-right",
+          "kind": "key",
+          "key": "ArrowRight"
+        },
+        {
+          "id": "arrow-left",
+          "kind": "key",
+          "key": "ArrowLeft"
+        },
+        {
+          "id": "end",
+          "kind": "key",
+          "key": "End"
+        },
+        {
+          "id": "home",
+          "kind": "key",
+          "key": "Home"
+        }
+      ]
+    },
+    {
+      "id": "decimal-default",
+      "source": "<p><label for=\"decimal\">Decimal midpoint</label> <input id=\"decimal\" type=\"range\" min=\"-2.5\" max=\"2.5\" step=\"0.5\"></p>",
+      "selector": "#decimal",
+      "actions": [
+        {
+          "id": "home",
+          "kind": "key",
+          "key": "Home"
+        },
+        {
+          "id": "arrow-up",
+          "kind": "key",
+          "key": "ArrowUp"
+        },
+        {
+          "id": "arrow-down",
+          "kind": "key",
+          "key": "ArrowDown"
+        },
+        {
+          "id": "end",
+          "kind": "key",
+          "key": "End"
+        }
+      ]
+    },
+    {
+      "id": "clamp-low",
+      "source": "<p><label for=\"low\">Below minimum</label> <input id=\"low\" type=\"range\" min=\"5\" max=\"15\" step=\"2\" value=\"-3\"></p>",
+      "selector": "#low",
+      "actions": [
+        {
+          "id": "arrow-left",
+          "kind": "key",
+          "key": "ArrowLeft"
+        },
+        {
+          "id": "home",
+          "kind": "key",
+          "key": "Home"
+        },
+        {
+          "id": "arrow-up",
+          "kind": "key",
+          "key": "ArrowUp"
+        }
+      ]
+    },
+    {
+      "id": "clamp-high",
+      "source": "<p><label for=\"high\">Above maximum</label> <input id=\"high\" type=\"range\" min=\"5\" max=\"15\" step=\"4\" value=\"99\"></p>",
+      "selector": "#high",
+      "actions": [
+        {
+          "id": "arrow-left",
+          "kind": "key",
+          "key": "ArrowLeft"
+        },
+        {
+          "id": "end",
+          "kind": "key",
+          "key": "End"
+        }
+      ]
+    },
+    {
+      "id": "malformed",
+      "source": "<p><label for=\"malformed\">Malformed attributes</label> <input id=\"malformed\" type=\"range\" min=\"bad\" max=\"Infinity\" step=\"nope\" value=\"not-a-number\" required oninput=\"window.bad=1\"></p>",
+      "selector": "#malformed",
+      "actions": [
+        {
+          "id": "arrow-right",
+          "kind": "key",
+          "key": "ArrowRight"
+        }
+      ]
+    },
+    {
+      "id": "max-below-min",
+      "source": "<p><label for=\"invalid-bounds\">Maximum below minimum</label> <input id=\"invalid-bounds\" type=\"range\" min=\"10\" max=\"3\" step=\"0\" value=\"50\"></p>",
+      "selector": "#invalid-bounds",
+      "actions": [
+        {
+          "id": "arrow-up",
+          "kind": "key",
+          "key": "ArrowUp"
+        },
+        {
+          "id": "home",
+          "kind": "key",
+          "key": "Home"
+        },
+        {
+          "id": "end",
+          "kind": "key",
+          "key": "End"
+        }
+      ]
+    },
+    {
+      "id": "disabled",
+      "source": "<p><label for=\"disabled\">Disabled range</label> <input id=\"disabled\" type=\"range\" min=\"0\" max=\"20\" value=\"10\" disabled></p>",
+      "selector": "#disabled",
+      "actions": [
+        {
+          "id": "arrow-right",
+          "kind": "key",
+          "key": "ArrowRight"
+        },
+        {
+          "id": "touch-drag",
+          "kind": "touch-drag",
+          "to": 0.9
+        }
+      ]
+    },
+    {
+      "id": "readonly",
+      "source": "<p><label for=\"readonly\">Readonly range</label> <input id=\"readonly\" type=\"range\" min=\"0\" max=\"20\" value=\"10\" readonly></p>",
+      "selector": "#readonly",
+      "actions": [
+        {
+          "id": "arrow-right",
+          "kind": "key",
+          "key": "ArrowRight"
+        },
+        {
+          "id": "touch-drag",
+          "kind": "touch-drag",
+          "to": 0.9
+        }
+      ]
+    },
+    {
+      "id": "fieldset-disabled",
+      "source": "<fieldset disabled><legend>Unavailable group</legend><label for=\"fieldset-disabled\">Disabled by fieldset</label> <input id=\"fieldset-disabled\" type=\"range\" value=\"25\"></fieldset>",
+      "selector": "#fieldset-disabled",
+      "actions": [
+        {
+          "id": "arrow-right",
+          "kind": "key",
+          "key": "ArrowRight"
+        }
+      ]
+    },
+    {
+      "id": "fieldset-legend-exception",
+      "source": "<fieldset disabled><legend><label for=\"legend-exception\">First legend control</label> <input id=\"legend-exception\" type=\"range\" min=\"0\" max=\"10\" value=\"5\"></legend><label for=\"after-legend\">Outside legend</label> <input id=\"after-legend\" type=\"range\"></fieldset>",
+      "selector": "#legend-exception",
+      "actions": [
+        {
+          "id": "arrow-right",
+          "kind": "key",
+          "key": "ArrowRight"
+        }
+      ]
+    },
+    {
+      "id": "accessible-name",
+      "source": "<p><span id=\"range-prefix\">Progress</span> <span id=\"range-detail\">current level</span> <label for=\"accessible\">Visible label</label> <input id=\"accessible\" type=\"range\" min=\"0\" max=\"5\" value=\"2\" aria-label=\"ARIA label\" aria-labelledby=\"range-prefix range-detail\" aria-describedby=\"range-detail\" title=\"Title fallback\"></p>",
+      "selector": "#accessible",
+      "actions": [
+        {
+          "id": "label-click",
+          "kind": "label-click",
+          "selector": "label[for=accessible]"
+        }
+      ]
+    },
+    {
+      "id": "implicit-label",
+      "source": "<p><label>Implicit range label <input id=\"implicit\" type=\"range\" min=\"0\" max=\"8\" value=\"4\"></label></p>",
+      "selector": "#implicit",
+      "actions": [
+        {
+          "id": "label-click",
+          "kind": "label-click",
+          "selector": "label"
+        }
+      ]
+    },
+    {
+      "id": "title-fallback",
+      "source": "<p><input id=\"title-only\" type=\"range\" value=\"30\" title=\"Title name\" aria-description=\"Extra context\"></p>",
+      "selector": "#title-only",
+      "actions": []
+    },
+    {
+      "id": "default-off-grid",
+      "source": "<p><label for=\"midpoint-step\">Midpoint off grid</label> <input id=\"midpoint-step\" type=\"range\" min=\"0\" max=\"10\" step=\"3\"></p>",
+      "selector": "#midpoint-step",
+      "actions": [
+        {
+          "id": "page-up",
+          "kind": "key",
+          "key": "PageUp"
+        }
+      ]
+    },
+    {
+      "id": "step-any",
+      "source": "<p><label for=\"any-step\">Any step</label> <input id=\"any-step\" type=\"range\" min=\"0\" max=\"10\" step=\"any\" value=\"5.25\"></p>",
+      "selector": "#any-step",
+      "actions": [
+        {
+          "id": "arrow-up",
+          "kind": "key",
+          "key": "ArrowUp"
+        },
+        {
+          "id": "touch-drag",
+          "kind": "touch-drag",
+          "to": 0.25
+        }
+      ]
+    },
+    {
+      "id": "step-tie",
+      "source": "<p><label for=\"tie-step\">Step tie rounds up</label> <input id=\"tie-step\" type=\"range\" min=\"0\" max=\"10\" step=\"4\" value=\"2\"></p>",
+      "selector": "#tie-step",
+      "actions": [
+        {
+          "id": "arrow-up",
+          "kind": "key",
+          "key": "ArrowUp"
+        }
+      ]
+    },
+    {
+      "id": "exponent-decimal",
+      "source": "<p><label for=\"exponent-step\">Exponent step</label> <input id=\"exponent-step\" type=\"range\" min=\"1e-3\" max=\"1e-1\" step=\"2e-2\" value=\"5e-2\"></p>",
+      "selector": "#exponent-step",
+      "actions": [
+        {
+          "id": "arrow-up",
+          "kind": "key",
+          "key": "ArrowUp"
+        }
+      ]
+    },
+    {
+      "id": "implicit-step-base-integer",
+      "source": "<p><label for=\"implicit-base\">No minimum, integer value</label> <input id=\"implicit-base\" type=\"range\" max=\"10\" step=\"2\" value=\"5\"></p>",
+      "selector": "#implicit-base",
+      "actions": [
+        {
+          "id": "home",
+          "kind": "key",
+          "key": "Home"
+        },
+        {
+          "id": "arrow-up",
+          "kind": "key",
+          "key": "ArrowUp"
+        },
+        {
+          "id": "end",
+          "kind": "key",
+          "key": "End"
+        }
+      ]
+    },
+    {
+      "id": "implicit-step-base-decimal",
+      "source": "<p><label for=\"implicit-decimal-base\">No minimum, decimal value</label> <input id=\"implicit-decimal-base\" type=\"range\" max=\"1\" step=\"0.3\" value=\"0.2\"></p>",
+      "selector": "#implicit-decimal-base",
+      "actions": [
+        {
+          "id": "home",
+          "kind": "key",
+          "key": "Home"
+        },
+        {
+          "id": "arrow-up",
+          "kind": "key",
+          "key": "ArrowUp"
+        },
+        {
+          "id": "end",
+          "kind": "key",
+          "key": "End"
+        }
+      ]
+    },
+    {
+      "id": "invalid-min-step-base",
+      "source": "<p><label for=\"invalid-base\">Invalid minimum, integer value</label> <input id=\"invalid-base\" type=\"range\" min=\"broken\" max=\"10\" step=\"2\" value=\"5\"></p>",
+      "selector": "#invalid-base",
+      "actions": [
+        {
+          "id": "home",
+          "kind": "key",
+          "key": "Home"
+        },
+        {
+          "id": "arrow-up",
+          "kind": "key",
+          "key": "ArrowUp"
+        },
+        {
+          "id": "end",
+          "kind": "key",
+          "key": "End"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "id": "backend-settings",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "width": 390,
+  "widths": [390, 768],
+  "height": 1200,
+  "settings": {
+    "providers": [
+      {
+        "id": "local",
+        "name": "Local models",
+        "source": "file",
+        "readOnly": true,
+        "api": "openai-completions",
+        "baseUrl": "http://localhost:11434/v1",
+        "hasApiKey": false,
+        "models": [
+          {
+            "id": "local-model",
+            "name": "Local model"
+          }
+        ]
+      },
+      {
+        "id": "custom",
+        "name": "Custom provider",
+        "source": "ui",
+        "readOnly": false,
+        "api": "openai-completions",
+        "baseUrl": "https://example.test/v1",
+        "hasApiKey": true,
+        "models": [
+          {
+            "id": "custom-model",
+            "name": "Custom model"
+          }
+        ]
+      }
+    ],
+    "oauthProviders": [],
+    "defaultModel": {
+      "provider": "custom",
+      "id": "custom-model"
+    }
+  }
+}

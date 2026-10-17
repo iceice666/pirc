@@ -1,0 +1,614 @@
+{
+  "browser": "Google Chrome",
+  "version": "154.0.8037.93",
+  "playwright": "1.63.0",
+  "source": "apps/web/src/lib/components/ProviderEditor.svelte base URL input: type=url required",
+  "cases": [
+    {
+      "name": "http standard",
+      "raw": "http://localhost:11434/v1",
+      "inputValue": "http://localhost:11434/v1",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "http://localhost:11434/v1",
+        "protocol": "http:",
+        "host": "localhost:11434",
+        "hostname": "localhost"
+      }
+    },
+    {
+      "name": "https standard",
+      "raw": "https://api.example/v1",
+      "inputValue": "https://api.example/v1",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "https://api.example/v1",
+        "protocol": "https:",
+        "host": "api.example",
+        "hostname": "api.example"
+      }
+    },
+    {
+      "name": "ftp scheme",
+      "raw": "ftp://example.com/models",
+      "inputValue": "ftp://example.com/models",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "ftp://example.com/models",
+        "protocol": "ftp:",
+        "host": "example.com",
+        "hostname": "example.com"
+      }
+    },
+    {
+      "name": "file scheme, no host",
+      "raw": "file:///tmp/models",
+      "inputValue": "file:///tmp/models",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "file:///tmp/models",
+        "protocol": "file:",
+        "host": "",
+        "hostname": ""
+      }
+    },
+    {
+      "name": "mailto scheme, no host",
+      "raw": "mailto:user@example.com",
+      "inputValue": "mailto:user@example.com",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "mailto:user@example.com",
+        "protocol": "mailto:",
+        "host": "",
+        "hostname": ""
+      }
+    },
+    {
+      "name": "javascript scheme",
+      "raw": "javascript:alert(1)",
+      "inputValue": "javascript:alert(1)",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "javascript:alert(1)",
+        "protocol": "javascript:",
+        "host": "",
+        "hostname": ""
+      }
+    },
+    {
+      "name": "data scheme",
+      "raw": "data:text/plain,hello",
+      "inputValue": "data:text/plain,hello",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "data:text/plain,hello",
+        "protocol": "data:",
+        "host": "",
+        "hostname": ""
+      }
+    },
+    {
+      "name": "http empty authority path",
+      "raw": "http:///path",
+      "inputValue": "http:///path",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "http://path/",
+        "protocol": "http:",
+        "host": "path",
+        "hostname": "path"
+      }
+    },
+    {
+      "name": "https one slash before host",
+      "raw": "https:/example.com/v1",
+      "inputValue": "https:/example.com/v1",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "https://example.com/v1",
+        "protocol": "https:",
+        "host": "example.com",
+        "hostname": "example.com"
+      }
+    },
+    {
+      "name": "http scheme without host",
+      "raw": "http://",
+      "inputValue": "http://",
+      "validity": {
+        "valid": false,
+        "typeMismatch": true,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": false
+      }
+    },
+    {
+      "name": "empty required value",
+      "raw": "",
+      "inputValue": "",
+      "validity": {
+        "valid": false,
+        "typeMismatch": false,
+        "valueMissing": true
+      },
+      "newURL": {
+        "success": false
+      }
+    },
+    {
+      "name": "outer spaces",
+      "raw": " https://example.com/v1 ",
+      "inputValue": " https://example.com/v1 ",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "https://example.com/v1",
+        "protocol": "https:",
+        "host": "example.com",
+        "hostname": "example.com"
+      }
+    },
+    {
+      "name": "space in host",
+      "raw": "https://exa mple.com/v1",
+      "inputValue": "https://exa mple.com/v1",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "https://exa%20mple.com/v1",
+        "protocol": "https:",
+        "host": "exa%20mple.com",
+        "hostname": "exa%20mple.com"
+      }
+    },
+    {
+      "name": "space in path",
+      "raw": "https://example.com/a b",
+      "inputValue": "https://example.com/a b",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "https://example.com/a%20b",
+        "protocol": "https:",
+        "host": "example.com",
+        "hostname": "example.com"
+      }
+    },
+    {
+      "name": "embedded newline",
+      "raw": "https://example.com/a\nb",
+      "inputValue": "https://example.com/a b",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "https://example.com/ab",
+        "protocol": "https:",
+        "host": "example.com",
+        "hostname": "example.com"
+      }
+    },
+    {
+      "name": "port above range",
+      "raw": "http://example.com:99999/v1",
+      "inputValue": "http://example.com:99999/v1",
+      "validity": {
+        "valid": false,
+        "typeMismatch": true,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": false
+      }
+    },
+    {
+      "name": "nonnumeric port",
+      "raw": "http://example.com:abc/v1",
+      "inputValue": "http://example.com:abc/v1",
+      "validity": {
+        "valid": false,
+        "typeMismatch": true,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": false
+      }
+    },
+    {
+      "name": "empty port delimiter",
+      "raw": "http://example.com:/v1",
+      "inputValue": "http://example.com:/v1",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "http://example.com/v1",
+        "protocol": "http:",
+        "host": "example.com",
+        "hostname": "example.com"
+      }
+    },
+    {
+      "name": "port max 65535",
+      "raw": "http://example.com:65535/v1",
+      "inputValue": "http://example.com:65535/v1",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "http://example.com:65535/v1",
+        "protocol": "http:",
+        "host": "example.com:65535",
+        "hostname": "example.com"
+      }
+    },
+    {
+      "name": "port max plus one",
+      "raw": "http://example.com:65536/v1",
+      "inputValue": "http://example.com:65536/v1",
+      "validity": {
+        "valid": false,
+        "typeMismatch": true,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": false
+      }
+    },
+    {
+      "name": "IPv6 with brackets and port",
+      "raw": "http://[::1]:11434/v1",
+      "inputValue": "http://[::1]:11434/v1",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "http://[::1]:11434/v1",
+        "protocol": "http:",
+        "host": "[::1]:11434",
+        "hostname": "[::1]"
+      }
+    },
+    {
+      "name": "IPv6 brackets, no port",
+      "raw": "http://[2001:db8::1]/v1",
+      "inputValue": "http://[2001:db8::1]/v1",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "http://[2001:db8::1]/v1",
+        "protocol": "http:",
+        "host": "[2001:db8::1]",
+        "hostname": "[2001:db8::1]"
+      }
+    },
+    {
+      "name": "IPv6 missing closing bracket",
+      "raw": "http://[::1:11434/v1",
+      "inputValue": "http://[::1:11434/v1",
+      "validity": {
+        "valid": false,
+        "typeMismatch": true,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": false
+      }
+    },
+    {
+      "name": "IPv6 without brackets",
+      "raw": "http://::1:11434/v1",
+      "inputValue": "http://::1:11434/v1",
+      "validity": {
+        "valid": false,
+        "typeMismatch": true,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": false
+      }
+    },
+    {
+      "name": "userinfo",
+      "raw": "https://user:pass@example.com/v1",
+      "inputValue": "https://user:pass@example.com/v1",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "https://user:pass@example.com/v1",
+        "protocol": "https:",
+        "host": "example.com",
+        "hostname": "example.com"
+      }
+    },
+    {
+      "name": "query string",
+      "raw": "https://example.com/v1?token=abc",
+      "inputValue": "https://example.com/v1?token=abc",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "https://example.com/v1?token=abc",
+        "protocol": "https:",
+        "host": "example.com",
+        "hostname": "example.com"
+      }
+    },
+    {
+      "name": "fragment",
+      "raw": "https://example.com/v1#models",
+      "inputValue": "https://example.com/v1#models",
+      "validity": {
+        "valid": true,
+        "typeMismatch": false,
+        "valueMissing": false
+      },
+      "newURL": {
+        "success": true,
+        "href": "https://example.com/v1#models",
+        "protocol": "https:",
+        "host": "example.com",
+        "hostname": "example.com"
+      }
+    }
+  ],
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "typedNumbers": [
+    "",
+    "+1",
+    "1.",
+    "1.e2",
+    "1e3",
+    "1e+2",
+    "1e-2",
+    "1.5",
+    "0",
+    "-1",
+    "-",
+    "1e",
+    "1e-",
+    "NaN",
+    "Infinity",
+    "1e309",
+    "1e-9999"
+  ],
+  "numberCases": [
+    {
+      "raw": "",
+      "value": "",
+      "number": null,
+      "valid": true,
+      "badInput": false,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "+1",
+      "value": "1",
+      "number": 1,
+      "valid": true,
+      "badInput": false,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "1.",
+      "value": "1",
+      "number": 1,
+      "valid": true,
+      "badInput": false,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "1.e2",
+      "value": "1.e2",
+      "number": 100,
+      "valid": true,
+      "badInput": false,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "1e3",
+      "value": "1e3",
+      "number": 1000,
+      "valid": true,
+      "badInput": false,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "1e+2",
+      "value": "1e+2",
+      "number": 100,
+      "valid": true,
+      "badInput": false,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "1e-2",
+      "value": "1e-2",
+      "number": 0.01,
+      "valid": false,
+      "badInput": false,
+      "rangeUnderflow": true,
+      "stepMismatch": true
+    },
+    {
+      "raw": "1.5",
+      "value": "1.5",
+      "number": 1.5,
+      "valid": false,
+      "badInput": false,
+      "rangeUnderflow": false,
+      "stepMismatch": true
+    },
+    {
+      "raw": "0",
+      "value": "0",
+      "number": 0,
+      "valid": false,
+      "badInput": false,
+      "rangeUnderflow": true,
+      "stepMismatch": false
+    },
+    {
+      "raw": "-1",
+      "value": "-1",
+      "number": -1,
+      "valid": false,
+      "badInput": false,
+      "rangeUnderflow": true,
+      "stepMismatch": false
+    },
+    {
+      "raw": "-",
+      "value": "",
+      "number": null,
+      "valid": false,
+      "badInput": true,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "1e",
+      "value": "",
+      "number": null,
+      "valid": false,
+      "badInput": true,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "1e-",
+      "value": "",
+      "number": null,
+      "valid": false,
+      "badInput": true,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "NaN",
+      "value": "",
+      "number": null,
+      "valid": true,
+      "badInput": false,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "Infinity",
+      "value": "",
+      "number": null,
+      "valid": true,
+      "badInput": false,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "1e309",
+      "value": "",
+      "number": null,
+      "valid": false,
+      "badInput": true,
+      "rangeUnderflow": false,
+      "stepMismatch": false
+    },
+    {
+      "raw": "1e-9999",
+      "value": "1e-9999",
+      "number": 0,
+      "valid": false,
+      "badInput": false,
+      "rangeUnderflow": true,
+      "stepMismatch": false
+    }
+  ]
+}

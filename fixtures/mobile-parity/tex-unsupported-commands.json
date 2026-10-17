@@ -1,0 +1,333 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "rendererOptions": {
+    "api": "apps/web/src/lib/markdown.ts renderMarkdown() -> KaTeX.renderToString()",
+    "throwOnError": false,
+    "strict": "ignore",
+    "output": "htmlAndMathml",
+    "trust": false,
+    "maxExpand": 500,
+    "errorColor": "KaTeX default #cc0000"
+  },
+  "capture": {
+    "widths": [
+      390,
+      768
+    ],
+    "height": 1000,
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "textScales": [
+      1,
+      2
+    ],
+    "deviceScaleFactor": 1,
+    "paragraphFontFamily": "Arial, sans-serif",
+    "paragraphFontSize": 15,
+    "paragraphLineHeight": 1.65,
+    "katexFontScale": 1.08,
+    "sourceCss": [
+      "apps/web/src/app.css",
+      "apps/web/src/markdown.css",
+      "apps/web/node_modules/katex/dist/katex.css"
+    ]
+  },
+  "cases": [
+    {
+      "id": "unknown-control-inline",
+      "description": "An undefined math-mode control sequence remains red text inside a rendered formula, with known formulas before and after.",
+      "source": "Left $a+b$ mid $x+\\pircunknown+y$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "rendered-with-unsupported-command",
+      "expectedMathClass": "katex",
+      "expectedRedText": [
+        "\\pircunknown"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ]
+    },
+    {
+      "id": "unknown-control-sup-sub",
+      "description": "Undefined control sequence followed by both superscript and subscript.",
+      "source": "Left $a+b$ mid $x+\\pircunknown^{2}_{i}+y$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "rendered-with-unsupported-command",
+      "expectedMathClass": "katex",
+      "expectedRedText": [
+        "\\pircunknown"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ]
+    },
+    {
+      "id": "unknown-control-text-mode",
+      "description": "Undefined control sequence inside a text-mode group.",
+      "source": "Left $a+b$ mid $\\text{left \\pircunknownword right}$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "rendered-with-unsupported-command",
+      "expectedMathClass": "katex",
+      "expectedRedText": [
+        "\\pircunknownword"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ]
+    },
+    {
+      "id": "unknown-control-from-macro-expansion",
+      "description": "A local macro expands to an undefined control sequence.",
+      "source": "Left $a+b$ mid $\\newcommand{\\pircBroken}[1]{#1+\\pircunknownexpanded}\\pircBroken{x}$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "rendered-with-unsupported-command",
+      "expectedMathClass": "katex",
+      "expectedRedText": [
+        "\\pircunknownexpanded"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ]
+    },
+    {
+      "id": "array-cline-unsupported",
+      "description": "Array content renders while unsupported cline is shown in red.",
+      "source": "Before $a+b$.\n\n$$\n\\begin{array}{cc}a&b\\\\\\cline{1-1}c&d\\end{array}\n$$\n\nAfter $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "rendered-with-unsupported-command",
+      "expectedMathClass": "katex",
+      "expectedRedText": [
+        "\\cline"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ]
+    },
+    {
+      "id": "array-multicolumn-unsupported",
+      "description": "Array content renders while unsupported multicolumn is shown in red.",
+      "source": "Before $a+b$.\n\n$$\n\\begin{array}{cc}\\multicolumn{2}{c}{x}\\\\a&b\\end{array}\n$$\n\nAfter $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "rendered-with-unsupported-command",
+      "expectedMathClass": "katex",
+      "expectedRedText": [
+        "\\multicolumn"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ]
+    },
+    {
+      "id": "unmatched-brace-whole-error",
+      "description": "Unmatched brace causes the whole target expression to render as KaTeX error text.",
+      "source": "Left $a+b$ mid $x+{y$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "whole-expression-parse-error",
+      "expectedMathClass": "katex-error",
+      "expectedRedText": [
+        "x+{y"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ]
+    },
+    {
+      "id": "unknown-environment-whole-error",
+      "description": "Unknown environment causes a whole-expression parse error.",
+      "source": "Left $a+b$ mid $\\begin{pircnotreal}x\\end{pircnotreal}$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "whole-expression-parse-error",
+      "expectedMathClass": "katex-error",
+      "expectedRedText": [
+        "\\begin{pircnotreal}x\\end{pircnotreal}"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ]
+    },
+    {
+      "id": "missing-known-function-argument-whole-error",
+      "description": "A known function with a missing required argument produces a whole-expression parse error.",
+      "source": "Left $a+b$ mid $\\frac{1}$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "whole-expression-parse-error",
+      "expectedMathClass": "katex-error",
+      "expectedRedText": [
+        "\\frac{1}"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ]
+    },
+    {
+      "id": "unknown-in-fraction",
+      "description": "Undefined control sequence inside a fraction argument remains red while the surrounding fraction renders.",
+      "source": "Left $a+b$ mid $\\frac{x+\\pircunknown}{y}$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "rendered-with-unsupported-command",
+      "expectedMathClass": "katex",
+      "expectedRedText": [
+        "\\pircunknown"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ],
+      "expectedDisplay": false
+    },
+    {
+      "id": "unknown-in-left-right",
+      "description": "Undefined control sequence inside a dynamically sized left/right delimiter pair remains red in a normal formula.",
+      "source": "Left $a+b$ mid $\\left(\\pircunknown\\right)$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "rendered-with-unsupported-command",
+      "expectedMathClass": "katex",
+      "expectedRedText": [
+        "\\pircunknown"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ],
+      "expectedDisplay": false
+    },
+    {
+      "id": "known-alpha-normal",
+      "description": "A supported Greek control sequence renders normally with no red unsupported-command runs.",
+      "source": "Left $a+b$ mid $\\alpha+x$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "normal-rendered",
+      "expectedMathClass": "katex",
+      "expectedRedText": [],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ],
+      "expectedDisplay": false
+    },
+    {
+      "id": "verb-literal-normal",
+      "description": "A supported verb command displays a literal unknown-looking control sequence as ordinary math text, with no red run.",
+      "source": "Left $a+b$ mid $\\verb|\\pircunknown|$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "normal-rendered",
+      "expectedMathClass": "katex",
+      "expectedRedText": [],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ],
+      "expectedDisplay": false
+    },
+    {
+      "id": "macro-to-known-symbol-normal",
+      "description": "A local macro expanding to the supported alpha symbol renders normally with no red run.",
+      "source": "Left $a+b$ mid $\\newcommand{\\pircKnown}{\\alpha}\\pircKnown+x$ right $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "normal-rendered",
+      "expectedMathClass": "katex",
+      "expectedRedText": [],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ],
+      "expectedDisplay": false
+    },
+    {
+      "id": "unknown-display",
+      "description": "An undefined control sequence in a display-math block remains a red run inside rendered KaTeX.",
+      "source": "Before $a+b$.\n\n$$\n\\frac{x+\\pircunknown}{y}\n$$\n\nAfter $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "rendered-with-unsupported-command",
+      "expectedMathClass": "katex",
+      "expectedRedText": [
+        "\\pircunknown"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ],
+      "expectedDisplay": true,
+      "expectedMathBlock": true
+    },
+    {
+      "id": "unknown-fenced-math",
+      "description": "An undefined control sequence in a fenced math code block uses the Markdown math-block renderer and remains a red run.",
+      "source": "Before $a+b$.\n\n```math\nx+\\pircunknown+y\n```\n\nAfter $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "rendered-with-unsupported-command",
+      "expectedMathClass": "katex",
+      "expectedRedText": [
+        "\\pircunknown"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ],
+      "expectedDisplay": true,
+      "expectedMathBlock": true
+    },
+    {
+      "id": "display-unmatched-brace-whole-error",
+      "description": "An unmatched brace in display math returns a whole-expression KaTeX error inside the Markdown math block.",
+      "source": "Before $a+b$.\n\n$$\nx+{y\n$$\n\nAfter $c+d$.",
+      "targetMathIndex": 1,
+      "expectedKind": "whole-expression-parse-error",
+      "expectedMathClass": "katex-error",
+      "expectedRedText": [
+        "x+{y"
+      ],
+      "expectedBeforeAnnotations": [
+        "a+b"
+      ],
+      "expectedAfterAnnotations": [
+        "c+d"
+      ],
+      "expectedDisplay": false,
+      "expectedMathBlock": true
+    }
+  ]
+}

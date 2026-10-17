@@ -1,0 +1,141 @@
+{
+  "id": "schedules-parity",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 768],
+  "height": 1100,
+  "views": ["list", "runs", "editor"],
+  "now": 1790985600000,
+  "workspaces": [
+    {
+      "id": "node:project",
+      "displayName": "Project",
+      "hostId": "node",
+      "kind": "directory"
+    }
+  ],
+  "schedules": [
+    {
+      "id": "daily",
+      "title": "Daily review",
+      "prompt": "Review the latest changes.\nReport anything that needs attention.",
+      "workspaceId": "node:project",
+      "workspace": {
+        "id": "node:project",
+        "name": "Project",
+        "node": "node",
+        "online": true
+      },
+      "cron": "0 9 * * *",
+      "runAt": null,
+      "timezone": "UTC",
+      "model": {
+        "provider": "test",
+        "id": "model"
+      },
+      "thinking": "high",
+      "notify": "problems",
+      "status": "active",
+      "nextRunAt": 1790989200000,
+      "attention": 1,
+      "createdBySession": "chat",
+      "lastRun": {
+        "status": "completed",
+        "createdAt": 1790982000000
+      },
+      "createdAt": 1790982000000,
+      "updatedAt": 1790982000000
+    },
+    {
+      "id": "paused",
+      "title": "Weekly report",
+      "prompt": "Review the latest changes.\nReport anything that needs attention.",
+      "workspaceId": "node:project",
+      "workspace": {
+        "id": "node:project",
+        "name": "Project",
+        "node": "node",
+        "online": false
+      },
+      "cron": "0 9 * * *",
+      "runAt": null,
+      "timezone": "UTC",
+      "model": {
+        "provider": "test",
+        "id": "model"
+      },
+      "thinking": "high",
+      "notify": "problems",
+      "status": "paused",
+      "nextRunAt": null,
+      "attention": 0,
+      "createdBySession": null,
+      "lastRun": {
+        "status": "completed",
+        "createdAt": 1790982000000
+      },
+      "createdAt": 1790982000000,
+      "updatedAt": 1790982000000
+    },
+    {
+      "id": "once",
+      "title": "Release notes",
+      "prompt": "Review the latest changes.\nReport anything that needs attention.",
+      "workspaceId": "node:project",
+      "workspace": {
+        "id": "node:project",
+        "name": "Project",
+        "node": "node",
+        "online": true
+      },
+      "cron": null,
+      "runAt": 1790985600000,
+      "timezone": "UTC",
+      "model": {
+        "provider": "test",
+        "id": "model"
+      },
+      "thinking": "high",
+      "notify": "problems",
+      "status": "done",
+      "nextRunAt": null,
+      "attention": 0,
+      "createdBySession": null,
+      "lastRun": {
+        "status": "completed",
+        "createdAt": 1790982000000
+      },
+      "createdAt": 1790982000000,
+      "updatedAt": 1790982000000
+    }
+  ],
+  "models": [
+    {
+      "provider": "test",
+      "id": "model",
+      "displayName": "Test model",
+      "available": true
+    }
+  ],
+  "runs": [
+    {
+      "id": "missed",
+      "scheduleId": "daily",
+      "dueAt": 1790982000000,
+      "status": "missed",
+      "sessionId": null,
+      "session": null,
+      "result": "The node was offline.",
+      "createdAt": 1790982000000
+    },
+    {
+      "id": "completed",
+      "scheduleId": "daily",
+      "dueAt": 1790980000000,
+      "status": "completed",
+      "sessionId": "chat",
+      "session": "Review",
+      "result": "Reviewed 3 changes.\nNo problems found.",
+      "createdAt": 1790980000000
+    }
+  ]
+}

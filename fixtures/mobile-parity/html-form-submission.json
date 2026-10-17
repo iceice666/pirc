@@ -1,0 +1,179 @@
+{
+  "id": "html-form-submission-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "oracle": "Actual Google Chrome 154 pointer and keyboard submission after production apps/web renderMarkdown() sanitization. No WebView or JS-only submit simulation.",
+  "source": "<form id=\"main-form\" action=\"/capture/cancelled?from=form\" method=\"get\" enctype=\"multipart/form-data\" target=\"_self\" onsubmit=\"window.unexpectedHandler=true\"><input id=\"required-first\" name=\"requiredFirst\" required value=\"\"><input id=\"required-second\" name=\"requiredSecond\" required value=\"already\"><input id=\"text-space\" name=\"q\" value=\"tea &amp; honey\"><input id=\"hidden-field\" type=\"hidden\" name=\"hidden\" value=\"secret\"><input id=\"disabled-field\" name=\"disabled\" disabled value=\"excluded\"><input id=\"readonly-field\" name=\"readonly\" readonly value=\"read only\"><input id=\"check-one\" type=\"checkbox\" name=\"choice\" value=\"one\" checked><input id=\"check-two\" type=\"checkbox\" name=\"choice\" value=\"two\" checked><input id=\"check-empty-value\" type=\"checkbox\" name=\"emptyCheck\" required checked value=\"\"><input id=\"check-off\" type=\"checkbox\" name=\"choice\" value=\"off\"><select id=\"select-many\" name=\"colors\" multiple><option value=\"red\" selected>Red</option><option value=\"green\">Green</option><option value=\"blue\" selected>Blue</option></select><textarea id=\"textarea-crlf\" name=\"notes\">line one\nline two</textarea><button id=\"main-submit\" name=\"submitter\" value=\"main\">Send</button><button id=\"skip-validation\" name=\"submitter\" value=\"skip\" formnovalidate>Skip validation</button><button id=\"override-submit\" name=\"submitter\" value=\"override\" formaction=\"/override?x=one&amp;y=two\" formmethod=\"post\" formenctype=\"text/plain\" formtarget=\"_self\" formnovalidate>Override</button><button id=\"copy-default\" name=\"submitter\" value=\"copy\" data-copy>Copy default type</button><button id=\"copy-typebutton\" type=\"button\" name=\"submitter\" value=\"copy-button\" data-copy>Copy button type</button><input id=\"button-no-value\" type=\"button\"></form><form id=\"novalidate-form\" action=\"/capture/cancelled?from=novalidate\" method=\"get\" novalidate><input id=\"novalidate-required\" name=\"must\" required value=\"\"><button id=\"novalidate-submit\" name=\"submitter\" value=\"novalidate\">Submit despite invalid</button></form><form id=\"message-locale-form\"><input id=\"locale-required-checkbox\" type=\"checkbox\" name=\"localeCheck\" required><select id=\"locale-required-select\" name=\"localeSelect\" required><option value=\"\">Choose one</option><option value=\"ok\">Okay</option></select><input id=\"locale-required-radio\" type=\"radio\" name=\"localeRadio\" value=\"one\" required><input id=\"locale-radio-peer\" type=\"radio\" name=\"localeRadio\" value=\"two\"><input id=\"locale-invalid-email\" type=\"email\" name=\"email\" value=\"bad\"><input id=\"locale-invalid-url\" type=\"url\" name=\"url\" value=\"bad\"><input id=\"locale-pattern-invalid\" type=\"text\" name=\"pattern\" pattern=\"[A-Z]{3}\" value=\"abc\"></form><form id=\"attributes-form\" action=\"https://outside.invalid/default?a=1&amp;b=two\" method=\"post\" enctype=\"text/plain\" target=\"_blank\" novalidate onclick=\"window.unexpectedHandler=true\"></form><input id=\"form-owner-control\" form=\"attributes-form\" name=\"owner\" value=\"external\"><button id=\"form-owner-button\" form=\"attributes-form\" name=\"ownerSubmit\" value=\"yes\" formaction=\"https://outside.invalid/override\" formmethod=\"post\" formenctype=\"multipart/form-data\" formtarget=\"_top\" formnovalidate onclick=\"window.unexpectedHandler=true\">External submitter</button><form id=\"unsafe-action-form\" action=\"javascript:alert(1)\" method=\"get\"><input id=\"unsafe-action-field\" name=\"q\" value=\"safe\"><button id=\"unsafe-formaction-button\" formaction=\"javascript:alert(1)\">Unsafe override</button></form><form id=\"input-buttons-form\" action=\"/capture/cancelled?from=input-buttons\" method=\"get\"><input id=\"input-default-submit\" type=\"submit\" name=\"send\"><input id=\"input-default-reset\" type=\"reset\" name=\"r\"></form><form id=\"get-network\" action=\"/capture/get?existing=two%20words&amp;keep=1\" method=\"get\" enctype=\"text/plain\" target=\"_self\" data-allow-default><input name=\"q\" value=\"tea &amp; honey\"><input name=\"n~!\" value=\"v~!\"><input name=\"台北\" value=\"城市 台北\"><input type=\"checkbox\" name=\"tag\" value=\"red\" checked><input type=\"checkbox\" name=\"tag\" value=\"blue\" checked><select name=\"sel\" multiple><option value=\"one\" selected>One</option><option value=\"two\" selected>Two</option></select><textarea name=\"message\">line one\nline two</textarea><button id=\"get-submit\" name=\"go\" value=\"yes &amp; ok\">GET</button></form><form id=\"post-network\" action=\"/capture/post?token=abc%20def\" method=\"post\" enctype=\"application/x-www-form-urlencoded\" target=\"_self\" data-allow-default><input name=\"payload\" value=\"post + &amp; ~ ! 台北\"><textarea name=\"message\">line one\nline two</textarea><button id=\"post-submit\" name=\"send\" value=\"post+go\">POST</button></form><form id=\"enter-single\" action=\"/capture/cancelled?from=single\" method=\"get\"><input id=\"enter-single-field\" name=\"q\" value=\"single\"><button id=\"enter-single-submit\" name=\"go\" value=\"single\">Submit</button></form><form id=\"enter-multiple\" action=\"/capture/cancelled?from=multiple\" method=\"get\"><input id=\"enter-multiple-first\" name=\"first\" value=\"one\"><input id=\"enter-multiple-second\" name=\"second\" value=\"two\"><button id=\"enter-multiple-submit\" name=\"go\" value=\"multiple\">Submit</button></form><form id=\"enter-no-submit\" action=\"/capture/cancelled?from=no-submit\" method=\"get\"><input id=\"enter-no-submit-field\" name=\"q\" value=\"no submit button\"></form><form id=\"enter-disabled-submit\" action=\"/capture/cancelled?from=disabled\" method=\"get\"><input id=\"enter-disabled-field\" name=\"q\" value=\"disabled default\"><button id=\"enter-disabled-button\" disabled>Disabled</button></form>",
+  "sanitizerTargets": {
+    "main-form": [
+      "action",
+      "method",
+      "enctype",
+      "target",
+      "novalidate",
+      "onsubmit"
+    ],
+    "skip-validation": [
+      "formnovalidate",
+      "formaction",
+      "formmethod",
+      "formenctype",
+      "formtarget",
+      "onclick"
+    ],
+    "override-submit": [
+      "formaction",
+      "formmethod",
+      "formenctype",
+      "formtarget",
+      "formnovalidate"
+    ],
+    "copy-default": [
+      "type",
+      "name",
+      "value",
+      "data-copy"
+    ],
+    "copy-typebutton": [
+      "type",
+      "name",
+      "value",
+      "data-copy"
+    ],
+    "attributes-form": [
+      "action",
+      "method",
+      "enctype",
+      "target",
+      "novalidate",
+      "onclick"
+    ],
+    "form-owner-control": [
+      "form",
+      "name",
+      "value"
+    ],
+    "form-owner-button": [
+      "form",
+      "name",
+      "value",
+      "formaction",
+      "formmethod",
+      "formenctype",
+      "formtarget",
+      "formnovalidate",
+      "onclick"
+    ],
+    "unsafe-action-form": [
+      "action",
+      "method"
+    ],
+    "unsafe-formaction-button": [
+      "formaction"
+    ],
+    "novalidate-form": [
+      "action",
+      "method",
+      "novalidate"
+    ],
+    "novalidate-submit": [
+      "formnovalidate",
+      "name",
+      "value"
+    ],
+    "input-default-submit": [
+      "type",
+      "name",
+      "value",
+      "formaction",
+      "formmethod"
+    ],
+    "input-default-reset": [
+      "type",
+      "name",
+      "value"
+    ]
+  },
+  "actions": [
+    {
+      "id": "invalid-required-click",
+      "mode": "click",
+      "selector": "#main-submit"
+    },
+    {
+      "id": "formnovalidate-click",
+      "mode": "click",
+      "selector": "#skip-validation"
+    },
+    {
+      "id": "form-novalidate-invalid-required-click",
+      "mode": "click",
+      "selector": "#novalidate-submit"
+    },
+    {
+      "id": "fill-required-first",
+      "mode": "fill",
+      "selector": "#required-first",
+      "value": "ready"
+    },
+    {
+      "id": "valid-required-click",
+      "mode": "click",
+      "selector": "#main-submit"
+    },
+    {
+      "id": "submitter-override-click",
+      "mode": "click",
+      "selector": "#override-submit"
+    },
+    {
+      "id": "data-copy-default-button-click",
+      "mode": "click",
+      "selector": "#copy-default"
+    },
+    {
+      "id": "data-copy-type-button-click",
+      "mode": "click",
+      "selector": "#copy-typebutton"
+    },
+    {
+      "id": "enter-single-text",
+      "mode": "pressEnter",
+      "selector": "#enter-single-field"
+    },
+    {
+      "id": "enter-multiple-text",
+      "mode": "pressEnter",
+      "selector": "#enter-multiple-second"
+    },
+    {
+      "id": "enter-with-no-submit-button",
+      "mode": "pressEnter",
+      "selector": "#enter-no-submit-field"
+    },
+    {
+      "id": "enter-with-disabled-submit-button",
+      "mode": "pressEnter",
+      "selector": "#enter-disabled-field"
+    },
+    {
+      "id": "input-default-submit-click",
+      "mode": "click",
+      "selector": "#input-default-submit"
+    },
+    {
+      "id": "get-default-navigation",
+      "mode": "networkGet"
+    },
+    {
+      "id": "post-default-navigation",
+      "mode": "networkPost"
+    }
+  ],
+  "notes": {
+    "submission": "Pointer clicks and Enter use Playwright Chromium input; submit handlers preventDefault for local interaction cases and capture SubmitEvent.submitter plus FormData(form, submitter). The GET and POST forms are allowed to navigate only to request-capturing endpoints on this same 127.0.0.1 Vite server.",
+    "sanitizer": "Every HTML control is first produced by the fixed web source's renderMarkdown() DOMPurify path. Attribute snapshots include null for attributes removed by sanitization.",
+    "textarea": "Textarea source contains LF newlines. The control value and FormData entries expose LF, while browser GET and POST serialization normalizes them to CRLF.",
+    "keyboard": "Enter cases dispatch real Chromium keyboard input after focusing each field; they are not requestSubmit() calls.",
+    "screenshot": "The capture script also saves 390x844 light and dark screenshots immediately after a real click on an invalid required form."
+  }
+}

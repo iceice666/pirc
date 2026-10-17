@@ -1,0 +1,30 @@
+{
+  "id": "mermaid-flowchart-styles-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "widths": [390, 768],
+  "height": 900,
+  "deviceScaleFactor": 1,
+  "textScales": [1],
+  "themes": ["light", "dark"],
+  "cases": [
+    {
+      "id": "flow-default-class-and-syntax",
+      "kind": "flowchart",
+      "description": "Default classDef styles and equivalent explicit class statement versus ::: syntax.",
+      "source": "```mermaid\nflowchart LR\nclassDef default fill:#fff1cc,stroke:#92400e,color:#1f2937,stroke-width:2px\nclassDef hot fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d,stroke-width:4px\nA[Default via classDef default]\nB[Class statement]\nC[Colon shorthand]\nA --> B --> C\nclass B hot\nC:::hot\n```"
+    },
+    {
+      "id": "flow-ordered-multiple-classes",
+      "kind": "flowchart",
+      "description": "Repeated class statements assign multiple classes in both orders to expose pinned style concatenation and CSS last-declaration behavior.",
+      "source": "```mermaid\nflowchart LR\nclassDef cold fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a,stroke-width:2px\nclassDef hot fill:#ffedd5,stroke:#ea580c,color:#7c2d12,stroke-width:5px\nA[Cold then hot]\nB[Hot then cold]\nA --> B\nclass A cold\nclass A hot\nclass B hot\nclass B cold\n```"
+    },
+    {
+      "id": "flow-explicit-style-and-redefinition",
+      "kind": "flowchart",
+      "description": "Explicit node style overrides class declarations, and a repeated classDef appends a later set of declarations before rendering.",
+      "source": "```mermaid\nflowchart LR\nclassDef patch fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a,stroke-width:2px\nA[Explicit style]\nB[Redefined class]\nC[Colon class]\nA --> B --> C\nclass A patch\nclass B patch\nC:::patch\nstyle A fill:#fecaca,stroke:#b91c1c,color:#450a0a,stroke-width:6px\nclassDef patch fill:#dcfce7,stroke:#15803d,color:#14532d,stroke-width:4px\n```"
+    }
+  ]
+}

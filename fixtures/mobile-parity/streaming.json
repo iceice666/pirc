@@ -1,0 +1,109 @@
+{
+  "id": "streaming-phone-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "width": 390,
+  "height": 760,
+  "source": "# Streaming answer\n\nThis paragraph is **complete** and stays mounted while more text arrives.\n\n- First result\n- Second result with `inline code`\n\n```ts\nconst ready = true;\n```\n\nThe next paragraph is still arriving with **strong text** and a [link](https://example.test).",
+  "cases": [
+    {
+      "source": "# Title\n\npara one\n\n- a\n- b\n\nlast",
+      "from": 0,
+      "end": 28
+    },
+    {
+      "source": "```ts\nx\n\ny\n```\n\nafter",
+      "from": 0,
+      "end": 16
+    },
+    {
+      "source": "| a | b |\n|---|---|\n| 1 | 2 |\n\ntext",
+      "from": 0,
+      "end": 31
+    },
+    {
+      "source": "$$\nx\n\ny\n$$\n\nz",
+      "from": 0,
+      "end": 12
+    },
+    {
+      "source": "> q\n\n> r\n\nz",
+      "from": 0,
+      "end": 10
+    },
+    {
+      "source": "one block",
+      "from": 0,
+      "end": 0
+    },
+    {
+      "source": "1. a\n\n2. b\n\n3. c",
+      "from": 0,
+      "end": 0
+    },
+    {
+      "source": "```ts\nopen\n\nstill",
+      "from": 0,
+      "end": 0
+    },
+    {
+      "source": "a\r\n\r\nb",
+      "from": 0,
+      "end": 0
+    },
+    {
+      "source": "one\n\ntwo\n\nthree",
+      "from": 5,
+      "end": 10
+    },
+    {
+      "source": "Heading\n---\n\nafter",
+      "from": 0,
+      "end": 13
+    },
+    {
+      "source": "- item\n  - nested\n\nafter",
+      "from": 0,
+      "end": 19
+    },
+    {
+      "source": "    indented\n\n    code\n\nafter",
+      "from": 0,
+      "end": 24
+    },
+    {
+      "source": "~~~py\na\n~~~\n\nafter",
+      "from": 0,
+      "end": 13
+    },
+    {
+      "source": "你好 👩‍💻\n\n正在回答",
+      "from": 0,
+      "end": 10
+    },
+    {
+      "source": "before\n\n> quote\n>\n> - item\n\nafter",
+      "from": 0,
+      "end": 28
+    },
+    {
+      "source": "before\n\n[link][r]\n\n[r]: https://example.test\n\nafter",
+      "from": 0,
+      "end": 46
+    },
+    {
+      "source": "one\n\n<div>\nraw\n</div>\n\nafter",
+      "from": 0,
+      "end": 23
+    },
+    {
+      "source": "one\n\n***\n\ntwo",
+      "from": 0,
+      "end": 10
+    },
+    {
+      "source": "\\[\nx^2\n\\]\n\nafter",
+      "from": 0,
+      "end": 11
+    }
+  ]
+}

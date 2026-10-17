@@ -1,0 +1,43 @@
+{
+  "id": "mermaid-quadrant-xy-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "widths": [390, 650, 651, 768, 860, 861, 1024],
+  "height": 900,
+  "deviceScaleFactor": 1,
+  "textScales": [1, 2],
+  "themes": ["light", "dark"],
+  "cases": [
+    {
+      "id": "quadrant-labeled-styled",
+      "kind": "quadrantChart",
+      "description": "Title, both arrow-labelled axes, all quadrant labels, four plotted quadrants, quoted comma-bearing label, classDef class styling, inline point styles, and diagram sizing directive.",
+      "source": "```mermaid\n%%{init: {\"quadrantChart\": {\"chartWidth\": 470, \"chartHeight\": 340, \"pointRadius\": 7}}}%%\nquadrantChart\ntitle Product priorities\nx-axis Low reach --> High reach\ny-axis Low effort --> High effort\nquadrant-1 Scale\nquadrant-2 Maintain\nquadrant-3 Defer\nquadrant-4 Explore\n\n\"Market, east\":::featured: [0.82, 0.82]\nEfficiency: [0.22, 0.76]\nRetire: [0.18, 0.22]\nSustain: [0.76, 0.24]\nInline style: [0.61, 0.41] radius: 9,color:#c1121f,stroke-color:#111827,stroke-width:3px\nclassDef featured color:#123456,stroke-color:#31572c,stroke-width:2px,radius:8\n```"
+    },
+    {
+      "id": "quadrant-default-axes",
+      "kind": "quadrantChart",
+      "description": "Minimal diagram with default dimensions and no axis text or point marks.",
+      "source": "```mermaid\nquadrantChart\ntitle Default axes\nquadrant-1 Upper right\nquadrant-2 Upper left\nquadrant-3 Lower left\nquadrant-4 Lower right\n```"
+    },
+    {
+      "id": "quadrant-invalid-coordinate",
+      "kind": "quadrantChart",
+      "expectedStatus": "error",
+      "description": "Out-of-range point value used to capture pinned parser failure output.",
+      "source": "```mermaid\nquadrantChart\ntitle Out of range\nOutside: [1.1, 0.5]\n```"
+    },
+    {
+      "id": "xy-categorical-bar-line",
+      "kind": "xychart-beta",
+      "description": "Categorical x axis, numeric y range, titled bar and line plots.",
+      "source": "```mermaid\nxychart-beta\ntitle \"Weekly, signals\"\nx-axis \"Day\" [Mon, Tue, Wed, Thu]\ny-axis \"Index\" 0 --> 100\nbar \"Visits\" [20, 35, 53, 72]\nline \"Retention\" [15, 49, 57, 84]\n```"
+    },
+    {
+      "id": "xy-numeric-horizontal",
+      "kind": "xychart-beta",
+      "description": "Numeric axes, horizontal orientation, and both supported plot forms; config directive enables data labels.",
+      "source": "```mermaid\n%%{init: {\"xyChart\": {\"width\": 470, \"height\": 330, \"showDataLabel\": true}}}%%\nxychart-beta horizontal\ntitle \"Latency by run\"\nx-axis \"Run\" 1 --> 5\ny-axis \"Milliseconds\" 0 --> 100\nbar [20, 44, 31, 79, 55]\nline [15, 39, 27, 68, 48]\n```"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "id": "mermaid-er-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 768],
+  "height": 900,
+  "padding": 16,
+  "cases": [
+    {
+      "id": "er-basic-entities-attributes",
+      "source": "```mermaid\nerDiagram\nCUSTOMER ||--o{ ORDER : places\nCUSTOMER {\n  string id PK\n  string name\n}\nORDER {\n  string id PK\n  string customer_id FK\n  date placed_at\n}\n```"
+    },
+    {
+      "id": "er-attribute-keys-comments",
+      "source": "```mermaid\nerDiagram\nACCOUNT {\n  string account_id PK \"primary identifier\"\n  string owner_id FK \"references customer\"\n  string email UK \"unique address\"\n  string account_owner PK, FK \"compound key\"\n}\n```"
+    },
+    {
+      "id": "er-attribute-type-forms",
+      "source": "```mermaid\nerDiagram\nMEASUREMENT {\n  decimal(10,2) amount \"measured total\"\n  string? middle_name\n  string[] tags\n}\n```"
+    },
+    {
+      "id": "er-cardinality-matrix",
+      "source": "```mermaid\nerDiagram\nCAR ||--o{ NAMEDDRIVER : allows\nPERSON }o..o{ NAMEDDRIVER : is\nA |o--|| B : optional\nC ||--|{ D : required\n```"
+    },
+    {
+      "id": "er-cardinality-word-aliases",
+      "source": "```mermaid\nerDiagram\nCAR 1 to zero or more NAMEDDRIVER : allows\nPERSON many(0) optionally to 0+ NAMEDDRIVER : is\n```"
+    },
+    {
+      "id": "er-identifying-and-nonidentifying",
+      "source": "```mermaid\nerDiagram\nCAR ||--o{ NAMEDDRIVER : allows\nPERSON }|..|{ NAMEDDRIVER : is\nCHILD ||--|| DETAIL : contains\n```"
+    },
+    {
+      "id": "er-entity-aliases",
+      "source": "```mermaid\nerDiagram\np[Person] {\n  string firstName\n  string lastName\n}\na[\"Customer Account\"] {\n  string email\n}\np ||--o| a : has\n```"
+    },
+    {
+      "id": "er-quoted-unicode-entities",
+      "source": "```mermaid\nerDiagram\n\"東京 Customer\" ||--o{ \"注文\" : \"places an order\"\n\"東京 Customer\" {\n  string 顧客ID PK \"識別子\"\n}\n```"
+    },
+    {
+      "id": "er-direction-lr-and-roles",
+      "source": "```mermaid\nerDiagram\ndirection LR\nAUTHOR ||--o{ BOOK : writes\nPUBLISHER ||--|{ BOOK : publishes\nBOOK }o..o{ TAG : \"categorized as\"\n```"
+    },
+    {
+      "id": "er-accessible-metadata",
+      "source": "```mermaid\nerDiagram\naccTitle: Library data model\naccDescr: Authors publish books, and books may have tags.\nAUTHOR ||--o{ BOOK : writes\nBOOK }o..o{ TAG : \"tagged with\"\n```"
+    },
+    {
+      "id": "er-invalid-relationship",
+      "source": "```mermaid\nerDiagram\nA ||--o{ : missing endpoint\n```"
+    },
+    {
+      "id": "er-invalid-attribute",
+      "source": "```mermaid\nerDiagram\nACCOUNT {\n  string\n}\n```"
+    }
+  ]
+}

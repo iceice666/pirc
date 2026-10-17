@@ -1,0 +1,148 @@
+{
+  "id": "html-select-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [390, 768],
+  "height": 1000,
+  "padding": 16,
+  "cases": [
+    {
+      "id": "single",
+      "source": "<div><label for=\"choice\">Choose</label> <select id=\"choice\"><option value=\"a\">Alpha</option><option value=\"b\" disabled>Blocked</option><option value=\"c\">Charlie</option><option value=\"d\">Delta</option></select></div>\n<div><label for=\"last\">Last selected</label> <select id=\"last\"><option selected value=\"a\">First</option><option selected value=\"b\">Second</option></select></div>\n<div><label for=\"empty\">Empty</label> <select id=\"empty\"></select></div>",
+      "actions": [
+        {
+          "id": "focus-label",
+          "selector": "label[for=choice]",
+          "mode": "dom-click"
+        },
+        {
+          "id": "choose-charlie",
+          "selector": "#choice",
+          "mode": "select",
+          "values": ["c"]
+        },
+        {
+          "id": "choose-delta",
+          "selector": "#choice",
+          "mode": "select",
+          "values": ["d"]
+        },
+        {
+          "id": "replace-document",
+          "mode": "replace-markdown",
+          "source": "<div><label for=\"choice\">Choose</label> <select id=\"choice\"><option value=\"reset\">Reset choice</option></select></div>"
+        }
+      ]
+    },
+    {
+      "id": "groups",
+      "source": "<div><label for=\"grouped\">Grouped choices</label> <select id=\"grouped\"><optgroup label=\"Unavailable\" disabled><option value=\"x\">Disabled by group</option></optgroup><optgroup label=\"Available\"><option value=\"a\">  Alpha   label  </option><option value=\"b\" label=\"Shown label\">Other text</option></optgroup></select></div>\n<fieldset disabled><legend><label for=\"legend\">Legend</label><select id=\"legend\"><option>Enabled</option><option>Changed</option></select></legend><label for=\"blocked\">Blocked</label><select id=\"blocked\"><option>Disabled by fieldset</option></select></fieldset>",
+      "actions": [
+        {
+          "id": "choose-label",
+          "selector": "#grouped",
+          "mode": "select",
+          "values": ["b"]
+        },
+        {
+          "id": "legend-choice",
+          "selector": "#legend",
+          "mode": "select",
+          "values": ["Changed"]
+        },
+        {
+          "id": "disabled-label",
+          "selector": "label[for=blocked]",
+          "mode": "dom-click"
+        }
+      ]
+    },
+    {
+      "id": "listboxes",
+      "source": "<div><label for=\"list\">Single list</label> <select id=\"list\" size=\"3\"><option value=\"a\">Alpha</option><option value=\"b\" selected>Beta</option><option value=\"c\" disabled>Blocked</option><option value=\"d\">Delta</option></select></div>\n<div><label for=\"many\">Multiple</label> <select id=\"many\" multiple size=\"4\"><optgroup label=\"Group\"><option value=\"a\" selected>Alpha</option><option value=\"b\">Beta</option><option value=\"c\" disabled>Blocked</option><option value=\"d\" selected>Delta</option></optgroup></select></div>",
+      "actions": [
+        {
+          "id": "touch-beta",
+          "selector": "#many",
+          "mode": "touch-option",
+          "index": 1
+        },
+        {
+          "id": "touch-disabled",
+          "selector": "#many",
+          "mode": "touch-option",
+          "index": 2
+        },
+        {
+          "id": "list-home",
+          "selector": "#list",
+          "mode": "key",
+          "key": "Home"
+        },
+        {
+          "id": "list-end",
+          "selector": "#list",
+          "mode": "key",
+          "key": "End"
+        },
+        {
+          "id": "many-select",
+          "selector": "#many",
+          "mode": "select",
+          "values": ["b", "d"]
+        },
+        {
+          "id": "many-clear",
+          "selector": "#many",
+          "mode": "select",
+          "values": []
+        },
+        {
+          "id": "many-home",
+          "selector": "#many",
+          "mode": "key",
+          "key": "Home"
+        },
+        {
+          "id": "many-shift-end",
+          "selector": "#many",
+          "mode": "key",
+          "key": "Shift+End"
+        }
+      ]
+    },
+    {
+      "id": "labels",
+      "source": "<label id=\"wrap\">Wrapped <select id=\"wrapped\" aria-label=\"Explicit name\" aria-describedby=\"hint\"><option>One</option><option>Two</option></select></label><span id=\"hint\">Choice help</span>\n<p id=\"duplicate\">First ID is text</p><label id=\"dup-label\" for=\"duplicate\">No target</label><select id=\"duplicate\"><option>Unlabelled choice</option></select>\n<div hidden><select id=\"hidden\"><option>Hidden choice</option></select></div>",
+      "actions": [
+        {
+          "id": "wrapped-focus",
+          "selector": "#wrap",
+          "mode": "dom-click"
+        },
+        {
+          "id": "duplicate-label",
+          "selector": "#dup-label",
+          "mode": "dom-click"
+        }
+      ]
+    },
+    {
+      "id": "group-structure",
+      "source": "<div><label for=\"group-menu\">Grouped menu</label> <select id=\"group-menu\"><optgroup label=\"Same\"><option value=\"a\">First</option></optgroup><optgroup label=\"Empty\"></optgroup><optgroup label=\"Same\"><option value=\"b\">Second</option></optgroup><optgroup label=\"Trailing\"></optgroup></select></div>\n<div><label for=\"group-list\">Grouped list</label> <select id=\"group-list\" size=\"8\"><optgroup label=\"Same\"><option value=\"a\">First</option></optgroup><optgroup label=\"Empty\"></optgroup><optgroup label=\"Same\"><option value=\"b\">Second</option></optgroup><optgroup label=\"Trailing\"></optgroup></select></div>",
+      "actions": [
+        {
+          "id": "select-second",
+          "selector": "#group-menu",
+          "mode": "select",
+          "values": ["b"]
+        },
+        {
+          "id": "list-end",
+          "selector": "#group-list",
+          "mode": "key",
+          "key": "End"
+        }
+      ]
+    }
+  ]
+}

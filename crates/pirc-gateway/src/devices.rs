@@ -196,6 +196,31 @@ impl DeviceTokens {
         Ok(())
     }
 
+    /// Look up one live device without exposing its credential or token hash.
+    pub fn get(&self, user: &str, device_id: &str) -> ApiResult<Option<DeviceSummary>> {
+        self.sweep()?;
+        let row = {
+            let conn = self.db.lock();
+            conn.query_row(
+                "SELECT * FROM device_tokens WHERE id=? AND owner_user=?",
+                [device_id, user],
+                DeviceRow::from_row,
+            )
+            .optional()?
+        };
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        if now_ms() >= self.deadline(&row) {
+            self.db
+                .lock()
+                .execute("DELETE FROM device_tokens WHERE id=?", [&row.id])?;
+            self.disconnect(&row.id);
+            return Ok(None);
+        }
+        Ok(Some(self.summary(&row)))
+    }
+
     pub fn list(&self, user: &str) -> ApiResult<Vec<DeviceSummary>> {
         self.sweep()?;
         Ok(self

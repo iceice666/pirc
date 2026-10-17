@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @vitest-environment-options {"url":"http://localhost/"}
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
@@ -28,6 +29,20 @@ const messages = (count: number): ConversationMessage[] =>
     content: `message ${index}`,
     createdAt: new Date(1_700_000_000_000 + index * 1000).toISOString(),
   }));
+
+function memoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => values.delete(key),
+    setItem: (key, value) => values.set(key, String(value)),
+  };
+}
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -68,6 +83,7 @@ async function start(count = 100, width = 1400) {
 beforeEach(() => {
   stubMatchMedia(false, true);
   vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+  vi.stubGlobal('localStorage', memoryStorage());
   vi.spyOn(app, 'refreshControl').mockResolvedValue();
   vi.spyOn(app, 'refreshNodes').mockResolvedValue();
   vi.spyOn(panelApi, 'state').mockResolvedValue({
@@ -241,5 +257,44 @@ describe('App side panel on a narrow screen', () => {
     const toggle = target.querySelector<HTMLButtonElement>('.details-toggle')!;
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(target.querySelector('.panel-scrim')).toBeNull();
+  });
+});
+
+describe('App native management link', () => {
+  it('keeps normal bootstrap and the other query parameters while showing consent without approving', async () => {
+    HTMLDialogElement.prototype.showModal = function () {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function () {
+      this.open = false;
+      this.dispatchEvent(new Event('close'));
+    };
+    history.replaceState(null, '', '/?nativeManagement=req%2Fone&session=existing-session');
+    const fetch = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            id: 'req/one',
+            status: 'pending',
+            deviceName: 'Test phone',
+            capabilities: ['providers'],
+            expiresAt: Date.now() + 300_000,
+            serverNow: Date.now(),
+          }),
+        ),
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await start(2);
+    await tick();
+    flushSync();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(target.textContent).toContain('Test phone');
+    });
+
+    expect(app.bootstrap).toHaveBeenCalledTimes(1);
+    expect(location.search).toBe('?nativeManagement=req%2Fone&session=existing-session');
+    expect(fetch.mock.calls.map(([, init]) => init?.method ?? 'GET')).toEqual(['GET']);
   });
 });

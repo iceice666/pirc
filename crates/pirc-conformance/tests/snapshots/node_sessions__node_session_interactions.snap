@@ -347,6 +347,7 @@ expression: t.into_value()
   {
     "observed": [
       {
+        "interactionEpoch": 1,
         "interactionId": "interaction_<uuid:3>"
       }
     ],
@@ -453,6 +454,7 @@ expression: t.into_value()
     "observed": [
       {
         "cancelled": true,
+        "interactionEpoch": 1,
         "interactionId": "interaction_<uuid:9>"
       }
     ],

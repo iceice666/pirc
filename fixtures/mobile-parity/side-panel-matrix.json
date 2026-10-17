@@ -1,0 +1,41 @@
+{
+  "id": "native-side-panel-matrix-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "height": 844,
+  "widths": [390, 650, 651, 768, 860, 861, 1024],
+  "themes": ["light", "dark"],
+  "textScales": [1, 2],
+  "views": ["files", "git", "memory", "context", "tasks", "terminal", "browser"],
+  "activeStateByView": {
+    "files": "directory",
+    "git": "changes",
+    "memory": "observational-memory",
+    "context": "snapshot",
+    "tasks": "list",
+    "terminal": "active",
+    "browser": "agent"
+  },
+  "contentFixtures": {
+    "chrome": "side-panel.json",
+    "files": "files.json",
+    "git": "git.json",
+    "memory": "observational-memory.json",
+    "tasks": "tasks.json",
+    "terminal": "terminal.json",
+    "browser": "browser.json"
+  },
+  "captureEnvironment": {
+    "web": {
+      "pointer": "touch",
+      "hasTouch": true,
+      "isMobile": true,
+      "locale": "en-US",
+      "deviceScaleFactor": 1
+    },
+    "native": {
+      "pointer": "touch",
+      "hostFonts": "loadParityFonts comparison aliases; not bundled by the app"
+    },
+    "textScaling": "UI font sizes scale 1x or 2x without changing viewport geometry"
+  }
+}

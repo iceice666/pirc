@@ -1,0 +1,5320 @@
+{
+  "fixture": "document-cache-v1",
+  "reference": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "apiFixtureReference": "app-document-routes.json",
+  "captureMethod": "Actual Chrome 154 over a real localhost HTTP server. No Playwright HTTP route/fulfill is installed. Vite serves the pinned App shell/assets, local middleware serves fixture API and response-policy documents, and a local WebSocket server supplies the event endpoint.",
+  "browser": {
+    "version": "154.0.8037.98",
+    "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "httpCacheMatrix": {
+      "playwrightHttpRouting": false,
+      "playwrightDefaultBfcacheDisableFlagRemoved": "--disable-back-forward-cache",
+      "bfcacheObservedByPageshow": true
+    }
+  },
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "deviceScaleFactor": 1,
+    "isMobile": true,
+    "hasTouch": true
+  },
+  "cacheResponsePolicies": [
+    {
+      "id": "no-store-back-fetches-changed-body",
+      "path": "/oracle/cache/no-store-back-fetches-changed-body",
+      "cacheControl": "no-store",
+      "validator": "none",
+      "formStateProbe": false,
+      "reloadMode": null
+    },
+    {
+      "id": "max-age-back-then-reload",
+      "path": "/oracle/cache/max-age-back-then-reload",
+      "cacheControl": "max-age=600",
+      "validator": "none",
+      "formStateProbe": false,
+      "reloadMode": null
+    },
+    {
+      "id": "no-cache-etag-304",
+      "path": "/oracle/cache/no-cache-etag-304",
+      "cacheControl": "no-cache",
+      "validator": "etag",
+      "formStateProbe": true,
+      "reloadMode": "normal"
+    },
+    {
+      "id": "no-cache-etag-changed-200",
+      "path": "/oracle/cache/no-cache-etag-changed-200",
+      "cacheControl": "no-cache",
+      "validator": "etag",
+      "formStateProbe": true,
+      "reloadMode": "hard"
+    },
+    {
+      "id": "no-cache-last-modified-304",
+      "path": "/oracle/cache/no-cache-last-modified-304",
+      "cacheControl": "no-cache",
+      "validator": "last-modified",
+      "formStateProbe": false,
+      "reloadMode": null
+    },
+    {
+      "id": "no-cache-last-modified-changed-200",
+      "path": "/oracle/cache/no-cache-last-modified-changed-200",
+      "cacheControl": "no-cache",
+      "validator": "last-modified",
+      "formStateProbe": false,
+      "reloadMode": null
+    }
+  ],
+  "serverReceipts": [
+    {
+      "caseId": "no-store-back-fetches-changed-body",
+      "sequence": 0,
+      "method": "GET",
+      "url": "/oracle/cache/no-store-back-fetches-changed-body",
+      "requestHeaders": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document"
+      },
+      "kind": "cache-document",
+      "version": "v1",
+      "validator": "none",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "317"
+      }
+    },
+    {
+      "caseId": "max-age-back-then-reload",
+      "sequence": 20,
+      "method": "GET",
+      "url": "/oracle/cache/max-age-back-then-reload",
+      "requestHeaders": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document"
+      },
+      "kind": "cache-document",
+      "version": "v1",
+      "validator": "none",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "max-age=600",
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "297"
+      }
+    },
+    {
+      "caseId": "max-age-back-then-reload",
+      "sequence": 31,
+      "method": "GET",
+      "url": "/oracle/cache/max-age-back-then-reload",
+      "requestHeaders": {
+        "cache-control": "max-age=0",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document"
+      },
+      "kind": "cache-document",
+      "version": "v2",
+      "validator": "none",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "max-age=600",
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "297"
+      }
+    },
+    {
+      "caseId": "no-cache-etag-304",
+      "sequence": 41,
+      "method": "GET",
+      "url": "/oracle/cache/no-cache-etag-304",
+      "requestHeaders": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document"
+      },
+      "kind": "cache-document",
+      "version": "v1",
+      "validator": "etag",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-cache",
+        "content-type": "text/html; charset=utf-8",
+        "etag": "\"no-cache-etag-304-stable\"",
+        "content-length": "704"
+      }
+    },
+    {
+      "caseId": "no-cache-etag-304",
+      "sequence": 52,
+      "method": "GET",
+      "url": "/oracle/cache/no-cache-etag-304",
+      "requestHeaders": {
+        "cache-control": "max-age=0",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document",
+        "if-none-match": "\"no-cache-etag-304-stable\""
+      },
+      "kind": "cache-revalidation",
+      "version": "v1",
+      "validator": "etag",
+      "responseStatus": 304,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-cache",
+        "content-type": "text/html; charset=utf-8",
+        "etag": "\"no-cache-etag-304-stable\""
+      }
+    },
+    {
+      "caseId": "no-cache-etag-changed-200",
+      "sequence": 62,
+      "method": "GET",
+      "url": "/oracle/cache/no-cache-etag-changed-200",
+      "requestHeaders": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document"
+      },
+      "kind": "cache-document",
+      "version": "v1",
+      "validator": "etag",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-cache",
+        "content-type": "text/html; charset=utf-8",
+        "etag": "\"no-cache-etag-changed-200-v1\"",
+        "content-length": "720"
+      }
+    },
+    {
+      "caseId": "no-cache-etag-changed-200",
+      "sequence": 73,
+      "method": "GET",
+      "url": "/oracle/cache/no-cache-etag-changed-200",
+      "requestHeaders": {
+        "pragma": "no-cache",
+        "cache-control": "no-cache",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document"
+      },
+      "kind": "cache-document",
+      "version": "v2",
+      "validator": "etag",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-cache",
+        "content-type": "text/html; charset=utf-8",
+        "etag": "\"no-cache-etag-changed-200-v2\"",
+        "content-length": "720"
+      }
+    },
+    {
+      "caseId": "no-cache-last-modified-304",
+      "sequence": 83,
+      "method": "GET",
+      "url": "/oracle/cache/no-cache-last-modified-304",
+      "requestHeaders": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document"
+      },
+      "kind": "cache-document",
+      "version": "v1",
+      "validator": "last-modified",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-cache",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT",
+        "content-length": "301"
+      }
+    },
+    {
+      "caseId": "no-cache-last-modified-304",
+      "sequence": 94,
+      "method": "GET",
+      "url": "/oracle/cache/no-cache-last-modified-304",
+      "requestHeaders": {
+        "cache-control": "max-age=0",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document",
+        "if-modified-since": "Thu, 01 Oct 2026 00:00:00 GMT"
+      },
+      "kind": "cache-revalidation",
+      "version": "v1",
+      "validator": "last-modified",
+      "responseStatus": 304,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-cache",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT"
+      }
+    },
+    {
+      "caseId": "no-cache-last-modified-changed-200",
+      "sequence": 104,
+      "method": "GET",
+      "url": "/oracle/cache/no-cache-last-modified-changed-200",
+      "requestHeaders": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document"
+      },
+      "kind": "cache-document",
+      "version": "v1",
+      "validator": "last-modified",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-cache",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT",
+        "content-length": "317"
+      }
+    },
+    {
+      "caseId": "no-cache-last-modified-changed-200",
+      "sequence": 115,
+      "method": "GET",
+      "url": "/oracle/cache/no-cache-last-modified-changed-200",
+      "requestHeaders": {
+        "cache-control": "max-age=0",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document",
+        "if-modified-since": "Thu, 01 Oct 2026 00:00:00 GMT"
+      },
+      "kind": "cache-document",
+      "version": "v2",
+      "validator": "last-modified",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-cache",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Fri, 02 Oct 2026 00:00:00 GMT",
+        "content-length": "317"
+      }
+    },
+    {
+      "caseId": "pageshow-bfcache-eligibility",
+      "sequence": 125,
+      "method": "GET",
+      "url": "/oracle/cache/pageshow-bfcache-eligibility",
+      "requestHeaders": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document"
+      },
+      "kind": "cache-document",
+      "version": "v1",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "max-age=600",
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "305"
+      }
+    },
+    {
+      "caseId": "post-resubmission-confirmation",
+      "sequence": 145,
+      "method": "GET",
+      "url": "/oracle/post-entry",
+      "requestHeaders": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document"
+      },
+      "kind": "post-entry",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "321"
+      }
+    },
+    {
+      "caseId": "post-resubmission-confirmation",
+      "sequence": 146,
+      "method": "POST",
+      "url": "/oracle/post-result",
+      "requestHeaders": {
+        "cache-control": "max-age=0",
+        "content-type": "application/x-www-form-urlencoded",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "origin": "http://127.0.0.1:18934",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document",
+        "referer": "http://127.0.0.1:18934/oracle/post-entry"
+      },
+      "kind": "post-result",
+      "body": "payload=native+POST+fixture+value",
+      "decoded": "native POST fixture value",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "191"
+      }
+    },
+    {
+      "caseId": "post-resubmission-confirmation",
+      "sequence": 147,
+      "method": "POST",
+      "url": "/oracle/post-result",
+      "requestHeaders": {
+        "cache-control": "max-age=0",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "origin": "http://127.0.0.1:18934",
+        "content-type": "application/x-www-form-urlencoded",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document",
+        "referer": "http://127.0.0.1:18934/oracle/post-entry"
+      },
+      "kind": "post-result",
+      "body": "payload=native+POST+fixture+value",
+      "decoded": "native POST fixture value",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "191"
+      }
+    },
+    {
+      "caseId": "post-keyboard-reload-and-history-back",
+      "sequence": 148,
+      "method": "GET",
+      "url": "/oracle/post-entry",
+      "requestHeaders": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "none",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document"
+      },
+      "kind": "post-entry",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "321"
+      }
+    },
+    {
+      "caseId": "post-keyboard-reload-and-history-back",
+      "sequence": 149,
+      "method": "POST",
+      "url": "/oracle/post-result",
+      "requestHeaders": {
+        "cache-control": "max-age=0",
+        "content-type": "application/x-www-form-urlencoded",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "origin": "http://127.0.0.1:18934",
+        "accept-language": "en-US",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document",
+        "referer": "http://127.0.0.1:18934/oracle/post-entry"
+      },
+      "kind": "post-result",
+      "body": "payload=native+POST+fixture+value",
+      "decoded": "native POST fixture value",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "vary": "Origin",
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+        "content-length": "191"
+      }
+    }
+  ],
+  "websocketReceipts": [
+    {
+      "caseId": "no-store-back-fetches-changed-body",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "no-store-back-fetches-changed-body",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "max-age-back-then-reload",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "max-age-back-then-reload",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "no-cache-etag-304",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "no-cache-etag-304",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "no-cache-etag-changed-200",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "no-cache-etag-changed-200",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "no-cache-last-modified-304",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "no-cache-last-modified-304",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "no-cache-last-modified-changed-200",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "no-cache-last-modified-changed-200",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "pageshow-bfcache-eligibility",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    },
+    {
+      "caseId": "pageshow-bfcache-eligibility",
+      "path": "/api/events",
+      "query": {
+        "sessionId": "session-latest",
+        "cursor": "1:0",
+        "directory": "1",
+        "memory": "1",
+        "schedules": "1",
+        "sessions": "1"
+      },
+      "connected": true,
+      "closed": true
+    }
+  ],
+  "apiFailures": [],
+  "cases": [
+    {
+      "caseId": "no-store-back-fetches-changed-body",
+      "url": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body",
+      "cacheControl": "no-store",
+      "validator": "none",
+      "initial": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body",
+          "pathname": "/oracle/cache/no-store-back-fetches-changed-body",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "title": "no-store-back-fetches-changed-body",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-store-back-fetches-changed-body Server document v1 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body"
+            }
+          ],
+          "pageHides": [],
+          "formState": null
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body"
+      },
+      "app": {
+        "documentResponseStatus": 200,
+        "documentResponseUrl": "http://127.0.0.1:18934/?session=session-latest",
+        "state": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [],
+          "scrollY": 0
+        },
+        "apiReceipts": [
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/snapshot",
+            "rawQuery": "",
+            "fixtureKey": "snapshot:session-latest",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "?sessionId=session-latest",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          }
+        ],
+        "eventStreams": [
+          {
+            "caseId": "no-store-back-fetches-changed-body",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ]
+      },
+      "serverVersionBeforeBack": "v2",
+      "back": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body",
+          "pathname": "/oracle/cache/no-store-back-fetches-changed-body",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "no-store-back-fetches-changed-body",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-store-back-fetches-changed-body Server document v1 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body"
+            }
+          ],
+          "formState": null
+        },
+        "responseStatus": null,
+        "responseUrl": null,
+        "documentRequest": null,
+        "serverRequest": {
+          "caseId": "no-store-back-fetches-changed-body",
+          "sequence": 0,
+          "method": "GET",
+          "url": "/oracle/cache/no-store-back-fetches-changed-body",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "none",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-store",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "317"
+          }
+        }
+      },
+      "forward": {
+        "app": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "scrollY": 0
+        },
+        "appConnectionRestored": true,
+        "documentRequest": null,
+        "harnessBindingAlreadyPresent": true,
+        "apiRequestCountAfterInitialApp": 9,
+        "newApiRequests": [
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          }
+        ],
+        "newEventStreams": [
+          {
+            "caseId": "no-store-back-fetches-changed-body",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ],
+        "openEventStreamCount": 1
+      },
+      "history": {
+        "backRequestedBy": "window.history.back()",
+        "forwardRequestedBy": "window.history.forward()",
+        "backRestoredFromBfcache": true,
+        "appRestoredFromBfcache": true
+      },
+      "serverReceipts": [
+        {
+          "caseId": "no-store-back-fetches-changed-body",
+          "sequence": 0,
+          "method": "GET",
+          "url": "/oracle/cache/no-store-back-fetches-changed-body",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "none",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-store",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "317"
+          }
+        }
+      ],
+      "cdp": {
+        "documentRequests": [
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-store",
+                "content-length": "317",
+                "content-type": "text/html; charset=utf-8"
+              }
+            },
+            "encodedDataLength": 520
+          },
+          {
+            "url": "http://127.0.0.1:18934/?session=session-latest",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/no-store-back-fetches-changed-body",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "same-origin",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "cache-control": "no-cache",
+                "content-length": "1259",
+                "content-type": "text/html",
+                "etag": "W/\"4eb-PZq2EL1BbdhLaTpQSSYJdKEnOO8\"",
+                "vary": "Origin"
+              }
+            },
+            "encodedDataLength": 1491
+          }
+        ],
+        "cacheEvents": [],
+        "bfcacheNotUsed": [],
+        "lifecycleEvents": [
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "max-age-back-then-reload",
+      "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+      "cacheControl": "max-age=600",
+      "validator": "none",
+      "initial": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+          "pathname": "/oracle/cache/max-age-back-then-reload",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "title": "max-age-back-then-reload",
+          "bodyVersion": "Server document v1",
+          "bodyText": "max-age-back-then-reload Server document v1 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload"
+            }
+          ],
+          "pageHides": [],
+          "formState": null
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload"
+      },
+      "app": {
+        "documentResponseStatus": 200,
+        "documentResponseUrl": "http://127.0.0.1:18934/?session=session-latest",
+        "state": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [],
+          "scrollY": 0
+        },
+        "apiReceipts": [
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/snapshot",
+            "rawQuery": "",
+            "fixtureKey": "snapshot:session-latest",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "?sessionId=session-latest",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          }
+        ],
+        "eventStreams": [
+          {
+            "caseId": "max-age-back-then-reload",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ]
+      },
+      "serverVersionBeforeBack": "v2",
+      "back": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+          "pathname": "/oracle/cache/max-age-back-then-reload",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "max-age-back-then-reload",
+          "bodyVersion": "Server document v1",
+          "bodyText": "max-age-back-then-reload Server document v1 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload"
+            }
+          ],
+          "formState": null
+        },
+        "responseStatus": null,
+        "responseUrl": null,
+        "documentRequest": null,
+        "serverRequest": {
+          "caseId": "max-age-back-then-reload",
+          "sequence": 20,
+          "method": "GET",
+          "url": "/oracle/cache/max-age-back-then-reload",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "none",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "max-age=600",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "297"
+          }
+        }
+      },
+      "reload": {
+        "trigger": "Playwright page.reload() (normal reload)",
+        "navigationTimedOut": false,
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+          "pathname": "/oracle/cache/max-age-back-then-reload",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "max-age-back-then-reload",
+          "bodyVersion": "Server document v2",
+          "bodyText": "max-age-back-then-reload Server document v2 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "reload",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload"
+            }
+          ],
+          "pageHides": [],
+          "formState": null
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+        "documentRequest": {
+          "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+          "method": "GET",
+          "resourceType": "Document",
+          "requestHeaders": {
+            "accept-language": "en-US",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+          },
+          "redirectResponse": null,
+          "extraRequestHeaders": {
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "accept-language": "en-US",
+            "cache-control": "max-age=0",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "none",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+          },
+          "response": {
+            "status": 200,
+            "mimeType": "text/html",
+            "fromDiskCache": false,
+            "fromServiceWorker": false,
+            "fromPrefetchCache": false,
+            "headers": {
+              "vary": "Origin",
+              "cache-control": "max-age=600",
+              "content-length": "297",
+              "content-type": "text/html; charset=utf-8"
+            }
+          },
+          "encodedDataLength": 503
+        },
+        "serverRequest": {
+          "caseId": "max-age-back-then-reload",
+          "sequence": 31,
+          "method": "GET",
+          "url": "/oracle/cache/max-age-back-then-reload",
+          "requestHeaders": {
+            "cache-control": "max-age=0",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v2",
+          "validator": "none",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "max-age=600",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "297"
+          }
+        }
+      },
+      "forward": {
+        "app": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "scrollY": 0
+        },
+        "appConnectionRestored": true,
+        "documentRequest": null,
+        "harnessBindingAlreadyPresent": true,
+        "apiRequestCountAfterInitialApp": 9,
+        "newApiRequests": [
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          }
+        ],
+        "newEventStreams": [
+          {
+            "caseId": "max-age-back-then-reload",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ],
+        "openEventStreamCount": 1
+      },
+      "history": {
+        "backRequestedBy": "window.history.back()",
+        "forwardRequestedBy": "window.history.forward()",
+        "backRestoredFromBfcache": true,
+        "appRestoredFromBfcache": true
+      },
+      "serverReceipts": [
+        {
+          "caseId": "max-age-back-then-reload",
+          "sequence": 20,
+          "method": "GET",
+          "url": "/oracle/cache/max-age-back-then-reload",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "none",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "max-age=600",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "297"
+          }
+        },
+        {
+          "caseId": "max-age-back-then-reload",
+          "sequence": 31,
+          "method": "GET",
+          "url": "/oracle/cache/max-age-back-then-reload",
+          "requestHeaders": {
+            "cache-control": "max-age=0",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v2",
+          "validator": "none",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "max-age=600",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "297"
+          }
+        }
+      ],
+      "cdp": {
+        "documentRequests": [
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "max-age=600",
+                "content-length": "297",
+                "content-type": "text/html; charset=utf-8"
+              }
+            },
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "encodedDataLength": 503
+          },
+          {
+            "url": "http://127.0.0.1:18934/?session=session-latest",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "same-origin",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "cache-control": "no-cache",
+                "content-length": "1259",
+                "content-type": "text/html",
+                "etag": "W/\"4eb-PZq2EL1BbdhLaTpQSSYJdKEnOO8\"",
+                "vary": "Origin"
+              }
+            },
+            "encodedDataLength": 1491
+          },
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/max-age-back-then-reload",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "cache-control": "max-age=0",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "max-age=600",
+                "content-length": "297",
+                "content-type": "text/html; charset=utf-8"
+              }
+            },
+            "encodedDataLength": 503
+          }
+        ],
+        "cacheEvents": [],
+        "bfcacheNotUsed": [],
+        "lifecycleEvents": [
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "no-cache-etag-304",
+      "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+      "cacheControl": "no-cache",
+      "validator": "etag",
+      "initial": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+          "pathname": "/oracle/cache/no-cache-etag-304",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "title": "no-cache-etag-304",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-cache-etag-304 Server document v1 Text Autocomplete off Checked Choice One Two Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304"
+            }
+          ],
+          "pageHides": [],
+          "formState": {
+            "textValue": "edited text value",
+            "autocompleteOffValue": "edited autocomplete off",
+            "checkboxChecked": true,
+            "selectValue": "two",
+            "activeElementId": "state-text",
+            "textSelection": {
+              "start": 16,
+              "end": 17,
+              "direction": "backward"
+            }
+          }
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304"
+      },
+      "app": {
+        "documentResponseStatus": 200,
+        "documentResponseUrl": "http://127.0.0.1:18934/?session=session-latest",
+        "state": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [],
+          "scrollY": 0
+        },
+        "apiReceipts": [
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/snapshot",
+            "rawQuery": "",
+            "fixtureKey": "snapshot:session-latest",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "?sessionId=session-latest",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          }
+        ],
+        "eventStreams": [
+          {
+            "caseId": "no-cache-etag-304",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ]
+      },
+      "serverVersionBeforeBack": "v1",
+      "back": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+          "pathname": "/oracle/cache/no-cache-etag-304",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "no-cache-etag-304",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-cache-etag-304 Server document v1 Text Autocomplete off Checked Choice One Two Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304"
+            }
+          ],
+          "formState": {
+            "textValue": "edited text value",
+            "autocompleteOffValue": "edited autocomplete off",
+            "checkboxChecked": true,
+            "selectValue": "two",
+            "activeElementId": "open-pirc",
+            "textSelection": null
+          }
+        },
+        "responseStatus": null,
+        "responseUrl": null,
+        "documentRequest": null,
+        "serverRequest": {
+          "caseId": "no-cache-etag-304",
+          "sequence": 41,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-etag-304",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "etag",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "etag": "\"no-cache-etag-304-stable\"",
+            "content-length": "704"
+          }
+        }
+      },
+      "reload": {
+        "trigger": "Playwright page.reload() (normal reload)",
+        "navigationTimedOut": false,
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+          "pathname": "/oracle/cache/no-cache-etag-304",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "no-cache-etag-304",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-cache-etag-304 Server document v1 Text Autocomplete off Checked Choice One Two Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "reload",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304"
+            }
+          ],
+          "pageHides": [],
+          "formState": {
+            "textValue": "default text",
+            "autocompleteOffValue": "default off",
+            "checkboxChecked": false,
+            "selectValue": "one",
+            "activeElementId": "",
+            "textSelection": null
+          }
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+        "documentRequest": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+          "method": "GET",
+          "resourceType": "Document",
+          "requestHeaders": {
+            "accept-language": "en-US",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+          },
+          "redirectResponse": null,
+          "response": {
+            "status": 200,
+            "mimeType": "text/html",
+            "fromDiskCache": false,
+            "fromServiceWorker": false,
+            "fromPrefetchCache": false,
+            "headers": {
+              "vary": "Origin",
+              "cache-control": "no-cache",
+              "content-length": "704",
+              "content-type": "text/html; charset=utf-8",
+              "etag": "\"no-cache-etag-304-stable\""
+            }
+          },
+          "extraRequestHeaders": {
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "accept-language": "en-US",
+            "cache-control": "max-age=0",
+            "if-none-match": "\"no-cache-etag-304-stable\"",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "none",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+          },
+          "encodedDataLength": 226
+        },
+        "serverRequest": {
+          "caseId": "no-cache-etag-304",
+          "sequence": 52,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-etag-304",
+          "requestHeaders": {
+            "cache-control": "max-age=0",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document",
+            "if-none-match": "\"no-cache-etag-304-stable\""
+          },
+          "kind": "cache-revalidation",
+          "version": "v1",
+          "validator": "etag",
+          "responseStatus": 304,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "etag": "\"no-cache-etag-304-stable\""
+          }
+        }
+      },
+      "forward": {
+        "app": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "scrollY": 0
+        },
+        "appConnectionRestored": true,
+        "documentRequest": null,
+        "harnessBindingAlreadyPresent": true,
+        "apiRequestCountAfterInitialApp": 9,
+        "newApiRequests": [
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          }
+        ],
+        "newEventStreams": [
+          {
+            "caseId": "no-cache-etag-304",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ],
+        "openEventStreamCount": 1
+      },
+      "history": {
+        "backRequestedBy": "window.history.back()",
+        "forwardRequestedBy": "window.history.forward()",
+        "backRestoredFromBfcache": true,
+        "appRestoredFromBfcache": true
+      },
+      "serverReceipts": [
+        {
+          "caseId": "no-cache-etag-304",
+          "sequence": 41,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-etag-304",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "etag",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "etag": "\"no-cache-etag-304-stable\"",
+            "content-length": "704"
+          }
+        },
+        {
+          "caseId": "no-cache-etag-304",
+          "sequence": 52,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-etag-304",
+          "requestHeaders": {
+            "cache-control": "max-age=0",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document",
+            "if-none-match": "\"no-cache-etag-304-stable\""
+          },
+          "kind": "cache-revalidation",
+          "version": "v1",
+          "validator": "etag",
+          "responseStatus": 304,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "etag": "\"no-cache-etag-304-stable\""
+          }
+        }
+      ],
+      "cdp": {
+        "documentRequests": [
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-cache",
+                "content-length": "704",
+                "content-type": "text/html; charset=utf-8",
+                "etag": "\"no-cache-etag-304-stable\""
+              }
+            },
+            "encodedDataLength": 941
+          },
+          {
+            "url": "http://127.0.0.1:18934/?session=session-latest",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "same-origin",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "cache-control": "no-cache",
+                "content-length": "1259",
+                "content-type": "text/html",
+                "etag": "W/\"4eb-PZq2EL1BbdhLaTpQSSYJdKEnOO8\"",
+                "vary": "Origin"
+              }
+            },
+            "encodedDataLength": 1491
+          },
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-304",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-cache",
+                "content-length": "704",
+                "content-type": "text/html; charset=utf-8",
+                "etag": "\"no-cache-etag-304-stable\""
+              }
+            },
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "cache-control": "max-age=0",
+              "if-none-match": "\"no-cache-etag-304-stable\"",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "encodedDataLength": 226
+          }
+        ],
+        "cacheEvents": [],
+        "bfcacheNotUsed": [],
+        "lifecycleEvents": [
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "no-cache-etag-changed-200",
+      "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+      "cacheControl": "no-cache",
+      "validator": "etag",
+      "initial": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+          "pathname": "/oracle/cache/no-cache-etag-changed-200",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "title": "no-cache-etag-changed-200",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-cache-etag-changed-200 Server document v1 Text Autocomplete off Checked Choice One Two Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200"
+            }
+          ],
+          "pageHides": [],
+          "formState": {
+            "textValue": "edited text value",
+            "autocompleteOffValue": "edited autocomplete off",
+            "checkboxChecked": true,
+            "selectValue": "two",
+            "activeElementId": "state-text",
+            "textSelection": {
+              "start": 16,
+              "end": 17,
+              "direction": "backward"
+            }
+          }
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200"
+      },
+      "app": {
+        "documentResponseStatus": 200,
+        "documentResponseUrl": "http://127.0.0.1:18934/?session=session-latest",
+        "state": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [],
+          "scrollY": 0
+        },
+        "apiReceipts": [
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/snapshot",
+            "rawQuery": "",
+            "fixtureKey": "snapshot:session-latest",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "?sessionId=session-latest",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          }
+        ],
+        "eventStreams": [
+          {
+            "caseId": "no-cache-etag-changed-200",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ]
+      },
+      "serverVersionBeforeBack": "v2",
+      "back": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+          "pathname": "/oracle/cache/no-cache-etag-changed-200",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "no-cache-etag-changed-200",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-cache-etag-changed-200 Server document v1 Text Autocomplete off Checked Choice One Two Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200"
+            }
+          ],
+          "formState": {
+            "textValue": "edited text value",
+            "autocompleteOffValue": "edited autocomplete off",
+            "checkboxChecked": true,
+            "selectValue": "two",
+            "activeElementId": "open-pirc",
+            "textSelection": null
+          }
+        },
+        "responseStatus": null,
+        "responseUrl": null,
+        "documentRequest": null,
+        "serverRequest": {
+          "caseId": "no-cache-etag-changed-200",
+          "sequence": 62,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-etag-changed-200",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "etag",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "etag": "\"no-cache-etag-changed-200-v1\"",
+            "content-length": "720"
+          }
+        }
+      },
+      "reload": {
+        "trigger": "Chrome CDP Page.reload(ignoreCache: true) (hard cache bypass)",
+        "navigationTimedOut": false,
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+          "pathname": "/oracle/cache/no-cache-etag-changed-200",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "no-cache-etag-changed-200",
+          "bodyVersion": "Server document v2",
+          "bodyText": "no-cache-etag-changed-200 Server document v2 Text Autocomplete off Checked Choice One Two Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "reload",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200"
+            }
+          ],
+          "pageHides": [],
+          "formState": {
+            "textValue": "default text",
+            "autocompleteOffValue": "default off",
+            "checkboxChecked": false,
+            "selectValue": "one",
+            "activeElementId": "",
+            "textSelection": null
+          }
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+        "documentRequest": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+          "method": "GET",
+          "resourceType": "Document",
+          "requestHeaders": {
+            "accept-language": "en-US",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+          },
+          "redirectResponse": null,
+          "response": {
+            "status": 200,
+            "mimeType": "text/html",
+            "fromDiskCache": false,
+            "fromServiceWorker": false,
+            "fromPrefetchCache": false,
+            "headers": {
+              "vary": "Origin",
+              "cache-control": "no-cache",
+              "content-length": "720",
+              "content-type": "text/html; charset=utf-8",
+              "etag": "\"no-cache-etag-changed-200-v2\""
+            }
+          },
+          "extraRequestHeaders": {
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "accept-language": "en-US",
+            "cache-control": "no-cache",
+            "pragma": "no-cache",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "none",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+          },
+          "encodedDataLength": 961
+        },
+        "serverRequest": {
+          "caseId": "no-cache-etag-changed-200",
+          "sequence": 73,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-etag-changed-200",
+          "requestHeaders": {
+            "pragma": "no-cache",
+            "cache-control": "no-cache",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v2",
+          "validator": "etag",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "etag": "\"no-cache-etag-changed-200-v2\"",
+            "content-length": "720"
+          }
+        }
+      },
+      "forward": {
+        "app": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "scrollY": 0
+        },
+        "appConnectionRestored": true,
+        "documentRequest": null,
+        "harnessBindingAlreadyPresent": true,
+        "apiRequestCountAfterInitialApp": 9,
+        "newApiRequests": [
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          }
+        ],
+        "newEventStreams": [
+          {
+            "caseId": "no-cache-etag-changed-200",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ],
+        "openEventStreamCount": 1
+      },
+      "history": {
+        "backRequestedBy": "window.history.back()",
+        "forwardRequestedBy": "window.history.forward()",
+        "backRestoredFromBfcache": true,
+        "appRestoredFromBfcache": true
+      },
+      "serverReceipts": [
+        {
+          "caseId": "no-cache-etag-changed-200",
+          "sequence": 62,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-etag-changed-200",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "etag",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "etag": "\"no-cache-etag-changed-200-v1\"",
+            "content-length": "720"
+          }
+        },
+        {
+          "caseId": "no-cache-etag-changed-200",
+          "sequence": 73,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-etag-changed-200",
+          "requestHeaders": {
+            "pragma": "no-cache",
+            "cache-control": "no-cache",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v2",
+          "validator": "etag",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "etag": "\"no-cache-etag-changed-200-v2\"",
+            "content-length": "720"
+          }
+        }
+      ],
+      "cdp": {
+        "documentRequests": [
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-cache",
+                "content-length": "720",
+                "content-type": "text/html; charset=utf-8",
+                "etag": "\"no-cache-etag-changed-200-v1\""
+              }
+            },
+            "encodedDataLength": 961
+          },
+          {
+            "url": "http://127.0.0.1:18934/?session=session-latest",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "same-origin",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "cache-control": "no-cache",
+                "content-length": "1259",
+                "content-type": "text/html",
+                "etag": "W/\"4eb-PZq2EL1BbdhLaTpQSSYJdKEnOO8\"",
+                "vary": "Origin"
+              }
+            },
+            "encodedDataLength": 1491
+          },
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/no-cache-etag-changed-200",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-cache",
+                "content-length": "720",
+                "content-type": "text/html; charset=utf-8",
+                "etag": "\"no-cache-etag-changed-200-v2\""
+              }
+            },
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "cache-control": "no-cache",
+              "pragma": "no-cache",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "encodedDataLength": 961
+          }
+        ],
+        "cacheEvents": [],
+        "bfcacheNotUsed": [],
+        "lifecycleEvents": [
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "no-cache-last-modified-304",
+      "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+      "cacheControl": "no-cache",
+      "validator": "last-modified",
+      "initial": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+          "pathname": "/oracle/cache/no-cache-last-modified-304",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "title": "no-cache-last-modified-304",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-cache-last-modified-304 Server document v1 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304"
+            }
+          ],
+          "pageHides": [],
+          "formState": null
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304"
+      },
+      "app": {
+        "documentResponseStatus": 200,
+        "documentResponseUrl": "http://127.0.0.1:18934/?session=session-latest",
+        "state": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [],
+          "scrollY": 0
+        },
+        "apiReceipts": [
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/snapshot",
+            "rawQuery": "",
+            "fixtureKey": "snapshot:session-latest",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "?sessionId=session-latest",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          }
+        ],
+        "eventStreams": [
+          {
+            "caseId": "no-cache-last-modified-304",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ]
+      },
+      "serverVersionBeforeBack": "v1",
+      "back": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+          "pathname": "/oracle/cache/no-cache-last-modified-304",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "no-cache-last-modified-304",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-cache-last-modified-304 Server document v1 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304"
+            }
+          ],
+          "formState": null
+        },
+        "responseStatus": null,
+        "responseUrl": null,
+        "documentRequest": null,
+        "serverRequest": {
+          "caseId": "no-cache-last-modified-304",
+          "sequence": 83,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-last-modified-304",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "last-modified",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT",
+            "content-length": "301"
+          }
+        }
+      },
+      "reload": {
+        "trigger": "Playwright page.reload() (normal reload)",
+        "navigationTimedOut": false,
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+          "pathname": "/oracle/cache/no-cache-last-modified-304",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "no-cache-last-modified-304",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-cache-last-modified-304 Server document v1 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "reload",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304"
+            }
+          ],
+          "pageHides": [],
+          "formState": null
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+        "documentRequest": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+          "method": "GET",
+          "resourceType": "Document",
+          "requestHeaders": {
+            "accept-language": "en-US",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+          },
+          "redirectResponse": null,
+          "response": {
+            "status": 200,
+            "mimeType": "text/html",
+            "fromDiskCache": false,
+            "fromServiceWorker": false,
+            "fromPrefetchCache": false,
+            "headers": {
+              "vary": "Origin",
+              "cache-control": "no-cache",
+              "content-length": "301",
+              "content-type": "text/html; charset=utf-8",
+              "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT"
+            }
+          },
+          "extraRequestHeaders": {
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "accept-language": "en-US",
+            "cache-control": "max-age=0",
+            "if-modified-since": "Thu, 01 Oct 2026 00:00:00 GMT",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "none",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+          },
+          "encodedDataLength": 238
+        },
+        "serverRequest": {
+          "caseId": "no-cache-last-modified-304",
+          "sequence": 94,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-last-modified-304",
+          "requestHeaders": {
+            "cache-control": "max-age=0",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document",
+            "if-modified-since": "Thu, 01 Oct 2026 00:00:00 GMT"
+          },
+          "kind": "cache-revalidation",
+          "version": "v1",
+          "validator": "last-modified",
+          "responseStatus": 304,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT"
+          }
+        }
+      },
+      "forward": {
+        "app": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "scrollY": 0
+        },
+        "appConnectionRestored": true,
+        "documentRequest": null,
+        "harnessBindingAlreadyPresent": true,
+        "apiRequestCountAfterInitialApp": 9,
+        "newApiRequests": [
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          }
+        ],
+        "newEventStreams": [
+          {
+            "caseId": "no-cache-last-modified-304",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ],
+        "openEventStreamCount": 1
+      },
+      "history": {
+        "backRequestedBy": "window.history.back()",
+        "forwardRequestedBy": "window.history.forward()",
+        "backRestoredFromBfcache": true,
+        "appRestoredFromBfcache": true
+      },
+      "serverReceipts": [
+        {
+          "caseId": "no-cache-last-modified-304",
+          "sequence": 83,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-last-modified-304",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "last-modified",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT",
+            "content-length": "301"
+          }
+        },
+        {
+          "caseId": "no-cache-last-modified-304",
+          "sequence": 94,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-last-modified-304",
+          "requestHeaders": {
+            "cache-control": "max-age=0",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document",
+            "if-modified-since": "Thu, 01 Oct 2026 00:00:00 GMT"
+          },
+          "kind": "cache-revalidation",
+          "version": "v1",
+          "validator": "last-modified",
+          "responseStatus": 304,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT"
+          }
+        }
+      ],
+      "cdp": {
+        "documentRequests": [
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-cache",
+                "content-length": "301",
+                "content-type": "text/html; charset=utf-8",
+                "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT"
+              }
+            },
+            "encodedDataLength": 550
+          },
+          {
+            "url": "http://127.0.0.1:18934/?session=session-latest",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "same-origin",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "cache-control": "no-cache",
+                "content-length": "1259",
+                "content-type": "text/html",
+                "etag": "W/\"4eb-PZq2EL1BbdhLaTpQSSYJdKEnOO8\"",
+                "vary": "Origin"
+              }
+            },
+            "encodedDataLength": 1491
+          },
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-304",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-cache",
+                "content-length": "301",
+                "content-type": "text/html; charset=utf-8",
+                "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT"
+              }
+            },
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "cache-control": "max-age=0",
+              "if-modified-since": "Thu, 01 Oct 2026 00:00:00 GMT",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "encodedDataLength": 238
+          }
+        ],
+        "cacheEvents": [],
+        "bfcacheNotUsed": [],
+        "lifecycleEvents": [
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "no-cache-last-modified-changed-200",
+      "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+      "cacheControl": "no-cache",
+      "validator": "last-modified",
+      "initial": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+          "pathname": "/oracle/cache/no-cache-last-modified-changed-200",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "title": "no-cache-last-modified-changed-200",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-cache-last-modified-changed-200 Server document v1 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200"
+            }
+          ],
+          "pageHides": [],
+          "formState": null
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200"
+      },
+      "app": {
+        "documentResponseStatus": 200,
+        "documentResponseUrl": "http://127.0.0.1:18934/?session=session-latest",
+        "state": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [],
+          "scrollY": 0
+        },
+        "apiReceipts": [
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/snapshot",
+            "rawQuery": "",
+            "fixtureKey": "snapshot:session-latest",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "?sessionId=session-latest",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          }
+        ],
+        "eventStreams": [
+          {
+            "caseId": "no-cache-last-modified-changed-200",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ]
+      },
+      "serverVersionBeforeBack": "v2",
+      "back": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+          "pathname": "/oracle/cache/no-cache-last-modified-changed-200",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "no-cache-last-modified-changed-200",
+          "bodyVersion": "Server document v1",
+          "bodyText": "no-cache-last-modified-changed-200 Server document v1 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200"
+            }
+          ],
+          "formState": null
+        },
+        "responseStatus": null,
+        "responseUrl": null,
+        "documentRequest": null,
+        "serverRequest": {
+          "caseId": "no-cache-last-modified-changed-200",
+          "sequence": 104,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-last-modified-changed-200",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "last-modified",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT",
+            "content-length": "317"
+          }
+        }
+      },
+      "reload": {
+        "trigger": "Playwright page.reload() (normal reload)",
+        "navigationTimedOut": false,
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+          "pathname": "/oracle/cache/no-cache-last-modified-changed-200",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "no-cache-last-modified-changed-200",
+          "bodyVersion": "Server document v2",
+          "bodyText": "no-cache-last-modified-changed-200 Server document v2 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "reload",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200"
+            }
+          ],
+          "pageHides": [],
+          "formState": null
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+        "documentRequest": {
+          "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+          "method": "GET",
+          "resourceType": "Document",
+          "requestHeaders": {
+            "accept-language": "en-US",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+          },
+          "redirectResponse": null,
+          "response": {
+            "status": 200,
+            "mimeType": "text/html",
+            "fromDiskCache": false,
+            "fromServiceWorker": false,
+            "fromPrefetchCache": false,
+            "headers": {
+              "vary": "Origin",
+              "cache-control": "no-cache",
+              "content-length": "317",
+              "content-type": "text/html; charset=utf-8",
+              "last-modified": "Fri, 02 Oct 2026 00:00:00 GMT"
+            }
+          },
+          "extraRequestHeaders": {
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "accept-language": "en-US",
+            "cache-control": "max-age=0",
+            "if-modified-since": "Thu, 01 Oct 2026 00:00:00 GMT",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "none",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+          },
+          "encodedDataLength": 566
+        },
+        "serverRequest": {
+          "caseId": "no-cache-last-modified-changed-200",
+          "sequence": 115,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-last-modified-changed-200",
+          "requestHeaders": {
+            "cache-control": "max-age=0",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document",
+            "if-modified-since": "Thu, 01 Oct 2026 00:00:00 GMT"
+          },
+          "kind": "cache-document",
+          "version": "v2",
+          "validator": "last-modified",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "last-modified": "Fri, 02 Oct 2026 00:00:00 GMT",
+            "content-length": "317"
+          }
+        }
+      },
+      "forward": {
+        "app": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "scrollY": 0
+        },
+        "appConnectionRestored": true,
+        "documentRequest": null,
+        "harnessBindingAlreadyPresent": true,
+        "apiRequestCountAfterInitialApp": 9,
+        "newApiRequests": [
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          }
+        ],
+        "newEventStreams": [
+          {
+            "caseId": "no-cache-last-modified-changed-200",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ],
+        "openEventStreamCount": 1
+      },
+      "history": {
+        "backRequestedBy": "window.history.back()",
+        "forwardRequestedBy": "window.history.forward()",
+        "backRestoredFromBfcache": true,
+        "appRestoredFromBfcache": true
+      },
+      "serverReceipts": [
+        {
+          "caseId": "no-cache-last-modified-changed-200",
+          "sequence": 104,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-last-modified-changed-200",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "validator": "last-modified",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT",
+            "content-length": "317"
+          }
+        },
+        {
+          "caseId": "no-cache-last-modified-changed-200",
+          "sequence": 115,
+          "method": "GET",
+          "url": "/oracle/cache/no-cache-last-modified-changed-200",
+          "requestHeaders": {
+            "cache-control": "max-age=0",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document",
+            "if-modified-since": "Thu, 01 Oct 2026 00:00:00 GMT"
+          },
+          "kind": "cache-document",
+          "version": "v2",
+          "validator": "last-modified",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-cache",
+            "content-type": "text/html; charset=utf-8",
+            "last-modified": "Fri, 02 Oct 2026 00:00:00 GMT",
+            "content-length": "317"
+          }
+        }
+      ],
+      "cdp": {
+        "documentRequests": [
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-cache",
+                "content-length": "317",
+                "content-type": "text/html; charset=utf-8",
+                "last-modified": "Thu, 01 Oct 2026 00:00:00 GMT"
+              }
+            },
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "encodedDataLength": 566
+          },
+          {
+            "url": "http://127.0.0.1:18934/?session=session-latest",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "same-origin",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "cache-control": "no-cache",
+                "content-length": "1259",
+                "content-type": "text/html",
+                "etag": "W/\"4eb-PZq2EL1BbdhLaTpQSSYJdKEnOO8\"",
+                "vary": "Origin"
+              }
+            },
+            "encodedDataLength": 1491
+          },
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/no-cache-last-modified-changed-200",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-cache",
+                "content-length": "317",
+                "content-type": "text/html; charset=utf-8",
+                "last-modified": "Fri, 02 Oct 2026 00:00:00 GMT"
+              }
+            },
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "cache-control": "max-age=0",
+              "if-modified-since": "Thu, 01 Oct 2026 00:00:00 GMT",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "encodedDataLength": 566
+          }
+        ],
+        "cacheEvents": [],
+        "bfcacheNotUsed": [],
+        "lifecycleEvents": [
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "pageshow-bfcache-eligibility",
+      "url": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility",
+      "cacheControl": "max-age=600",
+      "initial": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility",
+          "pathname": "/oracle/cache/pageshow-bfcache-eligibility",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "title": "pageshow-bfcache-eligibility",
+          "bodyVersion": "Server document v1",
+          "bodyText": "pageshow-bfcache-eligibility Server document v1 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility"
+            }
+          ],
+          "pageHides": [],
+          "formState": null
+        },
+        "responseStatus": 200,
+        "responseUrl": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility"
+      },
+      "app": {
+        "documentResponseStatus": 200,
+        "documentResponseUrl": "http://127.0.0.1:18934/?session=session-latest",
+        "state": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [],
+          "scrollY": 0
+        },
+        "apiReceipts": [
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/snapshot",
+            "rawQuery": "",
+            "fixtureKey": "snapshot:session-latest",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/models",
+            "rawQuery": "?sessionId=session-latest",
+            "fixtureKey": "models",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          }
+        ],
+        "eventStreams": [
+          {
+            "caseId": "pageshow-bfcache-eligibility",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ]
+      },
+      "serverVersionBeforeBack": "v2",
+      "back": {
+        "document": {
+          "url": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility",
+          "pathname": "/oracle/cache/pageshow-bfcache-eligibility",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "title": "pageshow-bfcache-eligibility",
+          "bodyVersion": "Server document v1",
+          "bodyText": "pageshow-bfcache-eligibility Server document v1 Open the Pirc app",
+          "scrollY": 0,
+          "navigationType": "navigate",
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility"
+            }
+          ],
+          "formState": null
+        },
+        "responseStatus": null,
+        "responseUrl": null,
+        "documentRequest": null,
+        "serverRequest": {
+          "caseId": "pageshow-bfcache-eligibility",
+          "sequence": 125,
+          "method": "GET",
+          "url": "/oracle/cache/pageshow-bfcache-eligibility",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "max-age=600",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "305"
+          }
+        }
+      },
+      "forward": {
+        "app": {
+          "url": "http://127.0.0.1:18934/?session=session-latest",
+          "pathname": "/",
+          "search": "?session=session-latest",
+          "hash": "",
+          "historyLength": 3,
+          "title": "Latest chat · pirc",
+          "app": {
+            "loading": false,
+            "view": "session",
+            "activeSessionId": "session-latest",
+            "sessionStateId": "session-latest",
+            "connection": "connected",
+            "demoFallback": false,
+            "pageError": null
+          },
+          "documentStartUrl": "http://127.0.0.1:18934/?session=session-latest",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/?session=session-latest"
+            }
+          ],
+          "scrollY": 0
+        },
+        "appConnectionRestored": true,
+        "documentRequest": null,
+        "harnessBindingAlreadyPresent": true,
+        "apiRequestCountAfterInitialApp": 9,
+        "newApiRequests": [
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions",
+            "rawQuery": "",
+            "fixtureKey": "sessions",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/memory",
+            "rawQuery": "",
+            "fixtureKey": "memory",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/schedules",
+            "rawQuery": "",
+            "fixtureKey": "schedules",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/session-latest/control",
+            "rawQuery": "",
+            "fixtureKey": "controlLease",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/nodes",
+            "rawQuery": "",
+            "fixtureKey": "nodes",
+            "responseStatus": 200
+          },
+          {
+            "method": "GET",
+            "path": "/api/workspaces",
+            "rawQuery": "",
+            "fixtureKey": "workspaces",
+            "responseStatus": 200
+          }
+        ],
+        "newEventStreams": [
+          {
+            "caseId": "pageshow-bfcache-eligibility",
+            "path": "/api/events",
+            "query": {
+              "sessionId": "session-latest",
+              "cursor": "1:0",
+              "directory": "1",
+              "memory": "1",
+              "schedules": "1",
+              "sessions": "1"
+            },
+            "connected": true,
+            "closed": true
+          }
+        ],
+        "openEventStreamCount": 1
+      },
+      "history": {
+        "backRequestedBy": "window.history.back()",
+        "forwardRequestedBy": "window.history.forward()",
+        "backRestoredFromBfcache": true,
+        "appRestoredFromBfcache": true
+      },
+      "serverReceipts": [
+        {
+          "caseId": "pageshow-bfcache-eligibility",
+          "sequence": 125,
+          "method": "GET",
+          "url": "/oracle/cache/pageshow-bfcache-eligibility",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "cache-document",
+          "version": "v1",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "max-age=600",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "305"
+          }
+        }
+      ],
+      "cdp": {
+        "documentRequests": [
+          {
+            "url": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "max-age=600",
+                "content-length": "305",
+                "content-type": "text/html; charset=utf-8"
+              }
+            },
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "encodedDataLength": 511
+          },
+          {
+            "url": "http://127.0.0.1:18934/?session=session-latest",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "referer": "http://127.0.0.1:18934/oracle/cache/pageshow-bfcache-eligibility",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "same-origin",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "cache-control": "no-cache",
+                "content-length": "1259",
+                "content-type": "text/html",
+                "etag": "W/\"4eb-PZq2EL1BbdhLaTpQSSYJdKEnOO8\"",
+                "vary": "Origin"
+              }
+            },
+            "encodedDataLength": 1491
+          }
+        ],
+        "cacheEvents": [],
+        "bfcacheNotUsed": [],
+        "lifecycleEvents": [
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "post-resubmission-confirmation",
+      "initial": {
+        "state": {
+          "url": "http://127.0.0.1:18934/oracle/post-entry",
+          "title": "POST entry document",
+          "historyLength": 2,
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/post-entry",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/post-entry"
+            }
+          ]
+        },
+        "responseStatus": 200
+      },
+      "postResult": {
+        "state": {
+          "url": "http://127.0.0.1:18934/oracle/post-result",
+          "title": "POST result document",
+          "body": "native POST fixture value",
+          "historyLength": 3,
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/post-result",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/post-result"
+            }
+          ]
+        },
+        "responseStatus": 200
+      },
+      "programmaticReload": {
+        "method": "Playwright page.reload()",
+        "state": {
+          "url": "http://127.0.0.1:18934/oracle/post-result",
+          "title": "POST result document",
+          "body": "native POST fixture value",
+          "historyLength": 3,
+          "documentStartUrl": "http://127.0.0.1:18934/oracle/post-result",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/post-result"
+            }
+          ]
+        },
+        "responseStatus": 200
+      },
+      "dialogs": [],
+      "serverReceipts": [
+        {
+          "caseId": "post-resubmission-confirmation",
+          "sequence": 145,
+          "method": "GET",
+          "url": "/oracle/post-entry",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "post-entry",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-store",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "321"
+          }
+        },
+        {
+          "caseId": "post-resubmission-confirmation",
+          "sequence": 146,
+          "method": "POST",
+          "url": "/oracle/post-result",
+          "requestHeaders": {
+            "cache-control": "max-age=0",
+            "content-type": "application/x-www-form-urlencoded",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "origin": "http://127.0.0.1:18934",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "same-origin",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document",
+            "referer": "http://127.0.0.1:18934/oracle/post-entry"
+          },
+          "kind": "post-result",
+          "body": "payload=native+POST+fixture+value",
+          "decoded": "native POST fixture value",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-store",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "191"
+          }
+        },
+        {
+          "caseId": "post-resubmission-confirmation",
+          "sequence": 147,
+          "method": "POST",
+          "url": "/oracle/post-result",
+          "requestHeaders": {
+            "cache-control": "max-age=0",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "origin": "http://127.0.0.1:18934",
+            "content-type": "application/x-www-form-urlencoded",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "same-origin",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document",
+            "referer": "http://127.0.0.1:18934/oracle/post-entry"
+          },
+          "kind": "post-result",
+          "body": "payload=native+POST+fixture+value",
+          "decoded": "native POST fixture value",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-store",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "191"
+          }
+        }
+      ],
+      "cdp": {
+        "documentRequests": [
+          {
+            "url": "http://127.0.0.1:18934/oracle/post-entry",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-store",
+                "content-length": "321",
+                "content-type": "text/html; charset=utf-8"
+              }
+            },
+            "encodedDataLength": 524
+          },
+          {
+            "url": "http://127.0.0.1:18934/oracle/post-result",
+            "method": "POST",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "content-type": "application/x-www-form-urlencoded",
+              "origin": "http://127.0.0.1:18934",
+              "referer": "http://127.0.0.1:18934/oracle/post-entry",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "cache-control": "max-age=0",
+              "content-type": "application/x-www-form-urlencoded",
+              "origin": "http://127.0.0.1:18934",
+              "referer": "http://127.0.0.1:18934/oracle/post-entry",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "same-origin",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-store",
+                "content-length": "191",
+                "content-type": "text/html; charset=utf-8"
+              }
+            },
+            "encodedDataLength": 447
+          },
+          {
+            "url": "http://127.0.0.1:18934/oracle/post-result",
+            "method": "POST",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "content-type": "application/x-www-form-urlencoded",
+              "origin": "http://127.0.0.1:18934",
+              "referer": "http://127.0.0.1:18934/oracle/post-entry",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "cache-control": "max-age=0",
+              "content-type": "application/x-www-form-urlencoded",
+              "origin": "http://127.0.0.1:18934",
+              "referer": "http://127.0.0.1:18934/oracle/post-entry",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "same-origin",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-store",
+                "content-length": "191",
+                "content-type": "text/html; charset=utf-8"
+              }
+            },
+            "encodedDataLength": 447
+          }
+        ],
+        "cacheEvents": [],
+        "bfcacheNotUsed": [],
+        "lifecycleEvents": [
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "post-keyboard-reload-and-history-back",
+      "postResult": {
+        "url": "http://127.0.0.1:18934/oracle/post-result",
+        "title": "POST result document",
+        "body": "native POST fixture value",
+        "pageShows": [
+          {
+            "persisted": false,
+            "url": "http://127.0.0.1:18934/oracle/post-result"
+          }
+        ],
+        "pageHides": []
+      },
+      "keyboardReload": {
+        "trigger": "Meta+R keyboard shortcut on macOS Chrome",
+        "navigationTimedOut": true,
+        "responseStatus": null,
+        "state": {
+          "url": "http://127.0.0.1:18934/oracle/post-result",
+          "title": "POST result document",
+          "body": "native POST fixture value",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/post-result"
+            }
+          ],
+          "pageHides": []
+        },
+        "documentRequests": [],
+        "correspondingPostReceipts": [
+          {
+            "caseId": "post-keyboard-reload-and-history-back",
+            "sequence": 149,
+            "method": "POST",
+            "url": "/oracle/post-result",
+            "requestHeaders": {
+              "cache-control": "max-age=0",
+              "content-type": "application/x-www-form-urlencoded",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+              "origin": "http://127.0.0.1:18934",
+              "accept-language": "en-US",
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "sec-fetch-site": "same-origin",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-dest": "document",
+              "referer": "http://127.0.0.1:18934/oracle/post-entry"
+            },
+            "kind": "post-result",
+            "body": "payload=native+POST+fixture+value",
+            "decoded": "native POST fixture value",
+            "responseStatus": 200,
+            "responseHeaders": {
+              "vary": "Origin",
+              "cache-control": "no-store",
+              "content-type": "text/html; charset=utf-8",
+              "content-length": "191"
+            }
+          }
+        ]
+      },
+      "historyBack": {
+        "trigger": "window.history.back()",
+        "form": {
+          "url": "http://127.0.0.1:18934/oracle/post-entry",
+          "inputValue": "native POST fixture value",
+          "pageShows": [
+            {
+              "persisted": false,
+              "url": "http://127.0.0.1:18934/oracle/post-entry"
+            },
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/post-entry"
+            }
+          ],
+          "pageHides": [
+            {
+              "persisted": true,
+              "url": "http://127.0.0.1:18934/oracle/post-entry"
+            }
+          ],
+          "scrollY": 0
+        },
+        "documentRequests": []
+      },
+      "dialogs": [],
+      "serverReceipts": [
+        {
+          "caseId": "post-keyboard-reload-and-history-back",
+          "sequence": 148,
+          "method": "GET",
+          "url": "/oracle/post-entry",
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "none",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document"
+          },
+          "kind": "post-entry",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-store",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "321"
+          }
+        },
+        {
+          "caseId": "post-keyboard-reload-and-history-back",
+          "sequence": 149,
+          "method": "POST",
+          "url": "/oracle/post-result",
+          "requestHeaders": {
+            "cache-control": "max-age=0",
+            "content-type": "application/x-www-form-urlencoded",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "origin": "http://127.0.0.1:18934",
+            "accept-language": "en-US",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site": "same-origin",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-dest": "document",
+            "referer": "http://127.0.0.1:18934/oracle/post-entry"
+          },
+          "kind": "post-result",
+          "body": "payload=native+POST+fixture+value",
+          "decoded": "native POST fixture value",
+          "responseStatus": 200,
+          "responseHeaders": {
+            "vary": "Origin",
+            "cache-control": "no-store",
+            "content-type": "text/html; charset=utf-8",
+            "content-length": "191"
+          }
+        }
+      ],
+      "cdp": {
+        "documentRequests": [
+          {
+            "url": "http://127.0.0.1:18934/oracle/post-entry",
+            "method": "GET",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "none",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-store",
+                "content-length": "321",
+                "content-type": "text/html; charset=utf-8"
+              }
+            },
+            "encodedDataLength": 524
+          },
+          {
+            "url": "http://127.0.0.1:18934/oracle/post-result",
+            "method": "POST",
+            "resourceType": "Document",
+            "requestHeaders": {
+              "accept-language": "en-US",
+              "content-type": "application/x-www-form-urlencoded",
+              "origin": "http://127.0.0.1:18934",
+              "referer": "http://127.0.0.1:18934/oracle/post-entry",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "redirectResponse": null,
+            "response": {
+              "status": 200,
+              "mimeType": "text/html",
+              "fromDiskCache": false,
+              "fromServiceWorker": false,
+              "fromPrefetchCache": false,
+              "headers": {
+                "vary": "Origin",
+                "cache-control": "no-store",
+                "content-length": "191",
+                "content-type": "text/html; charset=utf-8"
+              }
+            },
+            "extraRequestHeaders": {
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+              "accept-language": "en-US",
+              "cache-control": "max-age=0",
+              "content-type": "application/x-www-form-urlencoded",
+              "origin": "http://127.0.0.1:18934",
+              "referer": "http://127.0.0.1:18934/oracle/post-entry",
+              "sec-fetch-dest": "document",
+              "sec-fetch-mode": "navigate",
+              "sec-fetch-site": "same-origin",
+              "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+            },
+            "encodedDataLength": 447
+          }
+        ],
+        "cacheEvents": [],
+        "bfcacheNotUsed": [],
+        "lifecycleEvents": [
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          },
+          {
+            "name": "init"
+          },
+          {
+            "name": "DOMContentLoaded"
+          },
+          {
+            "name": "load"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "id": "mermaid-mindmap-v1",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "widths": [
+    390,
+    650,
+    651,
+    768,
+    860,
+    861,
+    1024
+  ],
+  "height": 900,
+  "deviceScaleFactor": 1,
+  "textScales": [
+    1,
+    2
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "cases": [
+    {
+      "id": "mindmap-single-default",
+      "kind": "mindmap",
+      "description": "Single root node using the default shape.",
+      "source": "~~~mermaid\nmindmap\nroot\n~~~"
+    },
+    {
+      "id": "mindmap-basic-tree",
+      "kind": "mindmap",
+      "description": "Default COSE-Bilkent tree with a root and branches at two depths.",
+      "source": "~~~mermaid\nmindmap\nroot((Planning))\n  Research\n    Sources\n    Notes\n  Build\n    Prototype\n    Review\n  Ship\n~~~"
+    },
+    {
+      "id": "mindmap-six-shapes",
+      "kind": "mindmap",
+      "description": "The six explicit grammar shapes (square, rounded, circle, cloud, bang, hexagon), alongside a default node.",
+      "source": "~~~mermaid\nmindmap\nroot((Shapes))\n  default\n  square[Square]\n  rounded(Rounded)\n  circle((Circle))\n  cloud)Cloud(\n  bang))Bang((\n  hex{{Hexagon}}\n~~~"
+    },
+    {
+      "id": "mindmap-wrapped-label",
+      "kind": "mindmap",
+      "description": "Long labels around the 200 CSS-pixel default maximum node width.",
+      "source": "~~~mermaid\nmindmap\nroot((Long labels))\n  This branch label contains enough words to exceed the default two hundred pixel maximum width\n    A descendant with a similarly long label demonstrates nested wrapping without changing the layout configuration\n~~~"
+    },
+    {
+      "id": "mindmap-uneven-indentation",
+      "kind": "mindmap",
+      "description": "Valid nonuniform indentation; parents are determined by the nearest preceding shallower node.",
+      "source": "~~~mermaid\nmindmap\n  Root\n     Child A\n            Deep A1\n     Child B\n       Deep B1\n~~~"
+    },
+    {
+      "id": "mindmap-multiple-roots-error",
+      "kind": "mindmap",
+      "expectedStatus": "error",
+      "description": "A second top-level node has no parent and captures the pinned parser/render error.",
+      "source": "~~~mermaid\nmindmap\nroot\nother\n~~~"
+    }
+  ]
+}

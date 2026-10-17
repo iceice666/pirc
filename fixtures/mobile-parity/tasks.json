@@ -1,0 +1,119 @@
+{
+  "id": "native-tasks-panel",
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "widths": [
+    390,
+    420
+  ],
+  "height": 1000,
+  "now": 1790960400000,
+  "views": [
+    "list",
+    "output",
+    "empty"
+  ],
+  "panel": {
+    "agentRunning": true,
+    "backgroundTasks": [
+      {
+        "id": "build-1",
+        "command": "bun run build",
+        "status": "completed",
+        "exitCode": 0,
+        "startedAt": 1790960333000,
+        "endedAt": 1790960397000
+      },
+      {
+        "id": "watch-2",
+        "command": "bun run watch --verbose",
+        "status": "running",
+        "tty": true,
+        "notifyOn": "ready",
+        "matches": 2,
+        "startedAt": 1790960358000
+      }
+    ],
+    "team": {
+      "agents": [
+        {
+          "name": "reviewer",
+          "mode": "team",
+          "status": "idle",
+          "model": "fixture-model",
+          "task": "Review the native implementation."
+        },
+        {
+          "name": "reader",
+          "mode": "subagent",
+          "kind": "explore",
+          "status": "done",
+          "background": true,
+          "model": "fixture-model",
+          "task": "Inspect all routes and record the missing cases."
+        },
+        {
+          "name": "writer",
+          "mode": "subagent",
+          "kind": "general",
+          "status": "failed",
+          "task": "Implement the remaining views.",
+          "lastError": "The node went offline."
+        }
+      ],
+      "tasks": [
+        {
+          "id": "2",
+          "subject": "Implement native rendering",
+          "status": "in_progress",
+          "owner": "writer",
+          "blockedBy": [
+            "1"
+          ],
+          "blocked": true
+        },
+        {
+          "id": "3",
+          "subject": "Review the result",
+          "status": "pending",
+          "blockedBy": [],
+          "blocked": false
+        }
+      ],
+      "events": [
+        {
+          "id": "e1",
+          "time": 1790960370000,
+          "kind": "spawn",
+          "from": "lead",
+          "to": "reviewer",
+          "body": "Check the output and report differences."
+        },
+        {
+          "id": "e2",
+          "time": 1790960390000,
+          "kind": "message",
+          "from": "reviewer",
+          "to": "lead",
+          "body": "Layout review complete.\nTwo edge cases remain."
+        }
+      ]
+    }
+  },
+  "output": {
+    "task": {
+      "id": "watch-2",
+      "command": "bun run watch --verbose",
+      "status": "running"
+    },
+    "output": "Starting watcher…\nReady on http://localhost:3000\nWaiting for changes.\n"
+  },
+  "empty": {
+    "agentRunning": false,
+    "backgroundTasks": [],
+    "team": {
+      "agents": [],
+      "tasks": [],
+      "events": []
+    }
+  }
+}

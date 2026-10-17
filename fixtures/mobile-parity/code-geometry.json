@@ -1,0 +1,45 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "cases": [
+    {
+      "id": "empty-fence",
+      "source": "```\n```"
+    },
+    {
+      "id": "single-line-js",
+      "source": "```js\nconst answer = 42;\n```"
+    },
+    {
+      "id": "three-line-js",
+      "source": "```js\nconst answer = 42;\nconsole.log(answer);\nreturnValue(answer);\n```"
+    },
+    {
+      "id": "trailing-blank-line",
+      "source": "```js\nconst answer = 42;\n\n```"
+    },
+    {
+      "id": "long-tab-line",
+      "source": "```js\n\tconst result = input + offset;\tconsole.log(result);\t// preserve horizontal overflow with a deliberately long code row for geometry measurement\n```"
+    },
+    {
+      "id": "tab-stops-and-lines",
+      "source": "```js\n\ta\nb\tc\nab\td\n\tx\t\tz\n```"
+    },
+    {
+      "id": "newline-only",
+      "source": "```text\n\n\n```"
+    },
+    {
+      "id": "two-trailing-newlines",
+      "source": "```js\nconst answer = 42;\n\n\n```"
+    },
+    {
+      "id": "space-after-newline",
+      "source": "```text\nabc\n \n```"
+    },
+    {
+      "id": "tab-before-final-newline",
+      "source": "```text\nabc\t\n\n```"
+    }
+  ]
+}

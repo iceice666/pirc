@@ -1,0 +1,449 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "mermaidVersion": "11.17.2",
+  "browser": "Pinned Google Chrome executable; runtime version collected below",
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "deviceScaleFactor": 1,
+    "isMobile": true,
+    "hasTouch": true
+  },
+  "colorScheme": "light",
+  "method": "Actual renderMarkdown + enhanceMarkdown + Mermaid 11.17.2 unified renderer; no hand-built SVG or route interception.",
+  "browserVersion": "154.0.8037.98",
+  "scope": "Bounded label/decorations oracle, not a complete geometry or mobile acceptance claim.",
+  "cases": [
+    {
+      "id": "baseline",
+      "source": "mindmap\nroot((Root))\n  Account",
+      "iconCount": 0,
+      "nodes": [
+        {
+          "text": "Root",
+          "classes": "node mindmap-node section-root section--1",
+          "shapes": [
+            {
+              "tag": "circle",
+              "fill": "rgb(116, 162, 247)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Root",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        },
+        {
+          "text": "Account",
+          "classes": "node mindmap-node section-0",
+          "shapes": [
+            {
+              "tag": "path",
+              "fill": "rgb(167, 179, 192)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Account",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "icon-following-node",
+      "source": "mindmap\nroot((Root))\n  Account\n  ::icon(fa fa-user)",
+      "iconCount": 0,
+      "nodes": [
+        {
+          "text": "Root",
+          "classes": "node mindmap-node section-root section--1",
+          "shapes": [
+            {
+              "tag": "circle",
+              "fill": "rgb(116, 162, 247)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Root",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        },
+        {
+          "text": "Account",
+          "classes": "node mindmap-node section-0",
+          "shapes": [
+            {
+              "tag": "path",
+              "fill": "rgb(167, 179, 192)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Account",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "label-literal-code",
+      "source": "mindmap\nroot((Root))\n  Code `const x = 1`",
+      "iconCount": 0,
+      "nodes": [
+        {
+          "text": "Root",
+          "classes": "node mindmap-node section-root section--1",
+          "shapes": [
+            {
+              "tag": "circle",
+              "fill": "rgb(116, 162, 247)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Root",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        },
+        {
+          "text": "Code `const x = 1`",
+          "classes": "node mindmap-node section-0",
+          "shapes": [
+            {
+              "tag": "path",
+              "fill": "rgb(167, 179, 192)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Code `const x = 1`",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "built-in-disabled-class-line",
+      "source": "mindmap\nroot((Root))\n  Account\n  :::disabled",
+      "iconCount": 0,
+      "nodes": [
+        {
+          "text": "Root",
+          "classes": "node mindmap-node section-root section--1",
+          "shapes": [
+            {
+              "tag": "circle",
+              "fill": "rgb(116, 162, 247)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Root",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        },
+        {
+          "text": "Account",
+          "classes": "node mindmap-node section-0 disabled",
+          "shapes": [
+            {
+              "tag": "path",
+              "fill": "rgb(167, 179, 192)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Account",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "built-in-disabled-circle",
+      "source": "mindmap\nroot((Root))\n  Account((Account))\n  :::disabled",
+      "iconCount": 0,
+      "nodes": [
+        {
+          "text": "Root",
+          "classes": "node mindmap-node section-root section--1",
+          "shapes": [
+            {
+              "tag": "circle",
+              "fill": "rgb(116, 162, 247)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Root",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        },
+        {
+          "text": "Account",
+          "classes": "node mindmap-node section-0 disabled",
+          "shapes": [
+            {
+              "tag": "circle",
+              "fill": "rgb(211, 211, 211)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Account",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "custom-class-line",
+      "source": "mindmap\nroot((Root))\n  Account\n  :::probe-class",
+      "iconCount": 0,
+      "nodes": [
+        {
+          "text": "Root",
+          "classes": "node mindmap-node section-root section--1",
+          "shapes": [
+            {
+              "tag": "circle",
+              "fill": "rgb(116, 162, 247)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Root",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        },
+        {
+          "text": "Account",
+          "classes": "node mindmap-node section-0 probe-class",
+          "shapes": [
+            {
+              "tag": "path",
+              "fill": "rgb(167, 179, 192)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Account",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "quoted-literal-link",
+      "source": "mindmap\nroot((Root))\n  link[\"[docs](https://example.com)\"]",
+      "iconCount": 0,
+      "nodes": [
+        {
+          "text": "Root",
+          "classes": "node mindmap-node section-root section--1",
+          "shapes": [
+            {
+              "tag": "circle",
+              "fill": "rgb(116, 162, 247)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Root",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        },
+        {
+          "text": "[docs](https://example.com)",
+          "classes": "node mindmap-node section-0",
+          "shapes": [
+            {
+              "tag": "rect",
+              "fill": "rgb(167, 179, 192)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "[docs](https://example.com)",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "quoted-html-color",
+      "source": "mindmap\nroot((Root))\n  color[\"<span style='color:#c00000'>red word</span>\"]",
+      "iconCount": 0,
+      "nodes": [
+        {
+          "text": "Root",
+          "classes": "node mindmap-node section-root section--1",
+          "shapes": [
+            {
+              "tag": "circle",
+              "fill": "rgb(116, 162, 247)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Root",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        },
+        {
+          "text": "red word",
+          "classes": "node mindmap-node section-0",
+          "shapes": [
+            {
+              "tag": "rect",
+              "fill": "rgb(167, 179, 192)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "span",
+              "text": "red word",
+              "color": "rgb(192, 0, 0)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "quoted-rich-syntax",
+      "source": "mindmap\nroot((Root))\n  rich[\"**Bold** *italic* ~~deleted~~ `code`\"]",
+      "iconCount": 0,
+      "nodes": [
+        {
+          "text": "Root",
+          "classes": "node mindmap-node section-root section--1",
+          "shapes": [
+            {
+              "tag": "circle",
+              "fill": "rgb(116, 162, 247)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "p",
+              "text": "Root",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            }
+          ]
+        },
+        {
+          "text": "Bold italic ~~deleted~~ `code`",
+          "classes": "node mindmap-node section-0",
+          "shapes": [
+            {
+              "tag": "rect",
+              "fill": "rgb(167, 179, 192)"
+            }
+          ],
+          "leaves": [
+            {
+              "tag": "strong",
+              "text": "Bold",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "700",
+              "fontStyle": "normal",
+              "fontSize": "13px"
+            },
+            {
+              "tag": "em",
+              "text": "italic",
+              "color": "rgb(15, 17, 21)",
+              "fontWeight": "400",
+              "fontStyle": "italic",
+              "fontSize": "13px"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

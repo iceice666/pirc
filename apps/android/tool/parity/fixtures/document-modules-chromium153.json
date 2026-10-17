@@ -1,0 +1,101 @@
+{
+  "browserVersion": "153.0.8010.12",
+  "browserExecutable": "<repository>/.pirc/test-browsers/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+  "cases": [
+    {
+      "name": "scope-and-shadowing",
+      "source": "import {value} from './dep.js';window.result=[];try{for(let value of [value]){}}catch(e){result.push(e.name)};try{const C=class value extends value{}}catch(e){result.push(e.name)};try{const obj={arguments};result.push(obj.arguments)}catch(e){result.push(e.name)};try{this.missing}catch(e){result.push(e.name)};result.push(this?.missing,typeof arguments);",
+      "modules": {
+        "dep.js": "export const value=3;"
+      },
+      "url": "$ORIGIN/0/page",
+      "expected": [
+        "ReferenceError",
+        "ReferenceError",
+        "ReferenceError",
+        "TypeError",
+        null,
+        "undefined"
+      ]
+    },
+    {
+      "name": "default-class-initialization",
+      "source": "import D from './class.js';window.result=[D.name,D.observed];",
+      "modules": {
+        "class.js": "export default class {static observed=this.name;}"
+      },
+      "url": "$ORIGIN/1/page",
+      "expected": [
+        "default",
+        "default"
+      ]
+    },
+    {
+      "name": "default-expression-tdz",
+      "source": "import value from './a.js';window.result=[value];",
+      "modules": {
+        "a.js": "import {read} from './b.js';export default read();",
+        "b.js": "import value from './a.js';export function read(){try{return typeof value}catch(e){return e.name}}"
+      },
+      "url": "$ORIGIN/2/page",
+      "expected": [
+        "ReferenceError"
+      ]
+    },
+    {
+      "name": "live-bindings-and-functions",
+      "source": "import {count,inc} from './state.js';import * as ns from './state.js';window.result=[count];inc();result.push(count,ns.count,ns.inc===inc,Object.isExtensible(ns),Object.getPrototypeOf(ns));",
+      "modules": {
+        "state.js": "export let count=1;export function inc(){count++}"
+      },
+      "url": "$ORIGIN/3/page",
+      "expected": [
+        1,
+        2,
+        2,
+        true,
+        false,
+        null
+      ]
+    },
+    {
+      "name": "function-cycle",
+      "source": "import {a} from './a.js';window.result=[a()];",
+      "modules": {
+        "a.js": "import {b} from './b.js';export function a(){return 'a'+b()};",
+        "b.js": "import {a} from './a.js';export function b(){return typeof a};"
+      },
+      "url": "$ORIGIN/4/page",
+      "expected": [
+        "afunction"
+      ]
+    },
+    {
+      "name": "dynamic-import-cache",
+      "source": "const [a,b]=await Promise.all([import('./dep.js'),import('./dep.js')]);window.result=[a.value,a===b,window.depRuns];",
+      "modules": {
+        "dep.js": "window.depRuns=(window.depRuns||0)+1;export const value=7;"
+      },
+      "url": "$ORIGIN/5/page",
+      "expected": [
+        7,
+        true,
+        1
+      ]
+    },
+    {
+      "name": "inline-base-meta",
+      "source": "window.result=[this,typeof arguments,document.currentScript,import.meta.url,import.meta.resolve('./asset.svg')];",
+      "base": "/folder/",
+      "modules": {},
+      "url": "$ORIGIN/6/page",
+      "expected": [
+        null,
+        "undefined",
+        null,
+        "$ORIGIN/folder/",
+        "$ORIGIN/folder/asset.svg"
+      ]
+    }
+  ]
+}

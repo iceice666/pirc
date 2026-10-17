@@ -1,0 +1,60 @@
+{
+  "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
+  "cases": [
+    {
+      "id": "heading-tail",
+      "source": "- # Heading\n\n  Tail",
+      "html": "<ul>\n<li><h1>Heading</h1>\nTail</li>\n</ul>\n",
+      "loose": false
+    },
+    {
+      "id": "many-empty-lines",
+      "source": "- # Heading\n\n\n  Tail",
+      "html": "<ul>\n<li><h1>Heading</h1>\nTail</li>\n</ul>\n",
+      "loose": false
+    },
+    {
+      "id": "one-whitespace-line",
+      "source": "- # Heading\n    \n  Tail",
+      "html": "<ul>\n<li><h1>Heading</h1>\nTail</li>\n</ul>\n",
+      "loose": false
+    },
+    {
+      "id": "two-whitespace-lines",
+      "source": "- # Heading\n    \n    \n  Tail",
+      "html": "<ul>\n<li><h1>Heading</h1>\n<p>Tail</p>\n</li>\n</ul>\n",
+      "loose": true
+    },
+    {
+      "id": "earlier-loose-paragraph",
+      "source": "- Before\n\n  # Heading\n\n  Tail",
+      "html": "<ul>\n<li><p>Before</p>\n<h1>Heading</h1>\n<p>Tail</p>\n</li>\n</ul>\n",
+      "loose": true
+    },
+    {
+      "id": "separated-items",
+      "source": "- # Heading\n\n- Tail",
+      "html": "<ul>\n<li><h1>Heading</h1>\n</li>\n<li><p>Tail</p>\n</li>\n</ul>\n",
+      "loose": true
+    },
+    {
+      "id": "ordered-heading",
+      "source": "3. ## Heading\n\n   Tail",
+      "html": "<ol start=\"3\">\n<li><h2>Heading</h2>\nTail</li>\n</ol>\n",
+      "loose": false
+    },
+    {
+      "id": "ordinary-loose",
+      "source": "- Before\n\n  Tail",
+      "html": "<ul>\n<li><p>Before</p>\n<p>Tail</p>\n</li>\n</ul>\n",
+      "loose": true
+    },
+    {
+      "id": "ordinary-tight",
+      "source": "- Before\n- Tail",
+      "html": "<ul>\n<li>Before</li>\n<li>Tail</li>\n</ul>\n",
+      "loose": false
+    }
+  ],
+  "markedVersion": "16.4.2"
+}

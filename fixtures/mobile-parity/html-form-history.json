@@ -1,0 +1,74 @@
+{
+  "id": "html-form-history-v1",
+  "browser": "Pinned Google Chrome 154, loopback-only real HTTP responses; no Playwright route/fulfill interception.",
+  "height": 844,
+  "width": 390,
+  "context": { "isMobile": false, "hasTouch": false },
+  "fileBytes": [
+    {
+      "name": "one résumé-台北.txt",
+      "mimeType": "text/plain",
+      "bytes": [76, 105, 110, 101, 32, 49, 10, 84, 97, 105, 112, 101, 105, 32, 240, 159, 140, 128]
+    },
+    {
+      "name": "two + space.bin",
+      "mimeType": "application/octet-stream",
+      "bytes": [0, 65, 255, 13, 10, 66, 128]
+    }
+  ],
+  "cases": [
+    {
+      "id": "no-store-eligible-history-back",
+      "cacheControl": "no-store",
+      "blockBackForwardCache": false,
+      "purpose": "Observe actual Chrome Back behavior for an otherwise eligible no-store HTML response."
+    },
+    {
+      "id": "no-store-forced-fresh-get-control",
+      "cacheControl": "no-store",
+      "blockBackForwardCache": true,
+      "purpose": "Fresh-GET control. A test-only unload listener excludes BFCache; no-store also prevents an HTTP cache hit. This does not claim no-store alone forces a GET."
+    }
+  ],
+  "postCases": [
+    {
+      "id": "cacheable-post-back-bfcache",
+      "responseCacheControl": "public, max-age=600",
+      "blockPostResponseBackForwardCache": false,
+      "purpose": "Back from a following GET to a cacheable actual POST response while BFCache is eligible."
+    },
+    {
+      "id": "cacheable-post-back-fresh-response-control",
+      "responseCacheControl": "public, max-age=600",
+      "blockPostResponseBackForwardCache": true,
+      "purpose": "Fresh-response control: a test-only unload listener on the POST response excludes BFCache, allowing observation of browser HTTP-cache/session-history behavior without assuming a repeated POST."
+    }
+  ],
+  "controlNames": [
+    "validDate",
+    "defaultAutocompleteDate",
+    "pristineDate",
+    "revertedDate",
+    "partialDate",
+    "regularText",
+    "autocompleteOffText",
+    "disabledText",
+    "readonlyText",
+    "password",
+    "passwordOff",
+    "pristineText",
+    "returnedDefaultText",
+    "multiSelect",
+    "checkbox",
+    "radioA",
+    "radioB",
+    "range",
+    "files"
+  ],
+  "notes": {
+    "partialDate": "The test clears an actual date input then types a partial segment through Chrome keyboard input. Capture records value, badInput, activeElement, and screenshots; it does not fake the browser's inaccessible segment buffer.",
+    "freshGetControl": "Chrome may BFCache no-store documents. The separate unload-listener case is explicitly a control for observing restoration after a genuine new GET; response headers and server receipts distinguish it from BFCache.",
+    "additionalState": "Password with default autocomplete and autocomplete=off, date with default autocomplete, pristine and edited-back-to-default dates, untouched default, edited-back-to-default text, multiple select, checkbox, radio group, and range are exercised through browser actions. Disabled/readonly values are script-mutated for same-document identification only, not as a production scripting recommendation.",
+    "postCache": "POST result responses carry explicit public freshness and Content-Location equal to the response URL. Both POST and later GET requests are recorded; no response is fulfilled by Playwright."
+  }
+}

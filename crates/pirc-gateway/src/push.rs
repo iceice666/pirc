@@ -52,6 +52,16 @@ pub struct PushMessage {
     /// Notifications with the same tag replace each other on the device.
     pub tag: String,
     pub target: Value,
+    /// Exact question metadata for create/revoke pushes. Refresh hints omit the tuple.
+    pub interaction: Option<InteractionPush>,
+}
+
+#[derive(Clone, Debug)]
+pub struct InteractionPush {
+    pub kind: &'static str,
+    pub session_id: String,
+    pub interaction_id: Option<String>,
+    pub interaction_epoch: Option<String>,
 }
 
 /// A push service's answer before giving up on it for this message.
@@ -441,8 +451,32 @@ fn js_json_string(units: &[u16]) -> String {
 /// What the subscriber decrypts: `{title, body, tag, target, at}`.
 fn payload(message: &PushMessage, at: i64) -> String {
     let tag: Vec<u16> = message.tag.encode_utf16().collect();
+    let interaction = message
+        .interaction
+        .as_ref()
+        .map(|interaction| {
+            let mut fields = format!(
+                ",\"kind\":{},\"sessionId\":{}",
+                serde_json::to_string(interaction.kind).unwrap_or_else(|_| "null".into()),
+                serde_json::to_string(&interaction.session_id).unwrap_or_else(|_| "null".into()),
+            );
+            if let Some(id) = &interaction.interaction_id {
+                fields.push_str(&format!(
+                    ",\"interactionId\":{}",
+                    serde_json::to_string(id).unwrap_or_else(|_| "null".into()),
+                ));
+            }
+            if let Some(epoch) = &interaction.interaction_epoch {
+                fields.push_str(&format!(
+                    ",\"interactionEpoch\":{}",
+                    serde_json::to_string(epoch).unwrap_or_else(|_| "null".into()),
+                ));
+            }
+            fields
+        })
+        .unwrap_or_default();
     format!(
-        r#"{{"title":{},"body":{},"tag":{},"target":{},"at":{at}}}"#,
+        r#"{{"title":{},"body":{},"tag":{},"target":{},"at":{at}{interaction}}}"#,
         js_json_string(&clip(&message.title, 120)),
         js_json_string(&clip(&message.body, 240)),
         js_json_string(&tag),
@@ -867,13 +901,105 @@ fn waiting_message(
         .and_then(|request| request.get("title"))
         .and_then(Value::as_str)
         .filter(|title| !title.trim_matches(js_space).is_empty());
+    let interaction = exact_interaction_push("interaction_created", session_id, data);
     Some((
         user,
         PushMessage {
             title: format!("{} is waiting for you", session.name),
             body: asked.unwrap_or("It needs your answer to go on.").to_owned(),
-            tag: format!("session:{}", session.id),
+            tag: interaction
+                .as_ref()
+                .map(interaction_tag)
+                .unwrap_or_else(|| format!("session:{}", session.id)),
             target: json!({ "sessionId": session.id }),
+            interaction,
+        },
+    ))
+}
+
+fn exact_interaction_push(
+    kind: &'static str,
+    session_id: &str,
+    data: Option<&Value>,
+) -> Option<InteractionPush> {
+    let data = data?;
+    let id_key = if kind == "interaction_created" {
+        "id"
+    } else {
+        "interactionId"
+    };
+    let id = data.get(id_key)?.as_str()?.to_owned();
+    if id.is_empty() {
+        return None;
+    }
+    // `interactionEpoch` is copied from the row's `runnerEpoch`. The hub
+    // envelope epoch is deliberately never used as a fallback.
+    let epoch = data
+        .get("interactionEpoch")
+        .or_else(|| data.get("runnerEpoch"))?;
+    let epoch = match epoch {
+        Value::Number(number) => number.as_u64()?.to_string(),
+        Value::String(text) => text.parse::<u64>().ok()?.to_string(),
+        _ => return None,
+    };
+    Some(InteractionPush {
+        kind,
+        session_id: session_id.to_owned(),
+        interaction_id: Some(id),
+        interaction_epoch: Some(epoch),
+    })
+}
+
+fn hex_utf8(text: &str) -> String {
+    text.as_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn interaction_tag(interaction: &InteractionPush) -> String {
+    format!(
+        "interaction:{}:{}:{}",
+        hex_utf8(&interaction.session_id),
+        interaction.interaction_epoch.as_deref().unwrap_or_default(),
+        hex_utf8(interaction.interaction_id.as_deref().unwrap_or_default()),
+    )
+}
+
+fn answered_message(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+    data: Option<&Value>,
+) -> Option<(String, PushMessage)> {
+    let session = conn.get_session(session_id).ok()?;
+    let user = session.owner_user?;
+    let interaction =
+        exact_interaction_push("interaction_answered", session_id, data).or_else(|| {
+            Some(InteractionPush {
+                kind: "interaction_refresh",
+                session_id: session_id.to_owned(),
+                interaction_id: None,
+                interaction_epoch: None,
+            })
+        });
+    let exact = interaction
+        .as_ref()
+        .is_some_and(|interaction| interaction.kind == "interaction_answered");
+    Some((
+        user,
+        PushMessage {
+            title: String::new(),
+            body: String::new(),
+            tag: if exact {
+                interaction
+                    .as_ref()
+                    .map(interaction_tag)
+                    .unwrap_or_default()
+            } else {
+                format!("session:{}", session.id)
+            },
+            target: json!({ "sessionId": session.id }),
+            interaction,
         },
     ))
 }
@@ -883,15 +1009,26 @@ fn waiting_message(
 fn watch_interactions(events: &Arc<EventHub>, db: Arc<Db>, push: Arc<Push>) {
     let (sender, mut receiver) = mpsc::unbounded_channel();
     let subscription = events.subscribe_all(Arc::new(move |event: &GatewayEvent| {
-        if event.kind == "interaction_created" {
-            let _ = sender.send((event.session_id.clone(), event.data.clone()));
+        if matches!(
+            event.kind.as_str(),
+            "interaction_created" | "interaction_answered"
+        ) {
+            let _ = sender.send((
+                event.session_id.clone(),
+                event.kind.clone(),
+                event.data.clone(),
+            ));
         }
     }));
     tokio::spawn(async move {
         let _subscription = subscription;
-        while let Some((session_id, data)) = receiver.recv().await {
-            let waiting = waiting_message(&db.lock(), &session_id, data.as_ref());
-            if let Some((user, message)) = waiting {
+        while let Some((session_id, kind, data)) = receiver.recv().await {
+            let message = match kind.as_str() {
+                "interaction_created" => waiting_message(&db.lock(), &session_id, data.as_ref()),
+                "interaction_answered" => answered_message(&db.lock(), &session_id, data.as_ref()),
+                _ => None,
+            };
+            if let Some((user, message)) = message {
                 let push = push.clone();
                 tokio::spawn(async move { push.notify(&user, &message).await });
             }
@@ -1001,6 +1138,7 @@ async fn test_push(
                 body: "Scheduled runs and anything waiting for you will show up here.".into(),
                 tag: "test".into(),
                 target: json!({ "schedules": true }),
+                interaction: None,
             },
         )
         .await;
@@ -1217,6 +1355,7 @@ mod tests {
             body: "b".into(),
             tag: "a\u{1}\"\\\n".into(),
             target: json!({ "sessionId": "s" }),
+            interaction: None,
         };
         assert_eq!(
             payload(&message, 5),
@@ -1225,6 +1364,24 @@ mod tests {
                 "t".repeat(119)
             )
         );
+        let revoke = PushMessage {
+            title: String::new(),
+            body: String::new(),
+            tag: "interaction:7331:0:6d656d6f72793a703a30".into(),
+            target: json!({ "sessionId": "s1" }),
+            interaction: Some(InteractionPush {
+                kind: "interaction_answered",
+                session_id: "s1".into(),
+                interaction_id: Some("memory:p:0".into()),
+                interaction_epoch: Some("0".into()),
+            }),
+        };
+        let revoke: Value = serde_json::from_str(&payload(&revoke, 6)).unwrap();
+        assert_eq!(revoke["kind"], "interaction_answered");
+        assert_eq!(revoke["sessionId"], "s1");
+        assert_eq!(revoke["interactionId"], "memory:p:0");
+        assert_eq!(revoke["interactionEpoch"], "0");
+        assert_eq!(revoke["tag"], "interaction:7331:0:6d656d6f72793a703a30");
         // Half a surrogate pair, as `JSON.stringify` writes it.
         assert_eq!(js_json_string(&clip("a😀bc", 3)), r#""a\ud83d…""#);
         assert!(key_shaped(&"a".repeat(80), 80, 100));
@@ -1319,6 +1476,7 @@ mod tests {
             body: "b".into(),
             tag: tag.into(),
             target: json!({ "memory": true }),
+            interaction: None,
         }
     }
 
@@ -1341,6 +1499,7 @@ mod tests {
                     body: "Scheduled run: open it to read the result.".into(),
                     tag: "session:s1".into(),
                     target: json!({ "sessionId": "s1" }),
+                    interaction: None,
                 },
             )
             .await;
@@ -1558,36 +1717,63 @@ mod tests {
         watch_interactions(&events, push.db.clone(), push.clone());
         events.publish(
             &session.id,
-            0,
+            17,
             "interaction_created",
-            json!({ "id": "i1", "request": { "title": "Allow rm -rf build?" } }),
+            json!({ "id": "i1", "runnerEpoch": 0, "request": { "title": "Allow rm -rf build?" } }),
         );
         events.publish(
             &session.id,
-            0,
+            17,
             "interaction_answered",
-            json!({ "interactionId": "i1" }),
+            json!({ "interactionId": "i1", "interactionEpoch": 0 }),
         );
         events.publish("unknown", 0, "interaction_created", json!({}));
         for _ in 0..100 {
-            if !service.lock().unwrap().received.is_empty() {
+            if service.lock().unwrap().received.len() >= 2 {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
         let received = service.lock().unwrap().received.clone();
-        assert_eq!(received.len(), 1);
-        let read = browser.read(&received[0].2);
+        assert_eq!(received.len(), 2);
+        let payloads: Vec<Value> = received.iter().map(|item| browser.read(&item.2)).collect();
+        let created = payloads
+            .iter()
+            .find(|payload| payload["kind"] == "interaction_created")
+            .unwrap();
         assert_eq!(
-            read["title"],
+            created["title"],
             format!("{} is waiting for you", session.name)
         );
-        assert_eq!(read["body"], "Allow rm -rf build?");
-        assert_eq!(read["tag"], format!("session:{}", session.id));
-        assert_eq!(read["target"], json!({ "sessionId": session.id }));
+        assert_eq!(created["body"], "Allow rm -rf build?");
+        assert_eq!(created["interactionId"], "i1");
+        assert_eq!(created["interactionEpoch"], "0");
+        assert_eq!(
+            created["tag"],
+            format!("interaction:{}:0:6931", hex_utf8(&session.id))
+        );
+        assert_eq!(created["target"], json!({ "sessionId": session.id }));
+        let answered = payloads
+            .iter()
+            .find(|payload| payload["kind"] == "interaction_answered")
+            .unwrap();
+        assert_eq!(answered["title"], "");
+        assert_eq!(answered["interactionId"], "i1");
+        assert_eq!(answered["interactionEpoch"], "0");
+        assert_eq!(answered["tag"], created["tag"]);
+        assert_eq!(answered["target"], json!({ "sessionId": session.id }));
 
         let conn = push.db.lock();
+        let (_, refresh) =
+            answered_message(&conn, &session.id, Some(&json!({ "interactionId": "i1" }))).unwrap();
+        assert_eq!(
+            refresh.interaction.as_ref().unwrap().kind,
+            "interaction_refresh"
+        );
+        assert_eq!(refresh.tag, format!("session:{}", session.id));
+        assert_eq!(refresh.interaction.as_ref().unwrap().interaction_id, None);
+
         let (_, untitled) = waiting_message(
             &conn,
             &session.id,

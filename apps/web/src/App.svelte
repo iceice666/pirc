@@ -35,6 +35,7 @@
   import NewSessionDialog from './lib/components/dialogs/NewSessionDialog.svelte';
   import NewWorkspaceDialog from './lib/components/dialogs/NewWorkspaceDialog.svelte';
   import SettingsDialog, { type SettingsTab } from './lib/components/dialogs/SettingsDialog.svelte';
+  import NativeManagementConsent from './lib/components/dialogs/NativeManagementConsent.svelte';
   import SidePanel from './lib/components/panel/SidePanel.svelte';
   import type { PanelTab } from './lib/panel-api';
   import { onFilePreviewRequest } from './lib/file-links';
@@ -141,6 +142,9 @@
   let timeline: HTMLElement | undefined = $state();
 
   const sessionState = $derived(app.sessionState);
+  // This consent URL is an additive overlay. The normal app bootstrap still runs on mount.
+  const nativeManagementRequestId =
+    new URLSearchParams(location.search).get('nativeManagement')?.trim() || undefined;
   const hasControl = $derived(app.hasControl);
   const connection = $derived(app.connection);
 
@@ -326,7 +330,12 @@
     const onWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type === 'OPEN_TARGET') {
         sidebarOpen = false;
-        void app.openTarget(event.data.target ?? undefined);
+        void app.openNotificationTarget(event.data.target ?? undefined, event.data.interaction);
+      } else if (
+        event.data?.type === 'INTERACTION_REFRESH' &&
+        event.data.sessionId === app.activeSessionId
+      ) {
+        void app.refreshSnapshot();
       }
     };
     navigator.serviceWorker?.addEventListener('message', onWorkerMessage);
@@ -596,6 +605,9 @@
           >
         </div>
       {/if}
+      {#if app.interactionNotice}
+        <div class="viewer-banner" role="status">{app.interactionNotice}</div>
+      {/if}
       {#if !hasControl}
         <div class="viewer-banner">
           <span
@@ -632,8 +644,9 @@
               {#each app.pendingInteractions as interaction (interaction.id)}
                 <InteractionCard
                   {interaction}
-                  disabled={!app.canCommand}
-                  onanswer={(answer) => app.answerInteraction(interaction.id, answer)}
+                  disabled={!app.canCommand || app.answeringInteractionIds.includes(interaction.id)}
+                  onanswer={(answer) =>
+                    app.answerInteraction(interaction.id, answer, interaction.runnerEpoch)}
                 />
               {/each}
               {#if unseenContent && !following}
@@ -699,6 +712,9 @@
   onresetlayout={resetLayout}
   onopenchat={openSession}
 />
+{#if nativeManagementRequestId}
+  <NativeManagementConsent requestId={nativeManagementRequestId} />
+{/if}
 <NewWorkspaceDialog
   bind:open={newWorkspaceOpen}
   nodeId={newWorkspaceNodeId}
