@@ -11,6 +11,7 @@ mod memory_support;
 use memory_support::*;
 use pirc_conformance::{AgentOptions, AgentRun};
 use serde_json::{Value, json};
+use std::time::{Duration, Instant};
 
 /// What the node sets for an agent in a chat workspace.
 fn chat() -> AgentOptions {
@@ -264,6 +265,77 @@ async fn agent_assistant_coding_session_unreachable() {
         "agent_assistant_coding_session_unreachable",
         log.into_value()
     );
+}
+
+/// A turn of a coding session whose `assistant.context` gets no answer:
+/// how long the model request came after the context request.
+async fn held_turn(log: &mut Log, agent: &mut AgentRun, step: &str, message: &str) -> Duration {
+    let response = agent
+        .call(json!({ "type": "prompt", "message": message }))
+        .await;
+    log.note(&format!("{step}: response"), response);
+    let mut events = agent
+        .until(|line| line["type"] == "gateway_request" && line["op"] == "assistant.context")
+        .await;
+    let asked = Instant::now();
+    agent.wait_for_request().await;
+    let waited = asked.elapsed();
+    events.extend(agent.settle().await);
+    let events: Vec<Value> = events
+        .into_iter()
+        .filter(|line| line["type"] != "response")
+        .collect();
+    log.note(&format!("{step}: events"), json!(events));
+    tokio::time::sleep(log.worker_pause).await;
+    log.requests(agent, step);
+    waited
+}
+
+/// A gateway that never answers holds each run of a coding session up for
+/// the 3 s `assistant.context` timeout only: it runs without USER, the user
+/// is told once, and the next run asks again.
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_assistant_coding_session_context_timeout() {
+    let Some(mut agent) = AgentRun::start(coding()).await else {
+        return;
+    };
+    let mut log = Log::new(&agent);
+    answer(
+        &agent,
+        "assistant.context",
+        [json!({ "hold": true }), json!({ "hold": true })],
+    );
+    agent.push([text("a"), text("b")]);
+    let first = held_turn(&mut log, &mut agent, "timed out", "hello").await;
+    let second = held_turn(
+        &mut log,
+        &mut agent,
+        "timed out again: not told again",
+        "again",
+    )
+    .await;
+    for waited in [first, second] {
+        assert!(
+            (Duration::from_millis(2500)..Duration::from_secs(10)).contains(&waited),
+            "the model request came {waited:?} after the context request"
+        );
+    }
+    log.session(&agent);
+    let value = log.into_value();
+    let text = value.to_string();
+    assert!(!text.contains("## User"), "a USER section: {value:#}");
+    assert_eq!(
+        text.matches("Your USER preferences could not be loaded")
+            .count(),
+        1,
+        "{value:#}"
+    );
+    assert_eq!(
+        text.matches(r#""op":"assistant.context""#).count(),
+        2,
+        "{value:#}"
+    );
+    insta::assert_json_snapshot!("agent_assistant_coding_session_context_timeout", value);
 }
 
 /// A coding session with no USER entries freezes that too.

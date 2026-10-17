@@ -324,6 +324,8 @@ pub struct Answers {
     pub dialogs: VecDeque<Value>,
     /// Gateway operation results by `op` (`{"ok": true, "result": …}` or an
     /// error object), else `{"ok": false, "error": {"code": "not_found"}}`.
+    /// `{"hold": true}` leaves the request unanswered (the agent's own
+    /// timeout ends it).
     pub gateway: HashMap<String, Value>,
     /// A team child's `team_call`s to its parent, answered in order: fields
     /// merged into `team_result` (`{"result": …}` or `{"error": "…"}`).
@@ -336,7 +338,8 @@ pub struct Answers {
     /// Sandbox request results in order, whatever the `op`; none queued is
     /// not answered.
     pub sandbox: VecDeque<Value>,
-    /// Gateway results by `op` taken one at a time, before `gateway`.
+    /// Gateway results by `op` taken one at a time, before `gateway`
+    /// (`{"hold": true}` leaves that request unanswered).
     pub gateway_queue: HashMap<String, VecDeque<Value>>,
 }
 
@@ -751,9 +754,13 @@ impl AgentRun {
                             json!({ "ok": false, "error": { "code": "not_found",
                             "message": "No such operation", "status": 404 } })
                         });
-                    reply["type"] = json!("gateway_response");
-                    reply["id"] = line["id"].clone();
-                    Some(reply)
+                    if reply["hold"] == true {
+                        None
+                    } else {
+                        reply["type"] = json!("gateway_response");
+                        reply["id"] = line["id"].clone();
+                        Some(reply)
+                    }
                 }
                 Some("team_call") => match answers.team.pop_front() {
                     Some(mut reply) if !reply.is_null() && reply["hold"] != true => {
