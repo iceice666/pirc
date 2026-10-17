@@ -27,8 +27,8 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** implement real Canvas text measurement,
-      synchronous write/read layout support and resize observation for charts; extend
+- [ ] **Dynamic content compatibility:** complete Canvas ink/baseline text metrics,
+      synchronous write/read layout support and chart-library acceptance; extend
       the supported computed-style
       properties, list-item/inline-fragment measurements and common-library coverage;
       signed/font-relative/empty-block and bottom-edge
@@ -90,14 +90,14 @@ outside the agreed scope.
   remain outside this initial surface. Generic native font-family names can differ
   from Chromium's resolved UA family names. Per-element and packet limits withhold
   complete declarations rather than truncate custom properties or discard geometry.
-- An actual Chart.js 4.5.1 production-runtime probe loads the library, but even
-  a fixed-size bar chart stops at unsupported Canvas `measureText`. Its default
-  responsive mode separately stops at a stale computed-style read after changing
-  canvas dimensions. Native `ResizeObserver` now covers measured horizontal
-  HTML content/border boxes; see its separate acceptance below. These Chart.js
-  probes supply synthetic native layout packets, so they establish script
-  compatibility blockers, not native rendering success. Chart.js support remains
-  incomplete until text measurement and synchronous write/read are resolved.
+- A Chart.js 4.5.1 production-runtime probe now constructs a fixed-size bar
+  chart and records its Canvas commands using the real Skia width engine. Its
+  default responsive mode still stops at a stale computed-style read after
+  changing canvas dimensions. These probes use synthetic native layout packets,
+  so they establish script compatibility, not native chart rendering or visual
+  acceptance. Native `ResizeObserver` covers measured horizontal HTML
+  content/border boxes. Full Chart.js support still needs synchronous write/read
+  layout and end-to-end library acceptance.
 - Arbitrary websites/frameworks, third-party cookie policies and full browser API
   coverage are not guaranteed. Preserve explicit unsupported errors and record
   real failures before expanding compatibility.
@@ -567,3 +567,71 @@ before asynchronous frame delivery; repeatedly enqueueing synthetic read taps
 would starve the frame under test. Existing offset, scroll, percentage layout,
 computed-style fences and moved-button hit checks still pass. Browser captures
 reproduce byte for byte. No third-party data or personal browser was used.
+
+## Native Canvas text width follow-up
+
+Canvas `measureText().width` now runs synchronously in the document's existing
+JavaScriptSandbox, using the Skia paragraph engine pinned to Flutter 3.44.4. The
+Android text shaper supplies the actual selected system font faces, styles and
+variation axes. Scripts continue in one execution; there is no script replay,
+WebView, character-count estimate or placeholder width. Flutter paints the
+recorded Canvas commands with the original platform fonts.
+
+The native collector extracts selected TTC faces and deduplicates their bytes.
+For supported CFF/CFF2 faces it keeps the real glyph IDs, cmap, advances and
+shaping tables while omitting outlines from the measurement-only copy. CFF2
+conversion retains `fvar`, supported `avar` and `HVAR` data; TrueType outline
+variation is not stripped. Unsupported conversions retain the original face,
+subject to the resource budget. Derived faces never paint text or supply ink
+bounds. This follows the OpenType [horizontal metric](https://learn.microsoft.com/en-us/typography/opentype/spec/hmtx)
+and [HVAR](https://learn.microsoft.com/en-us/typography/opentype/spec/hvar)
+advance sources.
+
+The pinned Roboto/Chromium 153 corpus covers two viewports, spaces and ASCII
+whitespace, kerning/ligatures, digits, Greek/Cyrillic, combining accents,
+DOMString conversion, readonly widths and unchanged context state. Missing
+Hebrew/Arabic glyphs in this particular fixture fail explicitly; their browser
+fallback widths are observations rather than same-font expectations. Actual
+Android acceptance compares 14 Latin/CJK cases with Flutter TextPainter and
+paints labels plus a rectangle whose width comes from the script measurement.
+Canvas `fillText`/`strokeText` also normalize whitespace and accept an explicitly
+undefined optional maximum width, as used by Chart.js. Nonfinite/nonpositive
+maximum widths produce no draw, matching the browser fixture.
+
+Resource observations on the dedicated emulator: the representative CJK document
+transfers 5,932,888 unique font bytes, uses a 32 MiB WASM heap and initializes in
+about one second. Before omitting CFF2 outlines, it needed 35,019,020 font bytes
+and a 128 MiB heap. These are engine observations, not whole-app memory or
+physical-device performance guarantees. A separate comparison of the original
+and native-derived CFF2 face covers nine weights × eight texts, including
+variable Latin advances and Chinese; all 72 widths match exactly.
+
+Remaining explicit differences:
+
+- Only `TextMetrics.width` is implemented. Ink bounds, font bounds and baseline
+  metrics fail with `NotSupportedError` instead of returning fabricated values.
+- Android 12+ and JavaScriptSandbox WebAssembly, named-data and Promise-return
+  features are required for this width surface. Older supported Android devices
+  retain ordinary native rendering but cannot use synchronous Canvas measurement.
+- Preparation covers the listed common generic/Arial/Helvetica/Times/Courier/
+  Roboto/Inter aliases, normal/italic and weights 400/700. Custom downloadable
+  fonts, other weights and unprepared families are not supported. The first
+  family follows the existing Canvas painter policy; complete CSS font fallback
+  lists and inherited RTL direction are not yet implemented.
+- Fonts are selected from Latin/digits and up to 4,096 UTF-16 units of distinct
+  non-ASCII source characters. Later content that needs an unprepared font fails
+  explicitly. Collection is bounded to 32 resources and 48 MiB of unique bytes;
+  each measurement to 16,384 UTF-16 units, with a bounded result cache.
+- Platform font aliases can resolve differently from a desktop browser. Portable
+  same-font comparisons use the pinned open-source Roboto file; this does not
+  establish arbitrary cross-platform font or complete Canvas visual parity.
+- Chart.js 4.5.1 now constructs the fixed 600 × 300 bar-chart probe and records
+  39 Canvas commands. This uses synthetic native layout packets. Responsive
+  mode still stops at a stale computed-style read after changing canvas size;
+  actual native chart-library and synchronous write/read acceptance remain open.
+
+Verification: 4,780 Flutter tests, 546 JavaScript tests, 290 Android JVM tests,
+Android Canvas width/pixel acceptance, static analysis and formatting passed.
+The existing Android local-HTTP layout/interaction integration also passed
+with the new engine preparation; detailed run evidence stays in ignored local
+acceptance output.

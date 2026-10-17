@@ -50,6 +50,7 @@ internal class NativeDocumentScripts(context: Context) {
         val generation: Long,
         val evaluationLock: Mutex = Mutex(),
         val retired: AtomicBoolean = AtomicBoolean(false),
+        val canvasTextPrepared: AtomicBoolean = AtomicBoolean(false),
         val resources: NativeDocumentResourceRequests = NativeDocumentResourceRequests(),
     )
 
@@ -132,7 +133,11 @@ internal class NativeDocumentScripts(context: Context) {
                 val connected = connectedSandbox()
                 val missing = withContext(Dispatchers.IO) { missingRequiredFeatures(connected) }
                 if (missing.isEmpty()) {
-                    mapOf("supported" to true)
+                    mapOf("supported" to true,
+                        "canvasTextSupported" to (android.os.Build.VERSION.SDK_INT >= 31 &&
+                            listOf(JavaScriptSandbox.JS_FEATURE_WASM_COMPILATION,
+                                JavaScriptSandbox.JS_FEATURE_PROVIDE_CONSUME_ARRAY_BUFFER,
+                                JavaScriptSandbox.JS_FEATURE_PROMISE_RETURN).all(connected::isFeatureSupported)))
                 } else {
                     unavailable("JavaScriptEngine is missing required features: ${missing.joinToString()}.")
                 }
@@ -234,6 +239,43 @@ internal class NativeDocumentScripts(context: Context) {
             if (error is DocumentScriptException) throw error
             if (error is SandboxDeadException) resetSandboxAfterCrash(reservation.sandbox)
             throw engineFailure(error)
+        }
+    }
+
+    /** Only packaged engine bytes and fonts selected by Android's shaper cross this boundary. */
+    suspend fun prepareCanvasText(id: Int, owner: String, contextId: String?, families: List<String>, sample: String): Map<String, Any?> {
+        validateOwner(owner)
+        val session = requireSession(id, owner, contextId)
+        require(listOf(JavaScriptSandbox.JS_FEATURE_WASM_COMPILATION,
+            JavaScriptSandbox.JS_FEATURE_PROVIDE_CONSUME_ARRAY_BUFFER,
+            JavaScriptSandbox.JS_FEATURE_PROMISE_RETURN).all(session.sandbox::isFeatureSupported)) {
+            "This JavaScriptSandbox cannot load native Canvas text resources"
+        }
+        return withContext(Dispatchers.IO) {
+            session.evaluationLock.withLock {
+                ensureSessionActive(session)
+                check(session.canvasTextPrepared.compareAndSet(false, true)) {
+                    "Canvas text resources were already prepared for this document"
+                }
+                val collected = NativeCanvasTextFonts.collect(families, sample)
+                val wasmName = "pirc-canvas-text-wasm"
+                val wasm = appContext.assets.open("flutter_assets/assets/document-canvas-text.wasm").use { it.readBytes() }
+                check(wasm.size in 1..16 * 1024 * 1024) { "Invalid packaged Canvas text engine" }
+                val binaryNames = java.util.IdentityHashMap<ByteArray, String>()
+                val resources = (collected["resources"] as List<*>).map { raw ->
+                    val resource = raw as Map<*, *>
+                    val bytes = resource["bytes"] as ByteArray
+                    val name = binaryNames[bytes] ?: "pirc-canvas-font-${binaryNames.size}".also {
+                        binaryNames[bytes] = it
+                    }
+                    resource.entries.filter { it.key != "bytes" }.associate { it.key as String to it.value } + ("dataName" to name)
+                }
+                ensureSessionActive(session)
+                session.isolate.provideNamedData(wasmName, wasm)
+                for ((bytes, name) in binaryNames) session.isolate.provideNamedData(name, bytes)
+                mapOf("wasmName" to wasmName, "resources" to resources, "matches" to collected["matches"],
+                    "fontBytes" to binaryNames.keys.sumOf { it.size.toLong() })
+            }
         }
     }
 

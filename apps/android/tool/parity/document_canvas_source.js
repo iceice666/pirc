@@ -3,7 +3,7 @@
  *
  * This factory is concatenated into the document runtime IIFE. It records
  * drawing operations and context state; it does not rasterize or guess font
- * metrics. Unsupported pixel, pattern, and measurement APIs fail
+ * metrics. Unsupported pixel, pattern, and ink measurement APIs fail
  * explicitly so callers cannot mistake missing output for a successful draw.
  */
 function createDocumentCanvas(deps) {
@@ -17,6 +17,24 @@ function createDocumentCanvas(deps) {
   const diagnostic = typeof options.diagnostic === 'function'
     ? options.diagnostic
     : function() {};
+  const metricsState = new WeakMap();
+  const metricToken = {};
+  class TextMetrics {
+    constructor(token, width) {
+      if (token !== metricToken) throw new TypeError('Illegal constructor');
+      metricsState.set(this, width);
+    }
+    get width() {
+      if (!metricsState.has(this)) throw new TypeError('Illegal TextMetrics invocation');
+      return metricsState.get(this);
+    }
+  }
+  Object.defineProperty(TextMetrics.prototype,'width',{...Object.getOwnPropertyDescriptor(TextMetrics.prototype,'width'),enumerable:true});
+  for (const name of ['actualBoundingBoxLeft','actualBoundingBoxRight','actualBoundingBoxAscent','actualBoundingBoxDescent',
+    'fontBoundingBoxAscent','fontBoundingBoxDescent','emHeightAscent','emHeightDescent','hangingBaseline','alphabeticBaseline','ideographicBaseline']) {
+    Object.defineProperty(TextMetrics.prototype,name,{get() {throw unsupported('TextMetrics.'+name);},enumerable:true});
+  }
+  Object.defineProperty(TextMetrics.prototype,Symbol.toStringTag,{value:'TextMetrics'});
   const records = new WeakMap();
   const unsupportedReported = new Set();
   const maxCommands = 5000;
@@ -928,14 +946,33 @@ function createDocumentCanvas(deps) {
         x0, y0, innerRadius, x1, y1, outerRadius
       ]);
     };
+    context.measureText = function(text) {
+      if (arguments.length === 0) throw new TypeError('measureText requires a text argument');
+      if (typeof text === 'symbol') throw new TypeError('Canvas text cannot be a Symbol');
+      if (typeof options.measureText !== 'function')
+        throw unsupported('measureText', options.textMetricError || undefined);
+      const state = record.currentState;
+      let width;
+      try {
+        width = options.measureText(state.font,String(text),state.direction === 'rtl' ? 'rtl' : 'ltr');
+      } catch (error) {
+        if (error && error.name === 'NotSupportedError') throw unsupported('measureText',String(error.message));
+        throw error;
+      }
+      if (!Number.isFinite(width) || width < 0) throw new TypeError('Invalid native Canvas text width');
+      return new TextMetrics(metricToken,width);
+    };
     context.fillText = function(text, x, y, maxWidth) {
       const args = [
         String(text),
         number(x, 'x'),
         number(y, 'y')
       ];
-      if (arguments.length >= 4)
-        args.push(number(maxWidth, 'maxWidth'));
+      if (maxWidth !== undefined) {
+        const width = imageNumber(maxWidth, 'maxWidth');
+        if (!Number.isFinite(width) || width <= 0) return;
+        args.push(width);
+      }
       draw(record, 'fillText', args, false, false);
     };
     context.strokeText = function(text, x, y, maxWidth) {
@@ -944,8 +981,11 @@ function createDocumentCanvas(deps) {
         number(x, 'x'),
         number(y, 'y')
       ];
-      if (arguments.length >= 4)
-        args.push(number(maxWidth, 'maxWidth'));
+      if (maxWidth !== undefined) {
+        const width = imageNumber(maxWidth, 'maxWidth');
+        if (!Number.isFinite(width) || width <= 0) return;
+        args.push(width);
+      }
       draw(record, 'strokeText', args, false, false);
     };
 
@@ -1052,7 +1092,7 @@ function createDocumentCanvas(deps) {
     };
 
     for (const api of [
-      'measureText', 'createPattern', 'createConicGradient',
+      'createPattern', 'createConicGradient',
       'getImageData', 'putImageData', 'createImageData', 'isPointInPath',
       'isPointInStroke', 'arcTo', 'roundRect',
       'scrollPathIntoView', 'reset'
@@ -1275,6 +1315,6 @@ function createDocumentCanvas(deps) {
     return output;
   }
 
-  return { install: install, snapshots: snapshots };
+  return {
+    TextMetrics, install: install, snapshots: snapshots };
 }
-

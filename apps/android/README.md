@@ -87,6 +87,16 @@ integration also reads canvas/image styles and rectangles through the shipped
 runtime after actual image decoding. Chart.js support remains incomplete; the
 concrete API blockers are recorded in the plan.
 
+`document_canvas_text_test.dart` runs synchronous Canvas `measureText().width`
+through Android JavaScriptSandbox, compares it with actual Flutter font advances,
+and paints the resulting native Canvas commands. It requires Android 12+ and the
+sandbox's WebAssembly/named-data features. The bundled Skia text engine is pinned
+to the Flutter engine above, with source checksums and license notices; rebuild
+its assets offline with `python3 tool/parity/build_document_script_runtime.py`.
+`document_canvas_text_runtime_test.mjs` compares the real engine with the pinned
+Roboto/Chromium fixture. Unprepared fonts, missing glyphs and ink/baseline metrics
+fail explicitly; this is a bounded text-width surface, not full Canvas support.
+
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
 [the test browser guide](tool/parity/TEST_BROWSER.md).

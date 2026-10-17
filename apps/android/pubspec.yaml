@@ -31,6 +31,9 @@ flutter:
   assets:
     - assets/design-tokens.json
     - assets/d3-sankey-license.txt
+    - assets/document-canvas-text.js
+    - assets/document-canvas-text.wasm
+    - assets/document-canvas-text.LICENSE.txt
     - assets/document-script-runtime.js
     - assets/document-script-runtime.LICENSE.txt
     - assets/document-script-runtime.THIRD_PARTY.txt

@@ -5,6 +5,9 @@
  */
 (function documentScriptRuntimeWrapper() {
   'use strict';
+  const nativeCanvasTextEngine = globalThis.__pircNativeCanvasText;
+  delete globalThis.__pircNativeCanvasText;
+  delete globalThis.__pircInitializeCanvasText;
   const MAX_INPUT_BYTES = 4 * 1024 * 1024;
   const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
   const MAX_DOM_NODES = 5000;
@@ -5242,8 +5245,11 @@
       installDocumentImages(view, document);
       markInitialDocument(document);
       activeState.canvas = createDocumentCanvas({document, ensureElementId, diagnostic,
+        textMetricError: input && input.canvasTextError,
+        measureText: nativeCanvasTextEngine && nativeCanvasTextEngine.measureText,
         resolveImage: source => activeState.images.canvasSource(source)});
       activeState.canvas.install();
+      defineGlobal('TextMetrics',activeState.canvas.TextMetrics,false);
       activeState.stylesheets = createPircDocumentStylesheets({
         document, URL: pircUrlPolyfill.URL, Event: PublicEvent,
         getBaseURL: currentDocumentBaseUrl, ensureElementId, diagnostic,

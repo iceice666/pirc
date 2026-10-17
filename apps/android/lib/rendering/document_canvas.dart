@@ -1498,7 +1498,10 @@ ui.Shader _gradientShader(
 
 void _paintText(Canvas canvas, NativeDocumentCanvasCommand command) {
   final state = command.state;
-  final text = command.args[0] as String;
+  final text = (command.args[0] as String).replaceAll(
+    RegExp(r'[\t\n\v\f\r]'),
+    ' ',
+  );
   final x = _argNumber(command.args, 1);
   final y = _argNumber(command.args, 2);
   final maxWidth = command.args.length == 4
@@ -1543,7 +1546,10 @@ void _paintText(Canvas canvas, NativeDocumentCanvasCommand command) {
     maxLines: 1,
   )..layout();
   final lineMetrics = painter.computeLineMetrics();
-  if (lineMetrics.isEmpty) return;
+  if (lineMetrics.isEmpty) {
+    painter.dispose();
+    return;
+  }
   final width = painter.width;
   final effectiveAlign = switch (state.textAlign) {
     'start' => state.direction == TextDirection.ltr ? 'left' : 'right',
@@ -1583,6 +1589,7 @@ void _paintText(Canvas canvas, NativeDocumentCanvasCommand command) {
     painter.paint(canvas, Offset(drawLeft, y - baseline));
   }
   canvas.restore();
+  painter.dispose();
 }
 
 Path _buildPath(List<NativeDocumentCanvasPathSegment> segments) {

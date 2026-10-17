@@ -200,6 +200,40 @@ void main() {
     expect(maxY, lessThan(35));
   });
 
+  testWidgets('fillText and strokeText normalize whitespace before shaping', (
+    tester,
+  ) async {
+    final points = [
+      for (var y = 0; y < 36; y++)
+        for (var x = 0; x < 150; x++) (x, y),
+    ];
+    for (final operation in ['fillText', 'strokeText']) {
+      NativeDocumentCanvasSnapshot draw(String text) => _snapshot(150, 36, [
+        _command(
+          operation,
+          [text, 2, 25],
+          state: _state(
+            fillStyle: 'black',
+            strokeStyle: 'black',
+            font: '16px Arial',
+          ),
+        ),
+      ]);
+      final actual = await _renderSamples(
+        tester,
+        draw('A\tV\nT\vX\fY\rZ'),
+        points,
+      );
+      final expected = await _renderSamples(
+        tester,
+        draw('A V T X Y Z'),
+        points,
+      );
+      expect(actual, expected, reason: operation);
+      expect(actual.any((pixel) => pixel[3] != 0), true);
+    }
+  });
+
   testWidgets('one-stop gradients paint as their stop color', (tester) async {
     final snapshot = _snapshot(8, 8, [
       _command(

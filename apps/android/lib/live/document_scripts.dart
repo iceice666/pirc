@@ -1313,6 +1313,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   int _pointerInputGeneration = 0;
   double _nextFrameAt = 0, _lastPumpAt = 0;
   String? _lastMarkup;
+  String? _canvasTextUnavailable;
   double get _now =>
       clockMilliseconds?.call() ?? _clock.elapsedMicroseconds / 1000;
 
@@ -2346,6 +2347,59 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       }
       _id = id;
       _nativeCookies = opened['cookieState'] is Map;
+      if (capability['canvasTextSupported'] == true) {
+        try {
+          // Collect representative scripts, without changing the authored text.
+          // Missing glyphs remain explicit when a later value needs other fonts.
+          final sample = StringBuffer();
+          final seen = <int>{};
+          for (final rune in source.runes) {
+            if (rune < 128 || !seen.add(rune)) continue;
+            final value = String.fromCharCode(rune);
+            if (sample.length + value.length > 4096) break;
+            sample.write(value);
+          }
+          final resources = obj(
+            await gateway.call('documentScriptCanvasTextResources', {
+              'id': id,
+              'owner': _owner,
+              'sample': sample.toString(),
+              'families': const [
+                'sans-serif',
+                'serif',
+                'monospace',
+                'system-ui',
+                'ui-sans-serif',
+                'ui-serif',
+                'ui-monospace',
+                'Arial',
+                'Helvetica',
+                'Helvetica Neue',
+                'Times New Roman',
+                'Courier New',
+                'Roboto',
+                'Inter',
+              ],
+            }),
+          );
+          if (_disposed) return;
+          await _evaluate(
+            await rootBundle.loadString('assets/document-canvas-text.js'),
+          );
+          final prepared = obj(
+            jsonDecode(
+              await _evaluate(
+                '__pircInitializeCanvasText(${jsonEncode(resources)})',
+              ),
+            ),
+          );
+          if (prepared['ok'] != true) {
+            throw const FormatException('Canvas text preparation failed.');
+          }
+        } catch (error) {
+          _canvasTextUnavailable = _message(error);
+        }
+      }
       await _evaluate(runtime);
       if (_disposed) return;
       _locationUrl = url;
@@ -2361,7 +2415,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       final initialEnvironment = _environment;
       _hostLayoutEnabled = _layoutCapture != null;
       await _run(
-        '__pircDocument.init(${jsonEncode({'hostLayout': _hostLayoutEnabled, 'environment': initialEnvironment.toJson(), 'html': source, 'url': url, 'cookieState': opened['cookieState'], 'referrerPolicy': referrerPolicy, 'objectUrlNonce': _objectUrlNonce, 'referrer': referrer, 'history': history, 'now': _now})})',
+        '__pircDocument.init(${jsonEncode({'hostLayout': _hostLayoutEnabled, 'canvasTextError': _canvasTextUnavailable, 'environment': initialEnvironment.toJson(), 'html': source, 'url': url, 'cookieState': opened['cookieState'], 'referrerPolicy': referrerPolicy, 'objectUrlNonce': _objectUrlNonce, 'referrer': referrer, 'history': history, 'now': _now})})',
       );
       if (_disposed) return;
       ready = true;

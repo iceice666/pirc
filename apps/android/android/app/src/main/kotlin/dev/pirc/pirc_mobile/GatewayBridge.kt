@@ -771,6 +771,11 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             optionalString("initiatorUrl") ?: optionalString("originUrl") ?: optionalString("referrerUrl"),
                             optionalString("topLevelUrl") ?: optionalString("initiatorUrl") ?: optionalString("originUrl") ?: optionalString("referrerUrl"),
                         )
+                        "documentScriptCanvasTextResources" -> documentScripts.prepareCanvasText(
+                            requiredInt("id"), str("owner"), contextId,
+                            (args["families"] as? List<*>)?.map { require(it is String); it }
+                                ?: error("Canvas text font families are required"), str("sample"),
+                        )
                         "documentScriptEvaluate" -> mapOf(
                             "value" to documentScripts.evaluate(
                                 requiredInt("id"), str("owner"), str("source"), contextId,

@@ -14,6 +14,7 @@ import json
 import re
 
 from generate_document_encoding_data import generate as generate_encoding_data
+from build_document_canvas_text import generate as generate_canvas_text
 from pathlib import Path
 
 
@@ -299,6 +300,7 @@ def build(vendor: Path, output_dir: Path) -> tuple[Path, str]:
         + "\n})(globalThis);\n"
     )
 
+    generate_canvas_text(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     url_third_party = (
         third_party_text.rstrip()
