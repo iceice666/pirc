@@ -304,12 +304,29 @@ function createPircDocumentLayout(options) {
     return id;
   }
 
+  function isIndependentCanvasBitmapMutation(record) {
+    if ((record.attributeName !== 'width' && record.attributeName !== 'height') ||
+        record.attributeNamespace != null ||
+        record.target?.namespaceURI !== 'http://www.w3.org/1999/xhtml' ||
+        record.target?.localName !== 'canvas' ||
+        !layoutSnapshot || layoutSnapshot.revision !== revisionValue ||
+        !isConnected(record.target)) return false;
+    const id = readAttribute.call(record.target, 'data-pirc-script-id');
+    const box = layoutSnapshot.boxes.get(id);
+    // Only the completed native frame can establish that both CSS dimensions
+    // are intrinsic-independent and the complete CSS cascade has no bitmap
+    // attribute dependencies. Other DOM/style mutations still fence the packet.
+    return box?.kind === 'box' && box.element === record.target &&
+      box.canvasBitmapSizeIndependent === true;
+  }
+
   function consumeMutationRecords(records) {
     if (internalMutationDepth > 0 || !records || records.length === 0) return;
     let relevant = false;
     for (const record of records) {
       if (record && record.type === 'attributes') {
         if (internalAttributes.has(record.attributeName)) continue;
+        if (isIndependentCanvasBitmapMutation(record)) continue;
         // Only a known old value and the actual HTML attribute can establish a
         // no-op. Canvas size setters still reset their bitmap/context state;
         // retaining an unchanged native layout does not suppress that work.
@@ -1001,6 +1018,15 @@ function createPircDocumentLayout(options) {
 
       const computedStyle = validateComputedStyle(source, id, computedStyleBudget);
       const resize = validateResize(source, id);
+      let canvasBitmapSizeIndependent = false;
+      if (Object.prototype.hasOwnProperty.call(source, 'canvasBitmapSizeIndependent')) {
+        if (typeof source.canvasBitmapSizeIndependent !== 'boolean' ||
+            source.kind !== 'box' || element.namespaceURI !== 'http://www.w3.org/1999/xhtml' ||
+            element.localName !== 'canvas') {
+          throw new TypeError(`${id}.canvasBitmapSizeIndependent requires a measured HTML canvas and boolean`);
+        }
+        canvasBitmapSizeIndependent = source.canvasBitmapSizeIndependent;
+      }
 
       const bounds = {};
       for (const name of ['x', 'y', 'width', 'height']) {
@@ -1060,6 +1086,7 @@ function createPircDocumentLayout(options) {
         stagedBoxes.set(id, Object.freeze({
           id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset,
           ...(computedStyle === undefined ? {} : { computedStyle }), resize, element, revision,
+          canvasBitmapSizeIndependent,
         }));
       } else {
         if (Object.prototype.hasOwnProperty.call(source, 'scroll')) {

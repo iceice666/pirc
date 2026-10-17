@@ -32,13 +32,13 @@
   },
   "nativeMutationPatches": {
     "source": "apps/android/tool/parity/document_linkedom_mutation_patches.json",
-    "sha256": "2d451dc44e80ecef55d67c226551063d2f197f86398cd007364ac9bc9fe1d5b1"
+    "sha256": "81aa27c9e9737725aee0302d8832e5ee5eacf01fbbca8956ddef75e679f8d3ea"
   },
   "nativeResizeObserver": {
     "helperSha256": "ee102a0c0a95f3f8ced8fe139cd6b9f0c796eda5cd629e2e8c2a815a7625a791"
   },
   "nativeLayout": {
-    "helperSha256": "721af79950c21098c3718c5431222ad9b427765e6719bb407258b59e8a2b7194"
+    "helperSha256": "70242fe862d0cb9c4a0faa5df21ece19eddc3facd45b6503dbd0b1c9b1f0ca16"
   },
   "nativeModules": {
     "parser": {

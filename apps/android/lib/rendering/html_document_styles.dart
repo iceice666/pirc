@@ -85,6 +85,7 @@ class NativeDocumentStylesResult {
     required this.styleAttributesByElement,
     required this.imports,
     required this.diagnostics,
+    required this.canvasBitmapAttributesIndependent,
   });
 
   /// Winning values in emitted CSS order. Values exclude `!important`.
@@ -99,6 +100,12 @@ class NativeDocumentStylesResult {
   final Map<dom.Element, String> styleAttributesByElement;
   final List<NativeDocumentStyleImport> imports;
   final List<NativeDocumentStyleDiagnostic> diagnostics;
+
+  /// True only when the complete parsed CSS set has no attribute-selector or
+  /// `attr()` dependency, and its relevant syntax was understood. This lets a
+  /// caller prove that changing a canvas backing-store attribute cannot change
+  /// CSS matching anywhere in the document.
+  final bool canvasBitmapAttributesIndependent;
 }
 
 /// Applies a deliberately bounded CSS author cascade to a full parsed DOM.
@@ -637,6 +644,7 @@ class _Cascade {
   final _diagnostics = <NativeDocumentStyleDiagnostic>[];
   final _cyclicVariables = <_VariableKey>{};
   final _reportedCycles = <String>{};
+  bool _canvasBitmapDependenciesInspectable = true;
   int _order = 0;
   int _selectorProbeOrder = 0;
 
@@ -673,7 +681,14 @@ class _Cascade {
       final parsed = _parseCss(mediaPrepared.cssText, source.baseUrl);
       _addParseMessages(parsed.messages, source.baseUrl);
       final stylesheet = parsed.stylesheet;
-      if (stylesheet == null) continue;
+      if (stylesheet == null) {
+        _canvasBitmapDependenciesInspectable = false;
+        continue;
+      }
+      if (parsed.messages.isNotEmpty) {
+        _canvasBitmapDependenciesInspectable = false;
+      }
+      _inspectCanvasBitmapDependencies(stylesheet);
 
       var sourceIsActive = true;
       final sourceMedia = source.media?.trim();
@@ -971,8 +986,41 @@ class _Cascade {
       diagnostics: List<NativeDocumentStyleDiagnostic>.unmodifiable(
         _diagnostics,
       ),
+      canvasBitmapAttributesIndependent:
+          _canvasBitmapDependenciesInspectable &&
+          !_diagnostics.any(_blocksCanvasBitmapIndependenceProof),
     );
   }
+
+  void _inspectCanvasBitmapDependencies(css.StyleSheet stylesheet) {
+    final dependencies = _CanvasBitmapDependencyCollector();
+    try {
+      stylesheet.visit(dependencies);
+    } on Object {
+      // Some csslib AST nodes have incomplete visitor implementations. A proof
+      // must fail closed instead of assuming they contain no relevant syntax.
+      _canvasBitmapDependenciesInspectable = false;
+      return;
+    }
+    if (dependencies.hasAttributeSelector || dependencies.hasAttrFunction) {
+      _canvasBitmapDependenciesInspectable = false;
+    }
+    if (dependencies.hasUnsupportedSelector ||
+        dependencies.hasUnsupportedRule) {
+      _canvasBitmapDependenciesInspectable = false;
+    }
+  }
+
+  bool _blocksCanvasBitmapIndependenceProof(
+    NativeDocumentStyleDiagnostic diagnostic,
+  ) =>
+      diagnostic.code == 'css-parse-error' ||
+      diagnostic.code.startsWith('unsupported-') ||
+      diagnostic.code.startsWith('invalid-') ||
+      diagnostic.code.startsWith('unresolved-') ||
+      diagnostic.code.startsWith('unvalidated-') ||
+      diagnostic.code.startsWith('cyclic-') ||
+      diagnostic.code.startsWith('partial-');
 
   void _processRules(
     List<css.TreeNode> rules,
@@ -1240,7 +1288,14 @@ class _Cascade {
     final parsed = _parseCss('* { $text }', baseUrl);
     _addParseMessages(parsed.messages, baseUrl);
     final sheet = parsed.stylesheet;
-    if (sheet == null) return;
+    if (sheet == null) {
+      _canvasBitmapDependenciesInspectable = false;
+      return;
+    }
+    if (parsed.messages.isNotEmpty) {
+      _canvasBitmapDependenciesInspectable = false;
+    }
+    _inspectCanvasBitmapDependencies(sheet);
     for (final node in sheet.topLevels.whereType<css.RuleSet>()) {
       for (final declaration in node.declarationGroup.declarations) {
         if (declaration is css.Declaration) {
@@ -4668,6 +4723,82 @@ class _RootSelectorCollector extends css.Visitor {
   @override
   dynamic visitNegationSelector(css.NegationSelector node) {
     node.negationArg?.visit(this);
+  }
+}
+
+/// Records CSS constructs that can make a canvas backing-size attribute affect
+/// native layout through style matching or computed declaration values.
+///
+/// `css.Visitor` does not descend into `:not()` or functional pseudo-class
+/// arguments by default, so those edges are followed explicitly. Unsupported
+/// selector forms and imports fail closed because their complete dependency
+/// surface cannot be proven here.
+class _CanvasBitmapDependencyCollector extends css.Visitor {
+  bool hasAttributeSelector = false;
+  bool hasAttrFunction = false;
+  bool hasUnsupportedSelector = false;
+  bool hasUnsupportedRule = false;
+
+  @override
+  dynamic visitAttributeSelector(css.AttributeSelector node) {
+    hasAttributeSelector = true;
+    return super.visitAttributeSelector(node);
+  }
+
+  @override
+  dynamic visitFunctionTerm(css.FunctionTerm node) {
+    if (node.value.toString().toLowerCase() == 'attr') {
+      hasAttrFunction = true;
+    }
+    return super.visitFunctionTerm(node);
+  }
+
+  @override
+  dynamic visitSelector(css.Selector node) {
+    if (_selectorUnsupportedReason(node) != null) {
+      hasUnsupportedSelector = true;
+    }
+    return super.visitSelector(node);
+  }
+
+  @override
+  dynamic visitNegationSelector(css.NegationSelector node) {
+    node.negationArg?.visit(this);
+  }
+
+  @override
+  dynamic visitPseudoClassFunctionSelector(
+    css.PseudoClassFunctionSelector node,
+  ) {
+    node.argument.visit(this);
+    return super.visitPseudoClassFunctionSelector(node);
+  }
+
+  @override
+  dynamic visitPseudoElementFunctionSelector(
+    css.PseudoElementFunctionSelector node,
+  ) {
+    hasUnsupportedSelector = true;
+    node.expression.visit(this);
+  }
+
+  @override
+  dynamic visitDeclarationGroup(css.DeclarationGroup node) {
+    if (node.declarations.any(
+      (declaration) => declaration is! css.Declaration,
+    )) {
+      hasUnsupportedRule = true;
+    }
+    return super.visitDeclarationGroup(node);
+  }
+
+  @override
+  dynamic visitImportDirective(css.ImportDirective node) {
+    // A source-level result cannot assert that a fetched import is represented
+    // by this cascade. Navigation currently flattens imports into sources, but
+    // keeping the parent import in the proof input must remain conservative.
+    hasUnsupportedRule = true;
+    return super.visitImportDirective(node);
   }
 }
 

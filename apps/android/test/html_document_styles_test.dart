@@ -619,6 +619,126 @@ void main() {
       containsAll(['unsupported-shorthand', 'unsupported-selector']),
     );
   });
+
+  group('canvas backing-size CSS independence', () {
+    test('accepts a clean cascade and recomputes after a sheet is added', () {
+      final document = html.parse(
+        '<canvas class="chart" style="width: 350px; height: 220px"></canvas>',
+      );
+      final initial = NativeDocumentStyleEngine(
+        stylesheets: const [],
+        viewportWidth: 390,
+        dark: false,
+      ).apply(document);
+      expect(initial.canvasBitmapAttributesIndependent, isTrue);
+
+      final updated = NativeDocumentStyleEngine(
+        stylesheets: const [
+          NativeDocumentStylesheet(
+            '.chart[width] + .legend { display: block; }',
+            baseUrl: 'https://example.test/dynamic.css',
+          ),
+        ],
+        viewportWidth: 390,
+        dark: false,
+      ).apply(document);
+      expect(updated.canvasBitmapAttributesIndependent, isFalse);
+    });
+
+    test('rejects escaped and nested attribute selectors in inactive CSS', () {
+      for (final source in [
+        r'@media print { canvas[w\69 dth] { color: red; } }',
+        r'.chart:has(canvas[h\65 ight]) + .legend { display: block; }',
+        r'.chart:not([w\69 dth]) ~ .legend { display: block; }',
+      ]) {
+        final result =
+            NativeDocumentStyleEngine(
+              stylesheets: [
+                NativeDocumentStylesheet(
+                  source,
+                  baseUrl: 'https://example.test/style.css',
+                ),
+              ],
+              viewportWidth: 390,
+              dark: false,
+            ).apply(
+              html.parse(
+                '<canvas class="chart"></canvas><div class="legend"></div>',
+              ),
+            );
+
+        expect(
+          result.canvasBitmapAttributesIndependent,
+          isFalse,
+          reason: source,
+        );
+      }
+    });
+
+    test('rejects escaped attr() functions in sheets and inline styles', () {
+      final sheetResult = NativeDocumentStyleEngine(
+        stylesheets: const [
+          NativeDocumentStylesheet(
+            r'canvas { --probe: a\74 tr(w\69 dth px); }',
+            baseUrl: 'https://example.test/style.css',
+          ),
+        ],
+        viewportWidth: 390,
+        dark: false,
+      ).apply(html.parse('<canvas></canvas>'));
+      expect(sheetResult.canvasBitmapAttributesIndependent, isFalse);
+
+      final inlineResult =
+          NativeDocumentStyleEngine(
+            stylesheets: const [],
+            viewportWidth: 390,
+            dark: false,
+          ).apply(
+            html.parse(
+              r'<canvas style="width: a\74 tr(width px); height: 220px"></canvas>',
+            ),
+          );
+      expect(inlineResult.canvasBitmapAttributesIndependent, isFalse);
+    });
+
+    test('rejects an ordinary attr() value function', () {
+      final result = NativeDocumentStyleEngine(
+        stylesheets: const [
+          NativeDocumentStylesheet(
+            'canvas { --probe: attr(width); }',
+            baseUrl: 'https://example.test/style.css',
+          ),
+        ],
+        viewportWidth: 390,
+        dark: false,
+      ).apply(html.parse('<canvas></canvas>'));
+      expect(result.canvasBitmapAttributesIndependent, isFalse);
+    });
+
+    test('fails closed on CSS parse errors and unsupported rules', () {
+      for (final source in [
+        r'canvas[w\69 dth { width: 350px; }',
+        '@supports (display: grid) { canvas { width: 350px; } }',
+      ]) {
+        final result = NativeDocumentStyleEngine(
+          stylesheets: [
+            NativeDocumentStylesheet(
+              source,
+              baseUrl: 'https://example.test/style.css',
+            ),
+          ],
+          viewportWidth: 390,
+          dark: false,
+        ).apply(html.parse('<canvas></canvas>'));
+
+        expect(
+          result.canvasBitmapAttributesIndependent,
+          isFalse,
+          reason: source,
+        );
+      }
+    });
+  });
 }
 
 Map<String, dynamic> _readFixture(String name) {

@@ -246,9 +246,6 @@ try {
         devicePixelRatio: 'per case',
       },
     },
-    nativeKnownPending: [
-      'Responsive chart geometry after a genuine container and canvas CSS width change remains pending native device acceptance; this Chromium oracle does not attest to native support for that path.',
-    ],
     captureNotes: {
       canvasCommandRecorder: false,
       sameValueAttributeWrites: 'Canvas width and height are assigned their existing values before Chart.js construction; bitmap and 2D context reset behavior are recorded.',

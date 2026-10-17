@@ -1949,6 +1949,8 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       layoutComputedStyles: nativeDocumentComputedStyleSpecs(
         document: styled,
         stylesByElement: result.stylesByElement,
+        canvasBitmapAttributesIndependent:
+            result.canvasBitmapAttributesIndependent,
         viewportWidth: environment.width,
         viewportHeight: environment.height,
         dark: schemeDark,

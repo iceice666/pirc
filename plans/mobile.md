@@ -90,15 +90,15 @@ outside the agreed scope.
   remain outside this initial surface. Generic native font-family names can differ
   from Chromium's resolved UA family names. Per-element and packet limits withhold
   complete declarations rather than truncate custom properties or discard geometry.
-- Chart.js 4.5.1 bar charts now construct, paint and update data through the
-  native fetched-document path on phone/tablet at DPR 1/3 when Canvas CSS and
-  backing dimensions are already sized consistently. Same-value width/height
-  assignments clear the bitmap without discarding current native geometry.
-  The four Chromium comparison cases have a maximum observed bar-geometry
-  difference of 0.055 px from platform font advances. Genuine size changes
-  followed by synchronous reads still need a matching native frame; default
-  unprepared Canvas sizes, dynamic container resizing and broader Chart.js
-  interactions remain unverified. This is bounded library acceptance.
+- Chart.js 4.5.1 bar charts now construct, paint, update data and resize through
+  the native fetched-document path on phone/tablet at DPR 1/3. The accepted cases
+  use explicit pixel CSS dimensions, initially consistent backing sizes, and a
+  CSS cascade without attribute dependencies. Real CSS width changes wait for
+  native layout before ResizeObserver updates the chart. Bitmap-only changes
+  then retain proven unchanged geometry. The maximum observed bar-geometry
+  difference is 0.055 px from platform fonts. Default/unprepared sizes, intrinsic
+  and percentage dimensions, CSS attribute dependencies, arbitrary synchronous
+  DOM write/read flows and broader chart interactions remain unverified.
 - Public `MutationObserver` covers live child/attribute/text changes, subtree
   matching, filters/old values, microtask delivery, `takeRecords()` and
   `disconnect()`. Private serialization does not create guest notifications.
@@ -688,8 +688,9 @@ All four cases pass with no script diagnostics. Every bar-geometry delta is
 retained in ignored evidence; the observed maximum is 0.054108 px, with matching
 vertical geometry and exact sampled blue RGBA pixels. Browser and Android fonts
 are different, so this is not a complete cross-platform screenshot equivalence
-claim. Container/CSS resizing is captured in the browser reference but remains a
-named native gap, as do arbitrary chart types, canvas tooltips and animation.
+claim. The initial acceptance did not cover container/CSS resizing. The follow-up
+below accepts a measured fixed-pixel subset; arbitrary chart types, canvas
+tooltips and animation remain open.
 
 The test reuses one Gateway across document cases, matching the app's ownership.
 Separate EventChannel listeners with the same channel name replace each other;
@@ -703,3 +704,48 @@ local-HTTP layout/scroll/interaction acceptance pass. Static analysis and format
 checks also pass. Run counts and detailed logs remain in ignored acceptance
 output; disposable builds and owned emulator disk images are removed after the
 run. This does not close the broader parity goal or the listed rendering gaps.
+
+## Native chart resizing and style mutation follow-up
+
+The Chart.js acceptance now also taps a rendered resize button, increases the
+container and Canvas CSS widths by 20 px, waits for the chart's real responsive
+frame callback, compares the resulting geometry with the same Chromium fixture,
+and samples both native painted bars. Phone/tablet cases at DPR 1/3 pass with
+no script diagnostics. This uses the authored chart instance without replaying
+its script or guessing new dimensions.
+
+Two underlying corrections make this path reliable:
+
+- Direct CSSOM property assignments and `setProperty`/`removeProperty` now report
+  their genuine prior style attribute to DOM observers. Previously LinkeDOM
+  changed that attribute internally without a mutation record, allowing a size
+  change to bypass the native revision fence. New property writes produce one
+  record, while exact repeat assignments and absent-property removals do not;
+  explicit `style.cssText` writes retain normal attribute-set behavior. Those
+  notification cases were checked against dedicated Chromium 153. Full CSSOM
+  parsing, priority handling and serialization equivalence are not claimed.
+- A completed native frame can mark a Canvas bitmap-size change independent of
+  geometry only when both authored CSS dimensions are nonnegative numeric pixel
+  lengths and the complete parsed CSS has no attribute selector or `attr()`
+  dependency. The proof includes inline styles, inactive rules and nested
+  selectors; malformed or unsupported CSS and unresolved imports withhold it.
+  This covers selectors that could otherwise change ancestors or siblings.
+  Missing proof, non-HTML/non-Canvas boxes, auto/intrinsic sizes, percentages,
+  calc()/relative lengths and any genuine DOM/style change keep the existing
+  remeasurement requirement. Packet metadata is validated and bound to the exact
+  measured element, current revision and real box.
+
+The bitmap reset still clears Canvas state and draw commands. Retaining the
+completed native geometry for a proven bitmap-only change does not make a new
+CSS size readable before layout. General synchronous size-changing DOM write/read
+support remains open, including arbitrary library initialization and CSS-driven
+intrinsic resizing. Attribute-dependent pages use the conservative fallback.
+
+Verification: all 567 JavaScript regressions and 162 focused
+CSS/cascade/style/Canvas and navigation tests, native chart initialization/update/resize at all four screen
+and density cases, real Android style-mutation records, and existing HTTP
+layout/scroll/interaction acceptance pass. Static analysis and formatting pass.
+Detailed counts, source/bundle hashes, browser observations and geometry deltas
+remain in ignored acceptance output; disposable test/emulator outputs are cleaned
+afterward. The broader parity goal and previously listed physical-device and
+push acceptance remain active.

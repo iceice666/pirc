@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pirc_mobile/rendering/document_computed_styles.dart';
 import 'package:pirc_mobile/rendering/document_layout.dart';
 
 void main() {
@@ -241,6 +242,43 @@ void main() {
       expect(
         wrapper.getDryBaseline(wrapper.constraints, TextBaseline.alphabetic),
         text.getDryBaseline(text.constraints, TextBaseline.alphabetic),
+      );
+    });
+
+    testWidgets('emits canvas bitmap independence only for measured boxes', (
+      tester,
+    ) async {
+      final controller = NativeDocumentLayoutController();
+      addTearDown(controller.dispose);
+      final spec = NativeDocumentComputedStyleSpec(
+        values: const {},
+        lengths: const {},
+        fontSize: 16,
+        rootFontSize: 16,
+        canvasBitmapSizeIndependent: true,
+      );
+
+      await tester.pumpWidget(
+        _document(
+          controller: controller,
+          revision: 1,
+          knownIds: const {'canvas', 'no-box'},
+          noBoxIds: const {'no-box'},
+          computedStyles: {'canvas': spec, 'no-box': spec},
+          child: NativeDocumentLayoutElement(
+            controller: controller,
+            revision: 1,
+            id: 'canvas',
+            child: const SizedBox(width: 350, height: 220),
+          ),
+        ),
+      );
+
+      final packet = _capture(controller, revision: 1);
+      expect(_box(packet, 'canvas')['canvasBitmapSizeIndependent'], isTrue);
+      expect(
+        _box(packet, 'no-box').containsKey('canvasBitmapSizeIndependent'),
+        isFalse,
       );
     });
 
@@ -499,6 +537,7 @@ Widget _document({
   required int revision,
   required Set<String> knownIds,
   Set<String> noBoxIds = const <String>{},
+  Map<String, NativeDocumentComputedStyleSpec> computedStyles = const {},
   required Widget child,
 }) {
   return Directionality(
@@ -508,6 +547,7 @@ Widget _document({
       revision: revision,
       knownIds: knownIds,
       noBoxIds: noBoxIds,
+      computedStyles: computedStyles,
       child: SizedBox(
         width: 400,
         height: 300,

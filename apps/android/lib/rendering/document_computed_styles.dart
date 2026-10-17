@@ -25,6 +25,7 @@ class NativeDocumentComputedStyleSpec {
     this.available = true,
     this.isReplaced = false,
     this.resizeSupported = true,
+    this.canvasBitmapSizeIndependent = false,
   }) : values = Map<String, String>.unmodifiable(values),
        lengths = Map<String, String>.unmodifiable(lengths);
 
@@ -38,6 +39,10 @@ class NativeDocumentComputedStyleSpec {
 
   /// The current native observer supports single-fragment horizontal HTML boxes.
   final bool resizeSupported;
+
+  /// True only for a canvas with two authored numeric-pixel dimensions when
+  /// the document-wide CSS cascade proved backing-size attributes irrelevant.
+  final bool canvasBitmapSizeIndependent;
 
   /// False when custom-property data exceeded the helper's memory budget.
   /// Consumers should treat the computed-style declaration as unavailable.
@@ -55,6 +60,7 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
   required Map<dom.Element, Map<String, String>> stylesByElement,
   required double viewportWidth,
   required double viewportHeight,
+  bool canvasBitmapAttributesIndependent = false,
   bool dark = false,
 }) {
   // `dark` is already reflected in stylesByElement by media-query evaluation.
@@ -447,6 +453,12 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
             'initial',
             'unset',
           }.contains((author['writing-mode'] ?? '').trim().toLowerCase()),
+      canvasBitmapSizeIndependent:
+          canvasBitmapAttributesIndependent &&
+          name == 'canvas' &&
+          element.namespaceUri == 'http://www.w3.org/1999/xhtml' &&
+          _isNonNegativePixelLength(author['width']) &&
+          _isNonNegativePixelLength(author['height']),
     );
     byElement[element] = spec;
     fontSizeReliableByElement[element] = fontSizeResult.supported;
@@ -454,6 +466,16 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
     if (id != null) result[id] = spec;
   }
   return Map<String, NativeDocumentComputedStyleSpec>.unmodifiable(result);
+}
+
+bool _isNonNegativePixelLength(String? source) {
+  if (source == null) return false;
+  final value = source.trim().toLowerCase();
+  if (!RegExp(r'^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)px$').hasMatch(value)) {
+    return false;
+  }
+  final number = double.tryParse(value.substring(0, value.length - 2));
+  return number != null && number.isFinite && number >= 0;
 }
 
 /// Resolves common CSS lengths without guessing at unsupported expressions.

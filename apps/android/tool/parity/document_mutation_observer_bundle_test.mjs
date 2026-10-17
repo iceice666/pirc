@@ -84,3 +84,27 @@ test('packaged characterData reports the text node and original values', () => {
     {type:'characterData',same:true,old:'second'},
   ]);
 });
+
+
+test('style property writes report one attribute record with the genuine previous value', () => {
+  const context=runtime(`
+    var styleRecords=[],root=document.getElementById('root');
+    var mo=new MutationObserver(records=>styleRecords.push(...records.map(r=>({name:r.attributeName,old:r.oldValue}))));
+    mo.observe(root,{attributes:true,attributeOldValue:true});
+    root.style.width='120px';
+    root.style.width='120px';
+    root.style.width='121px';
+    root.style.setProperty('height','60px');
+    root.style.removeProperty('width');
+    root.style.removeProperty('width');
+    root.style.height='';
+  `);
+  assert.deepEqual(JSON.parse(run(context,'JSON.stringify(styleRecords)')),[
+    {name:'style',old:null},
+    {name:'style',old:'width:120px'},
+    {name:'style',old:'width:121px'},
+    {name:'style',old:'width:121px;height:60px'},
+    {name:'style',old:'height:60px'},
+  ]);
+  assert.equal(run(context,'document.getElementById("root").style.height'),'');
+});

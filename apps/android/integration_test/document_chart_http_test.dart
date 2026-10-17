@@ -66,7 +66,7 @@ html,body{margin:0;padding:0}
 #chart{display:block;box-sizing:border-box;width:${chartWidth}px;height:240px}
 </style></head><body>
 <div id="chart-container"><canvas id="chart" width="${chartWidth * dpr}" height="${240 * dpr}" style="display:block;box-sizing:border-box;width:${chartWidth}px;height:240px"></canvas></div>
-<button type="button" id="update">Update data</button><pre id="probe">WAIT</pre>
+<button type="button" id="update">Update data</button><button type="button" id="resize">Resize container</button><pre id="probe">WAIT</pre>
 <script src="/chart.js"></script><script>
 var canvas=document.getElementById('chart'),chart;
 function chartState(){var s=getComputedStyle(canvas),r=canvas.getBoundingClientRect();return {
@@ -82,6 +82,12 @@ try{
  chart=new Chart(canvas,{type:'bar',data:{labels:['A','B'],datasets:[{label:'Data',data:[3,7],backgroundColor:'#3b82f6'}]},options:{responsive:true,animation:false,maintainAspectRatio:false,devicePixelRatio:$dpr}});
  document.getElementById('probe').textContent=JSON.stringify(chartState());
  document.getElementById('update').onclick=function(){try{chart.data.datasets[0].data=[6,2];chart.update('none');document.getElementById('probe').textContent=JSON.stringify(chartState())}catch(e){document.getElementById('probe').textContent=JSON.stringify({error:e.name+': '+e.message})}};
+ document.getElementById('resize').onclick=function(){
+   document.getElementById('chart-container').style.width='${chartWidth + 20}px';canvas.style.width='${chartWidth + 20}px';
+   var turns=0;
+   function reportResize(){try{if(chart.width!==${chartWidth + 20}&&++turns<30){requestAnimationFrame(reportResize);return}var state=chartState();state.resized=true;document.getElementById('probe').textContent=JSON.stringify(state)}catch(e){document.getElementById('probe').textContent=JSON.stringify({error:e.name+': '+e.message})}}
+   requestAnimationFrame(function(){requestAnimationFrame(reportResize)});
+ };
 }catch(e){document.getElementById('probe').textContent=JSON.stringify({error:e.name+': '+e.message})}
 </script></body></html>''';
 }
@@ -89,7 +95,7 @@ try{
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'pre-sized responsive Chart.js renders and updates on native phone/tablet at DPR 1 and 3',
+    'responsive Chart.js renders, updates and resizes on native phone/tablet at DPR 1 and 3',
     (tester) async {
       final chartSource = await _fixture('/chart.js');
       final reference = obj(jsonDecode(await _fixture('/reference.json')));
@@ -194,7 +200,10 @@ void main() {
             return obj(jsonDecode(text));
           }
 
-          Future<void> ready({bool updated = false}) async {
+          Future<void> ready({
+            bool updated = false,
+            bool resized = false,
+          }) async {
             for (var turn = 0; turn < 300; turn++) {
               await tester.pump(const Duration(milliseconds: 50));
               final current = observation();
@@ -205,7 +214,8 @@ void main() {
               }
               if (document!.scripts?.ready == true &&
                   current['bars'] is List &&
-                  (!updated || rows(current['bars']).first['value'] == 6)) {
+                  (!updated || rows(current['bars']).first['value'] == 6) &&
+                  (!resized || current['resized'] == true)) {
                 return;
               }
             }
@@ -252,7 +262,7 @@ void main() {
             expect(finder, findsOneWidget);
             final widget = tester.widget<NativeDocumentCanvas>(finder);
             final snapshot = widget.snapshot;
-            expect(snapshot.width, (width - 40) * dpr);
+            expect(snapshot.width, obj(current['canvas'])['widthAttribute']);
             expect(snapshot.height, 240 * dpr);
             expect(
               snapshot.commands.any((command) => command.op == 'fillText'),
@@ -297,12 +307,24 @@ void main() {
           final updated = observation();
           compare(updated, obj(expectedCase['updated']), 'updated');
           await verifyPaint(updated);
+          await tester.tap(find.text('Resize container', findRichText: true));
+          await ready(updated: true, resized: true);
+          final resized = observation();
+
+          compare(
+            resized,
+            obj(obj(expectedCase['responsiveWidthChange'])['measurement']),
+            'resized',
+          );
+          await verifyPaint(resized);
+          expect(document.scripts?.diagnostics, isEmpty);
           expect(failures, isEmpty);
           expect(tester.takeException(), isNull);
           acceptance.add({
             'caseId': expectedCase['caseId'],
             'initial': initial,
             'updated': updated,
+            'resized': resized,
             'geometryDeltas': deltas,
             'diagnostics': document.scripts?.diagnostics,
           });

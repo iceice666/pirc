@@ -628,6 +628,12 @@ void _attachComputedStyles(
     final id = box['id'] as String;
     final spec = specs[id];
     if (spec == null) continue;
+    if (box['kind'] == 'box' &&
+        surfaces.containsKey(id) &&
+        spec.available &&
+        spec.canvasBitmapSizeIndependent) {
+      box['canvasBitmapSizeIndependent'] = true;
+    }
     final values = _resolvedComputedStyles(
       spec,
       surfaces[id],

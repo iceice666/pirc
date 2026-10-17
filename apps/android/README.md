@@ -85,8 +85,8 @@ fitting and height-driven aspect ratios with eight Chromium cases at two viewpor
 differences are named in the test and mobile plan. The Android HTTP
 integration also reads canvas/image styles and rectangles through the shipped
 runtime after actual image decoding. The native Chart.js cases below cover
-pre-sized bar charts; broader library support and size-changing synchronous
-write/read gaps remain listed in the mobile plan.
+bar-chart initialization, updates and measured container resizing; broader
+library support and size-changing synchronous write/read gaps remain in the plan.
 
 `document_canvas_text_test.dart` runs synchronous Canvas `measureText().width`
 through Android JavaScriptSandbox, compares it with actual Flutter font advances,
@@ -106,9 +106,10 @@ transient observation and bulk record grouping remain explicit differences.
 
 `document_chart_http_test.dart` uses the pinned test-only Chart.js 4.5.1 UMD and
 Chromium 153 fixture for phone/tablet at DPR 1/3. It compares actual native
-geometry, paints the bars and taps the update button. Canvas CSS and backing
-sizes are pre-sized consistently; genuine container resizing is not accepted by
-this test. Run it with the loopback fixture server (keep it running in another
+geometry, paints the bars, taps the update button and increases the container
+and Canvas CSS widths by 20 px. Initial CSS and backing sizes are consistent;
+both CSS dimensions use explicit pixels, with no CSS attribute dependencies.
+Other sizing modes and synchronous reads before native layout remain open. Run it with the loopback fixture server (keep it running in another
 terminal) and an attached dedicated test device/emulator:
 
 ```sh

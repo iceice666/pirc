@@ -31,6 +31,7 @@ var observer=new MutationObserver(function(records,self){
 });
 observer.observe(root,{subtree:true,attributes:true,attributeOldValue:true,childList:true,characterDataOldValue:true});
 root.setAttribute('data-chart','ready');root.setAttribute('data-chart','ready');
+root.style.width='120px';root.style.width='121px';
 text.data='second';
 var inserted=document.createElement('b');inserted.id='inserted';document.getElementById('nested').appendChild(inserted);inserted.remove();
 var drainCalls=0,drainObserver=new MutationObserver(function(){drainCalls++});
@@ -63,11 +64,15 @@ document.getElementById('read').onclick=report;
         expect(records.map((record) => record['type']).toList(), [
           'attributes',
           'attributes',
+          'attributes',
+          'attributes',
           'characterData',
           'childList',
           'childList',
         ]);
         expect(records.map((record) => record['target']).toList(), [
+          'root',
+          'root',
           'root',
           'root',
           'nested',
@@ -77,6 +82,8 @@ document.getElementById('read').onclick=report;
         expect(records.map((record) => record['old']).toList(), [
           null,
           'ready',
+          null,
+          'width:120px',
           'first',
           null,
           null,
@@ -86,9 +93,9 @@ document.getElementById('read').onclick=report;
             expect(record[field], true, reason: '$field: $record');
           }
         }
-        expect(records[3]['added'], ['inserted']);
-        expect(records[3]['item'], 'inserted');
-        expect(records[4]['removed'], ['inserted']);
+        expect(records[5]['added'], ['inserted']);
+        expect(records[5]['item'], 'inserted');
+        expect(records[6]['removed'], ['inserted']);
         final button = html
             .parse(scripts.content!.text)
             .getElementById('read')!;
