@@ -93,9 +93,11 @@ outside the agreed scope.
 - An actual Chart.js 4.5.1 production-runtime probe loads the library, but even
   a fixed-size bar chart stops at unsupported Canvas `measureText`. Its default
   responsive mode separately stops at a stale computed-style read after changing
-  canvas dimensions; `ResizeObserver` is also absent. These probes supply
-  synthetic native layout packets, so they establish script compatibility
-  blockers, not native rendering success. Chart.js support remains incomplete.
+  canvas dimensions. Native `ResizeObserver` now covers measured horizontal
+  HTML content/border boxes; see its separate acceptance below. These Chart.js
+  probes supply synthetic native layout packets, so they establish script
+  compatibility blockers, not native rendering success. Chart.js support remains
+  incomplete until text measurement and synchronous write/read are resolved.
 - Arbitrary websites/frameworks, third-party cookie policies and full browser API
   coverage are not guaranteed. Preserve explicit unsupported errors and record
   real failures before expanding compatibility.
@@ -492,8 +494,8 @@ with bounded retries and selection endpoints retained by identity. Other
 assertions still propagate. The decoded-image reflow regression verifies a
 selection exists before the image is revealed and can still be copied afterward.
 
-Chart.js remains blocked by the separately recorded `measureText`, synchronous
-write/read and resize-observation gaps; these sizing fixes do not establish
+Chart.js remains blocked by the separately recorded `measureText` and synchronous
+write/read gaps; these sizing fixes and the following resize-observation work do not establish
 third-party chart-library compatibility. Physical-device/real-account acceptance
 and remote push remain pending as listed above.
 
@@ -505,3 +507,63 @@ production fetched-document renderer: real PNG decoding, initial/content/border
 box dimensions, percentages, height-driven aspect ratios, retained computed
 styles, scroll/offset changes and moved-button interaction. This acceptance uses
 synthetic local data; it does not replace the real-account/physical-device checks.
+
+## Native resize observation follow-up
+
+`ResizeObserver` now uses a separate measured payload alongside the accepted
+Flutter layout snapshot. Content dimensions exclude resolved padding/borders;
+border dimensions use the native surface before transforms. It does not infer
+size from authored width/height or rounded client/offset metrics. Unsupported
+or unresolved boxes withhold entries with a diagnostic, rather than supplying
+estimated values. The native payload remains available when computed-style
+serialization reaches its property/character budget.
+
+Supported: one horizontal HTML box per target, `content-box` and `border-box`
+observation, fractional content rectangles, atomic inline canvas/images, initial
+zero-size entries, changes after native layout, hide/show and removal/reinsertion,
+re-observation, `unobserve`, `disconnect`, readonly entries/sizes and frozen size
+arrays. Callback order follows observer creation; each frame gathers all entries
+before guest callbacks can mutate the DOM. Cancellation by an earlier callback
+suppresses the cancelled target's undelivered entry, matching Chromium; changing
+its observed box does not duplicate delivery. Unchanged dimensions do not generate
+another entry. Delivery pauses with the existing document lifecycle and never
+polls continuously merely because an observer remains registered.
+
+The dedicated Chromium 153 fixture covers **two viewports × 12 stages**: initial,
+unchanged width, repeated observation, width, padding-only, border-only,
+changing the observed box, hidden, shown, unobserved, reobserved and disconnected.
+Native Flutter tests compare the measured box payload; runtime tests compare the
+actual callback entries and suppression behavior against the browser. Additional
+runtime checks cover malformed packets, callback mutations/errors, removal,
+missing measurements, readonly data, receiver/argument validation and resource
+limits (256 active observers, 5,000 target observations; explicit failure at the
+limit, capacity restored on cancellation).
+
+Remaining explicit differences:
+
+- `device-pixel-content-box` and `devicePixelContentBoxSize` fail explicitly; no
+  fabricated physical-pixel metrics are returned.
+- Cross-document targets, vertical writing, SVG geometry, fragmented boxes and unresolved native box
+  edges are outside this measured observer surface.
+- Callback-driven layout changes are measured and delivered on a later native
+  frame. This does not implement the browser's same-rendering-cycle depth loop
+  and `ResizeObserver loop completed with undelivered notifications` error event.
+- Callback exceptions remain visible through document diagnostics, following the
+  runtime's existing callback-error policy.
+- Full Chart.js remains unverified/blocked by the separately listed text-metrics
+  and synchronous write/read issues. This feature is not evidence of chart-library
+  compatibility.
+
+Reference: [CSSWG Resize Observer processing model](https://drafts.csswg.org/resize-observer/);
+the pinned Chromium capture is authoritative for the compared behavior.
+
+Verification: **4,779 Flutter tests**, **541 JavaScript tests** (including 14
+resize-specific runtime checks), Android local-HTTP integration, Flutter analysis
+and repository formatting passed. Android used the shipped JavaScriptSandbox and
+production fetched-document renderer, real decoded PNGs, measured content/border
+boxes and a 200 → 300 px parent resize whose callback redraws the native canvas
+with a 40 → 60 px rectangle. The integration waits for queued reads to drain
+before asynchronous frame delivery; repeatedly enqueueing synthetic read taps
+would starve the frame under test. Existing offset, scroll, percentage layout,
+computed-style fences and moved-button hit checks still pass. Browser captures
+reproduce byte for byte. No third-party data or personal browser was used.

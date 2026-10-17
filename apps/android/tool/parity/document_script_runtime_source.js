@@ -1211,7 +1211,7 @@
 
     return {
       timerDelayMs: earliest === Infinity ? null : Math.max(0, earliest - state.now),
-      animationFrame: state.animationFrames.size > 0
+      animationFrame: state.animationFrames.size > 0 || Boolean(state.resizeObservers?.pending())
     };
   }
 
@@ -2787,6 +2787,12 @@
         'Native document geometry is unavailable until the matching layout is measured.', detail)
     });
     activeState.layout.install();
+    activeState.resizeObservers = createDocumentResizeObservers({
+      document, Element: Element$1, layout: activeState.layout, diagnostic
+    });
+    for (const name of ['ResizeObserver', 'ResizeObserverEntry', 'ResizeObserverSize']) {
+      defineGlobal(name, activeState.resizeObservers[name], false);
+    }
     if (activeState.hostLayout)
       installNativeScrollPositionGlobals(view, globalThis, activeState.layout);
     defineGlobal('DOMRect', activeState.layout.DOMRect, false);
@@ -5364,6 +5370,7 @@
           }
         }
       }
+      if (request.animationFrame === true) state.resizeObservers?.deliver();
     } finally {
       state.pumping = false;
     }
@@ -5902,6 +5909,7 @@
         return response({layoutAccepted:false});
       throw error;
     }
+    state.resizeObservers?.changed();
     dispatchNativeViewportScrollIfChanged(state);
     dispatchNativeElementScrollEvents(state, accepted);
     // These guest callbacks were paused when their preceding DOM had not yet

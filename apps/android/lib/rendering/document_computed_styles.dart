@@ -24,6 +24,7 @@ class NativeDocumentComputedStyleSpec {
     required this.rootFontSize,
     this.available = true,
     this.isReplaced = false,
+    this.resizeSupported = true,
   }) : values = Map<String, String>.unmodifiable(values),
        lengths = Map<String, String>.unmodifiable(lengths);
 
@@ -34,6 +35,9 @@ class NativeDocumentComputedStyleSpec {
 
   /// Atomic image/canvas/SVG roots have used dimensions even when inline.
   final bool isReplaced;
+
+  /// The current native observer supports single-fragment horizontal HTML boxes.
+  final bool resizeSupported;
 
   /// False when custom-property data exceeded the helper's memory budget.
   /// Consumers should treat the computed-style declaration as unavailable.
@@ -433,6 +437,16 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
       rootFontSize: rootFontSize,
       available: available,
       isReplaced: const {'img', 'canvas', 'svg'}.contains(name),
+      resizeSupported:
+          (parentSpec?.resizeSupported ?? true) &&
+          element.namespaceUri == 'http://www.w3.org/1999/xhtml' &&
+          const {
+            '',
+            'horizontal-tb',
+            'inherit',
+            'initial',
+            'unset',
+          }.contains((author['writing-mode'] ?? '').trim().toLowerCase()),
     );
     byElement[element] = spec;
     fontSizeReliableByElement[element] = fontSizeResult.supported;

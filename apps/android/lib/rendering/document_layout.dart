@@ -627,14 +627,16 @@ void _attachComputedStyles(
   for (final box in boxes) {
     final id = box['id'] as String;
     final spec = specs[id];
-    if (spec == null || !spec.available) continue;
+    if (spec == null) continue;
     final values = _resolvedComputedStyles(
       spec,
       surfaces[id],
       viewport,
       noBox: box['kind'] == 'none',
     );
-    if (values.length > 256) continue;
+    final resize = _resizeMetrics(spec, surfaces[id], values, box['kind']);
+    if (resize != null) box['resize'] = resize;
+    if (!spec.available || values.length > 256) continue;
     final accepted = <String, String>{};
     var valid = true;
     var size = 0;
@@ -667,6 +669,71 @@ void _attachComputedStyles(
     remaining -= cost;
     box['computedStyle'] = accepted;
   }
+}
+
+// Dimensions are captured from the owned native surface before transforms.
+// Missing edges withhold observer data; integer client/offset sizes and authored
+// width/height are not substitutes for a measured content box.
+Map<String, dynamic>? _resizeMetrics(
+  NativeDocumentComputedStyleSpec spec,
+  RenderBox? surface,
+  Map<String, String> values,
+  Object? kind,
+) {
+  if (!spec.resizeSupported) return null;
+  final display = values['display'];
+  if (kind == 'none' ||
+      display == 'contents' ||
+      (display == 'inline' && !spec.isReplaced)) {
+    return {'kind': 'none'};
+  }
+  if (kind != 'box' || surface == null || display == null) return null;
+  double? pixels(String name) {
+    final raw = values[name];
+    if (raw == null || !raw.endsWith('px')) return null;
+    final value = double.tryParse(raw.substring(0, raw.length - 2));
+    return value != null && value.isFinite && value >= 0 ? value : null;
+  }
+
+  final padding = <String, double?>{
+    for (final side in const ['left', 'right', 'top', 'bottom'])
+      side: pixels('padding-$side'),
+  };
+  final border = <String, double?>{
+    for (final side in const ['left', 'right', 'top', 'bottom'])
+      side: pixels('border-$side-width'),
+  };
+  if (padding.values.any((value) => value == null) ||
+      border.values.any((value) => value == null)) {
+    return null;
+  }
+  final contentWidth =
+      (surface.size.width -
+              padding['left']! -
+              padding['right']! -
+              border['left']! -
+              border['right']!)
+          .clamp(0.0, double.infinity);
+  final contentHeight =
+      (surface.size.height -
+              padding['top']! -
+              padding['bottom']! -
+              border['top']! -
+              border['bottom']!)
+          .clamp(0.0, double.infinity);
+  return {
+    'kind': 'box',
+    'contentRect': {
+      'x': padding['left']!,
+      'y': padding['top']!,
+      'width': contentWidth,
+      'height': contentHeight,
+    },
+    'borderBoxSize': {
+      'inlineSize': surface.size.width,
+      'blockSize': surface.size.height,
+    },
+  };
 }
 
 Map<String, String> _resolvedComputedStyles(

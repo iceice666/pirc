@@ -51,6 +51,11 @@ padding:7px 9px;border:4px solid;overflow:auto}
 </div>
 <script>
 window.relativeHits=0;window.relativeMutation=null;window.computedMutation=null;
+window.resizeRecords=[];
+window.contentObserver=new ResizeObserver(function(entries,observer){for(var e of entries){window.resizeRecords.push({id:e.target.id,width:e.contentRect.width,height:e.contentRect.height,x:e.contentRect.x,y:e.contentRect.y,borderWidth:e.borderBoxSize[0].inlineSize,borderHeight:e.borderBoxSize[0].blockSize,self:this===observer});if(e.target.id==='percent-parent'){var ctx=document.getElementById('replaced-content-canvas').getContext('2d');ctx.clearRect(0,0,300,150);ctx.fillStyle='#123456';ctx.fillRect(0,0,e.contentRect.width/5,20)}}});
+window.contentObserver.observe(document.getElementById('percent-parent'));
+window.contentObserver.observe(document.getElementById('replaced-border-image'));
+window.contentObserver.observe(document.getElementById('replaced-height-image'));
 window.retainedRelativeStyle=getComputedStyle(document.getElementById('relative-parent'));
 window.readReplaced=function(){function details(id,isImage){var e=document.getElementById(id),s=getComputedStyle(e),r=e.getBoundingClientRect();return {width:s.width,height:s.height,boxSizing:s.boxSizing,paddingLeft:s.paddingLeft,borderLeftWidth:s.borderLeftWidth,rect:r.toJSON(),offsetWidth:e.offsetWidth,offsetHeight:e.offsetHeight,complete:isImage?e.complete:null,naturalWidth:isImage?e.naturalWidth:null,naturalHeight:isImage?e.naturalHeight:null}}return {defaultCanvas:details('replaced-default-canvas',false),contentCanvas:details('replaced-content-canvas',false),borderBoxImage:details('replaced-border-image',true),percentageParent:details('replaced-percentage-parent',false),percentageImage:details('replaced-percentage-image',true),heightCanvas:details('replaced-height-canvas',false),heightImage:details('replaced-height-image',true)}};
 window.replacedImagesReady=function(){var a=document.getElementById('replaced-border-image'),b=document.getElementById('replaced-percentage-image'),c=document.getElementById('replaced-height-image');return c.complete&&c.naturalWidth===64&&c.naturalHeight===32&&a.complete&&a.naturalWidth===64&&a.naturalHeight===32&&b.complete&&b.naturalWidth===64&&b.naturalHeight===32};
@@ -63,7 +68,7 @@ window.readPercent=function(){var p=document.getElementById('percent-parent'),c=
  stale:window.percentMutation
 }};
 window.readOffsets=function(){var e=document.getElementById('target');return {
- top:e.offsetTop,left:e.offsetLeft,parent:e.offsetParent.id,stale:window.offsetMutation,
+ top:e.offsetTop,left:e.offsetLeft,parent:e.offsetParent.id,stale:window.offsetMutation,resizes:window.resizeRecords,
  parentIdentity:e.offsetParent===document.getElementById('parent'),
  rect:e.getBoundingClientRect().toJSON(),
  rootParent:document.documentElement.offsetParent,bodyParent:document.body.offsetParent,
@@ -229,6 +234,20 @@ void main() {
         }
       }
 
+      bool resizeObservationsReady() {
+        try {
+          final records = (observation()['resizes'] as List).map(obj);
+          return records.any(
+                (r) => r['id'] == 'percent-parent' && r['width'] == 200,
+              ) &&
+              records.any(
+                (r) => r['id'] == 'replaced-height-image' && r['width'] == 100,
+              );
+        } catch (_) {
+          return false;
+        }
+      }
+
       await ready();
       // Image completion can arrive before its native layout frame. Read only
       // in separate user turns after pumping; a load callback must not perform
@@ -243,6 +262,20 @@ void main() {
         isTrue,
         reason:
             'Both runtime PNGs decode before measuring replaced boxes: ${jsonEncode(observation())}; diagnostics=${document.scripts?.diagnostics}',
+      );
+      bool canvasWidth(num width) => document!.scripts!.canvases.values
+          .expand((c) => c.commands)
+          .any((c) => c.op == 'fillRect' && c.args[2] == width);
+      // Let the serialized event queue drain. Repeated synthetic taps here
+      // would keep enqueueing reads before the host can run a frame callback.
+      await ready(() => canvasWidth(40));
+      await t.tap(find.text('Read', findRichText: true));
+      await ready(resizeObservationsReady);
+      expect(
+        resizeObservationsReady(),
+        isTrue,
+        reason:
+            'Resize observers receive actual decoded native boxes: ${jsonEncode(observation())}; diagnostics=${document.scripts?.diagnostics}',
       );
       final initial = observation();
       expect(initial['parent'], 'parent');
@@ -259,6 +292,35 @@ void main() {
       expect(obj(initial['percent']), containsPair('width', 200));
       expect(obj(initial['percent']), containsPair('height', 10));
       expect(obj(initial['percent']), containsPair('parentIdentity', true));
+      final initialResizes = (initial['resizes'] as List).map(obj).toList();
+      final percentInitial = initialResizes
+          .where((r) => r['id'] == 'percent-parent')
+          .single;
+      expect(percentInitial['width'], 200);
+      expect(percentInitial['height'], 10);
+      expect(percentInitial['self'], true);
+      final borderImageResize = initialResizes
+          .where((r) => r['id'] == 'replaced-border-image')
+          .last;
+      expect(borderImageResize['width'], 104);
+      expect(borderImageResize['height'], 44);
+      expect(borderImageResize['x'], 5);
+      expect(borderImageResize['y'], 5);
+      expect(borderImageResize['borderWidth'], 120);
+      expect(borderImageResize['borderHeight'], 60);
+      final heightImageResize = initialResizes
+          .where((r) => r['id'] == 'replaced-height-image')
+          .last;
+      expect(heightImageResize['width'], 100);
+      expect(heightImageResize['height'], 50);
+      expect(
+        document.scripts!.canvases.values
+            .expand((c) => c.commands)
+            .where((c) => c.op == 'fillRect')
+            .last
+            .args[2],
+        40,
+      );
       final initialComputed = obj(initial['computed']);
       expect(initialComputed, containsPair('width', '20px'));
       expect(initialComputed, containsPair('height', '10px'));
@@ -402,6 +464,30 @@ void main() {
       );
       await t.tap(find.text('Read', findRichText: true));
       await ready(() => obj(observation()['percent'])['gap'] == 31);
+      await ready(() => canvasWidth(60));
+      await t.tap(find.text('Read', findRichText: true));
+      await ready(
+        () => (observation()['resizes'] as List)
+            .map(obj)
+            .any((r) => r['id'] == 'percent-parent' && r['width'] == 300),
+      );
+      final percentResizes = (observation()['resizes'] as List)
+          .map(obj)
+          .where((r) => r['id'] == 'percent-parent')
+          .toList();
+      expect(percentResizes.map((r) => r['width']).toList(), [200, 300]);
+      final drawWidths = document.scripts!.canvases.values
+          .expand((c) => c.commands)
+          .where((c) => c.op == 'fillRect')
+          .map((c) => c.args[2])
+          .toList();
+      expect(drawWidths.last, 60);
+      expect(
+        document.scripts!.diagnostics.where(
+          (d) => d.contains('ResizeObserver'),
+        ),
+        isEmpty,
+      );
       final percentChanged = obj(observation()['percent']);
       expect(percentChanged['childGap'], 0);
       expect(percentChanged['top'], 0);

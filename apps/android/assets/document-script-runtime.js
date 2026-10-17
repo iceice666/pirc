@@ -36344,6 +36344,194 @@ function createPircDocumentModules(options) {
     resolve,
   };
 }
+// Native ResizeObserver delivery uses completed Flutter layout snapshots.
+// It never estimates a content box from authored CSS or integer client metrics.
+function createDocumentResizeObservers(options) {
+  const { document, Element, layout, diagnostic } = options;
+  const states = new WeakMap();
+  const observers = new Set();
+  const entryStates = new WeakMap();
+  const sizeStates = new WeakMap();
+  const token = {};
+  let pending = false;
+  let targetCount = 0;
+  let sequence = 0;
+  const reported = new WeakSet();
+
+  function unsupported(message) {
+    const error = new Error(message);
+    error.name = 'NotSupportedError';
+    return error;
+  }
+  function stateFor(observer) {
+    const state = states.get(observer);
+    if (!state) throw new TypeError('Illegal ResizeObserver invocation');
+    return state;
+  }
+  function validateTarget(target) {
+    if (!(target instanceof Element))
+      throw new TypeError('ResizeObserver target must be an Element');
+    if (target.ownerDocument !== document)
+      throw unsupported('ResizeObserver cannot observe another native document');
+  }
+  class ResizeObserverSize {
+    constructor(secret, width, height) {
+      if (secret !== token) throw new TypeError('Illegal constructor');
+      sizeStates.set(this, { inlineSize: width, blockSize: height });
+    }
+    get inlineSize() {
+      return sizeStates.get(this).inlineSize;
+    }
+    get blockSize() {
+      return sizeStates.get(this).blockSize;
+    }
+  }
+  class ResizeObserverEntry {
+    constructor(secret, target, measured) {
+      if (secret !== token) throw new TypeError('Illegal constructor');
+      const rect = measured.contentRect;
+      const border = measured.borderBoxSize;
+      entryStates.set(this, {
+        target,
+        contentRect: new layout.DOMRectReadOnly(rect.x, rect.y, rect.width, rect.height),
+        contentBoxSize: Object.freeze([new ResizeObserverSize(token, rect.width, rect.height)]),
+        borderBoxSize: Object.freeze([
+          new ResizeObserverSize(token, border.inlineSize, border.blockSize),
+        ]),
+      });
+    }
+    get target() {
+      return entryStates.get(this).target;
+    }
+    get contentRect() {
+      return entryStates.get(this).contentRect;
+    }
+    get contentBoxSize() {
+      return entryStates.get(this).contentBoxSize;
+    }
+    get borderBoxSize() {
+      return entryStates.get(this).borderBoxSize;
+    }
+    get devicePixelContentBoxSize() {
+      throw unsupported('Native device-pixel-content-box observation is unavailable');
+    }
+  }
+  class ResizeObserver {
+    constructor(callback) {
+      if (typeof callback !== 'function')
+        throw new TypeError('ResizeObserver callback must be a function');
+      states.set(this, { callback, targets: new Map(), sequence: sequence++ });
+    }
+    observe(target, options = {}) {
+      const state = stateFor(this);
+      validateTarget(target);
+      if (options != null && typeof options !== 'object' && typeof options !== 'function')
+        throw new TypeError('ResizeObserver options must be a dictionary');
+      const boxValue = options == null ? undefined : options.box;
+      const box = boxValue === undefined ? 'content-box' : String(boxValue);
+      if (!['content-box', 'border-box', 'device-pixel-content-box'].includes(box))
+        throw new TypeError('Invalid ResizeObserver box option');
+      if (box === 'device-pixel-content-box')
+        throw unsupported('Native device-pixel-content-box observation is unavailable');
+      if (state.targets.get(target)?.box === box) return;
+      if (
+        (!state.targets.has(target) && targetCount >= 5000) ||
+        (!observers.has(this) && observers.size >= 256)
+      )
+        throw new RangeError('Native ResizeObserver observation limit exceeded');
+      // Changing the observed box replaces the previous observation and last size.
+      if (state.targets.delete(target)) targetCount--;
+      state.targets.set(target, { box, width: -1, height: -1 });
+      targetCount++;
+      observers.add(this);
+      pending = true;
+    }
+    unobserve(target) {
+      const state = stateFor(this);
+      validateTarget(target);
+      if (state.targets.delete(target)) targetCount--;
+      if (!state.targets.size) observers.delete(this);
+    }
+    disconnect() {
+      const state = stateFor(this);
+      targetCount -= state.targets.size;
+      state.targets.clear();
+      observers.delete(this);
+    }
+  }
+  for (const constructor of [ResizeObserver, ResizeObserverEntry, ResizeObserverSize])
+    Object.defineProperty(constructor.prototype, Symbol.toStringTag, {
+      value: constructor.name,
+      configurable: true,
+    });
+
+  function deliver() {
+    if (!pending || layout.needsLayout()) return;
+    pending = false;
+    // Gather every entry before invoking any callback. DOM writes by an earlier
+    // observer must not change the entries already collected for another one.
+    const batches = [];
+    for (const observer of Array.from(observers).sort(
+      (a, b) => states.get(a).sequence - states.get(b).sequence,
+    )) {
+      const state = states.get(observer);
+      const entries = [];
+      for (const [target, observation] of state.targets) {
+        const measured = layout.resizeObservation(target);
+        if (!measured) {
+          if (!reported.has(target)) {
+            reported.add(target);
+            diagnostic(
+              'resize_observer.unavailable',
+              'warning',
+              'Native layout did not supply a supported ResizeObserver box.',
+              { tag: target.localName },
+            );
+          }
+          continue;
+        }
+        const selected =
+          observation.box === 'border-box'
+            ? measured.borderBoxSize
+            : { inlineSize: measured.contentRect.width, blockSize: measured.contentRect.height };
+        if (selected.inlineSize === observation.width && selected.blockSize === observation.height)
+          continue;
+        entries.push(new ResizeObserverEntry(token, target, measured));
+      }
+      if (entries.length) batches.push({ observer, state, entries });
+    }
+    for (const { observer, state, entries } of batches) {
+      // Cancellation by an earlier observer also cancels an undelivered entry.
+      // A box-option change keeps the entry but commits the newly selected size.
+      const activeEntries = entries.filter((entry) => state.targets.has(entry.target));
+      if (!activeEntries.length) continue;
+      for (const entry of activeEntries) {
+        const observation = state.targets.get(entry.target);
+        const size =
+          observation.box === 'border-box' ? entry.borderBoxSize[0] : entry.contentBoxSize[0];
+        observation.width = size.inlineSize;
+        observation.height = size.blockSize;
+      }
+      try {
+        state.callback.call(observer, activeEntries, observer);
+      } catch (error) {
+        diagnostic('resize_observer.callback_error', 'error', String(error?.stack || error));
+      }
+    }
+  }
+  return {
+    ResizeObserver,
+    ResizeObserverEntry,
+    ResizeObserverSize,
+    changed() {
+      if (observers.size) pending = true;
+    },
+    pending() {
+      return pending && observers.size > 0 && !layout.needsLayout();
+    },
+    deliver,
+  };
+}
 // Private document-layout bridge used by the mobile JavaScriptSandbox runtime.
 // This file deliberately has no imports or exports so it can be loaded as a
 // plain script in the isolated JavaScriptSandbox context.
@@ -37234,6 +37422,38 @@ function createPircDocumentLayout(options) {
     return value;
   }
 
+  function validateResize(source, id) {
+    if (!Object.prototype.hasOwnProperty.call(source, 'resize')) return undefined;
+    const raw = source.resize;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new TypeError(`${id}.resize must be an object`);
+    if (source.kind !== 'box' && raw.kind !== 'none') throw new TypeError(`${id}.resize requires a measured box`);
+    if (raw.kind === 'none') return Object.freeze({
+      contentRect: Object.freeze({x: 0, y: 0, width: 0, height: 0}),
+      borderBoxSize: Object.freeze({inlineSize: 0, blockSize: 0})
+    });
+    if (raw.kind !== 'box') throw new TypeError(`${id}.resize.kind is invalid`);
+    const rect = raw.contentRect, border = raw.borderBoxSize;
+    if (!rect || !border || typeof rect !== 'object' || typeof border !== 'object' || Array.isArray(rect) || Array.isArray(border))
+      throw new TypeError(`${id}.resize dimensions must be objects`);
+    return Object.freeze({
+      contentRect: Object.freeze(Object.fromEntries(['x', 'y', 'width', 'height'].map(name =>
+        [name, requireFiniteNumber(rect[name], `${id}.resize.contentRect.${name}`, true)]))),
+      borderBoxSize: Object.freeze(Object.fromEntries(['inlineSize', 'blockSize'].map(name =>
+        [name, requireFiniteNumber(border[name], `${id}.resize.borderBoxSize.${name}`, true)])))
+    });
+  }
+
+  function resizeObservation(element) {
+    validateElement(element);
+    if (!isConnected(element)) return {
+      contentRect: {x: 0, y: 0, width: 0, height: 0},
+      borderBoxSize: {inlineSize: 0, blockSize: 0}
+    };
+    if (!hasCurrentBox(element)) return null;
+    const box = layoutSnapshot.boxes.get(ownIdForElement(element));
+    return box.resize || null;
+  }
+
   function validatePacket(packet) {
     if (!packet || typeof packet !== 'object' || Array.isArray(packet)) throw new TypeError('Layout packet must be an object');
     const revision = requirePositiveSafeInteger(packet.revision, 'packet.revision');
@@ -37293,6 +37513,7 @@ function createPircDocumentLayout(options) {
       if (known && known !== element) throw new TypeError(`Layout box id is already owned by another element: ${id}`);
 
       const computedStyle = validateComputedStyle(source, id, computedStyleBudget);
+      const resize = validateResize(source, id);
 
       const bounds = {};
       for (const name of ['x', 'y', 'width', 'height']) {
@@ -37351,7 +37572,7 @@ function createPircDocumentLayout(options) {
         }
         stagedBoxes.set(id, Object.freeze({
           id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset,
-          ...(computedStyle === undefined ? {} : { computedStyle }), element, revision,
+          ...(computedStyle === undefined ? {} : { computedStyle }), resize, element, revision,
         }));
       } else {
         if (Object.prototype.hasOwnProperty.call(source, 'scroll')) {
@@ -37373,6 +37594,7 @@ function createPircDocumentLayout(options) {
           scroll: null,
           offset: null,
           ...(computedStyle === undefined ? {} : { computedStyle }),
+          resize,
           element,
           revision,
         }));
@@ -37549,6 +37771,7 @@ function createPircDocumentLayout(options) {
     getBoundingClientRect(element) { return boundingClientRect(element); },
     getComputedStyle(element, pseudoElement) { return getComputedStyle(element, pseudoElement); },
     hasCurrentBox,
+    resizeObservation,
     DOMRect,
     DOMRectReadOnly,
   };
@@ -38767,7 +38990,7 @@ function createPircDocumentLayout(options) {
 
     return {
       timerDelayMs: earliest === Infinity ? null : Math.max(0, earliest - state.now),
-      animationFrame: state.animationFrames.size > 0
+      animationFrame: state.animationFrames.size > 0 || Boolean(state.resizeObservers?.pending())
     };
   }
 
@@ -40343,6 +40566,12 @@ function createPircDocumentLayout(options) {
         'Native document geometry is unavailable until the matching layout is measured.', detail)
     });
     activeState.layout.install();
+    activeState.resizeObservers = createDocumentResizeObservers({
+      document, Element: Element$1, layout: activeState.layout, diagnostic
+    });
+    for (const name of ['ResizeObserver', 'ResizeObserverEntry', 'ResizeObserverSize']) {
+      defineGlobal(name, activeState.resizeObservers[name], false);
+    }
     if (activeState.hostLayout)
       installNativeScrollPositionGlobals(view, globalThis, activeState.layout);
     defineGlobal('DOMRect', activeState.layout.DOMRect, false);
@@ -42920,6 +43149,7 @@ function createPircDocumentLayout(options) {
           }
         }
       }
+      if (request.animationFrame === true) state.resizeObservers?.deliver();
     } finally {
       state.pumping = false;
     }
@@ -43458,6 +43688,7 @@ function createPircDocumentLayout(options) {
         return response({layoutAccepted:false});
       throw error;
     }
+    state.resizeObservers?.changed();
     dispatchNativeViewportScrollIfChanged(state);
     dispatchNativeElementScrollEvents(state, accepted);
     // These guest callbacks were paused when their preceding DOM had not yet

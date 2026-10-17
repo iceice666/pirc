@@ -888,6 +888,38 @@ function createPircDocumentLayout(options) {
     return value;
   }
 
+  function validateResize(source, id) {
+    if (!Object.prototype.hasOwnProperty.call(source, 'resize')) return undefined;
+    const raw = source.resize;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new TypeError(`${id}.resize must be an object`);
+    if (source.kind !== 'box' && raw.kind !== 'none') throw new TypeError(`${id}.resize requires a measured box`);
+    if (raw.kind === 'none') return Object.freeze({
+      contentRect: Object.freeze({x: 0, y: 0, width: 0, height: 0}),
+      borderBoxSize: Object.freeze({inlineSize: 0, blockSize: 0})
+    });
+    if (raw.kind !== 'box') throw new TypeError(`${id}.resize.kind is invalid`);
+    const rect = raw.contentRect, border = raw.borderBoxSize;
+    if (!rect || !border || typeof rect !== 'object' || typeof border !== 'object' || Array.isArray(rect) || Array.isArray(border))
+      throw new TypeError(`${id}.resize dimensions must be objects`);
+    return Object.freeze({
+      contentRect: Object.freeze(Object.fromEntries(['x', 'y', 'width', 'height'].map(name =>
+        [name, requireFiniteNumber(rect[name], `${id}.resize.contentRect.${name}`, true)]))),
+      borderBoxSize: Object.freeze(Object.fromEntries(['inlineSize', 'blockSize'].map(name =>
+        [name, requireFiniteNumber(border[name], `${id}.resize.borderBoxSize.${name}`, true)])))
+    });
+  }
+
+  function resizeObservation(element) {
+    validateElement(element);
+    if (!isConnected(element)) return {
+      contentRect: {x: 0, y: 0, width: 0, height: 0},
+      borderBoxSize: {inlineSize: 0, blockSize: 0}
+    };
+    if (!hasCurrentBox(element)) return null;
+    const box = layoutSnapshot.boxes.get(ownIdForElement(element));
+    return box.resize || null;
+  }
+
   function validatePacket(packet) {
     if (!packet || typeof packet !== 'object' || Array.isArray(packet)) throw new TypeError('Layout packet must be an object');
     const revision = requirePositiveSafeInteger(packet.revision, 'packet.revision');
@@ -947,6 +979,7 @@ function createPircDocumentLayout(options) {
       if (known && known !== element) throw new TypeError(`Layout box id is already owned by another element: ${id}`);
 
       const computedStyle = validateComputedStyle(source, id, computedStyleBudget);
+      const resize = validateResize(source, id);
 
       const bounds = {};
       for (const name of ['x', 'y', 'width', 'height']) {
@@ -1005,7 +1038,7 @@ function createPircDocumentLayout(options) {
         }
         stagedBoxes.set(id, Object.freeze({
           id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset,
-          ...(computedStyle === undefined ? {} : { computedStyle }), element, revision,
+          ...(computedStyle === undefined ? {} : { computedStyle }), resize, element, revision,
         }));
       } else {
         if (Object.prototype.hasOwnProperty.call(source, 'scroll')) {
@@ -1027,6 +1060,7 @@ function createPircDocumentLayout(options) {
           scroll: null,
           offset: null,
           ...(computedStyle === undefined ? {} : { computedStyle }),
+          resize,
           element,
           revision,
         }));
@@ -1203,6 +1237,7 @@ function createPircDocumentLayout(options) {
     getBoundingClientRect(element) { return boundingClientRect(element); },
     getComputedStyle(element, pseudoElement) { return getComputedStyle(element, pseudoElement); },
     hasCurrentBox,
+    resizeObservation,
     DOMRect,
     DOMRectReadOnly,
   };

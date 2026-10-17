@@ -27,8 +27,11 @@
     "sha256": "e842c1d9edde16ef8ef10fe505cc680229aa82b04af01c127c385c92b8f887c8",
     "browserOracle": "apps/android/tool/parity/fixtures/document-cookies-chrome155.json"
   },
+  "nativeResizeObserver": {
+    "helperSha256": "ee102a0c0a95f3f8ced8fe139cd6b9f0c796eda5cd629e2e8c2a815a7625a791"
+  },
   "nativeLayout": {
-    "helperSha256": "7149ce9261156d5f360c43c0284f9a21500f247c32983f11ac72a8c9839cbeee"
+    "helperSha256": "0bf04f02f0fd929c5d2cdf7bc8be4e9733d72f93b550021d4b5246813305aa85"
   },
   "nativeModules": {
     "parser": {

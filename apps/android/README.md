@@ -102,3 +102,10 @@ normalization does not change the recorded browser results or claim a recapture.
 
 Large JSON regression expectations are stored compactly; JSON values are
 unchanged. Keep formatting-only capture output out of code reviews.
+
+`document_resize_capture_test.dart` compares fractional content/border box data
+with the dedicated Chromium 153 resize fixture at phone/tablet widths.
+`document_resize_runtime_test.mjs` checks actual observation delivery and lifecycle
+against that fixture. The Android offsets integration also exercises observer
+callbacks through JavaScriptSandbox and the production native renderer. Supported
+boxes and remaining observer differences are recorded in the mobile plan.
