@@ -774,11 +774,11 @@ void main() {
           final mode = expectedCase['mode'] as String;
           if (obj(initial['constructor'])['succeeded'] != true ||
               initial['error'] != null) {
-            // Audit the original authored modes too; genuine inline-to-block
-            // native layout changes are not claimed accepted by this subset.
+            // Unspecified/intrinsic Canvas dimensions still need synchronous
+            // native layout; explicit and percentage CSS sizes must succeed.
             expect(
               mode,
-              isNot('percent_width_reset_styles'),
+              'container_only',
               reason: '${expectedCase['caseId']}: $initial',
             );
             final error =
@@ -943,6 +943,16 @@ void main() {
           (item) =>
               item['mode'] == 'percent_width_reset_styles' &&
               item['status'] == 'accepted',
+        ),
+        hasLength(4),
+      );
+      expect(
+        acceptance.where((item) => item['status'] == 'accepted'),
+        hasLength(12),
+      );
+      expect(
+        acceptance.where(
+          (item) => item['status'] == 'unaccepted-synchronous-layout',
         ),
         hasLength(4),
       );

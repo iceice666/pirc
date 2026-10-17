@@ -28,6 +28,8 @@ class NativeDocumentComputedStyleSpec {
     this.canvasBitmapSizeIndependent = false,
     this.canvasEquivalentStyleWrites = false,
     this.clientWidthIndependentOfDescendantSizes = false,
+    this.replacedBoxStyleProjection = false,
+    this.fixedBlockChildId,
   }) : values = Map<String, String>.unmodifiable(values),
        lengths = Map<String, String>.unmodifiable(lengths);
 
@@ -56,6 +58,14 @@ class NativeDocumentComputedStyleSpec {
   /// its measured clientWidth when only strict descendants' dimensions change.
   final bool clientWidthIndependentOfDescendantSizes;
 
+  /// Both used dimensions are fixed independently of bitmap, inline/block
+  /// display and box-sizing changes, with no edges or important overrides.
+  final bool replacedBoxStyleProjection;
+
+  /// Candidate single replaced child; the packet builder verifies its proof
+  /// and actual native measurements before attaching this relationship.
+  final String? fixedBlockChildId;
+
   /// False when custom-property data exceeded the helper's memory budget.
   /// Consumers should treat the computed-style declaration as unavailable.
   final bool available;
@@ -73,6 +83,7 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
   required double viewportWidth,
   required double viewportHeight,
   bool canvasBitmapAttributesIndependent = false,
+  bool inlineBoxStyleOverridesIndependent = false,
   bool dark = false,
 }) {
   // `dark` is already reflected in stylesByElement by media-query evaluation.
@@ -497,6 +508,42 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
               (hasPercentWidthPixelHeight && ordinaryBlockCanvasPath)),
       canvasEquivalentStyleWrites:
           canvasBitmapAttributesIndependent && ordinaryBlockCanvasPath,
+      replacedBoxStyleProjection:
+          canvasBitmapAttributesIndependent &&
+          inlineBoxStyleOverridesIndependent &&
+          available &&
+          resizeSupported &&
+          isHtmlCanvas &&
+          ordinaryBlockCanvasPath &&
+          _hasStableOverflowAncestors(element, byElement) &&
+          (hasFixedPixelCanvasSize || hasPercentWidthPixelHeight) &&
+          const [
+            'padding-left',
+            'padding-right',
+            'padding-top',
+            'padding-bottom',
+            'border-left-width',
+            'border-right-width',
+            'border-top-width',
+            'border-bottom-width',
+          ].every((name) => lengths[name] == '0px'),
+      fixedBlockChildId:
+          canvasBitmapAttributesIndependent &&
+              available &&
+              resizeSupported &&
+              values['display'] == 'block' &&
+              _isNormalFlowPosition(values['position']) &&
+              _isNonNegativePixelLength(author['width']) &&
+              _isNonNegativePixelLength(author['height']) &&
+              _hasNonFloatingCanvasAuthor(author) &&
+              !_hasUnsupportedCanvasSizingDeclarations(author) &&
+              _hasOrdinaryBlockAncestors(element, byElement, stylesByElement) &&
+              element.children.length == 1 &&
+              element.nodes.every(
+                (node) => node is! dom.Text || node.text.trim().isEmpty,
+              )
+          ? element.children.single.attributes['data-pirc-script-id']
+          : null,
       clientWidthIndependentOfDescendantSizes:
           canvasBitmapAttributesIndependent &&
           available &&
@@ -542,6 +589,23 @@ bool _isNonNegativePixelLength(String? source) {
   }
   final number = double.tryParse(value.substring(0, value.length - 2));
   return number != null && number.isFinite && number >= 0;
+}
+
+bool _hasStableOverflowAncestors(
+  dom.Element element,
+  Map<dom.Element, NativeDocumentComputedStyleSpec> computed,
+) {
+  var ancestor = element.parent;
+  while (ancestor is dom.Element) {
+    final values = computed[ancestor]?.values;
+    if (values == null ||
+        !const {'visible', 'hidden', 'clip'}.contains(values['overflow-x']) ||
+        values['overflow-x'] != values['overflow-y']) {
+      return false;
+    }
+    ancestor = ancestor.parent;
+  }
+  return true;
 }
 
 bool _hasOrdinaryBlockAncestors(

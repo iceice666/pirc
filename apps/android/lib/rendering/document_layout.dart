@@ -808,6 +808,27 @@ void _attachComputedStyles(
                   exactDimensions[name];
         })) {
       box['canvasEquivalentStyleWrites'] = true;
+      if (spec.replacedBoxStyleProjection) {
+        box['replacedBoxStyleProjection'] = true;
+      }
+    }
+  }
+  final byId = {for (final box in boxes) box['id']: box};
+  for (final box in boxes) {
+    final childId = specs[box['id']]?.fixedBlockChildId;
+    final child = byId[childId];
+    final childStyle = child?['computedStyle'];
+    if (box['kind'] == 'box' &&
+        box['computedStyle'] is Map &&
+        child?['replacedBoxStyleProjection'] == true &&
+        childStyle is Map &&
+        const [
+          'margin-top',
+          'margin-right',
+          'margin-bottom',
+          'margin-left',
+        ].every((name) => childStyle[name] == '0px')) {
+      box['stableReplacedChildId'] = childId;
     }
   }
 }

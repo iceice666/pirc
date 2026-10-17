@@ -142,13 +142,13 @@ Neither the test library nor its fixture is included in the APK.
 
 The same command also audits 16 responsive sizing cases from
 `document-chart-responsive-layout-chromium153.json`, loading the exact authored
-HTML and driver used by the browser. Four cases with `width:100%`, pixel height,
-and author `display:block;box-sizing:border-box` initialize without diagnostics
-and match native geometry and bar pixels even with omitted backing attributes.
-Container-only resizing now requires matching early and settled geometry and
-paint without script diagnostics, including Chart's same-callback parent-width
-read after changing descendant sizes. The other 12 cases (initial inline display or
-no authored canvas size) retain the synchronous layout initialization gap.
+HTML and driver used by the browser. Twelve cases with authored pixel or
+percentage width and pixel height initialize without diagnostics and match native
+geometry and bar pixels, including initial inline display, content-box sizing and
+omitted backing attributes. Container-only resizing requires matching early and
+settled geometry and paint without script diagnostics, including Chart's
+same-callback parent-width read after changing descendant sizes. The four cases
+with no authored canvas size retain the synchronous layout initialization gap.
 Recreate this separate browser reference with
 `node apps/android/tool/parity/capture_document_chart_responsive_layout_chromium153.mjs`.
 The capture records both the early two-frame and settled resize observations;
@@ -178,6 +178,19 @@ phone/tablet, DPR 1/3 and light/dark. It reads parent `clientWidth` immediately
 after resizing a descendant, then compares actual native rectangles on the next
 frame. Recreate the reference with
 `node apps/android/tool/parity/capture_document_layout_dependencies_chromium153.mjs`.
+
+`integration_test/document_box_style_projection_test.dart` uses the same server
+and define to compare 32 independent computed-style cases against Chromium 153.
+It switches edgeless fixed-size Canvas display/box-sizing, including percent width,
+inline/block changes and same-batch restoration. The live computed declaration
+and fixed single-child parent rectangle are checked synchronously; actual native
+child geometry is checked on the next frame. Inline child baseline rounding may
+differ by at most 0.1 px with platform fonts; the raw difference is recorded and
+all other values stay exact. Recreate the reference with
+`node apps/android/tool/parity/capture_document_box_style_projection_chromium153.mjs`.
+This proof excludes scrollbar ancestors, edges, important box declarations,
+attribute-dependent CSS and real dimension changes. It does not provide general
+synchronous native layout or certify a replaced element's old position/scroll data.
 
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see

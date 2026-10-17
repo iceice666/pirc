@@ -179,6 +179,52 @@ void main() {
     }
   });
 
+  test('projects box styles only for measured edgeless fixed canvases', () {
+    for (final width in ['350px', '100%']) {
+      final spec = _specFor(
+        '<div style="width:350px;height:240px">'
+        '<canvas id="target" style="width:$width;height:240px"></canvas></div>',
+      )['target']!;
+      expect(spec.replacedBoxStyleProjection, isTrue);
+    }
+    for (final extra in [
+      'padding:1px',
+      'border:1px solid',
+      'width:350px !important',
+      'display:inline !important',
+      'box-sizing:content-box !important',
+      'min-width:2px',
+    ]) {
+      final spec = _specFor(
+        '<div style="width:350px;height:240px">'
+        '<canvas id="target" style="width:350px;height:240px;$extra"></canvas></div>',
+      )['target']!;
+      expect(spec.replacedBoxStyleProjection, isFalse, reason: extra);
+    }
+    for (final overflow in ['auto', 'scroll', 'hidden;overflow-y:visible']) {
+      final spec = _specFor(
+        '<div style="width:350px;height:240px;overflow:$overflow">'
+        '<canvas id="target" style="width:100%;height:240px"></canvas></div>',
+      )['target']!;
+      expect(spec.replacedBoxStyleProjection, isFalse, reason: overflow);
+    }
+    final document = html.parse(
+      '<style>canvas {display:inline !important}</style>'
+      '<div style="width:350px;height:240px"><canvas id="target" style="width:350px;height:240px"></canvas></div>',
+    );
+    final styles = NativeDocumentStyleEngine(
+      stylesheets: [
+        NativeDocumentStylesheet(
+          document.querySelector('style')!.text,
+          baseUrl: 'https://example.test/style.css',
+        ),
+      ],
+      viewportWidth: 390,
+      dark: false,
+    ).apply(document);
+    expect(styles.inlineBoxStyleOverridesIndependent, isFalse);
+  });
+
   test(
     'ordinary fixed blocks retain clientWidth under descendant size changes',
     () {
@@ -273,6 +319,8 @@ Map<String, NativeDocumentComputedStyleSpec> _specFor(
     stylesByElement: styles.stylesByElement,
     viewportWidth: 390,
     viewportHeight: 844,
+    inlineBoxStyleOverridesIndependent:
+        styles.inlineBoxStyleOverridesIndependent,
     canvasBitmapAttributesIndependent:
         canvasBitmapAttributesIndependent ??
         styles.canvasBitmapAttributesIndependent,

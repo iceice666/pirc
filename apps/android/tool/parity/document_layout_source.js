@@ -73,6 +73,9 @@ function createPircDocumentLayout(options) {
   // A nonempty set can certify only an unaffected parent's clientWidth.
   // null means an unproved mutation forbids every partial read until layout.
   let pendingSizeMutationTargets = new Set();
+  // Project only host-proved unchanged-size box styles. This does not certify
+  // the replaced element's position, its surrounding line box, or scroll extents.
+  let pendingProjectedStyles = new Map();
   let installed = false;
   let observer = null;
   let scrollActionQueue = null;
@@ -403,6 +406,62 @@ function createPircDocumentLayout(options) {
     return true;
   }
 
+  function projectedBoxStyleMutation(record, afterValue) {
+    const target = record?.target;
+    if (record?.type !== 'attributes' || record.attributeNamespace != null ||
+        !layoutSnapshot || !isConnected(target)) return null;
+    const id = readAttribute.call(target, 'data-pirc-script-id');
+    const box = layoutSnapshot.boxes.get(id);
+    if (box?.element !== target || box.replacedBoxStyleProjection !== true) return null;
+    const style = {...(pendingProjectedStyles?.get(target) || box.computedStyle)};
+    if ((record.attributeName === 'width' || record.attributeName === 'height') &&
+        target.localName === 'canvas' && box.canvasBitmapSizeIndependent === true) return style;
+    if (record.attributeName !== 'style') return null;
+    const before = simpleInlineDeclarations(record.oldValue);
+    const after = simpleInlineDeclarations(afterValue);
+    if (!before || !after) return null;
+    const beforeNames = [...before.keys()];
+    const afterExisting = [...after.keys()].filter(name => before.has(name));
+    if (beforeNames.length !== afterExisting.length ||
+        beforeNames.some((name, index) => name !== afterExisting[index])) return null;
+    for (const name of new Set([...before.keys(), ...after.keys()])) {
+      if (before.get(name) === after.get(name)) continue;
+      const next = after.get(name);
+      if (next === undefined) return null;
+      if (name === 'width' || name === 'height') {
+        const value = nonnegativePixelValue(next);
+        if (value === null || value !== nonnegativePixelValue(box.computedStyle[name])) return null;
+        style[name] = box.computedStyle[name];
+      } else if (name === 'display' && ['inline', 'block'].includes(next.toLowerCase())) {
+        style.display = next.toLowerCase();
+      } else if (name === 'box-sizing' && ['content-box', 'border-box'].includes(next.toLowerCase())) {
+        style[name] = next.toLowerCase();
+      } else return null;
+    }
+    return Object.freeze(style);
+  }
+
+  function stableReplacedChildBox(element) {
+    if (!layoutSnapshot || !pendingProjectedStyles?.size) return null;
+    const id = readAttribute.call(element, 'data-pirc-script-id');
+    const box = layoutSnapshot.boxes.get(id);
+    const child = layoutSnapshot.boxes.get(box?.stableReplacedChildId)?.element;
+    if (box?.element !== element || !child || !isConnected(child) ||
+        readAttribute.call(child, 'data-pirc-script-id') !== box.stableReplacedChildId ||
+        child.parentElement !== element ||
+        [...pendingProjectedStyles.keys()].some(target => target !== child)) return null;
+    return box;
+  }
+
+  function partialComputedStyle(element) {
+    if (!pendingProjectedStyles?.size) return null;
+    if (pendingProjectedStyles.has(element) &&
+        [...pendingProjectedStyles.keys()].every(target => target === element)) {
+      return pendingProjectedStyles.get(element);
+    }
+    return stableReplacedChildBox(element)?.computedStyle || null;
+  }
+
   function consumeMutationRecords(records) {
     if (internalMutationDepth > 0 || !records || records.length === 0) return;
     // MutationRecord carries oldValue only. Recover each write's real successor
@@ -422,7 +481,8 @@ function createPircDocumentLayout(options) {
     for (const record of records) {
       if (record && record.type === 'attributes') {
         if (internalAttributes.has(record.attributeName)) continue;
-        if (isIndependentCanvasBitmapMutation(record) || isEquivalentCanvasStyleMutation(record,styleAfter.get(record))) continue;
+        if (isIndependentCanvasBitmapMutation(record) ||
+            (!pendingProjectedStyles?.size && isEquivalentCanvasStyleMutation(record,styleAfter.get(record)))) continue;
         // Only a known old value and the actual HTML attribute can establish a
         // no-op. Canvas size setters still reset their bitmap/context state;
         // retaining an unchanged native layout does not suppress that work.
@@ -435,6 +495,11 @@ function createPircDocumentLayout(options) {
               readAttribute.call(record.target, record.attributeName)) === record.oldValue) continue;
       }
       relevant = true;
+      if (pendingProjectedStyles !== null) {
+        const projected = projectedBoxStyleMutation(record, styleAfter.get(record));
+        if (projected && pendingProjectedStyles.size < 5000) pendingProjectedStyles.set(record.target, projected);
+        else pendingProjectedStyles = null;
+      }
       if (pendingSizeMutationTargets !== null) {
         if (isSizeOnlyMutation(record, styleAfter.get(record)) && pendingSizeMutationTargets.size < 5000) {
           pendingSizeMutationTargets.add(record.target);
@@ -497,7 +562,7 @@ function createPircDocumentLayout(options) {
     return layoutSnapshot.viewport;
   }
 
-  function requireBox(element) {
+  function requireBox(element, allowStableParentBounds = false) {
     validateElement(element);
     if (!isConnected(element)) return { detached: true };
     if (!enabled) {
@@ -511,6 +576,8 @@ function createPircDocumentLayout(options) {
       throw notSupported('unmeasured', 'Document geometry has not been measured', { id, revision: current });
     }
     if (layoutSnapshot.revision !== current) {
+      const stable = allowStableParentBounds && stableReplacedChildBox(element);
+      if (stable) return {detached: false, box: stable, viewport: layoutSnapshot.viewport};
       throw notSupported('stale', 'Document geometry is stale after a document mutation', {
         id,
         revision: current,
@@ -545,6 +612,8 @@ function createPircDocumentLayout(options) {
       throw notSupported('computed_style_unmeasured', 'Computed style has not been measured', { id, revision: current });
     }
     if (layoutSnapshot.revision !== current) {
+      const style = partialComputedStyle(element);
+      if (style) return {detached: false, style, id, revision: current};
       throw notSupported('computed_style_stale', 'Computed style is stale after a document mutation', {
         id,
         revision: current,
@@ -843,7 +912,7 @@ function createPircDocumentLayout(options) {
   }
 
   function boundingClientRect(element) {
-    const result = requireBox(element);
+    const result = requireBox(element, true);
     if (result.detached || result.box.kind === 'none') return zeroRect();
     const box = result.box;
     return new DOMRect(
@@ -1153,6 +1222,29 @@ function createPircDocumentLayout(options) {
         canvasEquivalentStyleWrites = source.canvasEquivalentStyleWrites;
       }
 
+      let replacedBoxStyleProjection = false;
+      if (Object.prototype.hasOwnProperty.call(source, 'replacedBoxStyleProjection')) {
+        if (typeof source.replacedBoxStyleProjection !== 'boolean' ||
+            source.kind !== 'box' || element.localName !== 'canvas' ||
+            element.namespaceURI !== 'http://www.w3.org/1999/xhtml' ||
+            !canvasBitmapSizeIndependent || !canvasEquivalentStyleWrites ||
+            !['padding-left', 'padding-right', 'padding-top', 'padding-bottom',
+              'border-left-width', 'border-right-width', 'border-top-width', 'border-bottom-width']
+                .every(name => computedStyle?.[name] === '0px')) {
+          throw new TypeError(`${id}.replacedBoxStyleProjection requires an independent edgeless measured canvas`);
+        }
+        replacedBoxStyleProjection = source.replacedBoxStyleProjection;
+      }
+      let stableReplacedChildId = null;
+      if (Object.prototype.hasOwnProperty.call(source, 'stableReplacedChildId')) {
+        if (!isSafeId(source.stableReplacedChildId) || source.kind !== 'box' ||
+            computedStyle?.display !== 'block' ||
+            !['width', 'height'].every(name => nonnegativePixelValue(computedStyle?.[name]) !== null)) {
+          throw new TypeError(`${id}.stableReplacedChildId requires a fixed measured block`);
+        }
+        stableReplacedChildId = source.stableReplacedChildId;
+      }
+
       let clientWidthIndependentOfDescendantSizes = false;
       if (Object.prototype.hasOwnProperty.call(source, 'clientWidthIndependentOfDescendantSizes')) {
         if (typeof source.clientWidthIndependentOfDescendantSizes !== 'boolean' ||
@@ -1224,6 +1316,7 @@ function createPircDocumentLayout(options) {
           id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset,
           ...(computedStyle === undefined ? {} : { computedStyle }), resize, element, revision,
           canvasBitmapSizeIndependent, canvasEquivalentStyleWrites, clientWidthIndependentOfDescendantSizes,
+          replacedBoxStyleProjection, stableReplacedChildId,
         }));
       } else {
         if (Object.prototype.hasOwnProperty.call(source, 'scroll')) {
@@ -1252,9 +1345,19 @@ function createPircDocumentLayout(options) {
       }
       stagedElements.set(id, element);
     }
-    // Resolve offset parents after all entries have been staged so a parent may
-    // appear later in the packet. Keep the actual HTMLElement reference in the
-    // snapshot; guests must never see an ID string in offsetParent.
+    // Resolve stable-child ownership after every box has been staged.
+    for (const [id, box] of stagedBoxes) {
+      if (box.stableReplacedChildId == null) continue;
+      const child = stagedBoxes.get(box.stableReplacedChildId);
+      if (!child?.replacedBoxStyleProjection || child.element.parentElement !== box.element ||
+          box.element.children.length !== 1 ||
+          [...box.element.childNodes].some(node => node.nodeType === 3 && String(node.textContent).trim()) ||
+          !['margin-top', 'margin-right', 'margin-bottom', 'margin-left']
+            .every(name => child.computedStyle?.[name] === '0px')) {
+        throw new TypeError(`${id}.stableReplacedChildId must name its sole independent zero-margin canvas`);
+      }
+    }
+
     for (const [id, box] of stagedBoxes) {
       if (!box.offset) continue;
       const element = box.element;
@@ -1345,6 +1448,7 @@ function createPircDocumentLayout(options) {
     for (const [id, element] of staged.elements) knownElements.set(id, element);
     lastGeneration = staged.generation;
     pendingSizeMutationTargets = new Set();
+    pendingProjectedStyles = new Map();
     return {
       ok: true, revision: staged.revision, generation: staged.generation,
       scrollEvents: staged.scrollEvents.slice(), scrollChanges,
@@ -1409,6 +1513,7 @@ function createPircDocumentLayout(options) {
     revision: currentRevision,
     invalidate() {
       pendingSizeMutationTargets = null;
+      pendingProjectedStyles = null;
       return advanceRevision();
     },
     runWithoutMutationInvalidation,

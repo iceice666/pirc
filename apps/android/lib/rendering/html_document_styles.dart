@@ -86,6 +86,7 @@ class NativeDocumentStylesResult {
     required this.imports,
     required this.diagnostics,
     required this.canvasBitmapAttributesIndependent,
+    required this.inlineBoxStyleOverridesIndependent,
   });
 
   /// Winning values in emitted CSS order. Values exclude `!important`.
@@ -106,6 +107,9 @@ class NativeDocumentStylesResult {
   /// caller prove that changing a canvas backing-store attribute cannot change
   /// CSS matching anywhere in the document.
   final bool canvasBitmapAttributesIndependent;
+
+  /// No important box declaration can outrank a normal inline box assignment.
+  final bool inlineBoxStyleOverridesIndependent;
 }
 
 /// Applies a deliberately bounded CSS author cascade to a full parsed DOM.
@@ -654,6 +658,7 @@ class _Cascade {
   final _cyclicVariables = <_VariableKey>{};
   final _reportedCycles = <String>{};
   bool _canvasBitmapDependenciesInspectable = true;
+  bool _hasImportantBoxDeclaration = false;
   int _order = 0;
   int _selectorProbeOrder = 0;
 
@@ -995,6 +1000,7 @@ class _Cascade {
       diagnostics: List<NativeDocumentStyleDiagnostic>.unmodifiable(
         _diagnostics,
       ),
+      inlineBoxStyleOverridesIndependent: !_hasImportantBoxDeclaration,
       canvasBitmapAttributesIndependent:
           _canvasBitmapDependenciesInspectable &&
           !_diagnostics.any(_blocksCanvasBitmapIndependenceProof),
@@ -1011,6 +1017,7 @@ class _Cascade {
       _canvasBitmapDependenciesInspectable = false;
       return;
     }
+    _hasImportantBoxDeclaration |= dependencies.hasImportantBoxDeclaration;
     if (dependencies.hasAttributeSelector || dependencies.hasAttrFunction) {
       _canvasBitmapDependenciesInspectable = false;
     }
@@ -4754,6 +4761,7 @@ class _RootSelectorCollector extends css.Visitor {
 /// surface cannot be proven here.
 class _CanvasBitmapDependencyCollector extends css.Visitor {
   bool hasAttributeSelector = false;
+  bool hasImportantBoxDeclaration = false;
   bool hasAttrFunction = false;
   bool hasUnsupportedSelector = false;
   bool hasUnsupportedRule = false;
@@ -4803,6 +4811,18 @@ class _CanvasBitmapDependencyCollector extends css.Visitor {
 
   @override
   dynamic visitDeclarationGroup(css.DeclarationGroup node) {
+    if (node.declarations.whereType<css.Declaration>().any(
+      (declaration) =>
+          declaration.important &&
+          const {
+            'display',
+            'box-sizing',
+            'width',
+            'height',
+          }.contains(declaration.property.toLowerCase()),
+    )) {
+      hasImportantBoxDeclaration = true;
+    }
     if (node.declarations.any(
       (declaration) => declaration is! css.Declaration,
     )) {

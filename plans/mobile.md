@@ -36,8 +36,9 @@ outside the agreed scope.
       units and inline fragments, transformed/zoomed/table offset geometry,
       inline-fragment geometry and image/resize/chart/framework flows. Changed geometry
       still needs a matching native frame; a proved fixed-width ordinary block can
-      retain only its unchanged `clientWidth` after descendant size writes.
-      Unsupported reads fail explicitly. Native Canvas event
+      retain its unchanged `clientWidth` after descendant size writes. The bounded
+      edgeless-Canvas box-style and fixed single-child parent proofs are described
+      below; other unsupported reads fail explicitly. Native Canvas event
       callbacks have measured geometry for their synchronous dispatch.
 - [ ] **Physical phone/tablet acceptance:** use a real account for pairing,
       streaming/cancel/reconnect, panels, management consent and simultaneous
@@ -85,8 +86,9 @@ outside the agreed scope.
   Chromium's full property list; omitted recognized properties, pseudo-elements,
   stale frames and unavailable declarations fail explicitly. Inline `element.style`
   remains independent. DOM writes followed immediately by style/geometry reads
-  generally need a matching native frame; only proved unchanged parent `clientWidth`
-  survives supported descendant size changes. Arbitrary framework flows are unverified.
+  generally need a matching native frame; the proved unchanged parent width and
+  bounded edgeless-Canvas box-style/parent proofs below are exceptions. Arbitrary
+  framework flows remain unverified.
 - Computed-style dimensions use measured native boxes and original containing
   blocks. Inline-fragment dimensions, auto margins, platform form-control UA
   properties, CSS font shorthand, transforms and unimplemented length expressions
@@ -99,10 +101,10 @@ outside the agreed scope.
   CSS cascade without attribute dependencies. Real CSS width changes wait for
   native layout before ResizeObserver updates the chart. Bitmap-only changes
   then retain proven unchanged geometry. The maximum observed bar-geometry
-  difference is 0.055 px from platform fonts. Four additional authored block/
-  border-box cases with percentage width and pixel height now initialize and resize
-  without diagnostics, including omitted backing attributes and container-only
-  width changes. The other 12 sizing-audit cases, intrinsic dimensions, CSS
+  difference is 0.055 px from platform fonts. Twelve additional responsive cases
+  with authored pixel/percentage width and pixel height now initialize and resize
+  without diagnostics, including initial inline display, omitted backing attributes
+  and container-only width changes. The four intrinsic sizing-audit cases, CSS
   attribute dependencies, arbitrary synchronous DOM write/read flows, other chart
   types and animation remain unsupported or unverified.
   Stock bar touch tooltips, blank/outside dismissal and rapid outside taps are
@@ -952,3 +954,45 @@ still records 12 unsupported initializations. Flutter regression tests, static
 analysis and formatting are clean. Browser recapture reproduces identical bytes.
 Evidence stays in ignored build output; disposable test/emulator output is
 removed after verification while preserving the released preview APK.
+
+## Synchronous unchanged-size Canvas box styles
+
+The native cascade now supplies a proof for edgeless Canvas boxes whose pixel
+sizes, or percentage width under a fixed-width ordinary block, are independent of
+bitmap attributes. With no important width/height/display/box-sizing declarations,
+attribute dependencies or scrollbar ancestors, the runtime can update live
+computed `display` and `box-sizing` during inline/block switches and same-size
+pixel normalization. Width and height remain the exact native measured values;
+this does not compute a new layout or substitute an old child rectangle.
+
+Only a fixed-width/fixed-height ordinary parent whose sole element child is that
+zero-margin Canvas can retain its bounding rectangle and computed style during
+these changes. Child positions, offsets, scrolling data and unrelated ancestors
+still need a new frame. Other style/DOM mutations, declaration removals/reordering,
+transient real size changes and explicit invalidation revoke the proof until
+native layout. Canvas bitmap resets and public mutation records remain intact.
+CSS `!important`, edges, intrinsic/min/max/logical sizing and scrollbar layouts
+are rejected rather than approximated.
+
+This supersedes the earlier 12 responsive initialization failures: eight more
+original Chart.js cases (pixel or percentage sizes with initial inline display)
+now require clean initialization and container resizing. Together with the prior
+four author-reset cases, 12 responsive configurations match native geometry,
+early/settled resize and actual paint. The four container-only/intrinsic cases
+remain unsupported; unrestricted synchronous layout remains open.
+
+A separate 32-case Chromium 153/native corpus covers phone/tablet, DPR 1/3,
+light/dark, pixel/percentage sizing, inline/block switches and same-batch property
+restoration. Synchronous styles and parent geometry are exact. The next-frame
+inline child's platform-font baseline has a recorded tolerance of 0.1 px; other
+coordinates and all dimensions remain exact. This small visual difference is
+explicitly deferred under the user's existing guidance, not counted as identical
+pixels. Other physical-device, account, push and distribution gates remain open.
+
+Verification: 613 JavaScript and 183 targeted Flutter regressions pass, with clean
+analysis and formatting. Native acceptance passes the new 32 style cases, the
+prior 32 parent-width cases, eight frame cases, 28 HTTP layout cases, four fixed
+chart configurations and 12 responsive chart configurations. The separate audit
+records four unsupported intrinsic initializations. Maximum recorded inline
+baseline difference is 0.09375 px. Compact evidence remains ignored; disposable
+builds/emulator disk images are removed while preserving the released preview APK.

@@ -49,6 +49,8 @@ const frameSteps = readFileSync(path.join(scriptDirectory, 'fixtures/document-fr
 
 const layoutDependencies = readFileSync(path.join(scriptDirectory, 'fixtures/document-layout-dependencies-chromium153.json'));
 
+const boxStyleProjection = readFileSync(path.join(scriptDirectory, 'fixtures/document-box-style-projection-chromium153.json'));
+
 const requestedPort = configuredPort();
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -77,6 +79,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/box-style-projection.json') {
+    response.writeHead(200, {'cache-control':'no-store','content-type':'application/json; charset=utf-8'});
+    response.end(boxStyleProjection);
     return;
   }
   if (pathname === '/layout-dependencies.json') {
