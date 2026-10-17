@@ -743,11 +743,15 @@ void _attachComputedStyles(
         spec.canvasBitmapSizeIndependent) {
       box['canvasBitmapSizeIndependent'] = true;
     }
+    final exactDimensions = <String, double>{};
     final values = _resolvedComputedStyles(
       spec,
       surfaces[id],
       viewport,
       noBox: box['kind'] == 'none',
+      onUsedDimension: spec.canvasEquivalentStyleWrites
+          ? (name, value) => exactDimensions[name] = value
+          : null,
     );
     final resize = _resizeMetrics(spec, surfaces[id], values, box['kind']);
     if (resize != null) box['resize'] = resize;
@@ -783,6 +787,21 @@ void _attachComputedStyles(
     if (cost > remaining) continue;
     remaining -= cost;
     box['computedStyle'] = accepted;
+    // CSSOM serializes dimensions to six decimals. Never use a rounded value
+    // as proof of an identical used size: even a tiny change can wrap a line.
+    if (box['kind'] == 'box' &&
+        surfaces.containsKey(id) &&
+        spec.canvasEquivalentStyleWrites &&
+        exactDimensions.length == 2 &&
+        const ['width', 'height'].every((name) {
+          final value = accepted[name];
+          return value != null &&
+              value.endsWith('px') &&
+              double.tryParse(value.substring(0, value.length - 2)) ==
+                  exactDimensions[name];
+        })) {
+      box['canvasEquivalentStyleWrites'] = true;
+    }
   }
 }
 
@@ -856,6 +875,7 @@ Map<String, String> _resolvedComputedStyles(
   RenderBox? surface,
   Size viewport, {
   required bool noBox,
+  void Function(String, double)? onUsedDimension,
 }) {
   final values = Map<String, String>.of(spec.values);
   final metrics = surface == null
@@ -965,12 +985,18 @@ Map<String, String> _resolvedComputedStyles(
         : metrics?.verticalEdges;
     if (borderBox || horizontalEdges != null) {
       final width = surface.size.width - (borderBox ? 0 : horizontalEdges!);
-      if (width.isFinite) values['width'] = px(width.clamp(0, double.infinity));
+      if (width.isFinite) {
+        final used = width.clamp(0, double.infinity).toDouble();
+        values['width'] = px(used);
+        onUsedDimension?.call('width', used);
+      }
     }
     if (borderBox || verticalEdges != null) {
       final height = surface.size.height - (borderBox ? 0 : verticalEdges!);
       if (height.isFinite) {
-        values['height'] = px(height.clamp(0, double.infinity));
+        final used = height.clamp(0, double.infinity).toDouble();
+        values['height'] = px(used);
+        onUsedDimension?.call('height', used);
       }
     }
   }

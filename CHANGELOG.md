@@ -6,7 +6,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
-- Android full-page HTML improves layout, image/canvas sizing and computed-style reads, keeps text selection stable during image loading, notifies interactive content when native element sizes change, and supports native Canvas text measurement, DOM mutation observation, bar-chart touch tooltips, outside-tap dismissal, legend toggles, updates and resizing.
+- Android full-page HTML improves layout, image/canvas sizing and computed-style reads, keeps text selection stable during image loading, notifies interactive content when native element sizes change, and supports native Canvas text measurement, percentage-sized chart initialization, DOM mutation observation, bar-chart touch tooltips, outside-tap dismissal, legend toggles, updates and resizing.
 - Gateway and node startup retry brief SQLite WAL-mode lock conflicts when processes open the same database concurrently.
 - PTC scripts that exhaust their JavaScript heap report an out-of-memory error reliably, including when the engine cannot allocate an error object.
 

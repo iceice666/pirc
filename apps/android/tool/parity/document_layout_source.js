@@ -320,13 +320,86 @@ function createPircDocumentLayout(options) {
       box.canvasBitmapSizeIndependent === true;
   }
 
+  // A narrow parser is intentional: complex values, priorities, comments,
+  // escapes and duplicate declarations keep the normal remeasurement fence.
+  // No browser CSS parsing or cascade result is fabricated here.
+  function simpleInlineDeclarations(source) {
+    if (source === null) return new Map();
+    if (typeof source !== 'string' || source.length > 16384 ||
+        /[\\'"(){}[\]\/!\x00-\x08\x0b\x0e-\x1f\x7f]/.test(source)) return null;
+    const result = new Map();
+    for (const part of source.split(';')) {
+      if (!part.trim()) continue;
+      const match = /^\s*(-?[a-zA-Z][a-zA-Z0-9-]*|--[a-zA-Z0-9_-]+)\s*:\s*([^:;]+?)\s*$/.exec(part);
+      if (!match) return null;
+      const name = match[1].startsWith('--') ? match[1] : match[1].toLowerCase();
+      if (name === 'all' || result.has(name)) return null;
+      result.set(name,match[2]);
+    }
+    return result;
+  }
+
+  function nonnegativePixelValue(value) {
+    if (typeof value !== 'string' || !/^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)px$/i.test(value)) return null;
+    const number = Number(value.slice(0,-2));
+    return Number.isFinite(number) && number >= 0 ? number : null;
+  }
+
+  function isEquivalentCanvasStyleMutation(record, afterValue) {
+    if (record.attributeName !== 'style' || record.attributeNamespace != null ||
+        record.target?.namespaceURI !== 'http://www.w3.org/1999/xhtml' ||
+        record.target?.localName !== 'canvas' ||
+        !layoutSnapshot || layoutSnapshot.revision !== revisionValue ||
+        !isConnected(record.target)) return false;
+    const id = readAttribute.call(record.target,'data-pirc-script-id');
+    const box = layoutSnapshot.boxes.get(id);
+    if (box?.kind !== 'box' || box.element !== record.target ||
+        box.canvasEquivalentStyleWrites !== true) return false;
+    const before = simpleInlineDeclarations(record.oldValue);
+    const after = simpleInlineDeclarations(afterValue);
+    if (!before || !after) return false;
+    // Reordering unchanged shorthand/longhand pairs can change the cascade.
+    // Ordinary CSSOM assignments retain existing property order; require it.
+    const beforeNames = [...before.keys()];
+    const afterExistingNames = [...after.keys()].filter(name=>before.has(name));
+    if (beforeNames.length !== afterExistingNames.length ||
+        beforeNames.some((name,index)=>name !== afterExistingNames[index])) return false;
+    for (const name of new Set([...before.keys(),...after.keys()])) {
+      if (before.get(name) === after.get(name)) continue;
+      const next = after.get(name);
+      // Removal might expose a different stylesheet declaration; do not infer it.
+      if (next === undefined) return false;
+      if (name === 'width' || name === 'height') {
+        const value = nonnegativePixelValue(next);
+        if (value === null || value !== nonnegativePixelValue(box.computedStyle[name])) return false;
+      } else if (name === 'display' || name === 'box-sizing') {
+        if (next.toLowerCase() !== box.computedStyle[name]) return false;
+      } else return false;
+    }
+    return true;
+  }
+
   function consumeMutationRecords(records) {
     if (internalMutationDepth > 0 || !records || records.length === 0) return;
+    // MutationRecord carries oldValue only. Recover each write's real successor
+    // from the next record, rather than treating a transient change restored in
+    // the same batch as an equivalent write. This remains linear in batch size.
+    const styleAfter = new Map(), nextStyleBefore = new Map();
+    for (let index = records.length - 1; index >= 0; index--) {
+      const record = records[index];
+      if (record?.type !== 'attributes' || record.attributeName !== 'style' ||
+          record.attributeNamespace != null ||
+          record.target?.namespaceURI !== 'http://www.w3.org/1999/xhtml' ||
+          record.target?.localName !== 'canvas') continue;
+      styleAfter.set(record,nextStyleBefore.has(record.target) ? nextStyleBefore.get(record.target) :
+        readAttribute.call(record.target,'style'));
+      nextStyleBefore.set(record.target,record.oldValue);
+    }
     let relevant = false;
     for (const record of records) {
       if (record && record.type === 'attributes') {
         if (internalAttributes.has(record.attributeName)) continue;
-        if (isIndependentCanvasBitmapMutation(record)) continue;
+        if (isIndependentCanvasBitmapMutation(record) || isEquivalentCanvasStyleMutation(record,styleAfter.get(record))) continue;
         // Only a known old value and the actual HTML attribute can establish a
         // no-op. Canvas size setters still reset their bitmap/context state;
         // retaining an unchanged native layout does not suppress that work.
@@ -335,7 +408,8 @@ function createPircDocumentLayout(options) {
             record.target?.namespaceURI === 'http://www.w3.org/1999/xhtml' &&
             record.attributeNamespace == null &&
             !repeatedEffectAttributes.has(record.attributeName) &&
-            readAttribute.call(record.target, record.attributeName) === record.oldValue) continue;
+            (styleAfter.has(record) ? styleAfter.get(record) :
+              readAttribute.call(record.target, record.attributeName)) === record.oldValue) continue;
       }
       relevant = true;
       break;
@@ -1028,6 +1102,18 @@ function createPircDocumentLayout(options) {
         canvasBitmapSizeIndependent = source.canvasBitmapSizeIndependent;
       }
 
+      let canvasEquivalentStyleWrites = false;
+      if (Object.prototype.hasOwnProperty.call(source, 'canvasEquivalentStyleWrites')) {
+        if (typeof source.canvasEquivalentStyleWrites !== 'boolean' ||
+            source.kind !== 'box' || element.namespaceURI !== 'http://www.w3.org/1999/xhtml' ||
+            element.localName !== 'canvas' ||
+            !computedStyle || !['display','box-sizing'].every(name=>typeof computedStyle[name] === 'string') ||
+            !['width','height'].every(name=>nonnegativePixelValue(computedStyle[name]) !== null)) {
+          throw new TypeError(`${id}.canvasEquivalentStyleWrites requires a measured HTML canvas with finite computed dimensions`);
+        }
+        canvasEquivalentStyleWrites = source.canvasEquivalentStyleWrites;
+      }
+
       const bounds = {};
       for (const name of ['x', 'y', 'width', 'height']) {
         if (Object.prototype.hasOwnProperty.call(source, name) || source.kind === 'box') {
@@ -1086,7 +1172,7 @@ function createPircDocumentLayout(options) {
         stagedBoxes.set(id, Object.freeze({
           id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset,
           ...(computedStyle === undefined ? {} : { computedStyle }), resize, element, revision,
-          canvasBitmapSizeIndependent,
+          canvasBitmapSizeIndependent, canvasEquivalentStyleWrites,
         }));
       } else {
         if (Object.prototype.hasOwnProperty.call(source, 'scroll')) {

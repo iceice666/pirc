@@ -740,8 +740,9 @@ Two underlying corrections make this path reliable:
   dependency. The proof includes inline styles, inactive rules and nested
   selectors; malformed or unsupported CSS and unresolved imports withhold it.
   This covers selectors that could otherwise change ancestors or siblings.
-  Missing proof, non-HTML/non-Canvas boxes, auto/intrinsic sizes, percentages,
-  calc()/relative lengths and any genuine DOM/style change keep the existing
+  Missing proof, non-HTML/non-Canvas boxes, auto/intrinsic sizes, unsupported
+  percentages (the narrow extension below is now covered), calc()/relative
+  lengths and any genuine DOM/style change keep the existing
   remeasurement requirement. Packet metadata is validated and bound to the exact
   measured element, current revision and real box.
 
@@ -759,7 +760,6 @@ Detailed counts, source/bundle hashes, browser observations and geometry deltas
 remain in ignored acceptance output; disposable test/emulator outputs are cleaned
 afterward. The broader parity goal and previously listed physical-device and
 push acceptance remain active.
-
 
 ## Native bar touch interactions
 
@@ -819,3 +819,53 @@ tools stay in Git; detailed acceptance evidence and disposable outputs stay
 ignored. Remaining font/API differences are listed in the text-metrics section
 above. Production signing, real-device/account and remote-push acceptance remain
 open; no release APK or backend API was changed by this round.
+
+## Percentage Canvas sizing and responsive compatibility audit
+
+A native frame can now prove bitmap-size independence for a canvas with authored
+percentage width and fixed pixel height in ordinary block flow, with a directly
+sized pixel-width parent. The CSS dependency gate still excludes attribute
+selectors, `attr()`, unresolved styles and unsupported CSS. Flex/grid/table,
+shrink-to-fit, special native controls, fieldset, multicolumn, containment,
+aspect-ratio, min/max/logical size and unsupported writing-mode paths do not get
+this extension. No old rectangle is used to infer a new layout.
+
+For this proved subset, adding the same computed `display`/`box-sizing` or
+normalizing width/height to identical pixel values no longer discards geometry.
+The metadata requires a real measured box and exactly representable serialized
+dimensions; rounding a fractional width never proves equality. Removing or
+changing other declarations, reordering existing shorthand/longhand pairs,
+transient size changes restored within one mutation batch, ancestor writes and
+actual size/display changes still require a new native frame. Public DOM
+mutation records and canvas bitmap/context resets retain their normal behavior.
+
+The new pinned Chromium 153 reference runs the same stock Chart.js 4.5.1 driver
+and authored HTML in 16 cases (four sizing modes, phone/tablet, DPR 1/3), with no
+external requests or page errors. Native acceptance distinguishes these results:
+
+| Authored sizing                                           | Native initialization                                                                                                 | Container-only +20 px resize                                                                                           |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `width:100%`, pixel height, block/border-box author reset | Four cases match geometry and actual painted bars without diagnostics; default 300×150 backing attributes are allowed | Final geometry and paint match, but early reads still produce stale/unavailable-layout diagnostics: not fully accepted |
+| Explicit pixel sizes, initial inline display              | Still requires synchronous layout after Chart changes display                                                         | Not accepted                                                                                                           |
+| Percentage width/pixel height, initial inline display     | Same initialization gap                                                                                               | Not accepted                                                                                                           |
+| Container size only, no canvas CSS dimensions             | Intrinsic size and display changes still require synchronous layout                                                   | Not accepted                                                                                                           |
+
+The audit retains the caught early read errors and the final successful resize
+state. It does not convert those errors into a claimed responsive pass. General
+synchronous DOM write/read support and unrestricted Chart initialization remain
+priority gaps. Existing four fixed-pixel chart cases still require clean
+initialization, touch/legend/update/resize behavior and painted pixels.
+
+The Android font acceptance now includes a combined `中文🙂` string: all 21 cases
+match same-font widths and native raster bounds. This emulator collected
+61,138,412 unique font bytes across 24 resources, below the existing 64 MiB
+collection bound; no font loading policy changed. This does not resolve physical
+device memory/performance, production signing, account or remote push acceptance.
+
+Verification for this follow-up: 578 JavaScript regressions, 93 targeted Flutter
+tests, the 21-case native font/pixel test, the four existing clean chart
+configurations and 28 native HTTP layout cases pass. The separate 16-case sizing
+audit records four accepted initializations with an early-resize-read gap and
+12 unsupported initializations; those recorded gaps are not conformance passes.
+Static analysis and formatting pass. Compact evidence stays in ignored build
+output; disposable builds and emulator disk images are cleaned after testing.

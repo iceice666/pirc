@@ -103,6 +103,8 @@ try{
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  // Match the app: both tests share one EventChannel listener/owner.
+  final gateway = _ChartGateway();
   testWidgets(
     'native Chart.js touch tooltips, legend toggles, rapid outside taps, updates and resizing',
     (tester) async {
@@ -113,7 +115,6 @@ void main() {
       );
       final theme = await PircTheme.load();
       final acceptance = <Json>[];
-      final gateway = _ChartGateway();
       for (final expectedCase in rows(reference['cases'])) {
         final viewport = obj(expectedCase['viewport']);
         final width = (viewport['width'] as num).toInt();
@@ -644,6 +645,321 @@ void main() {
       }
       debugPrintSynchronously(
         'PIRC_NATIVE_CHART_ACCEPTANCE ${jsonEncode(acceptance)}',
+      );
+    },
+    skip: _fixtureOrigin.isEmpty,
+  );
+  testWidgets(
+    'native responsive chart sizing and explicit compatibility audit',
+    (tester) async {
+      final fixture = obj(
+        jsonDecode(await _fixture('/responsive-layout.json')),
+      );
+      final chartSource = await _fixture('/chart.js');
+      final theme = await PircTheme.load();
+      final acceptance = <Json>[];
+      for (final expectedCase in rows(fixture['cases'])) {
+        final viewport = obj(expectedCase['viewport']);
+        final width = (viewport['width'] as num).toDouble(),
+            height = (viewport['height'] as num).toDouble();
+        final dpr = (expectedCase['dpr'] as num).toDouble();
+        final failures = <String>[];
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final origin = 'http://127.0.0.1:${server.port}';
+        final token = 'pirc_dev_${List.filled(43, 'R').join()}';
+        final listener = server.listen((request) async {
+          try {
+            await request.drain<void>();
+            if (request.headers.value('authorization') != 'Bearer $token') {
+              failures.add('Missing synthetic bearer');
+            }
+            if (request.uri.path == '/api/sessions') {
+              request.response.headers.contentType = ContentType.json;
+              request.response.write('{"sessions":[]}');
+            } else if (request.uri.path == '/page') {
+              request.response.headers.contentType = ContentType(
+                'text',
+                'html',
+                charset: 'utf-8',
+              );
+              request.response.write(expectedCase['authoredHtml']);
+            } else if (request.uri.path == '/chart.js' ||
+                request.uri.path == '/chart-responsive-driver.js') {
+              request.response.headers.contentType = ContentType(
+                'text',
+                'javascript',
+                charset: 'utf-8',
+              );
+              request.response.write(
+                request.uri.path == '/chart.js'
+                    ? chartSource
+                    : fixture['driverSource'],
+              );
+            } else {
+              request.response.statusCode = 404;
+              failures.add('Unexpected path ${request.uri.path}');
+            }
+            await request.response.close();
+          } catch (error) {
+            failures.add('$error');
+          }
+        });
+        NativeDocumentWindows? windows;
+        NativeFetchedDocument? document;
+        try {
+          await gateway.call('pair', {
+            'link': Uri(
+              scheme: 'pirc',
+              host: 'pair',
+              queryParameters: {'url': origin, 'token': token},
+            ).toString(),
+          });
+          windows = NativeDocumentWindows(gateway);
+          final window = windows.target('', null, sourceUrl: '$origin/page');
+          expect(
+            await window.load(
+              NativeHtmlFormRequest(
+                url: '$origin/page',
+                method: 'GET',
+                target: '',
+              ),
+              baseUrl: origin,
+            ),
+            NativeDocumentLoadResult.committed,
+          );
+          windows.select(window);
+          document = window.currentDocument!;
+          tester.view.devicePixelRatio = dpr;
+          tester.view.physicalSize = Size(width * dpr, height * dpr);
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: theme.build(Brightness.light),
+              home: Scaffold(
+                body: NativeDocumentScope(
+                  documentUrl: '$origin/page',
+                  windows: windows,
+                  window: window,
+                  child: NativeFetchedDocumentView(
+                    document: document,
+                    gateway: gateway,
+                    onLink: (_) {},
+                    onSubmit: (_) {},
+                  ),
+                ),
+              ),
+            ),
+          );
+          Json observation() {
+            final text = html
+                .parse(document!.scripts?.content?.text ?? '')
+                .getElementById('probe')
+                ?.text;
+            return text != null && text.startsWith('{')
+                ? obj(jsonDecode(text))
+                : {};
+          }
+
+          Future<Json> ready(String phase) async {
+            for (var turn = 0; turn < 400; turn++) {
+              await tester.pump(const Duration(milliseconds: 50));
+              final probe = observation();
+              if (probe['phase'] == phase) return probe;
+            }
+            fail(
+              '${expectedCase['caseId']} report missing: ${document!.scripts?.diagnostics}',
+            );
+          }
+
+          final initial = await ready('initial');
+          final mode = expectedCase['mode'] as String;
+          if (obj(initial['constructor'])['succeeded'] != true ||
+              initial['error'] != null) {
+            // Audit the original authored modes too; genuine inline-to-block
+            // native layout changes are not claimed accepted by this subset.
+            expect(
+              mode,
+              isNot('percent_width_reset_styles'),
+              reason: '${expectedCase['caseId']}: $initial',
+            );
+            final error =
+                '${obj(initial['constructor'])['error']} ${initial['error']}';
+            expect(
+              error,
+              contains('stale'),
+              reason: 'Only the named synchronous layout gap is expected',
+            );
+            acceptance.add({
+              'caseId': expectedCase['caseId'],
+              'mode': mode,
+              'status': 'unaccepted-synchronous-layout',
+              'report': initial,
+              'diagnostics': document.scripts?.diagnostics,
+            });
+            continue;
+          }
+          expect(
+            document.scripts?.diagnostics,
+            isEmpty,
+            reason: '${expectedCase['caseId']} initialization',
+          );
+          void compare(Json actual, Json expected) {
+            expect(
+              actual['chart'],
+              containsPair('width', obj(expected['chart'])['width']),
+            );
+            for (final key in ['height', 'currentDevicePixelRatio']) {
+              expect(obj(actual['chart'])[key], obj(expected['chart'])[key]);
+            }
+            final canvas = obj(actual['canvas']),
+                referenceCanvas = obj(expected['canvas']);
+            for (final key in [
+              'backing',
+              'computedStyle',
+              'client',
+              'offset',
+            ]) {
+              expect(
+                canvas[key],
+                referenceCanvas[key],
+                reason: '${expectedCase['caseId']} $key',
+              );
+            }
+            for (final key in ['x', 'y', 'width', 'height']) {
+              expect(
+                obj(canvas['rect'])[key],
+                closeTo(
+                  (obj(referenceCanvas['rect'])[key] as num).toDouble(),
+                  .1,
+                ),
+              );
+            }
+            final bars = rows(actual['bars']),
+                referenceBars = rows(expected['bars']);
+            expect(bars, hasLength(referenceBars.length));
+            for (var i = 0; i < bars.length; i++) {
+              for (final key in ['x', 'y', 'base', 'width', 'height']) {
+                expect(
+                  bars[i][key],
+                  closeTo((referenceBars[i][key] as num).toDouble(), .1),
+                  reason: '${expectedCase['caseId']} bar $i $key',
+                );
+              }
+            }
+          }
+
+          Future<void> paintBars(Json state) async {
+            final widget = tester.widget<NativeDocumentCanvas>(
+              find.byType(NativeDocumentCanvas),
+            );
+            final snapshot = widget.snapshot;
+            final recorder = ui.PictureRecorder();
+            NativeDocumentCanvasPainter(
+              snapshot,
+            ).paint(Canvas(recorder), Size(snapshot.width, snapshot.height));
+            final picture = recorder.endRecording();
+            final image = await tester.runAsync(
+              () => picture.toImage(
+                snapshot.width.toInt(),
+                snapshot.height.toInt(),
+              ),
+            );
+            try {
+              final data = (await tester.runAsync(
+                () => image!.toByteData(format: ui.ImageByteFormat.rawRgba),
+              ))!;
+              final bytes = data.buffer.asUint8List();
+              for (final bar in rows(state['bars'])) {
+                final x = ((bar['x'] as num) * dpr).floor(),
+                    y = (((bar['y'] as num) + (bar['base'] as num)) / 2 * dpr)
+                        .floor();
+                final offset = (y * snapshot.width.toInt() + x) * 4;
+                expect(bytes.sublist(offset, offset + 4), [59, 130, 246, 255]);
+              }
+            } finally {
+              image?.dispose();
+              picture.dispose();
+            }
+          }
+
+          compare(
+            obj(initial['state']),
+            obj(obj(expectedCase['initialProbe'])['state']),
+          );
+          await paintBars(obj(initial['state']));
+          debugPrintSynchronously(
+            'PIRC_RESPONSIVE_CHART_INITIAL ${jsonEncode({'caseId': expectedCase['caseId'], 'report': initial, 'diagnostics': document.scripts?.diagnostics})}',
+          );
+          await tester.tap(find.text('Resize +20px', findRichText: true));
+          await tester.pump();
+          final resized = await ready('resized');
+          expect(
+            resized['error'],
+            isNull,
+            reason: '${expectedCase['caseId']}: $resized',
+          );
+          compare(
+            obj(resized['state']),
+            obj(obj(expectedCase['resizeProbe'])['state']),
+          );
+          await paintBars(obj(resized['state']));
+          debugPrintSynchronously(
+            'PIRC_RESPONSIVE_CHART_RESIZED ${jsonEncode({'caseId': expectedCase['caseId'], 'report': resized, 'diagnostics': document.scripts?.diagnostics})}',
+          );
+          final resizeDiagnostics = document.scripts?.diagnostics ?? <String>[];
+          final earlyResize = obj(
+            obj(resized['timing'])['afterTwoAnimationFrames'],
+          );
+          // Keep the authored early read in the audit: a caught stale-layout
+          // exception is still a parity gap, even when settled paint is correct.
+          final hasResizeLayoutGap = resizeDiagnostics.isNotEmpty;
+          if (hasResizeLayoutGap) {
+            expect(earlyResize['error'], contains('stale'));
+            expect(earlyResize['state'], isNull);
+            expect(
+              resizeDiagnostics,
+              everyElement(
+                isIn(const [
+                  'Native document geometry is unavailable until the matching layout is measured.',
+                  'Document geometry is stale after a document mutation',
+                ]),
+              ),
+            );
+          } else {
+            expect(earlyResize['error'], isNull);
+          }
+          acceptance.add({
+            'caseId': expectedCase['caseId'],
+            'mode': mode,
+            'status': hasResizeLayoutGap
+                ? 'initial-accepted-resize-layout-gap'
+                : 'accepted',
+            'initial': initial,
+            'resized': resized,
+            'diagnostics': document.scripts?.diagnostics,
+          });
+        } finally {
+          await tester.pumpWidget(const SizedBox.shrink());
+          windows?.dispose();
+          if (document?.scripts != null) await document!.scripts!.closed;
+          tester.view.reset();
+          await listener.cancel();
+          await server.close(force: true);
+          expect(failures, isEmpty);
+        }
+      }
+      expect(
+        acceptance.where(
+          (item) =>
+              item['mode'] == 'percent_width_reset_styles' &&
+              const [
+                'accepted',
+                'initial-accepted-resize-layout-gap',
+              ].contains(item['status']),
+        ),
+        hasLength(4),
+      );
+      debugPrintSynchronously(
+        'PIRC_RESPONSIVE_CHART_ACCEPTANCE ${jsonEncode(acceptance)}',
       );
     },
     skip: _fixtureOrigin.isEmpty,

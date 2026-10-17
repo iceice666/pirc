@@ -25,6 +25,12 @@ if (fixture.chartJs?.sha256 !== actualSha256 || !Array.isArray(fixture.cases)) {
   throw new Error('Chart.js reference fixture does not match the pinned library or has no cases');
 }
 
+const responsive = readFileSync(path.join(scriptDirectory, 'fixtures/document-chart-responsive-layout-chromium153.json'));
+const responsiveFixture = JSON.parse(responsive.toString('utf8'));
+if (responsiveFixture.chartJs?.sha256 !== actualSha256 || typeof responsiveFixture.driverSource !== 'string') {
+  throw new Error('Chart responsive fixture does not match the pinned library');
+}
+
 function configuredPort() {
   const argument = process.argv.slice(2).find((value) => value === '--port' || value.startsWith('--port='));
   const argumentIndex = process.argv.indexOf(argument);
@@ -67,6 +73,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/responsive-layout.json') {
+    response.writeHead(200, {'cache-control':'no-store','content-type':'application/json; charset=utf-8'});
+    response.end(responsive);
     return;
   }
   if (pathname === '/reference.json') {

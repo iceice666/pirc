@@ -85,6 +85,7 @@ void main() {
       {'font': '16px Arial', 'family': 'Arial', 'text': '\tHello\n世界'},
       {'font': '16px Arial', 'family': 'Arial', 'text': ''},
       {'font': '16px Arial', 'family': 'Arial', 'text': 'office A\u0301 To'},
+      {'font': '16px Arial', 'family': 'Arial', 'text': '中文🙂'},
       {
         'font': '16.5px Arial',
         'family': 'Arial',

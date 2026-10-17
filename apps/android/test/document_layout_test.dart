@@ -615,6 +615,52 @@ void main() {
       );
     });
 
+    testWidgets(
+      'equivalent style proof requires exactly serialized measured dimensions',
+      (tester) async {
+        final controller = NativeDocumentLayoutController();
+        addTearDown(controller.dispose);
+        final spec = NativeDocumentComputedStyleSpec(
+          values: const {'display': 'block', 'box-sizing': 'border-box'},
+          lengths: const {},
+          fontSize: 16,
+          rootFontSize: 16,
+          isReplaced: true,
+          canvasBitmapSizeIndependent: true,
+          canvasEquivalentStyleWrites: true,
+        );
+        for (final width in [350.0, 350.000000125]) {
+          await tester.pumpWidget(
+            _document(
+              controller: controller,
+              revision: 1,
+              knownIds: const {'canvas', 'missing'},
+              noBoxIds: const {'missing'},
+              computedStyles: {'canvas': spec, 'missing': spec},
+              child: NativeDocumentLayoutElement(
+                controller: controller,
+                revision: 1,
+                id: 'canvas',
+                child: SizedBox(width: width, height: 220),
+              ),
+            ),
+          );
+          final packet = _capture(controller, revision: 1);
+          final box = _box(packet, 'canvas');
+          expect(box['computedStyle'], containsPair('width', '350px'));
+          expect(box['canvasBitmapSizeIndependent'], isTrue);
+          expect(
+            box['canvasEquivalentStyleWrites'],
+            width == 350 ? isTrue : isNull,
+          );
+          expect(
+            _box(packet, 'missing').containsKey('canvasEquivalentStyleWrites'),
+            isFalse,
+          );
+        }
+      },
+    );
+
     testWidgets('replacement keeps the new ID binding and detach clears root', (
       tester,
     ) async {

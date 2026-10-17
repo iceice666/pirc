@@ -26,6 +26,7 @@ class NativeDocumentComputedStyleSpec {
     this.isReplaced = false,
     this.resizeSupported = true,
     this.canvasBitmapSizeIndependent = false,
+    this.canvasEquivalentStyleWrites = false,
   }) : values = Map<String, String>.unmodifiable(values),
        lengths = Map<String, String>.unmodifiable(lengths);
 
@@ -40,9 +41,15 @@ class NativeDocumentComputedStyleSpec {
   /// The current native observer supports single-fragment horizontal HTML boxes.
   final bool resizeSupported;
 
-  /// True only for a canvas with two authored numeric-pixel dimensions when
-  /// the document-wide CSS cascade proved backing-size attributes irrelevant.
+  /// True for fixed-pixel CSS dimensions, or a proved percentage-width block
+  /// path, when the document-wide CSS cascade excludes backing-attribute
+  /// dependencies.
   final bool canvasBitmapSizeIndependent;
+
+  /// Allows the runtime to consider only equivalent writes to display,
+  /// box-sizing, and numeric-pixel width/height. It does not authorize arbitrary
+  /// style mutations: those values must still match the native computed style.
+  final bool canvasEquivalentStyleWrites;
 
   /// False when custom-property data exceeded the helper's memory budget.
   /// Consumers should treat the computed-style declaration as unavailable.
@@ -436,6 +443,40 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
       },
       tagName: name,
     );
+    final resizeSupported =
+        (parentSpec?.resizeSupported ?? true) &&
+        element.namespaceUri == 'http://www.w3.org/1999/xhtml' &&
+        const {
+          '',
+          'horizontal-tb',
+          'inherit',
+          'initial',
+          'unset',
+        }.contains((author['writing-mode'] ?? '').trim().toLowerCase());
+    final isHtmlCanvas =
+        name == 'canvas' &&
+        element.namespaceUri == 'http://www.w3.org/1999/xhtml';
+    final authoredWidth = author['width'];
+    final authoredHeight = author['height'];
+    final hasFixedPixelCanvasSize =
+        _isNonNegativePixelLength(authoredWidth) &&
+        _isNonNegativePixelLength(authoredHeight);
+    final hasPercentWidthPixelHeight =
+        _isNonNegativePercentage(authoredWidth) &&
+        _isNonNegativePixelLength(authoredHeight);
+    final ordinaryBlockCanvasPath =
+        isHtmlCanvas &&
+        available &&
+        resizeSupported &&
+        (hasFixedPixelCanvasSize || hasPercentWidthPixelHeight) &&
+        _hasOrdinaryBlockCanvasSizingPath(
+          canvas: element,
+          canvasAuthor: author,
+          canvasDisplay: values['display'],
+          canvasPosition: values['position'],
+          computedStylesByElement: byElement,
+          stylesByElement: stylesByElement,
+        );
     final spec = NativeDocumentComputedStyleSpec(
       values: values,
       lengths: lengths,
@@ -443,22 +484,14 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
       rootFontSize: rootFontSize,
       available: available,
       isReplaced: const {'img', 'canvas', 'svg'}.contains(name),
-      resizeSupported:
-          (parentSpec?.resizeSupported ?? true) &&
-          element.namespaceUri == 'http://www.w3.org/1999/xhtml' &&
-          const {
-            '',
-            'horizontal-tb',
-            'inherit',
-            'initial',
-            'unset',
-          }.contains((author['writing-mode'] ?? '').trim().toLowerCase()),
+      resizeSupported: resizeSupported,
       canvasBitmapSizeIndependent:
           canvasBitmapAttributesIndependent &&
-          name == 'canvas' &&
-          element.namespaceUri == 'http://www.w3.org/1999/xhtml' &&
-          _isNonNegativePixelLength(author['width']) &&
-          _isNonNegativePixelLength(author['height']),
+          isHtmlCanvas &&
+          (hasFixedPixelCanvasSize ||
+              (hasPercentWidthPixelHeight && ordinaryBlockCanvasPath)),
+      canvasEquivalentStyleWrites:
+          canvasBitmapAttributesIndependent && ordinaryBlockCanvasPath,
     );
     byElement[element] = spec;
     fontSizeReliableByElement[element] = fontSizeResult.supported;
@@ -476,6 +509,149 @@ bool _isNonNegativePixelLength(String? source) {
   }
   final number = double.tryParse(value.substring(0, value.length - 2));
   return number != null && number.isFinite && number >= 0;
+}
+
+bool _isNonNegativePercentage(String? source) {
+  if (source == null) return false;
+  final value = source.trim().toLowerCase();
+  if (!RegExp(r'^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)%$').hasMatch(value)) {
+    return false;
+  }
+  final number = double.tryParse(value.substring(0, value.length - 1));
+  return number != null && number.isFinite && number >= 0;
+}
+
+const _canvasUnsupportedSizingProperties = {
+  'min-width',
+  'max-width',
+  'min-height',
+  'max-height',
+  'inline-size',
+  'block-size',
+  'min-inline-size',
+  'max-inline-size',
+  'min-block-size',
+  'max-block-size',
+  'aspect-ratio',
+  'contain',
+  'contain-intrinsic-size',
+  'contain-intrinsic-width',
+  'contain-intrinsic-height',
+  'contain-intrinsic-inline-size',
+  'contain-intrinsic-block-size',
+  'content-visibility',
+  'columns',
+  'column-count',
+  'column-width',
+  'column-span',
+};
+
+// UA fieldset minimum sizing and native form/table/replaced widgets can have
+// intrinsic sizing even when an authored display value says ordinary block.
+const _canvasSpecialLayoutAncestors = {
+  'fieldset',
+  'legend',
+  'table',
+  'caption',
+  'thead',
+  'tbody',
+  'tfoot',
+  'tr',
+  'td',
+  'th',
+  'col',
+  'colgroup',
+  'button',
+  'input',
+  'textarea',
+  'select',
+  'optgroup',
+  'option',
+  'img',
+  'video',
+  'audio',
+  'iframe',
+  'object',
+  'embed',
+  'canvas',
+  'dialog',
+};
+
+bool _hasOrdinaryBlockCanvasSizingPath({
+  required dom.Element canvas,
+  required Map<String, String> canvasAuthor,
+  required String? canvasDisplay,
+  required String? canvasPosition,
+  required Map<dom.Element, NativeDocumentComputedStyleSpec>
+  computedStylesByElement,
+  required Map<dom.Element, Map<String, String>> stylesByElement,
+}) {
+  if (!const {'inline', 'block'}.contains(canvasDisplay) ||
+      !_isNormalFlowPosition(canvasPosition) ||
+      _hasUnsupportedCanvasSizingDeclarations(canvasAuthor) ||
+      !_hasNonFloatingCanvasAuthor(canvasAuthor) ||
+      !_hasSimplePreferredCanvasSizes(canvasAuthor)) {
+    return false;
+  }
+
+  final parentNode = canvas.parent;
+  if (parentNode is! dom.Element) return false;
+  final directParentAuthor =
+      stylesByElement[parentNode] ?? const <String, String>{};
+  if (!_isNonNegativePixelLength(directParentAuthor['width'])) return false;
+
+  var ancestor = parentNode;
+  var isDirectParent = true;
+  while (true) {
+    final ancestorSpec = computedStylesByElement[ancestor];
+    final ancestorAuthor =
+        stylesByElement[ancestor] ?? const <String, String>{};
+    if (_canvasSpecialLayoutAncestors.contains(ancestor.localName) ||
+        ancestor.namespaceUri != 'http://www.w3.org/1999/xhtml' ||
+        ancestorSpec == null ||
+        !ancestorSpec.available ||
+        !ancestorSpec.resizeSupported ||
+        ancestorSpec.values['display'] != 'block' ||
+        !_isNormalFlowPosition(ancestorSpec.values['position']) ||
+        _hasUnsupportedCanvasSizingDeclarations(ancestorAuthor) ||
+        !_hasNonFloatingCanvasAuthor(ancestorAuthor) ||
+        !_hasSimplePreferredCanvasSizes(ancestorAuthor)) {
+      return false;
+    }
+    if (isDirectParent &&
+        (ancestor.namespaceUri != 'http://www.w3.org/1999/xhtml' ||
+            !_isNonNegativePixelLength(ancestorAuthor['width']))) {
+      return false;
+    }
+
+    isDirectParent = false;
+    final parent = ancestor.parent;
+    if (parent is! dom.Element) break;
+    ancestor = parent;
+  }
+  return true;
+}
+
+bool _isNormalFlowPosition(String? value) =>
+    value == 'static' || value == 'relative';
+
+bool _hasNonFloatingCanvasAuthor(Map<String, String> author) {
+  final float = author['float']?.trim().toLowerCase();
+  return float == null || float == 'none';
+}
+
+bool _hasUnsupportedCanvasSizingDeclarations(Map<String, String> author) =>
+    _canvasUnsupportedSizingProperties.any(author.containsKey);
+
+bool _hasSimplePreferredCanvasSizes(Map<String, String> author) {
+  for (final property in const {'width', 'height'}) {
+    final value = author[property]?.trim().toLowerCase();
+    if (value == null || value == 'auto') continue;
+    if (!_isNonNegativePixelLength(value) && !_isNonNegativePercentage(value)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /// Resolves common CSS lengths without guessing at unsupported expressions.
