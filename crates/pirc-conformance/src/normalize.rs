@@ -99,6 +99,30 @@ impl Normalizer {
                 text = text.replace(value.as_str(), placeholder);
             }
         }
+        // An untrusted fence's random nonce (`<<<PTC_RESULT id=…>>>`).
+        static FENCE: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r"(PTC_RESULT|WEB_RESULTS) id=([0-9a-f]{12})\b").unwrap());
+        if FENCE.is_match(&text) {
+            let found: Vec<_> = FENCE
+                .captures_iter(&text)
+                .map(|captures| {
+                    (
+                        captures.get(0).unwrap().range(),
+                        captures[1].to_owned(),
+                        captures[2].to_owned(),
+                    )
+                })
+                .collect();
+            let mut out = String::with_capacity(text.len());
+            let mut last = 0;
+            for (range, name, nonce) in found {
+                out.push_str(&text[last..range.start]);
+                out.push_str(&format!("{name} id={}", self.placeholder("hex12", &nonce)));
+                last = range.end;
+            }
+            out.push_str(&text[last..]);
+            text = out;
+        }
         for (kind, pattern) in PATTERNS.iter() {
             if !pattern.is_match(&text) {
                 continue;

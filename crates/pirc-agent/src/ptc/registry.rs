@@ -34,6 +34,9 @@ pub struct Meta {
     pub suspension: &'static [&'static str],
     /// Returns web content: what a script returns is fenced as untrusted.
     pub untrusted: bool,
+    /// Returns text other sessions or agents wrote (memory notes, delegated
+    /// results, team messages): what a script returns is fenced as data.
+    pub agent_data: bool,
 }
 
 const fn meta(
@@ -51,6 +54,7 @@ const fn meta(
         approval,
         suspension,
         untrusted: false,
+        agent_data: false,
     }
 }
 
@@ -69,6 +73,11 @@ const fn with_reads(mut info: Meta, actions: &'static [&'static str]) -> Meta {
 
 const fn untrusted(mut info: Meta) -> Meta {
     info.untrusted = true;
+    info
+}
+
+const fn agent_data(mut info: Meta) -> Meta {
+    info.agent_data = true;
     info
 }
 
@@ -145,7 +154,7 @@ pub fn capability_meta(name: &str) -> Meta {
         "get_goal" => read("planning", &["read"]),
         "create_goal" | "update_goal" => write("planning", &["write"]),
         "recall" => read("memory", &["read"]),
-        "memory_search" => read("memory", &["read", "external"]),
+        "memory_search" => agent_data(read("memory", &["read", "external"])),
         "memory_note" => write("memory", &["write"]),
         "memory_propose_user" => meta(
             "memory",
@@ -161,7 +170,7 @@ pub fn capability_meta(name: &str) -> Meta {
             "always-confirm",
             &["approval", "child"],
         ),
-        "delegation_status" => read("delegation", &["external"]),
+        "delegation_status" => agent_data(read("delegation", &["external"])),
         "schedule" => with_reads(
             meta(
                 "schedule",
@@ -172,9 +181,8 @@ pub fn capability_meta(name: &str) -> Meta {
             ),
             &["list", "result"],
         ),
-        "agent_list" | "agent_inbox" | "board_read" | "task_list" | "task_get" => {
-            read("team", &["read"])
-        }
+        "agent_inbox" | "board_read" => agent_data(read("team", &["read"])),
+        "agent_list" | "task_list" | "task_get" => read("team", &["read"]),
         "agent_wait" => meta("team", &["read"], "read", "none", &["child"]),
         "subagent" | "agent_spawn" => meta(
             "team",
@@ -393,6 +401,9 @@ pub fn contract(capability: &Capability) -> Value {
     out.insert("suspension".to_owned(), strs(info.suspension));
     if info.untrusted {
         out.insert("untrustedContent".to_owned(), json!(true));
+    }
+    if info.agent_data {
+        out.insert("agentData".to_owned(), json!(true));
     }
     out.insert(
         "examples".to_owned(),
