@@ -23,6 +23,10 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
+- [ ] **Project files:** add native project-file upload/list/delete controls for
+      the new Web/backend feature (`1acc4371`). Existing project chats remain
+      available; manage their shared files on the Web until this UI is added.
+
 - [ ] **0.6.0 project deletion:** add the deletion preview, mixed-source memory
       decisions, confirmation and interrupted-deletion retry UI. Until then, finish
       deletion on the web; the app must block creating chats in a deleting project.
