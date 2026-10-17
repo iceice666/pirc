@@ -13,6 +13,7 @@ import 'svg_dimensions.dart';
 import 'document_canvas.dart';
 import 'document_layout.dart';
 import 'document_offsets.dart';
+import 'document_relative_position.dart';
 import 'document_margin_collapse.dart';
 import 'document_element_scroll.dart';
 import 'document_canvas_pointer.dart';
@@ -3139,6 +3140,11 @@ class _NativeHtmlFactory extends WidgetFactory {
     return parent != null && _flexChildStyles(parent)['display'] == 'flex';
   }
 
+  bool _directDocumentGridItem(dom.Element element) {
+    final parent = element.parent;
+    return parent != null && _flexChildStyles(parent)['display'] == 'grid';
+  }
+
   String _elementScrollId(dom.Element element) {
     final scriptId = element.attributes['data-pirc-script-id'];
     if (scriptId != null) return scriptId;
@@ -3240,6 +3246,33 @@ class _NativeHtmlFactory extends WidgetFactory {
         ),
       ),
     );
+    final relativePosition = NativeDocumentRelativePositionSpec.parse(
+      styles,
+      direction: TextDirection.ltr,
+    );
+    if (relativePosition != null) {
+      tree.register(
+        BuildOp(
+          debugLabel: 'native-document-relative-position',
+          alwaysRenderBlock: false,
+          // Move the border box, inside its normal-flow margin allocation.
+          priority: 5000005800000000,
+          onRenderBlock: (parsed, placeholder) =>
+              placeholder.wrapWith((context, child) {
+                final parentDirection = parsed.hasParent
+                    ? parsed.parent.inheritanceResolvers
+                          .resolve(context)
+                          .get<TextDirection>()
+                    : null;
+                return NativeDocumentRelativePosition(
+                  spec: relativePosition,
+                  direction: parentDirection ?? Directionality.of(context),
+                  child: child,
+                );
+              }),
+        ),
+      );
+    }
     final borderBox = _documentUsesBorderBox(tree.element);
     final flexItem = _directDocumentFlexItem(tree.element);
     _geometryOwnSizing[tree.element] = true;
@@ -3354,7 +3387,8 @@ class _NativeHtmlFactory extends WidgetFactory {
   @override
   void parseStyleDisplay(BuildTree tree, String? display) {
     final blockified =
-        _directDocumentFlexItem(tree.element) &&
+        (_directDocumentFlexItem(tree.element) ||
+            _directDocumentGridItem(tree.element)) &&
         const {'inline', 'inline-block', null}.contains(display) &&
         !const {
           'img',
@@ -3371,6 +3405,23 @@ class _NativeHtmlFactory extends WidgetFactory {
       _documentSizing(tree);
     }
     if (!markdownStyles && const {'flex', 'grid'}.contains(display)) {
+      if (display == 'grid') {
+        tree.register(
+          BuildOp(
+            debugLabel: 'native-grid-items',
+            onVisitChild: (parent, child) {
+              if (child.element.parent != parent.element) return;
+              child.register(
+                BuildOp(
+                  alwaysRenderBlock: true,
+                  debugLabel: 'native-grid-item',
+                  priority: 5000008000000000,
+                ),
+              );
+            },
+          ),
+        );
+      }
       if (display == 'flex') {
         tree.register(
           BuildOp(
@@ -3584,7 +3635,8 @@ class _NativeHtmlFactory extends WidgetFactory {
     final nativeBlock =
         !markdownStyles &&
         (const {'block', 'flex', 'grid', 'flow-root'}.contains(display) ||
-            (_directDocumentFlexItem(tree.element) &&
+            ((_directDocumentFlexItem(tree.element) ||
+                    _directDocumentGridItem(tree.element)) &&
                 const {'inline', 'inline-block', null}.contains(display) &&
                 !const {
                   'img',
