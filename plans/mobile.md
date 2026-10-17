@@ -81,7 +81,13 @@ The full Rust workspace gate is **not green on this host**: two PTC heap-exhaust
 checks report `Uncaught null`, and the browser corpus expects OOPIF targets that
 Headless Shell 153 does not report. Those implementation/test sources are
 unchanged from 0.6.0; retain these findings rather than weakening the assertions.
-Linux black-box conformance and complete Nix builds remain CI checks.
+Linux black-box conformance remains a CI check; full Nix package builds were not
+run locally. The 0.6.1 CI Nix dependency hashes/evaluation passed.
+
+The Linux sandbox CI test `a_real_agent_is_confined` also fails with
+`bwrap: Can't read seccomp data: Resource temporarily unavailable`. This is the
+same failure recorded by the [0.6.0 baseline CI](https://github.com/iceice666/pirc/actions/runs/39009632614),
+and remains a backend follow-up; do not report the whole repository as green.
 
 Raw logs, synthetic state, screenshots, generated captures and APKs remain in
 ignored local output. Only the Android and web clients are published under
