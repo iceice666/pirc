@@ -132,6 +132,7 @@ test('document layout helper', async (t) => {
       childList: true,
       characterData: true,
       attributes: true,
+      attributeOldValue: true,
     }));
     assert.equal(layout.revision(), 1);
     assert.equal(layout.status().required, true);

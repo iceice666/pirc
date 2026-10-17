@@ -84,8 +84,9 @@ sizes, HTML dimensions, border-box edges, percentages, overflow and max-width
 fitting and height-driven aspect ratios with eight Chromium cases at two viewports. Small text-flow rounding
 differences are named in the test and mobile plan. The Android HTTP
 integration also reads canvas/image styles and rectangles through the shipped
-runtime after actual image decoding. Chart.js support remains incomplete; the
-concrete API blockers are recorded in the plan.
+runtime after actual image decoding. The native Chart.js cases below cover
+pre-sized bar charts; broader library support and size-changing synchronous
+write/read gaps remain listed in the mobile plan.
 
 `document_canvas_text_test.dart` runs synchronous Canvas `measureText().width`
 through Android JavaScriptSandbox, compares it with actual Flutter font advances,
@@ -96,6 +97,36 @@ its assets offline with `python3 tool/parity/build_document_script_runtime.py`.
 `document_canvas_text_runtime_test.mjs` compares the real engine with the pinned
 Roboto/Chromium fixture. Unprepared fonts, missing glyphs and ink/baseline metrics
 fail explicitly; this is a bounded text-width surface, not full Canvas support.
+
+`document_mutation_observer_test.dart` verifies public DOM observation through
+Android IPC: nested child/attribute/text records, old values, NodeList records,
+Promise ordering, record draining and private-snapshot suppression. The matching
+Node suites exercise the helper and the shipped bundle. Detached-subtree
+transient observation and bulk record grouping remain explicit differences.
+
+`document_chart_http_test.dart` uses the pinned test-only Chart.js 4.5.1 UMD and
+Chromium 153 fixture for phone/tablet at DPR 1/3. It compares actual native
+geometry, paints the bars and taps the update button. Canvas CSS and backing
+sizes are pre-sized consistently; genuine container resizing is not accepted by
+this test. Run it with the loopback fixture server (keep it running in another
+terminal) and an attached dedicated test device/emulator:
+
+```sh
+# From the repository root:
+node apps/android/tool/parity/serve_document_chart_fixture.mjs --port 19261
+# In the test terminal:
+adb -s emulator-5554 reverse tcp:19261 tcp:19261
+cd apps/android
+flutter test integration_test/document_chart_http_test.dart -d emulator-5554 \
+  --dart-define=PIRC_CHART_FIXTURE_ORIGIN=http://127.0.0.1:19261
+adb -s emulator-5554 reverse --remove tcp:19261
+```
+
+Without the define, the fixture-dependent test is skipped. The server binds only
+to loopback and verifies the pinned library hash. Recreate the browser reference
+with `node apps/android/tool/parity/capture_document_chart_chromium153.mjs` from
+the repository root; the capture refuses everyday Chrome and blocks requests.
+Neither the test library nor its fixture is included in the APK.
 
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see

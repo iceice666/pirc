@@ -27,11 +27,18 @@
     "sha256": "e842c1d9edde16ef8ef10fe505cc680229aa82b04af01c127c385c92b8f887c8",
     "browserOracle": "apps/android/tool/parity/fixtures/document-cookies-chrome155.json"
   },
+  "nativeMutationObserver": {
+    "helperSha256": "842a9ca3e4ee720fba945c422c87cdf80ad7e255c1424af098c4e4358defa65c"
+  },
+  "nativeMutationPatches": {
+    "source": "apps/android/tool/parity/document_linkedom_mutation_patches.json",
+    "sha256": "2d451dc44e80ecef55d67c226551063d2f197f86398cd007364ac9bc9fe1d5b1"
+  },
   "nativeResizeObserver": {
     "helperSha256": "ee102a0c0a95f3f8ced8fe139cd6b9f0c796eda5cd629e2e8c2a815a7625a791"
   },
   "nativeLayout": {
-    "helperSha256": "0bf04f02f0fd929c5d2cdf7bc8be4e9733d72f93b550021d4b5246813305aa85"
+    "helperSha256": "721af79950c21098c3718c5431222ad9b427765e6719bb407258b59e8a2b7194"
   },
   "nativeModules": {
     "parser": {

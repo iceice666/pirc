@@ -20,6 +20,16 @@ function createPircDocumentLayout(options) {
   }
 
   const internalAttributes = new Set(['data-pirc-script-id', 'data-pirc-script-click']);
+  const readAttribute = ElementCtor.prototype.getAttribute;
+  // Reassigning these attributes can reload resources or reset live control
+  // state even when their serialized value is unchanged. Keep their fence.
+  const repeatedEffectAttributes = new Set([
+    'src', 'srcdoc', 'srcset', 'sizes', 'href', 'data', 'poster',
+    'crossorigin', 'referrerpolicy', 'fetchpriority', 'loading', 'decoding',
+    'rel', 'media', 'as', 'integrity', 'disabled', 'type',
+    'value', 'checked', 'selected',
+  ]);
+
   const validId = /^pirc-[1-9][0-9]*$/;
   const metricNames = [
     'clientLeft',
@@ -298,7 +308,18 @@ function createPircDocumentLayout(options) {
     if (internalMutationDepth > 0 || !records || records.length === 0) return;
     let relevant = false;
     for (const record of records) {
-      if (record && record.type === 'attributes' && internalAttributes.has(record.attributeName)) continue;
+      if (record && record.type === 'attributes') {
+        if (internalAttributes.has(record.attributeName)) continue;
+        // Only a known old value and the actual HTML attribute can establish a
+        // no-op. Canvas size setters still reset their bitmap/context state;
+        // retaining an unchanged native layout does not suppress that work.
+        if (typeof readAttribute === 'function' &&
+            (record.oldValue === null || typeof record.oldValue === 'string') &&
+            record.target?.namespaceURI === 'http://www.w3.org/1999/xhtml' &&
+            record.attributeNamespace == null &&
+            !repeatedEffectAttributes.has(record.attributeName) &&
+            readAttribute.call(record.target, record.attributeName) === record.oldValue) continue;
+      }
       relevant = true;
       break;
     }
@@ -1212,7 +1233,7 @@ function createPircDocumentLayout(options) {
     }
     if (typeof MutationObserverCtor === 'function') {
       observer = new MutationObserverCtor((records) => consumeMutationRecords(records));
-      observer.observe(documentRef, { subtree: true, childList: true, characterData: true, attributes: true });
+      observer.observe(documentRef, { subtree: true, childList: true, characterData: true, attributes: true, attributeOldValue: true });
     }
     installed = true;
     return api;

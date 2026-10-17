@@ -67,6 +67,7 @@ TEXT_DECODER = REPOSITORY_ROOT / "apps/android/tool/parity/document_text_decoder
 MODULE_VENDOR = REPOSITORY_ROOT / "apps/android/tool/parity/vendor/acorn-8.18.0"
 IMPORT_MAPS = REPOSITORY_ROOT / "apps/android/tool/parity/document_import_maps_source.js"
 RESIZE_RUNTIME = REPOSITORY_ROOT / "apps/android/tool/parity/document_resize_observer_source.js"
+MUTATION_RUNTIME = REPOSITORY_ROOT / "apps/android/tool/parity/document_mutation_observer_source.js"
 LAYOUT_RUNTIME = REPOSITORY_ROOT / "apps/android/tool/parity/document_layout_source.js"
 CLASSIC_IMPORTS = REPOSITORY_ROOT / "apps/android/tool/parity/document_classic_imports_source.js"
 MODULE_COMPILER = REPOSITORY_ROOT / "apps/android/tool/parity/document_modules_compiler_source.js"
@@ -95,6 +96,7 @@ def build(vendor: Path, output_dir: Path) -> tuple[Path, str]:
         classic_imports = CLASSIC_IMPORTS.read_text(encoding="utf-8")
         layout_runtime = LAYOUT_RUNTIME.read_text(encoding="utf-8")
         resize_runtime = RESIZE_RUNTIME.read_text(encoding="utf-8")
+        mutation_runtime = MUTATION_RUNTIME.read_text(encoding="utf-8")
         import_maps = IMPORT_MAPS.read_text(encoding="utf-8")
         module_runtime = MODULE_RUNTIME.read_text(encoding="utf-8")
         wrapper = WRAPPER.read_text(encoding="utf-8")
@@ -150,6 +152,13 @@ def build(vendor: Path, output_dir: Path) -> tuple[Path, str]:
         fail("vendored worker checksum does not match provenance.json")
     if re.search(r"(?m)^\s*import\s", worker):
         fail("worker.js contains an import; expected the no-import worker build")
+
+    mutation_patch_path = Path(__file__).resolve().parent / "document_linkedom_mutation_patches.json"
+    mutation_patches = json.loads(mutation_patch_path.read_text(encoding="utf-8"))
+    for patch in mutation_patches["patches"]:
+        if worker.count(patch["before"]) != 1:
+            fail("LinkeDOM mutation patch does not match: " + patch["name"])
+        worker = worker.replace(patch["before"], patch["after"], 1)
 
     export_position = worker.rfind("\nexport {")
     if export_position < 0:
@@ -292,6 +301,8 @@ def build(vendor: Path, output_dir: Path) -> tuple[Path, str]:
         + "\n"
         + module_runtime.rstrip()
         + "\n"
+        + mutation_runtime.rstrip()
+        + "\n"
         + resize_runtime.rstrip()
         + "\n"
         + layout_runtime.rstrip()
@@ -349,6 +360,13 @@ def build(vendor: Path, output_dir: Path) -> tuple[Path, str]:
         "source": "apps/android/tool/parity/document_cookies_source.js",
         "sha256": hashlib.sha256(cookies_runtime.encode("utf-8")).hexdigest(),
         "browserOracle": "apps/android/tool/parity/fixtures/document-cookies-chrome155.json",
+    }
+    output_provenance["nativeMutationObserver"] = {
+        "helperSha256": hashlib.sha256(mutation_runtime.encode("utf-8")).hexdigest(),
+    }
+    output_provenance["nativeMutationPatches"] = {
+        "source": "apps/android/tool/parity/document_linkedom_mutation_patches.json",
+        "sha256": hashlib.sha256(mutation_patch_path.read_bytes()).hexdigest(),
     }
     output_provenance["nativeResizeObserver"] = {"helperSha256": hashlib.sha256(resize_runtime.encode("utf-8")).hexdigest()}
     output_provenance["nativeLayout"] = {"helperSha256": hashlib.sha256(layout_runtime.encode("utf-8")).hexdigest()}

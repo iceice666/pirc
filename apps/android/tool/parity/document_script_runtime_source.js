@@ -2790,6 +2790,13 @@
         'Native document geometry is unavailable until the matching layout is measured.', detail)
     });
     activeState.layout.install();
+    activeState.mutationObservers = createDocumentMutationObserverRuntime({
+      document, NativeMutationObserver: view.MutationObserver, Node, NodeList,
+      onDiagnostic: diagnostic
+    });
+    defineGlobal('MutationObserver', activeState.mutationObservers.MutationObserver, false);
+    if (activeState.mutationObservers.MutationRecord)
+      defineGlobal('MutationRecord', activeState.mutationObservers.MutationRecord, false);
     activeState.resizeObservers = createDocumentResizeObservers({
       document, Element: Element$1, layout: activeState.layout, diagnostic
     });
@@ -4334,9 +4341,13 @@
     // the source document's observer. Keep every private-snapshot mutation in
     // one suppression scope, while callers still decorate and prepare images
     // on the real document before entering this helper.
-    return state.layout && typeof state.layout.runWithoutMutationInvalidation === 'function'
-      ? state.layout.runWithoutMutationInvalidation(cloneAndSerialize)
-      : cloneAndSerialize();
+    const serializeWithoutLayoutMutations = () =>
+      state.layout && typeof state.layout.runWithoutMutationInvalidation === 'function'
+        ? state.layout.runWithoutMutationInvalidation(cloneAndSerialize)
+        : cloneAndSerialize();
+    return state.mutationObservers
+      ? state.mutationObservers.runWithoutMutations(serializeWithoutLayoutMutations)
+      : serializeWithoutLayoutMutations();
   }
 
   function snapshotHtml() {

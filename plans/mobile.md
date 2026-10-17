@@ -28,7 +28,7 @@ outside the agreed scope.
 ## Remaining work, in priority order
 
 - [ ] **Dynamic content compatibility:** complete Canvas ink/baseline text metrics,
-      synchronous write/read layout support and chart-library acceptance; extend
+      synchronous write/read layout support and broader chart-library acceptance; extend
       the supported computed-style
       properties, list-item/inline-fragment measurements and common-library coverage;
       signed/font-relative/empty-block and bottom-edge
@@ -90,14 +90,21 @@ outside the agreed scope.
   remain outside this initial surface. Generic native font-family names can differ
   from Chromium's resolved UA family names. Per-element and packet limits withhold
   complete declarations rather than truncate custom properties or discard geometry.
-- A Chart.js 4.5.1 production-runtime probe now constructs a fixed-size bar
-  chart and records its Canvas commands using the real Skia width engine. Its
-  default responsive mode still stops at a stale computed-style read after
-  changing canvas dimensions. These probes use synthetic native layout packets,
-  so they establish script compatibility, not native chart rendering or visual
-  acceptance. Native `ResizeObserver` covers measured horizontal HTML
-  content/border boxes. Full Chart.js support still needs synchronous write/read
-  layout and end-to-end library acceptance.
+- Chart.js 4.5.1 bar charts now construct, paint and update data through the
+  native fetched-document path on phone/tablet at DPR 1/3 when Canvas CSS and
+  backing dimensions are already sized consistently. Same-value width/height
+  assignments clear the bitmap without discarding current native geometry.
+  The four Chromium comparison cases have a maximum observed bar-geometry
+  difference of 0.055 px from platform font advances. Genuine size changes
+  followed by synchronous reads still need a matching native frame; default
+  unprepared Canvas sizes, dynamic container resizing and broader Chart.js
+  interactions remain unverified. This is bounded library acceptance.
+- Public `MutationObserver` covers live child/attribute/text changes, subtree
+  matching, filters/old values, microtask delivery, `takeRecords()` and
+  `disconnect()`. Private serialization does not create guest notifications.
+  Detached-subtree transient registrations and bulk-operation record grouping
+  still differ from browsers. Cross-document observation is explicitly rejected;
+  active observers, targets and pending records have documented limits below.
 - Arbitrary websites/frameworks, third-party cookie policies and full browser API
   coverage are not guaranteed. Preserve explicit unsupported errors and record
   real failures before expanding compatibility.
@@ -494,10 +501,10 @@ with bounded retries and selection endpoints retained by identity. Other
 assertions still propagate. The decoded-image reflow regression verifies a
 selection exists before the image is revealed and can still be copied afterward.
 
-Chart.js remains blocked by the separately recorded `measureText` and synchronous
-write/read gaps; these sizing fixes and the following resize-observation work do not establish
-third-party chart-library compatibility. Physical-device/real-account acceptance
-and remote push remain pending as listed above.
+These sizing fixes alone did not establish third-party chart-library
+compatibility. The later Canvas-width and native-chart follow-ups below cover
+pre-sized bar charts; genuine size-changing synchronous write/read flows remain
+open. Physical-device/real-account acceptance and remote push remain pending.
 
 Verification for this follow-up: **4,753 Flutter tests** passed on the final
 source, including the 16 Chromium sizing records and the decoded-image selection
@@ -550,9 +557,9 @@ Remaining explicit differences:
   and `ResizeObserver loop completed with undelivered notifications` error event.
 - Callback exceptions remain visible through document diagnostics, following the
   runtime's existing callback-error policy.
-- Full Chart.js remains unverified/blocked by the separately listed text-metrics
-  and synchronous write/read issues. This feature is not evidence of chart-library
-  compatibility.
+- Resize observation alone does not establish full Chart.js compatibility.
+  The later native-chart follow-up covers pre-sized bar charts; broader chart
+  interactions and size-changing synchronous write/read flows remain open.
 
 Reference: [CSSWG Resize Observer processing model](https://drafts.csswg.org/resize-observer/);
 the pinned Chromium capture is authoritative for the compared behavior.
@@ -625,13 +632,74 @@ Remaining explicit differences:
 - Platform font aliases can resolve differently from a desktop browser. Portable
   same-font comparisons use the pinned open-source Roboto file; this does not
   establish arbitrary cross-platform font or complete Canvas visual parity.
-- Chart.js 4.5.1 now constructs the fixed 600 × 300 bar-chart probe and records
-  39 Canvas commands. This uses synthetic native layout packets. Responsive
-  mode still stops at a stale computed-style read after changing canvas size;
-  actual native chart-library and synchronous write/read acceptance remain open.
+- The initial Chart.js fixed-size probe used synthetic native layout packets.
+  The native follow-up below supersedes that probe with four real rendered
+  cases; genuine size-changing synchronous write/read flows remain open.
 
 Verification: 4,780 Flutter tests, 546 JavaScript tests, 290 Android JVM tests,
 Android Canvas width/pixel acceptance, static analysis and formatting passed.
 The existing Android local-HTTP layout/interaction integration also passed
 with the new engine preparation; detailed run evidence stays in ignored local
 acceptance output.
+
+## Native chart and DOM observation follow-up
+
+Exact same-value HTML attribute writes no longer invalidate an otherwise current
+native layout packet. Canvas width/height setters still clear the bitmap and
+reset context state, including when their value does not change. Real changes,
+A → B → A changes, unknown old values, non-HTML namespaces and repeatable
+resource/control assignments retain their conservative layout fences. No stale
+geometry is returned to satisfy a library read.
+
+The packaged runtime now exposes `MutationObserver` and readonly-field
+`MutationRecord` instances with iterable NodeList records. It uses the private
+LinkeDOM observer with checksum-verified build-time fixes for nested targets,
+removal sibling context, attribute matching and character-data records. Public
+notifications are queued at mutation time so later Promise jobs follow them;
+callbacks can drain or disconnect a later observer before it is notified.
+Internal marker attributes and document-clone serialization stay private while
+already pending authored records are preserved. Callback failures are diagnostic
+and do not prevent other observers from receiving their records.
+
+Explicit observation differences:
+
+- Mutations inside a detached subtree between its removal and notification do
+  not use browser transient registrations. Live subtree observation is covered.
+- Bulk `innerHTML`, fragment and replacement operations can produce per-node
+  child-list records instead of browser aggregate records. Those groupings are
+  not claimed equivalent.
+- Namespaced attributes and complete Web IDL property descriptor behavior are
+  not accepted as a complete browser surface. The two `data-pirc-script-*`
+  instrumentation attributes are reserved and hidden from public notifications.
+- Observation is limited to nodes from the current document. There are at most
+  128 active observers, 1,000 target registrations and 5,000 pending records.
+  Capacity exhaustion produces an explicit error/diagnostic; `disconnect()`
+  releases capacity and allows reuse. Private suppression is synchronous only.
+
+Chart.js 4.5.1 is a test-only pinned UMD dependency with original MIT license and
+SHA-256 provenance. It is served over loopback for acceptance and is not bundled
+as an app library. The dedicated Chromium 153 reference blocks all network
+requests and captures phone 390 × 844 / tablet 768 × 1024 at DPR 1 and 3.
+Android acceptance fetches the same library through the real native transport,
+uses real Flutter layout and synchronous native Skia text widths, compares
+Canvas CSS/bitmap dimensions and bar geometry, samples the native painted bars,
+and taps the rendered update button to change data from [3, 7] to [6, 2].
+All four cases pass with no script diagnostics. Every bar-geometry delta is
+retained in ignored evidence; the observed maximum is 0.054108 px, with matching
+vertical geometry and exact sampled blue RGBA pixels. Browser and Android fonts
+are different, so this is not a complete cross-platform screenshot equivalence
+claim. Container/CSS resizing is captured in the browser reference but remains a
+named native gap, as do arbitrary chart types, canvas tooltips and animation.
+
+The test reuses one Gateway across document cases, matching the app's ownership.
+Separate EventChannel listeners with the same channel name replace each other;
+creating a Gateway for each case had triggered event-stream teardown and closed
+its document isolate. No product timeout or geometry fence was weakened.
+
+Verification for this follow-up: all 563 JavaScript tests, 132 targeted Flutter
+controller/layout/Canvas tests, Android DOM-observer IPC acceptance, all four
+Chart.js cases, existing native Canvas font/pixel acceptance and the existing
+local-HTTP layout/scroll/interaction acceptance pass. Static analysis and format
+checks also pass. Run counts and detailed logs remain in ignored acceptance
+output; disposable builds and owned emulator disk images are removed after the
+run. This does not close the broader parity goal or the listed rendering gaps.
