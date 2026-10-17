@@ -297,6 +297,12 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
 
     open suspend fun schedule(id: String): ScheduleDetail = get("/api/schedules/${id.urlSegment()}")
 
+    /** Project files are raw bytes, including JSON documents; no attachment/session is created. */
+    open suspend fun uploadProjectFile(workspaceId: String, filename: String, body: RequestBody): JsonObject = readingReply {
+        send("POST", "/api/workspaces/${workspaceId.urlSegment()}/files?filename=${filename.urlSegment()}", body)
+            as? JsonObject ?: error("empty project file reply")
+    }
+
     /** The user's own schedules need no approval (only an agent's do). */
     open suspend fun createSchedule(input: ScheduleInput): Schedule =
         decodeSchedule(send("POST", "/api/schedules", scheduleBody(input)))

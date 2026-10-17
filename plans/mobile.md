@@ -11,6 +11,8 @@ outside the agreed scope.
 
 - Native chat/work navigation, session streaming/cancellation/reconnection,
   approvals, memory, schedules, files, Git, terminal, browser and task panels.
+- Chat-project files, including top-level Chats: native multi-file selection,
+  streaming uploads, listing, same-name replacement and confirmed removal.
 - Pairing and first-launch permission guidance, notification/overlay controls,
   attachments, code highlighting, Markdown, math and supported native diagrams.
 - Short-lived provider/device management grants approved by the logged-in web
@@ -22,10 +24,6 @@ outside the agreed scope.
   tested browser behavior, not a complete browser engine.
 
 ## Remaining work, in priority order
-
-- [ ] **Project files:** add native project-file upload/list/delete controls for
-      the new Web/backend feature (`1acc4371`). Existing project chats remain
-      available; manage their shared files on the Web until this UI is added.
 
 - [ ] **0.6.0 project deletion:** add the deletion preview, mixed-source memory
       decisions, confirmation and interrupted-deletion retry UI. Until then, finish
@@ -116,3 +114,28 @@ With dedicated Chrome for Testing 153.0.8010.47, the local OOPIF cases pass.
 The macOS keyboard corpus still differs at step 14 by the active-focus marker;
 its expected data remains unchanged. This local platform finding is separate
 from the Linux CI gate and the Android client.
+
+## Native project-files follow-up
+
+The Android settings now expose the Web/backend project-files feature
+(`1acc4371`) through Flutter. The system document picker returns scoped native
+file tokens; files stream one at a time within the node's reported limit rather
+than using the session-attachment picker's older 8 MiB cap. Batch uploads keep
+successful files after another fails. Switching account, project, host or online
+state discards stale results and stops the remaining batch; temporary tokens are
+released after completion or cancellation.
+
+Local acceptance against fresh Rust gateway/node binaries at `2560ea17`:
+
+- Flutter analysis and formatting are clean; 49 project-files, project-links and
+  workspace-settings widget tests pass, including stale reads/uploads, limits,
+  partial failures, retries and inline removal confirmation.
+- All 280 Android JVM tests pass, including streaming, raw-byte encoding,
+  provider-read failures and project/account/window token isolation.
+- Owned Android emulator integration passes native document selection, raw JSON
+  and Unicode names, same-name replacement, a 9 MiB upload, list/removal and the
+  existing per-session attachment path. Test projects are deleted afterwards.
+- The system picker is Android UI; the project settings and content remain
+  Flutter. At very narrow widths or enlarged text, file actions can move to a
+  second row to remain usable. This new feature is outside the frozen `bd3d909`
+  visual corpus. Physical-device acceptance and remote push remain pending.
