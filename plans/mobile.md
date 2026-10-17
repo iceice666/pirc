@@ -13,6 +13,8 @@ outside the agreed scope.
   approvals, memory, schedules, files, Git, terminal, browser and task panels.
 - Chat-project files, including top-level Chats: native multi-file selection,
   streaming uploads, listing, same-name replacement and confirmed removal.
+- Project deletion previews, mixed-source memory decisions, revision conflicts
+  and finishing an interrupted deletion from the app.
 - Pairing and first-launch permission guidance, notification/overlay controls,
   attachments, code highlighting, Markdown, math and supported native diagrams.
 - Short-lived provider/device management grants approved by the logged-in web
@@ -25,9 +27,6 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **0.6.0 project deletion:** add the deletion preview, mixed-source memory
-      decisions, confirmation and interrupted-deletion retry UI. Until then, finish
-      deletion on the web; the app must block creating chats in a deleting project.
 - [ ] **Dynamic content compatibility:** root percentage-height chains,
       offsetTop/Left/Parent, inline-fragment geometry and image/resize/chart/framework
       flows. A DOM write followed immediately by a geometry read still needs a
@@ -139,3 +138,36 @@ Local acceptance against fresh Rust gateway/node binaries at `2560ea17`:
   Flutter. At very narrow widths or enlarged text, file actions can move to a
   second row to remain usable. This new feature is outside the frozen `bd3d909`
   visual corpus. Physical-device acceptance and remote push remain pending.
+
+## Native project-deletion follow-up
+
+Chat-project settings now include the Web deletion preview, automatic
+project-only note removal and rollback summaries, explicit Forget/Keep/Edit
+choices for mixed memory, and the interrupted-deletion Finish deleting action.
+The top-level Chats workspace cannot be deleted. A memory revision conflict
+reloads the preview and clears prior decisions. Other failures reload the
+remaining deletion plan before retrying; no POST is retried automatically.
+
+Preview and confirmation requests carry the captured pairing stamp. Android
+captures that account's API before network I/O; a stale stamp is rejected before
+sending a destructive request. Account, host and project changes discard the
+old dialog. Acknowledged deletion clears only that project's sessions, drafts,
+selection and navigation, refreshes memory/schedules and fences stale indexes
+or pending chat creation from restoring deleted content.
+
+Local evidence against fresh Rust services at `d36d86e5`:
+
+- 91 Flutter controller/widget tests pass across deletion, navigation, settings,
+  project files and links, including partial failures, explicit choices,
+  conflicts, stale responses, duplicate clicks and 320 px / 2× text layout.
+- All 280 Android JVM tests pass; Flutter analysis and formatting are clean.
+- Owned Android emulator integration uses real `memory_note` source histories:
+  project-only removal, external-text rollback and mixed-source edit all pass.
+  A real concurrent memory edit produces 409 and requires a fresh decision;
+  a stale pairing stamp is rejected. Project chats, instructions and files are
+  removed while top-level Chats and external reviewed memory stay intact.
+- Partial-deletion retry UI uses controlled HTTP failures in widget tests;
+  physical-device/network-interruption acceptance remains pending.
+- This 0.6.x feature is outside the frozen visual corpus. Its native radio/input
+  controls follow the Web text and layout. A constrained keyboard viewport may
+  scroll the entire dialog; dismissal and edits are blocked while submitting.

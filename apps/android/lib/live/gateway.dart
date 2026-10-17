@@ -13,7 +13,7 @@ List<Json> rows(dynamic value) => value is List ? value.map(obj).toList() : [];
 String enc(String value) => Uri.encodeComponent(value);
 String sessionPath(String id) => '/api/sessions/${enc(id)}';
 const workspaceDeletionNotice =
-    'This project deletion is incomplete. Finish deleting it on the web.';
+    "This project's deletion did not finish: its chats accept no more work. Finish deleting it once the chat node is connected.";
 
 class Gateway {
   static const channel = MethodChannel('dev.pirc.mobile/gateway');
@@ -28,8 +28,14 @@ class Gateway {
     String path, {
     String method = 'GET',
     dynamic body,
+    String? pairingStamp,
   }) async => obj(
-    await call('request', {'method': method, 'path': path, 'body': body}),
+    await call('request', {
+      'method': method,
+      'path': path,
+      'body': body,
+      'pairingStamp': ?pairingStamp,
+    }),
   );
   Future<Json> command(String id, Json payload) async => obj(
     await call('command', {
@@ -201,6 +207,8 @@ class LiveController extends ChangeNotifier {
   final _reading = <String>{};
   final _deleting = <String>{};
   final _deleted = <String>{};
+  final _deletedWorkspaces = <String>{};
+  final _projectDeletions = <String, Object>{};
   final readers = <String, ReadingState>{};
   final panelState = <String, Json>{};
   PanelResource? _panelData;
@@ -398,6 +406,8 @@ class LiveController extends ChangeNotifier {
     _selectFirstSessionOnRefresh = false;
     _retryListOnNetwork = false;
     _deleted.clear();
+    _deletedWorkspaces.clear();
+    _projectDeletions.clear();
     attention.reset();
     _selection++;
     loading = false;
@@ -440,6 +450,8 @@ class LiveController extends ChangeNotifier {
       _selectFirstSessionOnRefresh = false;
       _retryListOnNetwork = false;
       _deleted.clear();
+      _deletedWorkspaces.clear();
+      _projectDeletions.clear();
       attention.reset();
       _selection++;
       loading = false;
@@ -485,10 +497,16 @@ class LiveController extends ChangeNotifier {
         gateway.request('/api/nodes'),
       ]);
       if (revision != _accountRevision) return;
-      sessions = rows(
-        result[0]['sessions'],
-      ).where((s) => !_deleted.contains(s['id'])).toList();
-      workspaces = rows(result[1]['workspaces']);
+      sessions = rows(result[0]['sessions'])
+          .where(
+            (s) =>
+                !_deleted.contains(s['id']) &&
+                !_deletedWorkspaces.contains(s['workspaceId']),
+          )
+          .toList();
+      workspaces = rows(
+        result[1]['workspaces'],
+      ).where((w) => !_deletedWorkspaces.contains(w['id'])).toList();
       nodes = rows(result[2]['nodes']);
       if (!workspaces.any(isTopChats)) mode = 'work';
       if (!workspaces.any((w) => w['id'] == workspaceFilter)) {
@@ -543,7 +561,9 @@ class LiveController extends ChangeNotifier {
     }
     final previousSelection = _selection;
     await flushDraft();
-    if (navigation != _navigationIntent || previousSelection != _selection) {
+    if (navigation != _navigationIntent ||
+        previousSelection != _selection ||
+        _deleted.contains(id)) {
       return;
     }
     final selection = ++_selection;
@@ -635,12 +655,29 @@ class LiveController extends ChangeNotifier {
     if (workspace?['deleting'] == true) {
       throw StateError(workspaceDeletionNotice);
     }
+    if (_deletedWorkspaces.contains(workspaceId)) {
+      throw StateError('This project is no longer available.');
+    }
+    final account = _accountRevision, stamp = pairingStamp;
     final data = await gateway.request(
       '/api/sessions',
       method: 'POST',
+      pairingStamp: stamp,
       body: {'workspaceId': workspaceId},
     );
+    if (_disposed ||
+        account != _accountRevision ||
+        stamp != pairingStamp ||
+        _deletedWorkspaces.contains(workspaceId)) {
+      return;
+    }
     await refreshList();
+    if (_disposed ||
+        account != _accountRevision ||
+        stamp != pairingStamp ||
+        _deletedWorkspaces.contains(workspaceId)) {
+      return;
+    }
     await open('${obj(data['session'])['id']}');
   }
 
@@ -684,6 +721,77 @@ class LiveController extends ChangeNotifier {
     }
     await refreshList();
     return workspace;
+  }
+
+  /// Acknowledged project deletion is terminal, even if an older index arrives later.
+  Future<void> deleteProject(String id, List<Json> decisions) async {
+    final workspace = workspaces.where((w) => w['id'] == id).firstOrNull;
+    if (workspace == null || !isChat(workspace) || isTopChats(workspace)) {
+      throw StateError('Only chat projects can be deleted.');
+    }
+    if (!workspaceOnline(workspace, nodes)) {
+      throw StateError('Connect the chat node to delete this project.');
+    }
+    final stamp = pairingStamp;
+    if (stamp == null || stamp.isEmpty) {
+      throw StateError('Pair this device before deleting a project.');
+    }
+    if (_projectDeletions.containsKey(id)) {
+      throw StateError('Deletion is already in progress.');
+    }
+    final operation = Object();
+    _projectDeletions[id] = operation;
+    final account = _accountRevision, host = origin, client = clientId;
+    try {
+      await gateway.request(
+        '/api/workspaces/${enc(id)}/deletion',
+        method: 'POST',
+        pairingStamp: stamp,
+        body: {
+          'decisions': [
+            for (final decision in decisions) {...decision},
+          ],
+        },
+      );
+      if (_disposed ||
+          account != _accountRevision ||
+          host != origin ||
+          client != clientId ||
+          stamp != pairingStamp) {
+        return;
+      }
+      final currentWorkspace = workspaces
+          .where((w) => w['id'] == id)
+          .firstOrNull;
+      if (currentWorkspace != null &&
+          (currentWorkspace['hostId'] != workspace['hostId'] ||
+              !isChat(currentWorkspace))) {
+        return;
+      }
+      _deletedWorkspaces.add(id);
+      final removed = sessions
+          .where((s) => s['workspaceId'] == id)
+          .map((s) => '${s['id']}')
+          .toSet();
+      if (obj(state['session'])['workspaceId'] == id && sessionId != null) {
+        removed.add(sessionId!);
+      }
+      for (final session in removed) {
+        unawaited(_removeSession(session));
+      }
+      workspaces = workspaces.where((w) => w['id'] != id).toList();
+      if (workspaceFilter == id) workspaceFilter = null;
+      if (routePage == 'workspace:$id') routePage = null;
+      changed();
+      // Refresh failures do not undo a completed deletion. Tombstones fence older reads.
+      unawaited(refreshList());
+      unawaited(attention.memoryChanged());
+      unawaited(attention.refreshSchedules());
+    } finally {
+      if (identical(_projectDeletions[id], operation)) {
+        _projectDeletions.remove(id);
+      }
+    }
   }
 
   Future<void> deleteChat(String id) async {
@@ -794,6 +902,8 @@ class LiveController extends ChangeNotifier {
       _save?.cancel();
       _selectFirstSessionOnRefresh = next['origin'] != null;
       _deleted.clear();
+      _deletedWorkspaces.clear();
+      _projectDeletions.clear();
       origin = next['origin'] as String?;
       clientId = next['clientId'] as String?;
       pairingStamp = next['pairingStamp'] as String?;

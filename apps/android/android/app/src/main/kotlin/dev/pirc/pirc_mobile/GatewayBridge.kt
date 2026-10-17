@@ -867,7 +867,11 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                             null
                         }
-                        "request" -> runtime.request(str("method"), str("path"), args["body"])
+                        "request" -> {
+                            val expectedStamp = optionalString("pairingStamp")
+                            if (expectedStamp == null) runtime.request(str("method"), str("path"), args["body"])
+                            else runtime.requestWithApi(capturePairedApi(expectedStamp, contextId), str("method"), str("path"), args["body"])
+                        }
                         "watch" -> { runtime.watch(str("sessionId"), contextId, optionalString("watchTag")); runtime.local.draft(str("sessionId")) }
                         "setWatchVisibility" -> runtime.setWatchVisibility(
                             contextId,
@@ -1408,11 +1412,14 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
         return limit
     }
 
-    private suspend fun projectFileApi(stamp: String, contextId: String?): PircApi = accountContextMutationLock.withLock {
+    private suspend fun projectFileApi(stamp: String, contextId: String?): PircApi = capturePairedApi(stamp, contextId).also {
+        projectFileSelections.bind(stamp)
+    }
+
+    private suspend fun capturePairedApi(stamp: String, contextId: String?): PircApi = accountContextMutationLock.withLock {
         runtime.validateContext(contextId)
         val current = runtime.boot()["pairingStamp"] as? String
         requirePairingStamp(stamp, current)
-        projectFileSelections.bind(current)
         runtime.api()
     }
 
