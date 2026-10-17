@@ -274,6 +274,9 @@ class NativeHtmlDocument extends StatefulWidget {
   )?
   onScriptDetailedEvent;
   final bool markdownStyles;
+
+  /// The document viewport for responsive media and, in full-document mode,
+  /// the initial CSS containing block. Omit it for content-sized HTML fragments.
   final Size? imageViewport;
   final bool? imageDark;
   final ValueChanged<NativeHtmlLink>? onNavigate;
@@ -303,6 +306,18 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
   NativeDocumentElementScrollController get _elementScroll =>
       widget.elementScrollController ?? _localElementScroll;
   final _canvasPointerKeys = <String, GlobalKey>{};
+  Size? get _documentViewport {
+    final viewport = widget.imageViewport;
+    return !widget.markdownStyles &&
+            viewport != null &&
+            viewport.width.isFinite &&
+            viewport.height.isFinite &&
+            viewport.width >= 0 &&
+            viewport.height >= 0
+        ? viewport
+        : null;
+  }
+
   NativeHtmlControlState? controls;
   NativeHtmlTextFieldState? textFields;
   NativeHtmlSelectState? selects;
@@ -1957,6 +1972,8 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
           buildAsync: false,
           enableCaching: true,
           rebuildTriggers: [
+            widget.markdownStyles,
+            widget.imageViewport,
             widget.authorStylesBuilder,
             widget.canvases,
             widget.canvasImages,
@@ -1985,6 +2002,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             buttons!,
             forms!,
             widget.markdownStyles,
+            () => _documentViewport != null,
             widget.onNavigate,
             widget.onScriptEvent == null && widget.onScriptClick == null
                 ? null
@@ -2382,6 +2400,26 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
         ),
       ),
     );
+    // Full documents scroll under unbounded vertical constraints. Publish the
+    // document viewport as the root's CSS containing block without forcing the
+    // content to that size. Auto-height elements still break percentage chains.
+    // Markdown has no document viewport and must retain its content sizing.
+    final viewport = _documentViewport;
+    final documentRoot = viewport != null
+        ? NativeDocumentContainingBlock(
+            width: viewport.width,
+            height: viewport.height,
+            child: NativeDocumentElementScroll(
+              controller: _elementScroll,
+              id: 'pirc-document-root-$nonce',
+              revision: widget.layoutRevision,
+              overflowX: NativeDocumentOverflow.visible,
+              overflowY: NativeDocumentOverflow.visible,
+              expandVisibleOverflow: true,
+              child: document,
+            ),
+          )
+        : document;
     return _NativeHtmlFocusScrollGate(
       suppress: _shouldSuppressFocusReveal,
       child: NativeHtmlFormFeedback(
@@ -2392,9 +2430,9 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
                 revision: widget.layoutRevision,
                 knownIds: widget.layoutKnownIds,
                 noBoxIds: widget.layoutNoBoxIds,
-                child: document,
+                child: documentRoot,
               )
-            : document,
+            : documentRoot,
       ),
     );
   }
@@ -2414,6 +2452,7 @@ class _NativeHtmlFactory extends WidgetFactory {
     this.buttons,
     this.forms,
     this.markdownStyles,
+    this.hasDocumentViewport,
     this.onNavigate,
     this.onScriptTap,
     this.dark,
@@ -2435,6 +2474,7 @@ class _NativeHtmlFactory extends WidgetFactory {
   );
   // HtmlWidget retains its factory when rebuild triggers change. Read the
   // current document viewport instead of capturing the first build.
+  final bool Function() hasDocumentViewport;
   final Size Function() imageViewport;
   final double Function() imageDpr;
   final bool Function() imageDark;
@@ -2867,12 +2907,26 @@ class _NativeHtmlFactory extends WidgetFactory {
 
   NativeFlexLength? _flexLength(String? source, double fontSize) {
     final match = RegExp(
-      r'^([+]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+))(px|%|em|pt)?$',
+      r'^([+]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+))(px|%|em|pt|vw|vh|vmin|vmax)?$',
     ).firstMatch(source?.trim().toLowerCase() ?? '');
     if (match == null) return null;
     final value = double.parse(match[1]!);
     if (!value.isFinite || (match[2] == null && value != 0)) return null;
-    return switch (match[2]) {
+    final unit = match[2];
+    if (const {'vw', 'vh', 'vmin', 'vmax'}.contains(unit)) {
+      final viewport = imageViewport();
+      final basis = switch (unit) {
+        'vw' => viewport.width,
+        'vh' => viewport.height,
+        'vmin' => min(viewport.width, viewport.height),
+        _ => max(viewport.width, viewport.height),
+      };
+      final pixels = value / 100 * basis;
+      return pixels.isFinite && pixels >= 0
+          ? NativeFlexLength.pixels(pixels)
+          : null;
+    }
+    return switch (unit) {
       '%' => NativeFlexLength.percent(value),
       'em' => NativeFlexLength.pixels(value * fontSize),
       'pt' => NativeFlexLength.pixels(value * 96 / 72),
@@ -4265,6 +4319,32 @@ class _NativeHtmlFactory extends WidgetFactory {
       url.isEmpty ? null : Uri.tryParse(url)?.toString();
   @override
   Widget buildBodyWidget(BuildContext context, Widget child) => child;
+
+  @override
+  Widget buildColumnWidget(
+    BuildContext context,
+    List<Widget> children, {
+    CrossAxisAlignment? crossAxisAlignment,
+    TextDirection? dir,
+  }) {
+    final column = super.buildColumnWidget(
+      context,
+      children,
+      crossAxisAlignment: crossAxisAlignment,
+      dir: dir,
+    );
+    if (!hasDocumentViewport()) return column;
+    // Normal CSS block flow can extend below an explicitly sized container.
+    // Its NativeDocumentBox still owns the definite percentage-height basis;
+    // only the flow content is laid out at its natural vertical extent.
+    return OverflowBox(
+      alignment: Alignment.topLeft,
+      fit: OverflowBoxFit.deferToChild,
+      minHeight: 0,
+      maxHeight: double.infinity,
+      child: column,
+    );
+  }
 
   @override
   WidgetPlaceholder? buildColumnPlaceholder(

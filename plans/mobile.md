@@ -27,8 +27,8 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** root percentage-height chains,
-      offsetTop/Left/Parent, inline-fragment geometry and image/resize/chart/framework
+- [ ] **Dynamic content compatibility:** offsetTop/Left/Parent,
+      inline-fragment geometry and image/resize/chart/framework
       flows. A DOM write followed immediately by a geometry read still needs a
       matching native frame; unsupported reads fail explicitly. Native Canvas event
       callbacks have measured geometry for their synchronous dispatch.
@@ -50,6 +50,9 @@ outside the agreed scope.
   added 0.6.x features are tracked separately rather than claimed as visual parity.
 - Eight percentage top-margin cases differ by parent margin collapse. Some
   inserted classic-script lexical-scope behavior differs from the browser.
+- Two root-height fixtures retain extra trailing blank scroll space: 8 px with
+  the default body margin, and 17 px with nested content-box edges. Their element
+  rectangles match Chromium; these small scroll-extent differences are deferred.
 - Root horizontal scrolling, scrollend/Promise semantics, mixed window/element
   event order, RTL, scroll snap/anchoring and nested touch scroll chaining need
   wider coverage. Smooth scroll timing follows Flutter.
@@ -171,3 +174,29 @@ Local evidence against fresh Rust services at `d36d86e5`:
 - This 0.6.x feature is outside the frozen visual corpus. Its native radio/input
   controls follow the Web text and layout. A constrained keyboard viewport may
   scroll the entire dialog; dismissal and edits are blocked while submitting.
+
+## Native full-page height follow-up
+
+Full HTML documents now publish their actual document viewport as the initial
+containing block. `html` / `body` / app percentage-height chains resolve without
+forcing auto-height content to fill the screen. Fixed viewport units (`vw`,
+`vh`, `vmin`, `vmax`) are supported by native block/flex sizing. A minimum height
+alone still does not establish a definite height for percentage descendants.
+Markdown and HTML fragments without an explicit document viewport keep their
+existing sizing.
+
+Normal block content can extend below a CSS-sized container without a Flutter
+Column overflow. Visible vertical overflow contributes to the page's outer
+scroll extent; nested hidden/auto overflow keeps its own viewport and scroll
+extent. The root wrapper preserves hit testing for content below the CSS root.
+
+The dedicated Chromium 153 capture in
+`capture_document_root_heights_web.mjs` records 42 cases at 390×844, 844×390 and
+768×1024. Native geometry, auto-height controls, viewport units, box edges and
+clipped/nested scrolling are compared to the captured browser results. The two
+small trailing-space differences are explicitly asserted and listed above.
+Fetched-page tests also cover resizing with retained input/scroll state,
+clicking an overflowing bottom link and excluding surrounding app chrome from
+the document viewport. The complete Flutter suite passes 4,438 tests; Flutter
+analysis and formatting are clean. Physical phone/tablet acceptance remains
+pending.
