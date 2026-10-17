@@ -355,11 +355,14 @@ async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
     )?;
     // Its roles, as registration reports them, for delegations.
     let mut body = serde_json::to_value(&workspace).unwrap_or_default();
-    if let Some(roles) = crate::link::workspace_roles(config, &canonical) {
-        body["roles"] = serde_json::to_value(roles).unwrap_or_default();
-    }
-    if let Some(repo) = crate::repo::workspace_repo(Path::new(&canonical)) {
-        body["repo"] = json!(repo);
+    let details = crate::link::workspace_details(&node, vec![Some(canonical)]).await;
+    if let Some((roles, repo)) = details.into_iter().next() {
+        if let Some(roles) = roles {
+            body["roles"] = serde_json::to_value(roles).unwrap_or_default();
+        }
+        if let Some(repo) = repo {
+            body["repo"] = json!(repo);
+        }
     }
     created(json!({ "workspace": body }))
 }

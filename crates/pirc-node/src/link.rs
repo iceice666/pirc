@@ -387,10 +387,15 @@ async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<b
             return Ended::default();
         }
     };
+    // Reading roles and git files is blocking IO, off the async task.
+    let registration = tokio::select! {
+        registration = registration(node) => registration,
+        () = stopped(terminated) => return Ended::default(),
+    };
     let (mut sink, mut stream) = socket.split();
     let mut queue = node.link.open();
     let id = queue.id;
-    node.link.send(&NodeMessage::Register(registration(node)));
+    node.link.send(&NodeMessage::Register(registration));
     let start = tokio::time::Instant::now() + Duration::from_millis(HEARTBEAT_MS);
     let mut heartbeat = tokio::time::interval_at(start, Duration::from_millis(HEARTBEAT_MS));
     let mut registered = false;
@@ -636,33 +641,66 @@ fn handle(node: &Node, id: u64, registered: &mut bool, message: GatewayMessage) 
 
 /// The `register` frame: protocol, role and this node's workspaces, each
 /// directory workspace with the roles its agents can start in.
-fn registration(node: &Node) -> Registration {
-    let workspaces = node.db.lock().list_workspaces().unwrap_or_default();
+async fn registration(node: &Node) -> Registration {
+    let workspaces: Vec<_> = node
+        .db
+        .lock()
+        .list_workspaces()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|workspace| workspace.host_id == node.config.node_id)
+        .collect();
+    let roots = workspaces
+        .iter()
+        .map(|workspace| {
+            (workspace.kind == WorkspaceKind::Directory).then(|| workspace.canonical_path.clone())
+        })
+        .collect();
+    let details = workspace_details(node, roots).await;
     Registration {
         role: node.config.role,
         protocol: Some(i64::from(NODE_PROTOCOL_VERSION)),
         workspaces: workspaces
             .into_iter()
-            .filter(|workspace| workspace.host_id == node.config.node_id)
-            .map(|workspace| {
-                let directory = workspace.kind == WorkspaceKind::Directory;
-                let roles = directory
-                    .then(|| workspace_roles(&node.config, &workspace.canonical_path))
-                    .flatten();
-                let repo = directory
-                    .then(|| {
-                        crate::repo::workspace_repo(std::path::Path::new(&workspace.canonical_path))
-                    })
-                    .flatten();
-                RegisteredWorkspace {
-                    id: workspace.id,
-                    display_name: workspace.display_name,
-                    kind: Some(workspace.kind),
-                    roles,
-                    repo,
-                }
+            .zip(details)
+            .map(|(workspace, (roles, repo))| RegisteredWorkspace {
+                id: workspace.id,
+                display_name: workspace.display_name,
+                kind: Some(workspace.kind),
+                roles,
+                repo,
             })
             .collect(),
+    }
+}
+
+/// Each directory workspace root's roles ([`workspace_roles`]) and
+/// repository key (`repo::workspace_repo`), read on a blocking thread;
+/// `None` for a root that is `None`, and for every root if the reads fail.
+pub async fn workspace_details(
+    node: &Node,
+    roots: Vec<Option<String>>,
+) -> Vec<(Option<Vec<WorkspaceRole>>, Option<String>)> {
+    let count = roots.len();
+    let config = node.config.clone();
+    let read = tokio::task::spawn_blocking(move || {
+        roots
+            .into_iter()
+            .map(|root| match root {
+                Some(root) => (
+                    workspace_roles(&config, &root),
+                    crate::repo::workspace_repo(std::path::Path::new(&root)),
+                ),
+                None => (None, None),
+            })
+            .collect()
+    });
+    match read.await {
+        Ok(details) => details,
+        Err(error) => {
+            crate::log::warn(&format!("workspace roles and repositories: {error}"));
+            vec![(None, None); count]
+        }
     }
 }
 
