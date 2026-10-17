@@ -28,6 +28,10 @@ use std::collections::HashMap;
 use std::io::{BufRead, IsTerminal, Write};
 use std::process::ExitCode;
 use std::rc::Rc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::{Duration, Instant};
 
 use rquickjs::context::EvalOptions;
@@ -140,6 +144,257 @@ impl State {
 }
 
 type Shared = Rc<RefCell<State>>;
+
+// QuickJS' built-in memory limit rejects an allocation before calling the
+// allocator. When it then cannot allocate the `InternalError`, QuickJS
+// deliberately throws `null`. Bound the Rust allocator instead so the host
+// can stop an exhausted execution without inspecting that ambiguous value.
+#[allow(unsafe_code)]
+mod oom_allocator {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    use rquickjs::allocator::{Allocator, RustAllocator};
+
+    /// The cap counts the rounded payload, RustAllocator's size header and an
+    /// additional eight-byte accounting allowance on every platform.
+    pub(super) struct BudgetedAllocator {
+        used: usize,
+        limit: usize,
+        oom: Arc<AtomicBool>,
+    }
+
+    const ALLOC_ALIGNMENT: usize = std::mem::align_of::<u64>();
+    const ALLOC_HEADER_BYTES: usize = if std::mem::size_of::<usize>() > ALLOC_ALIGNMENT {
+        std::mem::size_of::<usize>()
+    } else {
+        ALLOC_ALIGNMENT
+    };
+    const ALLOC_OVERHEAD_BYTES: usize = 8;
+
+    impl BudgetedAllocator {
+        pub(super) fn new(limit: usize, oom: Arc<AtomicBool>) -> Self {
+            Self {
+                used: 0,
+                limit,
+                oom,
+            }
+        }
+
+        /// RustAllocator rounds to its u64 alignment and prepends a size
+        /// header. Check every addition before asking it to allocate, including
+        /// that header, so adversarial sizes cannot wrap the cap calculation.
+        fn charge(size: usize) -> Option<usize> {
+            let aligned =
+                size.checked_add(ALLOC_ALIGNMENT.checked_sub(1)?)? & !(ALLOC_ALIGNMENT - 1);
+            aligned
+                .checked_add(ALLOC_HEADER_BYTES)?
+                .checked_add(ALLOC_OVERHEAD_BYTES)
+        }
+
+        fn fail(&self) -> *mut u8 {
+            self.oom.store(true, Ordering::Release);
+            std::ptr::null_mut()
+        }
+
+        fn next_used(&self, old_charge: usize, new_size: usize) -> Option<usize> {
+            self.used
+                .checked_sub(old_charge)?
+                .checked_add(Self::charge(new_size)?)
+                .filter(|used| *used <= self.limit)
+        }
+    }
+
+    // SAFETY: Every allocation is delegated to RustAllocator, and this
+    // wrapper preserves its alignment, usable-size, ownership and realloc
+    // failure guarantees. `used` is updated only after successful operations.
+    unsafe impl Allocator for BudgetedAllocator {
+        fn alloc(&mut self, size: usize) -> *mut u8 {
+            let Some(next_used) = self.next_used(0, size) else {
+                return self.fail();
+            };
+            let ptr = RustAllocator.alloc(size);
+            if ptr.is_null() {
+                return self.fail();
+            }
+            // SAFETY: `ptr` is a live allocation returned by RustAllocator.
+            debug_assert!(
+                Self::rounded(size)
+                    .is_some_and(|rounded| unsafe { RustAllocator::usable_size(ptr) } == rounded)
+            );
+            self.used = next_used;
+            ptr
+        }
+
+        fn calloc(&mut self, count: usize, size: usize) -> *mut u8 {
+            if count == 0 || size == 0 {
+                // Match RustAllocator's zero-sized calloc behavior. This is
+                // not an allocation failure and must not latch OOM.
+                return std::ptr::null_mut();
+            }
+            let Some(total) = count.checked_mul(size) else {
+                return self.fail();
+            };
+            let Some(next_used) = self.next_used(0, total) else {
+                return self.fail();
+            };
+            let ptr = RustAllocator.calloc(count, size);
+            if ptr.is_null() {
+                return self.fail();
+            }
+            // SAFETY: `ptr` is a live allocation returned by RustAllocator.
+            debug_assert!(
+                Self::rounded(total)
+                    .is_some_and(|rounded| unsafe { RustAllocator::usable_size(ptr) } == rounded)
+            );
+            self.used = next_used;
+            ptr
+        }
+
+        unsafe fn dealloc(&mut self, ptr: *mut u8) {
+            if ptr.is_null() {
+                return;
+            }
+            // SAFETY: the trait contract guarantees this pointer came from
+            // this allocator, which delegates to RustAllocator.
+            let actual = unsafe { RustAllocator::usable_size(ptr) };
+            let charge = Self::charge(actual).unwrap_or(usize::MAX);
+            debug_assert!(self.used >= charge, "allocator accounting underflow");
+            self.used = self.used.saturating_sub(charge);
+            // SAFETY: same ownership guarantee as the usable-size call above.
+            unsafe { RustAllocator.dealloc(ptr) };
+        }
+
+        unsafe fn realloc(&mut self, ptr: *mut u8, new_size: usize) -> *mut u8 {
+            if ptr.is_null() {
+                return self.alloc(new_size);
+            }
+            if new_size == 0 {
+                // SAFETY: the trait contract guarantees this pointer came from
+                // this allocator; the zero-size request frees it.
+                unsafe { self.dealloc(ptr) };
+                return std::ptr::null_mut();
+            }
+            // SAFETY: the trait contract guarantees this pointer came from
+            // this allocator, which delegates to RustAllocator.
+            let old_usable = unsafe { RustAllocator::usable_size(ptr) };
+            let Some(old_charge) = Self::charge(old_usable) else {
+                return self.fail();
+            };
+            let Some(next_used) = self.next_used(old_charge, new_size) else {
+                return self.fail();
+            };
+            // SAFETY: `ptr` belongs to RustAllocator and a null return leaves
+            // the original allocation valid, as required by the trait.
+            let resized = unsafe { RustAllocator.realloc(ptr, new_size) };
+            if resized.is_null() {
+                return self.fail();
+            }
+            // SAFETY: `resized` is the successful RustAllocator result.
+            debug_assert!(
+                Self::rounded(new_size).is_some_and(|rounded| unsafe {
+                    RustAllocator::usable_size(resized)
+                } == rounded)
+            );
+            self.used = next_used;
+            resized
+        }
+
+        unsafe fn usable_size(ptr: *mut u8) -> usize {
+            if ptr.is_null() {
+                0
+            } else {
+                // SAFETY: the caller's trait contract requires a pointer
+                // allocated by this allocator.
+                unsafe { RustAllocator::usable_size(ptr) }
+            }
+        }
+    }
+
+    impl BudgetedAllocator {
+        fn rounded(size: usize) -> Option<usize> {
+            size.checked_add(ALLOC_ALIGNMENT - 1)
+                .map(|aligned| aligned & !(ALLOC_ALIGNMENT - 1))
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{ALLOC_ALIGNMENT, ALLOC_HEADER_BYTES, ALLOC_OVERHEAD_BYTES, BudgetedAllocator};
+        use rquickjs::allocator::Allocator;
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        fn charge(size: usize) -> usize {
+            let aligned = (size + ALLOC_ALIGNMENT - 1) & !(ALLOC_ALIGNMENT - 1);
+            aligned + ALLOC_HEADER_BYTES + ALLOC_OVERHEAD_BYTES
+        }
+
+        fn allocator(limit: usize) -> (BudgetedAllocator, Arc<AtomicBool>) {
+            let oom = Arc::new(AtomicBool::new(false));
+            (BudgetedAllocator::new(limit, oom.clone()), oom)
+        }
+
+        #[test]
+        fn realloc_preserves_data_and_updates_accounting_for_growth_and_shrink() {
+            let (mut allocator, oom) = allocator(1024);
+            let ptr = allocator.alloc(9);
+            assert!(!ptr.is_null());
+            assert_eq!(allocator.used, charge(9));
+            unsafe { ptr.copy_from_nonoverlapping(b"hello".as_ptr(), 5) };
+
+            let ptr = unsafe { allocator.realloc(ptr, 25) };
+            assert!(!ptr.is_null());
+            assert_eq!(unsafe { std::slice::from_raw_parts(ptr, 5) }, b"hello");
+            assert_eq!(allocator.used, charge(25));
+
+            let ptr = unsafe { allocator.realloc(ptr, 7) };
+            assert!(!ptr.is_null());
+            assert_eq!(unsafe { std::slice::from_raw_parts(ptr, 5) }, b"hello");
+            assert_eq!(allocator.used, charge(7));
+            assert!(!oom.load(Ordering::Acquire));
+
+            unsafe { allocator.dealloc(ptr) };
+            assert_eq!(allocator.used, 0);
+        }
+
+        #[test]
+        fn denied_realloc_keeps_old_allocation_data_and_accounting() {
+            let (mut allocator, oom) = allocator(charge(8));
+            let ptr = allocator.alloc(8);
+            assert!(!ptr.is_null());
+            unsafe { ptr.copy_from_nonoverlapping(b"keep".as_ptr(), 4) };
+            let used = allocator.used;
+
+            let failed = unsafe { allocator.realloc(ptr, 32) };
+            assert!(failed.is_null());
+            assert_eq!(allocator.used, used);
+            assert_eq!(unsafe { std::slice::from_raw_parts(ptr, 4) }, b"keep");
+            assert!(oom.load(Ordering::Acquire));
+
+            unsafe { allocator.dealloc(ptr) };
+            assert_eq!(allocator.used, 0);
+        }
+
+        #[test]
+        fn checked_sizes_latch_oom_but_zero_calloc_does_not() {
+            let (mut allocator, oom) = allocator(usize::MAX);
+            assert!(allocator.calloc(0, 4).is_null());
+            assert!(!oom.load(Ordering::Acquire));
+            assert!(allocator.calloc(usize::MAX, 2).is_null());
+            assert!(oom.load(Ordering::Acquire));
+            assert!(allocator.alloc(usize::MAX).is_null());
+            assert!(oom.load(Ordering::Acquire));
+            assert_eq!(allocator.used, 0);
+        }
+    }
+}
+
+use oom_allocator::BudgetedAllocator;
 
 /// `stringArg(handle)`: the text of a string argument, else ''. A string
 /// with a lone surrogate (no UTF-8 form) is made well-formed first, with
@@ -267,14 +522,22 @@ fn execute(start: &Json, input: &mut impl BufRead) -> Result<(), String> {
         Some(store) => store.to_owned(),
         None => "{}".to_owned(),
     };
-    let runtime = Runtime::new().map_err(|e| e.to_string())?;
-    runtime.set_memory_limit(budgets::QUICKJS_HEAP_BYTES);
+    let oom = Arc::new(AtomicBool::new(false));
+    let runtime = Runtime::new_with_alloc(BudgetedAllocator::new(
+        budgets::QUICKJS_HEAP_BYTES,
+        oom.clone(),
+    ))
+    .map_err(|e| e.to_string())?;
     runtime.set_max_stack_size(budgets::QUICKJS_STACK_BYTES);
     // A busy script cannot see its host vanish: stop when this process was
     // orphaned (checked about every 100 ms; QuickJS polls this often).
     let parent = std::os::unix::process::parent_id();
     let mut last_check = Instant::now();
+    let interrupt_oom = oom.clone();
     runtime.set_interrupt_handler(Some(Box::new(move || {
+        if interrupt_oom.load(Ordering::Acquire) {
+            return true;
+        }
         if last_check.elapsed() < Duration::from_millis(100) {
             return false;
         }
@@ -334,7 +597,11 @@ fn execute(start: &Json, input: &mut impl BufRead) -> Result<(), String> {
                 .eval_with_options::<(), _>(prelude(), eval_options("ptc-sdk.js"))
                 .is_err()
             {
-                return Err(exception_message(&ctx, "the SDK did not load"));
+                return Err(if oom.load(Ordering::Acquire) {
+                    "out of memory".to_owned()
+                } else {
+                    exception_message(&ctx, "the SDK did not load")
+                });
             }
             let evaluated = ctx.eval_with_options::<Promise, _>(
                 format!("{code}\n;__ptc_finish(__ptc_main());"),
@@ -342,10 +609,19 @@ fn execute(start: &Json, input: &mut impl BufRead) -> Result<(), String> {
             );
             Ok(match evaluated {
                 Ok(promise) => Ok(Persistent::save(&ctx, promise)),
-                Err(_) => Err(exception_message(&ctx, "evaluation failed")),
+                Err(_) => Err(if oom.load(Ordering::Acquire) {
+                    "out of memory".to_owned()
+                } else {
+                    exception_message(&ctx, "evaluation failed")
+                }),
             })
         },
-    )?;
+    );
+    if oom.load(Ordering::Acquire) {
+        finish(failure("out of memory"));
+        return Ok(());
+    }
+    let main = main?;
     let main = match main {
         Ok(main) => main,
         Err(message) => {
@@ -360,8 +636,15 @@ fn execute(start: &Json, input: &mut impl BufRead) -> Result<(), String> {
         if state.borrow().finished {
             return;
         }
+        if oom.load(Ordering::Acquire) {
+            return finish(failure("out of memory"));
+        }
         loop {
-            match runtime.execute_pending_job() {
+            let job = runtime.execute_pending_job();
+            if oom.load(Ordering::Acquire) {
+                return finish(failure("out of memory"));
+            }
+            match job {
                 Ok(true) => {}
                 Ok(false) => break,
                 Err(job) => {
@@ -389,6 +672,11 @@ fn execute(start: &Json, input: &mut impl BufRead) -> Result<(), String> {
                 }),
             }
         });
+        // Reading the settled value can itself allocate in QuickJS (for
+        // example, converting a UTF-16 string). Preserve the same OOM report.
+        if oom.load(Ordering::Acquire) {
+            return finish(failure("out of memory"));
+        }
         match outcome {
             Some(outcome) => finish(outcome),
             None => {

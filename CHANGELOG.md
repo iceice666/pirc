@@ -4,6 +4,11 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Fixed
+
+- Gateway and node startup retry brief SQLite WAL-mode lock conflicts when processes open the same database concurrently.
+- PTC scripts that exhaust their JavaScript heap report an out-of-memory error reliably, including when the engine cannot allocate an error object.
+
 Same node protocol (11) and database schemas; upgrade the gateway and every node together as usual (an older node answers the new project-file routes with 404).
 
 ### Added

@@ -2614,6 +2614,7 @@ expression: t.into_value()
       },
       {
         "data": {
+          "interactionEpoch": 0,
           "interactionId": "memory:<p11>:0"
         },
         "epoch": 0,

@@ -750,6 +750,26 @@ async fn a_runaway_loop_is_interrupted_by_the_budget() {
     assert!(started.elapsed() < Duration::from_secs(5));
 }
 
+async fn a_caught_out_of_memory_still_interrupts_a_busy_script() {
+    let started = Instant::now();
+    let Run { report, .. } = run(
+        "try { const a = []; for (;;) a.push(\"x\".repeat(1 << 20) + a.length); } catch (_) {} for (;;) {}",
+        vec![],
+        Options {
+            timeout_ms: Some(5_000.0),
+            ..Options::default()
+        },
+    )
+    .await;
+    assert_eq!(report.status, "failed", "{}", message_of(&report));
+    assert!(
+        message_of(&report).to_lowercase().contains("out of memory"),
+        "{}",
+        message_of(&report)
+    );
+    assert!(started.elapsed() < Duration::from_secs(5));
+}
+
 async fn memory_exhaustion_and_stack_overflow_end_the_script_not_the_host() {
     let memory = run(
         "const a = []; for (;;) a.push(\"x\".repeat(1 << 20) + a.length);",
@@ -828,6 +848,7 @@ async fn the_guest_tears_down_cleanly_after_any_outcome() {
     for (code, expected) in [
         ("return 1;", "\"ok\":true"),
         ("throw new Error(\"x\");", "Error: x"),
+        ("throw null;", "Uncaught null"),
         (
             "const a = []; for (;;) a.push(\"x\".repeat(1 << 20) + a.length);",
             "out of memory",
@@ -1294,6 +1315,7 @@ fn main() -> std::process::ExitCode {
         a_par_left_running_after_its_parent_closed_keeps_its_own_scope,
         oversized_results_are_refused_but_still_count_as_completed,
         a_runaway_loop_is_interrupted_by_the_budget,
+        a_caught_out_of_memory_still_interrupts_a_busy_script,
         memory_exhaustion_and_stack_overflow_end_the_script_not_the_host,
         the_guest_tears_down_cleanly_after_any_outcome,
         a_crash_after_side_effects_still_reports_them,

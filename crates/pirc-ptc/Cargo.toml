@@ -32,8 +32,14 @@ nix = { version = "0.31", features = ["fs", "process", "resource", "signal"], op
 seccompiler = { version = "0.5", optional = true }
 libc = { version = "0.2", optional = true }
 
-[lints]
-workspace = true
+# The QuickJS Allocator bridge needs a narrowly scoped unsafe impl. Keep
+# unsafe denied for the rest of this package, but do not inherit the workspace
+# `forbid`, which cannot be overridden by that module's local `allow`.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
 
 # Escape tests for the hardened guest; each case runs in a re-executed child.
 [[test]]

@@ -349,23 +349,25 @@ mod tests {
         let mut output = Vec::new();
         let mut buffer = [0; 4096];
         let run = async {
+            // Exit notification can arrive before the final PTY bytes are
+            // read. Drain to EOF (EIO on Linux) before reaping the child so
+            // the host's isolation result cannot be lost to that race.
             loop {
-                tokio::select! {
-                    _ = child.wait() => break,
-                    read = master.read(&mut buffer) => match read {
-                        Ok(n @ 1..) => output.extend_from_slice(&buffer[..n]),
-                        _ => {
-                            let _ = child.wait().await;
-                            break;
-                        }
-                    },
+                match master.read(&mut buffer).await {
+                    Ok(0) => break,
+                    Ok(n) => output.extend_from_slice(&buffer[..n]),
+                    Err(error) if error.raw_os_error() == Some(nix::libc::EIO) => break,
+                    Err(error) => panic!("could not read the probe PTY: {error}"),
                 }
             }
+            child.wait().await
         };
-        tokio::time::timeout(Duration::from_secs(60), run)
+        let status = tokio::time::timeout(Duration::from_secs(60), run)
             .await
-            .expect("the probe did not finish");
+            .expect("the probe did not finish")
+            .expect("could not reap the probe");
         let output = String::from_utf8_lossy(&output).replace('\r', "");
+        assert!(status.success(), "probe exited with {status}: {output}");
         assert!(output.contains("PROBE node: tty"), "{output}");
         assert!(output.contains("PROBE host: no-tty"), "{output}");
         assert!(!output.contains("PROBE host: tty"), "{output}");
