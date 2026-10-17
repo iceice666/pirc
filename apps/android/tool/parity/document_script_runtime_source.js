@@ -5258,6 +5258,8 @@
       activeState.canvas = createDocumentCanvas({document, ensureElementId, diagnostic,
         textMetricError: input && input.canvasTextError,
         measureText: nativeCanvasTextEngine && nativeCanvasTextEngine.measureText,
+        measureInk: nativeCanvasTextEngine && nativeCanvasTextEngine.measureInk,
+        fontBaselineOffset: nativeCanvasTextEngine && nativeCanvasTextEngine.fontBaselineOffset,
         resolveImage: source => activeState.images.canvasSource(source)});
       activeState.canvas.install();
       defineGlobal('TextMetrics',activeState.canvas.TextMetrics,false);

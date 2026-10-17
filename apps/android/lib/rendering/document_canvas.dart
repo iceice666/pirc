@@ -135,6 +135,7 @@ class NativeDocumentCanvasState {
     required this.font,
     required this.textAlign,
     required this.textBaseline,
+    required this.textBaselineOffset,
     required this.direction,
     required this.path,
     required this.clips,
@@ -156,6 +157,7 @@ class NativeDocumentCanvasState {
   final NativeDocumentCanvasFont font;
   final String textAlign;
   final String textBaseline;
+  final double? textBaselineOffset;
   final TextDirection direction;
   final List<NativeDocumentCanvasPathSegment>? path;
   final List<NativeDocumentCanvasClip> clips;
@@ -793,6 +795,12 @@ class _NativeCanvasDecoder {
         'Unsupported Canvas text baseline "$textBaseline".',
       );
     }
+    final textBaselineOffset = source.containsKey('textBaselineOffset')
+        ? _readNumber(
+            source['textBaselineOffset'],
+            '$prefix.textBaselineOffset',
+          )
+        : null;
     final directionSource = _optionalString(
       source['direction'],
       'inherit',
@@ -855,6 +863,7 @@ class _NativeCanvasDecoder {
       font: font,
       textAlign: textAlign,
       textBaseline: textBaseline,
+      textBaselineOffset: textBaselineOffset,
       direction: direction,
       path: path,
       clips: List.unmodifiable(clips),
@@ -1373,6 +1382,7 @@ NativeDocumentCanvasState _withBlendMode(
   font: state.font,
   textAlign: state.textAlign,
   textBaseline: state.textBaseline,
+  textBaselineOffset: state.textBaselineOffset,
   direction: state.direction,
   path: state.path,
   clips: state.clips,
@@ -1562,14 +1572,19 @@ void _paintText(Canvas canvas, NativeDocumentCanvasCommand command) {
     _ => x,
   };
   final metrics = lineMetrics.first;
-  final baseline = switch (state.textBaseline) {
-    'top' => metrics.baseline - metrics.ascent,
-    'hanging' => metrics.baseline - metrics.ascent * .8,
-    'middle' => metrics.baseline - (metrics.ascent - metrics.descent) / 2,
-    'ideographic' => metrics.baseline + metrics.descent * .5,
-    'bottom' => metrics.baseline + metrics.descent,
-    _ => metrics.baseline,
-  };
+  final legacyBaseline = state.textBaselineOffset == null
+      ? switch (state.textBaseline) {
+          'top' => metrics.baseline - metrics.ascent,
+          'hanging' => metrics.baseline - metrics.ascent * .8,
+          'middle' => metrics.baseline - (metrics.ascent - metrics.descent) / 2,
+          'ideographic' => metrics.baseline + metrics.descent * .5,
+          'bottom' => metrics.baseline + metrics.descent,
+          _ => metrics.baseline,
+        }
+      : null;
+  final textTop = state.textBaselineOffset == null
+      ? y - legacyBaseline!
+      : y + state.textBaselineOffset! - metrics.baseline;
   final horizontalScale = maxWidth.isFinite && width > maxWidth && width > 0
       ? maxWidth / width
       : 1.0;
@@ -1584,9 +1599,9 @@ void _paintText(Canvas canvas, NativeDocumentCanvasCommand command) {
   if (horizontalScale != 1) {
     canvas.translate(drawLeft, 0);
     canvas.scale(horizontalScale, 1);
-    painter.paint(canvas, Offset(0, y - baseline));
+    painter.paint(canvas, Offset(0, textTop));
   } else {
-    painter.paint(canvas, Offset(drawLeft, y - baseline));
+    painter.paint(canvas, Offset(drawLeft, textTop));
   }
   canvas.restore();
   painter.dispose();

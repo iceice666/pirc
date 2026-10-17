@@ -200,6 +200,43 @@ void main() {
     expect(maxY, lessThan(35));
   });
 
+  testWidgets('native text baseline metadata moves rendered ink', (
+    tester,
+  ) async {
+    const width = 64;
+    const height = 48;
+    final points = [
+      for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++) (x, y),
+    ];
+    NativeDocumentCanvasSnapshot draw(double baselineOffset) =>
+        _snapshot(width, height, [
+          _command(
+            'fillText',
+            ['A', 8, 24],
+            state: _state(
+              fillStyle: 'black',
+              font: '18px Arial',
+              textBaselineOffset: baselineOffset,
+            ),
+          ),
+        ]);
+
+    final first = _topInkRow(
+      await _renderSamples(tester, draw(1.25), points),
+      width,
+      height,
+    );
+    final shifted = _topInkRow(
+      await _renderSamples(tester, draw(6.25), points),
+      width,
+      height,
+    );
+
+    expect(first, greaterThanOrEqualTo(0));
+    expect(shifted, first + 5);
+  });
+
   testWidgets('fillText and strokeText normalize whitespace before shaping', (
     tester,
   ) async {
@@ -283,6 +320,39 @@ void main() {
       expect(emptyGradient.commands, hasLength(1));
     },
   );
+
+  test('decoder validates optional native text baseline metadata', () {
+    Map<String, Object?> textSnapshot({double? offset}) => _snapshotJson(8, 8, [
+      _command('fillText', [
+        'A',
+        0,
+        4,
+      ], state: _state(textBaselineOffset: offset)),
+    ]);
+
+    final missing = NativeDocumentCanvasSnapshot.fromJson(textSnapshot());
+    expect(missing.commands.single.state.textBaselineOffset, isNull);
+
+    final finite = NativeDocumentCanvasSnapshot.fromJson(
+      textSnapshot(offset: -2.5),
+    );
+    expect(finite.commands.single.state.textBaselineOffset, -2.5);
+
+    for (final invalidOffset in [
+      double.nan,
+      double.infinity,
+      double.negativeInfinity,
+      1e9 + 1,
+    ]) {
+      expect(
+        () => NativeDocumentCanvasSnapshot.fromJson(
+          textSnapshot(offset: invalidOffset),
+        ),
+        throwsA(isA<NativeDocumentCanvasException>()),
+        reason: 'baseline offset $invalidOffset must be rejected',
+      );
+    }
+  });
 
   test('decoder rejects dashed paths that exceed the paint work budget', () {
     final snapshot = _snapshotJson(8, 8, [
@@ -411,6 +481,15 @@ Future<List<List<int>>> _renderSamplesFromPicture(
   }
 }
 
+int _topInkRow(List<List<int>> pixels, int width, int height) {
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      if (pixels[y * width + x][3] != 0) return y;
+    }
+  }
+  return -1;
+}
+
 NativeDocumentCanvasSnapshot _snapshot(
   int width,
   int height,
@@ -448,6 +527,7 @@ Map<String, Object?> _state({
   String font = '10px sans-serif',
   String textAlign = 'start',
   String textBaseline = 'alphabetic',
+  double? textBaselineOffset,
   List<Map<String, Object?>>? path,
   List<Map<String, Object?>> clips = const [],
 }) => <String, Object?>{
@@ -465,6 +545,7 @@ Map<String, Object?> _state({
   'font': font,
   'textAlign': textAlign,
   'textBaseline': textBaseline,
+  'textBaselineOffset': ?textBaselineOffset,
   'direction': 'ltr',
   'clips': clips,
   'path': ?path,

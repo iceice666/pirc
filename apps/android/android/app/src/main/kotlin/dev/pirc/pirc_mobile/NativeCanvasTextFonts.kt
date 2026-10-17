@@ -17,7 +17,9 @@ internal object NativeCanvasTextFonts {
     private const val MAX_FAMILIES = 16
     private const val MAX_SAMPLE_LENGTH = 4096
     private const val MAX_RESOURCES = 32
-    private const val MAX_TOTAL_FONT_BYTES = 48 * 1024 * 1024
+    // Complete Latin/CJK sans + serif outlines must fit without stripping real ink.
+    // The isolate heap and evaluation limits remain independently bounded.
+    private const val MAX_TOTAL_FONT_BYTES = 64 * 1024 * 1024
     private const val LATIN_DIGITS_SAMPLE = "AaZz 0123456789 "
 
     private val styles = listOf(
@@ -92,17 +94,29 @@ internal object NativeCanvasTextFonts {
                                 (axes.firstOrNull { it.axis == "ital" }?.value ?: 0.0) >= 0.5 ||
                                 (axes.firstOrNull { it.axis == "slnt" }?.value ?: 0.0) != 0.0
                             )
+                        // API 35 exposes the shaper's per-glyph synthesis flags. Earlier
+                        // releases fall back to comparing the requested style to the selected
+                        // Font style/axes using Minikin's >=600 / two-grade fake-bold threshold;
+                        // this is an inference, not an Android-reported flag.
+                        val fakeBold = overrides.fakeBold ?: (
+                            requestedStyle.weight >= 600 && requestedStyle.weight - weight >= 200
+                            )
+                        val fakeItalic = overrides.fakeItalic ?: (requestedStyle.italic && !italic)
                         val key = ShapedFontKey(
                             sourceIdentifier = font.sourceIdentifier,
                             originalTtcIndex = font.ttcIndex,
                             weight = weight,
                             italic = italic,
+                            fakeBold = fakeBold,
+                            fakeItalic = fakeItalic,
                             axes = axes.map { AxisKey(it.axis, it.floatBits) },
                         )
                         val id = shapedFontIds[key] ?: captureFont(
                             font = font,
                             weight = weight,
                             italic = italic,
+                            fakeBold = fakeBold,
+                            fakeItalic = fakeItalic,
                             axes = axes,
                             resourcesById = resourcesById,
                             binaryByDigest = binaryByDigest,
@@ -149,13 +163,26 @@ internal object NativeCanvasTextFonts {
         glyphIndex: Int,
     ): GlyphVariationOverrides {
         // PositionedGlyphs exposed variable-font overrides starting in API 35. On API 31-34,
-        // the selected Font's own axes and FontStyle are the available public metadata.
-        if (Build.VERSION.SDK_INT < 35) return GlyphVariationOverrides(weight = null, italic = null)
+        // the selected Font's own axes and FontStyle are the available public metadata. Fake
+        // style flags have the same API 35 boundary and are inferred by the caller on 31-34.
+        if (Build.VERSION.SDK_INT < 35) {
+            return GlyphVariationOverrides(
+                weight = null,
+                italic = null,
+                fakeBold = null,
+                fakeItalic = null,
+            )
+        }
 
         val noOverride = PositionedGlyphs.NO_OVERRIDE
         val weight = glyphs.getWeightOverride(glyphIndex).takeUnless { it == noOverride }
         val italic = glyphs.getItalicOverride(glyphIndex).takeUnless { it == noOverride }
-        return GlyphVariationOverrides(weight = weight, italic = italic)
+        return GlyphVariationOverrides(
+            weight = weight,
+            italic = italic,
+            fakeBold = glyphs.getFakeBold(glyphIndex),
+            fakeItalic = glyphs.getFakeItalic(glyphIndex),
+        )
     }
 
     private fun effectiveAxes(
@@ -187,6 +214,8 @@ internal object NativeCanvasTextFonts {
         font: Font,
         weight: Int,
         italic: Boolean,
+        fakeBold: Boolean,
+        fakeItalic: Boolean,
         axes: List<AxisValue>,
         resourcesById: LinkedHashMap<String, CapturedResource>,
         binaryByDigest: HashMap<String, ByteArray>,
@@ -216,10 +245,8 @@ internal object NativeCanvasTextFonts {
             // Android's Font buffer can reference an entire TTC. Extract directly from a
             // read-only duplicate so only the selected face tables are copied into the result.
             val extracted = NativeCanvasFontFace.extract(font.buffer.duplicate(), originalTtcIndex)
-            // Only horizontal advance widths are exposed to Canvas. Supported CFF/CFF2 faces
-            // retain real metrics and shaping tables without copying megabytes of outlines.
-            // Flutter still paints with the original system font; ink metrics are unavailable.
-            val bytes = NativeCanvasFontMetricsFont.deriveAdvanceFont(extracted) ?: extracted
+            // Preserve complete CFF/CFF2 outlines so CanvasKit can return real ink bounds.
+            val bytes = extracted
             digest = sha256(bytes)
             val existingBinary = binaryByDigest[digest]
             sharedBytes = if (existingBinary != null) {
@@ -248,6 +275,8 @@ internal object NativeCanvasTextFonts {
             append('|').append(originalTtcIndex)
             append('|').append(weight)
             append('|').append(if (italic) 1 else 0)
+            append('|').append(if (fakeBold) 1 else 0)
+            append('|').append(if (fakeItalic) 1 else 0)
             for (axis in axes) {
                 append('|').append(axis.axis).append(':').append(hexInt(axis.floatBits))
             }
@@ -270,6 +299,8 @@ internal object NativeCanvasTextFonts {
             originalTtcIndex = originalTtcIndex,
             weight = weight,
             italic = italic,
+            fakeBold = fakeBold,
+            fakeItalic = fakeItalic,
             axes = axes,
             label = label,
         )
@@ -296,7 +327,12 @@ internal object NativeCanvasTextFonts {
 
     private data class RequestedStyle(val weight: Int, val italic: Boolean)
 
-    private data class GlyphVariationOverrides(val weight: Float?, val italic: Float?)
+    private data class GlyphVariationOverrides(
+        val weight: Float?,
+        val italic: Float?,
+        val fakeBold: Boolean?,
+        val fakeItalic: Boolean?,
+    )
 
     private data class FontBinary(val digest: String, val bytes: ByteArray)
 
@@ -311,6 +347,8 @@ internal object NativeCanvasTextFonts {
         val originalTtcIndex: Int,
         val weight: Int,
         val italic: Boolean,
+        val fakeBold: Boolean,
+        val fakeItalic: Boolean,
         val axes: List<AxisKey>,
     )
 
@@ -326,6 +364,8 @@ internal object NativeCanvasTextFonts {
         val originalTtcIndex: Int,
         val weight: Int,
         val italic: Boolean,
+        val fakeBold: Boolean,
+        val fakeItalic: Boolean,
         val axes: List<AxisValue>,
         val label: String,
     ) {
@@ -336,6 +376,8 @@ internal object NativeCanvasTextFonts {
             "originalTtcIndex" to originalTtcIndex,
             "weight" to weight,
             "italic" to italic,
+            "fakeBold" to fakeBold,
+            "fakeItalic" to fakeItalic,
             "axes" to axes.map { mapOf("axis" to it.axis, "value" to it.value) },
             "label" to label,
         )

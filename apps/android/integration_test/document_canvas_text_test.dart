@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:html/parser.dart' as html;
 import 'package:integration_test/integration_test.dart';
@@ -16,7 +17,15 @@ class _ProbeGateway extends Gateway {
 
   @override
   Future<dynamic> call(String method, [Json args = const {}]) async {
-    final result = await super.call(method, args);
+    dynamic result;
+    try {
+      result = await super.call(method, args);
+    } catch (error) {
+      if (method == 'documentScriptCanvasTextResources') {
+        debugPrintSynchronously('PIRC_NATIVE_CANVAS_FONT_ERROR $error');
+      }
+      rethrow;
+    }
     if (method == 'documentScriptCanvasTextResources') {
       fontBytes = obj(result)['fontBytes'] as int?;
     } else if (method == 'documentScriptEvaluate' &&
@@ -31,7 +40,7 @@ class _ProbeGateway extends Gateway {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('Canvas measureText uses matched native Skia fonts synchronously', (
+  testWidgets('Canvas advances and ink use matched native Skia fonts synchronously', (
     tester,
   ) async {
     final rows = [
@@ -75,17 +84,61 @@ void main() {
       {'font': '16px monospace', 'family': 'monospace', 'text': '中文繁體測試'},
       {'font': '16px Arial', 'family': 'Arial', 'text': '\tHello\n世界'},
       {'font': '16px Arial', 'family': 'Arial', 'text': ''},
+      {'font': '16px Arial', 'family': 'Arial', 'text': 'office A\u0301 To'},
+      {
+        'font': '16.5px Arial',
+        'family': 'Arial',
+        'text': 'AV To',
+        'size': 16.5,
+      },
+      {
+        'font': '16px Arial',
+        'family': 'Arial',
+        'text': 'AV fi',
+        'direction': 'rtl',
+      },
+      {
+        'font': '16px Arial',
+        'family': 'Arial',
+        'text': 'AV',
+        'baseline': 'top',
+      },
+      {
+        'font': '16px Arial',
+        'family': 'Arial',
+        'text': 'AV',
+        'baseline': 'middle',
+      },
+      {
+        'font': '16px Arial',
+        'family': 'Arial',
+        'text': 'AV',
+        'baseline': 'bottom',
+      },
     ];
+    const width = 512, lineHeight = 48, rasterScale = 4;
+    final height = rows.length * lineHeight + 64;
     final source =
-        '''<!doctype html><html><body><canvas id="c"></canvas><pre id="probe">WAIT</pre><script>
-var rows=${jsonEncode(rows)},ctx=document.getElementById('c').getContext('2d'),results=[];
-for(var row of rows){try{ctx.font=row.font;var before=ctx.font;var metrics=ctx.measureText(row.text);results.push({font:ctx.font,width:metrics.width,type:metrics instanceof TextMetrics,unchanged:ctx.font===before});}catch(e){results.push({error:e.name+': '+e.message})}}
-document.getElementById('probe').textContent=JSON.stringify(results);
-ctx.font='16px Arial';ctx.fillStyle='#ff0000';ctx.fillRect(0,0,ctx.measureText('中文繁體測試').width,8);
-ctx.fillStyle='#000000';ctx.fillText('Canvas label',0,30,undefined);
+        '''<!doctype html><html><body><canvas id="c" width="$width" height="$height"></canvas><pre id="probe">WAIT</pre><script>
+var rows=${jsonEncode(rows)},ctx=document.getElementById('c').getContext('2d'),results=[],started=Date.now();
+for(var i=0;i<rows.length;i++){var row=rows[i];try{
+ctx.font=row.font;ctx.direction=row.direction||'ltr';ctx.textAlign='left';ctx.textBaseline=row.baseline||'alphabetic';
+var before=ctx.font,metrics=ctx.measureText(row.text);
+results.push({font:ctx.font,width:metrics.width,type:metrics instanceof TextMetrics,unchanged:ctx.font===before,
+left:metrics.actualBoundingBoxLeft,right:metrics.actualBoundingBoxRight,ascent:metrics.actualBoundingBoxAscent,descent:metrics.actualBoundingBoxDescent});
+ctx.fillText(row.text,40,i*$lineHeight+32,undefined);
+}catch(e){results.push({error:e.name+': '+e.message})}}
+document.getElementById('probe').textContent=JSON.stringify({results:results,measureMs:Date.now()-started,heapBytes:__pircInkProbeEngine?__pircInkProbeEngine.heapBytes:null});
+ctx.font='16px Arial';ctx.fillStyle='#ff0000';ctx.fillRect(0,${rows.length * lineHeight},ctx.measureText('中文繁體測試').width,8);
 </script></body></html>''';
     final gateway = _ProbeGateway();
-    final scripts = NativeDocumentScripts(gateway);
+    // Capture the private engine only in this synthetic test document. The
+    // shipped runtime hides it; this measures live WASM growth after ink reads.
+    final scripts = NativeDocumentScripts(
+      gateway,
+      loadRuntime: () async =>
+          'globalThis.__pircInkProbeEngine=globalThis.__pircNativeCanvasText;\n${await rootBundle.loadString('assets/document-script-runtime.js')}',
+    );
     final startup = Stopwatch()..start();
     try {
       await scripts.start(
@@ -97,12 +150,17 @@ ctx.fillStyle='#000000';ctx.fillText('Canvas label',0,30,undefined);
         'PIRC_NATIVE_CANVAS_TEXT_RESOURCES ${jsonEncode({'startupMs': startup.elapsedMilliseconds, 'fontBytes': gateway.fontBytes, 'heapBytes': gateway.heapBytes, 'fontCount': gateway.fontCount})}',
       );
       expect(scripts.ready, isTrue, reason: '${scripts.diagnostics}');
+      expect(scripts.diagnostics, isEmpty);
       final raw = html
           .parse(scripts.content!.text)
           .getElementById('probe')!
           .text;
       debugPrintSynchronously('PIRC_NATIVE_CANVAS_TEXT $raw');
-      final actual = jsonDecode(raw) as List;
+      final probe = jsonDecode(raw) as Map;
+      debugPrintSynchronously(
+        'PIRC_NATIVE_CANVAS_INK_RESOURCES ${jsonEncode({'measureMs': probe['measureMs'], 'heapBytesAfterInk': probe['heapBytes']})}',
+      );
+      final actual = probe['results'] as List;
       expect(actual, hasLength(rows.length));
       for (var i = 0; i < rows.length; i++) {
         final row = rows[i], entry = actual[i] as Map;
@@ -120,7 +178,7 @@ ctx.fillStyle='#000000';ctx.fillText('Canvas label',0,30,undefined);
             text: text,
             style: TextStyle(
               fontFamily: row['family'] as String,
-              fontSize: 16,
+              fontSize: (row['size'] as num?)?.toDouble() ?? 16,
               fontWeight: row['bold'] == true
                   ? FontWeight.w700
                   : FontWeight.w400,
@@ -130,7 +188,9 @@ ctx.fillStyle='#000000';ctx.fillText('Canvas label',0,30,undefined);
               height: 1,
             ),
           ),
-          textDirection: TextDirection.ltr,
+          textDirection: row['direction'] == 'rtl'
+              ? TextDirection.rtl
+              : TextDirection.ltr,
           textScaler: TextScaler.noScaling,
           maxLines: 1,
         )..layout();
@@ -147,35 +207,84 @@ ctx.fillStyle='#000000';ctx.fillText('Canvas label',0,30,undefined);
         painter.dispose();
       }
       final snapshot = scripts.canvases.values.single;
-      expect(snapshot.commands.map((command) => command.op), [
-        'fillRect',
-        'fillText',
-      ]);
+      expect(
+        snapshot.commands.where((command) => command.op == 'fillText'),
+        hasLength(rows.length),
+      );
+      expect(snapshot.commands.last.op, 'fillRect');
       final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
+      final canvas = Canvas(recorder)..scale(rasterScale.toDouble());
       NativeDocumentCanvasPainter(
         snapshot,
       ).paint(canvas, Size(snapshot.width, snapshot.height));
       final picture = recorder.endRecording();
-      final image = await tester.runAsync(() => picture.toImage(300, 150));
+      final image = await tester.runAsync(
+        () => picture.toImage(width * rasterScale, height * rasterScale),
+      );
       try {
         final data = (await tester.runAsync(
           () => image!.toByteData(format: ui.ImageByteFormat.rawRgba),
         ))!;
         final bytes = data.buffer.asUint8List();
-        List<int> pixel(int x, int y) =>
-            bytes.sublist((y * 300 + x) * 4, (y * 300 + x) * 4 + 4);
-        expect(pixel(94, 4), [255, 0, 0, 255]);
-        expect(pixel(99, 4), [0, 0, 0, 0]);
-        expect(
-          [
-            for (var y = 10; y < 35; y++)
-              for (var x = 0; x < 130; x++) pixel(x, y)[3],
-          ].any((alpha) => alpha > 0),
-          true,
-          reason:
-              'The shipped Flutter Canvas painter draws the measured document labels',
+        List<int> pixel(int x, int y) => bytes.sublist(
+          (y * width * rasterScale + x) * 4,
+          (y * width * rasterScale + x) * 4 + 4,
         );
+        expect(
+          pixel(94 * rasterScale, (rows.length * lineHeight + 4) * rasterScale),
+          [255, 0, 0, 255],
+        );
+        expect(
+          pixel(99 * rasterScale, (rows.length * lineHeight + 4) * rasterScale),
+          [0, 0, 0, 0],
+        );
+        for (var i = 0; i < rows.length; i++) {
+          final entry = actual[i] as Map;
+          int? left, top, right, bottom;
+          for (
+            var y = i * lineHeight * rasterScale;
+            y < (i + 1) * lineHeight * rasterScale;
+            y++
+          ) {
+            for (var x = 0; x < width * rasterScale; x++) {
+              if (bytes[(y * width * rasterScale + x) * 4 + 3] == 0) continue;
+              left = left == null || x < left ? x : left;
+              right = right == null || x + 1 > right ? x + 1 : right;
+              top = top == null || y < top ? y : top;
+              bottom = bottom == null || y + 1 > bottom ? y + 1 : bottom;
+            }
+          }
+          if ((rows[i]['text'] as String).trim().isEmpty) {
+            expect(left, isNull, reason: 'Empty text row $i must not paint');
+            continue;
+          }
+          expect(left, isNotNull, reason: 'Native text row $i must paint');
+          // Compare real native raster ink with independently measured Skia
+          // outlines at 4x resolution to avoid low-resolution hinting shifts.
+          // Raster coverage rounds outward and can add one AA pixel.
+          final expected = [
+            40 - (entry['left'] as num),
+            i * lineHeight + 32 - (entry['ascent'] as num),
+            40 + (entry['right'] as num),
+            i * lineHeight + 32 + (entry['descent'] as num),
+          ];
+          final painted = [
+            left,
+            top,
+            right,
+            bottom,
+          ].map((value) => value! / rasterScale).toList();
+          debugPrintSynchronously(
+            'PIRC_NATIVE_CANVAS_INK_COMPARE ${jsonEncode({'row': i, 'outline': expected, 'raster': painted})}',
+          );
+          for (var edge = 0; edge < 4; edge++) {
+            expect(
+              painted[edge],
+              closeTo(expected[edge], 1.1),
+              reason: 'Real native ink row $i edge $edge',
+            );
+          }
+        }
       } finally {
         image?.dispose();
         picture.dispose();

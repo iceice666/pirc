@@ -104,7 +104,7 @@ try{
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'native Chart.js touch tooltips, rapid outside taps, updates and resizing',
+    'native Chart.js touch tooltips, legend toggles, rapid outside taps, updates and resizing',
     (tester) async {
       final chartSource = await _fixture('/chart.js');
       final reference = obj(jsonDecode(await _fixture('/reference.json')));
@@ -269,10 +269,12 @@ void main() {
             }
           }
 
-          Future<void> verifyPaint(
+          Future<List<Json>> verifyPaint(
             Json current, {
             Json? interactionExpected,
+            List<Json>? initialBarSamples,
           }) async {
+            final barPixelChecks = <Json>[];
             final finder = find.byType(NativeDocumentCanvas);
             expect(finder, findsOneWidget);
             final widget = tester.widget<NativeDocumentCanvas>(finder);
@@ -321,6 +323,59 @@ void main() {
                   (color >> 24) & 255,
                 ]);
               }
+              if (initialBarSamples != null) {
+                final expected = interactionExpected!;
+                final expectedVisible = expected['datasetVisible'] == true;
+                final actualInitialBars = initialBarSamples;
+                final referenceInitialBars = rows(expected['bars']);
+                expect(
+                  actualInitialBars,
+                  hasLength(referenceInitialBars.length),
+                );
+                for (var index = 0; index < actualInitialBars.length; index++) {
+                  final bar = actualInitialBars[index];
+                  final x = ((bar['x'] as num) * dpr).floor();
+                  final y =
+                      (((bar['y'] as num) + (bar['base'] as num)) / 2 * dpr)
+                          .floor();
+                  final offset = (y * snapshot.width.toInt() + x) * 4;
+                  final pixel = bytes.sublist(offset, offset + 4).toList();
+                  final colorText =
+                      referenceInitialBars[index]['color'] as String;
+                  final argb = parseNativeCssColor(colorText)!.toARGB32();
+                  final visibleColor = [
+                    (argb >> 16) & 255,
+                    (argb >> 8) & 255,
+                    argb & 255,
+                    (argb >> 24) & 255,
+                  ];
+                  if (expectedVisible) {
+                    expect(
+                      pixel,
+                      visibleColor,
+                      reason:
+                          'Legend show must restore bar $index at its original Canvas sample point.',
+                    );
+                  } else {
+                    expect(
+                      pixel,
+                      isNot(equals(visibleColor)),
+                      reason:
+                          'Legend hide must remove bar $index fill from its original Canvas sample point.',
+                    );
+                  }
+                  barPixelChecks.add({
+                    'barIndex': index,
+                    'canvasCssPoint': {
+                      'x': bar['x'],
+                      'y': ((bar['y'] as num) + (bar['base'] as num)) / 2,
+                    },
+                    'pixelRgba': pixel,
+                    'datasetColorRgba': visibleColor,
+                    'datasetVisible': expectedVisible,
+                  });
+                }
+              }
               if (interactionExpected != null &&
                   obj(interactionExpected['tooltip'])['opacity'] == 1) {
                 final tooltip = obj(obj(current['interaction'])['tooltip']);
@@ -353,6 +408,7 @@ void main() {
               image?.dispose();
               picture.dispose();
             }
+            return barPixelChecks;
           }
 
           await ready();
@@ -364,14 +420,13 @@ void main() {
           ).singleWhere((value) => value['caseId'] == expectedCase['caseId']);
           final interactionSteps = obj(interactionCase['steps']);
           final interactionAcceptance = <Json>[];
-          // Legend touch references are retained for the ink-metric follow-up.
-          // Actual hide/show redraw currently fails on TextMetrics ink bounds;
-          // those gestures are explicitly not accepted by this passing subset.
           for (final name in [
             'touchFirstBar',
             'touchSecondBar',
             'touchOutsideCanvas',
             'touchBlankChart',
+            'legendHide',
+            'legendShow',
           ]) {
             final before = observation();
             final beforeState = obj(before['interaction']);
@@ -427,6 +482,28 @@ void main() {
               expectedState['datasetVisible'],
               reason: name,
             );
+            final actualHitBoxes = rows(obj(state['legend'])['hitBoxes']);
+            final expectedHitBoxes = rows(
+              obj(expectedState['legend'])['hitBoxes'],
+            );
+            expect(actualHitBoxes, hasLength(expectedHitBoxes.length));
+            for (var index = 0; index < actualHitBoxes.length; index++) {
+              expect(
+                actualHitBoxes[index]['text'],
+                expectedHitBoxes[index]['text'],
+                reason: name,
+              );
+              expect(
+                actualHitBoxes[index]['datasetIndex'],
+                expectedHitBoxes[index]['datasetIndex'],
+                reason: name,
+              );
+              expect(
+                actualHitBoxes[index]['hidden'],
+                expectedHitBoxes[index]['hidden'],
+                reason: name,
+              );
+            }
             final tooltip = obj(state['tooltip']),
                 expectedTooltip = obj(expectedState['tooltip']);
             expect(
@@ -463,8 +540,20 @@ void main() {
               }
             }
             expect(document.scripts?.diagnostics, isEmpty, reason: name);
-            await verifyPaint(actual, interactionExpected: expectedState);
-            interactionAcceptance.add({'name': name, 'state': state});
+            final checkLegendBarVisibility =
+                name == 'legendHide' || name == 'legendShow';
+            final barPixelChecks = await verifyPaint(
+              actual,
+              interactionExpected: expectedState,
+              initialBarSamples: checkLegendBarVisibility
+                  ? rows(initial['bars'])
+                  : null,
+            );
+            interactionAcceptance.add({
+              'name': name,
+              'state': state,
+              if (checkLegendBarVisibility) 'canvasBarPixels': barPixelChecks,
+            });
           }
           // No pump between taps: the per-Canvas click queue may complete after
           // the document has already received the outside gesture.
@@ -543,9 +632,6 @@ void main() {
             'geometryDeltas': deltas,
             'interactions': interactionAcceptance,
             'diagnostics': document.scripts?.diagnostics,
-            'unaccepted': [
-              'Legend hide/show redraw requires TextMetrics ink bounds; browser references only.',
-            ],
           });
         } finally {
           await tester.pumpWidget(const SizedBox.shrink());

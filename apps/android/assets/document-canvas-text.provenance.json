@@ -11,6 +11,6 @@
     "source": "https://raw.githubusercontent.com/emscripten-core/emscripten/main/LICENSE",
     "sha256": "620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86"
   },
-  "helperSha256": "8cb0a3ef4141f5816f746f7b0dbacba0b1fa0e7f357d1030873f27cd657bcee5",
-  "bundleSha256": "9b473dcabd81f0f4ba74b66cf6192ffd40464bddc22187de1a090ec676d7cd4b"
+  "helperSha256": "59aa977e7d6a08eebdbfc9a027dc512b816d52d7ca144b4ba0be757829485533",
+  "bundleSha256": "aa58742f346ca29031305120221a1605dc35cb191741fb2fc0bb6a6440fd0aee"
 }

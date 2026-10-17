@@ -88,15 +88,19 @@ runtime after actual image decoding. The native Chart.js cases below cover
 bar-chart initialization, updates and measured container resizing; broader
 library support and size-changing synchronous write/read gaps remain in the plan.
 
-`document_canvas_text_test.dart` runs synchronous Canvas `measureText().width`
+`document_canvas_text_test.dart` runs synchronous Canvas `measureText()`
 through Android JavaScriptSandbox, compares it with actual Flutter font advances,
-and paints the resulting native Canvas commands. It requires Android 12+ and the
+compares real ink bounds with native raster pixels at 4x resolution and paints
+the resulting native Canvas commands. It requires Android 12+ and the
 sandbox's WebAssembly/named-data features. The bundled Skia text engine is pinned
 to the Flutter engine above, with source checksums and license notices; rebuild
 its assets offline with `python3 tool/parity/build_document_script_runtime.py`.
 `document_canvas_text_runtime_test.mjs` compares the real engine with the pinned
-Roboto/Chromium fixture. Unprepared fonts, missing glyphs and ink/baseline metrics
-fail explicitly; this is a bounded text-width surface, not full Canvas support.
+Roboto/Chromium width and ink fixtures, including alignment and baselines.
+Unprepared fonts, missing glyphs, ambiguous ownership, OpenType BASE selection
+and mixed color/outline ink remain explicit differences. Font preparation keeps
+complete outlines, bounded to 64 MiB of unique data; isolate limits are unchanged.
+This is a bounded Canvas surface, not full browser font support.
 
 `document_mutation_observer_test.dart` verifies public DOM observation through
 Android IPC: nested child/attribute/text records, old values, NodeList records,
@@ -107,7 +111,8 @@ transient observation and bulk record grouping remain explicit differences.
 `document_chart_http_test.dart` uses the pinned test-only Chart.js 4.5.1 UMD and
 Chromium 153 fixture for phone/tablet at DPR 1/3. It compares actual native
 geometry and painted bar/tooltip pixels, taps both bars and blank/outside areas,
-checks rapid outside taps, taps the update button and increases the container
+checks legend hide/show with actual bar pixels and rapid outside taps, taps the
+update button and increases the container
 and Canvas CSS widths by 20 px. Initial CSS and backing sizes are consistent;
 both CSS dimensions use explicit pixels, with no CSS attribute dependencies.
 Other sizing modes and synchronous reads before native layout remain open. Run it with the loopback fixture server (keep it running in another
@@ -130,9 +135,8 @@ with `node apps/android/tool/parity/capture_document_chart_chromium153.mjs` from
 the repository root; the capture refuses everyday Chrome and blocks requests.
 The touch oracle is reproducible with
 `node apps/android/tool/parity/capture_document_chart_interactions_chromium153.mjs`.
-Its legend captures are browser references only: native legend hide/show redraw
-still fails on unsupported Canvas text ink bounds and can leave the chart blank.
-Legend interaction is not accepted. Full TouchEvent/multitouch compatibility,
+The native acceptance includes legend state and bar fill disappearance/restoration;
+label strikethrough uses real glyph ink bounds. Full TouchEvent/multitouch compatibility,
 other chart types and animation remain open.
 Neither the test library nor its fixture is included in the APK.
 

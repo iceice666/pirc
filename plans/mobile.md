@@ -27,7 +27,7 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** complete Canvas ink/baseline text metrics,
+- [ ] **Dynamic content compatibility:** extend Canvas font/ink coverage,
       synchronous write/read layout support and broader chart-library acceptance; extend
       the supported computed-style
       properties, list-item/inline-fragment measurements and common-library coverage;
@@ -100,9 +100,9 @@ outside the agreed scope.
   and percentage dimensions, CSS attribute dependencies, arbitrary synchronous
   DOM write/read flows, other chart types and animation remain unverified.
   Stock bar touch tooltips, blank/outside dismissal and rapid outside taps are
-  covered. **Legend hide/show redraw is not usable yet:** its strikethrough needs
-  unsupported Canvas text ink bounds and can leave the chart blank. This is a
-  confirmed remaining issue, even though the dataset visibility flag changes.
+  covered, along with legend hide/show, including actual disappearance and
+  restoration of the painted bars. The common label strikethrough now uses real
+  glyph ink bounds; extended font and chart surfaces remain bounded below.
 - Public `MutationObserver` covers live child/attribute/text changes, subtree
   matching, filters/old values, microtask delivery, `takeRecords()` and
   `disconnect()`. Private serialization does not create guest notifications.
@@ -579,9 +579,9 @@ would starve the frame under test. Existing offset, scroll, percentage layout,
 computed-style fences and moved-button hit checks still pass. Browser captures
 reproduce byte for byte. No third-party data or personal browser was used.
 
-## Native Canvas text width follow-up
+## Native Canvas text metrics follow-up
 
-Canvas `measureText().width` now runs synchronously in the document's existing
+Canvas `measureText()` now runs synchronously in the document's existing
 JavaScriptSandbox, using the Skia paragraph engine pinned to Flutter 3.44.4. The
 Android text shaper supplies the actual selected system font faces, styles and
 variation axes. Scripts continue in one execution; there is no script replay,
@@ -589,40 +589,45 @@ WebView, character-count estimate or placeholder width. Flutter paints the
 recorded Canvas commands with the original platform fonts.
 
 The native collector extracts selected TTC faces and deduplicates their bytes.
-For supported CFF/CFF2 faces it keeps the real glyph IDs, cmap, advances and
-shaping tables while omitting outlines from the measurement-only copy. CFF2
-conversion retains `fvar`, supported `avar` and `HVAR` data; TrueType outline
-variation is not stripped. Unsupported conversions retain the original face,
-subject to the resource budget. Derived faces never paint text or supply ink
-bounds. This follows the OpenType [horizontal metric](https://learn.microsoft.com/en-us/typography/opentype/spec/hmtx)
-and [HVAR](https://learn.microsoft.com/en-us/typography/opentype/spec/hvar)
-advance sources.
+It retains full outlines, including CFF/CFF2 variations, and Android 15+ reports
+actual per-glyph synthetic bold/italic flags. Android 12–14 infer synthesis from
+selected styles/axes, so their synthesis fidelity still needs device acceptance.
+Glyph IDs, positions and variation typefaces come from the real shaped runs;
+Skia path intercepts supply fractional ink extrema rather than rounded glyph
+boxes. Font metrics and the primary face's OS/2 typography supply baseline
+placement; Flutter receives that placement with each recorded text command.
 
 The pinned Roboto/Chromium 153 corpus covers two viewports, spaces and ASCII
 whitespace, kerning/ligatures, digits, Greek/Cyrillic, combining accents,
 DOMString conversion, readonly widths and unchanged context state. Missing
 Hebrew/Arabic glyphs in this particular fixture fail explicitly; their browser
-fallback widths are observations rather than same-font expectations. Actual
-Android acceptance compares 14 Latin/CJK cases with Flutter TextPainter and
-paints labels plus a rectangle whose width comes from the script measurement.
+fallback widths are observations rather than same-font expectations. The ink
+reference adds 57 cases per viewport, including fractional sizes,
+alignments and baselines, empty/space-only ink, ligatures and accents. Android
+acceptance compares Latin/CJK advances with Flutter TextPainter and actual
+rasterized text edges with the independent outline measurements; it also paints
+a rectangle whose width comes from the script measurement.
 Canvas `fillText`/`strokeText` also normalize whitespace and accept an explicitly
 undefined optional maximum width, as used by Chart.js. Nonfinite/nonpositive
 maximum widths produce no draw, matching the browser fixture.
 
-Resource observations on the dedicated emulator: the representative CJK document
-transfers 5,932,888 unique font bytes, uses a 32 MiB WASM heap and initializes in
-about one second. Before omitting CFF2 outlines, it needed 35,019,020 font bytes
-and a 128 MiB heap. These are engine observations, not whole-app memory or
-physical-device performance guarantees. A separate comparison of the original
-and native-derived CFF2 face covers nine weights × eight texts, including
-variable Latin advances and Chinese; all 72 widths match exactly.
+The earlier width-only implementation stripped selected CFF/CFF2 outlines,
+reducing one CJK preparation to 5,932,888 unique font bytes and a 32 MiB WASM
+heap. Those measurements do not describe the current complete-outline engine;
+the previous advance-only converter is no longer used for preparation. Current
+resource observations and native ink acceptance are recorded in the follow-up
+below. The isolate heap and guest execution limits remain unchanged.
 
 Remaining explicit differences:
 
-- Only `TextMetrics.width` is implemented. Ink bounds, font bounds and baseline
-  metrics fail with `NotSupportedError` instead of returning fabricated values.
+- The standard width, four actual ink bounds, font ascent/descent and baseline
+  properties are supported for prepared faces. OpenType BASE-table hanging/
+  ideographic selection, ambiguous font ownership and mixed color/outline glyph
+  geometry fail explicitly. Bitmap-only ink uses real Skia glyph bitmap bounds.
+  Chromium 153 has no `emHeightAscent`/`emHeightDescent` properties; neither does
+  this runtime.
 - Android 12+ and JavaScriptSandbox WebAssembly, named-data and Promise-return
-  features are required for this width surface. Older supported Android devices
+  features are required for this measurement surface. Older supported Android devices
   retain ordinary native rendering but cannot use synchronous Canvas measurement.
 - Preparation covers the listed common generic/Arial/Helvetica/Times/Courier/
   Roboto/Inter aliases, normal/italic and weights 400/700. Custom downloadable
@@ -631,7 +636,7 @@ Remaining explicit differences:
   lists and inherited RTL direction are not yet implemented.
 - Fonts are selected from Latin/digits and up to 4,096 UTF-16 units of distinct
   non-ASCII source characters. Later content that needs an unprepared font fails
-  explicitly. Collection is bounded to 32 resources and 48 MiB of unique bytes;
+  explicitly. Collection is bounded to 32 resources and 64 MiB of unique bytes;
   each measurement to 16,384 UTF-16 units, with a bounded result cache.
 - Platform font aliases can resolve differently from a desktop browser. Portable
   same-font comparisons use the pinned open-source Roboto file; this does not
@@ -640,8 +645,9 @@ Remaining explicit differences:
   The native follow-up below supersedes that probe with four real rendered
   cases; genuine size-changing synchronous write/read flows remain open.
 
-Verification: 4,780 Flutter tests, 546 JavaScript tests, 290 Android JVM tests,
-Android Canvas width/pixel acceptance, static analysis and formatting passed.
+The initial width-only verification passed 4,780 Flutter tests, 546 JavaScript
+tests, 290 Android JVM tests, Android Canvas width/pixel acceptance, static
+analysis and formatting.
 The existing Android local-HTTP layout/interaction integration also passed
 with the new engine preparation; detailed run evidence stays in ignored local
 acceptance output.
@@ -773,9 +779,43 @@ target. This also preserves ordering for libraries that coalesce events per fram
 so an early exit cannot be merged ahead of a late click and revive its tooltip. Desktop pointer boundaries also deliver their
 corresponding mouse events, including after pointer capture releases.
 
-Remaining: the browser oracle includes legend taps, but native hide/show redraw
-is **not accepted**. Chart.js requests actual glyph ink bounds for a hidden-label
-strikethrough; the current width-only TextMetrics rejects that read, aborts the
-redraw and can leave the chart blank. Keep this issue ahead of further chart
-coverage. Full DOM TouchEvent/multitouch lifecycle and animation are unverified;
-this follow-up does not establish general browser input equivalence.
+The later ink-metric follow-up below supersedes the original legend finding.
+Full DOM TouchEvent/multitouch lifecycle and animation remain unverified; this
+follow-up does not establish general browser input equivalence.
+
+## Canvas ink metrics and legend redraw follow-up
+
+The common Chart.js legend redraw no longer aborts on `TextMetrics` ink reads.
+The native fetched-document test now taps hide/show on phone/tablet at DPR 1/3,
+compares dataset and legend state with the frozen Chromium reference, samples
+each bar's original native center to prove that its fill disappears, and checks
+that the exact fill returns. Tooltip, blank/outside dismissal, rapid outside
+taps, update and resize checks remain in the same acceptance sequence. All four
+configurations complete with no script diagnostics. This checks bar fills and
+label redraw, not every antialiased pixel of the whole chart.
+
+The independent same-font Chromium 153 corpus covers 57 ink/metric cases at each
+of two viewports, within 1/4096 CSS px. Android 16 acceptance covers 20 actual
+platform-font cases, including Latin/CJK, bold/italic, ligatures, combining
+accents, fractional size and baseline changes. Widths match TextPainter within
+0.02 px. Native raster edges are compared at 4x resolution within 1.1 CSS px;
+low-resolution hinting can move individual raster edges, so this is not a claim
+of pixel-identical text at every device scale.
+
+Complete outlines cost more than the old width-only copies. This emulator's
+representative document transfers 58,325,348 unique font bytes across 20 matched
+resources, starts in 1,279 ms, and spends 122 ms on its 20 metric/draw cases. WASM
+linear-buffer capacity starts at 64 MiB and grows to 128 MiB after ink reads.
+These are one emulator run's measurements, not whole-app resident memory or a
+physical-device performance guarantee. Collection now allows 64 MiB of unique
+font bytes; the existing 128 MiB isolate heap and two-second guest evaluation
+limit are unchanged. Font preparation still fails explicitly above its bound;
+low-memory/multiple-document behavior needs physical-device acceptance.
+
+This round passed 573 JavaScript tests, 71 targeted Flutter tests, the native
+20-case text/pixel test, four Chart.js configurations, 28 local-HTTP layout cases,
+static analysis and formatting. Source, compact browser references and capture
+tools stay in Git; detailed acceptance evidence and disposable outputs stay
+ignored. Remaining font/API differences are listed in the text-metrics section
+above. Production signing, real-device/account and remote-push acceptance remain
+open; no release APK or backend API was changed by this round.

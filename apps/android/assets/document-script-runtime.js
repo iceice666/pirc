@@ -21376,7 +21376,7 @@ function createDocumentFileReader(deps) {
  *
  * This factory is concatenated into the document runtime IIFE. It records
  * drawing operations and context state; it does not rasterize or guess font
- * metrics. Unsupported pixel, pattern, and ink measurement APIs fail
+ * metrics. Unsupported pixel, pattern, and font measurement APIs fail
  * explicitly so callers cannot mistake missing output for a successful draw.
  */
 function createDocumentCanvas(deps) {
@@ -21393,19 +21393,26 @@ function createDocumentCanvas(deps) {
   const metricsState = new WeakMap();
   const metricToken = {};
   class TextMetrics {
-    constructor(token, width) {
+    constructor(token, width, readInk) {
       if (token !== metricToken) throw new TypeError('Illegal constructor');
-      metricsState.set(this, width);
+      metricsState.set(this, {width,readInk,ink:null});
     }
     get width() {
       if (!metricsState.has(this)) throw new TypeError('Illegal TextMetrics invocation');
-      return metricsState.get(this);
+      return metricsState.get(this).width;
     }
   }
   Object.defineProperty(TextMetrics.prototype,'width',{...Object.getOwnPropertyDescriptor(TextMetrics.prototype,'width'),enumerable:true});
   for (const name of ['actualBoundingBoxLeft','actualBoundingBoxRight','actualBoundingBoxAscent','actualBoundingBoxDescent',
-    'fontBoundingBoxAscent','fontBoundingBoxDescent','emHeightAscent','emHeightDescent','hangingBaseline','alphabeticBaseline','ideographicBaseline']) {
-    Object.defineProperty(TextMetrics.prototype,name,{get() {throw unsupported('TextMetrics.'+name);},enumerable:true});
+    'fontBoundingBoxAscent','fontBoundingBoxDescent','hangingBaseline','alphabeticBaseline','ideographicBaseline']) {
+    Object.defineProperty(TextMetrics.prototype,name,{get() {
+      const metrics=metricsState.get(this);
+      if (!metrics) throw new TypeError('Illegal TextMetrics invocation');
+      if (!metrics.readInk) throw unsupported('TextMetrics.'+name);
+      const ink=metrics.ink || (metrics.ink=metrics.readInk());
+      if (!ink || !Number.isFinite(ink[name])) throw unsupported('TextMetrics.'+name);
+      return ink[name];
+    },enumerable:true,configurable:true});
   }
   Object.defineProperty(TextMetrics.prototype,Symbol.toStringTag,{value:'TextMetrics'});
   const records = new WeakMap();
@@ -21962,6 +21969,13 @@ function createDocumentCanvas(deps) {
       args: args,
       state: stateSnapshot(record, includePath)
     };
+    if ((op === 'fillText' || op === 'strokeText') && typeof options.fontBaselineOffset === 'function') {
+      const offset=options.fontBaselineOffset(record.currentState.font,record.currentState.textBaseline);
+      if (offset !== null && offset !== undefined) {
+        if (!Number.isFinite(offset) || Math.abs(offset)>maxCoordinate) throw new TypeError('Invalid native text baseline offset');
+        command.state.textBaselineOffset=offset;
+      }
+    }
     appendCommand(record, command, fullClear === true);
   }
 
@@ -22324,17 +22338,28 @@ function createDocumentCanvas(deps) {
       if (typeof text === 'symbol') throw new TypeError('Canvas text cannot be a Symbol');
       if (typeof options.measureText !== 'function')
         throw unsupported('measureText', options.textMetricError || undefined);
+      const value = String(text);
       const state = record.currentState;
+      const font = state.font, direction = state.direction === 'rtl' ? 'rtl' : 'ltr';
+      const align = state.textAlign, baseline = state.textBaseline;
       let width;
       try {
-        width = options.measureText(state.font,String(text),state.direction === 'rtl' ? 'rtl' : 'ltr');
+        width = options.measureText(font,value,direction);
       } catch (error) {
         if (error && error.name === 'NotSupportedError') throw unsupported('measureText',String(error.message));
         throw error;
       }
       if (!Number.isFinite(width) || width < 0) throw new TypeError('Invalid native Canvas text width');
-      return new TextMetrics(metricToken,width);
+      const readInk = typeof options.measureInk === 'function' ? function() {
+        try { return options.measureInk(font,value,direction,align,baseline); }
+        catch (error) {
+          if (error && error.name === 'NotSupportedError') throw unsupported('measureText',String(error.message));
+          throw error;
+        }
+      } : null;
+      return new TextMetrics(metricToken,width,readInk);
     };
+
     context.fillText = function(text, x, y, maxWidth) {
       const args = [
         String(text),
@@ -43599,6 +43624,8 @@ function createPircDocumentLayout(options) {
       activeState.canvas = createDocumentCanvas({document, ensureElementId, diagnostic,
         textMetricError: input && input.canvasTextError,
         measureText: nativeCanvasTextEngine && nativeCanvasTextEngine.measureText,
+        measureInk: nativeCanvasTextEngine && nativeCanvasTextEngine.measureInk,
+        fontBaselineOffset: nativeCanvasTextEngine && nativeCanvasTextEngine.fontBaselineOffset,
         resolveImage: source => activeState.images.canvasSource(source)});
       activeState.canvas.install();
       defineGlobal('TextMetrics',activeState.canvas.TextMetrics,false);

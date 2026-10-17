@@ -11,6 +11,7 @@ import { createDocumentScriptHostVm } from './document_script_host_test_helper.m
 const vm = createDocumentScriptHostVm(nativeVm);
 const asset = name => new URL('../../assets/' + name, import.meta.url);
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/document-canvas-text-chromium153.json', import.meta.url)));
+const inkFixture = JSON.parse(readFileSync(new URL('./fixtures/document-canvas-ink-chromium153.json', import.meta.url)));
 const font = readFileSync(new URL('./vendor/canvas-text-fixture-font/Roboto-Regular.ttf', import.meta.url));
 const wasm = readFileSync(asset('document-canvas-text.wasm'));
 const arrayBuffer = buffer => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
@@ -94,13 +95,13 @@ test('measureText follows browser DOMString conversions and readonly width seman
   assert.throws(() => evaluate(context, 'new TextMetrics()'), { name: 'TypeError' });
 });
 
-test('measureText leaves draw state intact and reports unsupported fonts and ink metrics explicitly', async () => {
+test('measureText leaves draw state intact while supporting real ink and rejecting unprepared fonts', async () => {
   const context = await runtime();
   const state = 'JSON.stringify([ctx.font,ctx.direction,ctx.textAlign,ctx.textBaseline])';
   const before = evaluate(context, state);
   evaluate(context, 'ctx.measureText("A V")');
   assert.equal(evaluate(context, state), before);
-  assert.throws(() => evaluate(context, 'ctx.measureText("AV").actualBoundingBoxAscent'), { name: 'NotSupportedError' });
+  assert.ok(Math.abs(evaluate(context, 'ctx.measureText("AV").actualBoundingBoxAscent')-11.375)<1/4096);
   assert.throws(() => evaluate(context, 'ctx.measureText("x".repeat(16385))'), { name: 'RangeError' });
   evaluate(context, 'ctx.font="16px UnpreparedFamily"');
   assert.throws(() => evaluate(context, 'ctx.measureText("AV")'), { name: 'NotSupportedError' });
@@ -132,4 +133,55 @@ test('Canvas text assets reproduce offline with verified dependency checksums an
       assert.deepEqual(readFileSync(path.join(directory, name)), readFileSync(asset(name)), name);
     }
   } finally { rmSync(directory, {recursive:true,force:true}); }
+});
+
+
+test('real Skia outline ink and font baselines match all Chromium 153 same-font cases', async () => {
+  assert.equal(createHash('sha256').update(font).digest('hex'),inkFixture.font.sha256);
+  const context=await runtime();
+  for(const viewport of inkFixture.viewports) {
+    assert.deepEqual(viewport.externalRequests,[]);
+    for(const row of viewport.cases) {
+      assert.equal(row.sameFontOracle,true,row.id);
+      const actual=json(context,`(()=>{
+        ctx.font=${JSON.stringify(row.font)};ctx.direction=${JSON.stringify(row.direction)};
+        ctx.textAlign=${JSON.stringify(row.textAlign)};ctx.textBaseline=${JSON.stringify(row.textBaseline)};
+        const before=JSON.stringify([ctx.font,ctx.direction,ctx.textAlign,ctx.textBaseline]);
+        const m=ctx.measureText(${JSON.stringify(row.text)});
+        return {values:Object.fromEntries(${JSON.stringify(inkFixture.metricProperties)}.map(k=>[k,m[k]===undefined?null:m[k]])),unchanged:before===JSON.stringify([ctx.font,ctx.direction,ctx.textAlign,ctx.textBaseline])};
+      })()`);
+      assert.equal(actual.unchanged,true,row.id);
+      for(const [key,expected] of Object.entries(row.metrics)) {
+        if(expected===null)assert.equal(actual.values[key],null,row.id+'/'+key);
+        else assert.ok(Math.abs(actual.values[key]-expected)<=1/4096,`${row.id}/${key}: ${actual.values[key]} vs ${expected}`);
+      }
+    }
+  }
+});
+
+test('ink getters retain their measurement state and match native readonly descriptors', async () => {
+  const context=await runtime();
+  const descriptors=json(context,`(${JSON.stringify(inkFixture.metricProperties)}).map(name=>{const d=Object.getOwnPropertyDescriptor(TextMetrics.prototype,name);return {name,present:!!d,configurable:d?d.configurable:null,enumerable:d?d.enumerable:null,getter:typeof d?.get==='function',setter:typeof d?.set==='function'}})`);
+  assert.deepEqual(descriptors,inkFixture.viewports[0].readonly.prototypeDescriptors);
+  const actual=json(context,`(()=>{
+    ctx.textAlign='left';ctx.textBaseline='alphabetic';const m=ctx.measureText('AV');
+    ctx.textAlign='right';ctx.textBaseline='bottom';ctx.font='16px UnpreparedFamily';
+    let brand=null,strict=null;try{Object.getOwnPropertyDescriptor(TextMetrics.prototype,'actualBoundingBoxLeft').get.call({})}catch(e){brand=e.name}
+    try{(function(){'use strict';m.actualBoundingBoxLeft=987})()}catch(e){strict=e.name}
+    return {left:m.actualBoundingBoxLeft,ascent:m.actualBoundingBoxAscent,brand,strict,assigned:Reflect.set(m,'actualBoundingBoxLeft',987)};
+  })()`);
+  assert.equal(actual.left,-.21875);
+  assert.ok(Math.abs(actual.ascent-11.375)<1/4096);
+  assert.deepEqual([actual.brand,actual.strict,actual.assigned],['TypeError','TypeError',false]);
+});
+
+test('recorded text baseline metadata comes from the same real font metrics as TextMetrics', async () => {
+  const context=await runtime();
+  for(const row of inkFixture.viewports[0].cases.filter(row=>row.id.startsWith('align-left-baseline-'))) {
+    evaluate(context,`ctx.font=${JSON.stringify(row.font)};ctx.textBaseline=${JSON.stringify(row.textBaseline)};ctx.clearRect(0,0,300,150);ctx.fillText('AV',20,40);ctx.strokeText('AV',20,80)`);
+    const snapshot=JSON.parse(evaluate(context,'__pircDocument.snapshot({})'));
+    for(const command of snapshot.canvases[0].commands.filter(command=>command.op.endsWith('Text'))) {
+      assert.ok(Math.abs(command.state.textBaselineOffset+row.metrics.alphabeticBaseline)<1/4096,row.id);
+    }
+  }
 });
