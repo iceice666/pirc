@@ -184,13 +184,21 @@ void main() {
                 controller: controller,
                 revision: 3,
                 id: 'duplicate',
-                child: const SizedBox(width: 10, height: 10),
+                child: const SizedBox(
+                  width: 10,
+                  height: 10,
+                  child: ColoredBox(color: Color(0xff000001)),
+                ),
               ),
               NativeDocumentLayoutElement(
                 controller: controller,
                 revision: 3,
                 id: 'duplicate',
-                child: const SizedBox(width: 20, height: 10),
+                child: const SizedBox(
+                  width: 20,
+                  height: 10,
+                  child: ColoredBox(color: Color(0xff000002)),
+                ),
               ),
             ],
           ),
@@ -201,6 +209,331 @@ void main() {
       expect(_box(packet, 'no-box')['kind'], 'none');
       expect(_box(packet, 'missing')['kind'], 'unsupported');
       expect(_box(packet, 'duplicate')['kind'], 'unsupported');
+      expect(
+        controller.hitTestDocument(const Offset(1, 1), revision: 3)?.elementId,
+        isNull,
+      );
+    });
+
+    testWidgets(
+      'hit-tests actual stacking, clipping, transforms, and root coordinates',
+      (tester) async {
+        final controller = NativeDocumentLayoutController();
+        addTearDown(controller.dispose);
+
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Transform.translate(
+              offset: const Offset(40, 30),
+              child: NativeDocumentLayoutRoot(
+                controller: controller,
+                revision: 7,
+                knownIds: const {
+                  'background',
+                  'behind',
+                  'front',
+                  'clipped-overflow',
+                  'translated',
+                },
+                child: SizedBox(
+                  width: 200,
+                  height: 180,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: NativeDocumentLayoutElement(
+                          controller: controller,
+                          revision: 7,
+                          id: 'background',
+                          child: const ColoredBox(color: Color(0xff000001)),
+                        ),
+                      ),
+                      Positioned(
+                        left: 20,
+                        top: 20,
+                        width: 100,
+                        height: 80,
+                        child: NativeDocumentLayoutElement(
+                          controller: controller,
+                          revision: 7,
+                          id: 'behind',
+                          child: const ColoredBox(color: Color(0xff000002)),
+                        ),
+                      ),
+                      Positioned(
+                        left: 45,
+                        top: 35,
+                        width: 40,
+                        height: 40,
+                        child: NativeDocumentLayoutElement(
+                          controller: controller,
+                          revision: 7,
+                          id: 'front',
+                          child: const ColoredBox(color: Color(0xff000003)),
+                        ),
+                      ),
+                      Positioned(
+                        left: 120,
+                        top: 20,
+                        child: ClipRect(
+                          child: SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Positioned(
+                                  left: 20,
+                                  top: 0,
+                                  child: NativeDocumentLayoutElement(
+                                    controller: controller,
+                                    revision: 7,
+                                    id: 'clipped-overflow',
+                                    child: const SizedBox(
+                                      width: 40,
+                                      height: 40,
+                                      child: ColoredBox(
+                                        color: Color(0xff000004),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 20,
+                        top: 120,
+                        child: Transform.translate(
+                          offset: const Offset(20, 0),
+                          child: NativeDocumentLayoutElement(
+                            controller: controller,
+                            revision: 7,
+                            id: 'translated',
+                            child: const SizedBox(
+                              width: 30,
+                              height: 30,
+                              child: ColoredBox(color: Color(0xff000005)),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        NativeDocumentHitTest? hitAt(double x, double y) =>
+            controller.hitTestDocument(Offset(x, y), revision: 7);
+
+        // The front box wins the real Stack hit test where the boxes overlap.
+        expect(hitAt(95, 75)?.elementId, 'front');
+        expect(hitAt(70, 60)?.elementId, 'behind');
+        expect(hitAt(190, 60)?.elementId, 'clipped-overflow');
+        // The child extends past the ClipRect, but the background is hit there.
+        expect(hitAt(210, 60)?.elementId, 'background');
+        // Transformed child bounds and the transformed document root use global
+        // coordinates from Flutter's hit path.
+        expect(hitAt(90, 160)?.elementId, 'translated');
+        expect(hitAt(65, 160)?.elementId, 'background');
+      },
+    );
+
+    testWidgets('uses the real scroll viewport hit path and current offset', (
+      tester,
+    ) async {
+      final controller = NativeDocumentLayoutController();
+      final scroll = ScrollController();
+      addTearDown(controller.dispose);
+      addTearDown(scroll.dispose);
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Transform.translate(
+            offset: const Offset(20, 10),
+            child: SizedBox(
+              width: 200,
+              height: 100,
+              child: SingleChildScrollView(
+                controller: scroll,
+                child: NativeDocumentLayoutRoot(
+                  controller: controller,
+                  revision: 10,
+                  knownIds: const {'scrolled'},
+                  child: SizedBox(
+                    width: 200,
+                    height: 700,
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          left: 20,
+                          top: 500,
+                          child: NativeDocumentLayoutElement(
+                            controller: controller,
+                            revision: 10,
+                            id: 'scrolled',
+                            child: const SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: ColoredBox(color: Color(0xff000001)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      scroll.jumpTo(450);
+      await tester.pump();
+
+      expect(
+        controller
+            .hitTestDocument(const Offset(45, 70), revision: 10)
+            ?.elementId,
+        'scrolled',
+      );
+      // This point is within the scrolled content root but below the actual
+      // viewport, so the viewport clip removes the document from the path.
+      expect(
+        controller
+            .hitTestDocument(const Offset(45, 180), revision: 10)
+            ?.elementId,
+        isNull,
+      );
+    });
+
+    testWidgets('returns nullable IDs for unmapped hits and outside content', (
+      tester,
+    ) async {
+      final controller = NativeDocumentLayoutController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _document(
+          controller: controller,
+          revision: 5,
+          knownIds: const {},
+          child: const ColoredBox(color: Color(0xff000001)),
+        ),
+      );
+
+      final unmapped = controller.hitTestDocument(
+        const Offset(10, 10),
+        revision: 5,
+      );
+      expect(unmapped, isNotNull);
+      expect(unmapped!.elementId, isNull);
+
+      final outside = controller.hitTestDocument(
+        const Offset(450, 350),
+        revision: 5,
+      );
+      expect(outside, isNotNull);
+      expect(outside!.elementId, isNull);
+    });
+
+    testWidgets('rejects unavailable, pending, stale, and invalid hit tests', (
+      tester,
+    ) async {
+      final controller = NativeDocumentLayoutController();
+      addTearDown(controller.dispose);
+
+      expect(
+        controller.hitTestDocument(const Offset(1, 1), revision: 1),
+        isNull,
+      );
+      expect(
+        controller.hitTestDocument(Offset(double.nan, 1), revision: 1),
+        isNull,
+      );
+
+      await tester.pumpWidget(
+        _document(
+          controller: controller,
+          revision: 1,
+          knownIds: const {'target'},
+          child: NativeDocumentLayoutElement(
+            controller: controller,
+            revision: 1,
+            id: 'target',
+            child: const SizedBox(
+              width: 30,
+              height: 30,
+              child: ColoredBox(color: Color(0xff000001)),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        controller.hitTestDocument(const Offset(1, 1), revision: 2),
+        isNull,
+      );
+      expect(
+        controller.hitTestDocument(Offset(double.infinity, 1), revision: 1),
+        isNull,
+      );
+
+      final root = tester.renderObject<RenderBox>(
+        find.byType(NativeDocumentLayoutRoot),
+      );
+      root.markNeedsLayout();
+      expect(
+        controller.hitTestDocument(const Offset(1, 1), revision: 1),
+        isNull,
+      );
+      await tester.pump();
+      expect(
+        controller.hitTestDocument(const Offset(1, 1), revision: 1)?.elementId,
+        'target',
+      );
+
+      controller.dispose();
+      expect(
+        controller.hitTestDocument(const Offset(1, 1), revision: 1),
+        isNull,
+      );
+    });
+
+    testWidgets('does not report an element missing from the root ID set', (
+      tester,
+    ) async {
+      final controller = NativeDocumentLayoutController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _document(
+          controller: controller,
+          revision: 8,
+          knownIds: const {'another'},
+          child: NativeDocumentLayoutElement(
+            controller: controller,
+            revision: 8,
+            id: 'unmeasured',
+            child: const SizedBox(
+              width: 30,
+              height: 30,
+              child: ColoredBox(color: Color(0xff000001)),
+            ),
+          ),
+        ),
+      );
+
+      final hit = controller.hitTestDocument(const Offset(1, 1), revision: 8);
+      expect(hit, isNotNull);
+      expect(hit!.elementId, isNull);
     });
 
     testWidgets('passes through intrinsic dimensions and baseline', (

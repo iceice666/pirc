@@ -22,6 +22,105 @@ class NativeDocumentLayoutController extends ChangeNotifier {
   bool _notificationScheduled = false;
   bool _disposed = false;
 
+  /// Hit-tests the current document render tree at a global pointer position.
+  ///
+  /// The nearest current, unambiguous [NativeDocumentLayoutElement] on the
+  /// actual Flutter hit path supplies [NativeDocumentHitTest.elementId]. A
+  /// completed hit test can have no mapped element, so its result may carry a
+  /// null ID. A null result means the requested layout is unavailable.
+  NativeDocumentHitTest? hitTestDocument(
+    Offset globalPosition, {
+    required int revision,
+  }) {
+    if (_disposed ||
+        !globalPosition.dx.isFinite ||
+        !globalPosition.dy.isFinite) {
+      return null;
+    }
+    final root = _root;
+    if (root == null ||
+        !root.attached ||
+        !root.hasSize ||
+        root.revision != revision ||
+        root.laidOutRevision != revision ||
+        root.pendingLayout ||
+        !nativeDocumentMarginsAreSettled(root)) {
+      return null;
+    }
+
+    final Offset localPosition;
+    try {
+      localPosition = root.globalToLocal(globalPosition);
+    } on FlutterError {
+      return null;
+    }
+    if (!localPosition.dx.isFinite || !localPosition.dy.isFinite) return null;
+    if (!(Offset.zero & root.size).contains(localPosition)) {
+      return const NativeDocumentHitTest(elementId: null);
+    }
+
+    // Start at the actual view root so ancestor transforms, clips, and
+    // overlapping render objects participate in the same hit test Flutter
+    // uses for pointer dispatch. Testing the document root on its own would
+    // incorrectly hit content hidden by a viewport clip or overlay.
+    final renderView = root.owner?.rootNode;
+    if (renderView is! RenderView || !renderView.attached) {
+      return null;
+    }
+    if (!(Offset.zero & renderView.size).contains(globalPosition)) {
+      return const NativeDocumentHitTest(elementId: null);
+    }
+    final hitTest = HitTestResult();
+    renderView.hitTest(hitTest, position: globalPosition);
+    final path = hitTest.path.toList(growable: false);
+
+    // HitTestResult is ordered from the deepest hit target out toward the
+    // view. Only consider entries up through this document's own root.
+    var rootPathIndex = -1;
+    for (var index = 0; index < path.length; index++) {
+      if (identical(path[index].target, root)) {
+        rootPathIndex = index;
+        break;
+      }
+    }
+    if (rootPathIndex < 0) {
+      return const NativeDocumentHitTest(elementId: null);
+    }
+
+    for (var index = 0; index <= rootPathIndex; index++) {
+      final target = path[index].target;
+      if (target is! _RenderNativeDocumentLayoutElement ||
+          !target.attached ||
+          target.pendingLayout ||
+          !target.hasSize ||
+          target.revision != revision ||
+          target.laidOutRevision != revision ||
+          !root.knownIds.contains(target.id) ||
+          root.noBoxIds.contains(target.id) ||
+          !identical(_nearestRoot(target), root)) {
+        continue;
+      }
+
+      final owners = _elements[target.id];
+      if (owners == null) continue;
+      final currentOwners = owners
+          .where(
+            (candidate) =>
+                candidate.attached &&
+                candidate.revision == revision &&
+                identical(_nearestRoot(candidate), root),
+          )
+          .toList(growable: false);
+      // Capture marks duplicate ownership unsupported even when only one
+      // duplicate happens to lie on the current pointer path.
+      if (currentOwners.length == 1 &&
+          identical(currentOwners.single, target)) {
+        return NativeDocumentHitTest(elementId: target.id);
+      }
+    }
+    return const NativeDocumentHitTest(elementId: null);
+  }
+
   /// Captures the latest completed layout for [revision].
   ///
   /// Element rectangles are relative to the explicit document root. Scroll is
@@ -280,6 +379,16 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     _elements.clear();
     super.dispose();
   }
+}
+
+/// The result of a completed actual render-tree hit test in a native document.
+///
+/// [elementId] is null when the hit path contains no current, unambiguous
+/// document element box, or when the point is outside the document content.
+class NativeDocumentHitTest {
+  const NativeDocumentHitTest({required this.elementId});
+
+  final String? elementId;
 }
 
 /// Establishes the explicit coordinate space and ID set for one document.

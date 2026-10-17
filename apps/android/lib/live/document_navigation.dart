@@ -12,6 +12,7 @@ import '../rendering/html_syntax.dart';
 import '../rendering/html_document_styles.dart';
 import '../rendering/native_html.dart';
 import '../rendering/document_layout.dart';
+import '../rendering/document_touch_boundary.dart';
 import '../rendering/document_computed_styles.dart';
 import '../rendering/document_offsets.dart';
 import '../rendering/document_margin_collapse.dart';
@@ -1330,6 +1331,121 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
   final _layout = NativeDocumentLayoutController();
   final _elementScroll = NativeDocumentElementScrollController();
   Size _layoutViewport = Size.zero;
+  late final _touchBoundary = NativeDocumentTouchBoundary(
+    onExit: (id, relatedTarget, position) {
+      final scripts = _scripts;
+      if (scripts == null ||
+          !scripts.ready ||
+          !scripts.canvases.containsKey(id)) {
+        return;
+      }
+      unawaited(
+        scripts.dispatchDetailed(id, 'mouseout', [], {
+          'clientX': position.dx,
+          'clientY': position.dy,
+          'relatedTarget': relatedTarget,
+        }),
+      );
+    },
+  );
+
+  ({
+    PointerUpEvent event,
+    NativeDocumentScripts scripts,
+    int sequence,
+    int epoch,
+  })?
+  _pendingTouchHit;
+
+  void _clearTouchBoundary() {
+    _pendingTouchHit = null;
+    _touchBoundary.clear();
+  }
+
+  void _documentTouchUp(PointerUpEvent event) {
+    if (!_touchBoundary.up(event)) return;
+    final scripts = _scripts;
+    if (scripts == null || !scripts.ready) return;
+    _pendingTouchHit = (
+      event: event,
+      scripts: scripts,
+      sequence: _touchBoundary.sequence,
+      epoch: _touchBoundary.epoch,
+    );
+    // A late queued click can publish another DOM revision. If its matching
+    // frame is not ready, the real layout notification completes this request.
+    _completeTouchTarget();
+  }
+
+  bool _completeTouchTarget() {
+    final pending = _pendingTouchHit;
+    if (pending == null) return true;
+    if (!mounted ||
+        !identical(_scripts, pending.scripts) ||
+        !pending.scripts.ready ||
+        pending.sequence != _touchBoundary.sequence ||
+        pending.epoch != _touchBoundary.epoch) {
+      _pendingTouchHit = null;
+      return true;
+    }
+    final hit = _layout.hitTestDocument(
+      pending.event.position,
+      revision: pending.scripts.layoutRevision,
+    );
+    if (hit == null) return false;
+    _pendingTouchHit = null;
+    _touchBoundary.completeTarget(hit.elementId, pending.event.localPosition);
+    return true;
+  }
+
+  VoidCallback? _nativeTouchClickQueued(String id, Json data) {
+    final scripts = _scripts;
+    final pointerId = data['pointerId'];
+    if (scripts == null ||
+        !scripts.ready ||
+        pointerId is! int ||
+        !scripts.canvases.containsKey(id)) {
+      return null;
+    }
+    final epoch = _touchBoundary.epoch;
+    _touchBoundary.queuedClick(id, pointerId);
+    return () {
+      if (!mounted ||
+          !identical(_scripts, scripts) ||
+          _touchBoundary.epoch != epoch) {
+        return;
+      }
+      _touchBoundary.finishedClick(id, pointerId);
+      _completeTouchTarget();
+      _touchBoundary.reconcile();
+    };
+  }
+
+  Future<bool> _dispatchNativeDetailedEvent(
+    String id,
+    String type,
+    List<Json> controls,
+    Json data,
+  ) async {
+    final scripts = _scripts;
+    if (scripts == null) return true;
+    final epoch = _touchBoundary.epoch;
+    final touchClick =
+        type == 'click' &&
+        data['pointerType'] == 'touch' &&
+        data['isPrimary'] == true &&
+        scripts.canvases.containsKey(id);
+    if (touchClick) _touchBoundary.acceptedClick(id);
+    final result = await scripts.dispatchDetailed(id, type, controls, data);
+    if (touchClick &&
+        mounted &&
+        identical(_scripts, scripts) &&
+        _touchBoundary.epoch == epoch) {
+      _completeTouchTarget();
+      _touchBoundary.reconcile();
+    }
+    return result;
+  }
 
   @override
   void initState() {
@@ -1341,7 +1457,10 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
   }
 
   void _nativeScrollChanged() => _scripts?.refreshLayout();
-  void _nativeLayoutChanged() => _scripts?.refreshLayout();
+  void _nativeLayoutChanged() {
+    _scripts?.refreshLayout();
+    _completeTouchTarget();
+  }
 
   Future<Json?> _captureLayout(int revision, int generation) async {
     final document = widget.document;
@@ -1442,6 +1561,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
             window?.historyPostResubmissionRequired != true &&
             (window == null ||
                 identical(window.currentDocument, widget.document));
+    if (!attached || !_tickerVisible) _clearTouchBoundary();
     scripts.setActivity(
       attached: attached,
       visible: attached && _tickerVisible,
@@ -1635,6 +1755,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
   void didUpdateWidget(covariant NativeFetchedDocumentView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.document != widget.document) {
+      _clearTouchBoundary();
       _elementScroll.beginDocument(widget.document);
       oldWidget.document.scroll.removeListener(_nativeScrollChanged);
       widget.document.scroll.addListener(_nativeScrollChanged);
@@ -1651,6 +1772,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
 
   @override
   void dispose() {
+    _clearTouchBoundary();
     widget.document.scroll.removeListener(_nativeScrollChanged);
     _scripts?.bindLayout(this, null);
     _layout.removeListener(_nativeLayoutChanged);
@@ -1724,16 +1846,22 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
               if (scripts != null) {
                 unawaited(scripts.updateEnvironment(environment));
               }
-              return SingleChildScrollView(
-                controller: document.scroll,
-                child: document.content.isHtml
-                    ? _buildContent(
-                        document,
-                        width: constraints.maxWidth,
-                        height: constraints.maxHeight,
-                        dark: base.brightness == Brightness.dark,
-                      )
-                    : (_body ??= _buildContent(document)),
+              return Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: _touchBoundary.down,
+                onPointerUp: _documentTouchUp,
+                onPointerCancel: _touchBoundary.cancel,
+                child: SingleChildScrollView(
+                  controller: document.scroll,
+                  child: document.content.isHtml
+                      ? _buildContent(
+                          document,
+                          width: constraints.maxWidth,
+                          height: constraints.maxHeight,
+                          dark: base.brightness == Brightness.dark,
+                        )
+                      : (_body ??= _buildContent(document)),
+                ),
               );
             },
           ),
@@ -1991,7 +2119,12 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       onNavigate: widget.onLink,
       onFormSubmit: widget.onSubmit,
       onScriptEvent: _scripts?.dispatch,
-      onScriptDetailedEvent: _scripts?.dispatchDetailed,
+      onScriptDetailedEvent: _scripts == null
+          ? null
+          : _dispatchNativeDetailedEvent,
+      onScriptTouchClickQueued: _scripts == null
+          ? null
+          : _nativeTouchClickQueued,
       onScriptControlClick: _scripts?.ready == true ? _scripts!.click : null,
       scriptFocusActions: _scripts?.focusActions ?? const [],
       takeScriptFocusActions: _scripts?.takeFocusActions,

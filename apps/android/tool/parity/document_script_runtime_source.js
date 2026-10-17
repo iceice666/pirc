@@ -5756,6 +5756,12 @@
         event = new PircFocusEvent(type, Object.assign({}, eventInit, {
           relatedTarget: staleHostFocusOut ? null : resolveEventRelatedTarget(state, eventData)
         }));
+      } else if (['mouseover', 'mouseout', 'mouseenter', 'mouseleave'].includes(type)) {
+        event = state.pointer.createMouseBoundaryEvent(
+          type, request.eventData, resolveEventRelatedTarget(state, eventData)
+        );
+        if (!event)
+          throw new TypeError('Invalid native mouse boundary coordinates.');
       } else if (type === 'click') {
         event = state.pointer.createClickEvent(request.eventData, eventInit, element) ||
           new state.pointer.PointerEvent(type, Object.assign({}, eventInit, { composed: true, detail: 1, pointerId: -1 }));

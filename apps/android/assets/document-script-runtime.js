@@ -23030,16 +23030,18 @@ function createDocumentPointer(deps) {
 
   function mouseEventInit(type, data, clickInit) {
     const pointerInit = pointerEventInit(type, data);
+    const boundary = ['mouseover', 'mouseout', 'mouseenter', 'mouseleave'].includes(type);
+    const nonBubbling = type === 'mouseenter' || type === 'mouseleave';
     const init = {
       bubbles: clickInit && typeof clickInit.bubbles === 'boolean'
-        ? clickInit.bubbles : true,
+        ? clickInit.bubbles : !nonBubbling,
       cancelable: clickInit && typeof clickInit.cancelable === 'boolean'
-        ? clickInit.cancelable : true,
+        ? clickInit.cancelable : !nonBubbling,
       composed: clickInit && typeof clickInit.composed === 'boolean'
-        ? clickInit.composed : true,
+        ? clickInit.composed : !nonBubbling,
       view: document && document.defaultView ? document.defaultView : null,
       detail: clickInit && typeof clickInit.detail === 'number' && Number.isFinite(clickInit.detail)
-        ? boundedNumber(clickInit.detail, 1, -2147483648, 2147483647, true) : (type === 'mousemove' ? 0 : 1),
+        ? boundedNumber(clickInit.detail, 1, -2147483648, 2147483647, true) : (type === 'mousemove' || boundary ? 0 : 1),
       screenX: pointerInit.screenX,
       screenY: pointerInit.screenY,
       clientX: pointerInit.clientX,
@@ -23224,7 +23226,11 @@ function createDocumentPointer(deps) {
   function dispatchMouseCompatibility(target, type, data) {
     const mouseType = type === 'pointerdown' ? 'mousedown' :
       type === 'pointermove' ? 'mousemove' :
-      type === 'pointerup' ? 'mouseup' : null;
+      type === 'pointerup' ? 'mouseup' :
+      type === 'pointerover' ? 'mouseover' :
+      type === 'pointerout' ? 'mouseout' :
+      type === 'pointerenter' ? 'mouseenter' :
+      type === 'pointerleave' ? 'mouseleave' : null;
     if (!mouseType)
       return null;
     const event = new MouseEvent(mouseType, mouseEventInit(mouseType, type === 'pointermove' ? Object.assign({}, data, {button: 0}) : data));
@@ -23304,7 +23310,7 @@ function createDocumentPointer(deps) {
     if (pointer && eventType === 'pointerdown' && event.defaultPrevented)
       pointer.suppressCompatMouse = true;
     const suppressCompatMouse = pointer && pointer.suppressCompatMouse;
-    if (data.pointerType === 'mouse' && !suppressCompatMouse)
+    if (data.pointerType === 'mouse' && (!suppressCompatMouse || boundary))
       dispatchMouseCompatibility(eventTarget, eventType, data);
 
     if (pointer && (eventType === 'pointerup' || eventType === 'pointercancel')) {
@@ -23315,13 +23321,33 @@ function createDocumentPointer(deps) {
       if (pointer.deferredBoundary?.outside) {
         const boundaryTarget = pointer.deferredBoundary.target;
         if (boundaryTarget?.isConnected !== false) {
-          dispatchEvent(boundaryTarget, new PointerEvent('pointerout', pointerEventInit('pointerout', data)));
-          dispatchEvent(boundaryTarget, new PointerEvent('pointerleave', pointerEventInit('pointerleave', data)));
+          for (const type of ['pointerout', 'pointerleave']) {
+            dispatchEvent(boundaryTarget, new PointerEvent(type, pointerEventInit(type, data)));
+            if (data.pointerType === 'mouse')
+              dispatchMouseCompatibility(boundaryTarget, type, data);
+          }
         }
       }
     }
     return { event: event, defaultPrevented: Boolean(event.defaultPrevented) };
     });
+  }
+
+  function createMouseBoundaryEvent(type, eventData, relatedTarget) {
+    if (!['mouseover', 'mouseout', 'mouseenter', 'mouseleave'].includes(type))
+      return null;
+    const data = {};
+    for (const name of ['clientX', 'clientY', 'screenX', 'screenY', 'offsetX', 'offsetY', 'movementX', 'movementY', 'button', 'buttons']) {
+      const value = finiteNumber(eventData, name);
+      if (value !== undefined) data[name] = value;
+    }
+    if (data.clientX === undefined || data.clientY === undefined)
+      return null;
+    for (const name of ['ctrlKey', 'shiftKey', 'altKey', 'metaKey'])
+      data[name] = booleanValue(eventData, name, false);
+    const init = mouseEventInit(type, data);
+    init.relatedTarget = relatedTarget;
+    return new MouseEvent(type, init);
   }
 
   function createClickEvent(eventData, eventInit, target) {
@@ -23366,6 +23392,7 @@ function createDocumentPointer(deps) {
     install: install,
     dispatch: dispatch,
     createClickEvent: createClickEvent,
+    createMouseBoundaryEvent: createMouseBoundaryEvent,
     nativeCanvasRect: nativeCanvasRect,
     withNativeDispatchGeometry: withNativeDispatchGeometry
   };
@@ -44070,6 +44097,12 @@ function createPircDocumentLayout(options) {
         event = new PircFocusEvent(type, Object.assign({}, eventInit, {
           relatedTarget: staleHostFocusOut ? null : resolveEventRelatedTarget(state, eventData)
         }));
+      } else if (['mouseover', 'mouseout', 'mouseenter', 'mouseleave'].includes(type)) {
+        event = state.pointer.createMouseBoundaryEvent(
+          type, request.eventData, resolveEventRelatedTarget(state, eventData)
+        );
+        if (!event)
+          throw new TypeError('Invalid native mouse boundary coordinates.');
       } else if (type === 'click') {
         event = state.pointer.createClickEvent(request.eventData, eventInit, element) ||
           new state.pointer.PointerEvent(type, Object.assign({}, eventInit, { composed: true, detail: 1, pointerId: -1 }));

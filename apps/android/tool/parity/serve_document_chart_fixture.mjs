@@ -15,6 +15,11 @@ if (actualSha256 !== provenance.assetSha256) {
 }
 const reference = readFileSync(path.join(scriptDirectory, 'fixtures/document-chart-chromium153.json'));
 const referenceSha256 = createHash('sha256').update(reference).digest('hex');
+const interactions = readFileSync(path.join(scriptDirectory, 'fixtures/document-chart-interactions-chromium153.json'));
+const interactionFixture = JSON.parse(interactions.toString('utf8'));
+if (interactionFixture.chartJs?.sha256 !== actualSha256 || !Array.isArray(interactionFixture.cases)) {
+  throw new Error('Chart interaction fixture does not match the pinned library');
+}
 const fixture = JSON.parse(reference.toString('utf8'));
 if (fixture.chartJs?.sha256 !== actualSha256 || !Array.isArray(fixture.cases)) {
   throw new Error('Chart.js reference fixture does not match the pinned library or has no cases');
@@ -54,6 +59,14 @@ const server = createServer((request, response) => {
       'x-chartjs-sha256': actualSha256,
     });
     response.end(library);
+    return;
+  }
+  if (pathname === '/interactions.json') {
+    response.writeHead(200, {
+      'cache-control': 'no-store',
+      'content-type': 'application/json; charset=utf-8',
+    });
+    response.end(interactions);
     return;
   }
   if (pathname === '/reference.json') {

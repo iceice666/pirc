@@ -106,7 +106,8 @@ transient observation and bulk record grouping remain explicit differences.
 
 `document_chart_http_test.dart` uses the pinned test-only Chart.js 4.5.1 UMD and
 Chromium 153 fixture for phone/tablet at DPR 1/3. It compares actual native
-geometry, paints the bars, taps the update button and increases the container
+geometry and painted bar/tooltip pixels, taps both bars and blank/outside areas,
+checks rapid outside taps, taps the update button and increases the container
 and Canvas CSS widths by 20 px. Initial CSS and backing sizes are consistent;
 both CSS dimensions use explicit pixels, with no CSS attribute dependencies.
 Other sizing modes and synchronous reads before native layout remain open. Run it with the loopback fixture server (keep it running in another
@@ -127,6 +128,12 @@ Without the define, the fixture-dependent test is skipped. The server binds only
 to loopback and verifies the pinned library hash. Recreate the browser reference
 with `node apps/android/tool/parity/capture_document_chart_chromium153.mjs` from
 the repository root; the capture refuses everyday Chrome and blocks requests.
+The touch oracle is reproducible with
+`node apps/android/tool/parity/capture_document_chart_interactions_chromium153.mjs`.
+Its legend captures are browser references only: native legend hide/show redraw
+still fails on unsupported Canvas text ink bounds and can leave the chart blank.
+Legend interaction is not accepted. Full TouchEvent/multitouch compatibility,
+other chart types and animation remain open.
 Neither the test library nor its fixture is included in the APK.
 
 Ordinary app rendering uses the platform fonts. Browser capture tools use

@@ -210,6 +210,7 @@ class NativeHtmlDocument extends StatefulWidget {
     this.canvasImages = const {},
     this.onScriptEvent,
     this.onScriptDetailedEvent,
+    this.onScriptTouchClickQueued,
     this.markdownStyles = true,
     this.onNavigate,
     this.viewport,
@@ -281,6 +282,11 @@ class NativeHtmlDocument extends StatefulWidget {
     Map<String, dynamic> eventData,
   )?
   onScriptDetailedEvent;
+
+  /// Called synchronously when a primary touch click is queued for dispatch.
+  /// The returned callback runs once after that click dispatch completes.
+  final VoidCallback? Function(String id, Map<String, dynamic> data)?
+  onScriptTouchClickQueued;
   final bool markdownStyles;
 
   /// The document viewport for responsive media and, in full-document mode,
@@ -1426,6 +1432,12 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
           type == 'click' ? _scriptControlValues() : const [],
           data,
         );
+      },
+      onTouchClickQueued: (data) {
+        if (!mounted || owner != widget.scriptDocument) return null;
+        final currentCallback = widget.onScriptTouchClickQueued;
+        if (currentCallback == null) return null;
+        return currentCallback(id, data);
       },
       child: child,
     );

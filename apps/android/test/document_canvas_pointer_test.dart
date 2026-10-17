@@ -13,6 +13,7 @@ Widget _host({
   required Object documentIdentity,
   required String elementId,
   required NativeCanvasPointerEventCallback onEvent,
+  VoidCallback? Function(Map<String, dynamic> data)? onTouchClickQueued,
   bool touchActionNone = false,
   Offset Function()? viewportOrigin,
   Widget? parent,
@@ -26,6 +27,7 @@ Widget _host({
       elementId: elementId,
       touchActionNone: touchActionNone,
       viewportOrigin: viewportOrigin,
+      onTouchClickQueued: onTouchClickQueued,
       onEvent: onEvent,
       child: SizedBox.expand(
         key: canvasKey,
@@ -97,6 +99,109 @@ void main() {
     expect(received.last.$2['pointerId'], down['pointerId']);
   });
 
+  testWidgets(
+    'queues touch marker synchronously and completes after dispatch',
+    (tester) async {
+      final events = <_ReceivedEvent>[];
+      final order = <String>[];
+      final downDispatch = Completer<bool>();
+      final clickDispatch = Completer<bool>();
+      final surfaceKey = GlobalKey();
+      final canvasKey = GlobalKey();
+      Map<String, dynamic>? markedData;
+      Map<String, dynamic>? dispatchedClickData;
+      var completions = 0;
+
+      await tester.pumpWidget(
+        _host(
+          surfaceKey: surfaceKey,
+          canvasKey: canvasKey,
+          documentIdentity: Object(),
+          elementId: 'canvas-1',
+          onEvent: (type, data) {
+            events.add((type, data));
+            if (type == 'pointerdown') {
+              order.add('down-start');
+              return downDispatch.future;
+            }
+            if (type == 'click') {
+              order.add('click-start');
+              dispatchedClickData = data;
+              return clickDispatch.future;
+            }
+            return Future<bool>.value(true);
+          },
+          onTouchClickQueued: (data) {
+            order.add('marker');
+            markedData = data;
+            return () {
+              completions++;
+              order.add('complete');
+            };
+          },
+        ),
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(canvasKey)),
+        kind: PointerDeviceKind.touch,
+      );
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      expect(order, <String>['down-start', 'marker']);
+      expect(markedData?['pointerType'], 'touch');
+      expect(markedData?['isPrimary'], isTrue);
+      expect(events.any((event) => event.$1 == 'click'), isFalse);
+
+      downDispatch.complete(true);
+      await tester.pump();
+      expect(order, <String>['down-start', 'marker', 'click-start']);
+      expect(identical(dispatchedClickData, markedData), isTrue);
+      expect(completions, 0);
+
+      clickDispatch.complete(true);
+      await tester.pumpAndSettle();
+      expect(completions, 1);
+      expect(order.last, 'complete');
+    },
+  );
+
+  testWidgets('queues one marker per accepted touch click', (tester) async {
+    var queued = 0;
+    var clicks = 0;
+    var completions = 0;
+    final surfaceKey = GlobalKey();
+    final canvasKey = GlobalKey();
+
+    await tester.pumpWidget(
+      _host(
+        surfaceKey: surfaceKey,
+        canvasKey: canvasKey,
+        documentIdentity: Object(),
+        elementId: 'canvas-1',
+        onEvent: (type, data) async {
+          if (type == 'click') clicks++;
+          return true;
+        },
+        onTouchClickQueued: (_) {
+          queued++;
+          return () => completions++;
+        },
+      ),
+    );
+
+    final point = tester.getCenter(find.byKey(canvasKey));
+    await tester.tapAt(point);
+    await tester.tapAt(point);
+    await tester.pumpAndSettle();
+
+    expect(queued, 2);
+    expect(clicks, 2);
+    expect(completions, 2);
+  });
+
   testWidgets('mouse drag keeps its pointer id and clicks on an inside up', (
     tester,
   ) async {
@@ -163,6 +268,7 @@ void main() {
     final received = <_ReceivedEvent>[];
     final surfaceKey = GlobalKey();
     final canvasKey = GlobalKey();
+    var touchClicksQueued = 0;
     final canvas = SizedBox(
       width: 300,
       height: 150,
@@ -171,6 +277,10 @@ void main() {
         documentIdentity: Object(),
         elementId: 'canvas-1',
         touchActionNone: false,
+        onTouchClickQueued: (_) {
+          touchClicksQueued++;
+          return null;
+        },
         onEvent: (type, data) async {
           received.add((type, Map<String, dynamic>.from(data)));
           return true;
@@ -208,6 +318,40 @@ void main() {
 
     expect(received.where((event) => event.$1 == 'pointercancel').length, 1);
     expect(received.any((event) => event.$1 == 'click'), isFalse);
+    expect(touchClicksQueued, 0);
+  });
+
+  testWidgets('runs queued completion once when click dispatch throws', (
+    tester,
+  ) async {
+    var queued = 0;
+    var completions = 0;
+    final surfaceKey = GlobalKey();
+    final canvasKey = GlobalKey();
+
+    await tester.pumpWidget(
+      _host(
+        surfaceKey: surfaceKey,
+        canvasKey: canvasKey,
+        documentIdentity: Object(),
+        elementId: 'canvas-1',
+        onEvent: (type, data) async {
+          if (type == 'click') throw StateError('click dispatch failed');
+          return true;
+        },
+        onTouchClickQueued: (_) {
+          queued++;
+          return () => completions++;
+        },
+      ),
+    );
+
+    await tester.tapAt(tester.getCenter(find.byKey(canvasKey)));
+    await tester.pumpAndSettle();
+
+    expect(queued, 1);
+    expect(completions, 1);
+    expect(tester.takeException(), isNotNull);
   });
 
   testWidgets('coalesces moves behind an awaited down and keeps edge order', (

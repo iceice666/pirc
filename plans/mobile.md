@@ -98,7 +98,11 @@ outside the agreed scope.
   then retain proven unchanged geometry. The maximum observed bar-geometry
   difference is 0.055 px from platform fonts. Default/unprepared sizes, intrinsic
   and percentage dimensions, CSS attribute dependencies, arbitrary synchronous
-  DOM write/read flows and broader chart interactions remain unverified.
+  DOM write/read flows, other chart types and animation remain unverified.
+  Stock bar touch tooltips, blank/outside dismissal and rapid outside taps are
+  covered. **Legend hide/show redraw is not usable yet:** its strikethrough needs
+  unsupported Canvas text ink bounds and can leave the chart blank. This is a
+  confirmed remaining issue, even though the dataset visibility flag changes.
 - Public `MutationObserver` covers live child/attribute/text changes, subtree
   matching, filters/old values, microtask delivery, `takeRecords()` and
   `disconnect()`. Private serialization does not create guest notifications.
@@ -689,8 +693,8 @@ retained in ignored evidence; the observed maximum is 0.054108 px, with matching
 vertical geometry and exact sampled blue RGBA pixels. Browser and Android fonts
 are different, so this is not a complete cross-platform screenshot equivalence
 claim. The initial acceptance did not cover container/CSS resizing. The follow-up
-below accepts a measured fixed-pixel subset; arbitrary chart types, canvas
-tooltips and animation remain open.
+below accepts a measured fixed-pixel subset. The later touch follow-up covers
+stock bar tooltips; arbitrary chart types and animation remain open.
 
 The test reuses one Gateway across document cases, matching the app's ownership.
 Separate EventChannel listeners with the same channel name replace each other;
@@ -749,3 +753,29 @@ Detailed counts, source/bundle hashes, browser observations and geometry deltas
 remain in ignored acceptance output; disposable test/emulator outputs are cleaned
 afterward. The broader parity goal and previously listed physical-device and
 push acceptance remain active.
+
+
+## Native bar touch interactions
+
+The fixed-pixel Chart.js cases now compare stock bar touch tooltips, blank-area
+and outside taps with the dedicated Chromium 153 touch reference. Native paint
+checks cover highlight colors, tooltip background pixels and actual tooltip text
+commands. An additional Android sequence taps a bar and immediately taps outside
+without pumping between gestures, then checks the final cleared state.
+
+A passive document listener uses the real Flutter view hit path, including
+stacking, clipping, transforms and scrolling. It waits for a matching native
+frame when the DOM revision has advanced. New primary gestures, cancellation,
+document replacement and detachment invalidate old pending results. Accepted
+Canvas clicks announce accepted queue entries before asynchronous delivery;
+boundary exits wait for those entries to complete and reconcile the final real
+target. This also preserves ordering for libraries that coalesce events per frame,
+so an early exit cannot be merged ahead of a late click and revive its tooltip. Desktop pointer boundaries also deliver their
+corresponding mouse events, including after pointer capture releases.
+
+Remaining: the browser oracle includes legend taps, but native hide/show redraw
+is **not accepted**. Chart.js requests actual glyph ink bounds for a hidden-label
+strikethrough; the current width-only TextMetrics rejects that read, aborts the
+redraw and can leave the chart blank. Keep this issue ahead of further chart
+coverage. Full DOM TouchEvent/multitouch lifecycle and animation are unverified;
+this follow-up does not establish general browser input equivalence.

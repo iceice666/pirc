@@ -58,3 +58,35 @@ test('captured mouse boundaries wait for release and compat move uses MouseEvent
  send('pointerup',{...mouse,buttons:0,pressure:0});
  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(log)',ctx)),['pointerup','lostpointercapture','pointerout','pointerleave']);
 });
+
+test('mouse pointer boundary compatibility uses MouseEvent with browser flags',()=>{
+ const {ctx,call,id}=setup(`<canvas></canvas><script>window.boundaries=[];for(const type of ['mouseover','mouseenter','mouseout','mouseleave'])document.querySelector('canvas').addEventListener(type,e=>boundaries.push([e.type,e instanceof MouseEvent,e instanceof PointerEvent,e.clientX,e.clientY,e.detail,e.bubbles,e.cancelable,e.composed]));</script>`);
+ const mouse={...data,pointerId:1,pointerType:'mouse',buttons:0,pressure:0};
+ for(const type of ['pointerover','pointerenter','pointerout','pointerleave'])call('dispatch',{id,type,eventData:mouse});
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(boundaries)',ctx)),[
+  ['mouseover',true,false,64,87,0,true,true,true],
+  ['mouseenter',true,false,64,87,0,false,false,false],
+  ['mouseout',true,false,64,87,0,true,true,true],
+  ['mouseleave',true,false,64,87,0,false,false,false]
+ ]);
+});
+
+test('native outside-touch mouseout resolves current related target and retains coordinates',()=>{
+ const {ctx,call,id}=setup(`<canvas></canvas><button id="other">Other</button><script>document.querySelector('canvas').onmouseout=e=>{window.exit=[e instanceof MouseEvent,e.clientX,e.clientY,e.relatedTarget===document.getElementById('other'),e.detail,e.bubbles,e.cancelable,e.isTrusted];};</script>`);
+ const other=vm.runInContext('document.getElementById("other").getAttribute("data-pirc-script-id")',ctx);
+ const result=call('dispatch',{id,type:'mouseout',eventData:{clientX:385,clientY:120,relatedTarget:other}});
+ assert.deepEqual(result.diagnostics.filter(d=>d.severity==='error'),[]);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(exit)',ctx)),[true,385,120,true,0,true,true,true]);
+ // An unknown or removed related target cannot cross document ownership.
+ call('dispatch',{id,type:'mouseout',eventData:{clientX:385,clientY:120,relatedTarget:'missing'}});
+ assert.equal(vm.runInContext('exit[3]',ctx),false);
+});
+
+test('captured mouse boundaries emit compatibility exit once after capture release',()=>{
+ const {ctx,call,id}=setup(`<canvas></canvas><script>window.log=[];const c=document.querySelector('canvas');c.onpointerdown=e=>c.setPointerCapture(e.pointerId);for(const type of ['pointerout','pointerleave','pointerup','lostpointercapture','mouseout','mouseleave'])c.addEventListener(type,e=>log.push(type));</script>`);
+ const mouse={...data,pointerId:1,pointerType:'mouse'};
+ for(const type of ['pointerdown','pointerout','pointerleave'])call('dispatch',{id,type,eventData:mouse});
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(log)',ctx)),[]);
+ call('dispatch',{id,type:'pointerup',eventData:{...mouse,buttons:0,pressure:0}});
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(log)',ctx)),['pointerup','lostpointercapture','pointerout','mouseout','pointerleave','mouseleave']);
+});

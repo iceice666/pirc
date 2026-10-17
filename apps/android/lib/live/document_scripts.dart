@@ -2485,6 +2485,12 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     final queuedDuringStartup = loading;
     final pointerInput =
         type.startsWith('pointer') ||
+        const {
+          'mouseover',
+          'mouseout',
+          'mouseenter',
+          'mouseleave',
+        }.contains(type) ||
         (eventData?.containsKey('pointerId') ?? false);
     final actionGeneration = _formActionGeneration;
     final focusEpoch = _focusActionEpoch;

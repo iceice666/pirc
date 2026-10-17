@@ -22,6 +22,7 @@ class NativeDocumentCanvasPointer extends StatefulWidget {
     required this.elementId,
     required this.touchActionNone,
     this.viewportOrigin,
+    this.onTouchClickQueued,
   });
 
   final Widget child;
@@ -36,6 +37,10 @@ class NativeDocumentCanvasPointer extends StatefulWidget {
   /// the global event position. The callback is evaluated for each event so a
   /// scroll or viewport layout change is reflected immediately.
   final Offset Function()? viewportOrigin;
+
+  /// Called synchronously when an accepted primary touch click is queued.
+  /// The returned callback runs once after the click event dispatch finishes.
+  final VoidCallback? Function(Map<String, dynamic> data)? onTouchClickQueued;
 
   @override
   State<NativeDocumentCanvasPointer> createState() =>
@@ -234,11 +239,16 @@ class _NativeDocumentCanvasPointerState
       );
       if (state.tapAccepted || coordinates.isInside) {
         state.clickSent = true;
+        final clickData = _pointerEventData('click', event, state);
+        final onCompleted = state.pointerType == 'touch' && state.isPrimary
+            ? widget.onTouchClickQueued?.call(clickData)
+            : null;
         _enqueue(
           'click',
-          _pointerEventData('click', event, state),
+          clickData,
           state.pointerId,
           state.onEvent,
+          onCompleted: onCompleted,
         );
       }
     }
@@ -430,12 +440,14 @@ class _NativeDocumentCanvasPointerState
     int pointerId,
     NativeCanvasPointerEventCallback callback, {
     bool coalesce = false,
+    VoidCallback? onCompleted,
   }) {
     final queued = _QueuedCanvasEvent(
       type: type,
       data: data,
       pointerId: pointerId,
       callback: callback,
+      onCompleted: onCompleted,
     );
     if (coalesce) {
       for (var index = _eventQueue.length - 1; index >= 0; index--) {
@@ -478,6 +490,22 @@ class _NativeDocumentCanvasPointerState
               ),
             ),
           );
+        } finally {
+          try {
+            queued.onCompleted?.call();
+          } catch (error, stackTrace) {
+            FlutterError.reportError(
+              FlutterErrorDetails(
+                exception: error,
+                stack: stackTrace,
+                library: 'document canvas pointer surface',
+                context: ErrorDescription(
+                  'while completing ${queued.type} for canvas pointer '
+                  '${queued.pointerId}',
+                ),
+              ),
+            );
+          }
         }
       }
     } finally {
@@ -542,12 +570,14 @@ class _QueuedCanvasEvent {
     required this.data,
     required this.pointerId,
     required this.callback,
+    this.onCompleted,
   });
 
   final String type;
   final Map<String, dynamic> data;
   final int pointerId;
   final NativeCanvasPointerEventCallback callback;
+  final VoidCallback? onCompleted;
 }
 
 enum _CanvasPointerPhase { down, move, up, cancel, click, other }
