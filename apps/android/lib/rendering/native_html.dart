@@ -221,6 +221,7 @@ class NativeHtmlDocument extends StatefulWidget {
     this.layoutKnownIds = const {},
     this.layoutNoBoxIds = const {},
     this.layoutOffsetSpecs = const {},
+    this.documentTopMargins = const {},
   });
   final List<md.Node> nodes;
   final TextStyle style;
@@ -291,6 +292,7 @@ class NativeHtmlDocument extends StatefulWidget {
   final int layoutRevision;
   final Set<String> layoutKnownIds, layoutNoBoxIds;
   final Map<String, NativeDocumentOffsetSpec> layoutOffsetSpecs;
+  final Map<String, double> documentTopMargins;
   @override
   State<NativeHtmlDocument> createState() => _NativeHtmlDocumentState();
 }
@@ -1982,6 +1984,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             widget.canvasImages,
             widget.layoutController,
             widget.layoutOffsetSpecs,
+            widget.documentTopMargins,
             widget.elementScrollController,
             widget.layoutRevision,
             account,
@@ -2063,6 +2066,12 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
               }
               final author = widget.authorStylesBuilder?.call(element) ?? {};
               styles.addAll(author);
+              final topMargin =
+                  widget.documentTopMargins[element
+                      .attributes['data-pirc-document-style']];
+              if (widget.imageViewport != null && topMargin != null) {
+                styles['margin-top'] = '${topMargin}px';
+              }
               // The document cascade emits physical border longhands. The HTML
               // core reads border-left/right/top/bottom but ignores their
               // width/style/color longhands, so bridge the resolved winners

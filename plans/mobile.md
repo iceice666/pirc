@@ -27,10 +27,9 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** parent/child vertical margin collapse,
-      positioned/transformed/zoomed/table offset geometry, inline-fragment
-      geometry and image/resize/chart/framework
-      flows. A DOM write followed immediately by a geometry read still needs a
+- [ ] **Dynamic content compatibility:** percentage/signed/empty-block and bottom-edge
+      margin collapse, positioned/transformed/zoomed/table offset geometry,
+      inline-fragment geometry and image/resize/chart/framework flows. A DOM write followed immediately by a geometry read still needs a
       matching native frame; unsupported reads fail explicitly. Native Canvas event
       callbacks have measured geometry for their synchronous dispatch.
 - [ ] **Physical phone/tablet acceptance:** use a real account for pairing,
@@ -49,15 +48,14 @@ outside the agreed scope.
 - Small visual differences, uncommon syntax and the old audit's fine-grained
   layout/style items. The frozen visual corpus is web revision `bd3d909`; newly
   added 0.6.x features are tracked separately rather than claimed as visual parity.
-- Parent/child vertical margins still differ when they should collapse through
-  the parent's top edge. This is not limited to small visual offsets: the offset
-  corpus records 3/3.5 px child differences, 63 px content-parent differences in
-  two scrollers, and a body box at 0 instead of 1000 px after a child's large
-  margin. Target child positions and scroll compensation match in the scroller
-  and large-margin cases. Browser results remain unchanged; exact native/browser
-  differences are in `document-offset-known-differences.json`.
-- Eight percentage top-margin cases have the same parent-margin-collapse gap.
-  Some inserted classic-script lexical-scope behavior differs from the browser.
+- Eight percentage top-margin cases retain parent/child margin-collapse gaps.
+  Negative and font-relative top margins, empty-block collapse-through and
+  parent/bottom-edge collapse need wider native layout support. The common
+  nonnegative pixel top-margin cases now match their browser references.
+- `display:flow-root` still has an unsupported parent box in the new margin
+  corpus. In that control, native child y/offsetTop and ancestor heights are
+  4 px short at both viewport widths; the oracle asserts the exact difference.
+- Some inserted classic-script lexical-scope behavior differs from the browser.
 - Two root-height fixtures retain extra trailing blank scroll space: 8 px with
   the default body margin, and 17 px with nested content-box edges. Their element
   rectangles match Chromium; these small scroll-extent differences are deferred.
@@ -226,11 +224,10 @@ percentage/auto flex margins and full CSS margin collapsing still need wider
 support.
 
 The dedicated Chromium 153 reference has 36 observations across 18 cases at
-390×844 and 768×1024, including nested and window scroll states. Thirteen cases match
-the captured offset and origin checks; five retain the named margin-collapse
-findings above, asserted separately at both viewport widths. Browser reference
-values are not replaced with native results. The bundle tests cover actual
-LinkeDOM parent identity, the classic-script frame gate, mutation/reparenting
+390×844 and 768×1024, including nested and window scroll states. All 18 cases now
+match the captured offset and origin checks after the top-margin follow-up.
+Browser reference values are not replaced with native results. The bundle tests
+cover actual LinkeDOM parent identity, the classic-script frame gate, mutation/reparenting
 staleness, detached/unrendered elements and missing metadata.
 
 Additional flex references check signed row margins with weighted shrinking,
@@ -245,3 +242,28 @@ Final gates for this follow-up: 4,501 Flutter tests and 519 JavaScript tests
 pass; Flutter analysis and formatting are clean. The local HTTP Android
 integration passes in the emulator. Physical-device and remote-push acceptance
 remain pending.
+
+## Parent/first-child top-margin follow-up
+
+Full fetched pages now compute a render-only collapse plan from the original DOM
+and winning author cascade before converting the root/body to native wrappers.
+Nonnegative pixel top margins collapse through eligible nonempty block chains;
+the parent’s actual border box/background moves with the collapsed edge.
+Computed styles retain their authored values. Root margins never collapse;
+body default margins, visibility:hidden and fixed parent heights are covered.
+Borders, padding, inline content, clearance, floats, flex/grid items and new
+formatting contexts stop the relevant collapse. Percentage, signed,
+font-relative, empty-block and bottom-edge groups remain outside this subset.
+
+The prior five offset findings now match Chromium, including scroll-content
+parent bounds and a body shifted by a 1000 px first-child margin. A separate
+32-observation reference across 16 cases and both viewport widths checks actual
+x/y/width/height and offsets. Fifteen cases match; the flow-root control keeps
+its named unsupported parent and exact 4 px geometry differences. Production
+fetched-page widget tests cover fixed heights, following siblings, resize and
+large body-margin scrolling. Browser capture tools use the dedicated test shell.
+
+Final gates: 4,575 Flutter tests and 519 JavaScript tests pass; Flutter analysis
+and formatting are clean. The 32-observation Chromium margin capture reproduces
+without geometry changes. This follow-up uses production-path host/widget tests;
+physical-device and remote-push acceptance remain pending.
