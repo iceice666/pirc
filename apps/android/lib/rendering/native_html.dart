@@ -12,6 +12,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'svg_dimensions.dart';
 import 'document_canvas.dart';
 import 'document_layout.dart';
+import 'document_offsets.dart';
 import 'document_element_scroll.dart';
 import 'document_canvas_pointer.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -219,6 +220,7 @@ class NativeHtmlDocument extends StatefulWidget {
     this.layoutRevision = 0,
     this.layoutKnownIds = const {},
     this.layoutNoBoxIds = const {},
+    this.layoutOffsetSpecs = const {},
   });
   final List<md.Node> nodes;
   final TextStyle style;
@@ -288,6 +290,7 @@ class NativeHtmlDocument extends StatefulWidget {
   final NativeDocumentElementScrollController? elementScrollController;
   final int layoutRevision;
   final Set<String> layoutKnownIds, layoutNoBoxIds;
+  final Map<String, NativeDocumentOffsetSpec> layoutOffsetSpecs;
   @override
   State<NativeHtmlDocument> createState() => _NativeHtmlDocumentState();
 }
@@ -1978,6 +1981,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             widget.canvases,
             widget.canvasImages,
             widget.layoutController,
+            widget.layoutOffsetSpecs,
             widget.elementScrollController,
             widget.layoutRevision,
             account,
@@ -2026,6 +2030,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
                 widget.imageDark ??
                 Theme.of(context).brightness == Brightness.dark,
             () => widget.layoutController,
+            () => widget.layoutOffsetSpecs,
             () => widget.layoutRevision,
             () => _elementScroll,
           ),
@@ -2469,6 +2474,7 @@ class _NativeHtmlFactory extends WidgetFactory {
     this.imageDpr,
     this.imageDark,
     this.layoutController,
+    this.layoutOffsetSpecs,
     this.layoutRevision,
     this.elementScroll,
   );
@@ -2479,6 +2485,7 @@ class _NativeHtmlFactory extends WidgetFactory {
   final double Function() imageDpr;
   final bool Function() imageDark;
   final NativeDocumentLayoutController? Function() layoutController;
+  final Map<String, NativeDocumentOffsetSpec> Function() layoutOffsetSpecs;
   final int Function() layoutRevision;
   final NativeDocumentElementScrollController Function() elementScroll;
   final _geometryBlockWrapped = Expando<bool>();
@@ -2779,6 +2786,7 @@ class _NativeHtmlFactory extends WidgetFactory {
       controller: controller,
       revision: layoutRevision(),
       id: id,
+      offsetSpec: layoutOffsetSpecs()[id],
       boxSurface: _geometryOwnSizing[element] == true
           ? (box) => nativeDocumentBoxSurface(box, owner: element)
           : null,
@@ -2990,6 +2998,21 @@ class _NativeHtmlFactory extends WidgetFactory {
               ? 0
               : edge('border-$side-width')),
     );
+    double margins(List<String> sides) {
+      if (!hasDocumentViewport()) return 0;
+      return sides.fold<double>(0, (sum, side) {
+        final value = styles['margin-$side']?.trim() ?? '';
+        final negative = value.startsWith('-');
+        final pixels =
+            _flexLength(
+              negative ? value.substring(1) : value,
+              fontSize,
+            )?.resolve(null) ??
+            0;
+        return sum + (negative ? -pixels : pixels);
+      });
+    }
+
     final main = horizontal ? 'width' : 'height';
     final cross = horizontal ? 'height' : 'width';
     final overflow =
@@ -3012,11 +3035,46 @@ class _NativeHtmlFactory extends WidgetFactory {
       automaticMinimum: !const {'hidden', 'auto', 'scroll'}.contains(overflow),
       mainEdges: edges(horizontal ? ['left', 'right'] : ['top', 'bottom']),
       crossEdges: edges(horizontal ? ['top', 'bottom'] : ['left', 'right']),
+      mainMargins: margins(horizontal ? ['left', 'right'] : ['top', 'bottom']),
+      crossMargins: margins(horizontal ? ['top', 'bottom'] : ['left', 'right']),
       borderBox: _documentUsesBorderBox(element),
       stretchCross: length(cross) == null,
       align: _flexAlign(styles['align-self']),
       order: int.tryParse(styles['order'] ?? '') ?? 0,
     );
+  }
+
+  double _fixedMargin(
+    Map<String, String> styles,
+    String side,
+    double fontSize,
+  ) {
+    final value = styles['margin-$side']?.trim() ?? '0';
+    final negative = value.startsWith('-');
+    final pixels =
+        _flexLength(
+          negative ? value.substring(1) : value,
+          fontSize,
+        )?.resolve(null) ??
+        0;
+    return negative ? -pixels : pixels;
+  }
+
+  bool _ownsFixedFlexMargins(dom.Element element) {
+    if (!hasDocumentViewport() || !_directDocumentFlexItem(element)) {
+      return false;
+    }
+    final styles = _flexChildStyles(element);
+    const sides = ['left', 'top', 'right', 'bottom'];
+    if (!sides.any((side) => styles.containsKey('margin-$side'))) return false;
+    return sides.every((side) {
+      final value = styles['margin-$side']?.trim() ?? '0';
+      final length = _flexLength(
+        value.startsWith('-') ? value.substring(1) : value,
+        16,
+      );
+      return length != null && !length.percentage;
+    });
   }
 
   bool _documentUsesBorderBox(dom.Element element) {
@@ -3153,16 +3211,46 @@ class _NativeHtmlFactory extends WidgetFactory {
         ),
       );
     }
-    if (margin != EdgeInsets.zero) {
+    double negativeMargin(String side, double fontSize) {
+      if (!hasDocumentViewport()) return 0;
+      final value = styles['margin-$side']?.trim() ?? '';
+      if (!value.startsWith('-')) return 0;
+      return -(_flexLength(value.substring(1), fontSize)?.resolve(null) ?? 0);
+    }
+
+    final hasNegativeMargin = const [
+      'left',
+      'right',
+    ].any((side) => negativeMargin(side, 16) != 0);
+    final ownsFlexMargins = _ownsFixedFlexMargins(tree.element);
+    if (margin != EdgeInsets.zero || hasNegativeMargin || ownsFlexMargins) {
       tree.register(
         BuildOp(
           debugLabel: 'native-document-percentage-margin',
           alwaysRenderBlock: false,
           priority: 5000005900000000,
-          onRenderBlock: (_, placeholder) => placeholder.wrapWith(
-            (_, child) =>
-                NativeDocumentPercentageMargin(fractions: margin, child: child),
-          ),
+          onRenderBlock: (parsed, placeholder) =>
+              placeholder.wrapWith((context, child) {
+                final resolved = parsed.inheritanceResolvers.resolve(context);
+                final fontSize = resolved.get<TextStyle>()?.fontSize ?? 16;
+                return NativeDocumentPercentageMargin(
+                  fractions: margin,
+                  fixed: ownsFlexMargins
+                      ? EdgeInsets.fromLTRB(
+                          _fixedMargin(styles, 'left', fontSize),
+                          _fixedMargin(styles, 'top', fontSize),
+                          _fixedMargin(styles, 'right', fontSize),
+                          _fixedMargin(styles, 'bottom', fontSize),
+                        )
+                      : EdgeInsets.fromLTRB(
+                          negativeMargin('left', fontSize),
+                          0,
+                          negativeMargin('right', fontSize),
+                          0,
+                        ),
+                  child: child,
+                );
+              }),
         ),
       );
     }
@@ -3447,6 +3535,14 @@ class _NativeHtmlFactory extends WidgetFactory {
                   'select',
                   'textarea',
                 }.contains(tree.element.localName)));
+    // Fixed flex-item margins must preserve the parent's allocated box.
+    // Core's margin Column loosens that allocation, collapsing empty grow and
+    // shrink items. The native margin proxy owns these insets instead.
+    if (nativeBlock &&
+        style.property.startsWith('margin') &&
+        _ownsFixedFlexMargins(tree.element)) {
+      return;
+    }
     if (nativeBlock &&
         const {
           'width',

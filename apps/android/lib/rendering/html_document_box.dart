@@ -749,27 +749,41 @@ class NativeDocumentPercentageMargin extends SingleChildRenderObjectWidget {
     super.key,
     required super.child,
     required this.fractions,
+    this.fixed = EdgeInsets.zero,
   });
 
   /// Fractions where `0.1` represents `10%`.
   final EdgeInsets fractions;
 
+  /// Fixed signed insets supplement percentage margins (for negative CSS
+  /// horizontal margins, which the HTML core clamps to zero).
+  final EdgeInsets fixed;
+
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderNativeDocumentPercentageMargin(fractions);
+      _RenderNativeDocumentPercentageMargin(fractions, fixed);
 
   @override
   void updateRenderObject(
     BuildContext context,
     covariant RenderObject renderObject,
   ) {
-    (renderObject as _RenderNativeDocumentPercentageMargin).fractions =
-        fractions;
+    (renderObject as _RenderNativeDocumentPercentageMargin)
+      ..fractions = fractions
+      ..fixed = fixed;
   }
 }
 
 class _RenderNativeDocumentPercentageMargin extends RenderShiftedBox {
-  _RenderNativeDocumentPercentageMargin(this._fractions) : super(null);
+  _RenderNativeDocumentPercentageMargin(this._fractions, this._fixed)
+    : super(null);
+
+  EdgeInsets _fixed;
+  set fixed(EdgeInsets value) {
+    if (_fixed == value) return;
+    _fixed = value;
+    markNeedsLayout();
+  }
 
   EdgeInsets _fractions;
   set fractions(EdgeInsets value) {
@@ -780,16 +794,17 @@ class _RenderNativeDocumentPercentageMargin extends RenderShiftedBox {
 
   EdgeInsets _margin({bool dry = false}) {
     final context = _findDocumentContainingBlock(parent);
-    if (dry && !(context?.isActive ?? false)) return EdgeInsets.zero;
+    if (dry && !(context?.isActive ?? false)) return _fixed;
     final width = context?.width;
-    if (width == null || !width.isFinite || width < 0) return EdgeInsets.zero;
+    if (width == null || !width.isFinite || width < 0) return _fixed;
     double side(double fraction) => fraction.isFinite ? fraction * width : 0;
     return EdgeInsets.fromLTRB(
-      side(_fractions.left),
-      side(_fractions.top),
-      side(_fractions.right),
-      side(_fractions.bottom),
-    );
+          side(_fractions.left),
+          side(_fractions.top),
+          side(_fractions.right),
+          side(_fractions.bottom),
+        ) +
+        _fixed;
   }
 
   @override

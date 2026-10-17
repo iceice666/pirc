@@ -1,4 +1,6 @@
 import 'dart:collection';
+import 'document_offsets.dart';
+import 'document_element_scroll.dart';
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
@@ -112,6 +114,8 @@ class NativeDocumentLayoutController extends ChangeNotifier {
         'offsetWidth': surface.size.width.round(),
         'offsetHeight': surface.size.height.round(),
       };
+      final offset = _offsetMetrics(element, surface, root);
+      if (offset != null) entry['offset'] = offset;
       final client = _clientMetrics(surface);
       if (client != null) entry.addAll(client);
       final scroll = elementScrollMetrics?.call(id);
@@ -134,6 +138,82 @@ class NativeDocumentLayoutController extends ChangeNotifier {
       },
       'boxes': boxes,
       if (scrollEvents.isNotEmpty) 'scrollEvents': scrollEvents,
+    };
+  }
+
+  Map<String, dynamic>? _offsetMetrics(
+    _RenderNativeDocumentLayoutElement element,
+    RenderBox surface,
+    _RenderNativeDocumentLayoutRoot root,
+  ) {
+    final spec = element.offsetSpec;
+    if (spec == null) return null;
+    if (spec.origin == NativeDocumentOffsetOrigin.zero) {
+      return {'top': 0, 'left': 0, 'parentId': null};
+    }
+    RenderBox? measuredAncestor(String? id) {
+      if (id == null ||
+          !root.knownIds.contains(id) ||
+          root.noBoxIds.contains(id)) {
+        return null;
+      }
+      final owners = (_elements[id] ?? {}).where(
+        (candidate) =>
+            candidate.attached && identical(_nearestRoot(candidate), root),
+      );
+      if (owners.length != 1) return null;
+      final owner = owners.single;
+      if (owner.pendingLayout ||
+          !owner.hasSize ||
+          owner.laidOutRevision != root.revision ||
+          owner.revision != root.revision) {
+        return null;
+      }
+      RenderObject? current = element.parent;
+      while (current != null &&
+          !identical(current, owner) &&
+          !identical(current, root)) {
+        current = current.parent;
+      }
+      if (!identical(current, owner)) return null;
+      final box = owner.boxSurface?.call(owner) ?? owner;
+      return box.attached && box.hasSize && identical(_nearestRoot(box), root)
+          ? box
+          : null;
+    }
+
+    // The parent must be a unique current measured ancestor even when a
+    // browser body rule selects the root as the coordinate origin.
+    if (spec.parentId != null && measuredAncestor(spec.parentId) == null) {
+      return null;
+    }
+    final position = _unscrolledOrigin(surface, root);
+    if (position == null) return null;
+    var origin = Offset.zero;
+    if (spec.origin != NativeDocumentOffsetOrigin.initialContainingBlock) {
+      final ancestor = measuredAncestor(spec.originId);
+      if (ancestor == null) return null;
+      final measured = _unscrolledOrigin(ancestor, root);
+      if (measured == null) return null;
+      origin = measured;
+      if (spec.origin == NativeDocumentOffsetOrigin.paddingEdge) {
+        final border = _borderInsets(ancestor);
+        if (border == null) return null;
+        origin += Offset(border.left, border.top);
+      }
+    }
+    final offset = position - origin;
+    if (!offset.dx.isFinite ||
+        !offset.dy.isFinite ||
+        offset.dx.abs() > 9007199254740990 ||
+        offset.dy.abs() > 9007199254740990) {
+      return null;
+    }
+    // CSSOM long rounding ties toward positive infinity, including negatives.
+    return {
+      'top': (offset.dy + .5).floor(),
+      'left': (offset.dx + .5).floor(),
+      'parentId': spec.parentId,
     };
   }
 
@@ -316,6 +396,7 @@ class NativeDocumentLayoutElement extends SingleChildRenderObjectWidget {
     required this.revision,
     required this.id,
     this.boxSurface,
+    this.offsetSpec,
     required super.child,
   });
 
@@ -323,6 +404,7 @@ class NativeDocumentLayoutElement extends SingleChildRenderObjectWidget {
   final int revision;
   final String id;
   final RenderBox? Function(RenderBox)? boxSurface;
+  final NativeDocumentOffsetSpec? offsetSpec;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
@@ -331,6 +413,7 @@ class NativeDocumentLayoutElement extends SingleChildRenderObjectWidget {
         revision: revision,
         id: id,
         boxSurface: boxSurface,
+        offsetSpec: offsetSpec,
       );
 
   @override
@@ -343,6 +426,7 @@ class NativeDocumentLayoutElement extends SingleChildRenderObjectWidget {
       revision: revision,
       id: id,
       boxSurface: boxSurface,
+      offsetSpec: offsetSpec,
     );
   }
 }
@@ -353,12 +437,14 @@ class _RenderNativeDocumentLayoutElement extends RenderProxyBox {
     required this.revision,
     required this.id,
     this.boxSurface,
+    this.offsetSpec,
   });
 
   NativeDocumentLayoutController controller;
   int revision;
   String id;
   RenderBox? Function(RenderBox)? boxSurface;
+  NativeDocumentOffsetSpec? offsetSpec;
   int? laidOutRevision;
   bool pendingLayout = true;
 
@@ -367,13 +453,15 @@ class _RenderNativeDocumentLayoutElement extends RenderProxyBox {
     required int revision,
     required String id,
     RenderBox? Function(RenderBox)? boxSurface,
+    NativeDocumentOffsetSpec? offsetSpec,
   }) {
     final ownerChanged = !identical(this.controller, controller);
     final registrationChanged = ownerChanged || this.id != id;
     final layoutChanged =
         registrationChanged ||
         this.revision != revision ||
-        this.boxSurface != boxSurface;
+        this.boxSurface != boxSurface ||
+        this.offsetSpec != offsetSpec;
     if (registrationChanged) {
       this.controller._detachElement(this);
       this.controller = controller;
@@ -382,6 +470,7 @@ class _RenderNativeDocumentLayoutElement extends RenderProxyBox {
     }
     if (!layoutChanged) return;
     this.boxSurface = boxSurface;
+    this.offsetSpec = offsetSpec;
     this.revision = revision;
     laidOutRevision = null;
     markNeedsLayout();
@@ -428,7 +517,23 @@ _RenderNativeDocumentLayoutRoot? _nearestRoot(RenderObject element) {
   return null;
 }
 
-Map<String, dynamic>? _clientMetrics(RenderBox element) {
+Offset? _unscrolledOrigin(RenderBox element, RenderBox root) {
+  Offset? position;
+  try {
+    position = MatrixUtils.getAsTranslation(element.getTransformTo(root));
+  } on FlutterError {
+    return null;
+  }
+  if (position == null) return null;
+  RenderObject? current = element.parent;
+  while (current != null && !identical(current, root)) {
+    position = position! + nativeDocumentScrollTranslation(current);
+    current = current.parent;
+  }
+  return identical(current, root) ? position : null;
+}
+
+EdgeInsets? _borderInsets(RenderBox element) {
   final borders = <EdgeInsets>[];
   var unresolvedBorder = false;
 
@@ -462,7 +567,12 @@ Map<String, dynamic>? _clientMetrics(RenderBox element) {
 
   visit(element, isElement: true);
   if (unresolvedBorder || borders.length > 1) return null;
-  final border = borders.isEmpty ? EdgeInsets.zero : borders.single;
+  return borders.isEmpty ? EdgeInsets.zero : borders.single;
+}
+
+Map<String, dynamic>? _clientMetrics(RenderBox element) {
+  final border = _borderInsets(element);
+  if (border == null) return null;
   final clientWidth = (element.size.width - border.left - border.right).clamp(
     0.0,
     double.infinity,

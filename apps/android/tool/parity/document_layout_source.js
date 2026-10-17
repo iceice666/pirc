@@ -237,6 +237,61 @@ function createPircDocumentLayout(options) {
     return { detached: false, box, viewport: layoutSnapshot.viewport };
   }
 
+  function isProperAncestor(parent, element) {
+    const visited = new Set();
+    let current = element && element.parentNode;
+    while (current && !visited.has(current)) {
+      if (current === parent) return true;
+      visited.add(current);
+      current = current.parentNode;
+    }
+    return false;
+  }
+
+  function currentOffsetParent(element, box) {
+    const offset = box.offset;
+    if (offset.parentId === null) return null;
+    const parent = offset.parentElement;
+    let resolved;
+    let ensured;
+    try {
+      resolved = resolveElementId(offset.parentId);
+      ensured = ensureElementId(parent);
+    } catch (_) {
+      resolved = null;
+      ensured = null;
+    }
+    const parentBox = layoutSnapshot.boxes.get(offset.parentId);
+    if (resolved !== parent || ensured !== offset.parentId ||
+        !(parent instanceof HTMLElementCtor) || parent.ownerDocument !== documentRef ||
+        !isConnected(parent) || !parentBox || parentBox.element !== parent ||
+        parentBox.kind !== 'box' || !isProperAncestor(parent, element)) {
+      throw notSupported('stale', 'Native offset parent is no longer the measured connected ancestor', {
+        id: box.id,
+        parentId: offset.parentId,
+        revision: currentRevision(),
+        measuredRevision: box.revision,
+      });
+    }
+    return parent;
+  }
+
+  function offsetMetric(element, name) {
+    const result = requireBox(element);
+    if (result.detached || result.box.kind === 'none') return name === 'offsetParent' ? null : 0;
+    const offset = result.box.offset;
+    if (!offset) {
+      throw notSupported('unavailable', `Native layout did not provide ${name}`, {
+        id: result.box.id,
+        revision: result.box.revision,
+        metric: name,
+      });
+    }
+    const parent = currentOffsetParent(element, result.box);
+    if (name === 'offsetParent') return parent;
+    return name === 'offsetTop' ? offset.top : offset.left;
+  }
+
   function zeroRect() {
     return new DOMRect(0, 0, 0, 0);
   }
@@ -508,6 +563,34 @@ function createPircDocumentLayout(options) {
       }
       const metrics = {};
       let scroll = null;
+      let offset = null;
+      if (Object.prototype.hasOwnProperty.call(source, 'offset')) {
+        if (source.kind !== 'box') throw new TypeError(`${id}.offset requires a box entry`);
+        const rawOffset = source.offset;
+        if (!rawOffset || typeof rawOffset !== 'object' || Array.isArray(rawOffset)) {
+          throw new TypeError(`${id}.offset must be an object`);
+        }
+        for (const name of ['top', 'left', 'parentId']) {
+          if (!Object.prototype.hasOwnProperty.call(rawOffset, name)) {
+            throw new TypeError(`${id}.offset.${name} is required`);
+          }
+        }
+        if (!Number.isSafeInteger(rawOffset.top)) {
+          throw new TypeError(`${id}.offset.top must be a signed safe integer`);
+        }
+        if (!Number.isSafeInteger(rawOffset.left)) {
+          throw new TypeError(`${id}.offset.left must be a signed safe integer`);
+        }
+        if (rawOffset.parentId !== null && !isSafeId(rawOffset.parentId)) {
+          throw new TypeError(`${id}.offset.parentId must be null or a valid element id`);
+        }
+        offset = Object.freeze({
+          top: rawOffset.top,
+          left: rawOffset.left,
+          parentId: rawOffset.parentId,
+          parentElement: null,
+        });
+      }
       if (source.kind === 'box') {
         const { x, y, width, height } = bounds;
         for (const name of metricNames) {
@@ -527,7 +610,7 @@ function createPircDocumentLayout(options) {
             height: requireFiniteNumber(rawScroll.height, `${id}.scroll.height`, true),
           });
         }
-        stagedBoxes.set(id, Object.freeze({ id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, element, revision }));
+        stagedBoxes.set(id, Object.freeze({ id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset, element, revision }));
       } else {
         if (Object.prototype.hasOwnProperty.call(source, 'scroll')) {
           throw new TypeError(`${id}.scroll requires a box entry`);
@@ -546,11 +629,37 @@ function createPircDocumentLayout(options) {
           height: 0,
           metrics: Object.freeze(metrics),
           scroll: null,
+          offset: null,
           element,
           revision,
         }));
       }
       stagedElements.set(id, element);
+    }
+    // Resolve offset parents after all entries have been staged so a parent may
+    // appear later in the packet. Keep the actual HTMLElement reference in the
+    // snapshot; guests must never see an ID string in offsetParent.
+    for (const [id, box] of stagedBoxes) {
+      if (!box.offset) continue;
+      const element = box.element;
+      if (!(element instanceof HTMLElementCtor) || !isConnected(element)) {
+        throw new TypeError(`${id}.offset requires a connected HTMLElement`);
+      }
+      let parentElement = null;
+      if (box.offset.parentId !== null) {
+        const parentId = box.offset.parentId;
+        parentElement = stagedElements.get(parentId);
+        const parentBox = stagedBoxes.get(parentId);
+        if (!parentElement || !parentBox || parentBox.element !== parentElement || parentBox.kind !== 'box' ||
+            !(parentElement instanceof HTMLElementCtor) || parentElement.ownerDocument !== documentRef ||
+            !isConnected(parentElement) || !isProperAncestor(parentElement, element)) {
+          throw new TypeError(`${id}.offset.parentId must name a measured connected HTMLElement ancestor`);
+        }
+      }
+      stagedBoxes.set(id, Object.freeze({
+        ...box,
+        offset: Object.freeze({ ...box.offset, parentElement }),
+      }));
     }
     const stagedScrollEvents = [];
     if (Object.prototype.hasOwnProperty.call(packet, 'scrollEvents')) {
@@ -651,6 +760,13 @@ function createPircDocumentLayout(options) {
         configurable: true,
         enumerable: false,
         get() { return metric(this, name); },
+      });
+    }
+    for (const name of ['offsetTop', 'offsetLeft', 'offsetParent']) {
+      Object.defineProperty(HTMLElementCtor.prototype, name, {
+        configurable: true,
+        enumerable: false,
+        get() { return offsetMetric(this, name); },
       });
     }
     for (const name of scrollMetricNames) {

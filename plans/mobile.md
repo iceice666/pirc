@@ -27,8 +27,9 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** offsetTop/Left/Parent,
-      inline-fragment geometry and image/resize/chart/framework
+- [ ] **Dynamic content compatibility:** parent/child vertical margin collapse,
+      positioned/transformed/zoomed/table offset geometry, inline-fragment
+      geometry and image/resize/chart/framework
       flows. A DOM write followed immediately by a geometry read still needs a
       matching native frame; unsupported reads fail explicitly. Native Canvas event
       callbacks have measured geometry for their synchronous dispatch.
@@ -48,8 +49,15 @@ outside the agreed scope.
 - Small visual differences, uncommon syntax and the old audit's fine-grained
   layout/style items. The frozen visual corpus is web revision `bd3d909`; newly
   added 0.6.x features are tracked separately rather than claimed as visual parity.
-- Eight percentage top-margin cases differ by parent margin collapse. Some
-  inserted classic-script lexical-scope behavior differs from the browser.
+- Parent/child vertical margins still differ when they should collapse through
+  the parent's top edge. This is not limited to small visual offsets: the offset
+  corpus records 3/3.5 px child differences, 63 px content-parent differences in
+  two scrollers, and a body box at 0 instead of 1000 px after a child's large
+  margin. Target child positions and scroll compensation match in the scroller
+  and large-margin cases. Browser results remain unchanged; exact native/browser
+  differences are in `document-offset-known-differences.json`.
+- Eight percentage top-margin cases have the same parent-margin-collapse gap.
+  Some inserted classic-script lexical-scope behavior differs from the browser.
 - Two root-height fixtures retain extra trailing blank scroll space: 8 px with
   the default body margin, and 17 px with nested content-box edges. Their element
   rectangles match Chromium; these small scroll-extent differences are deferred.
@@ -200,3 +208,40 @@ clicking an overflowing bottom link and excluding surrounding app chrome from
 the document viewport. The complete Flutter suite passes 4,438 tests; Flutter
 analysis and formatting are clean. Physical phone/tablet acceptance remains
 pending.
+
+## Native element offsets follow-up
+
+Full HTML pages now expose measured `offsetTop`, `offsetLeft` and the actual DOM
+`offsetParent` through the existing revision/identity-checked layout bridge.
+Native measurements preserve the browser's root/body origins, parent border
+insets, signed rounding and unscrolled coordinates. Missing, ambiguous or stale
+measurements remain explicit errors; detached and unrendered elements report
+zero offsets and a null parent. Absolute/fixed/sticky positioning, relative
+insets, transforms, zoom, table offsets and fragmented inline geometry still
+need native layout support and are not claimed as implemented.
+
+Normal block negative horizontal margins and fixed flex-item margins now
+contribute to native layout and flex allocation. Negative vertical block margins,
+percentage/auto flex margins and full CSS margin collapsing still need wider
+support.
+
+The dedicated Chromium 153 reference has 36 observations across 18 cases at
+390×844 and 768×1024, including nested and window scroll states. Thirteen cases match
+the captured offset and origin checks; five retain the named margin-collapse
+findings above, asserted separately at both viewport widths. Browser reference
+values are not replaced with native results. The bundle tests cover actual
+LinkeDOM parent identity, the classic-script frame gate, mutation/reparenting
+staleness, detached/unrendered elements and missing metadata.
+
+Additional flex references check signed row margins with weighted shrinking,
+positive block margins with column grow/shrink, and cross-axis centering. Both
+coordinates and allocated width/height match; fixed flex margins keep the tight
+allocation instead of entering the HTML core's loose margin Column. Android
+emulator acceptance uses a real local HTTP page and JavaScriptSandbox: initial
+parent identity/offsets, two-axis scrolling, stale reads after a style mutation
+and the subsequent freshly measured offset all pass.
+
+Final gates for this follow-up: 4,501 Flutter tests and 519 JavaScript tests
+pass; Flutter analysis and formatting are clean. The local HTTP Android
+integration passes in the emulator. Physical-device and remote-push acceptance
+remain pending.

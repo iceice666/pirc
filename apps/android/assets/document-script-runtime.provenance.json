@@ -28,7 +28,7 @@
     "browserOracle": "apps/android/tool/parity/fixtures/document-cookies-chrome155.json"
   },
   "nativeLayout": {
-    "helperSha256": "2aadcc2e6a36b0cfa03e2a4cb00c56320aee91bd26500a898fa1f40e1888daf5"
+    "helperSha256": "801a1def2aa9c6d021793c5299831f8e072703e98efb1b4b6cc779bac1b21c75"
   },
   "nativeModules": {
     "parser": {
