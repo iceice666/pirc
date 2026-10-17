@@ -412,7 +412,7 @@ pub struct SessionDeletion {
 /// The node's queries (owner: **core**), each the `GatewayDatabase`
 /// method of the same name; error statuses, codes and messages as there.
 pub trait Store {
-    /// In one transaction: open runs → `interrupted` ("gateway restarted"),
+    /// In one transaction: open runs → `interrupted` ("node restarted"),
     /// pending interactions → `stale`, dispatched commands →
     /// `outcome_unknown`, sessions not stopped → `stopped` with
     /// `partial_output_lost`, every lease deleted.
@@ -800,7 +800,7 @@ impl Store for Connection {
             let interrupted_runs = db.execute(
                 &format!(
                     "UPDATE runs SET status='interrupted', ended_at=?1, \
-                     failure_reason='gateway restarted' WHERE status IN {OPEN_RUNS}"
+                     failure_reason='node restarted' WHERE status IN {OPEN_RUNS}"
                 ),
                 [stamp],
             )?;
@@ -809,7 +809,7 @@ impl Store for Connection {
                 [],
             )?;
             let unknown_commands = db.execute(
-                "UPDATE commands SET status='outcome_unknown', error_text='gateway restarted before \
+                "UPDATE commands SET status='outcome_unknown', error_text='node restarted before \
                  RPC acceptance was recorded', updated_at=?1 WHERE status='dispatched'",
                 [stamp],
             )?;
@@ -2048,13 +2048,17 @@ mod tests {
         );
         let latest = db.latest_run(&id).unwrap().unwrap();
         assert_eq!(latest.status, RunStatus::Interrupted);
-        assert_eq!(latest.failure_reason.as_deref(), Some("gateway restarted"));
+        assert_eq!(latest.failure_reason.as_deref(), Some("node restarted"));
         assert_eq!(
             db.get_interaction(&interaction.id).unwrap().status,
             InteractionStatus::Stale
         );
         let command = db.get_command("c").unwrap();
         assert_eq!(command.status, CommandStatus::OutcomeUnknown);
+        assert_eq!(
+            command.error.as_deref(),
+            Some("node restarted before RPC acceptance was recorded")
+        );
         assert_eq!(db.get_lease(&id).unwrap(), None);
         let session = db.get_session(&id).unwrap();
         assert!(session.partial_output_lost);
