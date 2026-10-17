@@ -732,6 +732,185 @@ test('document layout helper', async (t) => {
     assert.equal(layout.revision(), 5, 'a guest text mutation after snapshot must still invalidate');
   });
 
+  await t.test('exposes native offset metrics with validated current HTMLElement parents', () => {
+    class OffsetElement extends FakeElement {}
+    class OffsetHTMLElement extends OffsetElement {}
+    const offsetDoc = makeDocument(OffsetHTMLElement);
+    const offsetRegistry = makeRegistry();
+    const offsetDiagnostics = [];
+    const offsetLayout = createLayout({
+      document: offsetDoc.document,
+      Element: OffsetElement,
+      HTMLElement: OffsetHTMLElement,
+      MutationObserver: FakeMutationObserver,
+      ensureElementId: offsetRegistry.ensureElementId,
+      resolveElementId: offsetRegistry.resolveElementId,
+      diagnostic: (code, details) => offsetDiagnostics.push({ code, details }),
+      enabled: true,
+    });
+    offsetLayout.install();
+    const observer = FakeMutationObserver.instances.at(-1);
+
+    const parent = new OffsetHTMLElement(offsetDoc.document);
+    const child = new OffsetHTMLElement(offsetDoc.document);
+    const alternateParent = new OffsetHTMLElement(offsetDoc.document);
+    const unmeasuredParent = new OffsetHTMLElement(offsetDoc.document);
+    const noneAncestor = new OffsetHTMLElement(offsetDoc.document);
+    const noneChild = new OffsetHTMLElement(offsetDoc.document);
+    const noneElement = new OffsetHTMLElement(offsetDoc.document);
+    const unsupported = new OffsetHTMLElement(offsetDoc.document);
+    const omitted = new OffsetHTMLElement(offsetDoc.document);
+    const plainAncestor = new OffsetElement(offsetDoc.document);
+    const plainChild = new OffsetHTMLElement(offsetDoc.document);
+    offsetDoc.root.append(parent);
+    parent.append(child);
+    offsetDoc.root.append(alternateParent);
+    offsetDoc.root.append(unmeasuredParent);
+    offsetDoc.root.append(noneAncestor);
+    noneAncestor.append(noneChild);
+    offsetDoc.root.append(noneElement);
+    offsetDoc.root.append(unsupported);
+    offsetDoc.root.append(omitted);
+    offsetDoc.root.append(plainAncestor);
+    plainAncestor.append(plainChild);
+
+    const rootId = offsetRegistry.ensureElementId(offsetDoc.root);
+    const parentId = offsetRegistry.ensureElementId(parent);
+    const childId = offsetRegistry.ensureElementId(child);
+    const alternateParentId = offsetRegistry.ensureElementId(alternateParent);
+    const unmeasuredParentId = offsetRegistry.ensureElementId(unmeasuredParent);
+    const noneAncestorId = offsetRegistry.ensureElementId(noneAncestor);
+    const noneChildId = offsetRegistry.ensureElementId(noneChild);
+    const noneId = offsetRegistry.ensureElementId(noneElement);
+    const unsupportedId = offsetRegistry.ensureElementId(unsupported);
+    const omittedId = offsetRegistry.ensureElementId(omitted);
+    const plainAncestorId = offsetRegistry.ensureElementId(plainAncestor);
+    const plainChildId = offsetRegistry.ensureElementId(plainChild);
+    const makeBox = (id, offset) => ({
+      id, kind: 'box', x: 13, y: 17, width: 31, height: 29,
+      ...(offset === undefined ? {} : { offset }),
+    });
+    const childOffset = (offsetParentId = parentId, top = -4, left = 7) => ({
+      top, left, parentId: offsetParentId,
+    });
+    const packet = (revision, generation, childData = childOffset()) => ({
+      revision,
+      generation,
+      viewport: { scrollX: 0, scrollY: 0, width: 390, height: 844 },
+      boxes: [
+        makeBox(childId, childData), // Its parent is deliberately later in the packet.
+        makeBox(rootId, { top: 0, left: 0, parentId: null }),
+        makeBox(parentId, { top: 5, left: -3, parentId: rootId }),
+        makeBox(alternateParentId),
+        { id: noneAncestorId, kind: 'none' },
+        makeBox(noneChildId),
+        { id: noneId, kind: 'none' },
+        { id: unsupportedId, kind: 'unsupported' },
+        makeBox(omittedId),
+        makeBox(plainAncestorId),
+        makeBox(plainChildId),
+      ],
+    });
+
+    assert.equal(offsetLayout.update(packet(1, 1)).generation, 1);
+    assert.equal(child.offsetTop, -4, 'signed native top values must not be clamped');
+    assert.equal(child.offsetLeft, 7);
+    assert.equal(child.offsetParent, parent, 'offsetParent exposes the captured HTMLElement');
+    assert.ok(child.offsetParent instanceof OffsetHTMLElement);
+    assert.equal(parent.offsetTop, 5);
+    assert.equal(parent.offsetLeft, -3);
+    assert.equal(parent.offsetParent, offsetDoc.root);
+    assert.equal(offsetDoc.root.offsetParent, null);
+    assert.equal(child.getBoundingClientRect().x, 13, 'offset data does not change existing rectangle geometry');
+    assert.equal(noneElement.offsetTop, 0);
+    assert.equal(noneElement.offsetLeft, 0);
+    assert.equal(noneElement.offsetParent, null);
+    assert.throws(() => omitted.offsetTop, (error) => error.name === 'NotSupportedError');
+    assert.throws(() => omitted.offsetLeft, (error) => error.name === 'NotSupportedError');
+    assert.throws(() => omitted.offsetParent, (error) => error.name === 'NotSupportedError');
+    assert.throws(() => unsupported.offsetParent, (error) => error.name === 'NotSupportedError');
+
+    const rejectPacket = (candidate, label) => {
+      assert.throws(() => offsetLayout.update(candidate), (error) => error.name === 'TypeError', label);
+      assert.equal(child.offsetTop, -4, `${label}: rejected packets preserve the accepted snapshot`);
+    };
+    for (const malformed of [
+      null,
+      [],
+      { top: 1, left: 2 },
+      { top: 1, left: 2, parentId: undefined },
+      { top: 1.5, left: 2, parentId },
+      { top: Number.MAX_SAFE_INTEGER + 1, left: 2, parentId },
+      { top: Infinity, left: 2, parentId },
+      { top: 1, left: '2', parentId },
+      { top: 1, left: 2, parentId: 'not-an-id' },
+    ]) {
+      rejectPacket(packet(1, 2, malformed), 'offset values require all fields and signed safe integers');
+    }
+    rejectPacket(packet(1, 2, childOffset(childId)), 'self cannot be its own offset parent');
+    rejectPacket(packet(1, 2, childOffset(alternateParentId)), 'offset parent must be a DOM ancestor');
+    rejectPacket(packet(1, 2, childOffset(unmeasuredParentId)), 'offset parent must be measured in the same packet');
+    const noneParentPacket = packet(1, 2);
+    noneParentPacket.boxes = noneParentPacket.boxes.map((entry) => entry.id === noneChildId
+      ? makeBox(noneChildId, childOffset(noneAncestorId))
+      : entry);
+    rejectPacket(noneParentPacket, 'offset parent must have a measured box');
+    const plainParentPacket = packet(1, 2);
+    plainParentPacket.boxes = plainParentPacket.boxes.map((entry) => entry.id === plainChildId
+      ? makeBox(plainChildId, childOffset(plainAncestorId))
+      : entry);
+    rejectPacket(plainParentPacket, 'offset parent must be an HTMLElement');
+    rejectPacket({
+      ...packet(1, 2),
+      boxes: packet(1, 2).boxes.map((entry) => entry.id === noneId
+        ? { ...entry, offset: { top: 0, left: 0, parentId: null } }
+        : entry),
+    }, 'none entries cannot carry offset metadata');
+    rejectPacket({
+      ...packet(1, 2),
+      boxes: packet(1, 2).boxes.map((entry) => entry.id === unsupportedId
+        ? { ...entry, offset: { top: 0, left: 0, parentId: null } }
+        : entry),
+    }, 'unsupported entries cannot carry offset metadata');
+
+    const foreignDoc = makeDocument(OffsetHTMLElement);
+    const foreignParent = new OffsetHTMLElement(foreignDoc.document);
+    const foreignId = 'pirc-9000';
+    offsetRegistry.ids.set(foreignParent, foreignId);
+    offsetRegistry.elements.set(foreignId, foreignParent);
+    const foreignPacket = packet(1, 2, childOffset(foreignId));
+    foreignPacket.boxes.push(makeBox(foreignId));
+    rejectPacket(foreignPacket, 'foreign offset parent identities are rejected');
+
+    assert.equal(offsetLayout.update(packet(1, 2, childOffset(parentId, -9, -11))).generation, 2,
+      'failed packets do not consume the next valid generation');
+    assert.equal(child.offsetTop, -9);
+    assert.equal(child.offsetLeft, -11);
+
+    parent.remove(child);
+    alternateParent.append(child);
+    assert.throws(() => child.offsetParent, (error) => error.name === 'NotSupportedError',
+      'a reparented element cannot reuse a stale captured parent relation');
+    assert.equal(offsetDiagnostics.at(-1).code, 'layout.stale');
+    observer.deliver([{ type: 'childList', attributeName: null }]);
+    assert.throws(() => child.offsetTop, (error) => error.name === 'NotSupportedError',
+      'tree invalidation fences offset values before a fresh native frame');
+    assert.equal(offsetLayout.update(packet(2, 3, childOffset(alternateParentId, 3, 4))).generation, 3);
+    assert.equal(child.offsetParent, alternateParent);
+    assert.equal(child.offsetTop, 3);
+
+    const replacement = new OffsetHTMLElement(offsetDoc.document);
+    offsetDoc.root.append(replacement);
+    offsetRegistry.elements.set(alternateParentId, replacement);
+    assert.throws(() => child.offsetParent, (error) => error.name === 'NotSupportedError',
+      'an offset parent ID that resolves to a replacement element is fenced');
+
+    alternateParent.remove(child);
+    assert.equal(child.offsetTop, 0, 'detached elements use browser zero offset geometry');
+    assert.equal(child.offsetLeft, 0);
+    assert.equal(child.offsetParent, null);
+  });
+
   await t.test('returns zero geometry for detached nodes and throws when parity is disabled', () => {
     root.remove(measured);
     assert.equal(measured.getBoundingClientRect().x, 0, 'detached elements use browser zero geometry');

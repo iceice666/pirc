@@ -28,6 +28,14 @@ bool nativeDocumentScrollClipsGlobalPoint(
       (object._clipsY && (local.dy < 0 || local.dy > object.size.height));
 }
 
+/// The translation a document scroll viewport applies to its descendants.
+/// Offset coordinates use the unscrolled layout; bounding rectangles retain
+/// this paint translation. Other render objects do not add scroll compensation.
+Offset nativeDocumentScrollTranslation(RenderObject object) =>
+    object is _RenderNativeDocumentElementScrollViewportRender
+    ? Offset(object._horizontalOffset.pixels, object._verticalOffset.pixels)
+    : Offset.zero;
+
 /// Owns native scroll offsets for elements in one fetched document.
 ///
 /// A controller may be shared by the layout bridge and script host for a view.

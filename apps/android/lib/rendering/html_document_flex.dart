@@ -29,6 +29,8 @@ class NativeFlexItem {
     this.automaticMinimum = true,
     this.mainEdges = 0,
     this.crossEdges = 0,
+    this.mainMargins = 0,
+    this.crossMargins = 0,
     this.borderBox = false,
     this.stretchCross = true,
     this.preferredCross,
@@ -38,6 +40,7 @@ class NativeFlexItem {
     this.order = 0,
   });
   final double grow, shrink, mainEdges, crossEdges;
+  final double mainMargins, crossMargins;
   final NativeFlexLength? basis, preferredMain, minimumMain, maximumMain;
   final NativeFlexLength? preferredCross, minimumCross, maximumCross;
   final bool automaticMinimum, borderBox, stretchCross;
@@ -188,16 +191,14 @@ class _RenderDocumentFlex extends RenderBox
     }
   }
 
-  double outer(double value, NativeFlexItem spec, {bool cross = false}) =>
-      math.max(
-        cross ? spec.crossEdges : spec.mainEdges,
-        value +
-            (spec.borderBox
-                ? 0
-                : cross
-                ? spec.crossEdges
-                : spec.mainEdges),
-      );
+  double outer(double value, NativeFlexItem spec, {bool cross = false}) {
+    final edges = cross ? spec.crossEdges : spec.mainEdges;
+    final margins = cross ? spec.crossMargins : spec.mainMargins;
+    return math.max(
+      0,
+      math.max(edges, value + (spec.borderBox ? 0 : edges)) + margins,
+    );
+  }
 
   BoxConstraints childConstraints(
     double mainSize,
@@ -342,14 +343,21 @@ class _RenderDocumentFlex extends RenderBox
             (grow
                 ? item.spec.grow
                 : item.spec.shrink *
-                      math.max(0, item.base - item.spec.mainEdges)),
+                      math.max(
+                        0,
+                        item.base - item.spec.mainEdges - item.spec.mainMargins,
+                      )),
       );
       final violations = <_FlexChild, double>{};
       var total = 0.0;
       for (final item in active) {
         final weight = grow
             ? item.spec.grow
-            : item.spec.shrink * math.max(0, item.base - item.spec.mainEdges);
+            : item.spec.shrink *
+                  math.max(
+                    0,
+                    item.base - item.spec.mainEdges - item.spec.mainMargins,
+                  );
         final raw = item.base + (weights > 0 ? free * weight / weights : 0);
         item.target = raw.clamp(item.minimum, item.maximum).toDouble();
         final violation = item.target - raw;
@@ -458,13 +466,13 @@ class _RenderDocumentFlex extends RenderBox
           ? outer(minValue, spec)
           : spec.automaticMinimum
           ? math.max(
-              spec.mainEdges,
+              math.max(0.0, spec.mainEdges + spec.mainMargins),
               math.min(
                 nonnegative(intrinsicMinimum),
                 preferred == null ? double.infinity : outer(preferred, spec),
               ),
             )
-          : spec.mainEdges;
+          : math.max(0.0, spec.mainEdges + spec.mainMargins);
       final maxValue = spec.maximumMain?.resolve(definiteMain);
       if (minValue == null && spec.automaticMinimum && maxValue != null) {
         minimum = math.min(minimum, outer(maxValue, spec));
@@ -595,7 +603,7 @@ class _RenderDocumentFlex extends RenderBox
           final minimum = item.spec.minimumCross?.resolve(definiteCross);
           final maximum = item.spec.maximumCross?.resolve(definiteCross);
           final minCross = minimum == null
-              ? item.spec.crossEdges
+              ? math.max(0.0, item.spec.crossEdges + item.spec.crossMargins)
               : outer(minimum, item.spec, cross: true);
           final maxCross = math.max(
             minCross,

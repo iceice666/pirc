@@ -12,6 +12,7 @@ import '../rendering/html_syntax.dart';
 import '../rendering/html_document_styles.dart';
 import '../rendering/native_html.dart';
 import '../rendering/document_layout.dart';
+import '../rendering/document_offsets.dart';
 import '../rendering/document_layout_visibility.dart';
 import '../rendering/document_element_scroll.dart';
 import 'common.dart';
@@ -1943,6 +1944,10 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       layoutRevision: _scripts?.layoutRevision ?? 0,
       layoutKnownIds: _scripts?.layoutElementIds ?? const {},
       layoutNoBoxIds: noBoxIds,
+      layoutOffsetSpecs: nativeDocumentOffsetSpecs(
+        document: styled,
+        stylesByElement: result.stylesByElement,
+      ),
       nodes: [NativeHtmlRaw(markup)],
       authorStylesBuilder: (element) =>
           indexStyles[element.attributes['data-pirc-document-style']],
