@@ -179,6 +179,65 @@ void main() {
     }
   });
 
+  test(
+    'simple intrinsic and one-axis canvases expose size calculation candidates',
+    () {
+      for (final style in [
+        '',
+        'width:200px',
+        'height:100px',
+        'width:50%;height:50%',
+      ]) {
+        final specs = _specFor(
+          '<div id="parent" style="width:350px;height:240px">'
+          '<canvas id="target" style="$style"></canvas></div>',
+        );
+        expect(specs['target']!.canvasSizingProjection, isTrue, reason: style);
+        expect(specs['parent']!.fixedBlockChildId, isNotNull);
+      }
+      for (final extra in [
+        'padding:1px',
+        'margin:auto',
+        'max-width:200px',
+        'width:auto !important',
+      ]) {
+        final spec = _specFor(
+          '<div style="width:350px;height:240px">'
+          '<canvas id="target" style="$extra"></canvas></div>',
+        )['target']!;
+        expect(spec.canvasSizingProjection, isFalse, reason: extra);
+      }
+    },
+  );
+
+  test(
+    'size-changing projection rejects viewport-dependent parent positions and bases',
+    () {
+      for (final wrapper in [
+        '<div style="position:relative;width:350px;height:240px;margin:0 auto">{canvas}</div>',
+        '<div style="position:relative;left:50%;width:350px;height:240px">{canvas}</div>',
+        '<div style="width:350px;height:240px;padding-left:10%">{canvas}</div>',
+        '<div style="direction:rtl;width:350px;height:240px">{canvas}</div>',
+        '<div style="width:350px;height:240px;transform:translateX(50%)">{canvas}</div>',
+        '<p>Earlier text can wrap when a root scrollbar appears.</p><div style="width:350px;height:240px">{canvas}</div>',
+        '<div>Earlier text<div style="width:350px;height:240px">{canvas}</div></div>',
+      ]) {
+        final specs = _specFor(
+          wrapper.replaceFirst('{canvas}', '<canvas id="target"></canvas>'),
+        );
+        expect(
+          specs['target']!.canvasSizingProjection,
+          isFalse,
+          reason: wrapper,
+        );
+      }
+      final fixed = _specFor(
+        '<div style="width:350px;height:240px;margin-left:20px"><canvas id="target"></canvas></div>',
+      );
+      expect(fixed['target']!.canvasSizingProjection, isTrue);
+    },
+  );
+
   test('projects box styles only for measured edgeless fixed canvases', () {
     for (final width in ['350px', '100%']) {
       final spec = _specFor(

@@ -37146,9 +37146,10 @@ function createPircDocumentLayout(options) {
   // A nonempty set can certify only an unaffected parent's clientWidth.
   // null means an unproved mutation forbids every partial read until layout.
   let pendingSizeMutationTargets = new Set();
-  // Project only host-proved unchanged-size box styles. This does not certify
-  // the replaced element's position, its surrounding line box, or scroll extents.
+  // Project host-proved box styles and simple Canvas used dimensions. This does
+  // not certify the child position, its surrounding line box, or scroll extents.
   let pendingProjectedStyles = new Map();
+  let pendingCanvasSizingAxes = new Map();
   let installed = false;
   let observer = null;
   let scrollActionQueue = null;
@@ -37479,16 +37480,62 @@ function createPircDocumentLayout(options) {
     return true;
   }
 
+  function canvasCssAxis(raw) {
+    if (raw === 'auto') return {auto: true};
+    if (raw === '0') return {value: 0, percent: false};
+    if (typeof raw !== 'string' || raw.length > 128) return null;
+    const match = /^(\d+(?:\.\d*)?|\.\d+)(px|%)$/.exec(raw);
+    if (!match || !Number.isFinite(Number(match[1]))) return null;
+    return {value: Number(match[1]), percent: match[2] === '%'};
+  }
+
+  function canvasIntrinsicDimension(element, axis) {
+    const fallback = axis === 'width' ? 300 : 150;
+    const raw = readAttribute.call(element, axis);
+    if (raw == null || !/^[\t\n\f\r ]*\d+[\t\n\f\r ]*$/.test(raw)) return fallback;
+    const parsed = Number(String(raw).trim());
+    return Number.isFinite(parsed) ? Math.min(Math.trunc(parsed), 0xffffffff) : fallback;
+  }
+
+  function canvasCssSize(element, sizing, boxes) {
+    const parent = boxes.get(sizing.parentId), content = parent?.resize?.contentRect;
+    if (!content || element.parentElement !== parent.element) return null;
+    const widthAxis = canvasCssAxis(sizing.width), heightAxis = canvasCssAxis(sizing.height);
+    if (!widthAxis || !heightAxis) return null;
+    let width = widthAxis.auto ? null : widthAxis.percent ? widthAxis.value * content.width / 100 : widthAxis.value;
+    let height = heightAxis.auto ? null : heightAxis.percent ? heightAxis.value * content.height / 100 : heightAxis.value;
+    const naturalWidth = canvasIntrinsicDimension(element, 'width');
+    const naturalHeight = canvasIntrinsicDimension(element, 'height');
+    const hasRatio = naturalWidth > 0 && naturalHeight > 0;
+    if (width === null && height === null) { width = naturalWidth; height = naturalHeight; }
+    else if (width === null) width = hasRatio ? height * naturalWidth / naturalHeight : naturalWidth;
+    else if (height === null) height = hasRatio ? width * naturalHeight / naturalWidth : naturalHeight;
+    // Only CSS size is calculated; rectangles and scroll data need native layout.
+    if (![width, height].every(value => Number.isFinite(value) && value >= 0 && value <= 1000000)) return null;
+    const pixels = value => `${Math.round(value * 1000000) / 1000000}px`;
+    return {width: pixels(width), height: pixels(height)};
+  }
+
   function projectedBoxStyleMutation(record, afterValue) {
     const target = record?.target;
     if (record?.type !== 'attributes' || record.attributeNamespace != null ||
         !layoutSnapshot || !isConnected(target)) return null;
     const id = readAttribute.call(target, 'data-pirc-script-id');
     const box = layoutSnapshot.boxes.get(id);
-    if (box?.element !== target || box.replacedBoxStyleProjection !== true) return null;
+    if (box?.element !== target || (box.replacedBoxStyleProjection !== true && !box.canvasSizingProjection)) return null;
     const style = {...(pendingProjectedStyles?.get(target) || box.computedStyle)};
+    const sizing = box.canvasSizingProjection ? {...(pendingCanvasSizingAxes?.get(target) || box.canvasSizingProjection)} : null;
+    const finish = () => {
+      if (sizing) {
+        const dimensions = canvasCssSize(target, sizing, layoutSnapshot.boxes);
+        if (!dimensions) return null;
+        Object.assign(style, dimensions);
+        pendingCanvasSizingAxes.set(target, Object.freeze(sizing));
+      }
+      return Object.freeze(style);
+    };
     if ((record.attributeName === 'width' || record.attributeName === 'height') &&
-        target.localName === 'canvas' && box.canvasBitmapSizeIndependent === true) return style;
+        target.localName === 'canvas' && (box.canvasBitmapSizeIndependent === true || sizing)) return finish();
     if (record.attributeName !== 'style') return null;
     const before = simpleInlineDeclarations(record.oldValue);
     const after = simpleInlineDeclarations(afterValue);
@@ -37502,23 +37549,33 @@ function createPircDocumentLayout(options) {
       const next = after.get(name);
       if (next === undefined) return null;
       if (name === 'width' || name === 'height') {
-        const value = nonnegativePixelValue(next);
-        if (value === null || value !== nonnegativePixelValue(box.computedStyle[name])) return null;
-        style[name] = box.computedStyle[name];
+        if (sizing) {
+          const normalized = next.toLowerCase();
+          if (!canvasCssAxis(normalized)) return null;
+          sizing[name] = normalized;
+        } else {
+          const value = nonnegativePixelValue(next);
+          if (value === null || value !== nonnegativePixelValue(box.computedStyle[name])) return null;
+          style[name] = box.computedStyle[name];
+        }
       } else if (name === 'display' && ['inline', 'block'].includes(next.toLowerCase())) {
         style.display = next.toLowerCase();
       } else if (name === 'box-sizing' && ['content-box', 'border-box'].includes(next.toLowerCase())) {
         style[name] = next.toLowerCase();
       } else return null;
     }
-    return Object.freeze(style);
+    return finish();
   }
 
   function stableReplacedChildBox(element) {
     if (!layoutSnapshot || !pendingProjectedStyles?.size) return null;
     const id = readAttribute.call(element, 'data-pirc-script-id');
     const box = layoutSnapshot.boxes.get(id);
-    const child = layoutSnapshot.boxes.get(box?.stableReplacedChildId)?.element;
+    const childBox = layoutSnapshot.boxes.get(box?.stableReplacedChildId);
+    const child = childBox?.element;
+    // Changed overflow can clamp a scrolled root even with fixed local edges.
+    if (childBox?.canvasSizingProjection &&
+        (layoutSnapshot.viewport.scrollX !== 0 || layoutSnapshot.viewport.scrollY !== 0)) return null;
     if (box?.element !== element || !child || !isConnected(child) ||
         readAttribute.call(child, 'data-pirc-script-id') !== box.stableReplacedChildId ||
         child.parentElement !== element ||
@@ -37530,7 +37587,11 @@ function createPircDocumentLayout(options) {
     if (!pendingProjectedStyles?.size) return null;
     if (pendingProjectedStyles.has(element) &&
         [...pendingProjectedStyles.keys()].every(target => target === element)) {
-      return pendingProjectedStyles.get(element);
+      const style = pendingProjectedStyles.get(element);
+      const sizing = pendingCanvasSizingAxes?.get(element);
+      if (!sizing) return style;
+      const dimensions = canvasCssSize(element, sizing, layoutSnapshot.boxes);
+      return dimensions ? Object.freeze({...style, ...dimensions}) : null;
     }
     return stableReplacedChildBox(element)?.computedStyle || null;
   }
@@ -37571,7 +37632,7 @@ function createPircDocumentLayout(options) {
       if (pendingProjectedStyles !== null) {
         const projected = projectedBoxStyleMutation(record, styleAfter.get(record));
         if (projected && pendingProjectedStyles.size < 5000) pendingProjectedStyles.set(record.target, projected);
-        else pendingProjectedStyles = null;
+        else { pendingProjectedStyles = null; pendingCanvasSizingAxes = null; }
       }
       if (pendingSizeMutationTargets !== null) {
         if (isSizeOnlyMutation(record, styleAfter.get(record)) && pendingSizeMutationTargets.size < 5000) {
@@ -38308,6 +38369,22 @@ function createPircDocumentLayout(options) {
         }
         replacedBoxStyleProjection = source.replacedBoxStyleProjection;
       }
+      let canvasSizingProjection = null;
+      if (Object.prototype.hasOwnProperty.call(source, 'canvasSizingProjection')) {
+        const raw = source.canvasSizingProjection;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
+            !isSafeId(raw.parentId) || !canvasCssAxis(raw.width) || !canvasCssAxis(raw.height) ||
+            source.kind !== 'box' || element.localName !== 'canvas' ||
+            element.namespaceURI !== 'http://www.w3.org/1999/xhtml' ||
+            !['inline', 'block'].includes(computedStyle?.display) ||
+            !['static', 'relative'].includes(computedStyle?.position) ||
+            !['padding-left', 'padding-right', 'padding-top', 'padding-bottom',
+              'border-left-width', 'border-right-width', 'border-top-width', 'border-bottom-width',
+              'margin-left', 'margin-right', 'margin-top', 'margin-bottom'].every(name => computedStyle?.[name] === '0px')) {
+          throw new TypeError(`${id}.canvasSizingProjection requires an edgeless zero-margin measured canvas and simple axes`);
+        }
+        canvasSizingProjection = Object.freeze({parentId: raw.parentId, width: raw.width, height: raw.height});
+      }
       let stableReplacedChildId = null;
       if (Object.prototype.hasOwnProperty.call(source, 'stableReplacedChildId')) {
         if (!isSafeId(source.stableReplacedChildId) || source.kind !== 'box' ||
@@ -38389,7 +38466,7 @@ function createPircDocumentLayout(options) {
           id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset,
           ...(computedStyle === undefined ? {} : { computedStyle }), resize, element, revision,
           canvasBitmapSizeIndependent, canvasEquivalentStyleWrites, clientWidthIndependentOfDescendantSizes,
-          replacedBoxStyleProjection, stableReplacedChildId,
+          replacedBoxStyleProjection, stableReplacedChildId, canvasSizingProjection,
         }));
       } else {
         if (Object.prototype.hasOwnProperty.call(source, 'scroll')) {
@@ -38418,11 +38495,21 @@ function createPircDocumentLayout(options) {
       }
       stagedElements.set(id, element);
     }
+    for (const [id, box] of stagedBoxes) {
+      if (!box.canvasSizingProjection) continue;
+      const parent = stagedBoxes.get(box.canvasSizingProjection.parentId);
+      const calculated = canvasCssSize(box.element, box.canvasSizingProjection, stagedBoxes);
+      if (parent?.stableReplacedChildId !== id || !calculated ||
+          calculated.width !== box.computedStyle.width || calculated.height !== box.computedStyle.height) {
+        throw new TypeError(`${id}.canvasSizingProjection must match the actual native sizes and its fixed parent`);
+      }
+    }
+
     // Resolve stable-child ownership after every box has been staged.
     for (const [id, box] of stagedBoxes) {
       if (box.stableReplacedChildId == null) continue;
       const child = stagedBoxes.get(box.stableReplacedChildId);
-      if (!child?.replacedBoxStyleProjection || child.element.parentElement !== box.element ||
+      if ((!child?.replacedBoxStyleProjection && !child?.canvasSizingProjection) || child.element.parentElement !== box.element ||
           box.element.children.length !== 1 ||
           [...box.element.childNodes].some(node => node.nodeType === 3 && String(node.textContent).trim()) ||
           !['margin-top', 'margin-right', 'margin-bottom', 'margin-left']
@@ -38522,6 +38609,7 @@ function createPircDocumentLayout(options) {
     lastGeneration = staged.generation;
     pendingSizeMutationTargets = new Set();
     pendingProjectedStyles = new Map();
+    pendingCanvasSizingAxes = new Map();
     return {
       ok: true, revision: staged.revision, generation: staged.generation,
       scrollEvents: staged.scrollEvents.slice(), scrollChanges,
@@ -38587,6 +38675,7 @@ function createPircDocumentLayout(options) {
     invalidate() {
       pendingSizeMutationTargets = null;
       pendingProjectedStyles = null;
+      pendingCanvasSizingAxes = null;
       return advanceRevision();
     },
     runWithoutMutationInvalidation,

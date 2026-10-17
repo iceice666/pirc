@@ -650,7 +650,7 @@ void main() {
     skip: _fixtureOrigin.isEmpty,
   );
   testWidgets(
-    'native responsive chart sizing and explicit compatibility audit',
+    'native responsive chart sizing across all four authored modes',
     (tester) async {
       final fixture = obj(
         jsonDecode(await _fixture('/responsive-layout.json')),
@@ -772,31 +772,13 @@ void main() {
 
           final initial = await ready('initial');
           final mode = expectedCase['mode'] as String;
-          if (obj(initial['constructor'])['succeeded'] != true ||
-              initial['error'] != null) {
-            // Unspecified/intrinsic Canvas dimensions still need synchronous
-            // native layout; explicit and percentage CSS sizes must succeed.
-            expect(
-              mode,
-              'container_only',
-              reason: '${expectedCase['caseId']}: $initial',
-            );
-            final error =
-                '${obj(initial['constructor'])['error']} ${initial['error']}';
-            expect(
-              error,
-              contains('stale'),
-              reason: 'Only the named synchronous layout gap is expected',
-            );
-            acceptance.add({
-              'caseId': expectedCase['caseId'],
-              'mode': mode,
-              'status': 'unaccepted-synchronous-layout',
-              'report': initial,
-              'diagnostics': document.scripts?.diagnostics,
-            });
-            continue;
-          }
+          expect(
+            obj(initial['constructor'])['succeeded'],
+            isTrue,
+            reason: '${expectedCase['caseId']}: $initial',
+          );
+          expect(obj(initial['constructor'])['error'], isNull);
+          expect(initial['error'], isNull);
           expect(
             document.scripts?.diagnostics,
             isEmpty,
@@ -948,13 +930,7 @@ void main() {
       );
       expect(
         acceptance.where((item) => item['status'] == 'accepted'),
-        hasLength(12),
-      );
-      expect(
-        acceptance.where(
-          (item) => item['status'] == 'unaccepted-synchronous-layout',
-        ),
-        hasLength(4),
+        hasLength(16),
       );
       debugPrintSynchronously(
         'PIRC_RESPONSIVE_CHART_ACCEPTANCE ${jsonEncode(acceptance)}',

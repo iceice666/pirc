@@ -51,6 +51,8 @@ const layoutDependencies = readFileSync(path.join(scriptDirectory, 'fixtures/doc
 
 const boxStyleProjection = readFileSync(path.join(scriptDirectory, 'fixtures/document-box-style-projection-chromium153.json'));
 
+const canvasSizing = readFileSync(path.join(scriptDirectory, 'fixtures/document-canvas-sizing-chromium153.json'));
+
 const requestedPort = configuredPort();
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -80,6 +82,10 @@ const server = createServer((request, response) => {
     });
     response.end(interactions);
     return;
+  }
+  if (pathname === '/canvas-sizing.json') {
+    response.writeHead(200, {'cache-control':'no-store','content-type':'application/json; charset=utf-8'});
+    response.end(canvasSizing); return;
   }
   if (pathname === '/box-style-projection.json') {
     response.writeHead(200, {'cache-control':'no-store','content-type':'application/json; charset=utf-8'});

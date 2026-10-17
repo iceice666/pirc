@@ -405,6 +405,31 @@ void main() {
     );
   });
 
+  testWidgets('degenerate natural ratio uses the other natural dimension', (
+    tester,
+  ) async {
+    for (final row in [
+      (0, 150, 80.0, null, const Size(80, 150)),
+      (160, 0, null, 90.0, const Size(160, 90)),
+      (0, 0, 80.0, null, const Size(80, 0)),
+    ]) {
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: NativeDocumentCanvas(
+              snapshot: _snapshot(row.$1, row.$2, const []),
+              width: row.$3,
+              height: row.$4,
+            ),
+          ),
+        ),
+      );
+      expect(tester.getSize(find.byType(CustomPaint)), row.$5);
+    }
+  });
+
   testWidgets('one-axis CSS sizing preserves the canvas intrinsic ratio', (
     tester,
   ) async {

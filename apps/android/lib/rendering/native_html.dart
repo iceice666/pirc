@@ -3235,13 +3235,18 @@ class _NativeHtmlFactory extends WidgetFactory {
     return 'native-static-${path.reversed.join('-')}';
   }
 
-  bool _ownsInlineReplacedBorderBox(BuildTree tree) =>
+  // Core cannot resolve an inline percentage height against the definite native
+  // containing block. Keep this path alongside owned border-box sizing.
+  bool _ownsInlineReplacedSizing(BuildTree tree) =>
       !markdownStyles &&
       const {'img', 'canvas'}.contains(tree.element.localName) &&
       !const {'block', 'flex', 'grid', 'flow-root'}.contains(
         _flexChildStyles(tree.element)['display']?.trim().toLowerCase(),
       ) &&
-      _documentUsesBorderBox(tree.element);
+      (_documentUsesBorderBox(tree.element) ||
+          (tree.element.localName == 'canvas' &&
+              (_flexChildStyles(tree.element)['height']?.trim().endsWith('%') ??
+                  false)));
 
   void _documentSizing(BuildTree tree, {bool inlineReplaced = false}) {
     const properties = [
@@ -3270,10 +3275,13 @@ class _NativeHtmlFactory extends WidgetFactory {
         }
       }
       // The core image/canvas defaults are registered after parse() begins.
-      // Preserve HTML dimensions when no author declaration overrides them.
+      // Preserve image HTML dimensions when no author declaration overrides them.
+      // Canvas bitmap attributes supply natural dimensions through its renderer;
+      // treating them as CSS lengths would defeat auto-axis aspect ratios.
       for (final property in const ['width', 'height']) {
         final attribute = int.tryParse(tree.element.attributes[property] ?? '');
-        if (!authored.containsKey(property) &&
+        if (tree.element.localName != 'canvas' &&
+            !authored.containsKey(property) &&
             attribute != null &&
             attribute >= 0) {
           authored[property] = '${attribute}px';
@@ -3789,7 +3797,7 @@ class _NativeHtmlFactory extends WidgetFactory {
         _ownsFixedFlexMargins(tree.element)) {
       return;
     }
-    if ((nativeBlock || _ownsInlineReplacedBorderBox(tree)) &&
+    if ((nativeBlock || _ownsInlineReplacedSizing(tree)) &&
         const {
           'width',
           'height',
@@ -4141,7 +4149,7 @@ class _NativeHtmlFactory extends WidgetFactory {
           },
         ),
       );
-      if (_ownsInlineReplacedBorderBox(tree)) {
+      if (_ownsInlineReplacedSizing(tree)) {
         _documentSizing(tree, inlineReplaced: true);
       }
       tree.register(
@@ -4781,7 +4789,17 @@ class _NativeHtmlFactory extends WidgetFactory {
             alignment: Alignment(x, -1),
             widthFactor: 1,
             heightFactor: 1,
-            child: child,
+            // Match the multi-child block-flow path: a definite parent
+            // height is a percentage basis, not a height limit on its content.
+            child: hasDocumentViewport()
+                ? OverflowBox(
+                    alignment: Alignment.topLeft,
+                    fit: OverflowBoxFit.deferToChild,
+                    minHeight: 0,
+                    maxHeight: double.infinity,
+                    child: child,
+                  )
+                : child,
           );
         },
       );

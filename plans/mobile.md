@@ -996,3 +996,54 @@ chart configurations and 12 responsive chart configurations. The separate audit
 records four unsupported intrinsic initializations. Maximum recorded inline
 baseline difference is 0.09375 px. Compact evidence remains ignored; disposable
 builds/emulator disk images are removed while preserving the released preview APK.
+
+## Intrinsic Canvas sizing and synchronous used dimensions
+
+The runtime can now calculate edgeless, zero-margin Canvas used width/height
+from `auto`, numeric pixels, percentages or zero, using the real measured content
+box of its fixed-pixel parent and the Canvas's current natural bitmap axes.
+The packet builder first requires this calculation to agree with the actual
+native measurement. Bitmap writes still reset drawing state; switching a fixed
+CSS axis to auto immediately restores its dependence on bitmap dimensions.
+The same natural-size formula drives Flutter painting and intrinsic layout,
+including the no-aspect-ratio case where a natural axis is zero.
+
+Inline Canvas percentage heights now use the native definite containing-block
+height instead of the HTML core's intrinsic-height fallback. Existing natural
+inline Canvas layout remains on its established path. A single-child block flow
+now permits the same natural vertical overflow as the multi-child path; a fixed
+parent height no longer silently compresses an auto-height block Canvas.
+
+Size-changing projection requires a first-flow, left-anchored LTR ancestor path
+with fixed pixel edges, no earlier rendered siblings/text and no transforms or
+percentage relative offsets. Auto margins, percentage padding, RTL and preceding
+wrapping text withhold this proof: a new classic root scrollbar can change those
+positions/bases even when the direct parent has fixed width and height. Other
+styles, important overrides, attribute-dependent CSS and scrollbar/intrinsic
+ancestors also retain the remeasurement fence. The numeric projection surface is
+bounded to 1,000,000 CSS pixels per axis; calc/var and declaration removal are
+not projected. Canvas bitmap/drawing limits remain separately enforced.
+
+The synchronous result certifies only the supported live computed styles and
+its proved fixed parent's old rectangle while root scroll offsets are zero.
+A scrolled root withholds that parent rectangle because changed overflow can
+clamp scrolling even when local edges stay fixed. It does not certify a changed Canvas
+rectangle, offsets, scroll extents or general synchronous native layout.
+
+A separate Chromium 153 corpus records 72 cases (nine modes, phone/tablet,
+DPR 1/3, light/dark), including every immediate style read and every following
+native-frame rectangle, not only the final size. One fractional-ratio mode
+allows a named 0.02 CSS-pixel browser-layout quantization difference; other
+values remain exact. Capture uses only the dedicated test browser and blocks
+all external requests. The existing Chart.js HTML, library and driver remain
+unchanged; the native chart gate now requires all 16 responsive configurations.
+
+Verification: 631 JavaScript tests, 285 targeted Flutter regressions and all
+192 native comparison cases pass, with clean analysis and formatting. These
+include 72 new Canvas cases, 4 fixed charts, all 16 responsive charts (closing
+the prior four intrinsic initialization failures), 32 box-style cases, 32 parent
+width cases, 28 HTTP cases and 8 frame cases. The recorded fractional-ratio
+maximum is 0.013549 px within its named 0.02 px bound. Compact acceptance records
+remain ignored; disposable builds and emulator images are cleared while the
+published APK is preserved. General synchronous layout, broader chart/touch
+compatibility and real-device/account/remote-push acceptance remain open.

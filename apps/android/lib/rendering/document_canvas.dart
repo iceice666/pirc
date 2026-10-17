@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'document_canvas_sizing.dart';
 import 'html_background_gradient.dart' show parseNativeCssColor;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
@@ -421,17 +422,17 @@ class _RenderNativeDocumentCanvasLayout extends RenderProxyBox {
     markNeedsLayout();
   }
 
-  double get _ratio {
-    if (_intrinsicSize.width <= 0 || _intrinsicSize.height <= 0) return 1;
-    return _intrinsicSize.width / _intrinsicSize.height;
+  Size _sized({double? width, double? height}) {
+    final used = nativeCanvasUsedSize(
+      intrinsicWidth: _intrinsicSize.width,
+      intrinsicHeight: _intrinsicSize.height,
+      width: width,
+      height: height,
+    );
+    return Size(used.width, used.height);
   }
 
-  Size _desiredSize() {
-    if (_width != null && _height != null) return Size(_width!, _height!);
-    if (_width != null) return Size(_width!, _width! / _ratio);
-    if (_height != null) return Size(_height! * _ratio, _height!);
-    return _intrinsicSize;
-  }
+  Size _desiredSize() => _sized(width: _width, height: _height);
 
   Size _constrainedAspectSize(BoxConstraints constraints) {
     // The HTML core may pass a preferred CSS width as a loose maximum. Honor
@@ -444,14 +445,10 @@ class _RenderNativeDocumentCanvasLayout extends RenderProxyBox {
     final cssWidth = _cssWidthSpecified && constraints.hasBoundedWidth;
     final cssHeight = _cssHeightSpecified && constraints.hasBoundedHeight;
     if (cssWidth) {
-      return constraints.constrain(
-        Size(constraints.maxWidth, constraints.maxWidth / _ratio),
-      );
+      return constraints.constrain(_sized(width: constraints.maxWidth));
     }
     if (cssHeight) {
-      return constraints.constrain(
-        Size(constraints.maxHeight * _ratio, constraints.maxHeight),
-      );
+      return constraints.constrain(_sized(height: constraints.maxHeight));
     }
     if (_width != null && _height != null) {
       return constraints.constrain(_desiredSize());
@@ -460,14 +457,10 @@ class _RenderNativeDocumentCanvasLayout extends RenderProxyBox {
       return constraints.biggest;
     }
     if (constraints.hasTightWidth) {
-      return constraints.constrain(
-        Size(constraints.maxWidth, constraints.maxWidth / _ratio),
-      );
+      return constraints.constrain(_sized(width: constraints.maxWidth));
     }
     if (constraints.hasTightHeight) {
-      return constraints.constrain(
-        Size(constraints.maxHeight * _ratio, constraints.maxHeight),
-      );
+      return constraints.constrain(_sized(height: constraints.maxHeight));
     }
     final desired = _desiredSize();
     var scale = 1.0;
@@ -496,15 +489,17 @@ class _RenderNativeDocumentCanvasLayout extends RenderProxyBox {
   double _intrinsicWidth(double height) {
     if (_width != null && _height != null) return _width!;
     if (_width != null) return _width!;
-    if (_height != null) return _height! * _ratio;
-    return height.isFinite ? height * _ratio : _intrinsicSize.width;
+    if (_height != null) return _sized(height: _height).width;
+    return height.isFinite
+        ? _sized(height: height).width
+        : _intrinsicSize.width;
   }
 
   double _intrinsicHeight(double width) {
     if (_width != null && _height != null) return _height!;
     if (_height != null) return _height!;
-    if (_width != null) return _width! / _ratio;
-    return width.isFinite ? width / _ratio : _intrinsicSize.height;
+    if (_width != null) return _sized(width: _width).height;
+    return width.isFinite ? _sized(width: width).height : _intrinsicSize.height;
   }
 
   @override

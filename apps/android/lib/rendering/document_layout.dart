@@ -1,5 +1,6 @@
 import 'dart:collection';
 import 'dart:convert';
+import 'document_canvas_sizing.dart';
 import 'document_offsets.dart';
 import 'document_computed_styles.dart';
 import 'html_document_box.dart';
@@ -818,9 +819,49 @@ void _attachComputedStyles(
     final childId = specs[box['id']]?.fixedBlockChildId;
     final child = byId[childId];
     final childStyle = child?['computedStyle'];
+    final childSpec = specs[childId];
+    final content = (box['resize'] as Map?)?['contentRect'] as Map?;
+    final intrinsic = childSpec?.canvasIntrinsicSize;
     if (box['kind'] == 'box' &&
         box['computedStyle'] is Map &&
-        child?['replacedBoxStyleProjection'] == true &&
+        child?['kind'] == 'box' &&
+        childStyle is Map &&
+        childSpec?.canvasSizingProjection == true &&
+        content != null &&
+        intrinsic != null) {
+      final width = childSpec!.lengths['width'] ?? 'auto';
+      final height = childSpec.lengths['height'] ?? 'auto';
+      final used = nativeCanvasCssUsedSize(
+        cssWidth: width,
+        cssHeight: height,
+        parentWidth: (content['width'] as num).toDouble(),
+        parentHeight: (content['height'] as num).toDouble(),
+        intrinsicWidth: intrinsic.width,
+        intrinsicHeight: intrinsic.height,
+      );
+      double? pixels(String key) {
+        final raw = childStyle[key];
+        return raw is String && raw.endsWith('px')
+            ? double.tryParse(raw.substring(0, raw.length - 2))
+            : null;
+      }
+
+      double cssPrecision(double value) =>
+          (value * 1000000).roundToDouble() / 1000000;
+      if (used != null &&
+          pixels('width') == cssPrecision(used.width) &&
+          pixels('height') == cssPrecision(used.height)) {
+        child!['canvasSizingProjection'] = {
+          'parentId': box['id'],
+          'width': width,
+          'height': height,
+        };
+      }
+    }
+    if (box['kind'] == 'box' &&
+        box['computedStyle'] is Map &&
+        (child?['replacedBoxStyleProjection'] == true ||
+            child?['canvasSizingProjection'] is Map) &&
         childStyle is Map &&
         const [
           'margin-top',

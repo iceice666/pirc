@@ -142,13 +142,13 @@ Neither the test library nor its fixture is included in the APK.
 
 The same command also audits 16 responsive sizing cases from
 `document-chart-responsive-layout-chromium153.json`, loading the exact authored
-HTML and driver used by the browser. Twelve cases with authored pixel or
-percentage width and pixel height initialize without diagnostics and match native
-geometry and bar pixels, including initial inline display, content-box sizing and
-omitted backing attributes. Container-only resizing requires matching early and
-settled geometry and paint without script diagnostics, including Chart's
-same-callback parent-width read after changing descendant sizes. The four cases
-with no authored canvas size retain the synchronous layout initialization gap.
+HTML and driver used by the browser. All 16 cases must initialize without
+diagnostics and match native geometry and bar pixels, including Canvas with no
+authored size, pixel/percentage widths, initial inline display, content-box sizing
+and omitted backing attributes. Container-only resizing requires matching early
+and settled geometry and paint, including Chart's same-callback parent-width
+read after changing descendant sizes. Native-proved simple used-size calculation
+supports intrinsic initialization; general synchronous layout remains open.
 Recreate this separate browser reference with
 `node apps/android/tool/parity/capture_document_chart_responsive_layout_chromium153.mjs`.
 The capture records both the early two-frame and settled resize observations;
@@ -191,6 +191,20 @@ all other values stay exact. Recreate the reference with
 This proof excludes scrollbar ancestors, edges, important box declarations,
 attribute-dependent CSS and real dimension changes. It does not provide general
 synchronous native layout or certify a replaced element's old position/scroll data.
+
+`integration_test/document_canvas_sizing_test.dart` uses the same server and
+define for 72 Chromium/native cases. It checks natural dimensions, auto-axis
+ratios, px/percent switches, bitmap resets, zero natural axes and narrow fixed
+parents after each individual write and native frame. The fractional-ratio mode
+allows 0.02 px of browser layout quantization; other values remain exact.
+`capture_document_canvas_sizing_chromium153.mjs` recreates the reference with
+all network requests blocked. The runtime projects only host-proved simple CSS
+sizes and stable parent data: a first-flow LTR path with pixel edges and no auto
+margins, preceding rendered content, transforms or percentage relative offsets.
+A scrolled root defers parent rectangles to native measurement to account for
+scroll clamping after overflow changes. Unknown sizing expressions, changed child rectangles and scroll data still
+require native measurement. Projection is bounded to 1,000,000 CSS pixels per
+axis; the existing bitmap and drawing budgets remain separate.
 
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see

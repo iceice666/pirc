@@ -29,6 +29,8 @@ class NativeDocumentComputedStyleSpec {
     this.canvasEquivalentStyleWrites = false,
     this.clientWidthIndependentOfDescendantSizes = false,
     this.replacedBoxStyleProjection = false,
+    this.canvasSizingProjection = false,
+    this.canvasIntrinsicSize,
     this.fixedBlockChildId,
   }) : values = Map<String, String>.unmodifiable(values),
        lengths = Map<String, String>.unmodifiable(lengths);
@@ -61,6 +63,12 @@ class NativeDocumentComputedStyleSpec {
   /// Both used dimensions are fixed independently of bitmap, inline/block
   /// display and box-sizing changes, with no edges or important overrides.
   final bool replacedBoxStyleProjection;
+
+  /// A measured fixed parent and edgeless zero-margin Canvas allow CSS sizes to
+  /// be calculated from px/percent/auto and natural bitmap dimensions. The
+  /// serializer must verify the original calculation against real native sizes.
+  final bool canvasSizingProjection;
+  final ({double width, double height})? canvasIntrinsicSize;
 
   /// Candidate single replaced child; the packet builder verifies its proof
   /// and actual native measurements before attaching this relationship.
@@ -480,11 +488,10 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
     final hasPercentWidthPixelHeight =
         _isNonNegativePercentage(authoredWidth) &&
         _isNonNegativePixelLength(authoredHeight);
-    final ordinaryBlockCanvasPath =
+    final simpleCanvasPath =
         isHtmlCanvas &&
         available &&
         resizeSupported &&
-        (hasFixedPixelCanvasSize || hasPercentWidthPixelHeight) &&
         _hasOrdinaryBlockCanvasSizingPath(
           canvas: element,
           canvasAuthor: author,
@@ -493,6 +500,20 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
           computedStylesByElement: byElement,
           stylesByElement: stylesByElement,
         );
+    final ordinaryBlockCanvasPath =
+        simpleCanvasPath &&
+        (hasFixedPixelCanvasSize || hasPercentWidthPixelHeight);
+    double bitmapDimension(String name, int fallback) {
+      final raw = element.attributes[name];
+      if (raw == null ||
+          !RegExp(r'^[\t\n\f\r ]*\d+[\t\n\f\r ]*$').hasMatch(raw)) {
+        return fallback.toDouble();
+      }
+      return (double.tryParse(raw.trim()) ?? fallback.toDouble())
+          .clamp(0, 0xffffffff)
+          .toDouble();
+    }
+
     final spec = NativeDocumentComputedStyleSpec(
       values: values,
       lengths: lengths,
@@ -508,6 +529,36 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
               (hasPercentWidthPixelHeight && ordinaryBlockCanvasPath)),
       canvasEquivalentStyleWrites:
           canvasBitmapAttributesIndependent && ordinaryBlockCanvasPath,
+      canvasIntrinsicSize: isHtmlCanvas
+          ? (
+              width: bitmapDimension('width', 300),
+              height: bitmapDimension('height', 150),
+            )
+          : null,
+      canvasSizingProjection:
+          canvasBitmapAttributesIndependent &&
+          inlineBoxStyleOverridesIndependent &&
+          simpleCanvasPath &&
+          _hasStableOverflowAncestors(element, byElement) &&
+          _hasViewportIndependentCanvasParent(
+            element,
+            byElement,
+            stylesByElement,
+          ) &&
+          const [
+            'padding-left',
+            'padding-right',
+            'padding-top',
+            'padding-bottom',
+            'border-left-width',
+            'border-right-width',
+            'border-top-width',
+            'border-bottom-width',
+            'margin-left',
+            'margin-right',
+            'margin-top',
+            'margin-bottom',
+          ].every((name) => lengths[name] == '0px'),
       replacedBoxStyleProjection:
           canvasBitmapAttributesIndependent &&
           inlineBoxStyleOverridesIndependent &&
@@ -604,6 +655,64 @@ bool _hasStableOverflowAncestors(
       return false;
     }
     ancestor = ancestor.parent;
+  }
+  return true;
+}
+
+// A visible overflow change can introduce a classic root scrollbar. Only a
+// first-flow, left-anchored path with fixed edges keeps the parent's position
+// and percentage content-box bases independent of that viewport-width change.
+bool _hasViewportIndependentCanvasParent(
+  dom.Element canvas,
+  Map<dom.Element, NativeDocumentComputedStyleSpec> computed,
+  Map<dom.Element, Map<String, String>> styles,
+) {
+  var current = canvas.parent;
+  while (current is dom.Element) {
+    final spec = computed[current];
+    final author = styles[current] ?? const <String, String>{};
+    if (spec == null ||
+        spec.values['direction'] != 'ltr' ||
+        const [
+          'transform',
+          'translate',
+          'rotate',
+          'scale',
+          'perspective',
+        ].any((key) => author[key] != null && author[key] != 'none')) {
+      return false;
+    }
+    for (final side in _sides) {
+      if (!_isNonNegativePixelLength(spec.lengths['padding-$side']) ||
+          !_isNonNegativePixelLength(spec.lengths['border-$side-width']) ||
+          !_isNonNegativePixelLength(spec.lengths['margin-$side'])) {
+        return false;
+      }
+      final offset = author[side]?.trim().toLowerCase() ?? 'auto';
+      if (offset != 'auto' &&
+          !_isNonNegativePixelLength(offset) &&
+          offset != '0') {
+        return false;
+      }
+    }
+    final parent = current.parent;
+    if (parent is dom.Element) {
+      for (final sibling in parent.nodes) {
+        if (identical(sibling, current)) break;
+        if (sibling is dom.Text && sibling.text.trim().isNotEmpty) return false;
+        if (sibling is dom.Element &&
+            !const {
+              'head',
+              'style',
+              'script',
+              'template',
+            }.contains(sibling.localName) &&
+            computed[sibling]?.values['display'] != 'none') {
+          return false;
+        }
+      }
+    }
+    current = parent;
   }
   return true;
 }
@@ -770,7 +879,7 @@ bool _hasUnsupportedCanvasSizingDeclarations(Map<String, String> author) =>
 bool _hasSimplePreferredCanvasSizes(Map<String, String> author) {
   for (final property in const {'width', 'height'}) {
     final value = author[property]?.trim().toLowerCase();
-    if (value == null || value == 'auto') continue;
+    if (value == null || value == 'auto' || value == '0') continue;
     if (!_isNonNegativePixelLength(value) && !_isNonNegativePercentage(value)) {
       return false;
     }
