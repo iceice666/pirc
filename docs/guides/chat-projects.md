@@ -182,6 +182,39 @@ Use the trash action in the chat list or a project's session list. The confirmat
 
 Deletion requires the chat node online. It stops the running agent, closes its terminals and browser, removes the private transcript and observational memory, and removes the chat's working files. If the connection fails during deletion, reconnect and use Delete again; retrying is safe. Until cleanup completes the chat remains listed but cannot accept more work. Completed deletion also removes the chat from other connected clients.
 
-The memory store retains only forgotten markers and content hashes to prevent exact re-adds; deleted memory cannot be restored through Settings. Copies already in other chats' frozen snapshots or messages, external files, backups, and original files in the owner-wide upload store are outside this deletion. The confirmation discloses the other-chat copy boundary. Project instructions and separately created schedules are preserved.
+The memory store retains only forgotten markers and content hashes to prevent exact re-adds; deleted memory cannot be restored through Settings. Copies already in other chats' frozen snapshots or messages, external files, backups, and original files in the node's upload store are outside this deletion (deleting the chat's project removes the uploads made in it; see [Deleting a project](#deleting-a-project)). The confirmation discloses the other-chat copy boundary. Project instructions and separately created schedules are preserved.
 
 API: `DELETE /api/sessions/:id`, authenticated as the owner, returns `204` after both node and gateway cleanup. The same owner can retry a completed deletion. Other owners are refused. This route supports chat sessions only.
+
+## Deleting a project
+
+A project's page → Settings → **Delete project…** deletes the project with its chats. The confirmation first shows what goes and what stays, and lists the memory entries that need your decision; nothing changes until you confirm.
+
+Deleted:
+
+- Every chat in the project, as [Deleting a chat](#deleting-a-chat) describes: messages, working files, private transcripts and observational memory, terminals and browser.
+- Files uploaded in the project's chats (originals included), and the project's browser profile.
+- The project's instructions, capability settings and links, the schedules that run in it with their history, and the records of delegations its chats started.
+- The memory its chats wrote. Each entry is judged by the chat each logged version's text came from:
+  - every version from the project: the entry is forgotten;
+  - the project's versions only after every other one (another chat wrote it, a project chat changed it later): the entry goes back to its last text from elsewhere, and the project's versions are erased from its history;
+  - mixed (a project chat changed it, then another chat did; or a project chat wrote it and another changed it): you decide, **Forget**, **Keep as is** (content and history untouched) or **Edit** (your text replaces it, and the project's versions are erased from its history).
+- The project's pending memory proposals.
+
+Not deleted, and listed as such:
+
+- Schedules its chats created in other workspaces.
+- What delegated tasks did in other workspaces: their sessions, files and commits, and the workspace memory they wrote.
+- Copies in other chats: what they already read (frozen snapshots, messages) and what they wrote in their own words. These are not traced.
+- Files uploaded before pirc recorded an upload's project (0.5.x and earlier), which stay in the node's upload store.
+- Backups, logs, and what model providers keep.
+
+Forgotten text is **not** blocked afterwards: the tombstones a project deletion leaves are scoped to the deleted project, so another chat or a new project may write the same text again. To keep a fact from coming back, forget it in Settings → Memory, whose tombstones refuse it everywhere. Projects have no project-only memory: their chats read and write the global USER/MEMORY like any other chat.
+
+Deletion requires the chat node online and running this version (gateway and nodes are upgraded together; node protocol 11). The project and its chats are fenced first, and its memory is handled in the same step: no new chat starts in it, and its chats accept no more work. If the connection fails part way, the project stays listed with **Finish deleting…** on its page: reconnect and use it. The confirmation then shows what is left, and entries you kept come up for a decision again. If an entry needing your decision changed between the confirmation and the deletion, the deletion refuses (`409`) and the confirmation reloads; entries that are forgotten or rolled back are handled as they are when you confirm. The memory of a project includes what its chats deleted one by one wrote (for chats deleted since this version; older chat deletions did not record their project).
+
+A deleted project keeps a content-free record (its id) on the gateway and the chat node, so the node, a restored node backup or a late message cannot bring it back. A new project with the same name is a different project with nothing of the old one.
+
+Uploads are usable only in the workspace they were uploaded in: an upload made in a project cannot be attached in another project, the top-level chats or a coding workspace (`403` "Upload belongs to another workspace"). Uploads from before this rule record no workspace and stay usable anywhere.
+
+API: `GET /api/workspaces/:id/deletion` returns the preview (`chats`, `schedules`, `keptSchedules`, `delegations`, `links`, `memory` with each entry's `action`: `forget`, `rollback` with the `restored` text, or `review`; `nodeOnline`; `deleting` for an unfinished one, which `GET /api/workspaces` also lists with `"deleting": true`). `POST /api/workspaces/:id/deletion` with `{"decisions": [{"entryId", "revision", "action": "forget" | "keep" | "edit", "content"?}]}`, one per `review` entry on its current revision, returns `204` once the node and the gateway are done, also for a project already deleted. Only chat projects can be deleted, not the top-level Chats or a directory workspace.

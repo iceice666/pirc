@@ -240,14 +240,28 @@ pub async fn save_assistant_prompt(
 
 // ---- workspaces ---------------------------------------------------------------
 
-pub async fn list_workspaces(State(app): State<AppState>) -> Handled {
-    let workspaces: Vec<_> = app
-        .db
-        .lock()
+pub async fn list_workspaces(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+) -> Handled {
+    let conn = app.db.lock();
+    let mut workspaces: Vec<Value> = conn
         .list_workspaces()?
         .into_iter()
         .filter(|workspace| workspace.id.contains(':'))
+        .map(|workspace| json!(workspace))
         .collect();
+    // A project whose deletion did not finish stays listed, for its owner to finish it.
+    for workspace in conn.deleting_workspaces()? {
+        let owner = conn
+            .workspace_deletion(&workspace.id)?
+            .map(|d| d.owner_user);
+        if owner.as_deref() == Some(identity.user.as_str()) {
+            let mut item = json!(workspace);
+            item["deleting"] = json!(true);
+            workspaces.push(item);
+        }
+    }
     Ok(ok(json!({ "workspaces": workspaces })))
 }
 

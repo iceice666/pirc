@@ -86,4 +86,4 @@ sqlite3 /var/lib/pirc/daemon/gateway.sqlite    # or: nix shell nixpkgs#sqlite -c
 
 - Schedule run history keeps the newest 50 runs per schedule (open and missed runs are never pruned).
 - Forgetting an assistant memory entry deletes it and its history but keeps a hash tombstone so the same text is not re-added; the chats it came from stay on the chat node.
-- There is no built-in session deletion or expiry; the state directories grow with use.
+- Sessions do not expire; the state directories grow with use. Deleting a chat or a chat project ([chat projects guide](../guides/chat-projects.md#deleting-a-chat)) removes its files and rows, but not the copies in backups or old WAL frames.

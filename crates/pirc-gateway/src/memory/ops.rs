@@ -241,6 +241,9 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             };
             let (entry, unchanged, usage) = {
                 let conn = app.db.lock();
+                // Checked under the lock that writes: a chat fenced for
+                // deletion since the operation arrived writes nothing.
+                conn.require_session_available(session_id)?;
                 super::interactions::ensure_known(app, &conn);
                 let store = super::store(app, &conn);
                 let (entry, unchanged) = store.write_note(user, &args.input, &change)?;
@@ -262,6 +265,7 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             let sources = json!({ "sessionId": session_id, "entryIds": args.entry_ids });
             let (proposal, duplicate) = {
                 let conn = app.db.lock();
+                conn.require_session_available(session_id)?;
                 super::interactions::ensure_known(app, &conn);
                 super::store(app, &conn).propose(user, session_id, &args.input, &sources)?
             };

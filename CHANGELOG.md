@@ -4,6 +4,16 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+The node protocol moves to 11: upgrade the gateway and every node together (a node on protocol 10 is refused, and a protocol 11 node by an older gateway). The gateway's database moves to schema 1004 and each node's to 2001 on first start (automatic); older versions refuse them afterwards, so keep a backup to downgrade. See [Upgrades](docs/deploy/upgrades.md).
+
+### Added
+
+- Chat projects can be deleted (project page → Settings → Delete project…). The confirmation lists what goes (the project's chats, uploads, instructions, links, settings and schedules, and the memory its chats wrote) and what stays (schedules its chats created elsewhere, work delegated to other workspaces, copies in other chats, older uploads, backups). Memory is judged by the chat each version came from: entries only the project wrote are forgotten, entries the project only changed last go back to their earlier text, and entries mixing both wait for your decision (forget, keep, or edit). Text forgotten this way may be written again by other chats; Settings → Memory's Forget still refuses it everywhere. Requires the chat node online; an interrupted deletion resumes when you delete again. API: `GET`/`POST /api/workspaces/:id/deletion`.
+
+### Changed
+
+- An upload can only be attached in the workspace it was uploaded in (`403` "Upload belongs to another workspace" elsewhere), so deleting a project can delete its uploads. Uploads made before this version can still be attached anywhere, and are not deleted with a project.
+
 ### Security
 
 - A node no longer passes file descriptors it was started with to its agents: it closes every one but stdin, stdout and stderr at start-up, and the Linux sandbox's bridge closes any other before it runs the agent. A terminal's PTY left open by whatever launched the node reached the agent, and a command written to it ran outside the sandbox.

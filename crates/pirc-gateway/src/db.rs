@@ -20,7 +20,7 @@ use crate::util::{new_id, now_ms, safe_json};
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1003;
+pub const SCHEMA_VERSION: i64 = 1004;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = include_str!("schema.sql");
@@ -49,6 +49,24 @@ const MIGRATIONS: &[(i64, &str)] = &[
          -- The delegation checkbox for auto mode, and retention (docs/history/assistant.md).
          ALTER TABLE delegations ADD COLUMN as_user_request INTEGER NOT NULL DEFAULT 0;
          CREATE INDEX delegations_follows ON delegations(follows);",
+    ),
+    (
+        // Project deletion (docs/guides/chat-projects.md): its fence, and
+        // tombstones scoped to the deleted project.
+        1004,
+        "ALTER TABLE session_deletions ADD COLUMN workspace_id TEXT;
+         CREATE TABLE workspace_deletions (
+           workspace_id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL
+         );
+         CREATE TABLE memory_tombstones_scoped (
+           owner_user TEXT NOT NULL, scope_id TEXT NOT NULL DEFAULT 'global', content_hash TEXT NOT NULL,
+           forgotten_at INTEGER NOT NULL,
+           PRIMARY KEY (owner_user, scope_id, content_hash)
+         );
+         INSERT INTO memory_tombstones_scoped (owner_user, scope_id, content_hash, forgotten_at)
+           SELECT owner_user, 'global', content_hash, forgotten_at FROM memory_tombstones;
+         DROP TABLE memory_tombstones;
+         ALTER TABLE memory_tombstones_scoped RENAME TO memory_tombstones;",
     ),
 ];
 
@@ -527,8 +545,23 @@ pub trait Store {
         node_id: &str,
         repos: &[(String, Option<String>)],
     ) -> ApiResult<()>;
+    /// A chat project being deleted (or deleted) is left out.
     fn list_workspaces(&self) -> ApiResult<Vec<Workspace>>;
+    /// 404 "Workspace not found"; 409 while it is being deleted.
     fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace>;
+    /// The workspace even while it is being deleted (the deletion's own lookups).
+    fn find_workspace(&self, workspace_id: &str) -> ApiResult<Option<Workspace>>;
+    fn workspace_deletion(&self, workspace_id: &str) -> ApiResult<Option<Deletion>>;
+    /// Fence the project and every session in it (403 if one is another
+    /// user's). Idempotent.
+    fn begin_workspace_deletion(&self, workspace_id: &str, user: &str) -> ApiResult<()>;
+    /// Ids of the sessions in a workspace.
+    fn workspace_session_ids(&self, workspace_id: &str) -> ApiResult<Vec<String>>;
+    /// Every session a workspace had: its sessions and those deleted from it
+    /// (recorded since schema 1004).
+    fn workspace_history_session_ids(&self, workspace_id: &str) -> ApiResult<Vec<String>>;
+    /// Chat projects being deleted (`deleting`), for their owner to finish.
+    fn deleting_workspaces(&self) -> ApiResult<Vec<Workspace>>;
     fn get_workspace_capabilities(&self, workspace_id: &str) -> ApiResult<Capabilities>;
     fn patch_workspace_capabilities(
         &self,
@@ -702,8 +735,10 @@ impl Store for Connection {
         workspaces: &[(String, String, Option<WorkspaceKind>)],
     ) -> ApiResult<()> {
         atomic(self, |tx| {
+            // A deleted project announced again (an old process, a restored
+            // backup) stays deleted.
             let mut insert = tx.prepare(
-                "INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at,kind) VALUES (?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name, kind=excluded.kind",
+                "INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at,kind) SELECT ?1,?2,?3,?4,?5,?6,?7 WHERE NOT EXISTS (SELECT 1 FROM workspace_deletions WHERE workspace_id=?1) ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name, kind=excluded.kind",
             )?;
             for (id, display_name, kind) in workspaces {
                 insert.execute(params![
@@ -757,19 +792,99 @@ impl Store for Connection {
     }
 
     fn list_workspaces(&self) -> ApiResult<Vec<Workspace>> {
-        let mut statement = self.prepare("SELECT * FROM workspaces ORDER BY display_name")?;
+        let mut statement = self.prepare(
+            "SELECT * FROM workspaces WHERE id NOT IN (SELECT workspace_id FROM workspace_deletions) ORDER BY display_name",
+        )?;
         let rows = statement.query_map([], Workspace::from_row)?;
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
     fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace> {
-        self.query_row(
-            "SELECT * FROM workspaces WHERE id=?",
-            [workspace_id],
-            Workspace::from_row,
-        )
-        .optional()?
-        .ok_or_else(|| ApiError::not_found("Workspace not found"))
+        let workspace = self
+            .find_workspace(workspace_id)?
+            .ok_or_else(|| ApiError::not_found("Workspace not found"))?;
+        if self.workspace_deletion(workspace_id)?.is_some() {
+            return Err(ApiError::new(
+                409,
+                "conflict",
+                "This project is being deleted. Retry Delete to finish cleanup.",
+            ));
+        }
+        Ok(workspace)
+    }
+
+    fn find_workspace(&self, workspace_id: &str) -> ApiResult<Option<Workspace>> {
+        Ok(self
+            .query_row(
+                "SELECT * FROM workspaces WHERE id=?",
+                [workspace_id],
+                Workspace::from_row,
+            )
+            .optional()?)
+    }
+
+    fn workspace_deletion(&self, workspace_id: &str) -> ApiResult<Option<Deletion>> {
+        Ok(self
+            .query_row(
+                "SELECT owner_user, status FROM workspace_deletions WHERE workspace_id=?",
+                [workspace_id],
+                |row| {
+                    Ok(Deletion {
+                        owner_user: row.get(0)?,
+                        status: row.get(1)?,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    fn begin_workspace_deletion(&self, workspace_id: &str, user: &str) -> ApiResult<()> {
+        atomic(self, |tx| {
+            if tx.find_workspace(workspace_id)?.is_none() {
+                return Err(ApiError::not_found("Workspace not found"));
+            }
+            let sessions = tx.workspace_session_ids(workspace_id)?;
+            for session_id in &sessions {
+                if tx.get_session(session_id)?.owner_user.as_deref() != Some(user) {
+                    return Err(ApiError::new(
+                        403,
+                        "forbidden",
+                        "The project has another user's chats",
+                    ));
+                }
+            }
+            tx.execute(
+                "INSERT OR IGNORE INTO workspace_deletions VALUES (?, ?, 'deleting', ?)",
+                params![workspace_id, user, now_ms()],
+            )?;
+            for session_id in &sessions {
+                tx.begin_session_deletion(session_id, user)?;
+            }
+            Ok(())
+        })
+    }
+
+    fn workspace_session_ids(&self, workspace_id: &str) -> ApiResult<Vec<String>> {
+        let mut statement =
+            self.prepare("SELECT id FROM sessions WHERE workspace_id=? ORDER BY created_at, id")?;
+        let rows = statement.query_map([workspace_id], |row| row.get(0))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    fn workspace_history_session_ids(&self, workspace_id: &str) -> ApiResult<Vec<String>> {
+        let mut statement = self.prepare(
+            "SELECT id FROM sessions WHERE workspace_id=?1 UNION SELECT session_id FROM session_deletions WHERE workspace_id=?1",
+        )?;
+        let rows = statement.query_map([workspace_id], |row| row.get(0))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    fn deleting_workspaces(&self) -> ApiResult<Vec<Workspace>> {
+        let mut statement = self.prepare(
+            "SELECT w.* FROM workspaces w JOIN workspace_deletions d ON d.workspace_id=w.id WHERE d.status='deleting' ORDER BY w.display_name",
+        )?;
+        let rows = statement.query_map([], Workspace::from_row)?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     /// Gateway-owned policy: node workspace sync never overwrites it.
@@ -1033,7 +1148,7 @@ impl Store for Connection {
     fn begin_session_deletion(&self, session_id: &str, user: &str) -> ApiResult<()> {
         self.claim_session(session_id, user, true)?;
         self.execute(
-            "INSERT OR IGNORE INTO session_deletions VALUES (?, ?, 'deleting', ?)",
+            "INSERT OR IGNORE INTO session_deletions (session_id,owner_user,status,created_at,workspace_id) SELECT ?1, ?2, 'deleting', ?3, workspace_id FROM sessions WHERE id=?1",
             params![session_id, user, now_ms()],
         )?;
         Ok(())
@@ -1354,6 +1469,23 @@ mod tests {
                 "CREATE INDEX delegations_follows ON delegations(follows);\n",
                 "",
             );
+        // And schema 1004's fence, deleted chats' workspace and tombstone scope.
+        let first = first.replace(
+            ", created_at INTEGER NOT NULL,\n  -- Its workspace, so deleting a project also finds the chats deleted from it before\n  -- (NULL for deletions before schema 1004).\n  workspace_id TEXT\n);",
+            ", created_at INTEGER NOT NULL\n);",
+        );
+        let fence = first
+            .find("\n-- A chat project being deleted")
+            .expect("schema.sql changed: update this test");
+        let fence_end = fence + first[fence..].find("\n);\n").unwrap() + "\n);\n".len();
+        let first = format!("{}{}", &first[..fence], &first[fence_end..]).replace(
+            "  -- 'global' (Forget, chat deletion) refuses the text from then on; a project's\n  -- workspace id (project deletion) only records it: other chats may write it again.\n  owner_user TEXT NOT NULL, scope_id TEXT NOT NULL DEFAULT 'global', content_hash TEXT NOT NULL,\n  forgotten_at INTEGER NOT NULL,\n  PRIMARY KEY (owner_user, scope_id, content_hash)",
+            "  owner_user TEXT NOT NULL, content_hash TEXT NOT NULL, forgotten_at INTEGER NOT NULL,\n  PRIMARY KEY (owner_user, content_hash)",
+        );
+        assert!(
+            !first.contains("workspace_deletions") && !first.contains("scope_id"),
+            "schema.sql changed: update this test"
+        );
         assert!(
             !first.contains("repo TEXT")
                 && !first.contains("project_links")
@@ -1374,6 +1506,11 @@ mod tests {
             [],
         )
         .unwrap();
+        old.execute(
+            "INSERT INTO memory_tombstones (owner_user,content_hash,forgotten_at) VALUES ('u','h',1)",
+            [],
+        )
+        .unwrap();
         drop(old);
 
         let db = Db::open(&path).unwrap();
@@ -1387,6 +1524,15 @@ mod tests {
             (workspace.display_name.as_str(), workspace.repo),
             ("W", None)
         );
+        // Old tombstones are global.
+        let scope: String = conn
+            .query_row(
+                "SELECT scope_id FROM memory_tombstones WHERE owner_user='u' AND content_hash='h'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(scope, "global");
         // The same tables and columns as a new database.
         assert_eq!(columns(&conn), columns(&Db::memory().lock()));
         drop(conn);
@@ -1503,6 +1649,72 @@ mod tests {
             conn.session_deletion(&session.id).unwrap().unwrap().status,
             "deleted"
         );
+    }
+
+    #[test]
+    fn a_project_being_deleted_is_fenced_and_stays_deleted() {
+        let db = Db::memory();
+        with_workspace(&db);
+        let conn = db.lock();
+        let mine = conn
+            .create_session("n1:w", "node://n1/r1", "n1", "r1", "u")
+            .unwrap();
+        assert_eq!(
+            conn.workspace_session_ids("n1:w").unwrap(),
+            std::slice::from_ref(&mine.id)
+        );
+        let theirs = conn
+            .create_session("n1:w", "node://n1/r2", "n1", "r2", "v")
+            .unwrap();
+        assert_eq!(
+            conn.begin_workspace_deletion("n1:w", "u").unwrap_err().code,
+            "forbidden"
+        );
+        assert!(conn.workspace_deletion("n1:w").unwrap().is_none());
+        conn.execute("DELETE FROM sessions WHERE id=?", [&theirs.id])
+            .unwrap();
+        conn.begin_workspace_deletion("n1:w", "u").unwrap();
+        // Idempotent.
+        conn.begin_workspace_deletion("n1:w", "u").unwrap();
+        assert_eq!(conn.get_workspace("n1:w").unwrap_err().code, "conflict");
+        assert!(conn.find_workspace("n1:w").unwrap().is_some());
+        assert!(conn.list_workspaces().unwrap().is_empty());
+        assert_eq!(
+            conn.create_session("n1:w", "node://n1/r3", "n1", "r3", "u")
+                .unwrap_err()
+                .code,
+            "conflict"
+        );
+        // Its chats are fenced too.
+        assert_eq!(conn.resolve_remote_session("n1", "r1").unwrap(), None);
+        assert_eq!(
+            conn.claim_session(&mine.id, "u", false).unwrap_err().code,
+            "conflict"
+        );
+        // Listed as unfinished, for its owner.
+        let deleting: Vec<String> = conn
+            .deleting_workspaces()
+            .unwrap()
+            .into_iter()
+            .map(|workspace| workspace.id)
+            .collect();
+        assert_eq!(deleting, ["n1:w"]);
+        // Once gone, the node announcing it again does not bring it back.
+        conn.finish_session_deletion(&mine.id).unwrap();
+        // A chat deleted from the project still counts as the project's.
+        assert_eq!(
+            conn.workspace_history_session_ids("n1:w").unwrap(),
+            std::slice::from_ref(&mine.id)
+        );
+        conn.execute("DELETE FROM workspaces WHERE id='n1:w'", [])
+            .unwrap();
+        conn.sync_remote_workspaces("n1", &[("w".into(), "W".into(), Some(WorkspaceKind::Chat))])
+            .unwrap();
+        assert!(conn.find_workspace("n1:w").unwrap().is_none());
+        // Others still sync.
+        conn.sync_remote_workspaces("n1", &[("x".into(), "X".into(), Some(WorkspaceKind::Chat))])
+            .unwrap();
+        assert!(conn.find_workspace("n1:x").unwrap().is_some());
     }
 
     #[test]

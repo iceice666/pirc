@@ -101,8 +101,13 @@ CREATE TABLE uploads (
   created_at INTEGER NOT NULL,
   filename TEXT,
   -- 'image' or 'file'
-  kind TEXT NOT NULL DEFAULT 'image'
+  kind TEXT NOT NULL DEFAULT 'image',
+  -- Where it was uploaded; it is usable in that workspace only and is
+  -- deleted with it. NULL for uploads older than schema 2001.
+  workspace_id TEXT,
+  session_id TEXT
 );
+CREATE INDEX uploads_workspace ON uploads(workspace_id);
 
 -- The project config (.pirc/config.json hooks, env, allowedPaths) the user
 -- trusted for a directory workspace, by hash.
@@ -111,6 +116,16 @@ CREATE TABLE workspace_trust (
   project_hash TEXT NOT NULL,
   trusted_by TEXT NOT NULL,
   trusted_at INTEGER NOT NULL
+);
+
+-- A chat project being deleted (fenced: hidden from the gateway, no new
+-- sessions, until it is gone). Kept afterwards so a retry answers 204.
+CREATE TABLE workspace_deletions (
+  workspace_id TEXT PRIMARY KEY,
+  owner_user TEXT NOT NULL,
+  -- 'deleting' or 'deleted'
+  status TEXT NOT NULL,
+  created_at INTEGER NOT NULL
 );
 
 -- A chat being deleted (fenced: its routes answer 409 until it is gone).

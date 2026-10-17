@@ -214,4 +214,39 @@ describe('WorkspacePage', () => {
     flushSync();
     expect(tab('Sessions').getAttribute('aria-selected')).toBe('true');
   });
+
+  it('offers to finish a deletion that did not finish, and nothing else', () => {
+    render({ ...project, deleting: true });
+    const buttons = [...target.querySelectorAll('button')];
+    expect(buttons.find((item) => item.textContent?.includes('Finish deleting'))?.disabled).toBe(
+      false,
+    );
+    expect(buttons.find((item) => item.textContent?.includes('New chat'))?.disabled).toBe(true);
+    tab('Settings').click();
+    flushSync();
+    expect(target.textContent).toContain('Settings are gone');
+    expect(target.querySelector('textarea')).toBeNull();
+  });
+
+  it('offers to delete a chat project, not the top-level chats or a directory', async () => {
+    const deleteButton = () =>
+      [...target.querySelectorAll('button')].find((item) =>
+        item.textContent?.includes('Delete project…'),
+      );
+    const props = render(project);
+    tab('Settings').click();
+    flushSync();
+    await flush();
+    expect(deleteButton()?.disabled).toBe(false);
+    props.workspace = { ...project, id: 'home:chats', displayName: 'Chats' };
+    flushSync();
+    tab('Settings').click();
+    flushSync();
+    expect(deleteButton()).toBeUndefined();
+    props.workspace = directory;
+    flushSync();
+    tab('Settings').click();
+    flushSync();
+    expect(deleteButton()).toBeUndefined();
+  });
 });

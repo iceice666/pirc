@@ -6,6 +6,7 @@
 import { api, connectEvents, type EventConnection } from './api';
 import { isChatWorkspace, type NewWorkspace } from './chats';
 import { memoryApi, type MemoryProposal } from './memory';
+import { projectDeletionApi, type ProjectMemoryDecision } from './project-deletion';
 import { schedulesApi, type Schedule, type ScheduleRun } from './schedules';
 import { targetFromUrl, type PushTarget } from './push';
 import { syncControl } from './control';
@@ -659,6 +660,28 @@ class AppState {
     this.removeSession(id);
     this.memoryRevision++;
     await this.refreshMemory();
+  }
+
+  /**
+   * Delete a chat project with its chats (docs/guides/chat-projects.md). The
+   * page it was on goes back to the open session, or the one behind it.
+   */
+  async deleteProject(workspaceId: string, decisions: ProjectMemoryDecision[]) {
+    if (!this.demo) await projectDeletionApi.delete(workspaceId, decisions);
+    for (const session of this.sessions.filter((item) => item.workspaceId === workspaceId))
+      this.removeSession(session.id);
+    this.workspaces = this.workspaces.filter((item) => item.id !== workspaceId);
+    if (this.workspaceViewId === workspaceId) {
+      this.workspaceViewId = undefined;
+      this.view = 'session';
+      this.#address(
+        this.activeSessionId ? `?session=${encodeURIComponent(this.activeSessionId)}` : '?',
+      );
+    }
+    this.memoryRevision++;
+    this.scheduleRevision++;
+    // Each keeps its last list on failure: the deletion itself is done.
+    void Promise.all([this.refreshNodes(), this.refreshMemory(), this.refreshSchedules()]);
   }
 
   /** Rename, pin or settle from the sidebar. Applied at once and rolled back on failure. */

@@ -1,5 +1,21 @@
 # Upgrades
 
+## Unreleased: gateway schema 1004, node schema 2001, node protocol 11
+
+Upgrade the gateway and every node together: the node protocol moves to 11, and
+the gateway closes a node on protocol 10 (the node exits asking for the
+upgrade). On first start the gateway migrates its database from schema
+1000–1003 to 1004 (the `workspace_deletions` table, a `workspace_id` in
+`session_deletions`, and a `scope_id` in `memory_tombstones`; existing
+tombstones become `global`, so forgotten text stays refused), and each node its
+store from 2000 to 2001 (an upload's
+`workspace_id`/`session_id`, and `workspace_deletions`). Uploads made before the
+upgrade record no workspace: they can still be attached anywhere and are not
+deleted with a chat project.
+
+A 0.5.x gateway refuses a database at schema 1004, and a 0.5.x node one at 2001. Back up both state directories before upgrading if you may need to roll
+back.
+
 ## 0.5.0: gateway schema 1003 (node protocol 10)
 
 An in-place upgrade. On its first start the gateway migrates its database from

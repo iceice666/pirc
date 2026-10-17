@@ -17,6 +17,7 @@
     SquarePen,
   } from '@lucide/svelte';
   import DeleteChatDialog from './dialogs/DeleteChatDialog.svelte';
+  import DeleteProjectDialog from './dialogs/DeleteProjectDialog.svelte';
   import { tick } from 'svelte';
   import { rovingFocus } from '../a11y';
   import { app } from '../app.svelte';
@@ -53,6 +54,8 @@
   const chat = $derived(isChatWorkspace(workspace));
   const topLevel = $derived(isTopLevelChats(workspace));
   const online = $derived(app.workspaceOnline(workspace));
+  /** An unfinished deletion: nothing but finishing it works. */
+  const deleting = $derived(!!workspace.deleting);
   /** What a project can be linked to. */
   const directories = $derived(app.workspaces.filter((item) => !isChatWorkspace(item)));
   const noun = $derived(chat ? 'chat' : 'session');
@@ -102,6 +105,7 @@
   const leaseHolder = $derived(all.find((session) => session.writeLease));
 
   let deletingChat: SessionSummary | undefined = $state();
+  let deletingProject: Workspace | undefined = $state();
   let renamingId: string | undefined = $state();
   let renameValue = $state('');
   let renameInput: HTMLInputElement | undefined = $state();
@@ -149,7 +153,7 @@
     <button
       class="button dark new-in"
       type="button"
-      disabled={!online}
+      disabled={!online || deleting}
       onclick={() => onnew(workspace.id)}><SquarePen size={15} /> New {noun}</button
     >
   </header>
@@ -180,6 +184,20 @@
 
   <div class="page-scroll">
     <div class="page-body">
+      {#if deleting}
+        <div class="deleting" role="status">
+          <p>
+            This project's deletion did not finish: its chats accept no more work. Finish deleting
+            it once the chat node is connected.
+          </p>
+          <button
+            class="button dark"
+            type="button"
+            disabled={app.usingDemo || !online}
+            onclick={() => (deletingProject = workspace)}>Finish deleting…</button
+          >
+        </div>
+      {/if}
       {#if tab === 'sessions'}
         <div id="workspace-panel-sessions" role="tabpanel" aria-labelledby="workspace-tab-sessions">
           <div class="list-tools">
@@ -235,7 +253,9 @@
         </div>
       {:else}
         <div id="workspace-panel-settings" role="tabpanel" aria-labelledby="workspace-tab-settings">
-          {#if chat}
+          {#if deleting}
+            <p class="note">Settings are gone with the project's deletion.</p>
+          {:else if chat}
             {#if app.usingDemo}
               <p class="note">Project instructions are unavailable in demo mode.</p>
             {:else if !online}
@@ -254,6 +274,25 @@
               />
             {/if}
             <ProjectSettings workspaceId={workspace.id} disabled={app.usingDemo} />
+            {#if !topLevel}
+              <section class="settings-section">
+                <h3>Delete project</h3>
+                <p class="note">
+                  Deletes the project, its chats and what they wrote to memory. You see what goes
+                  and what stays before anything is deleted.
+                </p>
+                <button
+                  class="button ghost danger"
+                  type="button"
+                  disabled={app.usingDemo || !online}
+                  onclick={() => (deletingProject = workspace)}
+                  ><Trash2 size={15} /> Delete project…</button
+                >
+                {#if !online && !app.usingDemo}
+                  <p class="note">Connect the chat node to delete this project.</p>
+                {/if}
+              </section>
+            {/if}
           {:else}
             <section class="settings-section">
               <h3>Workspace</h3>
@@ -407,6 +446,7 @@
 {/snippet}
 
 <DeleteChatDialog bind:session={deletingChat} />
+<DeleteProjectDialog bind:workspace={deletingProject} />
 
 <style>
   .workspace-page {
@@ -689,6 +729,20 @@
   }
   .row-rename input:focus {
     border-color: var(--accent);
+  }
+  .button.danger {
+    color: var(--danger);
+  }
+  .deleting {
+    margin: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    background: var(--bg-subtle);
+  }
+  .deleting p {
+    margin: 0 0 10px;
+    color: var(--danger);
+    font-size: 14px;
   }
   .empty-note,
   .note {

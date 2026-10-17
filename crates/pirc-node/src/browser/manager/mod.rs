@@ -163,6 +163,21 @@ impl BrowserService for BrowserManager {
     }
 }
 
+/// A workspace's browser profile directory name under the profiles
+/// directory: its id with `[^a-zA-Z0-9_-]` as `_`.
+pub fn profile_name(workspace_id: &str) -> String {
+    workspace_id
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
 /// A request task that panicked (an engine bug): what TS answered for an
 /// unexpected exception, 500 `browser_error` with its message.
 fn panicked(error: tokio::task::JoinError) -> ApiError {
@@ -576,17 +591,7 @@ impl Inner {
     ) -> OpResult<(u64, Launch)> {
         let mut state = self.lock();
         if !state.workspaces.contains_key(id) {
-            let sanitized: String = id
-                .chars()
-                .map(|c| {
-                    if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
-                        c
-                    } else {
-                        '_'
-                    }
-                })
-                .collect();
-            let profile = self.settings.profiles_dir.join(sanitized);
+            let profile = self.settings.profiles_dir.join(profile_name(id));
             create_private_dir(&profile)?;
             let seq = self.next_seq();
             let (done, launch) = watch::channel(None);

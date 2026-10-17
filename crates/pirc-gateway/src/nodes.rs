@@ -274,6 +274,16 @@ impl NodeRegistry {
         Ok(())
     }
 
+    /// Forget a workspace the node deleted (a chat project), until it registers again.
+    pub fn remove_workspace(&self, node_id: &str, local_id: &str) {
+        let mut state = self.lock();
+        if let Some(connection) = state.connections.get_mut(node_id) {
+            let node = &mut connection.node;
+            node.workspaces.retain(|item| item.id != local_id);
+            node.added.remove(local_id);
+        }
+    }
+
     /// Replay an HTTP request on the node. `Ok` with the node's status and
     /// body (4xx/5xx included); `Err` only when the transport fails, in
     /// which case the outcome on the node is unknown.

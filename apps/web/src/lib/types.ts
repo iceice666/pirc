@@ -42,6 +42,8 @@ export interface Workspace {
   color?: string;
   defaults: WorkspaceDefaults;
   activeSessionCount?: number;
+  /** A chat project whose deletion did not finish: deleting it again finishes it. */
+  deleting?: boolean;
 }
 
 export interface NodeSummary {

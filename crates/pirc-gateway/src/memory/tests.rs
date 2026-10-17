@@ -823,3 +823,228 @@ fn coding_sessions_get_only_their_users_active_user_entries() {
     assert_eq!(contents(OTHER), vec![json!("Someone else.")]);
     assert_eq!(contents("nobody@example.com"), Vec::<Value>::new());
 }
+
+fn in_chat(session: &str) -> Change {
+    Change {
+        actor: format!("session:{session}"),
+        origins: json!(["assistant"]),
+        sources: json!({ "sessionId": session }),
+    }
+}
+
+fn write(store: &Store<'_>, input: &NoteInput, session: &str) -> Entry {
+    store.write_note(ME, input, &in_chat(session)).unwrap().0
+}
+
+#[test]
+fn deleting_a_project_classifies_by_the_session_of_each_version() {
+    use super::store::{ProjectAction, ProjectChoice, ProjectDecision};
+    let db = Db::memory();
+    let conn = db.lock();
+    let store = store(&conn);
+    let project = vec!["p1".to_owned(), "p2".to_owned()];
+    // Only the project: forgotten.
+    let own = write(&store, &add("Project only"), "p1");
+    let own = write(
+        &store,
+        &edit(Action::Replace, &own.id, Some("Project only 2"), Some(1)),
+        "p2",
+    );
+    // Elsewhere, then the project: rolled back.
+    let tail = write(&store, &add("Tea"), "s2");
+    write(
+        &store,
+        &edit(Action::Replace, &tail.id, Some("Tea for X"), Some(1)),
+        "p1",
+    );
+    // Mixed: the user decides.
+    let mixed = write(&store, &add("A"), "s2");
+    write(
+        &store,
+        &edit(Action::Replace, &mixed.id, Some("A plus"), Some(1)),
+        "p1",
+    );
+    let mixed = write(
+        &store,
+        &edit(Action::Replace, &mixed.id, Some("A plus more"), Some(2)),
+        "s2",
+    );
+    // Untouched.
+    let other = write(&store, &add("Other"), "s2");
+    let pending = store
+        .propose(
+            ME,
+            "p1",
+            &ProposeInput {
+                action: Action::Add,
+                id: None,
+                content: Some("Likes X".into()),
+                base_revision: None,
+                quote: "I like X".into(),
+            },
+            &json!({ "sessionId": "p1" }),
+        )
+        .unwrap()
+        .0;
+
+    let plan = store.project_plan(ME, &project).unwrap();
+    let action = |id: &str| {
+        plan.iter()
+            .find(|item| item.entry.id == id)
+            .map(|item| item.action)
+    };
+    assert_eq!(action(&own.id), Some(ProjectAction::Forget));
+    assert_eq!(action(&tail.id), Some(ProjectAction::Rollback));
+    assert_eq!(action(&mixed.id), Some(ProjectAction::Review));
+    assert_eq!(action(&other.id), None);
+    let rollback = plan.iter().find(|item| item.entry.id == tail.id).unwrap();
+    assert_eq!(
+        (rollback.restored.as_deref(), rollback.restored_revision),
+        (Some("Tea"), Some(1))
+    );
+
+    // Without a decision (or on another revision) nothing changes.
+    assert_eq!(
+        code(store.delete_project(ME, &project, "w:p", &[], true)),
+        "conflict"
+    );
+    let stale = vec![(
+        mixed.id.clone(),
+        ProjectDecision {
+            revision: mixed.revision - 1,
+            choice: ProjectChoice::Forget,
+        },
+    )];
+    assert_eq!(
+        code(store.delete_project(ME, &project, "w:p", &stale, true)),
+        "conflict"
+    );
+    assert_eq!(store.entry(ME, &own.id).unwrap().status, "active");
+    assert_eq!(store.proposal(ME, &pending.id).unwrap().status, "pending");
+
+    let decisions = vec![(
+        mixed.id.clone(),
+        ProjectDecision {
+            revision: mixed.revision,
+            choice: ProjectChoice::Edit("A cleaned".into()),
+        },
+    )];
+    store
+        .delete_project(ME, &project, "w:p", &decisions, true)
+        .unwrap();
+    let forgotten = store.entry(ME, &own.id).unwrap();
+    assert_eq!(
+        (forgotten.status.as_str(), forgotten.content.as_str()),
+        ("forgotten", "")
+    );
+    let rolled = store.entry(ME, &tail.id).unwrap();
+    assert_eq!(rolled.content, "Tea");
+    let texts = |id: &str| -> Vec<String> {
+        store
+            .history(ME, id)
+            .unwrap()
+            .into_iter()
+            .filter_map(|version| version.content)
+            .collect()
+    };
+    assert!(!texts(&tail.id).iter().any(|text| text.contains("for X")));
+    let edited = store.entry(ME, &mixed.id).unwrap();
+    assert_eq!(edited.content, "A cleaned");
+    assert_eq!(edited.origins, json!(["user"]));
+    // The project's version is gone from the history; the others stay.
+    assert_eq!(texts(&mixed.id), ["A cleaned", "A plus more", "A"]);
+    assert_eq!(store.entry(ME, &other.id).unwrap().content, "Other");
+    assert_eq!(code(store.proposal(ME, &pending.id)), "not_found");
+    // Project tombstones refuse nothing: another chat may write it again.
+    assert!(note(&store, "Tea for X", ME).is_ok());
+    assert!(note(&store, "Project only 2", ME).is_ok());
+    // A user's Forget still does.
+    store.forget(ME, &other.id).unwrap();
+    assert_eq!(code(note(&store, "Other", ME)), "forgotten");
+    // Nothing of the project is left to do; a repeated sweep is a no-op.
+    let left: Vec<_> = store
+        .project_plan(ME, &project)
+        .unwrap()
+        .into_iter()
+        .map(|item| item.entry.id)
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
+    store
+        .delete_project(ME, &project, "w:p", &[], false)
+        .unwrap();
+}
+
+#[test]
+fn a_kept_entry_stays_as_it_is() {
+    use super::store::{ProjectAction, ProjectChoice, ProjectDecision};
+    let db = Db::memory();
+    let conn = db.lock();
+    let store = store(&conn);
+    let project = vec!["p1".to_owned()];
+    // Created in the project, edited elsewhere: mixed too.
+    let entry = write(&store, &add("From P"), "p1");
+    let entry = write(
+        &store,
+        &edit(Action::Replace, &entry.id, Some("From P and S"), Some(1)),
+        "s2",
+    );
+    let plan = store.project_plan(ME, &project).unwrap();
+    assert_eq!(plan[0].action, ProjectAction::Review);
+    let decisions = vec![(
+        entry.id.clone(),
+        ProjectDecision {
+            revision: entry.revision,
+            choice: ProjectChoice::Keep,
+        },
+    )];
+    store
+        .delete_project(ME, &project, "w:p", &decisions, true)
+        .unwrap();
+    let kept = store.entry(ME, &entry.id).unwrap();
+    assert_eq!(
+        (kept.content.as_str(), kept.revision),
+        ("From P and S", entry.revision)
+    );
+    assert_eq!(store.history(ME, &entry.id).unwrap().len(), 2);
+    // The final sweep leaves it too.
+    store
+        .delete_project(ME, &project, "w:p", &[], false)
+        .unwrap();
+    assert_eq!(store.entry(ME, &entry.id).unwrap().content, "From P and S");
+}
+
+#[test]
+fn a_rollback_to_text_forgotten_since_forgets_instead() {
+    use super::store::ProjectAction;
+    let db = Db::memory();
+    let conn = db.lock();
+    let store = store(&conn);
+    let project = vec!["p1".to_owned()];
+    let entry = write(&store, &add("Old text"), "s2");
+    write(
+        &store,
+        &edit(Action::Replace, &entry.id, Some("New text"), Some(1)),
+        "p1",
+    );
+    // Forgotten elsewhere with the same words.
+    let twin = write(&store, &add("Something"), "s3");
+    let twin = write(
+        &store,
+        &edit(Action::Replace, &twin.id, Some("Other"), Some(1)),
+        "s3",
+    );
+    conn.execute(
+        "INSERT INTO memory_tombstones (owner_user,scope_id,content_hash,forgotten_at) VALUES (?,'global',?,0)",
+        rusqlite::params![ME, super::text::content_hash("Old text")],
+    )
+    .unwrap();
+    assert_eq!(
+        store.project_plan(ME, &project).unwrap()[0].action,
+        ProjectAction::Rollback
+    );
+    store
+        .delete_project(ME, &project, "w:p", &[], true)
+        .unwrap();
+    assert_eq!(store.entry(ME, &entry.id).unwrap().status, "forgotten");
+    assert_eq!(store.entry(ME, &twin.id).unwrap().content, "Other");
+}

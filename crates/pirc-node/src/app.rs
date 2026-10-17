@@ -3,7 +3,8 @@
 //!
 //! - Workspaces: `POST /api/workspaces` (chat projects on the chat node,
 //!   directories under `$HOME` elsewhere, never around the node's state or
-//!   a credential store), `GET`/`PATCH /api/workspaces/:id/instructions`,
+//!   a credential store), `DELETE /api/workspaces/:id` (chat projects only,
+//!   fenced, idempotent), `GET`/`PATCH /api/workspaces/:id/instructions`,
 //!   `GET /api/workspaces/:id/project-config`,
 //!   `POST /api/workspaces/:id/project-trust`; on the chat node
 //!   `GET /api/assistant/prompts`, `PUT /api/assistant/prompts/:name`.
@@ -52,6 +53,10 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
     let deletions = Arc::new(Deletions::default());
     let mut routes = vec![
         post("/api/workspaces", create_workspace),
+        delete("/api/workspaces/:id", {
+            let deletions = deletions.clone();
+            move |node, request| delete_workspace(node, request, deletions.clone())
+        }),
         get("/api/workspaces/:id/instructions", read_instructions),
         patch("/api/workspaces/:id/instructions", write_instructions),
         get("/api/workspaces/:id/project-config", project_config),
@@ -695,6 +700,122 @@ fn remove_tree(path: &Path) -> ApiResult<()> {
     }
 }
 
+/// Delete a chat project: every chat in it (as [`delete_session`] does),
+/// the uploads made in it, its browser profile, its directory
+/// (instructions included) and its row. Fenced first, so a retry after a
+/// failure or a restart finishes the same cleanup; the fenced project is
+/// no longer announced to the gateway.
+async fn delete_workspace(
+    node: Node,
+    request: Request,
+    deletions: Arc<Deletions>,
+) -> ApiResult<Response> {
+    let workspace_id = param(&request, "id").to_owned();
+    let user = request.user.clone();
+    let workspace = {
+        let db = node.db.lock();
+        if let Some(deletion) = db.workspace_deletion(&workspace_id)? {
+            if deletion.owner_user != user {
+                return Err(ApiError::forbidden("Project belongs to another user"));
+            }
+            if deletion.status == "deleted" {
+                return Ok(Response::empty(204));
+            }
+        }
+        let workspace = db
+            .find_workspace(&workspace_id)?
+            .ok_or_else(|| ApiError::not_found("Workspace not found"))?;
+        if workspace.kind != WorkspaceKind::Chat || workspace.id == pirc_config::CHAT_WORKSPACE_ID {
+            return Err(ApiError::bad_request("Only chat projects can be deleted"));
+        }
+        db.begin_workspace_deletion(&workspace_id, &user)?;
+        workspace
+    };
+    let key = format!("workspace:{workspace_id}");
+    let task = {
+        let mut running = deletions.0.lock().unwrap_or_else(|p| p.into_inner());
+        running
+            .entry(key.clone())
+            .or_insert_with(|| {
+                let handle = tokio::spawn({
+                    let node = node.clone();
+                    let deletions = deletions.clone();
+                    async move {
+                        let _entry = DeletionEntry {
+                            deletions,
+                            session_id: key,
+                        };
+                        remove_project(&node, &workspace).await
+                    }
+                });
+                async move { handle.await.unwrap_or_else(|_| Err(ApiError::internal())) }
+                    .boxed()
+                    .shared()
+            })
+            .clone()
+    };
+    task.await?;
+    Ok(Response::empty(204))
+}
+
+/// An upload's storage name as the node makes them: `<48 hex>.bin`.
+fn storage_name(name: &str) -> bool {
+    name.strip_suffix(".bin").is_some_and(|stem| {
+        stem.len() == 48
+            && stem
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    })
+}
+
+async fn remove_project(node: &Node, workspace: &Workspace) -> ApiResult<()> {
+    // Checked before anything goes: only the directory the node allocated,
+    // `<state>/chat/<id>`, and only a non-empty id.
+    let directory = Path::new(&workspace.canonical_path);
+    let chat_root = node.config.state_dir.join("chat");
+    let chat_root = chat_root.canonicalize().unwrap_or(chat_root);
+    if workspace.id.is_empty()
+        || directory.parent() != Some(chat_root.as_path())
+        || directory.file_name() != Some(std::ffi::OsStr::new(&workspace.id))
+    {
+        crate::log::error(&format!(
+            "deleting workspace {}: unexpected directory {}",
+            workspace.id,
+            directory.display()
+        ));
+        return Err(ApiError::internal());
+    }
+    let user = node
+        .db
+        .lock()
+        .workspace_deletion(&workspace.id)?
+        .map(|deletion| deletion.owner_user)
+        .ok_or_else(ApiError::internal)?;
+    let sessions = node.db.lock().workspace_sessions(&workspace.id)?;
+    for session in sessions {
+        node.db.lock().begin_session_deletion(&session.id, &user)?;
+        remove_session(node, &session, workspace).await?;
+    }
+    let uploads = node.db.lock().workspace_uploads(&workspace.id)?;
+    for upload in uploads {
+        if !storage_name(&upload.storage_name) {
+            crate::log::error(&format!("upload {}: invalid storage name", upload.id));
+            return Err(ApiError::internal());
+        }
+        remove_tree(&node.config.uploads_dir.join(&upload.storage_name))?;
+    }
+    remove_tree(
+        &node
+            .config
+            .browser
+            .profiles_dir
+            .join(crate::browser::manager::profile_name(&workspace.id)),
+    )?;
+    remove_tree(directory)?;
+    node.db.lock().finish_workspace_deletion(&workspace.id)?;
+    Ok(())
+}
+
 async fn rename_session(node: Node, request: Request) -> ApiResult<Response> {
     let session = claim(&node, &request)?;
     let name = string(object(request.json())?, "name", true, 1, 200)?;
@@ -1199,7 +1320,7 @@ fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
 /// Images and generic files are stored on the node that runs the
 /// session's agent.
 async fn upload(node: Node, request: Request) -> ApiResult<Response> {
-    claim(&node, &request)?;
+    let session = claim(&node, &request)?;
     let Body::Raw {
         bytes,
         content_type,
@@ -1262,6 +1383,8 @@ async fn upload(node: Node, request: Request) -> ApiResult<Response> {
         sha256: sha256_hex(bytes),
         kind,
         filename,
+        workspace_id: Some(session.workspace_id.clone()),
+        session_id: Some(session.id.clone()),
     };
     let file = node.config.uploads_dir.join(&upload.storage_name);
     OpenOptions::new()
@@ -1271,7 +1394,19 @@ async fn upload(node: Node, request: Request) -> ApiResult<Response> {
         .open(&file)
         .and_then(|mut out| out.write_all(bytes))
         .map_err(|error| io_failure("writing", &file, error))?;
-    node.db.lock().create_upload(&upload)?;
+    {
+        // The chat (or its project) may have been fenced for deletion while
+        // the bytes were written: keep nothing then.
+        let db = node.db.lock();
+        if let Err(error) = db
+            .require_session_available(&session.id)
+            .and_then(|()| db.get_workspace(&session.workspace_id).map(drop))
+            .and_then(|()| db.create_upload(&upload))
+        {
+            let _ = std::fs::remove_file(&file);
+            return Err(error);
+        }
+    }
     created(json!({ "upload": {
         "id": upload.id,
         "mimeType": upload.mime_type,

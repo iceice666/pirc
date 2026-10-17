@@ -693,7 +693,7 @@ fn build_rpc(
             };
             rpc.insert("type".into(), json!(kind));
             rpc.insert("message".into(), json!(message));
-            if let Some(images) = image_contents(node, ids, user)? {
+            if let Some(images) = image_contents(node, ids, user, session_id)? {
                 rpc.insert("images".into(), Value::Array(images));
             }
             if matches!(payload, CommandPayload::Prompt { .. }) {
@@ -733,23 +733,48 @@ fn build_rpc(
     Ok((rpc, run_id))
 }
 
-fn uploads(node: &Node, ids: &[String]) -> ApiResult<Vec<crate::store::UploadRow>> {
+/// The uploads, each the user's and made in the session's workspace (an
+/// upload from before schema 2001 records no workspace and is accepted).
+fn uploads(
+    node: &Node,
+    ids: &[String],
+    user: &str,
+    session_id: &str,
+) -> ApiResult<Vec<crate::store::UploadRow>> {
     let db = node.db.lock();
-    ids.iter().map(|id| db.get_upload(id)).collect()
+    let workspace_id = db.get_session(session_id)?.workspace_id;
+    ids.iter()
+        .map(|id| {
+            let upload = db.get_upload(id)?;
+            if upload.owner_user != user {
+                return Err(ApiError::forbidden("Upload belongs to another user"));
+            }
+            if upload
+                .workspace_id
+                .as_ref()
+                .is_some_and(|uploaded| *uploaded != workspace_id)
+            {
+                return Err(ApiError::forbidden("Upload belongs to another workspace"));
+            }
+            Ok(upload)
+        })
+        .collect()
 }
 
 /// `imageContents`: image uploads as the agent's image blocks.
-fn image_contents(node: &Node, ids: &[String], user: &str) -> Result<Option<Vec<Value>>, Failure> {
+fn image_contents(
+    node: &Node,
+    ids: &[String],
+    user: &str,
+    session_id: &str,
+) -> Result<Option<Vec<Value>>, Failure> {
     if ids.is_empty() {
         return Ok(None);
     }
     let mut images = Vec::new();
-    for upload in uploads(node, ids)? {
+    for upload in uploads(node, ids, user, session_id)? {
         if upload.kind != UploadKind::Image {
             continue;
-        }
-        if upload.owner_user != user {
-            return Err(ApiError::forbidden("Upload belongs to another user").into());
         }
         let file = node.config.uploads_dir.join(&upload.storage_name);
         let bytes = std::fs::read(&file)
@@ -773,7 +798,7 @@ fn file_attachments(
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let files: Vec<_> = uploads(node, ids)?
+    let files: Vec<_> = uploads(node, ids, user, session_id)?
         .into_iter()
         .filter(|upload| upload.kind == UploadKind::File)
         .collect();
@@ -793,9 +818,6 @@ fn file_attachments(
     })?;
     let mut notes = Vec::new();
     for upload in files {
-        if upload.owner_user != user {
-            return Err(ApiError::forbidden("Upload belongs to another user").into());
-        }
         let name = upload
             .filename
             .as_deref()

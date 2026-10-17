@@ -66,6 +66,9 @@
   .modal-dialog.settings {
     width: min(760px, calc(100% - 40px));
   }
+  .modal-dialog.wide {
+    width: min(600px, calc(100% - 40px));
+  }
   .modal-dialog::backdrop {
     background: rgb(0 0 0 / 40%);
   }

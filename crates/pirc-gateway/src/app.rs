@@ -325,6 +325,7 @@ pub fn router(app: AppState) -> Router {
             get(routes::recording),
         )
         .merge(routes::feature_routes())
+        .merge(crate::project_deletion::routes())
         .merge(crate::backends::routes())
         .fallback(not_found)
         .method_not_allowed_fallback(not_found)
@@ -350,6 +351,8 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("PATCH", "/api/workspaces/{workspace_id}/instructions"),
     ("GET", "/api/workspaces/{workspace_id}/project-config"),
     ("POST", "/api/workspaces/{workspace_id}/project-trust"),
+    ("GET", "/api/workspaces/{workspace_id}/deletion"),
+    ("POST", "/api/workspaces/{workspace_id}/deletion"),
     ("DELETE", "/api/sessions/{id}"),
     ("PATCH", "/api/sessions/{id}"),
     ("POST", "/api/sessions/{id}/read"),

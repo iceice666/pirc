@@ -46,6 +46,8 @@ fn no_store_route(method: &Method, path: &str) -> bool {
         ("GET", ["api", "memory", "entries", id, "history"]) => one(id),
         ("POST", ["api", "memory", "proposals", id, "approve" | "reject"]) => one(id),
         ("POST", ["api", "memory", "entries", id, "forget" | "restore"]) => one(id),
+        // A project deletion's preview lists memory entries.
+        ("GET" | "POST", ["api", "workspaces", id, "deletion"]) => one(id),
         _ => false,
     }
 }
