@@ -610,6 +610,27 @@ llm.route = (body) => {
       }),
     );
   }
+  // Project-deletion fixtures create memory notes with real session source
+  // records, then exercise the production preview and deletion transaction.
+  const projectMemoryAdd = /^\/parity-project-memory-add (.+)$/s.exec(content);
+  if (projectMemoryAdd) {
+    return ptcReply(
+      toolCallCode('memory_note', {
+        action: 'add',
+        content: projectMemoryAdd[1],
+      }),
+    );
+  }
+  const projectMemoryReplace = /^\/parity-project-memory-replace (\S+) (.+)$/s.exec(content);
+  if (projectMemoryReplace) {
+    return ptcReply(
+      toolCallCode('memory_note', {
+        action: 'replace',
+        id: projectMemoryReplace[1],
+        content: projectMemoryReplace[2],
+      }),
+    );
+  }
   const remove = /^\/parity-remove (\S+)$/.exec(content);
   if (remove) {
     return ptcReply(

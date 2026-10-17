@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:ui' show FontVariation, SemanticsRole;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'project_deletion_dialog.dart';
 import 'common.dart';
 import 'gateway.dart';
 import 'work_index.dart';
@@ -42,6 +44,7 @@ class _WorkspaceSettingsScope {
     required this.workspaceId,
     required this.workspaceKind,
     required this.hostId,
+    required this.deleting,
   });
 
   factory _WorkspaceSettingsScope.from(WorkspaceSettings widget) {
@@ -56,6 +59,7 @@ class _WorkspaceSettingsScope {
       workspaceId: workspace['id']?.toString() ?? '',
       workspaceKind: workspace['kind']?.toString() ?? '',
       hostId: workspace['hostId']?.toString() ?? '',
+      deleting: workspace['deleting'] == true,
     );
   }
 
@@ -63,6 +67,7 @@ class _WorkspaceSettingsScope {
   final int accountRevision;
   final String? origin, clientId, pairingStamp;
   final String workspaceId, workspaceKind, hostId;
+  final bool deleting;
 
   @override
   bool operator ==(Object other) =>
@@ -74,7 +79,8 @@ class _WorkspaceSettingsScope {
       pairingStamp == other.pairingStamp &&
       workspaceId == other.workspaceId &&
       workspaceKind == other.workspaceKind &&
-      hostId == other.hostId;
+      hostId == other.hostId &&
+      deleting == other.deleting;
 
   @override
   int get hashCode => Object.hash(
@@ -86,6 +92,7 @@ class _WorkspaceSettingsScope {
     workspaceId,
     workspaceKind,
     hostId,
+    deleting,
   );
 }
 
@@ -114,6 +121,7 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
 
   void _initScope() {
     final scope = _scope;
+    if (scope.deleting) return;
     if (scope.workspaceKind == 'chat') {
       unawaited(_load('capabilities', scope));
       if (_wasOnline) unawaited(_load('instructions', scope));
@@ -588,6 +596,9 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
   @override
   Widget build(BuildContext context) {
     final w = widget.workspace;
+    if (isChat(w) && w['deleting'] == true) {
+      return paragraph("Settings are gone with the project's deletion.");
+    }
     final sessions = widget.controller.sessions
         .where((s) => s['workspaceId'] == w['id'])
         .toList();
@@ -689,6 +700,26 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
               controller: widget.controller,
               workspaceId: '${w['id']}',
             ),
+            sectionDivider(),
+            heading('Delete project'),
+            paragraph(
+              'Deletes the project, its chats and what they wrote to memory. You see what goes and what stays before anything is deleted.',
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: WebButton(
+                'Delete project…',
+                key: const ValueKey('project-delete-open'),
+                danger: true,
+                icon: LucideIcons.trash2,
+                disabledOpacity: .5,
+                onPressed: online
+                    ? () => deleteProjectDialog(context, widget.controller, w)
+                    : null,
+              ),
+            ),
+            if (!online)
+              paragraph('Connect the chat node to delete this project.'),
           ],
           if (online) sectionDivider(),
           heading('Project capabilities'),

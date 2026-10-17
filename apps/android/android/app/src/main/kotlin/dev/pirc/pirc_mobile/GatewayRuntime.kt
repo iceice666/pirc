@@ -445,7 +445,8 @@ class GatewayRuntime private constructor(val context: Context) {
         require(path.startsWith("/api/") && !path.contains('\\') && !path.contains('#'))
         requestWithApi(api(), method, path, body)
     }
-    private suspend fun requestWithApi(api: PircApi, method: String, path: String, body: Any?): Any? = withContext(Dispatchers.IO) {
+    internal suspend fun requestWithApi(api: PircApi, method: String, path: String, body: Any?): Any? = withContext(Dispatchers.IO) {
+        require(path.startsWith("/api/") && !path.contains('\\') && !path.contains('#'))
         val payload = if (method in listOf("GET", "HEAD")) null else body.json().toString().toRequestBody("application/json".toMediaType())
         api.client.newCall(api.request(path).header("Accept", "application/json").method(method, payload).build()).execute().use { response ->
             val text = response.body?.string().orEmpty()

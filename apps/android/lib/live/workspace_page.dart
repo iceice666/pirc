@@ -9,6 +9,7 @@ import 'work_index.dart';
 import 'session_row.dart';
 import 'web_controls.dart';
 import 'workspace_settings.dart';
+import 'project_deletion_dialog.dart';
 
 class WorkspacePage extends StatefulWidget {
   const WorkspacePage({
@@ -279,9 +280,23 @@ class _WorkspacePageState extends State<WorkspacePage> {
             ),
           ),
           if (deleting)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: WebNotice(workspaceDeletionNotice, error: true),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const WebNotice(workspaceDeletionNotice, error: true),
+                  WebButton(
+                    'Finish deleting…',
+                    key: const ValueKey('project-deletion-finish'),
+                    primary: true,
+                    disabledOpacity: .5,
+                    onPressed: online
+                        ? () => deleteProjectDialog(context, c, w)
+                        : null,
+                  ),
+                ],
+              ),
             ),
           LayoutBuilder(
             builder: (context, size) {

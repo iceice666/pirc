@@ -4,7 +4,7 @@ Native Flutter Android client for pirc. Its Android transport lives in
 `android/app/src/main/kotlin`; pairing uses Settings → Devices on the web.
 
 The app includes chat and work sessions, streaming and cancellation, approvals,
-memory and schedules, workspace panels, shared project files, attachments,
+memory and schedules, workspace panels, shared project files and project deletion, attachments,
 notifications and native content rendering. Provider and device management uses a short-lived grant that
 you approve in the authenticated web UI. HTML, JavaScript-backed documents,
 Markdown, code, math and supported diagrams render through Flutter; browser
@@ -48,7 +48,9 @@ and its private Dart define file. `project_files_test.dart` covers raw project
 uploads, replacement, removal and existing session attachments; its optional
 `PIRC_PROJECT_FILES_PICKER=true` mode also exercises the Android document picker
 with a local `pirc-project-file-picker.txt` containing `Native project picker fixture`
-followed by a newline. Never point those destructive test fixtures at
+followed by a newline. `project_deletion_test.dart` verifies the native preview,
+mixed-memory conflict/review, pairing guard and project cleanup using synthetic
+`memory_note` histories. Never point those destructive test fixtures at
 your normal gateway or production data.
 
 Some pixel/geometry fixtures use macOS Arial and Menlo through
