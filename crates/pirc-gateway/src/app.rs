@@ -147,7 +147,10 @@ impl App {
             Ok(models) => self
                 .backends
                 .set_baseline(models.unwrap_or_else(empty_models)),
-            Err(_) => crate::log::error("models reload failed; keeping the previous providers"),
+            // The same message a bad file stops the gateway with at startup.
+            Err(error) => crate::log::error(&format!(
+                "models reload failed; keeping the previous providers: {error}"
+            )),
         }
     }
 

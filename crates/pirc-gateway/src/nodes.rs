@@ -1177,9 +1177,26 @@ fn start_inference(
                 biased;
                 _ = stopped => finish(model_error("limit_exceeded")),
                 message = run => {
+                    if message.stop_reason == pirc_protocol::StopReason::Error {
+                        // Already a fixed classification (status included
+                        // when known), never an upstream body.
+                        crate::log::warn(&format!(
+                            "inference for node {} failed: {}/{}: {}",
+                            key.0,
+                            request.provider_name,
+                            request.model_id,
+                            message.error_message.as_deref().unwrap_or("no error message")
+                        ));
+                    }
                     finish(json!({ "type": "model_end", "message": Message::Assistant(message) }));
                 }
-                () = tokio::time::sleep(INFERENCE_TIMEOUT) => finish(model_error("timeout")),
+                () = tokio::time::sleep(INFERENCE_TIMEOUT) => {
+                    crate::log::warn(&format!(
+                        "inference for node {} timed out: {}/{}",
+                        key.0, request.provider_name, request.model_id
+                    ));
+                    finish(model_error("timeout"));
+                }
             }
         }
     });
