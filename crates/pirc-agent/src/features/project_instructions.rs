@@ -23,7 +23,6 @@ use serde_json::json;
 
 use crate::LocalBoxFuture;
 use crate::agent::Agent;
-use crate::config::WorkspaceKind;
 use crate::context::PromptSection;
 use crate::feature::{BeforeStart, Feature, PromptAddition};
 use crate::session_store::EntryData;
@@ -112,7 +111,7 @@ impl Feature for ProjectInstructionsFeature {
         agent: &'a Rc<Agent>,
     ) -> LocalBoxFuture<'a, Result<Option<BeforeStart>, String>> {
         Box::pin(async move {
-            if agent.config().workspace_kind != WorkspaceKind::Chat {
+            if !agent.config().mode().project_instructions {
                 return Ok(None);
             }
             let cached = self.section.borrow().clone();

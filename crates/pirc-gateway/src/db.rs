@@ -306,9 +306,14 @@ impl WorkspaceKind {
     }
 
     pub fn as_str(self) -> &'static str {
+        self.mode().id
+    }
+
+    /// What this kind allows (`pirc_protocol::mode`).
+    pub fn mode(self) -> &'static pirc_protocol::Mode {
         match self {
-            Self::Directory => "directory",
-            Self::Chat => "chat",
+            Self::Directory => pirc_protocol::WorkspaceKind::Directory.mode(),
+            Self::Chat => pirc_protocol::WorkspaceKind::Chat.mode(),
         }
     }
 }
@@ -982,7 +987,12 @@ impl Store for Connection {
         workspace_id: &str,
         patch: &CapabilitiesPatch,
     ) -> ApiResult<Capabilities> {
-        if self.get_workspace(workspace_id)?.kind != WorkspaceKind::Chat {
+        if !self
+            .get_workspace(workspace_id)?
+            .kind
+            .mode()
+            .full_assistant()
+        {
             return Err(ApiError::new(
                 400,
                 "invalid_input",

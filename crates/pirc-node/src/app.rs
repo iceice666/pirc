@@ -375,7 +375,7 @@ async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
 /// `chatProject`: the workspace, which must be a chat project.
 fn chat_project(node: &Node, request: &Request) -> ApiResult<Workspace> {
     let workspace = node.db.lock().get_workspace(param(request, "id"))?;
-    if workspace.kind != WorkspaceKind::Chat {
+    if !workspace.kind.mode().project_instructions {
         return Err(ApiError::bad_request(
             "Only chat projects have instructions",
         ));
@@ -468,7 +468,7 @@ async fn remove_project_file(node: Node, request: Request) -> ApiResult<Response
 /// `directoryWorkspace`: the workspace, which must be a directory.
 fn directory_workspace(node: &Node, request: &Request) -> ApiResult<Workspace> {
     let workspace = node.db.lock().get_workspace(param(request, "id"))?;
-    if workspace.kind != WorkspaceKind::Directory {
+    if !workspace.kind.mode().project_config {
         return Err(ApiError::bad_request(
             "Only directory workspaces have a project config",
         ));
@@ -652,7 +652,7 @@ async fn delete_session(
         }
         let session = db.claim_session(&session_id, &user, true)?;
         let workspace = db.get_workspace(&session.workspace_id)?;
-        if workspace.kind != WorkspaceKind::Chat {
+        if !workspace.kind.mode().delete_sessions {
             return Err(ApiError::bad_request("Only chats can be deleted"));
         }
         db.begin_session_deletion(&session_id, &user)?;
@@ -788,7 +788,7 @@ async fn delete_workspace(
         let workspace = db
             .find_workspace(&workspace_id)?
             .ok_or_else(|| ApiError::not_found("Workspace not found"))?;
-        if workspace.kind != WorkspaceKind::Chat || workspace.id == pirc_config::CHAT_WORKSPACE_ID {
+        if !workspace.kind.mode().projects || workspace.id == pirc_config::CHAT_WORKSPACE_ID {
             return Err(ApiError::bad_request("Only chat projects can be deleted"));
         }
         db.begin_workspace_deletion(&workspace_id, &user)?;

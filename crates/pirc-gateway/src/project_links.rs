@@ -16,7 +16,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 
 use crate::app::App;
-use crate::db::{Store as _, Workspace, WorkspaceKind, atomic};
+use crate::db::{Store as _, Workspace, atomic};
 use crate::dispatch::workspace_online;
 use crate::error::{ApiError, ApiResult};
 use crate::util::now_ms;
@@ -53,7 +53,7 @@ impl Linked {
 
 /// A chat project: a chat workspace other than a node's top-level chats.
 pub fn is_project(workspace: &Workspace) -> bool {
-    workspace.kind == WorkspaceKind::Chat && workspace.local_id().is_some_and(|id| id != "chats")
+    workspace.kind.mode().projects && workspace.local_id().is_some_and(|id| id != "chats")
 }
 
 fn require_project(conn: &Connection, project_id: &str) -> ApiResult<Workspace> {
@@ -103,9 +103,7 @@ pub fn set_links(
                 Workspace::from_row,
             )
             .optional()?
-            .filter(|workspace| {
-                workspace.kind == WorkspaceKind::Directory && workspace.local_id().is_some()
-            })
+            .filter(|workspace| workspace.kind.mode().repository && workspace.local_id().is_some())
             .ok_or_else(|| {
                 ApiError::new(
                     400,
@@ -235,7 +233,7 @@ pub fn project_links(conn: &Connection, project_id: &str) -> ApiResult<Vec<Link>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::Db;
+    use crate::db::{Db, WorkspaceKind};
 
     fn db() -> Db {
         let db = Db::memory();

@@ -9,7 +9,7 @@ use super::schema::{array, hex12, int, optional, required, strict, string};
 use super::store::{Action, Change, NoteInput, ProposeInput};
 use crate::agent_ops::OpContext;
 use crate::app::AppState;
-use crate::db::{Store as _, WorkspaceKind};
+use crate::db::Store as _;
 use crate::error::{ApiError, ApiResult};
 use crate::memory_records;
 
@@ -177,9 +177,9 @@ pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {
     })
 }
 
-/// Memory belongs to the assistant, which lives in chat workspaces.
-fn require_chat(context: &OpContext) -> ApiResult<()> {
-    if context.workspace.kind != WorkspaceKind::Chat {
+/// Memory belongs to the assistant: a mode with full assistant access.
+fn require_assistant(context: &OpContext) -> ApiResult<()> {
+    if !context.workspace.kind.mode().full_assistant() {
         return Err(ApiError::new(
             403,
             "forbidden",
@@ -198,7 +198,7 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
         // coding session reads the approved USER entries and nothing else:
         // no notes, no workspaces, and its memory operations stay refused.
         Op::Context => {
-            if context.workspace.kind != WorkspaceKind::Chat {
+            if !context.workspace.kind.mode().full_assistant() {
                 let user = {
                     let conn = app.db.lock();
                     super::store(app, &conn).user_context(user)?
@@ -225,7 +225,7 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             Ok(Value::Object(result))
         }
         Op::Note(args) => {
-            require_chat(context)?;
+            require_assistant(context)?;
             let mut sources = Map::new();
             sources.insert("sessionId".into(), json!(session_id));
             if !args.entry_ids.is_empty() {
@@ -261,7 +261,7 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             }))
         }
         Op::ProposeUser(args) => {
-            require_chat(context)?;
+            require_assistant(context)?;
             let sources = json!({ "sessionId": session_id, "entryIds": args.entry_ids });
             let (proposal, duplicate) = {
                 let conn = app.db.lock();
@@ -280,7 +280,7 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             limit,
             everywhere,
         } => {
-            require_chat(context)?;
+            require_assistant(context)?;
             // In a project linked to workspaces, those (and their clones) first.
             let (hits, searched) = memory_records::search_in(
                 app,
@@ -298,7 +298,7 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             Ok(result)
         }
         Op::Recall { id } => {
-            require_chat(context)?;
+            require_assistant(context)?;
             recall(app, user, &id).await
         }
     }

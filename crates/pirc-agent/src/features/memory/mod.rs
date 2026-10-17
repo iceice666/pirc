@@ -53,7 +53,6 @@ use crate::LocalBoxFuture;
 use crate::agent::Agent;
 use crate::channels::{ChannelError, process_gateway, team_child_name};
 use crate::compaction::context_tokens;
-use crate::config::WorkspaceKind;
 use crate::context::PromptSection;
 use crate::feature::{
     BeforeStart, CompactContext, CompactDecision, CompactionPlan, Feature, FeatureCommand,
@@ -693,7 +692,7 @@ fn workspace_on(agent: &Agent, config: &MemoryConfig) -> bool {
     config.enabled
         && config.workspace.enabled
         && team_child_name(&|name| std::env::var(name).ok()).is_none()
-        && agent.config().workspace_kind != WorkspaceKind::Chat
+        && agent.config().mode().workspace_memory
 }
 
 fn workspace_ledger(state: &State, agent: &Agent) -> WorkspaceLedger {
@@ -931,7 +930,7 @@ impl RecallTool {
         }
         // A chat recalls notes it found with memory_search through the
         // gateway, which asks the node that holds them (docs/history/assistant.md).
-        let gateway = if agent.config().workspace_kind == WorkspaceKind::Chat {
+        let gateway = if agent.config().mode().full_assistant() {
             process_gateway()
         } else {
             None

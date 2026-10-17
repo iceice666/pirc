@@ -31,8 +31,7 @@ use futures_util::{FutureExt, SinkExt, StreamExt};
 use pirc_protocol::{
     GatewayMessage, INFERENCE_BUFFER_MAX_BYTES, INVALID_NODE_CREDENTIALS_CLOSE,
     NODE_FRAME_MAX_BYTES, NODE_PROTOCOL_VERSION, NodeMessage, PROTOCOL_MISMATCH_CLOSE,
-    RegisteredWorkspace, Registration, SessionActivity, SessionRun, TerminalKind, WorkspaceKind,
-    WorkspaceRole,
+    RegisteredWorkspace, Registration, SessionActivity, SessionRun, TerminalKind, WorkspaceRole,
 };
 use serde_json::Value;
 use tokio::sync::{mpsc, watch};
@@ -653,7 +652,11 @@ async fn registration(node: &Node) -> Registration {
     let roots = workspaces
         .iter()
         .map(|workspace| {
-            (workspace.kind == WorkspaceKind::Directory).then(|| workspace.canonical_path.clone())
+            workspace
+                .kind
+                .mode()
+                .repository
+                .then(|| workspace.canonical_path.clone())
         })
         .collect();
     let details = workspace_details(node, roots).await;

@@ -17,10 +17,11 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 use pirc_config::{CHAT_WORKSPACE_ID, NodeConfig};
+use pirc_protocol::mode::Workdir;
 use rusqlite::Connection;
 
 use crate::error::{ApiError, ApiResult};
-use crate::store::{Store, Workspace, WorkspaceKind};
+use crate::store::{Store, Workspace};
 use crate::util::{head16, hex, random_bytes};
 
 pub const INSTRUCTIONS_FILE: &str = "instructions.md";
@@ -72,7 +73,7 @@ fn basename(text: &str) -> &str {
 /// `sessionRoot`: where the session's agent, terminals and panels work.
 pub fn session_root(workspace: &Workspace, session_id: &str) -> ApiResult<PathBuf> {
     let root = PathBuf::from(&workspace.canonical_path);
-    if workspace.kind != WorkspaceKind::Chat {
+    if workspace.kind.mode().workdir != Workdir::PerSession {
         return Ok(root);
     }
     let dir = root.join("sessions").join(basename(session_id));
@@ -82,7 +83,10 @@ pub fn session_root(workspace: &Workspace, session_id: &str) -> ApiResult<PathBu
 
 /// `projectInstructionsPath`: a chat workspace's instructions file.
 pub fn project_instructions_path(workspace: &Workspace) -> Option<PathBuf> {
-    (workspace.kind == WorkspaceKind::Chat)
+    workspace
+        .kind
+        .mode()
+        .project_instructions
         .then(|| Path::new(&workspace.canonical_path).join(INSTRUCTIONS_FILE))
 }
 
@@ -155,6 +159,7 @@ mod tests {
     use serde_json::Map;
 
     use super::*;
+    use crate::store::WorkspaceKind;
 
     fn chat(dir: &Path) -> Workspace {
         Workspace {

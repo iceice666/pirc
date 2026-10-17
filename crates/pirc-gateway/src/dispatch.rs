@@ -13,7 +13,7 @@ use regex_lite::Regex;
 use serde_json::{Map, Value, json};
 
 use crate::app::App;
-use crate::db::{Session, Store, Workspace, WorkspaceKind};
+use crate::db::{Session, Store, Workspace};
 use crate::error::{ApiError, ApiResult};
 use crate::events::GatewayEvent;
 use crate::routes::urlencoding_component;
@@ -306,9 +306,7 @@ pub fn resolve_directory_workspace(app: &App, reference: &str) -> ApiResult<Work
         .lock()
         .list_workspaces()?
         .into_iter()
-        .filter(|workspace| {
-            workspace.kind == WorkspaceKind::Directory && workspace.id.contains(':')
-        })
+        .filter(|workspace| workspace.kind.mode().delegate_target && workspace.id.contains(':'))
         .collect();
     if let Some(exact) = all.iter().find(|workspace| workspace.id == reference) {
         return Ok(exact.clone());

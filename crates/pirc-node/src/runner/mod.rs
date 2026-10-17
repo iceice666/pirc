@@ -639,7 +639,7 @@ async fn workspace_ledger(
     workspace: &crate::store::Workspace,
     root: &std::path::Path,
 ) -> Option<pirc_agent::features::memory::workspace::WorkspaceLedger> {
-    if workspace.kind != crate::store::WorkspaceKind::Directory {
+    if !workspace.kind.mode().workspace_memory {
         return None;
     }
     let dir = node

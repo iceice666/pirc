@@ -16,19 +16,17 @@ use serde_json::{Map, Value};
 use crate::LocalBoxFuture;
 use crate::agent::Agent;
 use crate::auto_mode::ApprovalMode;
-use crate::config::WorkspaceKind;
 use crate::context::PromptSection;
 use crate::signal::AbortSignal;
 use crate::tools::Tool;
 
-/// `offInChat`: coding-session features a chat leaves out
-/// (docs/history/assistant.md): their tools cost context a personal
-/// assistant rarely needs, and chats hand real work to a workspace with
-/// `delegate`. `features.<key>.enabled: true` in the node's config brings
-/// one back.
-pub fn off_in_chat(agent: &Agent, key: &str) -> bool {
+/// `offInChat`, generalised: a feature the session's mode leaves out
+/// ([`pirc_protocol::Mode::features_off`]; chats drop coding features
+/// whose tools cost context a personal assistant rarely needs).
+/// `features.<key>.enabled: true` in the node's config brings one back.
+pub fn off_in_mode(agent: &Agent, key: &str) -> bool {
     let config = agent.config();
-    if config.workspace_kind != WorkspaceKind::Chat {
+    if !config.mode().feature_off(key) {
         return false;
     }
     config

@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use icu_normalizer::ComposingNormalizerBorrowed;
 use pirc_protocol::Message;
+use pirc_protocol::mode::AssistantAccess;
 use serde_json::{Map, Value, json};
 
 use super::memory::ledger::local_stamp;
@@ -26,7 +27,6 @@ use crate::LocalBoxFuture;
 use crate::agent::Agent;
 use crate::capabilities::Capabilities;
 use crate::channels::{ChannelError, NodeChannels, process_gateway};
-use crate::config::WorkspaceKind;
 use crate::context::PromptSection;
 use crate::feature::{BeforeStart, Feature, PromptAddition};
 use crate::redact::redact_secrets;
@@ -430,7 +430,7 @@ struct State {
 type Shared = Rc<State>;
 
 fn gateway_of(agent: &Agent) -> Option<Rc<NodeChannels>> {
-    if agent.config().workspace_kind == WorkspaceKind::Chat {
+    if agent.config().mode().assistant == AssistantAccess::Full {
         process_gateway()
     } else {
         None
@@ -439,7 +439,7 @@ fn gateway_of(agent: &Agent) -> Option<Rc<NodeChannels>> {
 
 /// The gateway of a coding session, which reads USER only.
 fn user_gateway_of(agent: &Agent) -> Option<Rc<NodeChannels>> {
-    if agent.config().workspace_kind == WorkspaceKind::Directory {
+    if agent.config().mode().assistant == AssistantAccess::User {
         process_gateway()
     } else {
         None

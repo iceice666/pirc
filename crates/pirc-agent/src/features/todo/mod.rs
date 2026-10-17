@@ -13,7 +13,7 @@ use pirc_protocol::{Message, StopReason};
 use serde_json::{Map, Value, json};
 
 use crate::agent::{Agent, Delivery};
-use crate::feature::{BeforeStart, Feature, FeatureCommand, off_in_chat};
+use crate::feature::{BeforeStart, Feature, FeatureCommand, off_in_mode};
 use crate::session_store::EntryData;
 use crate::tools::result_schema::{arr, fields, int, obj, one_of_strings, str_};
 use crate::tools::{Tool, ToolContext, ToolResult, ToolSpec, js, spec_tool, typed};
@@ -459,7 +459,7 @@ impl Feature for TodoFeature {
     }
 
     fn tools(&self, agent: &Rc<Agent>) -> Vec<Rc<dyn Tool>> {
-        if off_in_chat(agent, "todo") {
+        if off_in_mode(agent, "todo") {
             return Vec::new();
         }
         vec![Rc::new(TodoTool::new(self.todos.clone(), agent))]

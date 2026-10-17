@@ -26,8 +26,8 @@ use self::broker::{Defaults, Json, SubagentResult, Team, TeamOptions, user_quest
 use self::channel::{ChildMode, parent_channel};
 use crate::LocalBoxFuture;
 use crate::agent::{Agent, Delivery};
-use crate::config::{WorkspaceKind, config_roles};
-use crate::feature::{BeforeStart, Feature, FeatureCommand, off_in_chat};
+use crate::config::config_roles;
+use crate::feature::{BeforeStart, Feature, FeatureCommand, off_in_mode};
 use crate::features::ask_question::{ask_question_schema, ask_questions, question_result_schema};
 use crate::roles::{default_roles, describe_roles, role_briefs};
 use crate::signal::{AbortController, AbortSignal};
@@ -601,7 +601,7 @@ impl State {
 
     fn on(agent: &Agent) -> bool {
         Self::settings(agent).get("enabled") != Some(&Value::Bool(false))
-            && !off_in_chat(agent, "agentTeam")
+            && !off_in_mode(agent, "agentTeam")
     }
 
     /// `manager(agent)`: the team, started on first use.
@@ -673,7 +673,7 @@ impl State {
             instructions: Some({
                 let weak = weak.clone();
                 Rc::new(move || match weak.upgrade() {
-                    Some(agent) if agent.config().workspace_kind == WorkspaceKind::Chat => {
+                    Some(agent) if agent.config().mode().project_instructions => {
                         crate::features::project_instructions::frozen_instructions(&agent)
                     }
                     _ => Ok(String::new()),
