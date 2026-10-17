@@ -7,6 +7,7 @@ import 'gateway.dart';
 import 'work_index.dart';
 import 'web_controls.dart';
 import 'workspace_instructions_editor.dart';
+import 'workspace_project_files.dart';
 import 'workspace_project_links.dart';
 
 class WorkspaceSettings extends StatefulWidget {
@@ -604,7 +605,7 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
             Padding(
               padding: const EdgeInsets.all(12),
               child: Text(
-                "The project's node is offline: its instructions can be changed once it is back.",
+                "The project's node is offline: its instructions and files can be changed once it is back.",
                 style: webText(
                   context,
                   size: 13,
@@ -677,6 +678,10 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
               ),
             ],
             ...feedback('instructions'),
+          ],
+          if (online && w['deleting'] != true) ...[
+            sectionDivider(),
+            WorkspaceProjectFiles(controller: widget.controller, workspace: w),
           ],
           if (!isTopChats(w)) ...[
             sectionDivider(),
