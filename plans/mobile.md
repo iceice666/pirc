@@ -15,7 +15,7 @@ are available from Git through Historical records, not repeated here.
       and common-library coverage. Broader image/framework flows remain
       unverified; preserve explicit unsupported errors.
 - [ ] **Fragment scrolling and target state:** complete CSS scroll margin/padding,
-      nested-container alignment, focus/`:target`, late-loaded targets and
+      nested-container alignment, remaining focus state, late-loaded targets and
       nodes discarded from rendered markup. Target lookup, initial URLs and
       repeated activation have a bounded gate below.
 - [ ] **Physical phone/tablet acceptance:** use a real account for pairing,
@@ -387,14 +387,35 @@ widget gate checks CSS-sized toggle activation, labels, Space and radio arrow
 keys. The browser geometry tolerance is 1/32 CSS px; focus identity and event
 reports must match exactly. Exact animation timing is still Flutter-specific.
 
+**Native `:target` state:** native styles and scripted `querySelector(All)`,
+`matches` and `closest` share the retained target identity. Literal/decoded IDs
+and named anchors use fragment priority; hidden targets participate before
+layout. Actual navigation (including repeated URLs) and history traversal
+reselect; `pushState`/`replaceState`, ID mutation and view remounts do not. The
+VM selects the initial target after DOMContentLoaded and before load, invalidates
+layout when target identity changes and publishes its renderer ID separately
+from markup. Static cached pages rebuild for the target revision before reveal,
+so target-dependent display/size changes cannot use the old geometry.
+
+A pinned Chromium 153 corpus covers 16 phone/tablet, DPR 1/3 and theme profiles,
+with 256 states: first/repeated links, named/encoded/hidden/missing/top/empty
+fragments, History API rewrites/traversals, renamed and duplicate nodes, removal
+and reinsertion. Native Android tests compare actual computed styles, rectangles,
+root scroll and Sandbox selector reports; the non-script widget gate covers
+80 states. Scripted profiles also remount the workspace after pushState and keep
+the same VM. Existing selector syntax limits still apply (`:is`/`:where`/`:has`,
+pseudo-elements and shadow DOM are not established by this gate). Late target
+selection, image-driven retries, reentrant navigation and browser lifecycle
+variants remain open. Unit checks also cover target marker collision avoidance,
+malformed UTF-8/BOM decoding and detached-node identity.
+
 **Remaining fragment differences:** reentrant focus redirection/navigation,
 filled/oversized control caret and selection variants, focus restoration across
 remount/background transitions, broader keyboard traversal, focus pseudo styling,
 additional toggle box-model combinations and exact toggle appearance/accent
 styling are not newly certified. A redirected focus is recorded as a difference.
-`:target`, ancestor revealing, late DOM/image retry, targets without a measured
-box, inline/text/
-non-HTML fragments, RTL/vertical writing, sticky/SVG geometry, scroll snap,
+Ancestor revealing, late DOM/image retry, targets without a measured box,
+inline/text/non-HTML fragments, RTL/vertical writing, sticky/SVG geometry, scroll snap,
 root horizontal scrolling and unresolved inset math remain open. Unsupported
 geometry retains the native anchor fallback and an explicit difference; matching
 frame waits stay bounded. Backend redirect/hash inheritance, physical devices

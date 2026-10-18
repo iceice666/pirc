@@ -1603,7 +1603,14 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
     }
   }
 
+  int _renderedTargetRevision = -1;
   void _syncScriptActivity() {
+    if (_scripts == null &&
+        widget.document.content.isHtml &&
+        mounted &&
+        _renderedTargetRevision != widget.document.fragmentTarget.revision) {
+      setState(() {});
+    }
     final scripts = _scripts;
     if (scripts == null) return;
     final scope = _scope;
@@ -1707,6 +1714,9 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
   ) {
     final document = widget.document;
     if (!mounted ||
+        document.content.isHtml &&
+            _scripts == null &&
+            _renderedTargetRevision != document.fragmentTarget.revision ||
         !document.scroll.hasClients ||
         !document.scroll.position.hasContentDimensions ||
         _scripts != null &&
@@ -2159,6 +2169,23 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       );
     }
     final styled = html.parse(content.text);
+    if (_scripts == null) {
+      var sequence = 0;
+      for (final element in styled.querySelectorAll('*')) {
+        element.attributes['data-pirc-script-id'] =
+            'native-static-${sequence++}';
+      }
+    }
+    _renderedTargetRevision = document.fragmentTarget.revision;
+    final targetId = _scripts?.fragmentTargetId;
+    final fragmentTarget = _scripts == null
+        ? document.fragmentTarget.resolve(styled)
+        : targetId == null
+        ? null
+        : styled
+              .querySelectorAll('*')
+              .where((e) => e.attributes['data-pirc-script-id'] == targetId)
+              .firstOrNull;
     final environment = _displayEnvironment(
       width: width,
       height: height,
@@ -2171,6 +2198,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       pointer: environment.pointer,
       hover: environment.hover,
       documentBaseUrl: _scripts?.documentBaseUrl ?? document.effectiveBase,
+      fragmentTarget: fragmentTarget,
       stylesheets: _scripts?.stylesheets ?? document.stylesheets,
       viewportWidth: width,
       dark: dark,

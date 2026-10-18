@@ -2213,10 +2213,38 @@
     return String(Object.is(current, -0) ? 0 : current);
   }
 
+  function selectFragmentTarget(url) {
+    const state = activeState;
+    const marker = String(url).indexOf('#');
+    const raw = marker < 0 ? '' : String(url).slice(marker + 1);
+    let target = null;
+    if (raw) {
+      const find = name => Array.from(state.document.querySelectorAll('*')).find(e => e.id === name) ||
+        Array.from(state.document.querySelectorAll('a')).find(e => e.getAttribute('name') === name) || null;
+      const bytes = [];
+      for (let i = 0; i < raw.length;) {
+        const pair = raw.slice(i + 1, i + 3);
+        if (raw[i] === '%' && /^[0-9a-fA-F]{2}$/.test(pair)) {bytes.push(parseInt(pair, 16)); i += 3;}
+        else {
+          const point = String.fromCodePoint(raw.codePointAt(i));
+          bytes.push(...new TextEncoder().encode(point)); i += point.length;
+        }
+      }
+      const decoded = new TextDecoder('utf-8', {ignoreBOM: true}).decode(new Uint8Array(bytes));
+      target = find(raw) || find(decoded);
+    }
+    if (state.fragmentTarget !== target) {
+      state.fragmentTarget = target;
+      state.layout?.invalidate();
+    }
+  }
+
   function installFormProperties() {
     // LinkeDOM's selector alias omits controls under a disabled fieldset.
     // Share the actual disabledness algorithm across matches and DOM queries,
     // including nested fieldsets and the first-legend exception.
+    delete aliases.target;
+    pseudos.target = element => element === activeState.fragmentTarget && element.isConnected;
     delete aliases.disabled;
     pseudos.disabled = function(element) {
       if (['input', 'button', 'select', 'textarea'].includes(element.localName))
@@ -3152,6 +3180,13 @@
             .some(name => typeof globalThis[name] === 'function' && value instanceof globalThis[name])}),
       initial: state.initialHistory, scope: state.objectUrlNonce,
       getURL: () => state.url, setURL: url => { state.url = url; },
+      updateTarget: snapshot => {
+        if (Number.isSafeInteger(snapshot.targetRevision) && snapshot.targetRevision >= 0 &&
+            typeof snapshot.targetUrl === 'string' && snapshot.targetRevision !== state.fragmentTargetRevision) {
+          state.fragmentTargetRevision = snapshot.targetRevision;
+          selectFragmentTarget(snapshot.targetUrl);
+        }
+      },
       getBaseURL: currentDocumentBaseUrl, nextActionOrder: nextActionOrder,
       enqueue: action => {
         const pending = state.navigationActions.filter(value => value.kind === 'history');
@@ -4539,6 +4574,7 @@
           element.isConnected ? id : null).filter(Boolean) : []
       }) : null,
       documentBaseURL: activeState && activeState.document ? currentDocumentBaseUrl() : null,
+      fragmentTargetId: activeState?.fragmentTarget ? ensureElementId(activeState.fragmentTarget) : null,
       stylesheets: activeState ? activeState.stylesheetSnapshot : null,
       environment: activeState && activeState.media ? activeState.media.snapshot() : null,
       canvases: activeState && activeState.canvas ? activeState.canvas.snapshots() : [],
@@ -5024,6 +5060,7 @@
         { event: 'DOMContentLoaded' }
       );
     }
+    selectFragmentTarget(state.url);
     dispatchDocumentLoadIfReady();
   }
 
@@ -5229,6 +5266,8 @@
       diagnosticsOmitted: false,
       url: url,
       sourceDocumentUrl: url,
+      fragmentTarget: null,
+      fragmentTargetRevision: Number.isSafeInteger(input.history?.targetRevision) ? input.history.targetRevision : 0,
       initialCookieState: input.cookieState,
       initialHistory: input.history && typeof input.history === 'object' ? input.history : {},
       documentReferrer: typeof input.referrer === 'string' ? input.referrer : '',
@@ -5714,6 +5753,7 @@
       fireHashChange = false;
     }
     state.url = nextUrl;
+    selectFragmentTarget(nextUrl);
 
     if (fireHashChange && state.window) {
       try {

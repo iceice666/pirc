@@ -37,6 +37,8 @@ The first published release with the 0.9.0 changes below (0.9.0 was tagged but i
 
 ### Fixed
 
+- Android document targets update native styles and preserve target identity through History API changes.
+
 - Android document links focus native controls and keep their nested scroll position consistent; CSS-sized toggles retain label and keyboard interaction.
 
 - Android document links use native nested scrolling with CSS scroll margins/padding and retain hidden anchor priority.
