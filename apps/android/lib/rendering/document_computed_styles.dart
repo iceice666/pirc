@@ -25,6 +25,8 @@ class NativeDocumentComputedStyleSpec {
     required Map<String, String> lengths,
     required this.fontSize,
     required this.rootFontSize,
+    this.transform,
+    this.transformOrigin,
     this.available = true,
     this.textContentSelectorsIndependent = false,
     this.isReplaced = false,
@@ -44,6 +46,10 @@ class NativeDocumentComputedStyleSpec {
   final Map<String, String> lengths;
   final double fontSize;
   final double rootFontSize;
+
+  /// Winning author values; percentages resolve against the owned native border
+  /// box only after layout. Unsupported reference-box variants stay absent.
+  final String? transform, transformOrigin;
 
   /// Atomic image/canvas/SVG roots have used dimensions even when inline.
   final bool isReplaced;
@@ -536,7 +542,21 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
           .toDouble();
     }
 
+    final transform = author['transform'] ?? 'none';
+    if (transform == 'none') values['transform'] = 'none';
+    final transformBoxSupported =
+        fontSizeResult.supported &&
+        element.namespaceUri == 'http://www.w3.org/1999/xhtml' &&
+        const {
+          '',
+          'view-box',
+          'border-box',
+        }.contains(author['transform-box'] ?? '');
     final spec = NativeDocumentComputedStyleSpec(
+      transform: transformBoxSupported ? transform : null,
+      transformOrigin: transformBoxSupported
+          ? (author['transform-origin'] ?? '50% 50%')
+          : null,
       values: values,
       lengths: lengths,
       fontSize: fontSize,

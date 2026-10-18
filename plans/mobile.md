@@ -91,9 +91,21 @@ are at `git show 7677d24:plans/mobile-audit.md`.
   inline `element.style` remains independent. Enumeration is the supplied subset,
   not Chromium's full property list. Omitted recognized properties,
   pseudo-elements, stale frames and unavailable declarations fail explicitly.
+- Common HTML 2D `transform` matrices and `transform-origin` now use the native
+  transform parser and real untransformed border-box dimensions. Matrix values
+  exclude the separately reported origin and preserve identity versus `none`.
+  Hidden elements have no used transform and preserve percentage origins.
+  Retained declarations update after accepted native layout, including class,
+  size, transform and hidden-to-shown changes. An independent 128-profile
+  Chromium 153 corpus covers phone/tablet, DPR 1/3, both themes, border/content
+  boxes, Canvas, empty and hidden elements. Native widget and Android Sandbox
+  gates check both states; styles compare exactly and rectangles use 0.001 CSS
+  px tolerance. Unsupported reference boxes/font bases and missing measurements
+  withhold affected values. This does not establish synchronous DOM write/read
+  layout or full CSS transform inheritance, animation or SVG serialization.
 - Inline-fragment and unmeasured list-item dimensions, auto margins, platform
-  form-control UA properties, CSS font shorthand, computed transform serialization
-  and unsupported length expressions remain outside this surface. The full browser
+  form-control UA properties, CSS font shorthand and unsupported length
+  expressions remain outside this surface. The full browser
   `CSSStyleDeclaration` prototype/property surface is not implemented;
   custom-property names currently use the ASCII subset.
 - Style limits: 256 properties, 128-character names, 4,096-character values and

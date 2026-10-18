@@ -432,11 +432,29 @@ scale, rotate, skew and six-value 2D matrices, composed in CSS order. Percentage
 translations and ordinary `transform-origin` values use the actual laid-out
 border box without changing normal-flow size. This gate includes nested
 scrollports, default/explicit origins, rotation, matrix composition, transformed
-positioned elements and actual Canvas taps. It does not certify transformed
-containing blocks, perspective/3D, individual transform properties, textual
-inline fragments or transformed overflow extents. CSS defaults, timing/event
-variants, global getter errors and remaining DOM/layout APIs stay in the mobile
-plan.
+positioned elements and actual Canvas taps.
+
+`getComputedStyle()` also exposes common HTML 2D `transform` matrices and
+`transform-origin` values. Matrix coefficients exclude the separately reported
+origin; percentages use the actual untransformed border box. Identity matrices
+remain distinct from `none`. Hidden elements report `none` and retain unresolved
+percentage origins. Matrix numbers use six significant digits, matching the
+frozen Chromium references. Retained declarations update after accepted native
+frames when classes, dimensions and transforms change, including hidden-to-shown
+and Canvas cases. `test/document_transform_style_oracle_test.dart` checks 128
+phone/tablet, DPR 1/3 and light/dark profiles before and after mutation; Android
+`integration_test/document_transform_style_test.dart` checks the same source
+through JavaScriptSandbox, including camel-case/property aliases and geometry.
+Recreate with
+`node apps/android/tool/parity/capture_document_transform_style_chromium153.mjs`;
+the loopback server supplies `/transform-style.json`.
+
+These gates do not certify transformed containing blocks, perspective/3D,
+individual transform properties, textual inline fragments, transform-box
+variants or transformed overflow extents. Missing native boxes or unproved font
+bases withhold the affected computed values. General DOM writes still need a
+matching native frame. CSS defaults, timing/event variants, global getter errors
+and remaining DOM/layout APIs stay in the mobile plan.
 
 `document.scrollingElement` uses the initial HTML parser mode and native
 box/overflow measurements to select the standards root, quirks body, or null.
