@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:html/parser.dart' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/document_navigation.dart';
@@ -13,6 +15,8 @@ Future<Map<String, dynamic>> checkFragmentScrollCase(
   Map row,
   ThemeData theme, {
   bool initial = false,
+  bool checkFocus = false,
+  String documentPath = '/fragment-scroll',
   FragmentScrollGateway? sharedGateway,
 }) async {
   final dpr = (row['dpr'] as num).toDouble(),
@@ -29,7 +33,8 @@ Future<Map<String, dynamic>> checkFragmentScrollCase(
   tester.view.padding = const FakeViewPadding();
   tester.view.viewPadding = const FakeViewPadding();
   tester.view.viewInsets = const FakeViewPadding();
-  final path = '/fragment-scroll${initial ? '#target' : ''}';
+  final path =
+      '$documentPath${initial ? (row['result']['initial']['hash'] ?? '#target') : ''}';
   final gateway = (sharedGateway ?? FragmentScrollGateway())
         ..calls.clear()
         ..responses.add(response(path, row['html'] as String)),
@@ -45,6 +50,47 @@ Future<Map<String, dynamic>> checkFragmentScrollCase(
   );
   windows.select(window);
   final document = window.currentDocument!;
+  Future<void> settle({int? afterReveal}) async {
+    String? previous;
+    var stable = 0;
+    for (var attempt = 0; attempt < 300; attempt++) {
+      await tester.pump(const Duration(milliseconds: 30));
+      final positions = [
+        for (final state in tester.stateList<ScrollableState>(
+          find.byType(Scrollable),
+        ))
+          {
+            'pixels': state.position.pixels,
+            'active': state.position.isScrollingNotifier.value,
+          },
+      ];
+      final scripts = document.scripts;
+      final stamp = jsonEncode([
+        positions,
+        document.viewport.focusedNativeElementId,
+        scripts?.layoutRevision,
+        scripts?.content?.text,
+      ]);
+      final ready =
+          scripts?.hasPendingPublication != true &&
+          (scripts?.scrollActions.isEmpty ?? true) &&
+          (scripts?.focusActions.isEmpty ?? true) &&
+          document.elementScroll.anchoringSettled &&
+          !window.hasPendingFragmentReveal &&
+          positions.every((p) => p['active'] == false) &&
+          (afterReveal == null ||
+              document.viewport.completedFragmentReveals > afterReveal);
+      stable = ready && stamp == previous ? stable + 1 : 0;
+      previous = stamp;
+      if (stable >= 3) return;
+    }
+    fail(
+      'Document did not stabilize: ${row['mode']} scripted=${row['scripted']} initial=$initial viewport=${row['viewport']} dpr=$dpr ${row['theme']} '
+      'completed=${document.viewport.completedFragmentReveals} pending=${window.hasPendingFragmentReveal} difference=${document.viewport.lastFragmentDifference} publication=${document.scripts?.hasPendingPublication} '
+      'focus=${document.viewport.focusedNativeElementId} diagnostics=${document.scripts?.diagnostics}',
+    );
+  }
+
   try {
     await tester.pumpWidget(
       MaterialApp(
@@ -63,7 +109,7 @@ Future<Map<String, dynamic>> checkFragmentScrollCase(
         reason: '${document.scripts?.diagnostics}',
       );
     }
-    await tester.pumpAndSettle();
+    await settle(afterReveal: initial ? 0 : null);
     expect(
       document.scroll.position.viewportDimension,
       viewport.height,
@@ -103,7 +149,21 @@ Future<Map<String, dynamic>> checkFragmentScrollCase(
       );
       expect(packet, isNotNull, reason: 'capture actual laid-out target');
       final box = (packet!['boxes'] as List).single as Map;
+      final focused = document.viewport.focusedNativeElementId;
+      final active =
+          [
+            'target',
+            'jump',
+          ].where((name) => named(name) == focused).firstOrNull ??
+          'body';
+      final probe = checkFocus && row['scripted'] == true
+          ? html
+                .parse(document.scripts?.content?.text ?? '')
+                .getElementById('focusprobe')
+          : null;
       return {
+        if (checkFocus) 'active': active,
+        if (checkFocus) 'events': probe == null ? null : jsonDecode(probe.text),
         'positions': {
           'root': {'left': 0.0, 'top': document.scroll.offset},
           'outer': position(outerId),
@@ -121,6 +181,18 @@ Future<Map<String, dynamic>> checkFragmentScrollCase(
     }
 
     void compare(Map actual, Map expected, String phase) {
+      if (checkFocus) {
+        expect(
+          actual['active'],
+          expected['active'],
+          reason: '${row['mode']} $phase native focus',
+        );
+        expect(
+          actual['events'],
+          expected['events'],
+          reason: '${row['mode']} $phase trusted focus events',
+        );
+      }
       for (final owner in ['root', 'outer', 'inner']) {
         for (final axis in ['left', 'top']) {
           expect(
@@ -153,7 +225,7 @@ Future<Map<String, dynamic>> checkFragmentScrollCase(
       ) {
         await tester.pump(const Duration(milliseconds: 30));
       }
-      await tester.pumpAndSettle();
+      await settle();
       expect(document.viewport.completedFragmentReveals, greaterThan(0));
       expect(window.hasPendingFragmentReveal, isFalse);
       expect(document.viewport.lastFragmentDifference, isNull);
@@ -174,7 +246,7 @@ Future<Map<String, dynamic>> checkFragmentScrollCase(
       };
     }
     document.scroll.jumpTo(240);
-    await tester.pumpAndSettle();
+    await settle();
     compare(read(), row['result']['before'] as Map, 'before');
     final initialCount = window.history.length,
         before = row['result']['before'] as Map;
@@ -186,11 +258,11 @@ Future<Map<String, dynamic>> checkFragmentScrollCase(
           for (final id in [outerId, innerId])
             {'id': id, 'op': 'to', 'left': 0, 'top': 0, 'behavior': 'instant'},
         ]);
-        await tester.pumpAndSettle();
+        await settle();
       }
       final completed = document.viewport.completedFragmentReveals;
       await tester.tap(find.text('Jump', findRichText: true));
-      await tester.pumpAndSettle();
+      await settle(afterReveal: completed);
       if (row['scripted'] == true) {
         for (
           var i = 0;
@@ -199,7 +271,7 @@ Future<Map<String, dynamic>> checkFragmentScrollCase(
         ) {
           await tester.pump(const Duration(milliseconds: 30));
         }
-        await tester.pumpAndSettle();
+        await settle();
       }
       expect(
         document.viewport.completedFragmentReveals,

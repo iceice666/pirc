@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fragmentScrollHTML, fragmentScrollModes } from './document_fragment_scroll_fixture.mjs';
 
-test('fragment scroll oracle retains exact source, viewport and known focus exclusions', () => {
+test('fragment scroll oracle retains exact source, viewport and control profile coverage', () => {
   const fixture = JSON.parse(
     readFileSync(new URL('./fixtures/document-fragment-scroll-chromium153.json', import.meta.url)),
   );

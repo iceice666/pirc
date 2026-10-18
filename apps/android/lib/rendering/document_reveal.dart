@@ -12,8 +12,78 @@ class NativeDocumentRevealAction {
 List<NativeDocumentRevealAction> nativeDocumentRevealPlan(
   Map<String, dynamic> packet,
   String id,
-  String rootId,
-) {
+  String rootId, {
+  bool centerFocus = false,
+}) {
+  if (!centerFocus) return _nativeDocumentRevealPlan(packet, id, rootId);
+  final focusPlan = _nativeDocumentRevealPlan(packet, id, rootId, focus: true);
+  if (focusPlan.isEmpty) return focusPlan;
+  // Focus can center a newly focused target before the fragment's start/nearest
+  // reveal. Translate only our own planned scrolls through proven native axes;
+  // DOM/focus handlers have already completed before this measurement. Apply
+  // the final destinations once, so native caret reveal cannot compete with it.
+  final boxes = [
+    for (final raw in packet['boxes'] as List)
+      Map<String, dynamic>.from(raw as Map),
+  ];
+  final byId = {for (final box in boxes) box['id'] as String: box};
+  final target = byId[id]!;
+  final proof = Map<String, dynamic>.from(target['scrollReveal'] as Map);
+  final ports = [
+    for (final raw in proof['ports'] as List)
+      {
+        ...Map<String, dynamic>.from(raw as Map),
+        'origin': List<num>.from(raw['origin'] as List),
+      },
+  ];
+  proof['ports'] = ports;
+  target['scrollReveal'] = proof;
+  final viewport = Map<String, dynamic>.from(packet['viewport'] as Map);
+  for (final action in focusPlan) {
+    final owner = byId[action.elementId ?? rootId];
+    // A following fragment reveal supersedes a not-yet-ticked smooth focus
+    // command. Instant focus effects are already positions; smooth goals are not.
+    if ((owner?['computedStyle'] as Map?)?['scroll-behavior'] == 'smooth') {
+      continue;
+    }
+    if (action.elementId == null) {
+      viewport['scrollX'] = action.destination.dx;
+      viewport['scrollY'] = action.destination.dy;
+      continue;
+    }
+    final index = ports.indexWhere((p) => p['id'] == action.elementId);
+    final metrics = Map<String, dynamic>.from(
+      byId[action.elementId]!['scroll'] as Map,
+    );
+    byId[action.elementId]!['scroll'] = metrics;
+    final axes = ports[index]['axes'] as List;
+    final dx = (metrics['left'] as num) - action.destination.dx,
+        dy = (metrics['top'] as num) - action.destination.dy;
+    final x = (axes[0] as num) * dx + (axes[2] as num) * dy,
+        y = (axes[1] as num) * dx + (axes[3] as num) * dy;
+    target['x'] = (target['x'] as num) + x;
+    target['y'] = (target['y'] as num) + y;
+    for (var j = 0; j < index; j++) {
+      final origin = ports[j]['origin'] as List<num>;
+      origin[0] += x;
+      origin[1] += y;
+    }
+    metrics['left'] = action.destination.dx;
+    metrics['top'] = action.destination.dy;
+  }
+  return _nativeDocumentRevealPlan(
+    {...packet, 'boxes': boxes, 'viewport': viewport},
+    id,
+    rootId,
+  );
+}
+
+List<NativeDocumentRevealAction> _nativeDocumentRevealPlan(
+  Map<String, dynamic> packet,
+  String id,
+  String rootId, {
+  bool focus = false,
+}) {
   Never unavailable(String reason) =>
       throw UnsupportedError('Native fragment reveal: $reason');
   final boxes = {
@@ -87,6 +157,19 @@ List<NativeDocumentRevealAction> nativeDocumentRevealPlan(
     return 0;
   }
 
+  double centerIfNeeded(
+    double start,
+    double end,
+    double visibleStart,
+    double visibleEnd,
+  ) {
+    if (end < start || visibleEnd < visibleStart) {
+      unavailable('inverted focus region');
+    }
+    if (start >= visibleStart && end <= visibleEnd) return 0;
+    return (start + end - visibleStart - visibleEnd) / 2;
+  }
+
   Offset destination(
     Rect rect,
     Size port,
@@ -110,13 +193,22 @@ List<NativeDocumentRevealAction> nativeDocumentRevealPlan(
     }
     final x =
             position.dx +
-            nearest(
+            (focus ? centerIfNeeded : nearest)(
               rect.left - margin.left,
               rect.right + margin.right,
               left,
               right,
             ),
-        y = position.dy + rect.top - margin.top - top;
+        y =
+            position.dy +
+            (focus
+                ? centerIfNeeded(
+                    rect.top - margin.top,
+                    rect.bottom + margin.bottom,
+                    top,
+                    bottom,
+                  )
+                : rect.top - margin.top - top);
     final minX = number(range['minLeft']),
         maxX = number(range['maxLeft']),
         minY = number(range['minTop']),
@@ -145,11 +237,12 @@ List<NativeDocumentRevealAction> nativeDocumentRevealPlan(
 
   final viewport = packet['viewport'] as Map,
       scroll = Offset(number(viewport['scrollX']), number(viewport['scrollY']));
+  final caret = focus ? target['focusRect'] as List? : null;
   var absolute = Rect.fromLTWH(
-    number(target['x']) - scroll.dx,
-    number(target['y']) - scroll.dy,
-    number(target['width']),
-    number(target['height']),
+    number(caret?[0] ?? target['x']) - scroll.dx,
+    number(caret?[1] ?? target['y']) - scroll.dy,
+    number(caret?[2] ?? target['width']),
+    number(caret?[3] ?? target['height']),
   );
   final plan = <NativeDocumentRevealAction>[];
   for (final raw in proof['ports'] as List) {

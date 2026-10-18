@@ -399,6 +399,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     super.didUpdateWidget(old);
     if (!identical(old.viewport, widget.viewport)) {
       old.viewport?._unbindFragments(this);
+      old.viewport?._unbindFragmentFocus(this);
     }
     final documentChanged = old.scriptDocument != widget.scriptDocument;
     if (documentChanged ||
@@ -463,6 +464,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
   @override
   void dispose() {
     widget.viewport?._unbindFragments(this);
+    widget.viewport?._unbindFragmentFocus(this);
     _localElementScroll.dispose();
     _backgroundSvgCache.clear();
     FocusManager.instance.removeListener(_handleNativeFocusChange);
@@ -701,6 +703,12 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
           widget.fragmentIndex ?? NativeDocumentFragmentIndex(content, nonce);
       if (widget.fragmentIndex == null) content = fragments.annotatedHtml;
       widget.viewport!._bindFragments(this, fragments);
+      widget.viewport!._bindFragmentFocus(
+        this,
+        _focusFragmentTarget,
+        _currentNativeScriptFocusId,
+        _focusedFragmentCaret,
+      );
     }
     _pruneScriptFocusableNodes(content);
     _bindScriptControls();
@@ -1014,6 +1022,88 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
         ),
       );
     }
+  }
+
+  NativeDocumentFocusCaret? _focusedFragmentCaret() {
+    final id = _currentNativeScriptFocusId();
+    if (id == null) return null;
+    final element = _scriptElement(id, html.parseFragment(content));
+    if (element?.localName != 'textarea') return null;
+    final field = textFields?.resolveControl(element!);
+    if (field == null) return null;
+    final object = textFields!
+        .editorKeyFor(field.key)
+        .currentContext
+        ?.findRenderObject();
+    if (object == null) return null;
+    RenderEditable? editable;
+    var visited = 0;
+    void find(RenderObject node) {
+      if (editable != null || visited++ > 128) return;
+      if (node is RenderEditable) {
+        editable = node;
+        return;
+      }
+      node.visitChildren(find);
+    }
+
+    find(object);
+    final surface = editable;
+    if (surface == null || !surface.attached || !surface.hasSize) return null;
+    final selection = textFields!.controllerFor(field.key).selection;
+    return (
+      id: id,
+      surface: surface,
+      rect: surface.getLocalRectForCaret(
+        selection.isValid ? selection.extent : const TextPosition(offset: 0),
+      ),
+    );
+  }
+
+  NativeFragmentFocusResult _focusFragmentTarget(
+    String? id,
+    bool Function() isCurrent,
+  ) {
+    if (!mounted || !isCurrent() || !_isScriptFocusDocumentCurrent()) {
+      return NativeFragmentFocusResult.unavailable;
+    }
+    final fragment = html.parseFragment(content);
+    final element = id == null ? null : _scriptElement(id, fragment);
+    final css = widget.layoutComputedStyles[id]?.values;
+    final hidden =
+        css?['display'] == 'none' ||
+        const {'hidden', 'collapse'}.contains(css?['visibility']);
+    var inert = false;
+    for (var parent = element; parent != null; parent = parent.parent) {
+      if (parent.attributes.containsKey('inert')) {
+        inert = true;
+        break;
+      }
+    }
+    final nodes = element == null || hidden || inert
+        ? const <FocusNode>[]
+        : _scriptFocusNodesForElement(element);
+    final desired = nodes
+        .where((node) => node.canRequestFocus && node.context != null)
+        .firstOrNull;
+    final previous = _currentNativeScriptFocusId();
+    if (desired == null) {
+      if (previous != null) {
+        _cancelFocusRevealSuppression();
+        FocusManager.instance.primaryFocus?.unfocus(
+          disposition: UnfocusDisposition.scope,
+        );
+        FocusManager.instance.applyFocusChangesIfNeeded();
+      }
+      return NativeFragmentFocusResult.unchanged;
+    }
+    if (previous == id) return NativeFragmentFocusResult.unchanged;
+    _beginFocusRevealSuppression(desired, true, isCurrent: isCurrent);
+    desired.requestFocus();
+    FocusManager.instance.applyFocusChangesIfNeeded();
+    return _currentNativeScriptFocusId() == id
+        ? NativeFragmentFocusResult.changed
+        : NativeFragmentFocusResult.unchanged;
   }
 
   List<FocusNode> _scriptFocusNodesForElement(dom.Element element) {
@@ -3120,6 +3210,31 @@ class _NativeHtmlFactory extends WidgetFactory {
     return _pointerBox(element, _measureLayoutElement(element, built));
   }
 
+  NativeHtmlControlDescriptor? _styledToggle(dom.Element element) {
+    if (markdownStyles) return null;
+    final control = controls.resolveControl(element);
+    if (control == null) return null;
+    final styles = _flexChildStyles(element);
+    return styles.keys.any(
+          (key) =>
+              const {
+                'width',
+                'height',
+                'min-width',
+                'min-height',
+                'max-width',
+                'max-height',
+                'box-sizing',
+                'margin',
+              }.contains(key) ||
+              key.startsWith('margin-') ||
+              key.startsWith('padding') ||
+              key.startsWith('border'),
+        )
+        ? control
+        : null;
+  }
+
   Widget? _customWidgetForElement(dom.Element element) {
     if (element.localName == 'audio' || element.localName == 'video') {
       final media = mediaWidgets(element);
@@ -3139,7 +3254,8 @@ class _NativeHtmlFactory extends WidgetFactory {
       }
     }
     if (!markdownStyles &&
-        (textFields.resolveControl(element) != null ||
+        (_styledToggle(element) != null ||
+            textFields.resolveControl(element) != null ||
             selects.resolveControl(element) != null ||
             dates.resolveControl(element) != null ||
             files.resolveControl(element) != null)) {
@@ -4429,7 +4545,8 @@ class _NativeHtmlFactory extends WidgetFactory {
     }
     final ownsControlBox =
         !markdownStyles &&
-        (textFields.resolveControl(tree.element) != null ||
+        (_styledToggle(tree.element) != null ||
+            textFields.resolveControl(tree.element) != null ||
             selects.resolveControl(tree.element) != null);
     if (ownsControlBox &&
         (const {
@@ -5097,12 +5214,14 @@ class _NativeHtmlFactory extends WidgetFactory {
         },
       ),
     );
+    final styledToggle = _styledToggle(tree.element);
     final styledTextField = textFields.resolveControl(tree.element);
     final select = selects.resolveControl(tree.element);
     final date = dates.resolveControl(tree.element);
     final file = files.resolveControl(tree.element);
     if (!markdownStyles &&
-        (styledTextField != null ||
+        (styledToggle != null ||
+            styledTextField != null ||
             select != null ||
             date != null ||
             file != null)) {
@@ -5115,6 +5234,10 @@ class _NativeHtmlFactory extends WidgetFactory {
           debugLabel: 'native-document-control-defaults',
           defaultStyles: (_) => {
             'display': 'inline-block',
+            if (styledToggle != null)
+              'margin': styledToggle.type == NativeHtmlControlType.checkbox
+                  ? '3px 3px 3px 4px'
+                  : '3px 3px 0px 5px',
             'font-family': multiline || date != null
                 ? 'monospace'
                 : 'sans-serif',
@@ -5160,7 +5283,7 @@ class _NativeHtmlFactory extends WidgetFactory {
                 fontSize: style.fontSize ?? 13.333333333333334,
                 dark: dark,
                 multiline: multiline,
-                uaPreset: file != null
+                uaPreset: file != null || styledToggle != null
                     ? NativeHtmlControlBoxUaPreset.none
                     : date != null
                     ? NativeHtmlControlBoxUaPreset.dateInput
@@ -5169,7 +5292,17 @@ class _NativeHtmlFactory extends WidgetFactory {
                     : NativeHtmlControlBoxUaPreset.select,
                 currentColor: style.color,
               );
-              final control = styledTextField != null
+              final control = styledToggle != null
+                  ? NativeHtmlControlWidget(
+                      key: controls.widgetKeyFor(styledToggle.key),
+                      state: controls,
+                      control: styledToggle,
+                      accent: Theme.of(
+                        context,
+                      ).extension<PircColors>()!['accent.default'],
+                      boxStyle: boxStyle,
+                    )
+                  : styledTextField != null
                   ? NativeHtmlTextFieldWidget(
                       state: textFields,
                       field: styledTextField,
@@ -6167,15 +6300,43 @@ class NativeHtmlViewportController {
   Object? _fragmentOwner;
   NativeDocumentFragmentIndex? _fragments;
   Object? _nativeRevealOwner;
-  NativeFragmentRevealResult Function(String?)? _nativeReveal;
+  NativeFragmentRevealResult Function(String?, NativeFragmentRevealPhase)?
+  _nativeReveal;
   String? lastFragmentDifference;
   void bindNativeReveal(
     Object owner,
-    NativeFragmentRevealResult Function(String?)? reveal,
+    NativeFragmentRevealResult Function(String?, NativeFragmentRevealPhase)?
+    reveal,
   ) {
     if (reveal == null && !identical(owner, _nativeRevealOwner)) return;
     _nativeRevealOwner = reveal == null ? null : owner;
     _nativeReveal = reveal;
+  }
+
+  Object? _fragmentFocusOwner;
+  NativeFragmentFocusResult Function(String?, bool Function())? _fragmentFocus;
+  String? Function()? _readFocusedNativeId;
+  NativeDocumentFocusCaret? Function()? _readFocusCaret;
+  NativeDocumentFocusCaret? get focusCaret => _readFocusCaret?.call();
+  String? get focusedNativeElementId => _readFocusedNativeId?.call();
+  void _bindFragmentFocus(
+    Object owner,
+    NativeFragmentFocusResult Function(String?, bool Function()) focus,
+    String? Function() read,
+    NativeDocumentFocusCaret? Function() caret,
+  ) {
+    _fragmentFocusOwner = owner;
+    _fragmentFocus = focus;
+    _readFocusedNativeId = read;
+    _readFocusCaret = caret;
+  }
+
+  void _unbindFragmentFocus(Object owner) {
+    if (!identical(owner, _fragmentFocusOwner)) return;
+    _fragmentFocusOwner = null;
+    _fragmentFocus = null;
+    _readFocusedNativeId = null;
+    _readFocusCaret = null;
   }
 
   void _bindFragments(Object owner, NativeDocumentFragmentIndex fragments) {
@@ -6203,10 +6364,14 @@ class NativeHtmlViewportController {
     bool allowUnindexedTop = false,
   }) async {
     lastFragmentDifference = null;
+    var focusPrepared = false, centerFocus = false;
+    String? selectedId;
+    NativeDocumentFragmentTarget? selectedTarget;
     try {
       for (var attempt = 0; attempt < 128; attempt++) {
         if (isCurrent?.call() == false) return false;
         final target =
+            selectedTarget ??
             _fragments?.select(fragment) ??
             (_fragments == null &&
                     allowUnindexedTop &&
@@ -6217,7 +6382,9 @@ class NativeHtmlViewportController {
                 : null);
         if (_fragments != null && target == null) return false;
         if (target != null) {
-          final nativeId = target.top
+          final nativeId = focusPrepared
+              ? selectedId
+              : target.top
               ? null
               : _fragments?.nativeIdFor(target.anchor!);
           final handler = _nativeReveal;
@@ -6230,7 +6397,40 @@ class NativeHtmlViewportController {
             await WidgetsBinding.instance.endOfFrame;
             continue;
           }
-          final result = handler(nativeId);
+          if (!focusPrepared) {
+            final ready = handler(nativeId, NativeFragmentRevealPhase.prepare);
+            if (ready == NativeFragmentRevealResult.unsupported) {
+              lastFragmentDifference = 'unsupported_native_geometry';
+              return target.anchor == null
+                  ? false
+                  : _scrollAlias(target.anchor!);
+            }
+            if (ready == NativeFragmentRevealResult.handled) {
+              final focus = target.top
+                  ? NativeFragmentFocusResult.unchanged
+                  : _fragmentFocus?.call(nativeId, isCurrent ?? () => true) ??
+                        NativeFragmentFocusResult.unchanged;
+              if (focus != NativeFragmentFocusResult.unavailable) {
+                centerFocus = focus == NativeFragmentFocusResult.changed;
+                focusPrepared = true;
+                selectedId = nativeId;
+                selectedTarget = target;
+              }
+            }
+            WidgetsBinding.instance.ensureVisualUpdate();
+            await WidgetsBinding.instance.endOfFrame;
+            continue;
+          }
+          if (centerFocus && focusedNativeElementId != nativeId) {
+            lastFragmentDifference = 'fragment_focus_redirect';
+            centerFocus = false;
+          }
+          final result = handler(
+            nativeId,
+            centerFocus
+                ? NativeFragmentRevealPhase.centered
+                : NativeFragmentRevealPhase.standard,
+          );
           if (result == NativeFragmentRevealResult.handled) return true;
           if (result == NativeFragmentRevealResult.unsupported) {
             lastFragmentDifference = 'unsupported_native_geometry';
@@ -6276,3 +6476,7 @@ class NativeHtmlViewportController {
 }
 
 enum NativeFragmentRevealResult { handled, unavailable, unsupported }
+
+enum NativeFragmentRevealPhase { prepare, standard, centered }
+
+enum NativeFragmentFocusResult { unavailable, unchanged, changed }

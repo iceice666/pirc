@@ -229,6 +229,74 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     return NativeDocumentScrollAnchorFrame(result, clips, layoutBoxes);
   }
 
+  /// Measures an owned editor's caret in the same completed document frame.
+  /// The caret is private host evidence and is never exported in script packets.
+  Rect? measureOwnedRect(String id, RenderBox surface, Rect localRect) {
+    if (!localRect.left.isFinite ||
+        !localRect.top.isFinite ||
+        !localRect.width.isFinite ||
+        !localRect.height.isFinite ||
+        localRect.width <= 0 ||
+        localRect.height <= 0) {
+      return null;
+    }
+    final root = _root;
+    if (_disposed ||
+        root == null ||
+        !root.attached ||
+        !root.hasSize ||
+        root.pendingLayout ||
+        root.laidOutRevision != root.revision ||
+        !root.knownIds.contains(id) ||
+        !surface.attached ||
+        !surface.hasSize ||
+        !identical(_nearestRoot(surface), root)) {
+      return null;
+    }
+    final owners = (_elements[id] ?? {})
+        .where(
+          (e) =>
+              e.attached &&
+              e.revision == root.revision &&
+              e.laidOutRevision == root.revision &&
+              !e.pendingLayout &&
+              e.hasSize &&
+              identical(_nearestRoot(e), root),
+        )
+        .toList();
+    if (owners.length != 1) return null;
+    var owned = false;
+    for (
+      RenderObject? parent = surface;
+      parent != null;
+      parent = parent.parent
+    ) {
+      if (identical(parent, owners.single)) {
+        owned = true;
+        break;
+      }
+      if (identical(parent, root)) break;
+    }
+    if (!owned) return null;
+    try {
+      final rect = MatrixUtils.transformRect(
+        surface.getTransformTo(root),
+        localRect,
+      );
+      if (!rect.left.isFinite ||
+          !rect.top.isFinite ||
+          !rect.width.isFinite ||
+          !rect.height.isFinite ||
+          rect.width <= 0 ||
+          rect.height <= 0) {
+        return null;
+      }
+      return rect;
+    } on FlutterError {
+      return null;
+    }
+  }
+
   /// Captures the latest completed layout for [revision].
   ///
   /// Element rectangles are relative to the explicit document root. Scroll is
@@ -1531,3 +1599,5 @@ Map<String, String> _resolvedComputedStyles(
   }
   return values;
 }
+
+typedef NativeDocumentFocusCaret = ({String id, RenderBox surface, Rect rect});
