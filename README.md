@@ -1,6 +1,6 @@
 # pirc
 
-A private, forward-authenticated web client for persistent coding-agent sessions. It ships as two native Rust executables: `pirc-gateway` and `pirc-node` (including the `chat` role).
+A private, self-hosted workspace for persistent coding-agent sessions and assistant chats, with a forward-authenticated web UI and a native Android client. It ships as two native Rust executables: `pirc-gateway` and `pirc-node` (including the `chat` role).
 
 It consists of:
 
@@ -8,9 +8,20 @@ It consists of:
 - a **chat node** (`pirc-node chat`) for assistant chats and projects;
 - one or more **coding nodes** (`pirc-node`), one per machine with workspaces, which connect out to the gateway and run one built-in agent subprocess per session (over a JSONL RPC on stdin/stdout), plus side-panel shells;
 - a responsive Svelte PWA;
-- a native Android client in progress ([`apps/android`](apps/android/README.md)), which pairs through device tokens.
+- a native Flutter Android client ([`apps/android`](apps/android/README.md)), which pairs through device tokens; browser compatibility and some mobile workflows remain in progress.
 
 The gateway never runs agents or tools; it only runs model requests on their behalf (see [Model backends](docs/guides/model-backends.md)). On a single machine, run the gateway and a node side by side; across devices, each device runs a node that connects to one central gateway over a private VPN. See [gateway and node reference](docs/development/gateway-and-node.md) for setup and the current limitations.
+
+## Features
+
+- **Persistent sessions across machines:** reconnect from the web or Android, follow streaming runs, respond to approvals, and switch between assistant chats and coding workspaces.
+- **Coding tools and collaboration:** file and shell tools, programmatic tool calling (PTC), background tasks, subagents and agent teams, with workspace write leases and per-session approval modes (`read-only`, `auto`, `full-access`).
+- **Chat projects:** project instructions, shared read-only project files, linked coding workspaces, approved task delegation, and project deletion with a preview and memory review.
+- **Memory and context:** observational memory for long sessions, shared USER/MEMORY notes for chats, approved USER preferences in coding sessions, and workspace-memory search across repository clones.
+- **Workspace panels:** files, Git changes and history, interactive terminals, and browser viewing and takeover. Scheduled runs and push notifications help follow work away from the session.
+- **Gateway-managed models:** subscription logins, API keys and custom endpoints, without configuring provider credentials on every node.
+
+See the [user guides](docs/guides/README.md) for behavior and limits. Web and Android coverage differs; see the [Android README](apps/android/README.md) for supported workflows and remaining validation work.
 
 ## Security model
 
@@ -31,7 +42,7 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 - Authenticated user identities, `Host`, and `Origin` are checked against exact allowlists.
 - There is no trust-all or unauthenticated production default.
 - Nodes authenticate to the gateway with per-node secrets and connect outbound only; they listen on no port.
-- Phones running the native app authenticate with device tokens paired from the web **Settings → Devices**. A device token still needs the trusted proxy and an allowed `Host`, cannot manage devices or model backends, and dies after 7 days without use, 30 days after pairing, or on revocation. Otherwise, it acts as you, including shells on your nodes; revoke a lost phone at once. The proxy must pass these requests past forward auth and strip the identity header (see [device tokens](docs/development/gateway-and-node.md#device-tokens)).
+- Phones running the native app authenticate with device tokens paired from the web **Settings → Devices**. A device token still needs the trusted proxy and an allowed `Host`, and by default expires after 7 days without use, 30 days after pairing, or on revocation. Managing devices or model backends additionally requires a scoped, short-lived management grant approved in the authenticated web UI. Otherwise, it acts as you, including shells on your nodes; revoke a lost phone at once. The proxy must pass these requests past forward auth and strip the identity header (see [device tokens](docs/development/gateway-and-node.md#device-tokens)).
 - Workspaces are allowlisted. Each agent runs in a native OS sandbox (bubblewrap on Linux, Seatbelt on macOS, with a filtering proxy); see [Agent sandbox](docs/guides/agent.md#agent-sandbox). A node where the sandbox cannot work starts no agents.
 - The web side panel can browse workspace files, show Git changes and history, and open interactive shells in the workspace. Shells run as the node's account, just like the agent's tools, and require holding session control; set `PIRC_TERMINALS=false` on the node to disable them.
 - The agent's browser (see [Browser](docs/guides/browser.md)) loads pages with the node account's network access and keeps each workspace's logins in a persistent profile. Taking it over from the side panel requires holding session control; set `PIRC_BROWSER=false` on the node to disable it.
@@ -41,9 +52,10 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 
 - No Bun, Node, Deno or V8 runtime is shipped or needed by the servers.
 - `git`, bubblewrap (`bwrap`) on Linux, and the system `sandbox-exec` on macOS; Chromium/Chrome and optional ffmpeg for browser features.
-- Development/build only: [Bun](https://bun.sh) for web/tooling, and Rust **1.98.1** with `clippy`/`rustfmt` (`rust-toolchain.toml` and CI pin it; `nix develop` provides the matching tools). The locked PTC dependencies require at least Rust 1.97.
+- Development/build only: [Bun](https://bun.sh) **1.2 or later** for web/tooling (`packageManager` pins 1.4.2), and Rust **1.98.1** with `clippy`/`rustfmt` (`rust-toolchain.toml` and CI pin it; `nix develop` provides the matching tools). The locked PTC dependencies require at least Rust 1.97.
 - A model backend, configured on the gateway: a subscription login (Claude Pro/Max, GitHub Copilot, ChatGPT/Codex) or an API-key/custom endpoint from the web **Settings**, and/or `models.json` (see [Model backends](docs/guides/model-backends.md))
 - A trusted forward-auth reverse proxy
+- Android development only: Flutter/Dart, Android SDK and JDK 17; see [Android build prerequisites](apps/android/README.md#build-and-run). These are not required for the servers or web client.
 
 ## Development
 
@@ -73,7 +85,13 @@ Build one executable with `cargo build --locked --release -p pirc-gateway` or `-
 
 SQLite is bundled; the node embeds native QuickJS for PTC, not a general-purpose JS runtime. `pirc-node chat` selects chat, with no environment/argv-name role switch. Internal `agent`, `ptc-guest` and `sandbox-bridge` commands are runtime helpers, not services. OAuth runs in the gateway process.
 
-The Nix gateway includes the static Web UI; the node includes native sandbox/browser drivers and supplies bubblewrap on Linux. Neither ships srt, Playwright's Node package or a JS sidecar. Keep all roles on protocol **10**. Version **0.4.0 requires fresh state**: re-pair devices, re-login providers and start new sessions; do not reuse 0.3.0 databases. See [migration guidance](docs/deploy/upgrades.md). Account separation, filesystem permissions and sandboxing remain the security boundaries.
+The Nix gateway includes the static Web UI; the node includes native sandbox/browser drivers and supplies bubblewrap on Linux. Neither ships srt, Playwright's Node package or a JS sidecar. Account separation, filesystem permissions and sandboxing remain the security boundaries.
+
+### Upgrading
+
+Upgrade the gateway and every chat/coding node together. The current **0.6.x** servers use node protocol **11**; protocol 10 nodes cannot connect. The 0.6.0 upgrade automatically migrates gateway state to schema **1004** and node state to **2001**. Back up both state directories first: older servers cannot open the migrated databases.
+
+Upgrading from the pre-Rust **0.3.x** releases still requires fresh state: re-pair devices, re-login providers and start new sessions rather than reusing the old databases. See [migration and rollback guidance](docs/deploy/upgrades.md).
 
 ## Documentation
 
@@ -83,7 +101,7 @@ Start with the [documentation index](docs/README.md). Current usage guides and a
 
 - [Agent configuration and sandbox](docs/guides/agent.md), [tools and workflows](docs/guides/tools.md)
 - [Model backends and subscription logins](docs/guides/model-backends.md)
-- [Browser](docs/guides/browser.md), [schedules and notifications](docs/guides/schedules.md), [chat projects](docs/guides/chat-projects.md)
+- [Session UI](docs/guides/session-ui.md), [browser](docs/guides/browser.md), [schedules and notifications](docs/guides/schedules.md), [chat projects](docs/guides/chat-projects.md)
 - [Architecture references](docs/architecture/README.md), [deployment guides](docs/deploy/README.md)
 
 ## Validation
@@ -92,7 +110,9 @@ Start with the [documentation index](docs/README.md). Current usage guides and a
 bun run check
 ```
 
-`bun run check` ends with the conformance suite (`crates/pirc-conformance`), which starts the built `pirc-gateway` and `pirc-node` and compares their HTTP and WebSocket behavior with committed snapshots; after an intended change, `bun run conformance:record` re-records them; review the snapshot diff before committing it. The snapshots are Linux's: on other platforms the suite is skipped and recording refused (`scripts/conformance.ts`).
+`bun run check` validates product versions, generated model/browser assets, formatting, Rust lint/tests, web types/tests and release builds. Android checks run separately; see [Android verification](apps/android/README.md#verification).
+
+It ends with the conformance suite (`crates/pirc-conformance`), which starts the built `pirc-gateway` and `pirc-node` and compares their HTTP and WebSocket behavior with committed snapshots; after an intended change, `bun run conformance:record` re-records them; review the snapshot diff before committing it. The snapshots are Linux's: on other platforms the suite is skipped and recording refused (`scripts/conformance.ts`).
 
 Real-model smoke tests are deliberately separate because they require credentials and incur provider cost. The automated suite drives the real agent against a scripted fake OpenAI/Anthropic SSE server (end to end through gateway inference), and covers subscription logins, refresh and logout with fake OAuth providers, and native provider transports against recorded parity fixtures. The TS-era tests and PTC evaluation tools were removed after the cutover; they run only from a checkout of `2d480d3`, the last TS revision.
 
