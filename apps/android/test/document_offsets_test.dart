@@ -122,6 +122,15 @@ void main() {
       expect(specs.containsKey('other'), isTrue);
     },
   );
+  test(
+    'supported CSS paint transforms select their measured containing block',
+    () {
+      final specs = _specs('#parent{transform:translateX(1px)}');
+      expect(specs['parent']!.parentId, 'body');
+      expect(specs['child']!.parentId, 'parent');
+      expect(specs['child']!.origin, NativeDocumentOffsetOrigin.paddingEdge);
+    },
+  );
   for (final css in [
     'position:absolute',
     'position:fixed',
@@ -129,7 +138,6 @@ void main() {
     'position:relative;top:1em',
     'position:relative;left:calc(1px + 2%)',
     'position:relative;inset-inline-start:1px',
-    'transform:translateX(1px)',
     'translate:1px',
     'scale:2',
     'rotate:1deg',
@@ -164,6 +172,64 @@ void main() {
       );
       expect(_specs('#parent{position:relative}')['child']!.parentId, 'parent');
       expect(_specs('#parent{position:static}')['child']!.parentId, 'body');
+    },
+  );
+
+  testWidgets(
+    'unproved positioned ownership withholds offsets without hiding layout',
+    (t) async {
+      final controller = NativeDocumentLayoutController();
+      for (final origin in [
+        NativeDocumentOffsetOrigin.viewport,
+        NativeDocumentOffsetOrigin.initialContainingBlock,
+      ]) {
+        await t.pumpWidget(
+          _host(
+            controller,
+            NativeDocumentLayoutElement(
+              controller: controller,
+              revision: 1,
+              id: 'child',
+              offsetSpec: NativeDocumentOffsetSpec(
+                parentId: null,
+                origin: origin,
+                requiresPositionedSurface: true,
+              ),
+              child: const SizedBox(width: 20, height: 10),
+            ),
+            ids: const {'child'},
+          ),
+        );
+        final box = _box(_capture(controller), 'child');
+        expect(box['kind'], 'box');
+        expect(box['width'], 20);
+        expect(box, isNot(contains('offset')));
+      }
+      await t.pumpWidget(
+        _host(
+          controller,
+          NativeDocumentLayoutElement(
+            controller: controller,
+            revision: 1,
+            id: 'parent',
+            offsetSpec: const NativeDocumentOffsetSpec(
+              parentId: null,
+              origin: NativeDocumentOffsetOrigin.viewport,
+              requiresPositionedSurface: true,
+            ),
+            child: NativeDocumentLayoutElement(
+              controller: controller,
+              revision: 1,
+              id: 'child',
+              offsetSpec: _parentSpec,
+              child: const SizedBox(width: 20, height: 10),
+            ),
+          ),
+        ),
+      );
+      expect(_box(_capture(controller), 'child'), isNot(contains('offset')));
+      await t.pumpWidget(const SizedBox());
+      controller.dispose();
     },
   );
 

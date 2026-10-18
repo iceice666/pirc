@@ -289,6 +289,11 @@ class NativeDocumentTransform extends SingleChildRenderObjectWidget {
   ) => (renderObject as _RenderDocumentTransform).update(this);
 }
 
+/// CSSOM offset coordinates ignore this CSS paint transform, including singular
+/// matrices. Other framework transforms still require explicit measurement.
+bool nativeDocumentIsCssTransform(RenderObject object) =>
+    object is _RenderDocumentTransform;
+
 class _RenderDocumentTransform extends RenderTransform {
   _RenderDocumentTransform(this.config) : super(transform: Matrix4.identity());
   NativeDocumentTransform config;

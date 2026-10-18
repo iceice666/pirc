@@ -76,8 +76,22 @@ are at `git show 7677d24:plans/mobile-audit.md`.
   clipping, general stacking/compositing between intermediate ancestors,
   inline/table/SVG containing blocks, 3D/perspective, individual transform
   properties, textual inline fragments, transform-box variants and transformed
-  overflow extents remain outside the covered subset. Transformed CSSOM
-  offset-parent/position reads still lack native offset specifications.
+  overflow extents remain outside the covered subset. Table/zoom/multicolumn
+  and fragmented offset paths still lack the required native offset support.
+- Common 2D transformed paths now provide `offsetParent`, `offsetLeft` and
+  `offsetTop` for ordinary, absolute and fixed boxes. Measurement follows real
+  untransformed native layout translations, removes native scroll displacement
+  and ignores owned CSS paint transforms, including singular matrices. Viewport
+  fixed offsets use the actual pre-routing layout position. The static-body
+  rules distinguish ordinary flow from positioned content, including body
+  transforms and html borders/margins. Native widget and Android Sandbox gates
+  check 224 Chromium 153 phone/tablet, DPR 1/3 and theme profiles across three
+  states, including dynamic ownership changes, Canvas/buttons, negative-half
+  rounding and root/enclosing scrolling. All integer offsets, dimensions and
+  parent identities compare exactly. Positioned reads require a real native
+  positioned item; missing/ambiguous owners, unsupported framework transforms,
+  fallback-flow positioning and stale frames withhold offset metadata. This
+  does not provide general synchronous DOM write/read layout.
 - The transformed-containing-block corpus has 136 Chromium 153 phone/tablet,
   DPR 1/3 and theme profiles, each checked before scrolling, after root/enclosing
   panel scrolling and after transform mutation. It covers static/relative and

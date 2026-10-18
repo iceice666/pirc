@@ -95,6 +95,9 @@ if (JSON.parse(scrollFeedback.toString('utf8')).browserVersion !== '153.0.8010.1
 const scrollingElement = readFileSync(path.join(scriptDirectory, 'fixtures/document-scrolling-element-chromium153.json'));
 if (JSON.parse(scrollingElement.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected scrolling-element browser');
 
+const transformOffset = readFileSync(path.join(scriptDirectory, 'fixtures/document-transform-offset-chromium153.json'));
+if (JSON.parse(transformOffset.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected transform-offset browser');
+
 const transformCB = readFileSync(path.join(scriptDirectory, 'fixtures/document-transform-cb-chromium153.json'));
 if (JSON.parse(transformCB.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected transform-cb browser');
 
@@ -132,6 +135,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/transform-offset.json') {
+    response.writeHead(200, {'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8'});
+    response.end(transformOffset);
     return;
   }
   if (pathname === '/transform-cb.json') {

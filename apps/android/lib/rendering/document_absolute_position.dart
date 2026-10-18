@@ -396,6 +396,23 @@ class _RenderAbsoluteItem extends RenderProxyBox
   }
 }
 
+/// Actual un-routed position assigned by the native containing-block layout.
+({Offset offset, bool fixedToViewport, bool initialContainingBlock})?
+nativeDocumentPositionedLayout(RenderObject object) {
+  if (object is! _RenderAbsoluteItem || !object.attached || !object.hasSize) {
+    return null;
+  }
+  final data = object.parentData, parent = object.parent;
+  if (data is! _AbsoluteParentData || parent is! _RenderAbsoluteLayer) {
+    return null;
+  }
+  return (
+    offset: data.offset,
+    fixedToViewport: object.fixedToViewport,
+    initialContainingBlock: parent.initialContainingBlock != null,
+  );
+}
+
 class _AbsoluteParentData extends ContainerBoxParentData<RenderBox> {}
 
 class _RenderAbsoluteLayer extends RenderBox

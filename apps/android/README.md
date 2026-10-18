@@ -469,12 +469,32 @@ px for subpixel layout rounding. Opaque pixels compare exactly. Android's 0.5
 opacity composition differs from Chromium by at most one RGB level (1/255), a
 recorded minor difference; alpha remains exact. Widget pixels compare exactly.
 
+`offsetParent`, `offsetLeft` and `offsetTop` now cover the supported ordinary,
+absolute and fixed paths through common 2D transforms. Native offset measurement
+walks actual layout translations, ignores owned CSS paint transforms (including
+singular matrices) and removes actual scroll translations. It never derives
+layout coordinates by inverting painted rectangles. Viewport-fixed offsets use
+the native layout position before viewport routing; local fixed boxes keep their
+containing-block parent. Static-body coordinate rules distinguish ordinary flow
+from positioned elements, including transformed bodies and root borders.
+
+`test/document_transform_offset_oracle_test.dart` compares 224 independent
+Chromium 153 profiles across three states. Android
+`integration_test/document_transform_offset_test.dart` uses the same source
+through JavaScriptSandbox. Offsets, dimensions and parent identities compare
+exactly, with no coordinate tolerance. Recreate with
+`node apps/android/tool/parity/capture_document_transform_offset_chromium153.mjs`;
+the local server supplies `/transform-offset.json`. A positioned read requires
+its actual native positioned item; missing/ambiguous owners, unsupported
+framework transforms and stale frames retain explicit errors. Existing ordinary
+offset references and regression checks remain covered.
+
 These gates do not certify containing blocks that themselves own scrolling or
 clipping, general stacking/compositing between intermediate ancestors,
 perspective/3D, individual transform properties, textual inline fragments,
 inline/table/SVG containing blocks, transform-box variants or transformed
-overflow extents. CSSOM offset-parent/position reads along transformed paths and
-wider opacity replacement/inline coverage remain separate differences. Missing
+overflow extents. Table/zoom/fragmented offset paths and wider opacity
+replacement/inline coverage remain separate differences. Missing
 native boxes or unproved font bases withhold the affected computed values.
 General DOM writes still need a matching native frame. CSS defaults, timing/event
 variants, global getter errors and remaining DOM/layout APIs stay in the mobile

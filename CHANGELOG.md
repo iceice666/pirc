@@ -37,6 +37,8 @@ The first published release with the 0.9.0 changes below (0.9.0 was tagged but i
 
 ### Fixed
 
+- Android interactive pages report native offset parents and layout positions through common CSS transforms, absolute positioning and fixed positioning.
+
 - Android improves positioning and whole-element opacity inside transformed HTML containers.
 
 - Android interactive pages keep element rectangles current after scripted scrolling and support common native CSS 2D transforms with matching touch targets and computed-style reads.
