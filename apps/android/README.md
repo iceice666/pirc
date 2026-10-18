@@ -374,6 +374,22 @@ the Node contract verifies exact source identity, exclusions and coupled layers.
 fixture server and define as the root-anchor test, comparing all scroll/client
 metrics and rectangles through the shipped JS engine and native controls.
 
+`document_scroll_retention_test.dart` checks complete view/workspace remounts,
+document switches, independent root/nested offsets, real link activation and fresh
+history responses against eight Chromium 153 phone/tablet/DPR/theme profiles.
+Capture the common HTML/driver reference with
+`node apps/android/tool/parity/capture_document_scroll_retention_chromium153.mjs`.
+Root history positions restore per entry in auto mode; nested positions stay with
+the retained document. A fresh response starts nested positions at zero. The
+Android `integration_test/document_scroll_retention_test.dart` uses the loopback
+server/define above and real Step/Read buttons, requiring a new JS probe sequence
+after each remount so a cached report cannot count as acceptance. The original VM
+and offsets survive retained-view rebuilding; different documents stay isolated.
+The workspace saves the latest root position at unmount, preserving user reading
+past the original anchor; the native workspace gate also checks that a new
+fragment selected while unmounted still applies on reveal.
+Interrupted smooth scrolling and OS process-death restoration are separate gates.
+
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
 [the test browser guide](tool/parity/TEST_BROWSER.md).

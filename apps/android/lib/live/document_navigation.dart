@@ -622,6 +622,7 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
   @override
   void dispose() {
     final window = widget.windows.active;
+    window?.rememberCurrentDocumentState();
     if (!widget.managed &&
         !_returningToApp &&
         window?.canReturnToSource == true) {
@@ -1332,7 +1333,8 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
   bool _tickerVisible = true;
   final _layout = NativeDocumentLayoutController();
   final _scrollAnchors = NativeDocumentScrollAnchorData();
-  final _elementScroll = NativeDocumentElementScrollController();
+  NativeDocumentElementScrollController get _elementScroll =>
+      widget.document.elementScroll;
   Size _layoutViewport = Size.zero;
   late final _touchBoundary = NativeDocumentTouchBoundary(
     onExit: (id, relatedTarget, position) {
@@ -1592,7 +1594,9 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       _captureLayout,
       onAccepted: (packet) {
         final through = packet['nativeScrollEventThrough'];
-        if (through is int) _elementScroll.acknowledgeScrollEvents(through);
+        if (through is int) {
+          document.elementScroll.acknowledgeScrollEvents(through);
+        }
       },
     );
     scripts.configureStyles(
@@ -1775,7 +1779,9 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
     if (oldWidget.document != widget.document) {
       _clearTouchBoundary();
       _scrollAnchors.nodes = const {};
+      oldWidget.document.elementScroll.removeListener(_nativeLayoutChanged);
       _elementScroll.beginDocument(widget.document);
+      _elementScroll.addListener(_nativeLayoutChanged);
       oldWidget.document.scroll.removeListener(_nativeScrollChanged);
       widget.document.scroll.addListener(_nativeScrollChanged);
       _scripts?.bindLayout(this, null);
@@ -1797,7 +1803,6 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
     _layout.removeListener(_nativeLayoutChanged);
     _layout.dispose();
     _elementScroll.removeListener(_nativeLayoutChanged);
-    _elementScroll.dispose();
     _scripts?.setActivity(attached: false, visible: false);
     _scripts?.removeListener(_scriptChanged);
     _window?.removeListener(_syncScriptActivity);
@@ -1878,6 +1883,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
                   child: NativeDocumentPositioningViewport(
                     scrollChanges: document.scroll,
                     child: SingleChildScrollView(
+                      key: ObjectKey(document),
                       controller: document.scroll,
                       child: document.content.isHtml
                           ? _buildContent(

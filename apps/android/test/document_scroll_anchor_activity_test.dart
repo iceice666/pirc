@@ -54,4 +54,48 @@ void main() {
       },
     );
   }
+  for (final keep in [true, false]) {
+    testWidgets(
+      'document root remount respects keepScrollOffset=$keep and new extents',
+      (tester) async {
+        final scroll = NativeDocumentScrollController(
+          initialScrollOffset: 17,
+          keepScrollOffset: keep,
+        );
+        Widget page(double height) => MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              height: 200,
+              child: SingleChildScrollView(
+                controller: scroll,
+                child: SizedBox(height: height),
+              ),
+            ),
+          ),
+        );
+        try {
+          await tester.pumpWidget(page(1600));
+          await tester.pumpAndSettle();
+          scroll.jumpTo(360);
+          await tester.pumpAndSettle();
+          await tester.pumpWidget(const SizedBox());
+          await tester.pumpAndSettle();
+          await tester.pumpWidget(page(1600));
+          await tester.pumpAndSettle();
+          expect(scroll.offset, keep ? 360 : 17);
+          await tester.pumpWidget(const SizedBox());
+          await tester.pumpAndSettle();
+          await tester.pumpWidget(page(240));
+          await tester.pumpAndSettle();
+          expect(scroll.position.maxScrollExtent, 40);
+          expect(scroll.offset, keep ? 40 : 17);
+          expect(tester.takeException(), isNull);
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          scroll.dispose();
+        }
+      },
+    );
+  }
 }

@@ -37,6 +37,8 @@ The first published release with the 0.9.0 changes below (0.9.0 was tagged but i
 
 ### Fixed
 
+- Android preserves interactive document scroll positions when views are rebuilt and keeps positions isolated between pages.
+
 - Android full-page HTML improves layout, image/canvas sizing and computed-style reads, keeps text selection stable during image loading, notifies interactive content when native element sizes change, and supports native Canvas text measurement, intrinsic/pixel/percentage-sized chart initialization and container resizing, DOM mutation observation, Promise updates between animation callbacks, bar-chart touch tooltips, outside-tap dismissal, legend toggles, updates and resizing.
 - Android fixes native pie-chart initialization when Canvas path arguments are nonfinite.
 - Android Canvas frames repaint independently of surrounding document content.

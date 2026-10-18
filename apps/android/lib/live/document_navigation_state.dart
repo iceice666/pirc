@@ -13,6 +13,7 @@ import '../rendering/html_form_submission.dart';
 import '../rendering/html_file.dart';
 import '../rendering/native_html.dart';
 import '../rendering/document_scroll_anchor.dart';
+import '../rendering/document_element_scroll.dart';
 import 'gateway.dart';
 import 'document_scripts.dart';
 import 'app_document_route.dart';
@@ -209,6 +210,11 @@ class NativeFetchedDocument {
   final historyControls = NativeHtmlHistoryController();
   final viewport = NativeHtmlViewportController();
   final scroll = NativeDocumentScrollController();
+  // A view can unmount while the document/VM remains in history or another
+  // browsing context. Only retiring that document discards its element offsets.
+  late final elementScroll = NativeDocumentElementScrollController(
+    documentOwner: this,
+  );
   String get effectiveBase {
     if (resolvedBase != null) return resolvedBase!;
     final location = historyApiLocation ?? url;
@@ -226,6 +232,7 @@ class NativeFetchedDocument {
     scriptFileSelections.clear();
     historyControls.dispose();
     scroll.dispose();
+    elementScroll.dispose();
   }
 }
 
@@ -915,6 +922,12 @@ class NativeDocumentWindow extends ChangeNotifier {
               windows.windows.any((w) => w.id == returnWindowId)) ||
       windows.windows.any((w) => w.name.isNotEmpty && w.returnWindowId == id);
 
+  /// A workspace can unmount while this browsing context remains alive.
+  /// Save its current entry before a recreated workspace reveals it again.
+  void rememberCurrentDocumentState() {
+    if (!disposed) _rememberScroll();
+  }
+
   void _rememberScroll({bool leavingDocument = false}) {
     final item = current;
     if (item == null || historyPostResubmissionRequired) return;
@@ -937,7 +950,7 @@ class NativeDocumentWindow extends ChangeNotifier {
       }
     }
     if (document == null) return;
-    if (document.scroll.hasClients) item.scrollOffset = document.scroll.offset;
+    item.scrollOffset = document.scroll.lastKnownOffset ?? item.scrollOffset;
     item.formControlSnapshot =
         document.historyControls.capture() ?? item.formControlSnapshot;
   }

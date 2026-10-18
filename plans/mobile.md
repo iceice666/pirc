@@ -10,9 +10,8 @@ are available from Git through Historical records, not repeated here.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** preserve nested scroll offsets across
-      native view/history remounts (the current cache is view-owned); extend Canvas
-      font/ink coverage, synchronous DOM write/read layout, inline-fragment
+- [ ] **Dynamic content compatibility:** extend Canvas font/ink coverage,
+      synchronous DOM write/read layout, inline-fragment
       measurements and common-library coverage. Broader image/framework flows
       remain unverified; preserve explicit unsupported errors.
 - [ ] **Physical phone/tablet acceptance:** use a real account for pairing,
@@ -73,8 +72,9 @@ are at `git show 7677d24:plans/mobile-audit.md`.
 - Root horizontal scrolling, scrollend/Promise semantics, mixed window/element
   event order, RTL, scroll snap/anchoring and nested touch scroll chaining need
   wider coverage. Common vertical root and nested-container scroll anchoring are
-  covered; full view/history remount restoration remains open. Smooth-scroll
-  timing follows Flutter.
+  covered. Retained documents keep root/nested offsets through full view
+  remounts and document switches; fresh responses start new nested positions.
+  Smooth-scroll timing follows Flutter.
 
 ### Computed styles and scripts
 
@@ -130,6 +130,21 @@ identity. Simultaneous root/outer/inner compensation, node replacement, hide/sho
 style suppression and end clamping are covered. Text/focus/find priority,
 RTL/horizontal writing, scroll snap/padding, complex transformed/out-of-flow
 geometry, image-load identity and simultaneous smooth scrolling remain open.
+
+Retained-document scrolling is owned by the document/VM lifecycle, including
+root offsets across a new PageStorage bucket. Switching the document in one view
+creates a separate native scroll position. The Chromium 153 retention corpus
+covers eight phone/tablet, DPR and theme profiles: same-document history restores
+the root per entry in auto mode, keeps current nested offsets, and leaves the root
+unchanged in manual mode. A reconstructed response starts nested offsets at zero.
+Native workspace tests cover traversal, remounts and named-window refetch. A
+workspace captures the current entry's latest root offset before unmounting,
+including after scroll positions detach, so it cannot replay an obsolete fragment
+or history snapshot. New fragment navigation while unmounted still takes effect.
+The Android gate checks fresh JS reads and native controls after remount/switch,
+plus the full workspace's retained-entry and offscreen-fragment paths.
+Smooth-scroll interruption during remount and OS process-death restoration remain
+outside this gate; physical-device/background acceptance remains open.
 
 The latest dedicated local Android renderer gate covers 168 nested-anchor, 144
 root-anchor and 120 fixed-position profiles against frozen Chromium 153 results.
