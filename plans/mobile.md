@@ -267,8 +267,42 @@ default and can differ from the browser call-time choice.
 A 224-profile Chromium 153 corpus checks computed values and immediate/settled
 positions exactly, with native controller/cascade and Android Sandbox gates.
 Valid/invalid CSS variables, inherited/unset values, setter/alias calls and
-frame-matched class changes are included. This does not certify fragment
-navigation, `scrollIntoView`, exact timing or reads immediately after dirty writes.
+frame-matched class changes are included. This does not certify fragment navigation, exact timing or reads immediately
+after dirty writes. `scrollIntoView` has the separate bounded gate below.
+
+**Native element reveal:** `Element.scrollIntoView` uses actual native scrollport
+sizes, origins, invertible affine axes and bounded ancestry. It supports the
+common standards-mode horizontal LTR block/inline alignments, legacy boolean arguments,
+`container:nearest`, nested auto/hidden ports (including zero ranges), current
+native scroll ranges, CSS scroll margin/padding, and clipped propagation to
+outer ports. Canvas, buttons and text inputs retain real measured targets;
+raw document text/select/date/file controls are measured at their replacement
+border box rather than a discarded parser placeholder. Unproved geometry is
+rejected before queuing any part of a reveal batch.
+
+The 216-profile Chromium 153 corpus covers phone/tablet, DPR 1/3 and both themes.
+Native geometry producers are checked separately from the shipped JS planner,
+and Android executes the same source in the real Sandbox. Instant positions,
+boolean/dictionary conversion, getter order, rejected enum errors, descriptors,
+Promise result dictionaries and nested destinations are checked. Smooth reveals
+wait for native action acknowledgement and actual native scroll activity; the
+host refreshes completion activity even when final pixels have stopped changing;
+replacement and stopped-away-from-target completion return `interrupted:true`.
+A newly appended element can be revealed after the next native layout frame.
+This does not make mutation-then-read layout synchronous.
+
+Explicit reveal differences: Flutter retains its native animation curve/duration
+and resolves a smooth reveal after all owned native targets stop. The frozen
+browser can resolve while its root is still moving. A redundant instant root
+request cancels a preceding animation in Flutter; this Chromium build can drift
+beyond that zero-distance request. Those timing differences remain listed and
+are not claimed as matching intermediate pixels. Wider native gesture
+interruption acceptance, scrollend ordering, RTL/vertical writing, horizontal
+root scrolling, logical scroll inset properties, quirks/iframe/XML documents,
+sticky/fragmented/SVG geometry, scroll snap, fractional CSS/limit quantization and unresolved CSS inset math/complex variable shorthands remain
+outside this gate. Invalid inset declarations also need wider cascade coverage.
+Other scroll methods' Promise return semantics and fragment navigation remain
+separate work.
 
 **Remaining synchronous layout differences:** general DOM writes followed by
 geometry reads still need matching native measurement. Exact animation timing,

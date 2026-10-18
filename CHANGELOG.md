@@ -37,6 +37,8 @@ The first published release with the 0.9.0 changes below (0.9.0 was tagged but i
 
 ### Fixed
 
+- Android interactive pages can scroll native elements into view through nested panels, including CSS scroll margins/padding and measured form controls.
+
 - Android scrolling APIs honor CSS smooth-scrolling defaults and keep immediate position reads consistent.
 
 - Android keeps positioned interactive content inside its native scrolling and clipping container.

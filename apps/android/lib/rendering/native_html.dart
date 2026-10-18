@@ -3064,7 +3064,11 @@ class _NativeHtmlFactory extends WidgetFactory {
     );
   }
 
-  Widget _measureLayoutElement(dom.Element element, Widget child) {
+  Widget _measureLayoutElement(
+    dom.Element element,
+    Widget child, {
+    bool controlSurface = false,
+  }) {
     final controller = layoutController();
     final id = element.attributes['data-pirc-script-id'];
     if (controller == null || id == null) return child;
@@ -3073,7 +3077,7 @@ class _NativeHtmlFactory extends WidgetFactory {
       revision: layoutRevision(),
       id: id,
       offsetSpec: layoutOffsetSpecs()[id],
-      boxSurface: _geometryOwnSizing[element] == true
+      boxSurface: !controlSurface && _geometryOwnSizing[element] == true
           ? (box) => nativeDocumentBoxSurface(box, owner: element)
           : null,
       child: child,
@@ -4782,6 +4786,15 @@ class _NativeHtmlFactory extends WidgetFactory {
         !tree.element.attributes.containsKey('data-pirc-script-id')) {
       return;
     }
+    // These controls replace the parsed inline/block placeholder. Measure
+    // their actual native border box in that replacement builder instead.
+    if (!markdownStyles &&
+        (textFields.resolveControl(tree.element) != null ||
+            selects.resolveControl(tree.element) != null ||
+            dates.resolveControl(tree.element) != null ||
+            files.resolveControl(tree.element) != null)) {
+      return;
+    }
     tree.register(
       BuildOp(
         debugLabel: 'native-document-layout-measurement',
@@ -5173,9 +5186,14 @@ class _NativeHtmlFactory extends WidgetFactory {
                       boxStyle: boxStyle,
                     );
               final anchor = forms.anchorFor(nativeControlTree.element);
+              final measuredControl = _measureLayoutElement(
+                nativeControlTree.element,
+                control,
+                controlSurface: true,
+              );
               final anchoredControl = anchor == null
-                  ? control
-                  : KeyedSubtree(key: anchor, child: control);
+                  ? measuredControl
+                  : KeyedSubtree(key: anchor, child: measuredControl);
               return Align(
                 alignment: AlignmentDirectional.centerStart,
                 widthFactor: 1,
