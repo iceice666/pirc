@@ -137,7 +137,8 @@ The touch oracle is reproducible with
 `node apps/android/tool/parity/capture_document_chart_interactions_chromium153.mjs`.
 The native acceptance includes legend state and bar fill disappearance/restoration;
 label strikethrough uses real glyph ink bounds. Full TouchEvent/multitouch compatibility,
-animation, custom plugins and untested chart configurations remain open.
+custom plugins and untested chart configurations remain open; default animation
+has the separate gate below.
 Neither the test library nor its fixture is included in the APK.
 
 With the same fixture server and define, run
@@ -150,6 +151,26 @@ doughnut holes and line connections. Recreate the frozen reference with
 `node apps/android/tool/parity/capture_document_chart_types_chromium153.mjs`.
 All browser resources are fulfilled locally by request interception; external
 requests are blocked, and the dedicated test browser remains mandatory.
+
+With the same server and define, run the default-animation gate:
+
+```sh
+flutter test integration_test/document_chart_animation_test.dart -d emulator-5554 \
+  --dart-define=PIRC_CHART_FIXTURE_ORIGIN=http://127.0.0.1:19261
+```
+
+Its 64 profiles retain the original Chart.js 1,000 ms duration and `easeOutQuart`
+easing and use ordinary `chart.update()`. The eight operations match the stock
+gate. Progress/complete callbacks are monitored without replacing the clock or
+shortening transitions. The test captures the actual Canvas widget layer during
+active frames, requires changing paint and compares settled geometry, selected
+colors, hits and completion counts against the browser. Canvas has an independent
+repaint boundary; its unit test checks that changed pixels do not repaint a static
+parent. Recreate the frozen reference from the repository root with
+`node apps/android/tool/parity/capture_document_chart_animation_chromium153.mjs`.
+Observed callback cadence is recorded rather than required to equal Chromium's.
+Animation interruption/retargeting, background/visibility lifecycle and physical
+device smoothness still need separate acceptance.
 
 The stock font aliases keep the prior 2 px pixel-geometry bound, with raw
 differences recorded; angles use a separate 1e-12 bound. A neutral radar tick

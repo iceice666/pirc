@@ -105,8 +105,10 @@ outside the agreed scope.
   now initialize and resize without diagnostics, including intrinsic dimensions,
   authored pixel/percentage sizes, initial inline display, omitted backing
   attributes and container-only width changes. CSS attribute dependencies,
-  arbitrary synchronous DOM write/read flows, additional chart configurations
-  and animation remain unsupported or unverified.
+  arbitrary synchronous DOM write/read flows and additional chart configurations
+  remain unsupported or unverified. The eight stock types and their default
+  animation have separate accepted gates below; animation interruption and
+  background/visibility lifecycle remain unverified.
   Stock bar touch tooltips, blank/outside dismissal and rapid outside taps are
   covered, along with legend hide/show, including actual disappearance and
   restoration of the painted bars. The common label strikethrough now uses real
@@ -1111,7 +1113,60 @@ analysis and formatting are clean. Actual maximum differences by chart type:
 
 All recorded angle differences are zero. Other selected color samples are
 exact. This closes the stock-type initialization/interaction gap for these
-configurations; default animation, custom configurations/plugins, arbitrary
-framework layout and physical-device/real-account/remote-push acceptance remain
-open. Compact evidence stays ignored; disposable builds/emulator disk images are
+configurations. The next gate covers default animation; custom
+configurations/plugins, arbitrary framework layout and
+physical-device/real-account/remote-push acceptance remain open. Compact evidence stays ignored; disposable builds/emulator disk images are
 removed while preserving the published APK.
+
+## Native default chart animation follow-up
+
+The default-animation gate uses the original Chart.js 4.5.1 duration/easing and
+ordinary `chart.update()`. Monitoring callbacks record progress/completion but
+do not replace the clock, shorten animations or set `animation:false`. Its
+64 profiles retain all eight chart types, phone/tablet, DPR 1/3 and light/dark,
+with initial/data updates, point hits, tooltips, outside dismissal, legend
+hide/show and resizing. Final values, poses, Canvas dimensions and selected
+colors are compared to the pinned browser fixture. Completion callback counts
+must match the browser.
+
+Canvas now owns a repaint boundary. Changed snapshots repaint the Canvas layer
+without repainting a static parent. The shared native chart paint check now
+captures that actual widget layer at backing density. Default-animation tests
+also capture active intermediate layers and require a different painted result
+before completion; this checks visible updates alongside progress callbacks.
+Sampling starts at the first available active frame because a hiding line can
+leave the viewport early in its 1,000 ms numeric transition.
+
+A first data point can already equal the scale's reset baseline in a line,
+scatter or radar chart. The gate follows that browser observation while still
+requiring the full native layer to change. Initial/data progress must be
+monotone, have multiple callbacks, finish at the reported last step and complete
+within the integration timing budget. Stock fonts retain the existing named
+pixel-geometry/color differences. Frame counts and elapsed times are recorded
+under the harness rather than claimed as identical browser/App cadence.
+
+The driver accumulates progress since the latest Canvas pointer-down or explicit
+data/resize operation. An outside-dismissal summary can therefore include the
+previous interaction plus the new fade; its overall step sequence is not a
+single monotone run. Initial/data runs have fresh counters. Volatile readiness
+serials and frame counts are not compared as UI state, but user click callback
+contents and animation completion counts remain required matches.
+
+Animation interruption/retargeting, background/visibility lifecycle and physical
+device smoothness remain separate acceptance work, alongside custom chart
+configurations/plugins, other libraries and the broader native layout gaps.
+
+Verification: all 64 native profiles and 512 operations pass with actual widget
+layer capture; 652 JavaScript checks and 66 Flutter repaint/sizing/layout tests
+pass, and static analysis is clean. All final angle differences are zero; the
+largest final pixel-geometry difference is 1.360138 CSS px from stock font aliases,
+within the previously recorded bound. Every completion count matches Chromium.
+
+Under this instrumented integration harness, initial/data runs have 6–7 native
+progress callbacks and finish in 1,216–1,459 ms; the frozen browser has about
+60–63 callbacks. Native sampling pumps in 50 ms increments and captures actual
+layers, so these counts do not establish normal device FPS. This remains a
+performance acceptance gap, not a claim of matching smoothness. Initial/data
+runs and all six other operation stages retain their reported callback/elapsed
+ranges in ignored compact evidence. Disposable builds and emulator disk images
+are removed after the run; the published APK is retained.

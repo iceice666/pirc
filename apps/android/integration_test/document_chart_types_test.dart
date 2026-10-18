@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:pirc_mobile/rendering/document_canvas.dart';
 import 'package:flutter/foundation.dart' show debugPrintSynchronously;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:html/parser.dart' as html;
 import 'package:integration_test/integration_test.dart';
@@ -407,17 +408,10 @@ Future<List<Json>> verifyPaint(
       );
     }
   }
-  final recorder = ui.PictureRecorder();
-  NativeDocumentCanvasPainter(
-    snapshot,
-  ).paint(Canvas(recorder), Size(snapshot.width, snapshot.height));
-  final picture = recorder.endRecording();
-  final image = await tester.runAsync(
-    () => picture.toImage(snapshot.width.toInt(), snapshot.height.toInt()),
-  );
+  final image = await captureCanvasLayer(tester);
   try {
     final data = (await tester.runAsync(
-      () => image!.toByteData(format: ui.ImageByteFormat.rawStraightRgba),
+      () => image.toByteData(format: ui.ImageByteFormat.rawStraightRgba),
     ))!;
     final bytes = data.buffer.asUint8List();
     final results = <Json>[];
@@ -537,7 +531,37 @@ Future<List<Json>> verifyPaint(
     }
     return results;
   } finally {
-    image?.dispose();
-    picture.dispose();
+    image.dispose();
   }
+}
+
+/// Captures the widget's already painted layer at its real backing density.
+Future<ui.Image> captureCanvasLayer(WidgetTester tester) async {
+  await tester.pump();
+  final canvas = find.byType(NativeDocumentCanvas);
+  final finder = find.descendant(
+    of: canvas,
+    matching: find.byType(RepaintBoundary),
+  );
+  expect(finder, findsOneWidget);
+  var boundary = tester.renderObject<RenderRepaintBoundary>(finder);
+  for (var i = 0; i < 6 && boundary.debugNeedsPaint; i++) {
+    await tester.pump();
+    boundary = tester.renderObject<RenderRepaintBoundary>(finder);
+  }
+  expect(
+    boundary.debugNeedsPaint,
+    isFalse,
+    reason: 'Canvas layer must be painted before capture',
+  );
+  final snapshot = tester.widget<NativeDocumentCanvas>(canvas).snapshot;
+  final ratio = snapshot.width / boundary.size.width;
+  expect(ratio, greaterThan(0));
+  final image = await tester.runAsync(
+    () => boundary.toImage(pixelRatio: ratio),
+  );
+  final result = image!;
+  expect(result.width, snapshot.width);
+  expect(result.height, snapshot.height);
+  return result;
 }

@@ -59,6 +59,12 @@ if (chartTypesFixture.chartJs?.sha256 !== actualSha256 || typeof chartTypesFixtu
   throw new Error('Chart types fixture does not match the pinned library');
 }
 
+const chartAnimation = readFileSync(path.join(scriptDirectory, 'fixtures/document-chart-animation-chromium153.json'));
+const chartAnimationFixture = JSON.parse(chartAnimation.toString('utf8'));
+if (chartAnimationFixture.chartJs?.sha256 !== actualSha256 || typeof chartAnimationFixture.driverSource !== 'string') {
+  throw new Error('Chart animation fixture does not match the pinned library');
+}
+
 const requestedPort = configuredPort();
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -87,6 +93,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/chart-animation.json') {
+    response.writeHead(200, {'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8'});
+    response.end(chartAnimation);
     return;
   }
   if (pathname === '/chart-types.json') {

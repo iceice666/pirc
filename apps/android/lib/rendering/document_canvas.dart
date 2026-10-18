@@ -329,9 +329,12 @@ class NativeDocumentCanvas extends StatelessWidget {
       height: height,
       cssWidthSpecified: cssWidthSpecified,
       cssHeightSpecified: cssHeightSpecified,
-      child: CustomPaint(
-        size: Size(snapshot.width, snapshot.height),
-        painter: NativeDocumentCanvasPainter(snapshot, images: images),
+      // Canvas frames repaint independently of surrounding HTML/text.
+      child: RepaintBoundary(
+        child: CustomPaint(
+          size: Size(snapshot.width, snapshot.height),
+          painter: NativeDocumentCanvasPainter(snapshot, images: images),
+        ),
       ),
     );
   }

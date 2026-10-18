@@ -2,9 +2,74 @@ import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/rendering.dart';
 import 'package:pirc_mobile/rendering/document_canvas.dart';
 
 void main() {
+  testWidgets('Canvas updates pixels without repainting its static parent', (
+    tester,
+  ) async {
+    final x = ValueNotifier<double>(2);
+    addTearDown(x.dispose);
+    var parentPaints = 0;
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: CustomPaint(
+            painter: _CanvasParentPaintCounter(() => parentPaints++),
+            child: ValueListenableBuilder<double>(
+              valueListenable: x,
+              builder: (_, value, _) => NativeDocumentCanvas(
+                width: 20,
+                height: 12,
+                snapshot: _snapshot(20, 12, [
+                  _command('fillRect', [
+                    value,
+                    2,
+                    4,
+                    6,
+                  ], state: _state(fillStyle: 'red')),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final finder = find.descendant(
+      of: find.byType(NativeDocumentCanvas),
+      matching: find.byType(RepaintBoundary),
+    );
+    final boundary = tester.renderObject<RenderRepaintBoundary>(finder);
+    Future<List<int>> pixelAt(int position) async {
+      final image = (await tester.runAsync(() => boundary.toImage()))!;
+      try {
+        final bytes = (await tester.runAsync(
+          () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+        ))!;
+        return bytes.buffer.asUint8List().sublist(
+          (4 * 20 + position) * 4,
+          (4 * 20 + position) * 4 + 4,
+        );
+      } finally {
+        image.dispose();
+      }
+    }
+
+    expect(await pixelAt(3), [255, 0, 0, 255]);
+    expect(await pixelAt(11), [0, 0, 0, 0]);
+    final initialParentPaints = parentPaints;
+    expect(initialParentPaints, greaterThan(0));
+    x.value = 10;
+    await tester.pump();
+    expect(tester.renderObject<RenderRepaintBoundary>(finder), same(boundary));
+    expect(await pixelAt(3), [0, 0, 0, 0]);
+    expect(await pixelAt(11), [255, 0, 0, 255]);
+    expect(parentPaints, initialParentPaints);
+  });
   testWidgets('negative rect dimensions and clearRect keep Canvas geometry', (
     tester,
   ) async {
@@ -603,3 +668,12 @@ Map<String, Object?> _segment(
   List<Object?> args, [
   List<num> transform = const [1, 0, 0, 1, 0, 0],
 ]) => <String, Object?>{'op': op, 'args': args, 'transform': transform};
+
+class _CanvasParentPaintCounter extends CustomPainter {
+  _CanvasParentPaintCounter(this.onPaint);
+  final VoidCallback onPaint;
+  @override
+  void paint(Canvas canvas, Size size) => onPaint();
+  @override
+  bool shouldRepaint(covariant _CanvasParentPaintCounter oldDelegate) => false;
+}
