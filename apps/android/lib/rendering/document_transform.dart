@@ -110,7 +110,17 @@ class NativeDocumentTransformSpec {
     if (operations.isEmpty || text.substring(end).trim().isNotEmpty) {
       return null;
     }
-    final tokens = (origin ?? '50% 50%').trim().toLowerCase().split(
+    final point = _parseOrigin(origin);
+    if (point == null) return null;
+    return NativeDocumentTransformSpec._(
+      List.unmodifiable(operations),
+      point.$1,
+      point.$2,
+    );
+  }
+
+  static (_TransformLength, _TransformLength)? _parseOrigin(String? text) {
+    final tokens = (text ?? '50% 50%').trim().toLowerCase().split(
       RegExp(r'\s+'),
     );
     if (tokens.isEmpty || tokens.length > 2) return null;
@@ -131,7 +141,60 @@ class NativeDocumentTransformSpec {
     };
     final ox = point(x, true), oy = point(y, false);
     if (ox == null || oy == null) return null;
-    return NativeDocumentTransformSpec._(List.unmodifiable(operations), ox, oy);
+    return (ox, oy);
+  }
+
+  // CSSOM serializes matrix components with six significant digits. The
+  // origin is reported separately and is not folded into the matrix value.
+  static String _cssNumber(double value) {
+    if (value == 0) return '0';
+    var parts = value.toStringAsPrecision(6).toLowerCase().split('e');
+    var mantissa = parts[0];
+    if (mantissa.contains('.')) {
+      mantissa = mantissa
+          .replaceFirst(RegExp(r'0+$'), '')
+          .replaceFirst(RegExp(r'\.$'), '');
+    }
+    if (parts.length == 1) return mantissa;
+    final exponent = int.parse(parts[1]);
+    return '${mantissa}e${exponent >= 0 ? '+' : ''}$exponent';
+  }
+
+  static String? computedOrigin(
+    String? text, {
+    Size? size,
+    double fontSize = 16,
+    Size viewport = Size.zero,
+  }) {
+    final point = _parseOrigin(text);
+    if (point == null) return null;
+    String? component(_TransformLength length, double? basis) {
+      if (length.unit == '%' && basis == null) {
+        return '${_cssNumber(length.value)}%';
+      }
+      final value = length.resolve(basis ?? 0, fontSize, viewport);
+      return value.isFinite ? '${_cssNumber(value)}px' : null;
+    }
+
+    final x = component(point.$1, size?.width),
+        y = component(point.$2, size?.height);
+    return x == null || y == null ? null : '$x $y';
+  }
+
+  String? computedMatrix(
+    Size size, {
+    double fontSize = 16,
+    Size viewport = Size.zero,
+  }) {
+    final m = resolve(
+      size,
+      fontSize: fontSize,
+      viewport: viewport,
+      includeOrigin: false,
+    ).storage;
+    final components = [m[0], m[1], m[4], m[5], m[12], m[13]];
+    if (components.any((value) => !value.isFinite)) return null;
+    return 'matrix(${components.map(_cssNumber).join(', ')})';
   }
 
   Matrix4 resolve(
@@ -139,13 +202,15 @@ class NativeDocumentTransformSpec {
     double fontSize = 16,
     Size viewport = Size.zero,
     Offset borderOffset = Offset.zero,
+    bool includeOrigin = true,
   }) {
-    final origin =
-        borderOffset +
-        Offset(
-          _originX.resolve(size.width, fontSize, viewport),
-          _originY.resolve(size.height, fontSize, viewport),
-        );
+    final origin = !includeOrigin
+        ? Offset.zero
+        : borderOffset +
+              Offset(
+                _originX.resolve(size.width, fontSize, viewport),
+                _originY.resolve(size.height, fontSize, viewport),
+              );
     final result = Matrix4.translationValues(origin.dx, origin.dy, 0);
     for (final op in _operations) {
       final n = op.numbers, l = op.lengths;

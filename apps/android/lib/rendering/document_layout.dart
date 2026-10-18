@@ -7,6 +7,7 @@ import 'html_document_box.dart';
 import 'document_element_scroll.dart';
 import 'document_scroll_anchor_state.dart';
 import 'document_absolute_position.dart';
+import 'document_transform.dart';
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
@@ -1214,6 +1215,33 @@ Map<String, String> _resolvedComputedStyles(
   }
 
   final display = values['display'];
+  // Use the owned untransformed border box, never the axis-aligned paint bounds.
+  // No-box nodes retain percentage origins and have no used transform matrix.
+  if (noBox || (surface != null && (display != 'inline' || spec.isReplaced))) {
+    final size = noBox ? null : surface?.size;
+    final origin = spec.transformOrigin == null
+        ? null
+        : NativeDocumentTransformSpec.computedOrigin(
+            spec.transformOrigin,
+            size: size,
+            fontSize: spec.fontSize,
+            viewport: viewport,
+          );
+    if (origin != null) values['transform-origin'] = origin;
+    final raw = spec.transform;
+    String? transform;
+    if (raw != null) {
+      if (noBox || raw == 'none') {
+        transform = 'none';
+      } else if (size != null) {
+        transform = NativeDocumentTransformSpec.parse(
+          raw,
+          origin: spec.transformOrigin,
+        )?.computedMatrix(size, fontSize: spec.fontSize, viewport: viewport);
+      }
+    }
+    if (transform != null) values['transform'] = transform;
+  }
   final usesComputedDimensions =
       noBox ||
       (display == 'inline' && !spec.isReplaced) ||
