@@ -489,11 +489,29 @@ its actual native positioned item; missing/ambiguous owners, unsupported
 framework transforms and stale frames retain explicit errors. Existing ordinary
 offset references and regression checks remain covered.
 
-These gates do not certify containing blocks that themselves own scrolling or
-clipping, general stacking/compositing between intermediate ancestors,
-perspective/3D, individual transform properties, textual inline fragments,
-inline/table/SVG containing blocks, transform-box variants or transformed
-overflow extents. Table/zoom/fragmented offset paths and wider opacity
+Positioned and transformed block containing blocks can now own their native
+scroll/clip surface. Their absolute and local-fixed entries live inside that
+surface, so paint and hit testing share its scroll displacement and clip. The
+actual constrained padding box remains the percentage/right/bottom basis even
+when flow content is taller; borders stay stationary. `overflow:clip` excludes
+trailing scroll-container padding from its reported overflow dimensions.
+
+The independent `document-transform-scroll-chromium153.json` corpus adds 128
+phone/tablet, DPR 1/3 and theme profiles. Widget and Android Sandbox gates compare
+three states for `auto`/`scroll`/`hidden`/`clip`, absolute/local fixed children,
+percentage sizes, right/bottom placement, positioned overflow, auto heights,
+content/border boxes and live size/overflow/transform changes. Scroll/client
+sizes, offsets and parents compare exactly; rectangles allow 1/32 CSS px for
+browser subpixel rounding. Before/after pixels compare exactly, and actual
+native taps must respect clipping. Recreate with
+`node apps/android/tool/parity/capture_document_transform_scroll_chromium153.mjs`.
+Use `/transform-scroll.json` from the local fixture server and
+`integration_test/document_transform_scroll_test.dart` for Android acceptance.
+
+These gates do not certify general stacking/compositing between intermediate
+ancestors, perspective/3D, individual transform properties, textual inline fragments,
+inline/table/SVG containing blocks, transform-box variants or general transformed
+overflow propagation. Table/zoom/fragmented offset paths and wider opacity
 replacement/inline coverage remain separate differences. Missing
 native boxes or unproved font bases withhold the affected computed values.
 General DOM writes still need a matching native frame. CSS defaults, timing/event

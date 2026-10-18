@@ -985,7 +985,9 @@ class _NativeDocumentElementScrollViewport
 }
 
 class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox
-    implements NativeDocumentLayoutMetricsCommitParticipant {
+    implements
+        NativeDocumentLayoutMetricsCommitParticipant,
+        NativeDocumentPositioningScrollport {
   _RenderNativeDocumentElementScrollViewportRender({
     required this._attachment,
     required this._revision,
@@ -1079,6 +1081,9 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox
       maxHeight: _scrollsY ? double.infinity : constraints.maxHeight,
     );
   }
+
+  @override
+  Size positioningPaddingSize(Size flowSize) => constraints.constrain(flowSize);
 
   @override
   void performLayout() {
@@ -1245,10 +1250,14 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox
             object.getTransformTo(this),
             Offset.zero & object.size,
           ).shift(unscroll);
-          final paddedRight = bounds.right > ownRect.right
+          final paddedRight =
+              _overflowX != NativeDocumentOverflow.clip &&
+                  bounds.right > ownRect.right
               ? bounds.right + padding.right
               : bounds.right;
-          final paddedBottom = bounds.bottom > ownRect.bottom
+          final paddedBottom =
+              _overflowY != NativeDocumentOverflow.clip &&
+                  bounds.bottom > ownRect.bottom
               ? bounds.bottom + padding.bottom
               : bounds.bottom;
           bounds = Rect.fromLTRB(

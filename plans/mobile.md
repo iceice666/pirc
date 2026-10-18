@@ -72,12 +72,23 @@ are at `git show 7677d24:plans/mobile-audit.md`.
   height for percentage descendants.
 - Common 2D `transform` functions and ordinary `transform-origin` paint and
   hit-test natively around the laid-out border box, including percentage
-  translation and composed matrices. Containing blocks that own scrolling or
-  clipping, general stacking/compositing between intermediate ancestors,
+  translation and composed matrices. General stacking/compositing between
+  intermediate ancestors,
   inline/table/SVG containing blocks, 3D/perspective, individual transform
-  properties, textual inline fragments, transform-box variants and transformed
-  overflow extents remain outside the covered subset. Table/zoom/multicolumn
+  properties, textual inline fragments, transform-box variants and general
+  transformed overflow propagation remain outside the covered subset. Table/zoom/multicolumn
   and fragmented offset paths still lack the required native offset support.
+- Common block containing blocks can now own `auto`/`scroll`/`hidden`/`clip`
+  overflow with absolute and local-fixed children. Positioned entries live
+  inside the actual native scrollport; its constrained padding box supplies
+  percentage and right/bottom bases while content can extend beyond it. Borders
+  remain stationary; native paint and clicks share the scroll/clip path. A
+  separate 128-profile Chromium 153 corpus checks phone/tablet, DPR 1/3 and both
+  themes across three states, including reflow, overflow changes and transforms.
+  Widget and Android Sandbox gates check exact scroll/client sizes, offsets and
+  parent ids, rectangles within 1/32 CSS px, exact before/after pixels and real
+  clipped/visible taps. Mixed-axis normalization, scrollbars, rounded clips and
+  general transformed overflow propagation still need wider coverage.
 - Common 2D transformed paths now provide `offsetParent`, `offsetLeft` and
   `offsetTop` for ordinary, absolute and fixed boxes. Measurement follows real
   untransformed native layout translations, removes native scroll displacement
