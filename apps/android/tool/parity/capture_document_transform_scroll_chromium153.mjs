@@ -5,6 +5,7 @@ import {
   transformScrollModes,
   transformScrollHTML,
   buildTransformScrollDriver,
+  buildTransformScrollClickObserver,
 } from './document_transform_scroll_fixture.mjs';
 const { chromium } = createRequire(import.meta.url)('playwright-core');
 const browser = await chromium.launch({
@@ -59,19 +60,32 @@ try {
           page.on('pageerror', (e) => errors.push(e.message));
           for (const mode of transformScrollModes) {
             const html = transformScrollHTML(mode),
-              driverSource = buildTransformScrollDriver();
+              driverSource = buildTransformScrollDriver(),
+              clickObserverSource = buildTransformScrollClickObserver();
             await page.setContent(
-              html.replace('</body>', `<script>${driverSource}</script></body>`),
+              html.replace(
+                '</body>',
+                `<script>${driverSource}${clickObserverSource}</script></body>`,
+              ),
             );
             await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
             const beforePixel = await sample(page, dpr);
 
+            const clicks = {};
+            await page.mouse.click(beforePixel.x, beforePixel.y);
+            clicks.before = await page
+              .locator('#probe')
+              .evaluate((e) => Number(e.getAttribute('data-clicked') || 0));
             await page.locator('#run').click();
             await page.waitForFunction(() =>
               document.getElementById('probe').textContent.startsWith('{'),
             );
             const result = JSON.parse(await page.locator('#probe').textContent()),
               changedPixel = await sample(page, dpr);
+            await page.mouse.click(changedPixel.x, changedPixel.y);
+            clicks.changed = await page
+              .locator('#probe')
+              .evaluate((e) => Number(e.getAttribute('data-clicked') || 0));
             if (errors.length || network.length)
               throw Error(JSON.stringify({ errors, network, result }));
             cases.push({
@@ -81,6 +95,8 @@ try {
               theme,
               html,
               driverSource,
+              clickObserverSource,
+              clicks,
               tap: { x: beforePixel.x, y: beforePixel.y },
               result,
               pixels: { before: beforePixel, changed: changedPixel },

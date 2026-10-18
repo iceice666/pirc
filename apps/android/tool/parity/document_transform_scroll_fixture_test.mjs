@@ -5,26 +5,32 @@ import {
   transformScrollModes,
   transformScrollHTML,
   buildTransformScrollDriver,
+  buildTransformScrollClickObserver,
 } from './document_transform_scroll_fixture.mjs';
-test('128 independent transform scroll profiles preserve sources, clipping pixels and offset parents', () => {
+test('192 independent transform scroll profiles preserve sources, clipping pixels and offset parents', () => {
   const f = JSON.parse(
     readFileSync(new URL('./fixtures/document-transform-scroll-chromium153.json', import.meta.url)),
   );
   assert.equal(f.browserVersion, '153.0.8010.12');
-  assert.equal(f.cases.length, 128);
-  assert.equal(transformScrollModes.length, 16);
+  assert.equal(f.cases.length, 192);
+  assert.equal(transformScrollModes.length, 24);
   assert.equal(
     new Set(f.cases.map((r) => [r.mode, r.viewport.width, r.dpr, r.theme].join('/'))).size,
-    128,
+    192,
   );
   let clipped = 0,
     visible = 0;
   for (const r of f.cases) {
     assert.equal(r.html, transformScrollHTML(r.mode));
     assert.equal(r.driverSource, buildTransformScrollDriver());
+    assert.equal(r.clickObserverSource, buildTransformScrollClickObserver());
+    assert.equal(r.clicks.before, Number(r.pixels.before.hit === 'target'));
+    assert.equal(r.clicks.changed, r.clicks.before + Number(r.pixels.changed.hit === 'target'));
     for (const phase of ['before', 'scrolled', 'changed']) {
       const state = r.result[phase];
-      assert.equal(state.boxes.target.offset.parentId, 'host');
+      const initiallyViewport = r.mode.startsWith('viewport-') || r.mode === 'add-transform';
+      const viewport = phase === 'changed' ? r.mode === 'remove-transform' : initiallyViewport;
+      assert.equal(state.boxes.target.offset.parentId, viewport ? null : 'host');
       for (const k of ['left', 'top', 'width', 'height', 'clientWidth', 'clientHeight'])
         assert.ok(Number.isInteger(state[k]));
     }

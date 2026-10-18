@@ -240,7 +240,13 @@ void main() {
             await tester.pumpAndSettle();
             expect(
               hits,
-              pixel['hit'] == 'target' ? ['target'] : isEmpty,
+              ((row['clicks'][phase] as num) -
+                          (phase == 'changed'
+                              ? row['clicks']['before'] as num
+                              : 0)) ==
+                      1
+                  ? ['target']
+                  : isEmpty,
               reason: '$phase native clipping click',
             );
           }
