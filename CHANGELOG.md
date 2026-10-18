@@ -4,6 +4,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-18
+
 ### Fixed
 
 - Android full-page HTML content improves viewport sizing, offsets, common margins, relative positioning, grid rows and computed-style reads, while keeping overflowing content reachable.
@@ -15,6 +17,7 @@ Same node protocol (11) and database schemas; upgrade the gateway and every node
 
 ### Added
 
+- You can edit your own messages in Chat and Work sessions, on the Web and in the Android app (**Edit message** → **Save & regenerate**). Saving keeps the original message and its replies as an earlier version, starts a new version from the edited text (attachments kept) and regenerates the reply; the previous/next buttons beside the message switch between versions without a model request, and the selected version survives reconnects and restarts. Only the selected version is used as context for later replies. Editing and switching need session control and an idle session (no running work or queued messages). **Tool effects are not undone**: files, commands, external actions and memory changed by the agent stay changed. Session commands `edit_message` (`{entryId, message}`) and `switch_branch` (`{entryId}`); snapshot history now includes `entryId` and user-message `branches`. An older node rejects these commands, so upgrade nodes with the gateway.
 - The Android app can manage shared project files and delete chat projects with a preview, memory decisions and interrupted-deletion retry.
 - Chat projects (and the top-level Chats) have project files: files every chat in the project can read, such as notes, documents or data (project page → Settings → Project files, or `GET`/`POST`/`DELETE /api/workspaces/:id/files`). The chat node keeps them in `<stateDir>/chat/<workspaceId>/files`; chats get that directory read-only in their sandbox and its path in their system prompt (`## Project files`), and the assistant cannot change them. They are shared, not copied: an upload, a replacement (same name) or a removal reaches chats already running. Chats started before the project's first file are not given them; start a new chat. At most 50 files per project, each within the node's upload limit. Deleting a project deletes its files.
 
@@ -224,7 +227,9 @@ This is the first tagged release. Earlier development used 0.1.0 without a publi
 - Linux/x86_64 binaries are not published or newly runtime-validated as part of this release. Nix packaging is retained.
 - Token allocations are estimates scaled to matching provider input usage, not exact per-section tokenizer counts.
 
-[Unreleased]: https://github.com/iceice666/pirc/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/iceice666/pirc/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/iceice666/pirc/releases/tag/v0.7.0
+[0.6.1]: https://github.com/iceice666/pirc/releases/tag/v0.6.1
 [0.6.0]: https://github.com/iceice666/pirc/releases/tag/v0.6.0
 [0.5.0]: https://github.com/iceice666/pirc/releases/tag/v0.5.0
 [0.4.1]: https://github.com/iceice666/pirc/releases/tag/v0.4.1
