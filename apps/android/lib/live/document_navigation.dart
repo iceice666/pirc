@@ -13,6 +13,7 @@ import '../rendering/html_document_styles.dart';
 import '../rendering/native_html.dart';
 import '../rendering/document_absolute_position.dart';
 import '../rendering/document_layout.dart';
+import '../rendering/document_fragment.dart';
 import '../rendering/document_scroll_anchor.dart';
 import '../rendering/document_touch_boundary.dart';
 import '../rendering/document_computed_styles.dart';
@@ -1027,29 +1028,39 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
   }
 
   NativeDocumentHistoryItem? _revealed;
+  int _revealedFragmentRevision = -1;
   void _revealFragment(NativeDocumentWindow? window) {
     final current = window?.current;
     if (current == null || current.document == null) {
       _revealed = null;
       return;
     }
-    if (_revealed == current) return;
+    final revision = window!.fragmentRevealRevision;
+    if (_revealed == current && _revealedFragmentRevision == revision) return;
     _revealed = current;
-    if (window?.historyChangeKind == 'pushState' ||
-        window?.historyChangeKind == 'replaceState' ||
-        window?.historyChangeKind == 'traverse' &&
-            current.scrollRestoration == 'manual') {
+    _revealedFragmentRevision = revision;
+    final explicit = window.hasPendingFragmentReveal;
+    if (!explicit &&
+        (window.historyChangeKind == 'pushState' ||
+            window.historyChangeKind == 'replaceState' ||
+            window.historyChangeKind == 'traverse' &&
+                current.scrollRestoration == 'manual')) {
       return;
     }
-    final savedOffset = current.scrollOffset;
+    final savedOffset = explicit ? null : current.scrollOffset;
     final hash = current.url.indexOf('#');
     if (savedOffset == null && hash < 0) return;
-    var id = hash < 0 ? '' : current.url.substring(hash + 1);
-    try {
-      id = Uri.decodeComponent(id);
-    } catch (_) {}
+    final revealUrl = current.url;
+    final fragment = hash < 0 ? '' : revealUrl.substring(hash + 1);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted || window?.current != current) return;
+      if (!mounted ||
+          window.current != current ||
+          current.url != revealUrl ||
+          window.fragmentRevealRevision != revision ||
+          (explicit && !window.hasPendingFragmentReveal)) {
+        return;
+      }
+      window.acknowledgeFragmentReveal(current, revision);
       final document = current.document!;
       if (savedOffset != null) {
         if (document.scroll.hasClients) {
@@ -1057,10 +1068,17 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
             savedOffset.clamp(0, document.scroll.position.maxScrollExtent),
           );
         }
-      } else if (id.isEmpty || id.toLowerCase() == 'top') {
-        if (document.scroll.hasClients) document.scroll.jumpTo(0);
       } else {
-        await document.viewport.scrollToAnchor(id);
+        final target = document.viewport.fragmentTarget(fragment);
+        final plainTop =
+            !document.content.isHtml &&
+            (fragment.isEmpty ||
+                decodeNativeDocumentFragment(fragment).toLowerCase() == 'top');
+        if (target?.top == true || plainTop) {
+          if (document.scroll.hasClients) document.scroll.jumpTo(0);
+        } else if (target != null) {
+          await document.viewport.scrollToFragmentTarget(target);
+        }
       }
     });
   }

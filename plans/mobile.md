@@ -14,6 +14,10 @@ are available from Git through Historical records, not repeated here.
       broader DOM APIs, Canvas font/ink coverage, inline-fragment measurements
       and common-library coverage. Broader image/framework flows remain
       unverified; preserve explicit unsupported errors.
+- [ ] **Fragment scrolling and target state:** complete CSS scroll margin/padding,
+      nested-container alignment, focus/`:target`, late-loaded targets and
+      nodes discarded from rendered markup. Target lookup, initial URLs and
+      repeated activation have a bounded gate below.
 - [ ] **Physical phone/tablet acceptance:** use a real account for pairing,
       streaming/cancel/reconnect, panels, management consent and simultaneous
       web/app confirmations. Check keyboard (including CJK IME), safe areas,
@@ -301,8 +305,39 @@ interruption acceptance, scrollend ordering, RTL/vertical writing, horizontal
 root scrolling, logical scroll inset properties, quirks/iframe/XML documents,
 sticky/fragmented/SVG geometry, scroll snap, fractional CSS/limit quantization and unresolved CSS inset math/complex variable shorthands remain
 outside this gate. Invalid inset declarations also need wider cascade coverage.
-Other scroll methods' Promise return semantics and fragment navigation remain
-separate work.
+Other scroll methods' Promise return semantics and broader fragment scrolling
+remain separate work; the selection/activation gate is below.
+
+**Fragment selection and activation:** rendered HTML resolves IDs before named
+`a` anchors and retains the first match in tree order. Literal fragment names
+are tried before UTF-8 percent decoding; plus signs are preserved, malformed
+percent/UTF-8 sequences are handled, and an actual `id`/`name="top"` wins over
+the case-insensitive top-of-document fallback. Hidden targets do not fall back
+to the page top. Private rendering aliases keep duplicate anchors distinct and
+leave original IDs available to CSS selectors, labels, controls and scripting.
+
+Repeated activation of the same URL requests another reveal without creating
+a history entry or repeating HTTP. Explicit activation ignores an old saved
+offset and still works in manual restoration mode. Requests survive a workspace
+remount until consumed; consumed requests are not replayed. Later history/URL
+changes invalidate stale callbacks. Internal alias resolution does not suppress
+real link taps during an in-progress reveal, and swapping a viewport controller
+rebinds its index without changing the document.
+
+The independent 152-profile Chromium 153 corpus covers initial URLs and actual
+first/repeated link clicks at both sizes, DPRs and themes. Flutter checks those
+flows plus lifecycle, CSS-ID/label/value preservation and existing history
+regressions. Android covers the actual native workspace's 152 click/repeat
+profiles and reruns the 216 Sandbox reveal profiles. Source URLs are delivered
+as complete final URLs by the existing document RPC; backend redirect/fragment
+inheritance is not newly certified by this renderer gate.
+
+This does not certify fragment focus, `:target` styling, ancestor revealing,
+late DOM/image retry, IDs discarded with head/script/unsupported nodes, text
+fragments or non-HTML fragment semantics. Fragment scrolling still uses the HTML
+core's native anchor path; its animation, nested alignment and CSS scroll
+margin/padding are not equivalent to the separately implemented element reveal
+API. Those remain explicit follow-up work, not completed scroll parity.
 
 **Remaining synchronous layout differences:** general DOM writes followed by
 geometry reads still need matching native measurement. Exact animation timing,

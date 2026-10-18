@@ -12,6 +12,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'svg_dimensions.dart';
 import 'document_canvas.dart';
 import 'document_layout.dart';
+import 'document_fragment.dart';
 import 'document_computed_styles.dart';
 import 'document_offsets.dart';
 import 'document_relative_position.dart';
@@ -394,6 +395,9 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
   @override
   void didUpdateWidget(covariant NativeHtmlDocument old) {
     super.didUpdateWidget(old);
+    if (!identical(old.viewport, widget.viewport)) {
+      old.viewport?._unbindFragments(this);
+    }
     final documentChanged = old.scriptDocument != widget.scriptDocument;
     if (documentChanged ||
         old.elementScrollController != widget.elementScrollController) {
@@ -412,7 +416,10 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     } else if (widget.scriptFormActions.isNotEmpty) {
       _captureSubmissionFiles();
     }
-    final sourceChanged = old.nodes != widget.nodes || documentChanged;
+    final sourceChanged =
+        old.nodes != widget.nodes ||
+        documentChanged ||
+        !identical(old.viewport, widget.viewport);
     final historyChanged = old.historyController != widget.historyController;
     final carriedSnapshot =
         sourceChanged &&
@@ -452,6 +459,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
 
   @override
   void dispose() {
+    widget.viewport?._unbindFragments(this);
     _localElementScroll.dispose();
     _backgroundSvgCache.clear();
     FocusManager.instance.removeListener(_handleNativeFocusChange);
@@ -685,6 +693,11 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
         ),
       ),
     );
+    if (widget.viewport != null) {
+      final fragments = NativeDocumentFragmentIndex(content, nonce);
+      content = fragments.annotatedHtml;
+      widget.viewport!._bindFragments(this, fragments);
+    }
     _pruneScriptFocusableNodes(content);
     _bindScriptControls();
   }
@@ -2070,7 +2083,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             () => _elementScroll,
           ),
           onTapUrl: (url) {
-            if (widget.viewport?.resolvingAnchor == true) return false;
+            if (widget.viewport?.resolvingAnchorUrl(url) == true) return false;
             widget.onLink?.call(url);
             return true;
           },
@@ -5405,7 +5418,25 @@ class _NativeHtmlFactory extends WidgetFactory {
         );
       }
     }
-    super.parse(tree);
+    final alias = tree.element.attributes[nativeFragmentAttribute];
+    if (alias == null) {
+      super.parse(tree);
+    } else {
+      final attributes = tree.element.attributes;
+      final id = attributes['id'], name = attributes['name'];
+      attributes['id'] = alias;
+      if (tree.element.localName == 'a') attributes.remove('name');
+      try {
+        super.parse(tree);
+      } finally {
+        if (id == null) {
+          attributes.remove('id');
+        } else {
+          attributes['id'] = id;
+        }
+        if (name != null) attributes['name'] = name;
+      }
+    }
     // The pinned HTML core inserts a zero-width, font-height anchor for inline
     // IDs/names at Late.anchor. It has no text baseline. Intrinsic button/table
     // measurements reach it through WidgetSpan's Semantics proxy, which cannot
@@ -6123,13 +6154,47 @@ class NativeHtmlViewportController {
     key = GlobalKey<HtmlWidgetState>();
   }
 
-  bool resolvingAnchor = false;
-  Future<bool> scrollToAnchor(String id) async {
-    resolvingAnchor = true;
-    try {
-      return await key.currentState?.scrollToAnchor(id) ?? false;
-    } finally {
-      resolvingAnchor = false;
+  Object? _fragmentOwner;
+  NativeDocumentFragmentIndex? _fragments;
+  void _bindFragments(Object owner, NativeDocumentFragmentIndex fragments) {
+    _fragmentOwner = owner;
+    _fragments = fragments;
+  }
+
+  void _unbindFragments(Object owner) {
+    if (identical(owner, _fragmentOwner)) {
+      _fragmentOwner = null;
+      _fragments = null;
     }
   }
+
+  NativeDocumentFragmentTarget? fragmentTarget(String raw) =>
+      _fragments?.select(raw);
+
+  bool resolvingAnchor = false;
+  final _resolvingUrls = <String, int>{};
+  bool resolvingAnchorUrl(String url) => _resolvingUrls.containsKey(url);
+  Future<bool> _scrollAlias(String alias) async {
+    final url = '#$alias';
+    _resolvingUrls.update(url, (count) => count + 1, ifAbsent: () => 1);
+    resolvingAnchor = true;
+    try {
+      return await key.currentState?.scrollToAnchor(alias) ?? false;
+    } finally {
+      final count = _resolvingUrls[url]! - 1;
+      if (count == 0) {
+        _resolvingUrls.remove(url);
+      } else {
+        _resolvingUrls[url] = count;
+      }
+      resolvingAnchor = _resolvingUrls.isNotEmpty;
+    }
+  }
+
+  Future<bool> scrollToFragmentTarget(NativeDocumentFragmentTarget target) =>
+      target.anchor == null
+      ? Future.value(false)
+      : _scrollAlias(target.anchor!);
+  Future<bool> scrollToAnchor(String id) =>
+      _scrollAlias(_fragments?.anchorFor(id) ?? id);
 }

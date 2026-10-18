@@ -337,6 +337,27 @@ class NativeDocumentWindow extends ChangeNotifier {
   int index = -1, _generation = 0, _nextDocument = 0;
   String? _previousHistoryEntryKey;
   String _historyChangeKind = 'load';
+  int _fragmentRevealRevision = 0;
+  NativeDocumentHistoryItem? _pendingFragmentReveal;
+  int get fragmentRevealRevision => _fragmentRevealRevision;
+  bool get hasPendingFragmentReveal =>
+      identical(_pendingFragmentReveal, current) && current != null;
+  void acknowledgeFragmentReveal(
+    NativeDocumentHistoryItem entry,
+    int revision,
+  ) {
+    if (identical(_pendingFragmentReveal, entry) &&
+        revision == _fragmentRevealRevision) {
+      _pendingFragmentReveal = null;
+    }
+  }
+
+  void _requestFragmentReveal() {
+    _fragmentRevealRevision++;
+    _pendingFragmentReveal = current;
+    _historyChangeKind = 'fragment';
+  }
+
   int? _pendingHistoryIndex;
   int get historyCursor => _pendingHistoryIndex ?? index;
   Object? sourceState;
@@ -620,6 +641,7 @@ class NativeDocumentWindow extends ChangeNotifier {
                   !absolute.contains('#') &&
                   nativeSameDocumentFragment('$absolute#', current!.url))) {
         if (absolute == current!.url) {
+          _requestFragmentReveal();
           loading = false;
           notifyListeners();
           return NativeDocumentLoadResult.committed;
@@ -630,6 +652,7 @@ class NativeDocumentWindow extends ChangeNotifier {
           replaceCurrent: replaceCurrent,
           changeKind: 'fragment',
         );
+        _requestFragmentReveal();
 
         loading = false;
         notifyListeners();
@@ -925,10 +948,14 @@ class NativeDocumentWindow extends ChangeNotifier {
   /// A workspace can unmount while this browsing context remains alive.
   /// Save its current entry before a recreated workspace reveals it again.
   void rememberCurrentDocumentState() {
-    if (!disposed) _rememberScroll();
+    if (!disposed) _rememberScroll(cancelFragmentReveal: false);
   }
 
-  void _rememberScroll({bool leavingDocument = false}) {
+  void _rememberScroll({
+    bool leavingDocument = false,
+    bool cancelFragmentReveal = true,
+  }) {
+    if (cancelFragmentReveal) _pendingFragmentReveal = null;
     final item = current;
     if (item == null || historyPostResubmissionRequired) return;
     final document = item.document;
