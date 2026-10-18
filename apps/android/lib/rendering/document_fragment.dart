@@ -73,6 +73,55 @@ class NativeDocumentFragmentIndex {
   }
 }
 
+/// Resolves the same indicated element as fragment navigation, before layout.
+/// Hidden elements and legacy named anchors participate; top/missing is null.
+dom.Element? nativeDocumentFragmentElement(dom.Document document, String raw) {
+  if (raw.isEmpty) return null;
+  dom.Element? find(String name) {
+    final elements = document.querySelectorAll('*');
+    return elements.where((e) => e.id == name).firstOrNull ??
+        elements
+            .where((e) => e.localName == 'a' && e.attributes['name'] == name)
+            .firstOrNull;
+  }
+
+  return find(raw) ?? find(decodeNativeDocumentFragment(raw));
+}
+
+/// Retains the selected renderer identity until actual navigation. A History
+/// API URL rewrite does not itself change the target. Static documents retain
+/// their renderer IDs across view remounts; scripted documents use VM identity.
+class NativeDocumentTargetState {
+  NativeDocumentTargetState(this.url);
+  String url;
+  int revision = 0;
+  bool _pending = true;
+  String? _nativeId;
+  void navigate(String value) {
+    url = value;
+    revision++;
+    _pending = true;
+  }
+
+  dom.Element? resolve(dom.Document document) {
+    final elements = document.querySelectorAll('*');
+    if (_pending) {
+      final hash = url.indexOf('#');
+      final target = hash < 0
+          ? null
+          : nativeDocumentFragmentElement(document, url.substring(hash + 1));
+      _nativeId = target?.attributes['data-pirc-script-id'];
+      _pending = false;
+    }
+    final id = _nativeId;
+    return id == null
+        ? null
+        : elements
+              .where((e) => e.attributes['data-pirc-script-id'] == id)
+              .firstOrNull;
+  }
+}
+
 String decodeNativeDocumentFragment(String value) {
   final bytes = <int>[0];
   var position = 0;

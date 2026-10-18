@@ -45,6 +45,8 @@ function configuredPort() {
   return port;
 }
 
+const targetState = readFileSync(path.join(scriptDirectory, 'fixtures/document-target-state-chromium153.json'));
+
 const frameSteps = readFileSync(path.join(scriptDirectory, 'fixtures/document-frame-steps-chromium153.json'));
 
 const layoutDependencies = readFileSync(path.join(scriptDirectory, 'fixtures/document-layout-dependencies-chromium153.json'));
@@ -141,6 +143,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/target-state.json') {
+    response.writeHead(200, {'cache-control':'no-store','content-type':'application/json; charset=utf-8'});
+    response.end(targetState);
     return;
   }
   if(pathname === '/fragment-focus.json') {

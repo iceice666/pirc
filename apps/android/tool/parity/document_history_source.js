@@ -119,6 +119,7 @@ function createDocumentHistory(options) {
     entryKey = snapshot.entryKey; graph = nextGraph; stateValue = nextState;
     scroll = snapshot.scrollRestoration === 'manual' ? 'manual' : 'auto';
     options.setURL(url);
+    options.updateTarget?.(snapshot);
     if (changed) {
       pendingTraversalIndex = null;
       // Capture both URLs before listeners run; a popstate handler may push again.

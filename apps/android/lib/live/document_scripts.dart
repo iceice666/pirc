@@ -181,6 +181,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   bool _hasStylesSnapshot = false;
   Set<String> _currentStyleRequests = {};
   String? documentBaseUrl;
+  String? fragmentTargetId;
   List<NativeDocumentStylesheet>? get stylesheets =>
       _hasStylesSnapshot ? _documentStyles?.stylesheets : null;
 
@@ -1913,6 +1914,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       'diagnostics',
       'imageReferences',
       'documentBaseURL',
+      'fragmentTargetId',
       'now',
       'scheduler',
       'classicScript',
@@ -2863,6 +2865,13 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     final decoded = obj(jsonDecode(snapshot));
     final issues = _validateResult(decoded);
     _acceptStyles(decoded);
+    final target = decoded['fragmentTargetId'];
+    if (target != null &&
+        (target is! String ||
+            !RegExp(r'^pirc-[1-9][0-9]*$').hasMatch(target))) {
+      throw const FormatException('Invalid native fragment target identity.');
+    }
+    fragmentTargetId = target as String?;
     final markup = decoded['html'];
     if (markup is! String) {
       throw const FormatException('Missing document HTML.');

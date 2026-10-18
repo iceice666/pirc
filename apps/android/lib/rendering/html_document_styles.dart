@@ -151,6 +151,7 @@ class NativeDocumentStyleEngine {
     this.pointer = 'coarse',
     this.hover = 'none',
     this.documentBaseUrl,
+    this.fragmentTarget,
   }) : stylesheets = List<NativeDocumentStylesheet>.unmodifiable(stylesheets);
 
   final List<NativeDocumentStylesheet> stylesheets;
@@ -169,6 +170,9 @@ class NativeDocumentStyleEngine {
   /// Effective document URL used for inline style attributes. This includes
   /// the document's `<base href>` when present.
   final String? documentBaseUrl;
+
+  /// The retained target element in this DOM clone, independent of URL rewrites.
+  final dom.Element? fragmentTarget;
 
   /// Applies the cascade to [document] in place and returns the effective
   /// inline declarations, import metadata, and diagnostics.
@@ -1224,7 +1228,11 @@ class _Cascade {
     selector.visit(collector);
     final roots = _RootSelectorCollector();
     selector.visit(roots);
-    if (collector.selectors.isEmpty && roots.selectors.isEmpty) {
+    final targets = _RootSelectorCollector('target');
+    selector.visit(targets);
+    if (collector.selectors.isEmpty &&
+        roots.selectors.isEmpty &&
+        targets.selectors.isEmpty) {
       return document.querySelectorAll(selectorText);
     }
 
@@ -1232,13 +1240,25 @@ class _Cascade {
     if (selectorSpan == null) {
       throw const FormatException('The selector has no source span.');
     }
-    final attribute = 'data-native-css-nth-${_selectorProbeOrder++}';
-    final rootAttribute = '$attribute-root';
+    late String attribute, rootAttribute, targetAttribute;
+    do {
+      attribute = 'data-native-css-nth-${_selectorProbeOrder++}';
+      rootAttribute = '$attribute-root';
+      targetAttribute = '$attribute-target';
+    } while (document
+        .querySelectorAll('*')
+        .any(
+          (element) =>
+              element.attributes.containsKey(attribute) ||
+              element.attributes.containsKey(rootAttribute) ||
+              element.attributes.containsKey(targetAttribute),
+        ));
+
     final replacements = <_SelectorRangeReplacement>[];
-    for (final pseudo in roots.selectors) {
+    for (final pseudo in [...roots.selectors, ...targets.selectors]) {
       final span = pseudo.span;
       if (span == null) {
-        throw const FormatException('The :root selector has no source span.');
+        throw const FormatException('The state selector has no source span.');
       }
       final start = span.start.offset - selectorSpan.start.offset - trimOffset;
       final end = span.end.offset - selectorSpan.start.offset - trimOffset;
@@ -1247,14 +1267,15 @@ class _Cascade {
           start >= end ||
           selectorText.substring(start, end) != span.text) {
         throw const FormatException(
-          'The :root source range could not be mapped.',
+          'The state selector source range could not be mapped.',
         );
       }
       replacements.add(
         _SelectorRangeReplacement(
           start: start,
           end: end,
-          text: '[$rootAttribute]',
+          text:
+              '[${pseudo.name.toLowerCase() == 'target' ? targetAttribute : rootAttribute}]',
         ),
       );
     }
@@ -1307,6 +1328,9 @@ class _Cascade {
     final originalAttributes = <dom.Element, String?>{};
     final root = document.nodes.whereType<dom.Element>().firstOrNull;
     final originalRootAttribute = root?.attributes[rootAttribute];
+    final target = engine.fragmentTarget;
+    final originalTargetAttribute = target?.attributes[targetAttribute];
+    if (targets.selectors.isNotEmpty) target?.attributes[targetAttribute] = '';
     if (roots.selectors.isNotEmpty) root?.attributes[rootAttribute] = '';
     for (final element
         in collector.selectors.isEmpty
@@ -1324,6 +1348,13 @@ class _Cascade {
     try {
       return document.querySelectorAll(matcherSelector);
     } finally {
+      if (targets.selectors.isNotEmpty && target != null) {
+        if (originalTargetAttribute == null) {
+          target.attributes.remove(targetAttribute);
+        } else {
+          target.attributes[targetAttribute] = originalTargetAttribute;
+        }
+      }
       if (roots.selectors.isNotEmpty && root != null) {
         if (originalRootAttribute == null) {
           root.attributes.remove(rootAttribute);
@@ -4773,6 +4804,7 @@ String? _simpleSelectorUnsupportedReason(css.SimpleSelector selector) {
     }
     if (const {
       'root',
+      'target',
       'empty',
       'blank',
       'first-child',
@@ -4820,10 +4852,12 @@ int? _numericNthChildIndex(css.PseudoClassFunctionSelector selector) {
 }
 
 class _RootSelectorCollector extends css.Visitor {
+  _RootSelectorCollector([this.name = 'root']);
+  final String name;
   final selectors = <css.PseudoClassSelector>[];
   @override
   dynamic visitPseudoClassSelector(css.PseudoClassSelector node) {
-    if (node.name.toLowerCase() == 'root') selectors.add(node);
+    if (node.name.toLowerCase() == name) selectors.add(node);
     return super.visitPseudoClassSelector(node);
   }
 

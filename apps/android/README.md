@@ -665,12 +665,23 @@ selection variants, focus restoration across remount/background transitions,
 broader traversal, focus pseudo styling, additional toggle box-model combinations
 and exact toggle appearance/accent styling remain outside this gate. Redirected
 focus records a difference.
-`:target`, late target retry, ancestor revealing, unmeasured/inline/text/non-HTML
+Late target retry, ancestor revealing, unmeasured/inline/text/non-HTML
 targets, RTL/vertical writing, sticky/SVG boxes, scroll snap, root horizontal
 scrolling and unresolved inset math remain listed in the mobile plan. Unsupported
 geometry retains the native anchor fallback; matching-frame waits are bounded.
 Physical acceptance, backend redirect/hash inheritance and remote push are not
 certified. Exact animation timing remains Flutter-specific.
+
+Native `:target` styles and Sandbox selectors retain element identity across
+History API URL rewrites, ID changes and workspace remounts. Navigation and
+history traversal reselect before measured fragment reveal. Static cached pages
+rebuild for the new target, including `display:none` targets made visible by CSS.
+Recreate the 16-profile / 256-state Chromium reference with
+`node apps/android/tool/parity/capture_document_target_state_chromium153.mjs`;
+`integration_test/document_target_state_test.dart` uses `/target-state.json`.
+The non-script widget gate covers 80 states. Actual styles and selector reports
+compare exactly; rectangles/scroll use 1/32 CSS px tolerance. Broader selector,
+shadow DOM, reentrant/late-load and lifecycle differences remain in the plan.
 
 `document.scrollingElement` uses the initial HTML parser mode and native
 box/overflow measurements to select the standards root, quirks body, or null.

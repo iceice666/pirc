@@ -13,6 +13,7 @@ import '../rendering/html_form_submission.dart';
 import '../rendering/html_file.dart';
 import '../rendering/native_html.dart';
 import '../rendering/document_scroll_anchor.dart';
+import '../rendering/document_fragment.dart';
 import '../rendering/document_element_scroll.dart';
 import 'gateway.dart';
 import 'document_scripts.dart';
@@ -209,6 +210,7 @@ class NativeFetchedDocument {
   final scriptFileSelections = NativeHtmlScriptFileSelections();
   final historyControls = NativeHtmlHistoryController();
   final viewport = NativeHtmlViewportController();
+  late final fragmentTarget = NativeDocumentTargetState(url);
   final scroll = NativeDocumentScrollController();
   // A view can unmount while the document/VM remains in history or another
   // browsing context. Only retiring that document discards its element offsets.
@@ -356,6 +358,9 @@ class NativeDocumentWindow extends ChangeNotifier {
     _fragmentRevealRevision++;
     _pendingFragmentReveal = current;
     _historyChangeKind = 'fragment';
+    if (current?.document case final document?) {
+      document.fragmentTarget.navigate(current!.url);
+    }
   }
 
   int? _pendingHistoryIndex;
@@ -407,6 +412,10 @@ class NativeDocumentWindow extends ChangeNotifier {
     'ackRevision': currentDocument?.historyApiAckRevision ?? 0,
     'scrollRestoration': current?.scrollRestoration ?? 'auto',
     'changeKind': _historyChangeKind,
+    if (currentDocument case final document?) ...{
+      'targetRevision': document.fragmentTarget.revision,
+      'targetUrl': document.fragmentTarget.url,
+    },
     if (_previousHistoryEntryKey != null)
       'previousEntryKey': _previousHistoryEntryKey,
   };
@@ -1331,6 +1340,9 @@ class NativeDocumentWindow extends ChangeNotifier {
     index = next;
     _historyChangeKind = 'traverse';
     currentDocument?.historyApiLocation = current?.url;
+    if (currentDocument case final document?) {
+      document.fragmentTarget.navigate(current!.url);
+    }
     failedRequest = null;
     failedBase = null;
     pendingAppRoute = currentAppRoute;
