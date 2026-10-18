@@ -255,10 +255,24 @@ or stale proof, sticky/unsupported positioning and nonaffine geometry retain
 explicit errors. Browser expectations are captured independently, including
 scroll displacement coefficients; native output does not generate them.
 
+**CSS default scrolling:** window/element scroll methods, numeric overloads and
+scroll offset setters now honor the matched native `scroll-behavior` value.
+The root supplies the viewport default; body styles do not propagate to it.
+The property does not inherit unless explicitly requested. `instant` overrides
+CSS smooth behavior, and clean commands freeze the resolved choice at call time.
+Native execution waits for the actual cascade when a dirty style frame is still
+pending; synchronous feedback with an unresolved default fails explicitly.
+Interleaved style/scroll/style calls within one turn use the next measured
+default and can differ from the browser call-time choice.
+A 224-profile Chromium 153 corpus checks computed values and immediate/settled
+positions exactly, with native controller/cascade and Android Sandbox gates.
+Valid/invalid CSS variables, inherited/unset values, setter/alias calls and
+frame-matched class changes are included. This does not certify fragment
+navigation, `scrollIntoView`, exact timing or reads immediately after dirty writes.
+
 **Remaining synchronous layout differences:** general DOM writes followed by
-geometry reads still need matching native measurement. CSS `scroll-behavior`
-default selection, exact animation timing, scrollend/Promise behavior and mixed
-root/element event ordering are not certified by this gate. Global getter
+geometry reads still need matching native measurement. Exact animation timing,
+scrollend/Promise behavior and mixed root/element event ordering are not certified by this gate. Global getter
 exception propagation during stale layout is not certified on Android; Node's VM
 can return undefined instead of propagating the accessor error. These unsupported
 reads are separate from the certified clean-layout scroll-position updates.

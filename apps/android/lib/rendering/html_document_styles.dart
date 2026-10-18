@@ -1403,6 +1403,14 @@ class _Cascade {
       return;
     }
 
+    if (property == 'scroll-behavior' && !_containsVarUsage(expression)) {
+      final keyword = _expressionText(expression).trim().toLowerCase();
+      if (!const {'auto', 'smooth'}.contains(keyword) &&
+          !_cssWideKeywords.contains(keyword)) {
+        return;
+      }
+    }
+
     if (property == 'pointer-events' && !_containsVarUsage(expression)) {
       final keyword = _expressionText(expression).trim().toLowerCase();
       if (!nativeDocumentPointerKeywords.contains(keyword) &&

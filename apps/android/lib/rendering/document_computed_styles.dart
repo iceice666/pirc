@@ -240,6 +240,16 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
     if (position != null) values['position'] = position;
     if (direction != null) values['direction'] = direction;
 
+    final scrollBehavior = _resolveKeyword(
+      author['scroll-behavior'],
+      inheritedValue: parentSpec?.values['scroll-behavior'] ?? 'auto',
+      initialValue: 'auto',
+      accepted: const {'auto', 'smooth'},
+    );
+    // Invalid-at-computed-value-time variables fall back to this property's
+    // non-inherited initial value, rather than omitting a known scalar.
+    values['scroll-behavior'] = scrollBehavior ?? 'auto';
+
     final visibility = _resolveKeyword(
       author['visibility'],
       inheritedValue: parentSpec?.values['visibility'] ?? 'visible',

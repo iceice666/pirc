@@ -678,6 +678,12 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
             id > _maxSafeScriptId ||
             !const {'to', 'by'}.contains(action['kind']) ||
             !const {'auto', 'instant', 'smooth'}.contains(action['behavior']) ||
+            (action.containsKey('resolvedBehavior') &&
+                (action['behavior'] != 'auto' ||
+                    !const {
+                      'instant',
+                      'smooth',
+                    }.contains(action['resolvedBehavior']))) ||
             (action.containsKey('elementId') &&
                 (action['elementId'] is! String ||
                     !RegExp(

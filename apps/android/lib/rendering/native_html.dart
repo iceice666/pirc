@@ -2064,6 +2064,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
                 Theme.of(context).brightness == Brightness.dark,
             () => widget.layoutController,
             () => widget.layoutOffsetSpecs,
+            () => widget.layoutComputedStyles,
             () => widget.documentPercentTopMargins,
             () => widget.layoutRevision,
             () => _elementScroll,
@@ -2524,6 +2525,7 @@ class _NativeHtmlFactory extends WidgetFactory {
     this.imageDark,
     this.layoutController,
     this.layoutOffsetSpecs,
+    this.layoutComputedStyles,
     this.documentPercentTopMargins,
     this.layoutRevision,
     this.elementScroll,
@@ -2537,6 +2539,8 @@ class _NativeHtmlFactory extends WidgetFactory {
   final bool Function() imageDark;
   final NativeDocumentLayoutController? Function() layoutController;
   final Map<String, NativeDocumentOffsetSpec> Function() layoutOffsetSpecs;
+  final Map<String, NativeDocumentComputedStyleSpec> Function()
+  layoutComputedStyles;
   final Map<String, NativeDocumentTopMarginGroup> Function()
   documentPercentTopMargins;
   final int Function() layoutRevision;
@@ -3870,6 +3874,12 @@ class _NativeHtmlFactory extends WidgetFactory {
                 revision: layoutRevision(),
                 overflowX: computed(x, y),
                 overflowY: computed(y, x),
+                scrollBehavior:
+                    layoutComputedStyles()[tree
+                            .element
+                            .attributes['data-pirc-script-id']]
+                        ?.values['scroll-behavior'] ??
+                    'auto',
                 child: entries.isEmpty
                     ? child
                     : NativeDocumentAbsoluteLayer(

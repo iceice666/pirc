@@ -521,6 +521,28 @@ General DOM writes still need a matching native frame. CSS defaults, timing/even
 variants, global getter errors and remaining DOM/layout APIs stay in the mobile
 plan.
 
+CSS `scroll-behavior` now selects the default for `window`/element scroll APIs,
+numeric overloads and scroll offset setters. Native execution and the script
+feedback ledger both use the matched native cascade: root styles apply to the
+viewport; body styles do not propagate there. The property is non-inherited
+unless `inherit` is explicit. `instant` overrides CSS smooth behavior. Clean
+commands retain their resolved behavior if a later style mutation changes it.
+Unmeasured defaults can still queue for the next native frame, but their
+synchronous position feedback is explicitly unavailable until resolved. A default
+after unmeasured style writes is taken from the next native frame; interleaved
+style/scroll/style changes within one script turn are not browser-equivalent.
+
+`document-scroll-behavior-chromium153.json` contains 224 independent Chromium
+153 profiles for phone/tablet, DPR 1/3 and both themes. Native controller/cascade
+checks and `integration_test/document_scroll_behavior_test.dart` compare computed
+values, immediate positions and settled positions exactly through the shipped
+Sandbox. The cases include auto/instant overrides, setters, aliases, explicit
+inherit/unset, invalid declarations, CSS variables and frame-matched mutations.
+Capture with `node apps/android/tool/parity/capture_document_scroll_behavior_chromium153.mjs`;
+use `/scroll-behavior.json` from the local fixture server. Animation timing still
+follows Flutter. Fragment navigation, `scrollIntoView`, scrollend/Promise semantics
+and general synchronous reads after DOM/style writes remain separate differences.
+
 `document.scrollingElement` uses the initial HTML parser mode and native
 box/overflow measurements to select the standards root, quirks body, or null.
 `document.compatMode` is read-only. Root/body viewport metrics use the actual

@@ -2630,7 +2630,10 @@
         behavior: behavior
       };
       if (target && target.viewport !== true) action.elementId = target.id;
-      layout.recordScrollAction(action, target);
+      const effectiveBehavior = layout.resolveScrollBehavior(target, behavior);
+      if (behavior === 'auto' && ['instant', 'smooth'].includes(effectiveBehavior))
+        action.resolvedBehavior = effectiveBehavior;
+      layout.recordScrollAction(action, target, effectiveBehavior);
       state.scrollActions.push(Object.freeze(action));
     }
 
