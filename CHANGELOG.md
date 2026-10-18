@@ -33,6 +33,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
+- Android document links correctly repeat fragment jumps and resolve encoded or duplicate anchors while preserving history and form controls.
+
 - Android interactive pages can scroll native elements into view through nested panels, including CSS scroll margins/padding and measured form controls.
 
 - Android scrolling APIs honor CSS smooth-scrolling defaults and keep immediate position reads consistent.

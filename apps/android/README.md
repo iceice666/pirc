@@ -604,6 +604,32 @@ invalid inset cascades are unverified. Other scroll APIs' Promise return values
 and fragment navigation remain separate differences. Physical acceptance and
 remote background push are still deferred as recorded in the mobile plan.
 
+Fragment navigation now resolves rendered IDs/named anchors in browser order,
+including duplicate targets, literal percent names, UTF-8 decoding and real
+`top` targets. Repeating the same fragment reveals it again without adding an
+entry or fetching the document. Saved history positions do not override an
+explicit activation. Pending requests survive remounts, consumed requests do not
+replay, and later URL/history changes invalidate old callbacks. The native
+renderer keeps original ID selectors, label associations and form values.
+
+Capture the independent 152-profile reference with
+`node apps/android/tool/parity/capture_document_fragment_chromium153.mjs`.
+`test/document_fragment_test.dart` checks initial URLs and actual first/repeated
+link taps; the lifecycle and binding test files check remounts, replacement,
+concurrent taps and preserved controls. Android runs
+`integration_test/document_fragment_test.dart` using `/fragment.json` from the
+loopback fixture server. Existing history behavior and the Sandbox element-reveal
+suite remain separate regression gates. Positions use 1/32 CSS px tolerance;
+relative history length, URL hashes, document reuse and request counts are exact.
+The existing document RPC supplies a complete final URL; backend redirect/hash
+inheritance is outside this renderer test.
+
+Fragment focus, `:target` styling, late target retries, discarded head/script/
+unsupported-node targets, ancestor revealing and text/non-HTML fragments remain
+uncertified. The fragment path still uses the HTML core's native anchor scrolling,
+so CSS scroll margin/padding, nested alignment and animation remain different
+from the bounded element-reveal API. See the mobile plan for the next work.
+
 `document.scrollingElement` uses the initial HTML parser mode and native
 box/overflow measurements to select the standards root, quirks body, or null.
 `document.compatMode` is read-only. Root/body viewport metrics use the actual
