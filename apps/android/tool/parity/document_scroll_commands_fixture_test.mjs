@@ -80,6 +80,7 @@ test('shipped JS forwards every command including cancellation-only calls', () =
           scrollY: 0,
           contentWidth: 390,
           contentHeight: 2200,
+          scrollRange: {minLeft: 0, maxLeft: 0, minTop: 0, maxTop: 1356},
         },
         boxes: initial.layout.ids.map((id) =>
           id === elementId
@@ -92,7 +93,8 @@ test('shipped JS forwards every command including cancellation-only calls', () =
                 height: 100,
                 clientWidth: 180,
                 clientHeight: 100,
-                scroll: { left: 0, top: 0, width: 600, height: 800 },
+                scroll: { left: 0, top: 0, width: 600, height: 800,
+                  range: {minLeft: 0, maxLeft: 420, minTop: 0, maxTop: 700} },
               }
             : { id, kind: 'none' },
         ),

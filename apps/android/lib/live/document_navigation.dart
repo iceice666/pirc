@@ -1492,6 +1492,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         generation: generation,
         viewport: _layoutViewport,
         elementScrollMetrics: _elementScroll.metricsFor,
+        elementScrollRanges: _elementScroll.scrollRangeFor,
 
         contentSize:
             document.scroll.hasClients &&
@@ -1508,6 +1509,16 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         ),
       );
       if (packet != null) {
+        packet['scrollActionThrough'] = scripts!.resolvedScrollActionId;
+        if (document.scroll.hasClients &&
+            document.scroll.position.hasContentDimensions) {
+          (packet['viewport'] as Json)['scrollRange'] = {
+            'minLeft': 0,
+            'maxLeft': 0,
+            'minTop': document.scroll.position.minScrollExtent,
+            'maxTop': document.scroll.position.maxScrollExtent,
+          };
+        }
         final eligible = <Object?>{
           for (final raw in packet['boxes'] as List)
             if (obj(raw)['kind'] == 'box' && obj(raw)['scroll'] is Map)

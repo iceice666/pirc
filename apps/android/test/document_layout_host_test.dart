@@ -259,12 +259,16 @@ void main() {
         url: 'https://example.test/',
       );
       expect(scripts.ready, isTrue, reason: scripts.diagnostics.join('\n'));
+      expect(scripts.resolvedScrollActionId, 0);
       expect(scripts.takeScrollActions().map((a) => a['actionId']), [1, 2]);
+      expect(scripts.resolvedScrollActionId, 2);
       expect(scripts.takeScrollActions(), isEmpty);
       gateway.pendingScroll = [scroll(3)];
       await scripts.dispatch('pirc-1', 'click', const []);
       expect(scripts.scrollActions, hasLength(1));
+      expect(scripts.resolvedScrollActionId, 2);
       scripts.setActivity(attached: false, visible: false);
+      expect(scripts.resolvedScrollActionId, 3);
       expect(scripts.takeScrollActions(), isEmpty);
       scripts.setActivity(attached: true, visible: true);
       expect(scripts.takeScrollActions(), isEmpty);

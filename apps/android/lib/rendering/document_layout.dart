@@ -238,6 +238,7 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     Offset scrollOffset = Offset.zero,
     Size? contentSize,
     Map<String, dynamic>? Function(String id)? elementScrollMetrics,
+    Map<String, double>? Function(String id)? elementScrollRanges,
     List<Map<String, dynamic>> scrollEvents = const [],
   }) {
     if (_disposed) return null;
@@ -330,7 +331,10 @@ class NativeDocumentLayoutController extends ChangeNotifier {
       final client = _clientMetrics(surface);
       if (client != null) entry.addAll(client);
       final scroll = elementScrollMetrics?.call(id);
-      if (scroll != null) entry['scroll'] = scroll;
+      if (scroll != null) {
+        final range = elementScrollRanges?.call(id);
+        entry['scroll'] = {...scroll, 'range': ?range};
+      }
       boxes.add(entry);
     }
 

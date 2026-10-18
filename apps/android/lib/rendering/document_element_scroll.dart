@@ -362,6 +362,40 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
     };
   }
 
+  /// Programmatic limits from the actual laid-out native axes, including
+  /// disabled/clip axes whose only valid programmatic position is zero.
+  Map<String, double>? scrollRangeFor(String id) {
+    if (metricsFor(id) == null) return null;
+    final attachment = _activeAttachments(id).single;
+    Map<String, double>? axis(ScrollController controller, bool enabled) {
+      if (!enabled) return {'min': 0, 'max': 0};
+      if (controller.positions.length != 1 ||
+          !controller.position.hasContentDimensions) {
+        return null;
+      }
+      return {
+        'min': controller.position.minScrollExtent,
+        'max': controller.position.maxScrollExtent,
+      };
+    }
+
+    final x = axis(
+      attachment.horizontalController,
+      _isProgrammaticallyScrollable(attachment.overflowX),
+    );
+    final y = axis(
+      attachment.verticalController,
+      _isProgrammaticallyScrollable(attachment.overflowY),
+    );
+    if (x == null || y == null) return null;
+    return {
+      'minLeft': x['min']!,
+      'maxLeft': x['max']!,
+      'minTop': y['min']!,
+      'maxTop': y['max']!,
+    };
+  }
+
   /// Events waiting to be included in an accepted native layout packet.
   ///
   /// A target contributes at most one event in each frame. [sequence] is

@@ -40,9 +40,11 @@ function nativePacket(context, response, generation, overrides = {}) {
   const packet = {
     revision: response.layout.revision,
     generation,
-    viewport: { scrollX: 17, scrollY: 29, width: 390, height: 844, ...(overrides.viewport || {}) },
+    viewport: { scrollX: 17, scrollY: 29, width: 390, height: 844,
+      scrollRange: {minLeft: 0, maxLeft: 100, minTop: 0, maxTop: 600}, ...(overrides.viewport || {}) },
     boxes,
   };
+  if (overrides.scrollActionThrough !== undefined) packet.scrollActionThrough = overrides.scrollActionThrough;
   if (Array.isArray(overrides.scrollEvents)) packet.scrollEvents = overrides.scrollEvents;
   return packet;
 }
@@ -243,8 +245,8 @@ test('native viewport scroll feedback targets Document, bubbles through Window, 
     ? settleLayout(context, initialBaseline, 2).response
     : initialBaseline;
   const scriptResponse = runClassicTask(context, acceptedBaseline);
-  assert.equal(evaluate(context, 'window.scrollAtScriptTime'), 29,
-    'scroll commands stay pending until the host returns a measured viewport position');
+  assert.equal(evaluate(context, 'window.scrollAtScriptTime'), 54,
+    'an instant relative command uses the measured current position, not a smooth destination');
   assert.deepEqual(scriptResponse.scrollActions, [
     { actionId: 1, kind: 'to', x: null, y: 999, behavior: 'smooth' },
     { actionId: 2, kind: 'by', x: 0, y: 25, behavior: 'auto' },
@@ -252,10 +254,11 @@ test('native viewport scroll feedback targets Document, bubbles through Window, 
   assert.deepEqual(JSON.parse(evaluate(context, 'JSON.stringify(window.scrollTrace)')), [],
     'the first accepted position establishes the baseline without a scroll event');
 
-  // The native host has clamped the requested offset to its actual scroll
-  // extent. Only this accepted frame changes the guest-visible scroll values.
+  // Accepted native measurements are authoritative even when user scrolling
+  // or a later extent change moves the viewport beyond a projected command.
   const clamped = invoke(context, 'updateLayout', nativePacket(context, scriptResponse, 3, {
     viewport: { scrollX: 0, scrollY: 600 },
+    scrollActionThrough: 2,
     [elementId(context, 'html')]: box(0, 0, 390, 1500),
   }));
   assert.equal(clamped.layoutAccepted, true);
@@ -308,6 +311,7 @@ test('Element scroll commands queue target-owned actions through mutation and fi
   assert.ok(pending.scrollActions.every((action) => !Object.hasOwn(action, 'layoutRevision')));
 
   const fresh = invoke(context, 'updateLayout', nativePacket(context, pending, 2, {
+    scrollActionThrough: 2,
     [outerId]: box(0, 0, 120, 80, { left: 0, top: 24, width: 120, height: 500 }),
     [addedId]: box(0, 100, 20, 20, { left: 3, top: 8, width: 20, height: 200 }),
   }));

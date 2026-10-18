@@ -584,6 +584,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _clearFocusActions() {
+    _resolvedScrollActionId = _lastScrollActionId;
     _scrollActions = const [];
     _focusActionEpoch++;
     _focusActions = const [];
@@ -637,6 +638,8 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   int _lastScrollActionId = 0;
+  int _resolvedScrollActionId = 0;
+  int get resolvedScrollActionId => _resolvedScrollActionId;
   List<Json> _scrollActions = const [];
   List<Json> get scrollActions => _scrollActions;
 
@@ -645,6 +648,9 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       return const [];
     }
     final actions = _scrollActions;
+    if (actions.isNotEmpty) {
+      _resolvedScrollActionId = actions.last['actionId'] as int;
+    }
     _scrollActions = const [];
     return actions;
   }

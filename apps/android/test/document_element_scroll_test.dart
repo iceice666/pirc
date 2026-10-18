@@ -44,6 +44,59 @@ Widget _viewport({
 );
 
 void main() {
+  for (final overflow in [
+    NativeDocumentOverflow.auto,
+    NativeDocumentOverflow.hidden,
+    NativeDocumentOverflow.clip,
+    NativeDocumentOverflow.visible,
+  ]) {
+    testWidgets(
+      'native scroll ranges follow measured dimensions and disabled axes: $overflow',
+      (tester) async {
+        final controller = NativeDocumentElementScrollController();
+        try {
+          expect(controller.scrollRangeFor('range'), isNull);
+          Widget scene(double height) => _page(
+            _viewport(
+              controller: controller,
+              id: 'range',
+              revision: 1,
+              width: 180,
+              height: height,
+              overflowX: overflow,
+              overflowY: overflow,
+              child: const OverflowBox(
+                fit: OverflowBoxFit.deferToChild,
+                alignment: Alignment.topLeft,
+                minWidth: 600,
+                maxWidth: 600,
+                child: SizedBox(width: 600, height: 800),
+              ),
+            ),
+          );
+          await tester.pumpWidget(scene(100));
+          final enabled =
+              overflow == NativeDocumentOverflow.auto ||
+              overflow == NativeDocumentOverflow.hidden;
+          expect(controller.scrollRangeFor('range'), {
+            'minLeft': 0.0,
+            'maxLeft': enabled ? 420.0 : 0.0,
+            'minTop': 0.0,
+            'maxTop': enabled ? 700.0 : 0.0,
+          });
+          await tester.pumpWidget(scene(150));
+          expect(
+            controller.scrollRangeFor('range')!['maxTop'],
+            enabled ? 650.0 : 0.0,
+          );
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          controller.dispose();
+        }
+      },
+    );
+  }
+
   testWidgets('keeps the border fixed and scrolls actual padding and content', (
     tester,
   ) async {
