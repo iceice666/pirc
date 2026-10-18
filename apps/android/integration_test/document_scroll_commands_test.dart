@@ -26,6 +26,7 @@ void main() {
         for (final entry in {
           '/scroll-commands.json': 160,
           '/scroll-feedback.json': 96,
+          '/scrolling-element.json': 88,
         }.entries) {
           final response = await (await client.getUrl(
             origin.resolve(entry.key),
@@ -37,13 +38,16 @@ void main() {
           expect(fixture['browserVersion'], '153.0.8010.12');
           expect(fixture['cases'], hasLength(entry.value));
           for (final raw in fixture['cases'] as List) {
-            cases.add({...obj(raw), 'fixtureHTML': fixture['html']});
+            cases.add({
+              ...obj(raw),
+              'fixtureHTML': obj(raw)['html'] ?? fixture['html'],
+            });
           }
         }
       } finally {
         client.close(force: true);
       }
-      expect(cases, hasLength(256));
+      expect(cases, hasLength(344));
       final gateway = Gateway(),
           theme = await PircTheme.load(),
           accepted = <Json>[];
@@ -143,7 +147,7 @@ void main() {
           });
           if (accepted.length % 32 == 0) {
             debugPrintSynchronously(
-              'PIRC_SCROLL_FEEDBACK_PROGRESS ${accepted.length}/256',
+              'PIRC_SCROLL_FEEDBACK_PROGRESS ${accepted.length}/344',
             );
           }
         } finally {
@@ -155,7 +159,7 @@ void main() {
           tester.view.reset();
         }
       }
-      expect(accepted, hasLength(256));
+      expect(accepted, hasLength(344));
       debugPrintSynchronously(
         'PIRC_NATIVE_SCROLL_FEEDBACK_ACCEPTANCE ${jsonEncode(accepted)}',
       );

@@ -11,9 +11,9 @@ are available from Git through Historical records, not repeated here.
 ## Remaining work, in priority order
 
 - [ ] **Dynamic content compatibility:** wider synchronous DOM write/read layout,
-      standard root scrolling APIs (`document.scrollingElement`), Canvas font/ink
-      coverage, inline-fragment measurements and common-library coverage. Broader
-      image/framework flows remain unverified; preserve explicit unsupported errors.
+      broader DOM APIs, Canvas font/ink coverage, inline-fragment measurements
+      and common-library coverage. Broader image/framework flows remain
+      unverified; preserve explicit unsupported errors.
 - [ ] **Physical phone/tablet acceptance:** use a real account for pairing,
       streaming/cancel/reconnect, panels, management consent and simultaneous
       web/app confirmations. Check keyboard (including CJK IME), safe areas,
@@ -149,8 +149,26 @@ and clamping; smooth destinations are not treated as current positions. The
 standards root uses viewport measurements even without a separate html box.
 The additional Chromium 153 feedback corpus has 96 profiles for setters,
 clamp-then-subtract, mixed methods, smooth cancellation, Promise jobs and RAF.
-The combined Android gate compares all 256 profiles, including aliases and
+The position-feedback corpus compares 256 profiles, including aliases and
 intermediate traces; the former 80 immediate-read mismatches are resolved.
+
+`document.scrollingElement` and read-only `document.compatMode` are now supplied
+for the active HTML document. Native startup passes the existing HTML parser's
+initial mode, including valid strict/limited/quirks legacy doctypes. Guest
+masking of `document.doctype` cannot change that mode. Standards roots and quirks
+viewport-owning bodies use measured viewport positions, scroll extents and client
+sizes. Quirks selection uses current native box/overflow evidence, including the
+root-clip exception; absent or stale evidence is an explicit unsupported read.
+Ownership queries inspect existing children and do not create a missing body.
+The additional 88 Chromium 153 profiles cover 11 mode/overflow cases at phone and
+tablet sizes, DPR 1/3 and both themes. The combined Android gate checks all 344
+profiles through the actual Sandbox and native Run button.
+
+This gate does not certify full quirks layout, inactive/DOMParser-created
+Documents, XML/frameset documents, mixed-axis overflow normalization or mixed
+viewport/body scroll routing. DOM doctype node removal and DocumentType ChildNode
+helpers (including `.remove()`) remain unsupported by the vendored DOM; the mode
+mutation test covers legal property masking, not successful node removal.
 
 **Remaining synchronous layout differences:** scroll-position feedback does not
 provide new element rectangles after scrolling or general DOM writes. Pending
