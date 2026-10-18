@@ -1,5 +1,5 @@
-//! Pre-evaluation check (`agent/ptc/preflight.ts`; docs/evaluations/ptc/
-//! ptc-only.md §3): strip TypeScript, parse the script and derive the
+//! Pre-evaluation check (`agent/ptc/preflight.ts`; docs/architecture/ptc.md):
+//! strip TypeScript, parse the script and derive the
 //! capabilities it may call. Capability names must be literals —
 //! `tools.read(…)` or `tools.call("read", …)`. Computed names, aliases of
 //! `tools`/`tools.call` and redeclaring `tools` are rejected before

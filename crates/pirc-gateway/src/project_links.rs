@@ -1,5 +1,5 @@
 //! Links from a chat project to the directory workspaces it is about
-//! (docs/history/assistant.md). A link is a default and an ordering, never a
+//! (docs/architecture/assistant-memory.md). A link is a default and an ordering, never a
 //! permission: every delegation still needs the user's confirmation, and an
 //! unlinked workspace stays reachable.
 //!

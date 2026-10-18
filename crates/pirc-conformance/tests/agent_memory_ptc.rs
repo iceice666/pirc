@@ -1,8 +1,8 @@
 //! The `recall` tool of observational memory (`agent/features/memory/`),
 //! with the test playing the agent's node. `recall` is not a direct tool:
 //! the model reaches it only from a `ptc` script, so these transcripts
-//! replay only on an agent with the PTC runtime (docs/history/rust-rewrite.md,
-//! M5). The rest of the feature is in `agent_memory.rs`.
+//! replay only on an agent with the PTC runtime (docs/architecture/ptc.md).
+//! The rest of the feature is in `agent_memory.rs`.
 
 mod memory_support;
 

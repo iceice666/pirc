@@ -1,4 +1,4 @@
-//! `schedules` (`agent/features/schedules.ts`, docs/history/cron.md): the
+//! `schedules` (`agent/features/schedules.ts`, docs/guides/schedules.md): the
 //! gateway keeps the user's schedules and starts each run in a new
 //! session. The `schedule` tool lists them and proposes new ones or
 //! changes, which the user approves in the chat; pausing and deleting take

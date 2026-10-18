@@ -687,7 +687,7 @@ fn maybe_consolidate(state: &Shared, agent: &Rc<Agent>) {
 }
 
 /// `workspaceOn`: chats have no repository to hand over; the gateway's
-/// MEMORY serves them (docs/history/assistant.md).
+/// MEMORY serves them (docs/architecture/assistant-memory.md).
 fn workspace_on(agent: &Agent, config: &MemoryConfig) -> bool {
     config.enabled
         && config.workspace.enabled
@@ -929,7 +929,7 @@ impl RecallTool {
             }
         }
         // A chat recalls notes it found with memory_search through the
-        // gateway, which asks the node that holds them (docs/history/assistant.md).
+        // gateway, which asks the node that holds them (docs/architecture/assistant-memory.md).
         let gateway = if agent.config().mode().full_assistant() {
             process_gateway()
         } else {

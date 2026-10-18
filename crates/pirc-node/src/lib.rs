@@ -1,4 +1,4 @@
-//! `pirc-node`, rewritten in Rust (docs/history/rust-rewrite.md, M6): the node
+//! `pirc-node`, rewritten in Rust (docs/development/historical-records.md): the node
 //! process of `apps/gateway/src/node/**` (both roles: `pirc-node` runs a
 //! coding node, `pirc-node chat` the chat node) next to the session agent
 //! (`pirc-node agent`, `pirc_agent`) and the PTC guest (`pirc-node

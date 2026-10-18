@@ -29,13 +29,13 @@ const SCHEMA: &str = include_str!("schema.sql");
 /// `schema.sql` is always the newest whole.
 const MIGRATIONS: &[(i64, &str)] = &[
     (
-        // Repository identity by normalized `origin` (docs/history/assistant.md).
+        // Repository identity by normalized `origin` (docs/architecture/assistant-memory.md).
         1001,
         "ALTER TABLE workspaces ADD COLUMN repo TEXT;
          ALTER TABLE memory_records ADD COLUMN repo TEXT;",
     ),
     (
-        // Projects linked to workspaces (docs/history/assistant.md).
+        // Projects linked to workspaces (docs/architecture/assistant-memory.md).
         1002,
         "CREATE TABLE project_links (
            project_workspace_id TEXT NOT NULL REFERENCES workspaces(id), workspace_id TEXT NOT NULL,
@@ -47,7 +47,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
         // Agents' schedule deletions wait for the user (security audit L10);
         1003,
         "ALTER TABLE schedule_proposals ADD COLUMN operation TEXT NOT NULL DEFAULT 'save';
-         -- The delegation checkbox for auto mode, and retention (docs/history/assistant.md).
+         -- The delegation checkbox for auto mode, and retention (docs/architecture/assistant-memory.md).
          ALTER TABLE delegations ADD COLUMN as_user_request INTEGER NOT NULL DEFAULT 0;
          CREATE INDEX delegations_follows ON delegations(follows);",
     ),

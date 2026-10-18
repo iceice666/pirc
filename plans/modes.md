@@ -1,6 +1,6 @@
 # Data-driven workspace modes
 
-[Plans](README.md) · [Assistant history](../docs/history/assistant.md) · [Chat projects guide](../docs/guides/chat-projects.md)
+[Plans](README.md) · [Assistant contracts](../docs/architecture/assistant-memory.md) · [Chat projects guide](../docs/guides/chat-projects.md)
 
 Goal: a workspace's mode (today `chat` or `directory`, shown as Chat / Work) is data, not two hard-coded branches, so the user can define more modes. Code defines a fixed vocabulary of capabilities; a mode file combines them. There are no built-in modes: `chat` and `directory` are two default mode files, edited or removed like any other.
 

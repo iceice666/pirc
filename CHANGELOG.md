@@ -132,7 +132,7 @@ Compatible with 0.4.0: same node protocol (10) and state; upgrade the gateway an
 
 ### Validation limitations
 
-- The user explicitly waived the remaining full PTC/task-time and native provider/subscription smoke-test gate, including unresolved polyglot review/accounting results. These are not reported as passed. Previously accepted sandbox/browser security gaps remain documented in the [rewrite plan](docs/history/rust-rewrite.md) and [security audit](docs/history/security-audit.md).
+- The user explicitly waived the remaining full PTC/task-time and native provider/subscription smoke-test gate, including unresolved polyglot review/accounting results. These are not reported as passed. Previously accepted sandbox/browser security gaps remain documented in the [cutover record](docs/development/historical-records.md#rust-cutover-and-validation-scope) and [security decisions](docs/architecture/security-decisions.md).
 
 ### Security
 
@@ -172,7 +172,7 @@ Compatible with 0.4.0: same node protocol (10) and state; upgrade the gateway an
 
 ### Migration
 
-- Upgrade the gateway (it ships the web bundle) and every chat and coding node from the same release, then reload web clients and update the Android app. Rename hook matchers that name `code` to `ptc` (they still apply, with a warning in the session). Scripts that relied on Bun or Node APIs must use tools instead. See [Upgrades](docs/deploy/upgrades.md#programmatic-tool-calling-the-code-tool-removed).
+- Upgrade the gateway (it ships the web bundle) and every chat and coding node from the same release, then reload web clients and update the Android app. Rename hook matchers that name `code` to `ptc` (they still apply, with a warning in the session). Scripts that relied on Bun or Node APIs must use tools instead. See [PTC migration record](docs/development/historical-records.md#ptc-evaluation-outcome).
 
 ### Known limits
 

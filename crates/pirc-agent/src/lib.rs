@@ -1,5 +1,5 @@
-//! The session agent (`apps/gateway/src/agent`), being rewritten in Rust
-//! (docs/history/rust-rewrite.md, M4 and M5): one session per process, JSONL RPC on
+//! The session agent (`apps/gateway/src/agent`), rewritten in Rust
+//! (docs/development/historical-records.md): one session per process, JSONL RPC on
 //! stdin/stdout, inference through the node's Unix socket.
 //!
 //! Like the TS agent it is single-threaded: a current-thread tokio runtime,

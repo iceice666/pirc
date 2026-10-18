@@ -40,6 +40,12 @@ Upgrade the gateway and every node together. The 0.6.x server uses node protocol
 management grants and cross-device interaction synchronization need the matching
 gateway/web update from this change.
 
+## Project files and deletion
+
+Project files use scoped native document tokens and stream one file at a time within the node's reported upload limit, not the session-attachment picker's older 8 MiB cap. Partial batches keep successful uploads; account, project, host or online-state changes discard stale results and stop the remaining batch. Temporary tokens are released on completion or cancellation.
+
+Project deletion requires explicit Forget/Keep/Edit decisions for mixed-source memory, following the [project deletion contract](../../docs/guides/chat-projects.md#deleting-a-project). Revision conflicts reload the preview and clear prior decisions; other failures reload the remaining deletion plan before retrying. No deletion POST is retried automatically. Preview and confirmation capture the pairing stamp and that account's API before I/O; stale stamps are rejected before destructive requests. Account, host or project changes dismiss stale dialogs. Acknowledged deletion clears only that project's sessions, drafts and navigation, refreshes memory/schedules and fences stale indexes or pending chat creation from restoring it. The top-level Chats workspace cannot be deleted. Submission blocks dismissal and edits; constrained keyboard viewports may scroll the whole dialog.
+
 ## Verification
 
 ```sh
@@ -94,8 +100,9 @@ a dedicated test browser, never the user's everyday Chrome; see
 Keep source fixtures, compact expectations, regression tests and reproducible
 capture tools in Git. APKs, screenshots, raw capture dumps, acceptance logs,
 per-machine setup and chronological development notes stay in ignored local
-output directories. Development history before 0.6.1 is retained locally under
-`build/local-history/`, not published as project documentation.
+output directories. Raw development output before 0.6.1 is retained locally under
+`build/local-history/`, not published as project documentation. Retired tracked
+plans and implementation notes are available through [Historical records in Git](../../docs/development/historical-records.md).
 
 Historical capture metadata uses `<repository>/` for machine-local paths. This
 normalization does not change the recorded browser results or claim a recapture.

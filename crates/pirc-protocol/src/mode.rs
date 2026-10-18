@@ -115,7 +115,7 @@ pub const CHAT: Mode = Mode {
     workdir: Workdir::PerSession,
     prompt: PromptStyle::Assistant,
     // Their tools cost context a personal assistant rarely needs, and chats
-    // hand real work to a workspace with `delegate` (docs/history/assistant.md).
+    // hand real work to a workspace with `delegate` (docs/architecture/assistant-memory.md).
     features_off: &["goal", "todo", "agentTeam", "background"],
     assistant: AssistantAccess::Full,
     delegate: true,

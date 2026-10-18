@@ -1,4 +1,4 @@
-//! `sandbox` (`agent/features/sandbox.ts`, docs/history/sandbox.md): tools
+//! `sandbox` (`agent/features/sandbox.ts`, docs/deploy/sandbox-and-browser.md): tools
 //! for an agent inside its node's OS sandbox. `sandbox_allow_domains` asks
 //! for more network access, `unsandboxed_bash` runs one command outside the
 //! sandbox. The node asks the human for both; nothing here can grant

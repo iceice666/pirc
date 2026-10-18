@@ -3,7 +3,7 @@
 //! and `memory_search`, with `recall` reaching the gateway, the test
 //! playing the agent's node and gateway. They are reachable only from
 //! `ptc` scripts, so these transcripts replay only on an agent with the
-//! PTC runtime (docs/history/rust-rewrite.md, M5). The rest of the feature is in
+//! PTC runtime (docs/architecture/ptc.md). The rest of the feature is in
 //! `agent_assistant.rs`.
 
 mod memory_support;

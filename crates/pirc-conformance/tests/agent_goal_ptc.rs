@@ -2,7 +2,7 @@
 //! `ptc` scripts, as `agent-goal.test.ts` calls them: rounds until the
 //! model completes the goal, the round limit, the authority rules during
 //! continuation rounds, blocked goals, and the tools in a session without
-//! goals. Needs the `ptc` runtime (docs/history/rust-rewrite.md, M5).
+//! goals. Needs the `ptc` runtime (docs/architecture/ptc.md).
 
 mod feature_support;
 

@@ -1,8 +1,8 @@
 //! The `background_task` tool (`agent/features/background/`), with the
 //! test playing the agent's node. `background_task` is not a direct tool:
 //! the model reaches it only from a `ptc` script, so these transcripts
-//! replay only on an agent with the PTC runtime (docs/history/rust-rewrite.md,
-//! M5). The slash commands, the panel and wake-ups without the tool are in
+//! replay only on an agent with the PTC runtime (docs/architecture/ptc.md).
+//! The slash commands, the panel and wake-ups without the tool are in
 //! `agent_background.rs`. Tasks finish inside a blocking call (`wait`,
 //! `stop`) or wait for a trigger file the test creates, so they finish at
 //! known points.

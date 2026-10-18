@@ -5,8 +5,8 @@
 //! with and without a live agent; browser recordings; uploads and what a
 //! prompt that references them gives the model; and who may use these
 //! routes. `node_panels_link` plays the gateway instead, for the checks
-//! the real gateway makes before relaying anything. The M6 target of the
-//! node port (docs/history/rust-rewrite.md).
+//! the real gateway makes before relaying anything. The historical node
+//! baseline (docs/development/historical-records.md).
 
 mod node_panels_support;
 

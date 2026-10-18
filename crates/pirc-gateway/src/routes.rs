@@ -293,7 +293,7 @@ pub async fn patch_capabilities(
     Ok(ok(json!({ "capabilities": capabilities })))
 }
 
-/// The workspaces a chat project is linked to (docs/history/assistant.md).
+/// The workspaces a chat project is linked to (docs/architecture/assistant-memory.md).
 pub async fn get_links(State(app): State<AppState>, Path(workspace_id): Path<String>) -> Handled {
     let links = crate::project_links::project_links(&app.db.lock(), &workspace_id)?;
     Ok(ok(crate::project_links::view(&app, &links)?))

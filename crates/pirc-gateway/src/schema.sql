@@ -1,4 +1,4 @@
--- The gateway's SQLite schema (docs/history/rust-rewrite.md, M2): the TS
+-- The gateway's SQLite schema (docs/development/historical-records.md): the TS
 -- migrations of apps/gateway/src/database.ts consolidated into one fresh
 -- schema. Tables the TS gateway created but never wrote (runs, interactions,
 -- uploads, workspace_trust: those live on the nodes) are left out.
@@ -125,7 +125,7 @@ CREATE TABLE memory_records (
 CREATE INDEX memory_records_owner ON memory_records(owner_user, status);
 CREATE INDEX memory_records_id ON memory_records(id);
 
--- Scheduled agent runs (daemon/schedules.ts, docs/history/cron.md).
+-- Scheduled agent runs (daemon/schedules.ts, docs/guides/schedules.md).
 CREATE TABLE schedules (
   id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, workspace_id TEXT NOT NULL,
   title TEXT NOT NULL, prompt TEXT NOT NULL, cron TEXT, run_at INTEGER,
@@ -167,7 +167,7 @@ CREATE TABLE workspace_capabilities (
   workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id), policy_json TEXT NOT NULL
 );
 
--- The directory workspaces a chat project is about (docs/history/assistant.md): a
+-- The directory workspaces a chat project is about (docs/architecture/assistant-memory.md): a
 -- default and an ordering, never a permission. No foreign key on workspace_id: a
 -- link to a workspace that went away stays, shown as such. repo is the workspace's
 -- normalized origin, so a link also covers the other clones of its repository.

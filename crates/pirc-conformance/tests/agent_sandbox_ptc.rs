@@ -1,4 +1,4 @@
-//! The sandbox tools run from `ptc` scripts (docs/history/rust-rewrite.md, M5):
+//! The sandbox tools run from `ptc` scripts (docs/architecture/ptc.md):
 //! `sandbox_allow_domains` granted, partly granted, refused and for an
 //! unrestricted agent; `unsandboxed_bash` run, failing, timed out, refused
 //! by the human and refused a write lease. The node's answers come from

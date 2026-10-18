@@ -1,4 +1,4 @@
-//! The `goal` feature without `ptc` scripts (docs/history/rust-rewrite.md, M5):
+//! The `goal` feature without `ptc` scripts (docs/development/historical-records.md):
 //! `/goal` commands, continuation rounds started when the agent settles,
 //! pauses at the round limit and after an interrupted run, a goal restored
 //! disarmed after a restart, and the feature turned off (config, chats).

@@ -2,7 +2,7 @@
 
 [User guides](README.md) · [All documentation](../README.md)
 
-Each node gives its agents a real Chromium through [playwright-core](https://playwright.dev) ([historical browser plan](../history/browser.md)). The node owns one browser per workspace, with a persistent profile under `$PIRC_STATE_DIR/browser/`, so a login made once serves every session in that workspace. Each session drives its own tabs.
+Each node gives its agents a real Chromium through [playwright-core](https://playwright.dev). The node owns one browser per workspace, with a persistent profile under `$PIRC_STATE_DIR/browser/`, so a login made once serves every session in that workspace. Each session drives its own tabs.
 
 - **Tools**:
   - `web_fetch` renders a URL (JavaScript runs, logins apply) and returns readable markdown, text or HTML, in pages of `maxChars`.

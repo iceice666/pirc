@@ -1,7 +1,7 @@
 //! The agent's configuration and session store as the node sees them
 //! (features off): project and node prompt files, untrusted project config
 //! and memory settings warnings, chat workspace prompts, and resuming a
-//! session file the TS agent wrote (docs/history/rust-rewrite.md, M4).
+//! session file the TS agent wrote (docs/development/historical-records.md).
 
 use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder, fake_models};
 use serde_json::{Value, json};

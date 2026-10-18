@@ -12,7 +12,7 @@ function mobileVersion(text: string): { version: string; code: number } {
     throw new Error('Invalid Flutter Android versionCode');
   return { version: version!, code };
 }
-/** The Rust workspace (docs/history/rust-rewrite.md): every member inherits `[workspace.package]`. */
+/** The Rust workspace (docs/development/historical-records.md): every member inherits `[workspace.package]`. */
 const cargo = 'Cargo.toml';
 const cargoLock = 'Cargo.lock';
 /** The line of `version = "…"` in `[workspace.package]`, and its value. */

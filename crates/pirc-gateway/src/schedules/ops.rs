@@ -1,6 +1,6 @@
 //! The `schedule.*` operations agents ask for (`daemon/agent-ops.ts`).
 //!
-//! Where a session's agent may schedule (docs/history/cron.md): an
+//! Where a session's agent may schedule (docs/guides/schedules.md): an
 //! assistant chat in its own chat or any directory workspace it may
 //! delegate to; any other session only in its own workspace. A scheduled
 //! run may not start more work: no new schedules, resumes or runs from it.

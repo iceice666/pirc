@@ -1,5 +1,5 @@
 //! Image attachments of one `ptc` execution (`agent/ptc/attachments.ts`;
-//! docs/evaluations/ptc/ptc-m1-contracts.md "Attachments"). An operation's
+//! docs/architecture/ptc.md). An operation's
 //! images stay on the host; the script sees descriptors with an opaque,
 //! unguessable handle and may queue them for the outer `ptc` result with
 //! `attachments.add(handle)`. No bytes, paths or URLs ever enter the realm,

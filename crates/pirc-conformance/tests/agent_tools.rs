@@ -1,7 +1,7 @@
 //! The agent's tool policy chain with the test playing its node (features
 //! off): user hooks around tool calls, the auto-mode rules (danger
 //! approvals, the deny-list, write-lease targets) and `ptc_docs` lookups.
-//! The M4 target of the agent port (docs/history/rust-rewrite.md).
+//! The historical core baseline (docs/development/historical-records.md).
 
 use std::collections::VecDeque;
 

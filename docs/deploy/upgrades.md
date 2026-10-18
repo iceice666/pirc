@@ -90,7 +90,7 @@ formats resemble the old ones. Do not point `PIRC_DATABASE_PATH` at an old DB.
    and real-provider smoke tests are operator actions, not performed by cutover.
 
 The remaining paid PTC/task-time and provider-login gate was **waived by the user**,
-not passed. See [the decision and accepted gaps](../history/rust-rewrite.md#m9-cutover).
+not passed. See [the cutover decision and validation scope](../development/historical-records.md#rust-cutover-and-validation-scope).
 
 ### Rollback across the cutover
 

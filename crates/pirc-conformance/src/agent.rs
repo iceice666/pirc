@@ -5,8 +5,8 @@
 //! operations, dialogs) answered by the test.
 //!
 //! The agent runs with its built-in features off (`PIRC_AGENT_FEATURES=
-//! none`, the M4 target of the agent port, docs/history/rust-rewrite.md) unless a
-//! scenario turns some on ([`AgentOptions::features`], M5).
+//! none`, the historical core-only baseline, docs/development/historical-records.md)
+//! unless a scenario turns some on ([`AgentOptions::features`]).
 
 use std::collections::{HashMap, VecDeque};
 use std::convert::Infallible;

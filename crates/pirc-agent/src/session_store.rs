@@ -1,6 +1,6 @@
 //! The append-only `session.jsonl` (`agent/session-store.ts`), kept
-//! field-for-field compatible with the TS agent's v1 (the TS node reads it
-//! while the Rust agent runs under it; docs/history/rust-rewrite.md, M4).
+//! field-for-field compatible with the TS agent's v1 (the historical TS-node
+//! interoperability baseline; docs/development/historical-records.md).
 //!
 //! Every entry has a stable id and parent id; the active branch is the chain
 //! ending at the most recently appended (or last read) entry.

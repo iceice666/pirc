@@ -1,5 +1,5 @@
 //! The agent alone (features off), with the test playing its node: the
-//! M4 target of the agent port (docs/history/rust-rewrite.md). The loop, the RPC
+//! historical core baseline (docs/development/historical-records.md). The loop, the RPC
 //! commands, tool calls and their failures, queues and model failures.
 
 use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder};

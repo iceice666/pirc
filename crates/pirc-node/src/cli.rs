@@ -1,6 +1,6 @@
 //! `pirc-node`'s command line (`entry/common.ts`, `entry/node-runtime.ts`):
-//! one executable for both node roles (docs/history/rust-rewrite.md, M6
-//! decisions). M9 re-specifies it as conformance tests.
+//! one executable for both node roles (historical decisions indexed in
+//! docs/development/historical-records.md), specified by conformance tests.
 
 use pirc_protocol::NodeRole;
 

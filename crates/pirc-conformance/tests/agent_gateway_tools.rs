@@ -1,5 +1,5 @@
 //! The features that go through the gateway, without `ptc` scripts
-//! (docs/history/rust-rewrite.md, M5): `web_search` (a direct tool) and its
+//! (docs/development/historical-records.md): `web_search` (a direct tool) and its
 //! results, failures and absence; `/cron` (the `schedules` feature's
 //! command) listing, pausing and running schedules, its errors, the
 //! workspace capability, and chats reading their capabilities from the

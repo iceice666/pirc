@@ -14,7 +14,7 @@ guest = ["dep:rquickjs", "dep:nix", "dep:seccompiler", "dep:libc"]
 
 [dependencies]
 # TypeScript type stripping and the preflight's AST checks (Bun.Transpiler
-# and acorn in TS); sized by the M1 spike in docs/history/rust-rewrite.md.
+# and acorn in TS); sized by the historical spike indexed in docs/development/historical-records.md.
 oxc = { version = "0.153", features = ["semantic", "transformer", "codegen", "ast_visit"] }
 # Native QuickJS, the engine TS ran as WASM (quickjs-emscripten).
 rquickjs = { version = "0.14", optional = true }
