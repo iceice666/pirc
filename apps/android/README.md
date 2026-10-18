@@ -408,13 +408,35 @@ node apps/android/tool/parity/capture_document_scroll_feedback_chromium153.mjs
 ```
 
 The Android `integration_test/document_scroll_commands_test.dart` uses the same
-loopback fixture server/define as above and checks all 344 profiles: immediate and
-settled readings, root aliases and intermediate traces. Node tests check exact
-shared HTML/drivers, the shipped bundle, delayed acknowledgements, bounded
-queues, measured ranges and lifecycle cancellation. Position feedback does not
-supply synchronous element rectangles after scrolling; those reads require a new
-native measurement. CSS defaults, timing/event variants, global getter errors
-and remaining DOM/layout APIs stay in the mobile plan.
+loopback fixture server/define as above and checks all 472 profiles: immediate and
+settled readings, root aliases, intermediate traces and element rectangles. Node
+tests check exact shared HTML/drivers, the shipped bundle, delayed
+acknowledgements, bounded queues, measured ranges and lifecycle cancellation.
+The existing 344 cases retain exact equality. The additional 128 rectangle cases
+allow at most 0.001 CSS px for affine floating-point differences, while checking
+all report keys, client rectangles and intermediate states.
+
+`getBoundingClientRect()` and `getClientRects()` can now project pending scroll
+commands from actual native paint ancestry, affine matrices and measured scroll
+ranges. Fixed subtrees keep their viewport position; unrelated boxes remain
+readable. The Canvas pointer rectangle fast path yields to this geometry after a
+script scroll, so a real tap does not leave subsequent reads at its old position.
+General DOM writes still require a matching native measurement; missing proof,
+sticky and unsupported positioning paths retain explicit errors. Recreate the
+128 independent Chromium 153 references with
+`node apps/android/tool/parity/capture_document_scroll_rect_chromium153.mjs`;
+the loopback fixture server supplies `/scroll-rect.json`.
+
+Common HTML `transform` functions now paint and hit-test natively: translate,
+scale, rotate, skew and six-value 2D matrices, composed in CSS order. Percentage
+translations and ordinary `transform-origin` values use the actual laid-out
+border box without changing normal-flow size. This gate includes nested
+scrollports, default/explicit origins, rotation, matrix composition, transformed
+positioned elements and actual Canvas taps. It does not certify transformed
+containing blocks, perspective/3D, individual transform properties, textual
+inline fragments or transformed overflow extents. CSS defaults, timing/event
+variants, global getter errors and remaining DOM/layout APIs stay in the mobile
+plan.
 
 `document.scrollingElement` uses the initial HTML parser mode and native
 box/overflow measurements to select the standards root, quirks body, or null.

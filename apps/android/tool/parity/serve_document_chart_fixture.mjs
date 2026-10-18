@@ -95,6 +95,9 @@ if (JSON.parse(scrollFeedback.toString('utf8')).browserVersion !== '153.0.8010.1
 const scrollingElement = readFileSync(path.join(scriptDirectory, 'fixtures/document-scrolling-element-chromium153.json'));
 if (JSON.parse(scrollingElement.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected scrolling-element browser');
 
+const scrollRect = readFileSync(path.join(scriptDirectory, 'fixtures/document-scroll-rect-chromium153.json'));
+if (JSON.parse(scrollRect.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected scroll-rect browser');
+
 const requestedPort = configuredPort();
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -123,6 +126,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/scroll-rect.json') {
+    response.writeHead(200, {'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8'});
+    response.end(scrollRect);
     return;
   }
   if (pathname === '/scrolling-element.json') {

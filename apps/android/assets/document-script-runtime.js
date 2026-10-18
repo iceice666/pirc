@@ -38133,14 +38133,40 @@ function createPircDocumentLayout(options) {
     return list;
   }
 
+  function scrollGeometryDelta(box) {
+    if (!pendingScrollActions.length) return {left: 0, top: 0};
+    const proof = box.scrollGeometry;
+    if (!proof) {
+      requireSettledScrollGeometry();
+      return {left: 0, top: 0};
+    }
+    let left = 0, top = 0;
+    if (proof.viewport) {
+      const measured = layoutSnapshot.viewport;
+      const projected = projectedScroll(null, {left: measured.scrollX, top: measured.scrollY}, measured.scrollRange);
+      left -= projected.left - measured.scrollX;
+      top -= projected.top - measured.scrollY;
+    }
+    for (const dependency of proof.ancestors) {
+      const owner = layoutSnapshot.boxes.get(dependency.id);
+      const projected = projectedScroll(dependency.element, owner.scroll, owner.scroll.range);
+      const x = projected.left - owner.scroll.left, y = projected.top - owner.scroll.top;
+      const a = dependency.axes;
+      left -= a[0] * x + a[2] * y;
+      top -= a[1] * x + a[3] * y;
+    }
+    if (!Number.isFinite(left) || !Number.isFinite(top))
+      throw notSupported('pending_scroll_geometry', 'Projected native scroll geometry is not finite', {revision: currentRevision()});
+    return {left, top};
+  }
+
   function boundingClientRect(element) {
     const result = requireBox(element, true);
     if (result.detached || result.box.kind === 'none') return zeroRect();
-    requireSettledScrollGeometry();
-    const box = result.box;
+    const box = result.box, delta = scrollGeometryDelta(box);
     return new DOMRect(
-      box.x - result.viewport.scrollX,
-      box.y - result.viewport.scrollY,
+      box.x - result.viewport.scrollX + delta.left,
+      box.y - result.viewport.scrollY + delta.top,
       box.width,
       box.height,
     );
@@ -38149,11 +38175,10 @@ function createPircDocumentLayout(options) {
   function clientRects(element) {
     const result = requireBox(element);
     if (result.detached || result.box.kind === 'none') return createRectList([]);
-    requireSettledScrollGeometry();
-    const box = result.box;
+    const box = result.box, delta = scrollGeometryDelta(box);
     return createRectList([new DOMRect(
-      box.x - result.viewport.scrollX,
-      box.y - result.viewport.scrollY,
+      box.x - result.viewport.scrollX + delta.left,
+      box.y - result.viewport.scrollY + delta.top,
       box.width,
       box.height,
     )]);
@@ -38426,6 +38451,23 @@ function createPircDocumentLayout(options) {
     return box.resize || null;
   }
 
+  function validateScrollGeometry(raw, label) {
+    if (raw === undefined) return undefined;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
+        typeof raw.viewport !== 'boolean' || !Array.isArray(raw.ancestors) || raw.ancestors.length > 64)
+      throw new TypeError(`${label} requires a viewport flag and bounded ancestors`);
+    const seen = new Set();
+    const ancestors = raw.ancestors.map(dependency => {
+      if (!dependency || !isSafeId(dependency.id) || seen.has(dependency.id) ||
+          !Array.isArray(dependency.axes) || dependency.axes.length !== 4)
+        throw new TypeError(`${label} requires distinct scroll ids and four affine coefficients`);
+      seen.add(dependency.id);
+      return Object.freeze({id: dependency.id, axes: Object.freeze(dependency.axes.map((n, i) =>
+        requireFiniteNumber(n, `${label}.${dependency.id}.axes[${i}]`, false)))});
+    });
+    return Object.freeze({viewport: raw.viewport, ancestors: Object.freeze(ancestors)});
+  }
+
   function validateScrollRange(raw, label) {
     if (raw === undefined) return undefined;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw))
@@ -38473,6 +38515,7 @@ function createPircDocumentLayout(options) {
     const stagedBoxes = new Map();
     const stagedElements = new Map();
     const computedStyleBudget = { chars: 0 };
+    let scrollGeometryReferences = 0;
     for (const source of packet.boxes) {
       if (!source || typeof source !== 'object' || Array.isArray(source)) throw new TypeError('Each layout box must be an object');
       const id = source.id;
@@ -38599,6 +38642,12 @@ function createPircDocumentLayout(options) {
         clientWidthIndependentOfDescendantSizes = source.clientWidthIndependentOfDescendantSizes;
       }
 
+      const scrollGeometry = validateScrollGeometry(source.scrollGeometry, `${id}.scrollGeometry`);
+      if (scrollGeometry !== undefined) {
+        if (source.kind !== 'box') throw new TypeError(`${id}.scrollGeometry requires a box`);
+        scrollGeometryReferences += scrollGeometry.ancestors.length;
+        if (scrollGeometryReferences > 16384) throw new RangeError('Scroll geometry metadata exceeds the packet budget');
+      }
       const bounds = {};
       for (const name of ['x', 'y', 'width', 'height']) {
         if (Object.prototype.hasOwnProperty.call(source, name) || source.kind === 'box') {
@@ -38656,7 +38705,7 @@ function createPircDocumentLayout(options) {
           });
         }
         stagedBoxes.set(id, Object.freeze({
-          id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset,
+          id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset, scrollGeometry,
           ...(computedStyle === undefined ? {} : { computedStyle }), textIndependentStyleProperties, resize, element, revision,
           canvasBitmapSizeIndependent, canvasEquivalentStyleWrites, clientWidthIndependentOfDescendantSizes,
           replacedBoxStyleProjection, stableReplacedChildId, canvasSizingProjection,
@@ -38697,6 +38746,21 @@ function createPircDocumentLayout(options) {
           calculated.width !== box.computedStyle.width || calculated.height !== box.computedStyle.height) {
         throw new TypeError(`${id}.canvasSizingProjection must match the actual native sizes and its fixed parent`);
       }
+    }
+
+    for (const [id, box] of stagedBoxes) {
+      if (!box.scrollGeometry) continue;
+      const ancestors = box.scrollGeometry.ancestors.map(dependency => {
+        const owner = stagedBoxes.get(dependency.id);
+        if (!owner || owner.kind !== 'box' || !owner.scroll?.range ||
+            owner.element.ownerDocument !== documentRef || !isConnected(owner.element) ||
+            !isProperAncestor(owner.element, box.element))
+          throw new TypeError(`${id}.scrollGeometry requires measured scroll ancestors`);
+        return Object.freeze({...dependency, element: owner.element});
+      });
+      stagedBoxes.set(id, Object.freeze({...box, scrollGeometry: Object.freeze({
+        viewport: box.scrollGeometry.viewport, ancestors: Object.freeze(ancestors),
+      })}));
     }
 
     // Resolve stable-child ownership after every box has been staged.
@@ -38890,6 +38954,7 @@ function createPircDocumentLayout(options) {
     nativeViewport,
     recordScrollAction,
     pendingScrollActionCount() { return pendingScrollActions.length; },
+    hasPendingScrollActions() { return pendingScrollActions.length > 0; },
     discardScrollFeedback() { pendingScrollActions = []; },
     update,
     scrollMetric(element, name) { return scrollMetric(element, name); },
@@ -41638,7 +41703,7 @@ function createPircDocumentLayout(options) {
     Object.defineProperty(prototype, 'getBoundingClientRect', {
       value: function() {
         const measured = pointer.nativeCanvasRect(this);
-        if (measured)
+        if (measured && !layout.hasPendingScrollActions())
           return new layout.DOMRect(measured.x, measured.y, measured.width, measured.height);
         return layout.getBoundingClientRect(this);
       },

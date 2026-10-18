@@ -15,6 +15,7 @@ import 'document_layout.dart';
 import 'document_computed_styles.dart';
 import 'document_offsets.dart';
 import 'document_relative_position.dart';
+import 'document_transform.dart';
 import 'document_absolute_position.dart';
 import 'document_pointer_events.dart';
 import 'document_pointer_style.dart';
@@ -3463,8 +3464,18 @@ class _NativeHtmlFactory extends WidgetFactory {
     dom.Element? current = element;
     while (current != null) {
       final css = _flexChildStyles(current);
+      final ownTransform =
+          identical(current, element) &&
+          NativeDocumentTransformSpec.parse(
+                css['transform'],
+                origin: css['transform-origin'],
+              ) !=
+              null;
+      if (!ownTransform &&
+          !const {'none', ''}.contains(css['transform'] ?? '')) {
+        return false;
+      }
       if (const [
-        'transform',
         'translate',
         'rotate',
         'scale',
@@ -4595,6 +4606,66 @@ class _NativeHtmlFactory extends WidgetFactory {
     );
   }
 
+  void _registerDocumentTransform(BuildTree tree) {
+    if (markdownStyles) return;
+    final css = _flexChildStyles(tree.element);
+    final spec = NativeDocumentTransformSpec.parse(
+      css['transform'],
+      origin: css['transform-origin'],
+    );
+    if (spec == null) return;
+    var blockWrapped = false;
+    Widget transformed(BuildTree parsed, BuildContext context, Widget child) =>
+        NativeDocumentTransform(
+          spec: spec,
+          viewport: imageViewport(),
+          fontSize:
+              parsed.inheritanceResolvers
+                  .resolve(context)
+                  .get<TextStyle>()
+                  ?.fontSize ??
+              16,
+          boxGeometry: (marker) =>
+              nativeDocumentPositioningSurface(marker, owner: parsed.element),
+          child: child,
+        );
+    tree.register(
+      BuildOp(
+        debugLabel: 'native-document-transform',
+        alwaysRenderBlock: false,
+        // Transform the border box and its measurement, inside flow margins.
+        priority: 5000005760000000,
+        onRenderBlock: (parsed, placeholder) {
+          blockWrapped = true;
+          return placeholder.wrapWith(
+            (context, child) => transformed(parsed, context, child),
+          );
+        },
+        onRenderInline: (parsed) {
+          if (blockWrapped) return;
+          if (!const {
+            'img',
+            'canvas',
+            'svg',
+            'input',
+            'button',
+            'select',
+            'textarea',
+            'video',
+            'audio',
+          }.contains(parsed.element.localName)) {
+            return;
+          }
+          final bits = parsed.bits.whereType<WidgetBit>().toList();
+          if (bits.length != 1) return;
+          bits.single.child.wrapWith(
+            (context, child) => transformed(parsed, context, child),
+          );
+        },
+      ),
+    );
+  }
+
   void _registerLayoutGeometry(BuildTree tree) {
     if (layoutController() == null ||
         !tree.element.attributes.containsKey('data-pirc-script-id')) {
@@ -4644,6 +4715,7 @@ class _NativeHtmlFactory extends WidgetFactory {
   @override
   void parse(BuildTree tree) {
     _registerPointerEvents(tree);
+    _registerDocumentTransform(tree);
     _registerAbsolutePositioning(tree);
     final absolute = _absoluteSupported(tree.element);
     if (absolute) {

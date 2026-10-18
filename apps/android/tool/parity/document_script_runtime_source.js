@@ -2728,7 +2728,7 @@
     Object.defineProperty(prototype, 'getBoundingClientRect', {
       value: function() {
         const measured = pointer.nativeCanvasRect(this);
-        if (measured)
+        if (measured && !layout.hasPendingScrollActions())
           return new layout.DOMRect(measured.x, measured.y, measured.width, measured.height);
         return layout.getBoundingClientRect(this);
       },

@@ -6,6 +6,7 @@ import 'document_computed_styles.dart';
 import 'html_document_box.dart';
 import 'document_element_scroll.dart';
 import 'document_scroll_anchor_state.dart';
+import 'document_absolute_position.dart';
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
@@ -239,6 +240,7 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     Size? contentSize,
     Map<String, dynamic>? Function(String id)? elementScrollMetrics,
     Map<String, double>? Function(String id)? elementScrollRanges,
+    Map<String, RenderBox> elementScrollSurfaces = const {},
     List<Map<String, dynamic>> scrollEvents = const [],
   }) {
     if (_disposed) return null;
@@ -339,6 +341,31 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     }
 
     _attachComputedStyles(boxes, root.computedStyles, styleSurfaces, viewport);
+    final byId = {for (final box in boxes) box['id'] as String: box};
+    final ports = {
+      for (final entry in elementScrollSurfaces.entries) entry.value: entry.key,
+    };
+    var references = 0;
+    for (final box in boxes) {
+      final id = box['id'] as String, surface = styleSurfaces[id];
+      if (surface == null ||
+          root.computedStyles[id]?.scrollTranslationSupported != true) {
+        continue;
+      }
+      final geometry = _scrollGeometry(
+        id,
+        surface,
+        root,
+        byId,
+        ports,
+        elementScrollRanges,
+      );
+      if (geometry == null) continue;
+      final count = (geometry['ancestors'] as List).length;
+      if (references + count > 16384) continue;
+      references += count;
+      box['scrollGeometry'] = geometry;
+    }
     return <String, dynamic>{
       'revision': revision,
       'generation': generation,
@@ -355,6 +382,74 @@ class NativeDocumentLayoutController extends ChangeNotifier {
       'boxes': boxes,
       if (scrollEvents.isNotEmpty) 'scrollEvents': scrollEvents,
     };
+  }
+
+  static List<double>? _affineAxes(Matrix4 matrix) {
+    final m = matrix.storage;
+    if (m.any((value) => !value.isFinite) ||
+        m[2].abs() > 1e-9 ||
+        m[3].abs() > 1e-9 ||
+        m[6].abs() > 1e-9 ||
+        m[7].abs() > 1e-9 ||
+        m[8].abs() > 1e-9 ||
+        m[9].abs() > 1e-9 ||
+        m[11].abs() > 1e-9 ||
+        m[14].abs() > 1e-9 ||
+        (m[10] - 1).abs() > 1e-9 ||
+        (m[15] - 1).abs() > 1e-9) {
+      return null;
+    }
+    return [m[0], m[1], m[4], m[5]];
+  }
+
+  Map<String, dynamic>? _scrollGeometry(
+    String id,
+    RenderBox surface,
+    _RenderNativeDocumentLayoutRoot root,
+    Map<String, Map<String, dynamic>> boxes,
+    Map<RenderBox, String> ports,
+    Map<String, double>? Function(String)? ranges,
+  ) {
+    try {
+      if (_affineAxes(surface.getTransformTo(root)) == null) return null;
+      final ancestors = <Map<String, dynamic>>[];
+      var followsViewport = true;
+      RenderObject? current = surface;
+      while (!identical(current, root)) {
+        if (current == null) return null;
+        final fixedSurface = current is NativeDocumentFixedSurface
+            ? current as NativeDocumentFixedSurface
+            : null;
+        if (fixedSurface != null && fixedSurface.fixedToViewport) {
+          if (!fixedSurface.scrollTranslationIndependent) return null;
+          followsViewport = false;
+          break;
+        }
+        current = current.parent;
+        if (current == null || identical(current, root)) continue;
+        final ownerId = nativeDocumentScrollOwnerId(current);
+        if (ownerId == null) continue;
+        if (current is! RenderBox || ports[current] != ownerId) return null;
+        final range = ranges?.call(ownerId);
+        if (range == null) return null;
+        if (range['minLeft'] == range['maxLeft'] &&
+            range['minTop'] == range['maxTop']) {
+          continue;
+        }
+        final owner = boxes[ownerId];
+        if (ownerId == id ||
+            owner?['kind'] != 'box' ||
+            owner?['scroll'] is! Map) {
+          return null;
+        }
+        final axes = _affineAxes(current.getTransformTo(root));
+        if (axes == null || ancestors.length >= 64) return null;
+        ancestors.add({'id': ownerId, 'axes': axes});
+      }
+      return {'viewport': followsViewport, 'ancestors': ancestors};
+    } on FlutterError {
+      return null;
+    }
   }
 
   Map<String, dynamic>? _offsetMetrics(

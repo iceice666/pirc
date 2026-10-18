@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:html/dom.dart' as dom;
 
 import 'document_pointer_style.dart';
+import 'document_transform.dart';
 
 import 'html_background_gradient.dart' show parseNativeCssColor;
 
@@ -28,6 +29,7 @@ class NativeDocumentComputedStyleSpec {
     this.textContentSelectorsIndependent = false,
     this.isReplaced = false,
     this.resizeSupported = true,
+    this.scrollTranslationSupported = false,
     this.canvasBitmapSizeIndependent = false,
     this.canvasEquivalentStyleWrites = false,
     this.clientWidthIndependentOfDescendantSizes = false,
@@ -48,6 +50,10 @@ class NativeDocumentComputedStyleSpec {
 
   /// The current native observer supports single-fragment horizontal HTML boxes.
   final bool resizeSupported;
+
+  /// The DOM positioning ancestry has no sticky/unknown position whose layout
+  /// may depend on scrolling. Paint ancestry/matrices still need native proof.
+  final bool scrollTranslationSupported;
 
   /// True for fixed-pixel CSS dimensions, or a proved percentage-width block
   /// path, when the document-wide CSS cascade excludes backing-attribute
@@ -539,6 +545,26 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
       textContentSelectorsIndependent: textContentSelectorsIndependent,
       isReplaced: const {'img', 'canvas', 'svg'}.contains(name),
       resizeSupported: resizeSupported,
+      scrollTranslationSupported:
+          (parentSpec?.scrollTranslationSupported ?? true) &&
+          const {
+            'static',
+            'relative',
+            'absolute',
+            'fixed',
+          }.contains(position) &&
+          (const {'none', ''}.contains(author['transform'] ?? '') ||
+              NativeDocumentTransformSpec.parse(
+                    author['transform'],
+                    origin: author['transform-origin'],
+                  ) !=
+                  null) &&
+          const [
+            'translate',
+            'rotate',
+            'scale',
+            'perspective',
+          ].every((name) => const {'none', ''}.contains(author[name] ?? '')),
       canvasBitmapSizeIndependent:
           canvasBitmapAttributesIndependent &&
           isHtmlCanvas &&

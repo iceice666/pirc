@@ -37,6 +37,8 @@ The first published release with the 0.9.0 changes below (0.9.0 was tagged but i
 
 ### Fixed
 
+- Android interactive pages keep element rectangles current after scripted scrolling and support common native CSS 2D transforms with matching touch targets.
+
 - Android interactive pages support `document.scrollingElement`, with parser-based document mode and viewport/body scroll ownership.
 
 - Android interactive documents report updated scroll positions immediately after scripted changes, including repeated increments and range clamping.

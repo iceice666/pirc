@@ -62,10 +62,18 @@ are at `git show 7677d24:plans/mobile-audit.md`.
   offset metadata. Common absolute positioning and viewport-fixed overlays are
   implemented, including native hit targets. Sticky positioning, transformed
   containing blocks, zoom, table offsets and fragmented inline geometry remain open.
-- DOM writes followed immediately by geometry/style reads still need a matching
-  native frame; stale, missing or ambiguous reads fail explicitly. Native Canvas
-  event callbacks have measured geometry for synchronous dispatch. A minimum
-  height alone does not establish a definite height for percentage descendants.
+- General DOM writes followed immediately by geometry/style reads still need a
+  matching native frame; stale, missing or ambiguous reads fail explicitly.
+  Scroll-only rectangle reads now use actual native paint ancestry and affine
+  matrices where proved. Native Canvas event callbacks have measured geometry
+  for synchronous dispatch. A minimum height alone does not establish a definite
+  height for percentage descendants.
+- Common 2D `transform` functions and ordinary `transform-origin` paint and
+  hit-test natively around the laid-out border box, including percentage
+  translation and composed matrices. Transformed containing blocks, 3D and
+  perspective, individual translate/rotate/scale properties, textual inline
+  fragments, transform-box variants and transformed overflow extents remain
+  outside the covered subset.
 - Two root-height fixtures retain extra trailing blank scroll space: 8 px with
   the default body margin and 17 px with nested content-box edges. Their element
   rectangles match Chromium; these scroll-extent differences remain deferred.
@@ -84,8 +92,8 @@ are at `git show 7677d24:plans/mobile-audit.md`.
   not Chromium's full property list. Omitted recognized properties,
   pseudo-elements, stale frames and unavailable declarations fail explicitly.
 - Inline-fragment and unmeasured list-item dimensions, auto margins, platform
-  form-control UA properties, CSS font shorthand, transforms and unsupported
-  length expressions remain outside this surface. The full browser
+  form-control UA properties, CSS font shorthand, computed transform serialization
+  and unsupported length expressions remain outside this surface. The full browser
   `CSSStyleDeclaration` prototype/property surface is not implemented;
   custom-property names currently use the ASCII subset.
 - Style limits: 256 properties, 128-character names, 4,096-character values and
@@ -161,8 +169,9 @@ sizes. Quirks selection uses current native box/overflow evidence, including the
 root-clip exception; absent or stale evidence is an explicit unsupported read.
 Ownership queries inspect existing children and do not create a missing body.
 The additional 88 Chromium 153 profiles cover 11 mode/overflow cases at phone and
-tablet sizes, DPR 1/3 and both themes. The combined Android gate checks all 344
-profiles through the actual Sandbox and native Run button.
+tablet sizes, DPR 1/3 and both themes. The ownership/position corpus checks 344
+profiles through the actual Sandbox and native Run button; rectangle coverage
+extends the combined gate below.
 
 This gate does not certify full quirks layout, inactive/DOMParser-created
 Documents, XML/frameset documents, mixed-axis overflow normalization or mixed
@@ -170,15 +179,31 @@ viewport/body scroll routing. DOM doctype node removal and DocumentType ChildNod
 helpers (including `.remove()`) remain unsupported by the vendored DOM; the mode
 mutation test covers legal property masking, not successful node removal.
 
-**Remaining synchronous layout differences:** scroll-position feedback does not
-provide new element rectangles after scrolling or general DOM writes. Pending
-scroll changes fence rectangle reads until actual native measurement. CSS
-`scroll-behavior` default selection, exact animation timing, scrollend/Promise
-behavior and mixed root/element event ordering are not certified by this gate.
-Global getter exception propagation during stale layout is not certified on
-Android; Node's VM can return undefined instead of propagating the accessor
-error. These unsupported reads are separate from the certified clean-layout
-scroll-position updates.
+**Scroll-only rectangle feedback:** `getBoundingClientRect()` and
+`getClientRects()` replay unacknowledged commands using real native paint
+ancestors, measured scroll ranges and affine 2D coefficients. Root, nested and
+combined scrolling, clamping, instant/smooth sequences, fixed/unrelated boxes
+and actual Canvas taps are covered by 128 additional Chromium 153 profiles.
+Canvas pointer rectangles are not reused after a pending script scroll. Native
+2D transforms preserve the border-box origin and normal-flow allocation while
+also transforming paint and hit tests. The combined Android gate covers 472
+profiles; the original 344 remain exact comparisons, and the new rectangle
+cases use at most 0.001 CSS px tolerance for affine floating-point differences.
+
+Native proof includes every real owned scroll viewport, including visible or
+zero-range wrappers, and stops at a proved viewport-fixed boundary. Metadata is
+bounded to 64 scroll ancestors per box and 16,384 references per packet. Missing
+or stale proof, sticky/unsupported positioning and nonaffine geometry retain
+explicit errors. Browser expectations are captured independently, including
+scroll displacement coefficients; native output does not generate them.
+
+**Remaining synchronous layout differences:** general DOM writes followed by
+geometry reads still need matching native measurement. CSS `scroll-behavior`
+default selection, exact animation timing, scrollend/Promise behavior and mixed
+root/element event ordering are not certified by this gate. Global getter
+exception propagation during stale layout is not certified on Android; Node's VM
+can return undefined instead of propagating the accessor error. These unsupported
+reads are separate from the certified clean-layout scroll-position updates.
 
 Retained-document scrolling is owned by the document/VM lifecycle, including
 root offsets across a new PageStorage bucket. Switching the document in one view
