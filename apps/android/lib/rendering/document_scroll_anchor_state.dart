@@ -124,6 +124,26 @@ class NativeDocumentScrollController extends ScrollController {
     super.onAttach,
     super.onDetach,
   });
+  double? _detachedOffset;
+
+  /// Last unambiguous position, including after the view has detached.
+  double? get lastKnownOffset {
+    if (positions.isEmpty) return _detachedOffset;
+    if (positions.length != 1 || !position.hasPixels) return null;
+    return position.pixels.isFinite ? position.pixels : null;
+  }
+
+  @override
+  void detach(ScrollPosition position) {
+    if (keepScrollOffset &&
+        positions.length == 1 &&
+        position.hasPixels &&
+        position.pixels.isFinite) {
+      _detachedOffset = position.pixels;
+    }
+    super.detach(position);
+  }
+
   void correctAnchorOffset(double target) {
     if (positions.length != 1) return;
     final position = this.position;
@@ -140,7 +160,11 @@ class NativeDocumentScrollController extends ScrollController {
   ) => _DocumentAnchorScrollPosition(
     physics: physics,
     context: context,
-    initialPixels: initialScrollOffset,
+    // A remounted view may have a new PageStorage bucket. Keep the position
+    // with the document, while respecting explicit keepScrollOffset opt-out.
+    initialPixels: keepScrollOffset
+        ? lastKnownOffset ?? initialScrollOffset
+        : initialScrollOffset,
     keepScrollOffset: keepScrollOffset,
     oldPosition: oldPosition,
     debugLabel: debugLabel,
