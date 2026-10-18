@@ -11,6 +11,7 @@ import '../rendering/html_document_urls.dart';
 import '../rendering/html_syntax.dart';
 import '../rendering/html_document_styles.dart';
 import '../rendering/native_html.dart';
+import '../rendering/document_absolute_position.dart';
 import '../rendering/document_layout.dart';
 import '../rendering/document_touch_boundary.dart';
 import '../rendering/document_computed_styles.dart';
@@ -1851,16 +1852,19 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
                 onPointerDown: _touchBoundary.down,
                 onPointerUp: _documentTouchUp,
                 onPointerCancel: _touchBoundary.cancel,
-                child: SingleChildScrollView(
-                  controller: document.scroll,
-                  child: document.content.isHtml
-                      ? _buildContent(
-                          document,
-                          width: constraints.maxWidth,
-                          height: constraints.maxHeight,
-                          dark: base.brightness == Brightness.dark,
-                        )
-                      : (_body ??= _buildContent(document)),
+                child: NativeDocumentPositioningViewport(
+                  scrollChanges: document.scroll,
+                  child: SingleChildScrollView(
+                    controller: document.scroll,
+                    child: document.content.isHtml
+                        ? _buildContent(
+                            document,
+                            width: constraints.maxWidth,
+                            height: constraints.maxHeight,
+                            dark: base.brightness == Brightness.dark,
+                          )
+                        : (_body ??= _buildContent(document)),
+                  ),
                 ),
               );
             },

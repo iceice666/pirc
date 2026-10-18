@@ -74,6 +74,9 @@ if (JSON.parse(pointerEvents.toString('utf8')).browserVersion !== '153.0.8010.12
 const textStyle = readFileSync(path.join(scriptDirectory, 'fixtures/document-text-style-chromium153.json'));
 if (JSON.parse(textStyle.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected text-style browser');
 
+const fixed = readFileSync(path.join(scriptDirectory, 'fixtures/document-fixed-chromium153.json'));
+if (JSON.parse(fixed.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected fixed browser');
+
 const requestedPort = configuredPort();
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -102,6 +105,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/fixed.json') {
+    response.writeHead(200, {'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8'});
+    response.end(fixed);
     return;
   }
   if (pathname === '/text-style.json') {

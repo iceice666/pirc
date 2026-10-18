@@ -151,8 +151,10 @@ class PreparedNativeLayoutDocument {
 }
 
 PreparedNativeLayoutDocument prepareNativeLayoutDocument(
-  Map<String, dynamic> capture,
-) {
+  Map<String, dynamic> capture, {
+  double? viewportHeight,
+  double? devicePixelRatio,
+}) {
   final document = html.parse(capture['html'] as String);
   final root = document.documentElement!;
   final body = document.body!;
@@ -165,7 +167,7 @@ PreparedNativeLayoutDocument prepareNativeLayoutDocument(
 
   final width = (capture['viewportWidth'] as num).toDouble();
   final viewport = _fixture['viewport'] as Map<String, dynamic>;
-  final height = (viewport['height'] as num).toDouble();
+  final height = viewportHeight ?? (viewport['height'] as num).toDouble();
   final dark = capture['theme'] == 'dark';
   final stylesheets = [
     for (final style in document.querySelectorAll('style'))
@@ -175,7 +177,8 @@ PreparedNativeLayoutDocument prepareNativeLayoutDocument(
     stylesheets: stylesheets,
     viewportWidth: width,
     viewportHeight: height,
-    devicePixelRatio: (viewport['deviceScaleFactor'] as num).toDouble(),
+    devicePixelRatio:
+        devicePixelRatio ?? (viewport['deviceScaleFactor'] as num).toDouble(),
     dark: dark,
   ).apply(document);
 

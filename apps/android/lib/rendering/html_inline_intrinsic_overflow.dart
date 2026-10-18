@@ -223,6 +223,14 @@ Iterable<RenderBox> _positionedTargets(RenderObject node) sync* {
   if (node is RenderBox && node is NativeDocumentPositionedHitTarget) {
     yield node;
   }
+  if (node is NativeDocumentRoutedPositionedRoot) {
+    final routed = node as NativeDocumentRoutedPositionedRoot;
+    if (routed.viewportRouted) {
+      final flow = routed.ordinaryFlow;
+      if (flow != null) yield* _positionedTargets(flow);
+      return;
+    }
+  }
   final children = <RenderObject>[];
   node.visitChildren(children.add);
   for (final child in children.reversed) {
@@ -234,6 +242,14 @@ Iterable<RenderNativeHtmlInlineOverflowMarker> _overflowMarkers(
   RenderObject root,
 ) sync* {
   if (root is RenderNativeHtmlInlineOverflowMarker) yield root;
+  if (root is NativeDocumentRoutedPositionedRoot) {
+    final routed = root as NativeDocumentRoutedPositionedRoot;
+    if (routed.viewportRouted) {
+      final flow = routed.ordinaryFlow;
+      if (flow != null) yield* _overflowMarkers(flow);
+      return;
+    }
+  }
   final children = <RenderObject>[];
   root.visitChildren(children.add);
   for (final child in children) {

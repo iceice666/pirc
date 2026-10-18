@@ -27,12 +27,13 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** extend Canvas font/ink coverage,
+- [ ] **Dynamic content compatibility:** restore root scroll anchoring when
+      content expands above the viewport (confirmed below); extend Canvas font/ink coverage,
       synchronous write/read layout within one callback and broader chart-library acceptance; extend
       the supported computed-style
       properties, list-item/inline-fragment measurements and common-library coverage;
       signed/font-relative/empty-block and bottom-edge
-      margin collapse, remaining absolute/fixed/sticky positioning, unsupported relative-inset
+      margin collapse, remaining absolute/fixed variants and sticky positioning, unsupported relative-inset
       units and inline fragments, transformed/zoomed/table offset geometry,
       inline-fragment geometry and image/resize/chart/framework flows. Changed geometry
       still needs a matching native frame; a proved fixed-width ordinary block can
@@ -71,8 +72,8 @@ outside the agreed scope.
 - Relative positioning supports native block/flex/grid/flow-root surfaces,
   signed pixel/percentage physical insets and zero values in CSS length units.
   Nonzero font/viewport-relative units, calc(), logical insets, inline fragments,
-  and fixed/sticky positioning remain unsupported. The initial absolute-position
-  surface and its remaining gaps are described below. A nonzero relative
+  and sticky positioning remain unsupported. Native viewport-fixed positioning
+  and the initial absolute surface are described below. A nonzero relative
   inline inset does not acquire offset metadata merely because its syntax parses.
 - Some inserted classic-script lexical-scope behavior differs from the browser.
 - Two root-height fixtures retain extra trailing blank scroll space: 8 px with
@@ -80,7 +81,9 @@ outside the agreed scope.
   rectangles match Chromium; these small scroll-extent differences are deferred.
 - Root horizontal scrolling, scrollend/Promise semantics, mixed window/element
   event order, RTL, scroll snap/anchoring and nested touch scroll chaining need
-  wider coverage. Smooth scroll timing follows Flutter.
+  wider coverage. Root scroll anchoring now has a confirmed 120 px difference
+  when content appears above the viewport, detailed below. Smooth scroll timing
+  follows Flutter.
 - `window.getComputedStyle()` now reads the native cascade and completed layout
   snapshot for a supported property subset. Declarations are read-only and live
   across accepted frames. Enumeration includes the supplied subset, rather than
@@ -273,7 +276,7 @@ Native measurements preserve the browser's root/body origins, parent border
 insets, signed rounding and unscrolled coordinates. Missing, ambiguous or stale
 measurements remain explicit errors; detached and unrendered elements report
 zero offsets and a null parent. Common block relative insets are covered by
-the follow-up below. Absolute/fixed/sticky positioning, unsupported relative
+the follow-up below. Remaining absolute/fixed variants and sticky positioning, unsupported relative
 inset units/logical properties, transforms, zoom, table offsets and fragmented
 inline geometry still need native layout support and are not claimed as
 implemented.
@@ -1248,7 +1251,7 @@ cases do not have positional parity. offsetParent/offsetLeft/offsetTop for
 positioned subtrees remain withheld; native getBoundingClientRect is measured.
 Owned element scrollWidth/scrollHeight do not yet include relocated positioned
 overflow. Root scroll-overflow integration and physical-device behavior still
-need wider acceptance. Fixed and sticky positioning remain separate work.
+need wider acceptance. Viewport-fixed positioning is covered by the follow-up below; sticky remains open.
 
 The frozen Chromium fixture compares phone/tablet, DPR 1/3 and light/dark,
 including actual screenshot samples and elementFromPoint targets. The native
@@ -1377,3 +1380,66 @@ Verification: 961 affected Flutter tests, all 694 JavaScript tests and all
 diagnostics. Format and static analysis are clean. Source/fixture driver identity
 is checked, and capture blocks all external requests. Compact local evidence is
 ignored; disposable builds and owned emulator images are removed after testing.
+
+
+## Viewport-fixed HTML positioning
+
+Full fetched documents now own an explicit native viewport outside the root
+Scrollable. Fixed elements use that viewport through ordinary positioned,
+clipping and scrolling ancestors. Their actual layout/DOM ancestry stays intact;
+painting and hit testing share the viewport transform and root z/source order.
+Root fixed and absolute entries compete in the same order. Local absolute
+children use the fixed box as their containing block. Fixed subtrees do not
+inflate scroll extents, including when a bottom control lies below a short flow
+root. Dynamic hide/show and viewport resize update the same document.
+
+The gate checks native buttons with authored and UA-default edges, Canvas,
+pointer-events pass-through, nested scrolling, escaped overflow clips and
+position/size changes. Empty transparent surfaces keep their own mapped DOM hit
+identity rather than falling back to body. Gesture measurement order is corrected
+without expanding element geometry. Positioned buttons retain their native
+activation/focus widget and use UA border-box/padding/border defaults.
+
+Native scroll requests are now published at the layout checkpoint before RAF
+callbacks/continuations. Their one-shot payload is consumed once; a fresh native
+packet acknowledges the actual position. A callback and its Promise scrollBy
+compose in order. Hidden/detached documents cancel old requests; resuming does not
+replay them. Immediate same-callback scroll/geometry reads are still asynchronous
+relative to the native UI, and smooth-scroll timing still follows Flutter.
+
+The frozen Chromium 153 reference contains 120 phone/tablet × DPR 1/3 × light/dark
+profiles and 368 states, including actual pixels and elementFromPoint targets.
+The widget gate uses matching scroll offsets, verifies real inner scrollTop,
+checks fixed paint/taps and all measured boxes, and does not rebuild the document
+for a scroll-only state. The Android gate runs the same driver through
+JavaScriptSandbox and real native controls. Percentage/padding geometry keeps a
+named 1/32 CSS px accumulated browser-quantization bound; other boxes use 0.01 px.
+
+**Confirmed remaining root anchoring difference:** showing a 120 px flow block
+above the viewport makes Chromium change scrollY 180 → 300; Flutter stays at 180.
+The fixed overlay remains at the same viewport coordinates. The eight
+hidden_dynamic profiles retain the unmodified browser reference and record both
+raw viewport box sets. Their flow layout is compared in document coordinates;
+they are not counted as complete viewport parity. This is the next scroll
+compatibility work, not an adjusted browser baseline.
+
+Other remaining positioning work: transformed/filter/contain or other special
+fixed containing blocks; intervening stacking contexts/opacity, nested fixed
+contexts and negative z-index; hidden-visibility/clip-path/mask composition;
+both-auto static-position axes; unsupported rem/calc/logical insets; positioned
+offset APIs and wider scroll metrics; sticky. Unsupported cases retain the
+existing flow fallback and do not have positioning parity. Physical device
+keyboard/rotation/background acceptance remains separate.
+
+
+Verification: 1,215 affected Flutter tests and all 697 JavaScript tests pass;
+static analysis is clean. The Android gate evaluates all 120 profiles: 112 have
+complete viewport agreement, and eight retain the named root-scroll-anchoring
+difference above. Their fixed overlays and document-space geometry pass; the raw
+120 px viewport difference is retained. Maximum matching geometry delta is
+0.009375 CSS px. Two additional synthetic Android scenarios pass same-turn
+scroll-owner resizing/replacement with real native controls and local HTTP.
+Their diagnostic overlays now use pointer-events:none so fixed labels do not
+obscure the controls. Compact ignored evidence records the original browser
+fixture and source hashes; disposable builds and owned emulator images are
+removed after testing, preserving the published APK.

@@ -191,6 +191,8 @@ String _pageFor(_Scenario scenario) =>
 html,body{margin:0;padding:0}
 #scroller{box-sizing:content-box;width:120px;height:100px;padding:8px;border:2px solid;overflow-x:hidden;overflow-y:auto}
 #child{width:80px;height:500px}
+/* Diagnostic overlays must not obscure the real native controls. */
+#scroll-stage-label,#scroll-json-probe{pointer-events:none}
 #scroll-stage-label{position:fixed;left:0;top:0;z-index:2147483647;background:white;color:black;white-space:nowrap}
 #scroll-json-probe{position:fixed;left:0;top:0;width:0;height:0;overflow:hidden}
 </style></head><body>

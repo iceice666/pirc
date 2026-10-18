@@ -308,6 +308,21 @@ and invalidation. The pointer integration also checks immediate reads after its
 programmatic click. Geometry still requires native layout, and text-sensitive
 selectors or other DOM/style mutations retain their normal invalidation.
 
+`document_fixed_oracle_test.dart` compares 120 Chromium profiles and 368 states
+for viewport-fixed geometry, native paint, hit identities, root/inner scrolling
+and same-document viewport resize. `document_fixed_position_test.dart` covers
+short-document hit ownership and scroll extents. Recreate with
+`node apps/android/tool/parity/capture_document_fixed_chromium153.mjs`.
+
+`integration_test/document_fixed_test.dart` uses the same local fixture server and
+`PIRC_CHART_FIXTURE_ORIGIN` define. Native Advance controls drive root/inner scroll,
+style changes and hide/show; every state checks measured boxes and native clicks.
+The eight hidden_dynamic profiles explicitly record the known root anchoring
+180/300 difference. Their fixed boxes match, but those profiles do not certify
+complete viewport parity. See the mobile plan for the full positioning limits.
+`document_scroll_frame_host_test.dart` verifies scroll acknowledgement before RAF,
+ordered callback/Promise scrollBy and cancellation across hide/detach.
+
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
 [the test browser guide](tool/parity/TEST_BROWSER.md).

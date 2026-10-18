@@ -12,6 +12,12 @@ abstract interface class NativeDocumentPositionedChildOrder {
   Iterable<RenderObject> get positionedPaintChildren;
 }
 
+/// Flow-only traversal avoids testing viewport-routed descendants twice.
+abstract interface class NativeDocumentRoutedPositionedRoot {
+  bool get viewportRouted;
+  RenderObject? get ordinaryFlow;
+}
+
 /// A live containing-block basis, published only during actual native layout.
 abstract interface class NativeDocumentPositioningBasis {
   double? get positioningWidth;
@@ -61,7 +67,12 @@ class NativeAbsolutePositionSpec {
     required Size viewport,
     TextDirection direction = TextDirection.ltr,
   }) {
-    if (styles['position']?.trim().toLowerCase() != 'absolute') return null;
+    if (!const {
+      'absolute',
+      'fixed',
+    }.contains(styles['position']?.trim().toLowerCase())) {
+      return null;
+    }
     final values = <String, String>{...styles};
     final shorthand = values['inset']?.trim().split(RegExp(r'\s+'));
     if (shorthand != null) {
@@ -141,6 +152,9 @@ class NativeAbsolutePositionSpec {
     }
     return NativeAbsolutePositionSpec._(values, lengths, direction);
   }
+
+  bool get fixedToViewport =>
+      styles['position']?.trim().toLowerCase() == 'fixed';
 
   double? value(String name, double basis) => lengths[name]?.resolve(basis);
   double edge(String side, double width) {
@@ -253,7 +267,8 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
     this.border = EdgeInsets.zero,
     this.initialContainingBlock,
     this.boxSurface,
-  }) : super(
+  }) : hasFixedEntries = positioned.any((item) => item.spec.fixedToViewport),
+       super(
          children: [
            flow,
            for (final item in positioned)
@@ -264,12 +279,17 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
              ),
          ],
        );
+  final bool hasFixedEntries;
   final EdgeInsets border;
   final Size? initialContainingBlock;
   final ({RenderBox surface, Size size})? Function(RenderBox)? boxSurface;
   @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderAbsoluteLayer(border, initialContainingBlock, boxSurface);
+  RenderObject createRenderObject(BuildContext context) => _RenderAbsoluteLayer(
+    border,
+    initialContainingBlock,
+    boxSurface,
+    hasFixedEntries,
+  );
   @override
   void updateRenderObject(
     BuildContext context,
@@ -279,6 +299,7 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
       ..border = border
       ..initialContainingBlock = initialContainingBlock
       ..boxSurface = boxSurface
+      ..hasFixedEntries = hasFixedEntries
       ..markNeedsLayout();
   }
 }
@@ -307,9 +328,11 @@ class _AbsoluteItem extends SingleChildRenderObjectWidget {
 }
 
 class _RenderAbsoluteItem extends RenderProxyBox
-    implements NativeDocumentPositioningBasis {
+    implements NativeDocumentPositioningBasis, NativeDocumentFixedSurface {
   _RenderAbsoluteItem(this.spec, this.overflowHitTest);
   NativeAbsolutePositionSpec spec;
+  @override
+  bool get fixedToViewport => spec.fixedToViewport;
   bool Function(RenderBox, BoxHitTestResult, Offset)? overflowHitTest;
   @override
   bool hitTest(BoxHitTestResult result, {required Offset position}) {
@@ -359,15 +382,67 @@ class _RenderAbsoluteLayer extends RenderBox
         RenderBoxContainerDefaultsMixin<RenderBox, _AbsoluteParentData>
     implements
         NativeDocumentPositionedHitTarget,
-        NativeDocumentPositionedChildOrder {
+        NativeDocumentPositionedChildOrder,
+        NativeDocumentRoutedPositionedRoot {
   _RenderAbsoluteLayer(
     this.border,
     this.initialContainingBlock,
     this.boxSurface,
+    this.hasFixedEntries,
   );
+  bool hasFixedEntries;
+  RenderNativeDocumentPositioningViewport? _fixedViewport;
+  @override
+  bool get viewportRouted => _fixedViewport != null;
+  @override
+  RenderObject? get ordinaryFlow => firstChild;
   EdgeInsets border;
   Size? initialContainingBlock;
   ({RenderBox surface, Size size})? Function(RenderBox)? boxSurface;
+  void _syncFixedViewport() {
+    RenderNativeDocumentPositioningViewport? found;
+    if (hasFixedEntries) {
+      RenderObject? node = parent;
+      while (node != null) {
+        if (node is RenderNativeDocumentPositioningViewport) {
+          found = node;
+          break;
+        }
+        node = node.parent;
+      }
+    }
+    if (identical(found, _fixedViewport)) return;
+    _fixedViewport?._unregister(this);
+    _fixedViewport = found;
+    found?._register(this);
+  }
+
+  @override
+  void detach() {
+    _fixedViewport?._unregister(this);
+    _fixedViewport = null;
+    super.detach();
+  }
+
+  @override
+  void markNeedsPaint() {
+    super.markNeedsPaint();
+    final viewport = _fixedViewport;
+    if (viewport != null && viewport.attached) viewport.markNeedsPaint();
+  }
+
+  Offset _itemOffset(RenderBox child) {
+    final offset = (child.parentData! as _AbsoluteParentData).offset;
+    final viewport = _fixedViewport;
+    if (child is _RenderAbsoluteItem &&
+        child.spec.fixedToViewport &&
+        viewport != null) {
+      final shift = MatrixUtils.getAsTranslation(getTransformTo(viewport));
+      if (shift != null) return offset - shift;
+    }
+    return offset;
+  }
+
   @override
   void setupParentData(RenderBox child) {
     if (child.parentData is! _AbsoluteParentData) {
@@ -377,6 +452,7 @@ class _RenderAbsoluteLayer extends RenderBox
 
   @override
   void performLayout() {
+    _syncFixedViewport();
     final flow = firstChild!;
     flow.layout(constraints, parentUsesSize: true);
     size = constraints.constrain(flow.size);
@@ -483,10 +559,8 @@ class _RenderAbsoluteLayer extends RenderBox
   @override
   void paint(PaintingContext context, Offset offset) {
     for (final child in _paintOrder) {
-      context.paintChild(
-        child,
-        offset + (child.parentData! as _AbsoluteParentData).offset,
-      );
+      if (_fixedViewport != null && child != firstChild) continue;
+      context.paintChild(child, offset + _itemOffset(child));
     }
   }
 
@@ -496,7 +570,8 @@ class _RenderAbsoluteLayer extends RenderBox
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     for (final child in _paintOrder.reversed) {
-      final offset = (child.parentData! as _AbsoluteParentData).offset;
+      if (_fixedViewport != null && child != firstChild) continue;
+      final offset = _itemOffset(child);
       if (result.addWithPaintOffset(
         offset: offset,
         position: position,
@@ -510,12 +585,13 @@ class _RenderAbsoluteLayer extends RenderBox
 
   @override
   void applyPaintTransform(RenderBox child, Matrix4 transform) {
-    final offset = (child.parentData! as _AbsoluteParentData).offset;
+    final offset = _itemOffset(child);
     transform.translateByDouble(offset.dx, offset.dy, 0, 1);
   }
 
   @override
   bool hitTestPositioned(BoxHitTestResult result, {required Offset position}) {
+    if (_fixedViewport != null) return false;
     for (final child in _paintOrder.skip(1).toList().reversed) {
       if (result.addWithPaintOffset(
         offset: (child.parentData! as _AbsoluteParentData).offset,
@@ -533,6 +609,7 @@ class _RenderAbsoluteLayer extends RenderBox
     if (!hasSize) return Rect.zero;
     var bounds = Offset.zero & size;
     for (final child in _paintOrder) {
+      if (_fixedViewport != null && child != firstChild) continue;
       if (child.hasSize) {
         bounds = bounds.expandToInclude(
           child.paintBounds.shift(
@@ -568,4 +645,154 @@ class _RenderAbsoluteLayer extends RenderBox
   @override
   double computeMaxIntrinsicHeight(double width) =>
       firstChild?.getMaxIntrinsicHeight(width) ?? 0;
+}
+
+/// A viewport-fixed subtree never contributes to a scroll container's extent.
+abstract interface class NativeDocumentFixedSurface {
+  bool get fixedToViewport;
+}
+
+/// Owns the document viewport outside its root Scrollable. Positioned render
+/// objects keep their layout/DOM ancestry; this viewport paints and hit-tests
+/// their root stacking order after the scrolling flow.
+class NativeDocumentPositioningViewport extends SingleChildRenderObjectWidget {
+  const NativeDocumentPositioningViewport({
+    super.key,
+    this.scrollChanges,
+    required super.child,
+  });
+  final Listenable? scrollChanges;
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      RenderNativeDocumentPositioningViewport(scrollChanges);
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant RenderNativeDocumentPositioningViewport renderObject,
+  ) {
+    renderObject.scrollChanges = scrollChanges;
+  }
+}
+
+class RenderNativeDocumentPositioningViewport extends RenderProxyBox {
+  RenderNativeDocumentPositioningViewport(this._scrollChanges);
+  Listenable? _scrollChanges;
+  final _roots = <_RenderAbsoluteLayer>{};
+  final _clip = LayerHandle<ClipRectLayer>();
+  set scrollChanges(Listenable? value) {
+    if (identical(value, _scrollChanges)) return;
+    if (attached) _scrollChanges?.removeListener(_scrollChanged);
+    _scrollChanges = value;
+    if (attached) _scrollChanges?.addListener(_scrollChanged);
+    markNeedsPaint();
+  }
+
+  void _scrollChanged() {
+    if (_roots.isEmpty) return;
+    markNeedsPaint();
+    markNeedsSemanticsUpdate();
+  }
+
+  void _register(_RenderAbsoluteLayer root) {
+    _roots.add(root);
+    markNeedsPaint();
+  }
+
+  void _unregister(_RenderAbsoluteLayer root) {
+    _roots.remove(root);
+    if (attached) markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _scrollChanges?.addListener(_scrollChanged);
+  }
+
+  @override
+  void detach() {
+    _scrollChanges?.removeListener(_scrollChanged);
+    _clip.layer = null;
+    super.detach();
+  }
+
+  @override
+  void dispose() {
+    _clip.layer = null;
+    super.dispose();
+  }
+
+  List<RenderBox> get _positioned {
+    final result = <RenderBox>[];
+    for (final root in _roots) {
+      if (root.attached && root.hasSize) {
+        result.addAll(root._paintOrder.skip(1));
+      }
+    }
+    final order = {for (var i = 0; i < result.length; i++) result[i]: i};
+    result.sort((a, b) {
+      final z = (a as _RenderAbsoluteItem).spec.zIndex.compareTo(
+        (b as _RenderAbsoluteItem).spec.zIndex,
+      );
+      return z == 0 ? order[a]!.compareTo(order[b]!) : z;
+    });
+    return result;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    super.paint(context, offset);
+    final items = _positioned;
+    if (items.isEmpty) {
+      _clip.layer = null;
+      return;
+    }
+    _clip.layer = context.pushClipRect(
+      needsCompositing,
+      offset,
+      Offset.zero & size,
+      (context, offset) {
+        for (final child in items) {
+          final translation = MatrixUtils.getAsTranslation(
+            child.getTransformTo(this),
+          );
+          if (translation != null) {
+            context.paintChild(child, offset + translation);
+          }
+        }
+      },
+      oldLayer: _clip.layer,
+    );
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    for (final child in _positioned.reversed) {
+      final hit = result.addWithPaintTransform(
+        transform: child.getTransformTo(this),
+        position: position,
+        hitTest: (result, p) => child.hitTest(result, position: p),
+      );
+      if (!hit) continue;
+      // Preserve the real native gesture, layout and focus owners even though
+      // their ordinary bounds no longer contain the fixed paint.
+      RenderObject? node = child.parent;
+      while (node != null && node != this) {
+        if (node is RenderBox) {
+          final ancestor = node;
+          result.addWithPaintTransform(
+            transform: ancestor.getTransformTo(this),
+            position: position,
+            hitTest: (result, p) {
+              result.add(BoxHitTestEntry(ancestor, p));
+              return true;
+            },
+          );
+        }
+        node = node.parent;
+      }
+      return true;
+    }
+    return super.hitTestChildren(result, position: position);
+  }
 }

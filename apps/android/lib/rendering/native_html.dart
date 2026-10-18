@@ -2033,6 +2033,12 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             forms!,
             widget.markdownStyles,
             () => _documentViewport != null,
+            () =>
+                context
+                    .findAncestorWidgetOfExactType<
+                      NativeDocumentPositioningViewport
+                    >() !=
+                null,
             widget.onNavigate,
             widget.onScriptEvent == null && widget.onScriptClick == null
                 ? null
@@ -2499,6 +2505,7 @@ class _NativeHtmlFactory extends WidgetFactory {
     this.forms,
     this.markdownStyles,
     this.hasDocumentViewport,
+    this.hasPositioningViewport,
     this.onNavigate,
     this.onScriptTap,
     this.dark,
@@ -2523,6 +2530,7 @@ class _NativeHtmlFactory extends WidgetFactory {
   // HtmlWidget retains its factory when rebuild triggers change. Read the
   // current document viewport instead of capturing the first build.
   final bool Function() hasDocumentViewport;
+  final bool Function() hasPositioningViewport;
   final Size Function() imageViewport;
   final double Function() imageDpr;
   final bool Function() imageDark;
@@ -3034,7 +3042,9 @@ class _NativeHtmlFactory extends WidgetFactory {
       BuildOp(
         alwaysRenderBlock: false,
         debugLabel: 'native-script-click-border-box',
-        priority: 5000005770000000,
+        // Keep measurement outside the opaque detector so empty CSS surfaces
+        // retain their own DOM hit identity, including transparent padding.
+        priority: 5000005740000000,
         onRenderBlock: (parsed, placeholder) {
           final recognizer = parsed.getNonInherited<GestureRecognizer>();
           if (recognizer != null) {
@@ -3440,12 +3450,14 @@ class _NativeHtmlFactory extends WidgetFactory {
   bool _calculateAbsoluteSupport(dom.Element element) {
     if (markdownStyles) return false;
     final styles = _flexChildStyles(element);
-    if (NativeAbsolutePositionSpec.parse(
-          styles,
-          fontSize: 16,
-          viewport: imageViewport(),
-        ) ==
-        null) {
+    final spec = NativeAbsolutePositionSpec.parse(
+      styles,
+      fontSize: 16,
+      viewport: imageViewport(),
+    );
+    if (spec == null) return false;
+    final fixed = spec.fixedToViewport;
+    if (fixed && (!hasDocumentViewport() || !hasPositioningViewport())) {
       return false;
     }
     dom.Element? current = element;
@@ -3466,31 +3478,80 @@ class _NativeHtmlFactory extends WidgetFactory {
       )) {
         return false;
       }
-      if (current != element && (css['position'] ?? 'static') != 'static') {
-        if (!const {'relative', 'absolute'}.contains(css['position'])) {
+      if (fixed) {
+        // Fixed uses the viewport through ordinary positioned/scrolling boxes.
+        // Other containing blocks and nested stacking contexts need their own
+        // native composition rather than being flattened into this viewport.
+        if (css['display'] == 'none' ||
+            current.attributes.containsKey('hidden') ||
+            !const {
+              'visible',
+              'initial',
+              'inherit',
+              'unset',
+            }.contains(css['visibility'] ?? 'visible') ||
+            !const {'none', ''}.contains(css['clip-path'] ?? '') ||
+            !const {'none', ''}.contains(css['mask'] ?? '') ||
+            !const {'auto', ''}.contains(css['will-change'] ?? '') ||
+            !const {'visible', ''}.contains(css['content-visibility'] ?? '') ||
+            !const {'normal', ''}.contains(css['container-type'] ?? '')) {
           return false;
         }
-        if (css['position'] == 'absolute' && !_absoluteSupported(current)) {
+        if (current != element) {
+          final position = css['position'] ?? 'static';
+          final itemParent = current.parent;
+          final itemDisplay = itemParent == null
+              ? null
+              : _flexChildStyles(itemParent)['display'];
+          if (const {'fixed', 'sticky'}.contains(position) ||
+              (double.tryParse(css['opacity'] ?? '1') ?? 1) != 1 ||
+              !const {'normal', ''}.contains(css['mix-blend-mode'] ?? '') ||
+              css['isolation'] == 'isolate' ||
+              (!const {'auto', ''}.contains(css['z-index'] ?? '') &&
+                  (position != 'static' ||
+                      const {
+                        'flex',
+                        'grid',
+                        'inline-flex',
+                        'inline-grid',
+                      }.contains(itemDisplay)))) {
+            return false;
+          }
+        }
+        current = current.parent;
+        continue;
+      }
+      if (current != element && (css['position'] ?? 'static') != 'static') {
+        if (!const {
+          'relative',
+          'absolute',
+          'fixed',
+        }.contains(css['position'])) {
+          return false;
+        }
+        if (const {'absolute', 'fixed'}.contains(css['position']) &&
+            !_absoluteSupported(current)) {
           return false;
         }
         if (css['position'] == 'relative' &&
             NativeDocumentRelativePositionSpec.parse(css) == null) {
           return false;
         }
-        if (!const {'block', 'flex', 'grid', 'flow-root'}.contains(
-          css['display'] ??
-              (const {
-                    'div',
-                    'section',
-                    'article',
-                    'main',
-                    'header',
-                    'footer',
-                    'form',
-                  }.contains(current.localName)
-                  ? 'block'
-                  : 'inline'),
-        )) {
+        if (css['position'] != 'fixed' &&
+            !const {'block', 'flex', 'grid', 'flow-root'}.contains(
+              css['display'] ??
+                  (const {
+                        'div',
+                        'section',
+                        'article',
+                        'main',
+                        'header',
+                        'footer',
+                        'form',
+                      }.contains(current.localName)
+                      ? 'block'
+                      : 'inline'),
+            )) {
           return false;
         }
         if (const [
@@ -3508,6 +3569,7 @@ class _NativeHtmlFactory extends WidgetFactory {
   }
 
   dom.Element? _absoluteHost(dom.Element element) {
+    if (_flexChildStyles(element)['position'] == 'fixed') return null;
     var current = element.parent;
     while (current != null) {
       if ((_flexChildStyles(current)['position'] ?? 'static') != 'static') {
@@ -3518,6 +3580,32 @@ class _NativeHtmlFactory extends WidgetFactory {
     return null;
   }
 
+  Map<String, String> _positionedStyles(
+    BuildTree tree,
+    Map<String, String> styles,
+  ) {
+    if (buttons.resolveControl(tree.element) == null) return styles;
+    // The author cascade does not include UA button box defaults. Positioning
+    // must use the same padding/border floor and border-box size as its native
+    // control, including zero/min/max authored dimensions.
+    return {
+      'box-sizing': 'border-box',
+      'padding-left': '6px',
+      'padding-right': '6px',
+      'padding-top': '1px',
+      'padding-bottom': '1px',
+      for (final side in ['left', 'right', 'top', 'bottom']) ...{
+        'border-$side-width': '2px',
+        'border-$side-style': 'solid',
+      },
+      ...styles,
+      if (styles['box-sizing'] == 'inherit')
+        'box-sizing': _documentUsesBorderBox(tree.element)
+            ? 'border-box'
+            : 'content-box',
+    };
+  }
+
   List<NativeAbsoluteEntry> _absoluteEntries(
     BuildContext context,
     dom.Element? host,
@@ -3525,7 +3613,7 @@ class _NativeHtmlFactory extends WidgetFactory {
     for (final item in _absoluteChildren[host] ?? const [])
       NativeAbsoluteEntry(
         spec: NativeAbsolutePositionSpec.parse(
-          item.styles,
+          _positionedStyles(item.tree, item.styles),
           fontSize:
               item.tree.inheritanceResolvers
                   .resolve(context)
@@ -3547,7 +3635,7 @@ class _NativeHtmlFactory extends WidgetFactory {
   void _registerAbsolutePositioning(BuildTree tree) {
     final styles = _flexChildStyles(tree.element);
     // Relative/absolute block surfaces own the padding-box coordinate system.
-    if (const {'relative', 'absolute'}.contains(styles['position'])) {
+    if (const {'relative', 'absolute', 'fixed'}.contains(styles['position'])) {
       tree.register(
         BuildOp(
           alwaysRenderBlock: false,
@@ -5058,7 +5146,24 @@ class _NativeHtmlFactory extends WidgetFactory {
           },
         ),
       );
-      if (markdownStyles &&
+      if (_absoluteSupported(tree.element)) {
+        tree.register(
+          BuildOp(
+            debugLabel: 'native-positioned-button',
+            alwaysRenderBlock: false,
+            priority: 5000005745000000,
+            onRenderBlock: (parsed, placeholder) => placeholder.wrapWith(
+              (context, child) => NativeHtmlButtonWidget(
+                key: buttons.widgetKeyFor(button.key),
+                state: buttons,
+                button: button,
+                tree: parsed,
+                child: child,
+              ),
+            ),
+          ),
+        );
+      } else if (markdownStyles &&
           tree.element.parent?.classes.contains('code-head') == true) {
         tree.register(
           BuildOp(

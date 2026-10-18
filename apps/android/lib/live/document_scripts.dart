@@ -1951,7 +1951,21 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       layoutElementIds = Set.unmodifiable(ids.cast<String>());
       final changedRevision = layoutRevision != revision;
       layoutRevision = revision;
-      if (descriptor['required'] != true && !forceCapture) {
+      final canPublishScroll =
+          _attached &&
+          _visible &&
+          _foreground &&
+          turn.actionGeneration == _formActionGeneration &&
+          _classicScriptOwnerCurrent(identity, owner);
+      final hasScrollResponses =
+          canPublishScroll &&
+          responses.any((entry) {
+            final actions = entry['scrollActions'];
+            return actions != null && (actions is! List || actions.isNotEmpty);
+          });
+      final pendingScroll =
+          canPublishScroll && (hasScrollResponses || _scrollActions.isNotEmpty);
+      if (descriptor['required'] != true && !forceCapture && !pendingScroll) {
         return (current, true);
       }
       final capture = _layoutCapture;
@@ -1965,7 +1979,20 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       turn.frames++;
       final oldContent = content;
       _apply(jsonEncode(current), at: _now);
-      if (changedRevision || !identical(oldContent, content)) notifyListeners();
+      if (hasScrollResponses) {
+        _acceptScrollActions(responses);
+        // These one-shot actions are now owned by the native queue. Removing
+        // them prevents the final response merge from replaying a scrollBy.
+        for (final entry in responses) {
+          entry.remove('scrollActions');
+        }
+      }
+      if (changedRevision || !identical(oldContent, content) || pendingScroll) {
+        notifyListeners();
+      }
+      // The capture awaits the Flutter frame that consumes the scroll queue.
+      // If a host has not consumed it yet, the next loop keeps RAF suspended
+      // instead of publishing old coordinates as an acknowledged scroll.
       final cancelled = Completer<void>();
       _layoutWaits.add(cancelled);
       Json? packet;
@@ -2292,7 +2319,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       await _evaluate('__pircDocument.syncCookies(${jsonEncode(state)})');
     }
     final responses = <Json>[];
-    final layoutTurn = _NativeLayoutTurn();
+    final layoutTurn = _NativeLayoutTurn(actionGeneration);
     if ((refreshLayoutFirst || checkLayoutFirst) &&
         _hostLayoutEnabled &&
         ready &&
@@ -2949,5 +2976,7 @@ class _PendingFilePickerAction {
 }
 
 class _NativeLayoutTurn {
+  _NativeLayoutTurn(this.actionGeneration);
+  final int actionGeneration;
   int frames = 0;
 }

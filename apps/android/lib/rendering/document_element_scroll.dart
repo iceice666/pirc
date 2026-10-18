@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import 'document_absolute_position.dart';
 import 'html_document_box.dart';
 
 /// The CSS overflow behavior for one physical axis.
@@ -950,6 +951,10 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox
     };
 
     Rect? visit(RenderObject object) {
+      if (object is NativeDocumentFixedSurface &&
+          (object as NativeDocumentFixedSurface).fixedToViewport) {
+        return null;
+      }
       if (object is RenderBox && (!object.attached || !object.hasSize)) {
         return null;
       }

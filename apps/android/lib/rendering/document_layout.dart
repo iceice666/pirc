@@ -56,9 +56,8 @@ class NativeDocumentLayoutController extends ChangeNotifier {
       return null;
     }
     if (!localPosition.dx.isFinite || !localPosition.dy.isFinite) return null;
-    if (!(Offset.zero & root.size).contains(localPosition)) {
-      return const NativeDocumentHitTest(elementId: null);
-    }
+    // Viewport-fixed descendants may paint outside a short flow root. The
+    // actual view hit path below proves ownership and all enclosing clips.
 
     // Start at the actual view root so ancestor transforms, clips, and
     // overlapping render objects participate in the same hit test Flutter
