@@ -37728,6 +37728,8 @@ function createPircDocumentLayout(options) {
     let left = position.left, top = position.top;
     for (const action of pendingScrollActions) {
       if (action.element !== target) continue;
+      if (action.behavior === 'unknown') throw notSupported('scroll_behavior_stale',
+        'The CSS scroll behavior needs a matching native style frame', {revision:currentRevision()});
       if (action.behavior === 'smooth') continue;
       if (layoutSnapshot.revision !== currentRevision()) {
         throw notSupported('scroll_feedback_stale', 'Native scroll ranges are stale after a document mutation', {revision: currentRevision()});
@@ -37753,11 +37755,33 @@ function createPircDocumentLayout(options) {
     return Object.freeze({...measured, scrollX: projected.left, scrollY: projected.top});
   }
 
-  function recordScrollAction(action, target) {
+  function resolveScrollBehavior(target, requested) {
+    if (requested !== 'auto') return requested;
+    const modern = layoutSnapshot &&
+      Object.prototype.hasOwnProperty.call(layoutSnapshot.viewport, 'scrollBehavior');
+    // Legacy packet producers retain their auto/instant semantics.
+    if (!modern) return undefined;
+    if (layoutSnapshot.revision !== currentRevision()) return 'unknown';
+    let css;
+    if (target?.id) {
+      const element = resolveElementId(target.id);
+      const box = layoutSnapshot.boxes.get(target.id);
+      if (!element || box?.element !== element) return 'unknown';
+      css = box.computedStyle?.['scroll-behavior'];
+    } else {
+      css = layoutSnapshot.viewport.scrollBehavior;
+    }
+    if (css === 'smooth') return 'smooth';
+    if (css === 'auto') return 'instant';
+    return 'unknown';
+  }
+
+  function recordScrollAction(action, target, effectiveBehavior) {
     if (!Number.isSafeInteger(action.actionId) || action.actionId <= lastQueuedScrollAction)
       throw new RangeError('Scroll feedback ids must increase');
     lastQueuedScrollAction = action.actionId;
     pendingScrollActions.push(Object.freeze({...action,
+      behavior: effectiveBehavior ?? action.behavior,
       element: target?.id ? resolveElementId(target.id) : null}));
   }
 
@@ -38493,6 +38517,11 @@ function createPircDocumentLayout(options) {
       width: requireFiniteNumber(packet.viewport.width, 'viewport.width', true),
       height: requireFiniteNumber(packet.viewport.height, 'viewport.height', true),
     };
+    if (Object.prototype.hasOwnProperty.call(packet.viewport, 'scrollBehavior')) {
+      if (!['auto', 'smooth'].includes(packet.viewport.scrollBehavior))
+        throw new TypeError('viewport.scrollBehavior must be auto or smooth');
+      viewportValue.scrollBehavior = packet.viewport.scrollBehavior;
+    }
     const hasContentWidth = Object.prototype.hasOwnProperty.call(packet.viewport, 'contentWidth');
     const hasContentHeight = Object.prototype.hasOwnProperty.call(packet.viewport, 'contentHeight');
     if (hasContentWidth !== hasContentHeight) {
@@ -38953,6 +38982,7 @@ function createPircDocumentLayout(options) {
     viewport,
     nativeViewport,
     recordScrollAction,
+    resolveScrollBehavior,
     pendingScrollActionCount() { return pendingScrollActions.length; },
     hasPendingScrollActions() { return pendingScrollActions.length > 0; },
     discardScrollFeedback() { pendingScrollActions = []; },
@@ -41605,7 +41635,10 @@ function createPircDocumentLayout(options) {
         behavior: behavior
       };
       if (target && target.viewport !== true) action.elementId = target.id;
-      layout.recordScrollAction(action, target);
+      const effectiveBehavior = layout.resolveScrollBehavior(target, behavior);
+      if (behavior === 'auto' && ['instant', 'smooth'].includes(effectiveBehavior))
+        action.resolvedBehavior = effectiveBehavior;
+      layout.recordScrollAction(action, target, effectiveBehavior);
       state.scrollActions.push(Object.freeze(action));
     }
 

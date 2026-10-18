@@ -9,6 +9,7 @@ void applyNativeDocumentScrollAxis(
   double? coordinate, {
   required bool relative,
   required String behavior,
+  String cssBehavior = 'auto',
 }) {
   if (controller.positions.length != 1 ||
       coordinate != null && !coordinate.isFinite) {
@@ -22,7 +23,7 @@ void applyNativeDocumentScrollAxis(
   final target = requested
       .clamp(position.minScrollExtent, position.maxScrollExtent)
       .toDouble();
-  if (behavior == 'smooth') {
+  if (behavior == 'smooth' || behavior == 'auto' && cssBehavior == 'smooth') {
     unawaited(
       controller.animateTo(
         target,

@@ -353,6 +353,7 @@ test('document layout helper', async (t) => {
       viewport: () => ({ scrollX: 12.5, scrollY: 31, width: 390, height: 844 }),
       pendingScrollActionCount: () => state.scrollActions.length,
       recordScrollAction() {},
+      resolveScrollBehavior() {return undefined;},
       setScrollActionQueue(callback) { scrollQueue = callback; },
       queueElementScrollAction(target, kind, x, y, behavior) {
         scrollQueue({ id: target.id }, kind, x, y, behavior);

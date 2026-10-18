@@ -458,13 +458,14 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
         _ => null,
       };
       if (operation == null) continue;
-      final behavior = action['behavior'] == 'smooth' ? 'smooth' : 'auto';
+      final behavior = action['behavior'] as String? ?? 'auto';
       if (_isProgrammaticallyScrollable(a.overflowX)) {
         applyNativeDocumentScrollAxis(
           a.horizontalController,
           _number(action['left']),
           relative: operation == 'by',
           behavior: behavior,
+          cssBehavior: a.scrollBehavior,
         );
       }
       if (_isProgrammaticallyScrollable(a.overflowY)) {
@@ -473,6 +474,7 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
           _number(action['top']),
           relative: operation == 'by',
           behavior: behavior,
+          cssBehavior: a.scrollBehavior,
         );
       }
     }
@@ -498,6 +500,7 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
     int revision,
     NativeDocumentOverflow overflowX,
     NativeDocumentOverflow overflowY,
+    String scrollBehavior,
   ) {
     final activeBefore = _activeAttachments(id);
     final previous =
@@ -509,6 +512,7 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
       documentOwner: _documentOwner,
       overflowX: overflowX,
       overflowY: overflowY,
+      scrollBehavior: scrollBehavior,
       initialOffset: previous,
     );
     (_attachments[id] ??= <_NativeDocumentScrollAttachment>{}).add(attachment);
@@ -533,12 +537,14 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
     required int revision,
     required NativeDocumentOverflow overflowX,
     required NativeDocumentOverflow overflowY,
+    required String scrollBehavior,
   }) {
     if (attachment.retired) return;
     final changed =
         attachment.revision != revision ||
         attachment.overflowX != overflowX ||
-        attachment.overflowY != overflowY;
+        attachment.overflowY != overflowY ||
+        attachment.scrollBehavior != scrollBehavior;
     if (!changed) return;
     if (!_isProgrammaticallyScrollable(attachment.overflowX) &&
         _isProgrammaticallyScrollable(overflowX) &&
@@ -553,6 +559,7 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
     attachment.revision = revision;
     attachment.overflowX = overflowX;
     attachment.overflowY = overflowY;
+    attachment.scrollBehavior = scrollBehavior;
     attachment.hasMetrics = false;
     _scheduleNotification();
   }
@@ -811,6 +818,7 @@ class NativeDocumentElementScroll extends StatefulWidget {
     required this.overflowX,
     required this.overflowY,
     this.expandVisibleOverflow = false,
+    this.scrollBehavior = 'auto',
     required this.child,
   });
 
@@ -823,6 +831,7 @@ class NativeDocumentElementScroll extends StatefulWidget {
   /// Only the full document root exposes visible vertical overflow as its
   /// outer scroll extent. Nested elements keep their CSS border-box heights.
   final bool expandVisibleOverflow;
+  final String scrollBehavior;
   final Widget child;
 
   @override
@@ -842,6 +851,7 @@ class _NativeDocumentElementScrollState
       widget.revision,
       widget.overflowX,
       widget.overflowY,
+      widget.scrollBehavior,
     );
   }
 
@@ -861,6 +871,7 @@ class _NativeDocumentElementScrollState
         widget.revision,
         widget.overflowX,
         widget.overflowY,
+        widget.scrollBehavior,
       );
     } else {
       widget.controller._updateAttachment(
@@ -868,6 +879,7 @@ class _NativeDocumentElementScrollState
         revision: widget.revision,
         overflowX: widget.overflowX,
         overflowY: widget.overflowY,
+        scrollBehavior: widget.scrollBehavior,
       );
     }
   }
@@ -1496,6 +1508,7 @@ class _NativeDocumentScrollAttachment {
     required this.documentOwner,
     required this.overflowX,
     required this.overflowY,
+    required this.scrollBehavior,
     required Offset initialOffset,
   }) : lastLeft = initialOffset.dx,
        lastTop = initialOffset.dy {
@@ -1526,6 +1539,7 @@ class _NativeDocumentScrollAttachment {
   int? layoutRevision;
   NativeDocumentOverflow overflowX;
   NativeDocumentOverflow overflowY;
+  String scrollBehavior;
   double lastLeft;
   double lastTop;
   double? contentWidth;

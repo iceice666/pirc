@@ -1511,6 +1511,8 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       );
       if (packet != null) {
         packet['scrollActionThrough'] = scripts!.resolvedScrollActionId;
+        (packet['viewport'] as Json)['scrollBehavior'] =
+            _viewportScrollBehavior;
         if (document.scroll.hasClients &&
             document.scroll.position.hasContentDimensions) {
           (packet['viewport'] as Json)['scrollRange'] = {
@@ -1664,6 +1666,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
     }
   }
 
+  String _viewportScrollBehavior = 'auto';
   bool _scrollScheduled = false;
   void _scheduleScroll() {
     final scripts = _scripts;
@@ -1703,7 +1706,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
                   'op': action['kind'] == 'by' ? 'scrollBy' : 'scrollTo',
                   'left': action['x'],
                   'top': action['y'],
-                  'behavior': action['behavior'],
+                  'behavior': action['resolvedBehavior'] ?? action['behavior'],
                 },
               ]);
             }
@@ -1712,7 +1715,9 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
               document.scroll,
               (action['y'] as num?)?.toDouble(),
               relative: action['kind'] == 'by',
-              behavior: action['behavior'] as String,
+              behavior:
+                  (action['resolvedBehavior'] ?? action['behavior']) as String,
+              cssBehavior: _viewportScrollBehavior,
             );
           }
         }
@@ -2107,6 +2112,10 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       viewportHeight: environment.height,
       dark: schemeDark,
     );
+    _viewportScrollBehavior =
+        computedStyles[root.attributes['data-pirc-script-id']]
+            ?.values['scroll-behavior'] ??
+        'auto';
     _scrollAnchors.nodes = nativeDocumentScrollAnchorNodes(
       document: styled,
       stylesByElement: result.stylesByElement,
