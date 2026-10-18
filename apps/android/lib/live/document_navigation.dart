@@ -13,6 +13,7 @@ import '../rendering/html_document_styles.dart';
 import '../rendering/native_html.dart';
 import '../rendering/document_absolute_position.dart';
 import '../rendering/document_layout.dart';
+import '../rendering/document_scroll_anchor.dart';
 import '../rendering/document_touch_boundary.dart';
 import '../rendering/document_computed_styles.dart';
 import '../rendering/document_offsets.dart';
@@ -1330,6 +1331,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
   NativeDocumentWindows? _windows;
   bool _tickerVisible = true;
   final _layout = NativeDocumentLayoutController();
+  final _scrollAnchors = NativeDocumentScrollAnchorData();
   final _elementScroll = NativeDocumentElementScrollController();
   Size _layoutViewport = Size.zero;
   late final _touchBoundary = NativeDocumentTouchBoundary(
@@ -1475,6 +1477,10 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
           !identical(_scripts, scripts) ||
           scripts?.layoutRevision != revision) {
         return null;
+      }
+      if (!_scrollAnchors.settled ||
+          scripts?.scrollActions.isNotEmpty == true) {
+        continue;
       }
       final pendingScrollEvents = _elementScroll.pendingScrollEvents;
       final packet = _layout.capture(
@@ -1649,61 +1655,71 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
     _scrollScheduled = true;
     final document = widget.document;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollScheduled = false;
-      if (!mounted ||
-          !identical(widget.document, document) ||
-          !identical(_scripts, scripts) ||
-          !document.scroll.hasClients ||
-          !document.scroll.position.hasContentDimensions) {
-        return;
-      }
-      final actions = scripts.takeScrollActions();
-      if (actions.isEmpty) return;
-      final position = document.scroll.position;
-      double target = position.pixels;
-      final windowActions = <Json>[];
-      _elementScroll.applyActions([
-        for (final action in actions)
-          if (action['elementId'] is String &&
-              scripts.layoutElementIds.contains(action['elementId']))
-            {
-              'id': action['elementId'],
-              'op': action['kind'] == 'by' ? 'scrollBy' : 'scrollTo',
-              'left': action['x'],
-              'top': action['y'],
-              'behavior': action['behavior'],
-            },
-      ]);
-      windowActions.addAll(
-        actions.where((action) => !action.containsKey('elementId')),
-      );
-      for (final action in windowActions) {
-        final y = action['y'] as num?;
-        if (y != null) {
-          target = action['kind'] == 'by'
-              ? target + y.toDouble()
-              : y.toDouble();
+      // Anchor compensation runs after document layout. Queue commands after
+      // those frame callbacks, so scrollTo wins over a same-turn content shift
+      // and scrollBy composes with the compensated position.
+      scheduleMicrotask(() {
+        _scrollScheduled = false;
+        if (!mounted ||
+            !identical(widget.document, document) ||
+            !identical(_scripts, scripts) ||
+            !document.scroll.hasClients ||
+            !document.scroll.position.hasContentDimensions) {
+          return;
         }
-        target = target.clamp(
-          position.minScrollExtent,
-          position.maxScrollExtent,
+        if (!_scrollAnchors.settled) {
+          _scheduleScroll();
+          WidgetsBinding.instance.ensureVisualUpdate();
+          return;
+        }
+        final actions = scripts.takeScrollActions();
+        if (actions.isEmpty) return;
+        final position = document.scroll.position;
+        double target = position.pixels;
+        final windowActions = <Json>[];
+        _elementScroll.applyActions([
+          for (final action in actions)
+            if (action['elementId'] is String &&
+                scripts.layoutElementIds.contains(action['elementId']))
+              {
+                'id': action['elementId'],
+                'op': action['kind'] == 'by' ? 'scrollBy' : 'scrollTo',
+                'left': action['x'],
+                'top': action['y'],
+                'behavior': action['behavior'],
+              },
+        ]);
+        windowActions.addAll(
+          actions.where((action) => !action.containsKey('elementId')),
         );
-      }
-      // Position changes are reported back only after native layout. Multiple
-      // same-turn calls compose in order against the real scroll extent.
-      if (windowActions.isNotEmpty &&
-          windowActions.last['behavior'] == 'smooth') {
-        unawaited(
-          document.scroll.animateTo(
-            target,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-          ),
-        );
-      } else if (windowActions.isNotEmpty) {
-        document.scroll.jumpTo(target);
-      }
-      scripts.refreshLayout();
+        for (final action in windowActions) {
+          final y = action['y'] as num?;
+          if (y != null) {
+            target = action['kind'] == 'by'
+                ? target + y.toDouble()
+                : y.toDouble();
+          }
+          target = target.clamp(
+            position.minScrollExtent,
+            position.maxScrollExtent,
+          );
+        }
+        // Position changes are reported back only after native layout. Multiple
+        // same-turn calls compose in order against the real scroll extent.
+        if (windowActions.isNotEmpty &&
+            windowActions.last['behavior'] == 'smooth') {
+          unawaited(
+            document.scroll.animateTo(
+              target,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+            ),
+          );
+        } else if (windowActions.isNotEmpty) {
+          document.scroll.jumpTo(target);
+        }
+        scripts.refreshLayout();
+      });
     });
   }
 
@@ -1757,6 +1773,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.document != widget.document) {
       _clearTouchBoundary();
+      _scrollAnchors.nodes = const {};
       _elementScroll.beginDocument(widget.document);
       oldWidget.document.scroll.removeListener(_nativeScrollChanged);
       widget.document.scroll.addListener(_nativeScrollChanged);
@@ -1852,18 +1869,23 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
                 onPointerDown: _touchBoundary.down,
                 onPointerUp: _documentTouchUp,
                 onPointerCancel: _touchBoundary.cancel,
-                child: NativeDocumentPositioningViewport(
-                  scrollChanges: document.scroll,
-                  child: SingleChildScrollView(
-                    controller: document.scroll,
-                    child: document.content.isHtml
-                        ? _buildContent(
-                            document,
-                            width: constraints.maxWidth,
-                            height: constraints.maxHeight,
-                            dark: base.brightness == Brightness.dark,
-                          )
-                        : (_body ??= _buildContent(document)),
+                child: NativeDocumentScrollAnchorViewport(
+                  controller: document.scroll,
+                  layout: _layout,
+                  data: _scrollAnchors,
+                  child: NativeDocumentPositioningViewport(
+                    scrollChanges: document.scroll,
+                    child: SingleChildScrollView(
+                      controller: document.scroll,
+                      child: document.content.isHtml
+                          ? _buildContent(
+                              document,
+                              width: constraints.maxWidth,
+                              height: constraints.maxHeight,
+                              dark: base.brightness == Brightness.dark,
+                            )
+                          : (_body ??= _buildContent(document)),
+                    ),
                   ),
                 ),
               );
@@ -2072,24 +2094,30 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       knownIds: _scripts?.layoutElementIds ?? const {},
       stylesByElement: result.stylesByElement,
     );
+    final computedStyles = nativeDocumentComputedStyleSpecs(
+      document: styled,
+      stylesByElement: result.stylesByElement,
+      canvasBitmapAttributesIndependent:
+          result.canvasBitmapAttributesIndependent,
+      inlineBoxStyleOverridesIndependent:
+          result.inlineBoxStyleOverridesIndependent,
+      textContentSelectorsIndependent: result.textContentSelectorsIndependent,
+      viewportWidth: environment.width,
+      viewportHeight: environment.height,
+      dark: schemeDark,
+    );
+    _scrollAnchors.nodes = nativeDocumentScrollAnchorNodes(
+      document: styled,
+      stylesByElement: result.stylesByElement,
+      computedStyles: computedStyles,
+    );
     final rendered = NativeHtmlDocument(
       layoutController: _scripts == null ? null : _layout,
       elementScrollController: _elementScroll,
       layoutRevision: _scripts?.layoutRevision ?? 0,
       layoutKnownIds: _scripts?.layoutElementIds ?? const {},
       layoutNoBoxIds: noBoxIds,
-      layoutComputedStyles: nativeDocumentComputedStyleSpecs(
-        document: styled,
-        stylesByElement: result.stylesByElement,
-        canvasBitmapAttributesIndependent:
-            result.canvasBitmapAttributesIndependent,
-        inlineBoxStyleOverridesIndependent:
-            result.inlineBoxStyleOverridesIndependent,
-        textContentSelectorsIndependent: result.textContentSelectorsIndependent,
-        viewportWidth: environment.width,
-        viewportHeight: environment.height,
-        dark: schemeDark,
-      ),
+      layoutComputedStyles: computedStyles,
       documentPercentTopMargins: nativeDocumentPercentTopMarginGroups(
         document: styled,
         stylesByElement: result.stylesByElement,

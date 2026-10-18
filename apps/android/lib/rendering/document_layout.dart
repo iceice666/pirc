@@ -121,6 +121,59 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     return const NativeDocumentHitTest(elementId: null);
   }
 
+  /// Current measured flow boxes in the explicit document coordinate space.
+  /// Fixed subtrees are excluded by the caller's DOM policy. Measuring here
+  /// does not require outer scroll-decoration transforms to have laid out.
+  Map<String, Rect>? scrollAnchorBoxes(Set<String> ids) {
+    final root = _root;
+    if (_disposed ||
+        root == null ||
+        !root.attached ||
+        !root.hasSize ||
+        root.pendingLayout ||
+        root.laidOutRevision != root.revision ||
+        !nativeDocumentMarginsAreSettled(root)) {
+      return null;
+    }
+    final result = <String, Rect>{};
+    for (final id in ids) {
+      if (!root.knownIds.contains(id) || root.noBoxIds.contains(id)) continue;
+      final owners = (_elements[id] ?? {})
+          .where(
+            (e) =>
+                e.attached &&
+                e.revision == root.revision &&
+                identical(_nearestRoot(e), root),
+          )
+          .toList();
+      if (owners.length != 1) continue;
+      final element = owners.single;
+      if (element.pendingLayout) return null;
+      if (!element.hasSize || element.laidOutRevision != root.revision) {
+        continue;
+      }
+      final surface = element.boxSurface?.call(element) ?? element;
+      if (!surface.attached ||
+          !surface.hasSize ||
+          !identical(_nearestRoot(surface), root)) {
+        continue;
+      }
+      try {
+        final translation = MatrixUtils.getAsTranslation(
+          surface.getTransformTo(root),
+        );
+        if (translation != null &&
+            translation.dx.isFinite &&
+            translation.dy.isFinite) {
+          result[id] = translation & surface.size;
+        }
+      } on FlutterError {
+        return null;
+      }
+    }
+    return result;
+  }
+
   /// Captures the latest completed layout for [revision].
   ///
   /// Element rectangles are relative to the explicit document root. Scroll is

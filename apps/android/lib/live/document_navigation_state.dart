@@ -12,6 +12,7 @@ import 'document_style_loading.dart';
 import '../rendering/html_form_submission.dart';
 import '../rendering/html_file.dart';
 import '../rendering/native_html.dart';
+import '../rendering/document_scroll_anchor.dart';
 import 'gateway.dart';
 import 'document_scripts.dart';
 import 'app_document_route.dart';
@@ -207,7 +208,7 @@ class NativeFetchedDocument {
   final scriptFileSelections = NativeHtmlScriptFileSelections();
   final historyControls = NativeHtmlHistoryController();
   final viewport = NativeHtmlViewportController();
-  final scroll = ScrollController();
+  final scroll = NativeDocumentScrollController();
   String get effectiveBase {
     if (resolvedBase != null) return resolvedBase!;
     final location = historyApiLocation ?? url;

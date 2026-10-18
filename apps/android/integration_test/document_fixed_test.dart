@@ -65,7 +65,6 @@ void main() {
           headers: {},
         );
         final clicks = <String>[];
-        final knownDifferences = <Json>[];
         var maxDelta = 0.0, rawMaxViewportDelta = 0.0;
         try {
           await tester.pumpWidget(
@@ -83,11 +82,6 @@ void main() {
               ),
             ),
           );
-          bool knownAnchorDifference(Json actual, Json expected) =>
-              row['mode'] == 'hidden_dynamic' &&
-              expected['phase'] == 2 &&
-              expected['scrollY'] == 300 &&
-              actual['scrollY'] == 180;
           Future<Json> ready(Json expected) async {
             Json last = {};
             for (var i = 0; i < 200; i++) {
@@ -102,8 +96,7 @@ void main() {
                 final state = obj(jsonDecode(text));
                 last = state;
                 if (state['phase'] == expected['phase'] &&
-                    (state['scrollY'] == expected['scrollY'] ||
-                        knownAnchorDifference(state, expected)) &&
+                    state['scrollY'] == expected['scrollY'] &&
                     state['hostScrollTop'] == expected['hostScrollTop'] &&
                     state['viewport'].toString() ==
                         expected['viewport'].toString() &&
@@ -140,16 +133,6 @@ void main() {
               }
             }
             final actual = await ready(expected);
-            final anchorDifference = knownAnchorDifference(actual, expected);
-            if (anchorDifference) {
-              knownDifferences.add({
-                'type': 'root_scroll_anchoring',
-                'browserScrollY': expected['scrollY'],
-                'nativeScrollY': actual['scrollY'],
-                'browserViewportBoxes': expected['boxes'],
-                'nativeViewportBoxes': actual['boxes'],
-              });
-            }
             expect(
               actual['scrollHeight'],
               closeTo((expected['scrollHeight'] as num).toDouble(), .01),
@@ -164,14 +147,7 @@ void main() {
                 if (rawDelta > rawMaxViewportDelta) {
                   rawMaxViewportDelta = rawDelta;
                 }
-                final referenceValue =
-                    (reference[axis] as num) +
-                    (anchorDifference &&
-                            axis == 'y' &&
-                            const {'host', 'filler'}.contains(entry.key)
-                        ? (expected['scrollY'] as num) -
-                              (actual['scrollY'] as num)
-                        : 0);
+                final referenceValue = reference[axis] as num;
                 final delta = ((box[axis] as num) - referenceValue)
                     .abs()
                     .toDouble();
@@ -207,7 +183,6 @@ void main() {
             'theme': row['theme'],
             'maxGeometryDelta': maxDelta,
             'rawMaxViewportDelta': rawMaxViewportDelta,
-            'knownDifferences': knownDifferences,
             'clicks': clicks,
           });
           debugPrintSynchronously('PIRC_FIXED_PROGRESS ${accepted.length}/120');

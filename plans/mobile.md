@@ -27,8 +27,7 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** restore root scroll anchoring when
-      content expands above the viewport (confirmed below); extend Canvas font/ink coverage,
+- [ ] **Dynamic content compatibility:** extend Canvas font/ink coverage,
       synchronous write/read layout within one callback and broader chart-library acceptance; extend
       the supported computed-style
       properties, list-item/inline-fragment measurements and common-library coverage;
@@ -81,9 +80,9 @@ outside the agreed scope.
   rectangles match Chromium; these small scroll-extent differences are deferred.
 - Root horizontal scrolling, scrollend/Promise semantics, mixed window/element
   event order, RTL, scroll snap/anchoring and nested touch scroll chaining need
-  wider coverage. Root scroll anchoring now has a confirmed 120 px difference
-  when content appears above the viewport, detailed below. Smooth scroll timing
-  follows Flutter.
+  wider coverage. Common root-block scroll anchoring is covered below; independent
+  nested-container anchoring and the remaining variants are still open. Smooth
+  scroll timing follows Flutter.
 - `window.getComputedStyle()` now reads the native cascade and completed layout
   snapshot for a supported property subset. Declarations are read-only and live
   across accepted frames. Enumeration includes the supplied subset, rather than
@@ -1415,13 +1414,11 @@ for a scroll-only state. The Android gate runs the same driver through
 JavaScriptSandbox and real native controls. Percentage/padding geometry keeps a
 named 1/32 CSS px accumulated browser-quantization bound; other boxes use 0.01 px.
 
-**Confirmed remaining root anchoring difference:** showing a 120 px flow block
-above the viewport makes Chromium change scrollY 180 → 300; Flutter stays at 180.
-The fixed overlay remains at the same viewport coordinates. The eight
-hidden_dynamic profiles retain the unmodified browser reference and record both
-raw viewport box sets. Their flow layout is compared in document coordinates;
-they are not counted as complete viewport parity. This is the next scroll
-compatibility work, not an adjusted browser baseline.
+**Resolved in the root anchoring follow-up below:** the initial implementation
+kept scrollY at 180 when a 120 px flow block appeared above the viewport; Chromium
+changed it to 300. The follow-up removes the eight hidden_dynamic allowances and
+compares their actual viewport boxes and native scroll offset with the unchanged
+browser reference, using the same strict gate as the other profiles.
 
 Other remaining positioning work: transformed/filter/contain or other special
 fixed containing blocks; intervening stacking contexts/opacity, nested fixed
@@ -1432,8 +1429,8 @@ existing flow fallback and do not have positioning parity. Physical device
 keyboard/rotation/background acceptance remains separate.
 
 
-Verification: 1,215 affected Flutter tests and all 697 JavaScript tests pass;
-static analysis is clean. The Android gate evaluates all 120 profiles: 112 have
+Initial verification, before the root anchoring follow-up: 1,215 affected Flutter
+tests and all 697 JavaScript tests pass; static analysis is clean. The Android gate evaluates all 120 profiles: 112 have
 complete viewport agreement, and eight retain the named root-scroll-anchoring
 difference above. Their fixed overlays and document-space geometry pass; the raw
 120 px viewport difference is retained. Maximum matching geometry delta is
@@ -1443,3 +1440,56 @@ Their diagnostic overlays now use pointer-events:none so fixed labels do not
 obscure the controls. Compact ignored evidence records the original browser
 fixture and source hashes; disposable builds and owned emulator images are
 removed after testing, preserving the published APK.
+
+
+## Root scroll anchoring
+
+Scripted full documents now keep a DOM anchor from the last completed native
+frame. The selection uses measured flow boxes and their actual DOM ordering:
+fully visible boxes can be selected directly; partially visible containers search
+their descendants. Fixed/sticky subtrees and overflow-anchor:none exclusions do
+not become anchors. User/programmatic scrolling selects afresh against retained
+document-space geometry. Selection does not rescan native surfaces on each drag.
+
+When the anchor disappears, surviving nodes are selected at their previous-frame
+positions before computing their new offset. This preserves the browser's
+phone/tablet distinction when a replacement was visible only on the larger
+viewport. Offset deltas are clamped to actual native scroll limits. Authored
+geometry changes along the anchor's ancestor path, out-of-flow position changes,
+zero offsets and changed viewport dimensions fence compensation. Native layout
+must be settled, uniquely owned and current; provisional margin layout does not
+replace the previous anchor snapshot. Scroll corrections retain drag/ballistic
+activities. Script layout publication waits for the corrected frame to paint.
+
+The Chromium 153 corpus contains 18 behaviors × phone/tablet × DPR 1/3 × light/dark
+(144 profiles, 576 states). It covers expansion/shrink, insertion/removal, changes
+below the viewport, nested partial/fully visible candidates, removed anchors,
+anchor/ancestor geometry suppression, root/subtree exclusions, the page top,
+scrollTo/scrollBy and end-of-document clamping. Widget checks compare every box,
+scroll offset/extent and an actual solid-color screen pixel at each step. Android
+checks use identical source/driver bytes through the production JS sandbox and
+native Advance button. The previously frozen fixed-position driver is also run
+with its root-anchor exception removed. Selection/suppression semantics are
+informed by the [CSS scroll anchoring draft](https://www.w3.org/TR/css-scroll-anchoring-1/);
+the frozen browser's actual results remain the acceptance baseline.
+
+Remaining anchoring boundaries: independent nested scroll-container anchoring,
+non-scripted document/image-load identity, text-fragment and focused/find-match
+priority candidates, scroll-padding/snap, RTL/vertical writing, overflowing and
+out-of-flow candidate ordering, complex transformed containing blocks and
+simultaneous programmatic smooth-scroll/DOM changes and fractional adjustment
+quantization. These are not certified by the root-block corpus. Synchronous DOM
+write/read layout retains its separate native-frame limitation. Physical keyboard/rotation/background acceptance remains
+open.
+
+
+Verification: 507 affected Flutter tests across 36 files and all 700 JavaScript
+tests pass. Analysis and formatting are clean. All 144 Android anchor profiles
+match every measured box and offset exactly; all 120 fixed-position profiles pass
+strict viewport comparison, including the previous eight 120 px findings.
+The fixed percentage cases retain their named bound (maximum delta 0.009375 CSS
+px), with no root-anchor allowance. Two same-turn element-scroll mutation cases
+and the existing native HTTP offset/style integration also pass. Test/browser
+source identity and empty diagnostics are checked. Compact evidence is ignored;
+disposable builds and the owned emulator images are cleaned while preserving the
+published APK. The wider goal and the remaining gates above remain open.

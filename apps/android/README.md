@@ -317,11 +317,23 @@ short-document hit ownership and scroll extents. Recreate with
 `integration_test/document_fixed_test.dart` uses the same local fixture server and
 `PIRC_CHART_FIXTURE_ORIGIN` define. Native Advance controls drive root/inner scroll,
 style changes and hide/show; every state checks measured boxes and native clicks.
-The eight hidden_dynamic profiles explicitly record the known root anchoring
-180/300 difference. Their fixed boxes match, but those profiles do not certify
-complete viewport parity. See the mobile plan for the full positioning limits.
+The eight hidden_dynamic profiles now use strict viewport comparison after the
+root anchoring follow-up; their previous 180/300 allowance is removed. See the
+mobile plan for the remaining positioning limits.
 `document_scroll_frame_host_test.dart` verifies scroll acknowledgement before RAF,
 ordered callback/Promise scrollBy and cancellation across hide/detach.
+
+`document_scroll_anchor_oracle_test.dart` compares 144 profiles and 576 states
+against Chromium: actual offset, extent, every captured box and a native painted
+pixel. `document_scroll_anchor_activity_test.dart` checks ongoing drag/inertia.
+The shared generator is `tool/parity/document_scroll_anchor_fixture.mjs`; capture
+from the repository root with
+`node apps/android/tool/parity/capture_document_scroll_anchor_chromium153.mjs`.
+The Node contract checks source/driver identity, exclusion/suppression and removed
+anchor behavior. `integration_test/document_scroll_anchor_test.dart` uses the same
+local server/define as the fixed test, with the shipped JS sandbox and native
+Advance control. Same-turn scrollTo/scrollBy wait for anchor compensation, and
+layout acknowledgements wait for the resulting native paint.
 
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
