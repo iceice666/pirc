@@ -60,8 +60,10 @@ are at `git show 7677d24:plans/mobile-audit.md`.
   font/viewport-relative units, `calc()`, logical insets and inline fragments
   remain unsupported. A parsed nonzero inline inset does not by itself gain
   offset metadata. Common absolute positioning and viewport-fixed overlays are
-  implemented, including native hit targets. Sticky positioning, transformed
-  containing blocks, zoom, table offsets and fragmented inline geometry remain open.
+  implemented, including native hit targets. Common 2D transformed block
+  containing blocks now support absolute/local fixed children, including
+  identity transforms and dynamic ownership changes. Sticky positioning, zoom,
+  table offsets and fragmented inline geometry remain open.
 - General DOM writes followed immediately by geometry/style reads still need a
   matching native frame; stale, missing or ambiguous reads fail explicitly.
   Scroll-only rectangle reads now use actual native paint ancestry and affine
@@ -70,10 +72,25 @@ are at `git show 7677d24:plans/mobile-audit.md`.
   height for percentage descendants.
 - Common 2D `transform` functions and ordinary `transform-origin` paint and
   hit-test natively around the laid-out border box, including percentage
-  translation and composed matrices. Transformed containing blocks, 3D and
-  perspective, individual translate/rotate/scale properties, textual inline
-  fragments, transform-box variants and transformed overflow extents remain
-  outside the covered subset.
+  translation and composed matrices. Containing blocks that own scrolling or
+  clipping, general stacking/compositing between intermediate ancestors,
+  inline/table/SVG containing blocks, 3D/perspective, individual transform
+  properties, textual inline fragments, transform-box variants and transformed
+  overflow extents remain outside the covered subset. Transformed CSSOM
+  offset-parent/position reads still lack native offset specifications.
+- The transformed-containing-block corpus has 136 Chromium 153 phone/tablet,
+  DPR 1/3 and theme profiles, each checked before scrolling, after root/enclosing
+  panel scrolling and after transform mutation. It covers static/relative and
+  nested hosts, nearest-owner selection, identity transforms, percentage sizing,
+  transformed children, Canvas and native buttons. Widget and Android Sandbox
+  gates use the same sources and actual native clicks. Geometry allows 1/32 CSS
+  px for subpixel rounding. Both compare two painted samples per profile;
+  opaque pixels are exact. Android's 0.5 opacity RGB composition differs by at
+  most one level (1/255), with exact alpha; widget opacity pixels are exact.
+  Common block opacity now groups its positioned children too. Wider inline and
+  replaced-element opacity, zero-opacity accessibility semantics, transitions
+  and intermediate stacking groups remain unverified, rather than certified
+  by this case.
 - Two root-height fixtures retain extra trailing blank scroll space: 8 px with
   the default body margin and 17 px with nested content-box edges. Their element
   rectangles match Chromium; these scroll-extent differences remain deferred.
