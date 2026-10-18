@@ -80,6 +80,9 @@ if (JSON.parse(fixed.toString('utf8')).browserVersion !== '153.0.8010.12') throw
 const scrollAnchor = readFileSync(path.join(scriptDirectory, 'fixtures/document-scroll-anchor-chromium153.json'));
 if (JSON.parse(scrollAnchor.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected scroll-anchor browser');
 
+const elementAnchor = readFileSync(path.join(scriptDirectory, 'fixtures/document-element-anchor-chromium153.json'));
+if (JSON.parse(elementAnchor.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected element-anchor browser');
+
 const requestedPort = configuredPort();
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -108,6 +111,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/element-anchor.json') {
+    response.writeHead(200, {'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8'});
+    response.end(elementAnchor);
     return;
   }
   if (pathname === '/scroll-anchor.json') {

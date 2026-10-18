@@ -5,6 +5,7 @@ import 'document_offsets.dart';
 import 'document_computed_styles.dart';
 import 'html_document_box.dart';
 import 'document_element_scroll.dart';
+import 'document_scroll_anchor_state.dart';
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
@@ -124,7 +125,15 @@ class NativeDocumentLayoutController extends ChangeNotifier {
   /// Current measured flow boxes in the explicit document coordinate space.
   /// Fixed subtrees are excluded by the caller's DOM policy. Measuring here
   /// does not require outer scroll-decoration transforms to have laid out.
-  Map<String, Rect>? scrollAnchorBoxes(Set<String> ids) {
+  Map<String, Rect>? scrollAnchorBoxes(Set<String> ids) =>
+      scrollAnchorFrame(ids)?.boxes;
+
+  NativeDocumentScrollAnchorFrame? scrollAnchorFrame(
+    Set<String> ids, {
+    RenderBox? relativeTo,
+    Offset contentOffset = Offset.zero,
+    Map<String, NativeDocumentScrollAnchorPort> scrollports = const {},
+  }) {
     final root = _root;
     if (_disposed ||
         root == null ||
@@ -135,7 +144,31 @@ class NativeDocumentLayoutController extends ChangeNotifier {
         !nativeDocumentMarginsAreSettled(root)) {
       return null;
     }
+    final basis = relativeTo ?? root;
+    if (!basis.attached ||
+        !basis.hasSize ||
+        !identical(_nearestRoot(basis), root)) {
+      return null;
+    }
+    Rect? rectangle(RenderBox surface) {
+      RenderObject? current = surface;
+      while (current != null && !identical(current, basis)) {
+        current = current.parent;
+      }
+      if (current == null) return null;
+      final translation = MatrixUtils.getAsTranslation(
+        surface.getTransformTo(basis),
+      );
+      if (translation == null ||
+          !translation.dx.isFinite ||
+          !translation.dy.isFinite) {
+        return null;
+      }
+      return (translation & surface.size).shift(contentOffset);
+    }
+
     final result = <String, Rect>{};
+    final layoutBoxes = <String, Rect>{};
     for (final id in ids) {
       if (!root.knownIds.contains(id) || root.noBoxIds.contains(id)) continue;
       final owners = (_elements[id] ?? {})
@@ -159,19 +192,39 @@ class NativeDocumentLayoutController extends ChangeNotifier {
         continue;
       }
       try {
-        final translation = MatrixUtils.getAsTranslation(
-          surface.getTransformTo(root),
-        );
-        if (translation != null &&
-            translation.dx.isFinite &&
-            translation.dy.isFinite) {
-          result[id] = translation & surface.size;
+        final rect = rectangle(surface);
+        if (rect != null) {
+          result[id] = rect;
+          var shift = Offset.zero;
+          RenderObject? ancestor = surface.parent;
+          while (ancestor != null && !identical(ancestor, basis)) {
+            shift += nativeDocumentScrollTranslation(ancestor);
+            ancestor = ancestor.parent;
+          }
+          layoutBoxes[id] = rect.shift(shift);
         }
       } on FlutterError {
         return null;
       }
     }
-    return result;
+    final clips = <String, Rect>{};
+    for (final entry in scrollports.entries) {
+      final port = entry.value;
+      if (!port.surface.attached ||
+          !port.surface.hasSize ||
+          !identical(_nearestRoot(port.surface), root)) {
+        continue;
+      }
+      final rect = rectangle(port.surface);
+      if (rect == null) continue;
+      clips[entry.key] = Rect.fromLTRB(
+        port.clipX ? rect.left : double.negativeInfinity,
+        port.clipY ? rect.top : double.negativeInfinity,
+        port.clipX ? rect.right : double.infinity,
+        port.clipY ? rect.bottom : double.infinity,
+      );
+    }
+    return NativeDocumentScrollAnchorFrame(result, clips, layoutBoxes);
   }
 
   /// Captures the latest completed layout for [revision].

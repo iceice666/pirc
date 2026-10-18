@@ -154,6 +154,7 @@ PreparedNativeLayoutDocument prepareNativeLayoutDocument(
   Map<String, dynamic> capture, {
   double? viewportHeight,
   double? devicePixelRatio,
+  Map<String, String> scriptIdOverrides = const {},
 }) {
   final document = html.parse(capture['html'] as String);
   final root = document.documentElement!;
@@ -162,7 +163,7 @@ PreparedNativeLayoutDocument prepareNativeLayoutDocument(
   for (final id in targets) {
     final element = document.getElementById(id);
     if (element == null) throw StateError('Missing fixture target #$id');
-    element.attributes['data-pirc-script-id'] = id;
+    element.attributes['data-pirc-script-id'] = scriptIdOverrides[id] ?? id;
   }
 
   final width = (capture['viewportWidth'] as num).toDouble();
@@ -188,7 +189,7 @@ PreparedNativeLayoutDocument prepareNativeLayoutDocument(
     while (true) {
       if (cascade.stylesByElement[current]?['display'] == 'none' ||
           current.attributes.containsKey('hidden')) {
-        noBoxIds.add(id);
+        noBoxIds.add(scriptIdOverrides[id] ?? id);
         break;
       }
       final parent = current.parent;

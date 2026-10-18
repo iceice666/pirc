@@ -15,6 +15,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 - Android keeps layout-independent computed styles readable after ordinary text updates while remeasuring affected dimensions.
 - Android supports viewport-fixed HTML overlays and acknowledges native scrolling before animation callbacks.
 - Android keeps the reading position stable when interactive HTML changes content above the viewport.
+- Android preserves reading positions inside nested HTML scrolling panels.
 - Gateway and node startup retry brief SQLite WAL-mode lock conflicts when processes open the same database concurrently.
 - PTC scripts that exhaust their JavaScript heap report an out-of-memory error reliably, including when the engine cannot allocate an error object.
 

@@ -335,6 +335,16 @@ local server/define as the fixed test, with the shipped JS sandbox and native
 Advance control. Same-turn scrollTo/scrollBy wait for anchor compensation, and
 layout acknowledgements wait for the resulting native paint.
 
+`document_element_anchor_oracle_test.dart` compares 168 nested-scroll profiles
+and 672 states, including actual native paint, owner replacement and hide/show.
+Recreate its frozen reference from the repository root with
+`node apps/android/tool/parity/capture_document_element_anchor_chromium153.mjs`.
+The shared page/driver generator is `tool/parity/document_element_anchor_fixture.mjs`;
+the Node contract verifies exact source identity, exclusions and coupled layers.
+`integration_test/document_element_anchor_test.dart` uses the same loopback
+fixture server and define as the root-anchor test, comparing all scroll/client
+metrics and rectangles through the shipped JS engine and native controls.
+
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
 [the test browser guide](tool/parity/TEST_BROWSER.md).

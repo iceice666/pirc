@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import 'document_absolute_position.dart';
+import 'document_scroll_anchor_state.dart';
 import 'html_document_box.dart';
 
 /// The CSS overflow behavior for one physical axis.
@@ -63,12 +64,247 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
   int _nextSequence = 1;
   int droppedScrollEventCount = 0;
 
+  Object? _anchorHost;
+  Map<String, NativeDocumentScrollAnchorNode> Function()? _anchorNodes;
+  NativeDocumentScrollAnchorCapture? _anchorCapture;
+  VoidCallback? _requestAnchorCheck;
+  void Function(Set<String>, Offset, bool)? _anchorScrollChanged;
+  final _anchorStates = <String, NativeDocumentScrollAnchorState>{};
+  final _pendingAnchoring = <_NativeDocumentScrollAttachment>{};
+  final _correctingAnchors = <_NativeDocumentScrollAttachment>{};
+  List<({_NativeDocumentScrollAttachment attachment, double target})>
+  _anchorPlan = [];
+  bool get anchoringSettled => _pendingAnchoring.isEmpty;
+
+  void bindAnchoring(
+    Object host, {
+    required Map<String, NativeDocumentScrollAnchorNode> Function() nodes,
+    required NativeDocumentScrollAnchorCapture capture,
+    required VoidCallback requestCheck,
+    required void Function(Set<String>, Offset, bool) onScroll,
+  }) {
+    if (_disposed) return;
+    if (!identical(_anchorHost, host)) _anchorStates.clear();
+    _anchorHost = host;
+    _anchorNodes = nodes;
+    _anchorCapture = capture;
+    _requestAnchorCheck = requestCheck;
+    _anchorScrollChanged = onScroll;
+  }
+
+  void unbindAnchoring(Object host) {
+    if (!identical(_anchorHost, host)) return;
+    _anchorHost = null;
+    _anchorNodes = null;
+    _anchorCapture = null;
+    _requestAnchorCheck = null;
+    _anchorScrollChanged = null;
+    _anchorStates.clear();
+    _pendingAnchoring.clear();
+    _anchorPlan = [];
+  }
+
+  Map<String, NativeDocumentScrollAnchorPort> get anchorScrollports => {
+    if (!_disposed)
+      for (final a in _allAttachments)
+        if (!a.retired &&
+            identical(a.documentOwner, _documentOwner) &&
+            _activeAttachments(a.id).length == 1 &&
+            a.viewportRenderObject?.attached == true &&
+            a.viewportRenderObject!.hasSize &&
+            (a.overflowX != NativeDocumentOverflow.visible ||
+                a.overflowY != NativeDocumentOverflow.visible))
+          a.id: (
+            surface: a.viewportRenderObject!,
+            clipX: a.overflowX != NativeDocumentOverflow.visible,
+            clipY: a.overflowY != NativeDocumentOverflow.visible,
+          ),
+  };
+  void _scheduleAnchoring(_NativeDocumentScrollAttachment a) {
+    if (_anchorHost == null ||
+        a.retired ||
+        !_isProgrammaticallyScrollable(a.overflowY) ||
+        _anchorNodes?.call()[a.id] == null) {
+      return;
+    }
+    _pendingAnchoring.add(a);
+    _requestAnchorCheck?.call();
+  }
+
+  bool prepareAnchoring() {
+    _anchorPlan = [];
+    final all =
+        _anchorNodes?.call() ??
+        const <String, NativeDocumentScrollAnchorNode>{};
+    _pendingAnchoring.removeWhere(
+      (a) =>
+          a.retired ||
+          !all.containsKey(a.id) ||
+          _activeAttachments(a.id).length != 1 ||
+          !_isProgrammaticallyScrollable(a.overflowY),
+    );
+    if (all.isEmpty) {
+      _anchorStates.clear();
+      return true;
+    }
+    final captures =
+        <
+          ({
+            _NativeDocumentScrollAttachment attachment,
+            Map<String, NativeDocumentScrollAnchorNode> nodes,
+            NativeDocumentScrollAnchorFrame frame,
+            ScrollPosition position,
+            double left,
+          })
+        >[];
+    for (final a in _allAttachments) {
+      if (a.retired ||
+          !identical(a.documentOwner, _documentOwner) ||
+          !all.containsKey(a.id) ||
+          !_isProgrammaticallyScrollable(a.overflowY) ||
+          _activeAttachments(a.id).length != 1) {
+        continue;
+      }
+      if (!all[a.id]!.rendered) {
+        _anchorStates.remove(a.id);
+        _pendingAnchoring.remove(a);
+        continue;
+      }
+      final port = a.viewportRenderObject;
+      if (!a.hasMetrics ||
+          !a.hasLayoutRevision ||
+          a.layoutRevision != a.revision ||
+          port == null ||
+          !port.attached ||
+          !port.hasSize ||
+          a.verticalController.positions.length != 1) {
+        return false;
+      }
+      final position = a.verticalController.position;
+      if (!position.hasContentDimensions || !position.hasViewportDimension) {
+        return false;
+      }
+      final nodes = nativeDocumentScrollAnchorScope(all, a.id);
+      final left = _currentPixels(a.horizontalController, a.lastLeft);
+      final frame = _anchorCapture?.call(
+        {
+          for (final n in nodes.values)
+            if (n.id != a.id && !n.excluded) n.id,
+        },
+        port,
+        Offset(left, position.pixels),
+      );
+      if (frame == null) return false;
+      captures.add((
+        attachment: a,
+        nodes: nodes,
+        frame: frame,
+        position: position,
+        left: left,
+      ));
+    }
+    // All measurements must be available before any state is committed. The
+    // host then computes the root plan before applying any layer's correction.
+    for (final c in captures) {
+      final state = _anchorStates.putIfAbsent(
+        c.attachment.id,
+        NativeDocumentScrollAnchorState.new,
+      );
+      final target = state.adjust(
+        nodes: c.nodes,
+        boxes: c.frame.boxes,
+        clips: c.frame.clips,
+        layoutBoxes: c.frame.layoutBoxes,
+        viewport: Size(
+          c.attachment.viewportRenderObject!.size.width,
+          c.position.viewportDimension,
+        ),
+        pixels: c.position.pixels,
+        min: c.position.minScrollExtent,
+        max: c.position.maxScrollExtent,
+        left: c.left,
+      );
+      _anchorPlan.add((attachment: c.attachment, target: target));
+    }
+    return true;
+  }
+
+  bool applyAnchoring() {
+    var changed = false;
+    for (final plan in _anchorPlan) {
+      final a = plan.attachment;
+      if (a.retired ||
+          _activeAttachments(a.id).length != 1 ||
+          a.verticalController.positions.length != 1) {
+        continue;
+      }
+      final scroll = a.verticalController;
+      if ((scroll.offset - plan.target).abs() > .0000001) {
+        changed = true;
+        _correctingAnchors.add(a);
+        try {
+          scroll.correctAnchorOffset(plan.target);
+        } finally {
+          _correctingAnchors.remove(a);
+        }
+        _scheduleAnchoring(a);
+      } else {
+        _pendingAnchoring.remove(a);
+      }
+    }
+    _anchorPlan = [];
+    return changed;
+  }
+
+  void _anchorOffsetChanged(
+    _NativeDocumentScrollAttachment a,
+    Offset before,
+    Offset after,
+  ) {
+    if (_anchorHost == null) return;
+    final all =
+        _anchorNodes?.call() ??
+        const <String, NativeDocumentScrollAnchorNode>{};
+    final descendants = <String>{};
+    for (final n in all.values) {
+      if (n.parent == a.id || descendants.contains(n.parent)) {
+        descendants.add(n.id);
+      }
+    }
+    final correction = _correctingAnchors.contains(a);
+    if (!correction) {
+      _anchorStates[a.id]?.didScroll(top: after.dy, left: after.dx);
+    }
+    final shift = before - after;
+    for (final entry in _anchorStates.entries) {
+      if (entry.key == a.id) continue;
+      String? ancestor = all[a.id]?.parent;
+      final seen = <String>{};
+      while (ancestor != null && seen.add(ancestor)) {
+        if (ancestor == entry.key) {
+          entry.value.shiftDescendants(
+            descendants,
+            shift,
+            reselect: !correction,
+          );
+          break;
+        }
+        ancestor = all[ancestor]?.parent;
+      }
+    }
+    _anchorScrollChanged?.call(descendants, shift, !correction);
+    _scheduleAnchoring(a);
+  }
+
   /// Starts a new document lifetime. Old render objects can detach later; their
   /// ScrollControllers are kept alive until their Scrollables have detached.
   void beginDocument(Object owner) {
     if (_disposed || identical(owner, _documentOwner)) return;
     _documentOwner = owner;
     _savedOffsets.clear();
+    _anchorStates.clear();
+    _pendingAnchoring.clear();
+    _anchorPlan = [];
     _events.clear();
     _coalescedSequences.clear();
     _coalescingGeneration++;
@@ -88,6 +324,8 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
   void retainIds(Set<String> ids) {
     if (_disposed || ids.isEmpty) return;
     _savedOffsets.removeWhere((id, _) => !ids.contains(id));
+    _anchorStates.removeWhere((id, _) => !ids.contains(id));
+    _pendingAnchoring.removeWhere((a) => !ids.contains(a.id));
   }
 
   /// Latest native scroll metrics for an unambiguous, laid-out element.
@@ -261,6 +499,10 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
     );
     (_attachments[id] ??= <_NativeDocumentScrollAttachment>{}).add(attachment);
     if (activeBefore.isNotEmpty) {
+      // A retained DOM node may temporarily have two widget leases during a
+      // rebuild. Withhold metrics until ownership is unique; retain its last
+      // completed anchor history for the surviving lease.
+      _pendingAnchoring.removeWhere((a) => a.id == id);
       for (final active in activeBefore) {
         active.hasMetrics = false;
         active.viewportRenderObject?.markNeedsLayout();
@@ -302,6 +544,10 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
   }
 
   void _detach(_NativeDocumentScrollAttachment attachment) {
+    _pendingAnchoring.remove(attachment);
+    if (_anchorNodes?.call()[attachment.id]?.rendered == false) {
+      _anchorStates.remove(attachment.id);
+    }
     if (attachment.retired) {
       _scheduleRetirement(attachment);
       return;
@@ -369,6 +615,7 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
       ..contentHeight = contentHeight
       ..hasMetrics = true;
     if (changed) _scheduleNotification();
+    _scheduleAnchoring(attachment);
   }
 
   void _offsetChanged(_NativeDocumentScrollAttachment attachment) {
@@ -386,6 +633,7 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
       attachment.lastTop,
     );
 
+    final before = Offset(attachment.lastLeft, attachment.lastTop);
     final changed =
         (attachment.lastLeft - left).abs() > 0.0001 ||
         (attachment.lastTop - top).abs() > 0.0001;
@@ -393,6 +641,7 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
       ..lastLeft = left
       ..lastTop = top;
     if (!changed) return;
+    _anchorOffsetChanged(attachment, before, Offset(left, top));
 
     if (_activeAttachments(attachment.id).length == 1) {
       _savedOffsets[attachment.id] = Offset(left, top);
@@ -564,6 +813,14 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _anchorHost = null;
+    _anchorNodes = null;
+    _anchorCapture = null;
+    _requestAnchorCheck = null;
+    _anchorScrollChanged = null;
+    _anchorStates.clear();
+    _pendingAnchoring.clear();
+    _anchorPlan = [];
     _events.clear();
     _savedOffsets.clear();
     _coalescingGeneration++;
@@ -908,8 +1165,19 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox
         ? math.max(0.0, _scrollHeight - _laidOutViewportSize.height)
         : 0.0;
 
-    _applyDimensions(_horizontalOffset, horizontalMax);
-    _applyDimensions(_verticalOffset, verticalMax);
+    // Layout clamping is a correction, not a user/programmatic scroll that
+    // selects new anchors in ancestor scroll boxes.
+    final alreadyCorrecting = _attachment.controller._correctingAnchors
+        .contains(_attachment);
+    _attachment.controller._correctingAnchors.add(_attachment);
+    try {
+      _applyDimensions(_horizontalOffset, horizontalMax);
+      _applyDimensions(_verticalOffset, verticalMax);
+    } finally {
+      if (!alreadyCorrecting) {
+        _attachment.controller._correctingAnchors.remove(_attachment);
+      }
+    }
     if (_scrollsX) _attachment.lastLeft = _horizontalOffset.pixels;
     if (_scrollsY) _attachment.lastTop = _verticalOffset.pixels;
 
@@ -922,6 +1190,13 @@ class _RenderNativeDocumentElementScrollViewportRender extends RenderProxyBox
   }
 
   static void _applyDimensions(ViewportOffset offset, double maximum) {
+    // CSS scroll extents clamp synchronously when content shrinks. Letting an
+    // idle ScrollActivity spring back first changes ancestor anchor selection
+    // and can over-correct a nested panel on the following frame.
+    if (offset.hasPixels) {
+      final clamped = offset.pixels.clamp(0.0, maximum);
+      if (clamped != offset.pixels) offset.correctBy(clamped - offset.pixels);
+    }
     var accepted = offset.applyContentDimensions(0.0, maximum);
     var attempts = 0;
     while (!accepted && attempts++ < 4) {
@@ -1261,7 +1536,7 @@ class _NativeDocumentScrollAttachment {
       debugLabel: 'document:$id:x',
       onDetach: (_) => controller._scheduleRetirement(this),
     );
-    verticalController = ScrollController(
+    verticalController = NativeDocumentScrollController(
       initialScrollOffset: initialOffset.dy,
       keepScrollOffset: false,
       debugLabel: 'document:$id:y',
@@ -1275,7 +1550,7 @@ class _NativeDocumentScrollAttachment {
   late final VoidCallback horizontalListener;
   late final VoidCallback verticalListener;
   late ScrollController horizontalController;
-  late ScrollController verticalController;
+  late NativeDocumentScrollController verticalController;
   int revision;
   int? layoutRevision;
   NativeDocumentOverflow overflowX;
@@ -1305,7 +1580,7 @@ class _NativeDocumentScrollAttachment {
   void replaceVerticalController() {
     verticalController.removeListener(verticalListener);
     verticalController.dispose();
-    verticalController = ScrollController(
+    verticalController = NativeDocumentScrollController(
       initialScrollOffset: lastTop,
       keepScrollOffset: false,
       debugLabel: 'document:$id:y',

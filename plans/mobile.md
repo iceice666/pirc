@@ -27,7 +27,8 @@ outside the agreed scope.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** extend Canvas font/ink coverage,
+- [ ] **Dynamic content compatibility:** verify/preserve nested scroll offsets
+      across native view/history remounts (the current cache is view-owned); extend Canvas font/ink coverage,
       synchronous write/read layout within one callback and broader chart-library acceptance; extend
       the supported computed-style
       properties, list-item/inline-fragment measurements and common-library coverage;
@@ -80,9 +81,8 @@ outside the agreed scope.
   rectangles match Chromium; these small scroll-extent differences are deferred.
 - Root horizontal scrolling, scrollend/Promise semantics, mixed window/element
   event order, RTL, scroll snap/anchoring and nested touch scroll chaining need
-  wider coverage. Common root-block scroll anchoring is covered below; independent
-  nested-container anchoring and the remaining variants are still open. Smooth
-  scroll timing follows Flutter.
+  wider coverage. Common vertical root and nested-container anchoring are covered
+  below; the remaining variants are still open. Smooth scroll timing follows Flutter.
 - `window.getComputedStyle()` now reads the native cascade and completed layout
   snapshot for a supported property subset. Declarations are read-only and live
   across accepted frames. Enumeration includes the supplied subset, rather than
@@ -1473,7 +1473,7 @@ with its root-anchor exception removed. Selection/suppression semantics are
 informed by the [CSS scroll anchoring draft](https://www.w3.org/TR/css-scroll-anchoring-1/);
 the frozen browser's actual results remain the acceptance baseline.
 
-Remaining anchoring boundaries: independent nested scroll-container anchoring,
+Remaining anchoring boundaries after the nested-container follow-up below:
 non-scripted document/image-load identity, text-fragment and focused/find-match
 priority candidates, scroll-padding/snap, RTL/vertical writing, overflowing and
 out-of-flow candidate ordering, complex transformed containing blocks and
@@ -1493,3 +1493,62 @@ and the existing native HTTP offset/style integration also pass. Test/browser
 source identity and empty diagnostics are checked. Compact evidence is ignored;
 disposable builds and the owned emulator images are cleaned while preserving the
 published APK. The wider goal and the remaining gates above remain open.
+
+
+## Nested scroll-container anchoring
+
+Vertical HTML scroll containers share anchor selection/suppression with the root.
+A container starts a new overflow-anchor exclusion scope: an opted-out outer
+ancestor does not disable a nested scroller whose own value is auto; the scroller's
+own none value disables its anchors. Inherited policies resolve through the DOM.
+Candidates use actual native scrollport clips, including one-axis clipping.
+
+The root and all nested containers first capture geometry from one completed
+frame and prepare all adjustments before any layer scrolls. This preserves the
+frozen browser's coupled root/outer/inner behavior. Retained actual boxes are kept
+separate from the saved viewport-relative anchor offset and from geometry with
+all scroll translations removed. Repaint/scroll-only frames refresh actual boxes
+without generating a second layout adjustment. Explicit scrolling selects afresh;
+automatic anchoring retains its saved reference. Style suppression and removal
+use the shared policy, with surviving nodes examined at their previous positions.
+
+Widget lease handoffs preserve the anchor history of the same DOM node until
+ownership is unique. New DOM identities start fresh; hidden owners discard old
+anchor history while retaining the browser's saved scroll position. Document
+replacement/disposal clears bindings and pending work. Vertical corrections keep
+native drag/ballistic activities. Shrinking extents clamp synchronously during
+layout, avoiding an idle return animation that would incorrectly reset ancestor
+anchors. Commands wait until the complete batch is painted; native packets never
+acknowledge queued scroll work early.
+
+The Chromium 153 corpus has 21 modes × phone/tablet × DPR 1/3 × light/dark
+(168 profiles, 672 states). It covers insertion/removal/size changes, changes
+below the viewport, exclusions, percentage padding/borders, hidden/clip overflow,
+the top/end boundaries, same-turn scrollTo/scrollBy, owner resize, real node
+replacement, hide/show and independent/simultaneous updates across three levels.
+The browser probe also checks that reported and stabilized live offsets agree.
+Widget checks retain actual DOM identity changes, compare every box and native
+paint samples, and round raw content extents only for CSSOM's public integer
+scrollHeight comparison. The Android gate reads offsets, extents, client sizes and
+rectangles through the production JS sandbox and native Advance controls.
+
+Remaining: nested scroll-position restoration across a completely unmounted
+view/history entry (current offsets are view-owned), horizontal/RTL or vertical-writing anchoring, text-fragment/focus/find
+priority candidates, scroll-padding/snap, complex transformed/out-of-flow and
+fragmented geometry, static document identity during image loads, fractional
+adjustment quantization and simultaneous smooth-scroll/layout changes. Existing
+synchronous write/read layout and physical-device/real-account/push acceptance
+remain separate open gates.
+
+
+Verification: 885 affected Flutter tests across 40 files and all 703 JavaScript
+tests pass; analysis and formatting are clean. All 168 Android element-anchor,
+144 root-anchor and 120 fixed-position profiles pass the unchanged frozen
+expectations. Maximum box differences are 0.00625 CSS px for nested percentage
+padding, 0 for root anchors and 0.009375 for the fixed percentage cases. Native
+scroll/client metrics, DOM replacement identity, painted-frame acknowledgement
+and empty script diagnostics are checked. The two existing same-turn scroll-owner
+mutation scenarios and the native HTTP offset/style integration also pass.
+Compact evidence is ignored; disposable builds and owned emulator images are
+removed after testing while preserving the published APK. Full view/history
+remount restoration is the next usability gate, not part of this acceptance.

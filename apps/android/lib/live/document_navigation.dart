@@ -1479,6 +1479,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         return null;
       }
       if (!_scrollAnchors.settled ||
+          !_elementScroll.anchoringSettled ||
           scripts?.scrollActions.isNotEmpty == true) {
         continue;
       }
@@ -1667,7 +1668,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
             !document.scroll.position.hasContentDimensions) {
           return;
         }
-        if (!_scrollAnchors.settled) {
+        if (!_scrollAnchors.settled || !_elementScroll.anchoringSettled) {
           _scheduleScroll();
           WidgetsBinding.instance.ensureVisualUpdate();
           return;
@@ -1873,6 +1874,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
                   controller: document.scroll,
                   layout: _layout,
                   data: _scrollAnchors,
+                  elements: _elementScroll,
                   child: NativeDocumentPositioningViewport(
                     scrollChanges: document.scroll,
                     child: SingleChildScrollView(
