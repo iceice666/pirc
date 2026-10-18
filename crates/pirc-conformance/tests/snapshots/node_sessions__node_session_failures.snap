@@ -81,7 +81,15 @@ expression: t.into_value()
       },
       "history": [
         {
+          "branches": [
+            {
+              "entryId": "<entry:1>",
+              "selected": true,
+              "text": "hello"
+            }
+          ],
           "content": "hello",
+          "entryId": "<entry:1>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -90,6 +98,7 @@ expression: t.into_value()
           "canonicalProvider": "fake",
           "completedAt": "<epoch-ms>",
           "content": [],
+          "entryId": "<entry:2>",
           "errorMessage": "Model provider request failed.",
           "model": "fake-model",
           "provider": "fake",
@@ -232,7 +241,15 @@ expression: t.into_value()
       },
       "history": [
         {
+          "branches": [
+            {
+              "entryId": "<entry:1>",
+              "selected": true,
+              "text": "hello"
+            }
+          ],
           "content": "hello",
+          "entryId": "<entry:1>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -241,6 +258,7 @@ expression: t.into_value()
           "canonicalProvider": "fake",
           "completedAt": "<epoch-ms>",
           "content": [],
+          "entryId": "<entry:2>",
           "errorMessage": "Model provider request failed.",
           "model": "fake-model",
           "provider": "fake",
@@ -256,7 +274,15 @@ expression: t.into_value()
           }
         },
         {
+          "branches": [
+            {
+              "entryId": "<entry:3>",
+              "selected": true,
+              "text": "again"
+            }
+          ],
           "content": "again",
+          "entryId": "<entry:3>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -270,6 +296,7 @@ expression: t.into_value()
               "type": "text"
             }
           ],
+          "entryId": "<entry:4>",
           "model": "fake-model",
           "provider": "fake",
           "role": "assistant",

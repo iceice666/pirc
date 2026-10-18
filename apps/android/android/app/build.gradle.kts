@@ -5,6 +5,14 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val releaseKeystore = System.getenv("PIRC_ANDROID_KEYSTORE")
+val requireReleaseSigning = System.getenv("PIRC_ANDROID_REQUIRE_SIGNING") == "1"
+if (requireReleaseSigning && releaseKeystore.isNullOrBlank()) {
+    error("CI release builds require PIRC_ANDROID_KEYSTORE; run Release setup first")
+}
+fun signingEnvironment(name: String): String = System.getenv(name)
+    ?.takeIf { it.isNotBlank() } ?: error("Missing release signing setting: $name")
+
 android {
     buildFeatures { buildConfig = true }
     namespace = "dev.pirc.pirc_mobile"
@@ -28,11 +36,24 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (!releaseKeystore.isNullOrBlank()) {
+            create("ciRelease") {
+                storeFile = file(releaseKeystore)
+                storePassword = signingEnvironment("PIRC_ANDROID_STORE_PASSWORD")
+                keyAlias = signingEnvironment("PIRC_ANDROID_KEY_ALIAS")
+                keyPassword = signingEnvironment("PIRC_ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Local preview installs retain their existing identity. CI requires
+            // the explicitly configured persistent key instead of generating one.
+            signingConfig = signingConfigs.getByName(
+                if (!releaseKeystore.isNullOrBlank()) "ciRelease" else "debug"
+            )
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

@@ -1,0 +1,35 @@
+name: Prepare Android signing
+description: Validate the configured preview signing identity and write a temporary keystore.
+runs:
+  using: composite
+  steps:
+    - name: Restore and validate signing key
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 - <<'PY'
+        import base64, os
+        from pathlib import Path
+        required = ['ANDROID_KEYSTORE_BASE64', 'PIRC_ANDROID_STORE_PASSWORD', 'PIRC_ANDROID_KEY_ALIAS', 'PIRC_ANDROID_KEY_PASSWORD']
+        missing = [name for name in required if not os.environ.get(name)]
+        if missing:
+            raise SystemExit('Missing release signing secrets: ' + ', '.join(missing))
+        key = Path(os.environ['RUNNER_TEMP']) / 'pirc-release.keystore'
+        key.write_bytes(base64.b64decode(os.environ['ANDROID_KEYSTORE_BASE64'], validate=True))
+        key.chmod(0o600)
+        with open(os.environ['GITHUB_ENV'], 'a') as env:
+            env.write('PIRC_ANDROID_KEYSTORE=' + str(key) + '\n')
+        PY
+        keytool -certreq -keystore "$RUNNER_TEMP/pirc-release.keystore" \
+          -storepass:env PIRC_ANDROID_STORE_PASSWORD -alias "$PIRC_ANDROID_KEY_ALIAS" \
+          -keypass:env PIRC_ANDROID_KEY_PASSWORD -file "$RUNNER_TEMP/pirc-signing.csr"
+        keytool -exportcert -keystore "$RUNNER_TEMP/pirc-release.keystore" \
+          -storepass:env PIRC_ANDROID_STORE_PASSWORD -alias "$PIRC_ANDROID_KEY_ALIAS" \
+          -file "$RUNNER_TEMP/pirc-signing.der"
+        python3 - <<'PY'
+        import hashlib, os
+        from pathlib import Path
+        digest = hashlib.sha256((Path(os.environ['RUNNER_TEMP']) / 'pirc-signing.der').read_bytes()).hexdigest()
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+            summary.write('Android signing certificate SHA-256: `' + digest + '`\n')
+        PY

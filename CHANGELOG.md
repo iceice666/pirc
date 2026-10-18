@@ -4,6 +4,10 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Added
+
+- Release CI builds macOS, Web and signed Android beta assets into a reviewed draft, with a separate signing setup check.
+
 ### Fixed
 
 - Android full-page HTML improves layout, image/canvas sizing and computed-style reads, keeps text selection stable during image loading, notifies interactive content when native element sizes change, and supports native Canvas text measurement, intrinsic/pixel/percentage-sized chart initialization and container resizing, DOM mutation observation, Promise updates between animation callbacks, bar-chart touch tooltips, outside-tap dismissal, legend toggles, updates and resizing.

@@ -235,7 +235,15 @@ expression: t.into_value()
       },
       "history": [
         {
+          "branches": [
+            {
+              "entryId": "<entry:1>",
+              "selected": true,
+              "text": "Say hello"
+            }
+          ],
           "content": "Say hello",
+          "entryId": "<entry:1>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -249,6 +257,7 @@ expression: t.into_value()
               "type": "text"
             }
           ],
+          "entryId": "<entry:2>",
           "model": "fake-model",
           "provider": "fake",
           "role": "assistant",

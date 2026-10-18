@@ -29,11 +29,13 @@ flutter run
 flutter build apk --release
 ```
 
-The application ID is `dev.pirc.mobile.preview`. Release-mode builds currently
-use the local Android debug signing key for preview installs. Public distribution
-and a production signing identity remain a release decision; do not treat these
-builds as store releases. No signing key, pairing credential or local APK belongs
-in Git.
+The application ID is `dev.pirc.mobile.preview`. Local release-mode builds use
+the existing Android debug signing key for preview installs. Release CI requires
+a persistent keystore supplied through Actions secrets; see
+[Release CI setup](../../docs/development/releasing.md#github-release-ci-setup-once-per-repository).
+Public distribution and a production signing identity remain a release decision;
+do not treat these builds as store releases. No signing key, pairing credential
+or local APK belongs in Git.
 
 Upgrade the gateway and every node together. The 0.6.x server uses node protocol
 11; this protocol is between the servers, not the app's REST connection. The app's

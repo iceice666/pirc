@@ -859,7 +859,15 @@ expression: t.into_value()
   {
     "observed": [
       {
+        "branches": [
+          {
+            "entryId": "<entry:1>",
+            "selected": true,
+            "text": "Write, read and edit"
+          }
+        ],
         "content": "Write, read and edit",
+        "entryId": "<entry:1>",
         "role": "user",
         "timestamp": "<epoch-ms>"
       },
@@ -878,6 +886,7 @@ expression: t.into_value()
             "type": "toolCall"
           }
         ],
+        "entryId": "<entry:2>",
         "model": "fake-model",
         "provider": "fake",
         "role": "assistant",
@@ -898,6 +907,7 @@ expression: t.into_value()
             "type": "text"
           }
         ],
+        "entryId": "<entry:3>",
         "isError": false,
         "role": "toolResult",
         "timestamp": "<epoch-ms>",
@@ -918,6 +928,7 @@ expression: t.into_value()
             "type": "toolCall"
           }
         ],
+        "entryId": "<entry:4>",
         "model": "fake-model",
         "provider": "fake",
         "role": "assistant",
@@ -938,6 +949,7 @@ expression: t.into_value()
             "type": "text"
           }
         ],
+        "entryId": "<entry:5>",
         "isError": false,
         "role": "toolResult",
         "timestamp": "<epoch-ms>",
@@ -960,6 +972,7 @@ expression: t.into_value()
             "type": "toolCall"
           }
         ],
+        "entryId": "<entry:6>",
         "model": "fake-model",
         "provider": "fake",
         "role": "assistant",
@@ -983,6 +996,7 @@ expression: t.into_value()
         "details": {
           "diff": "--- notes.txt\n+++ notes.txt\n@@ -1 +1 @@\n-from the agent\n+edited by the agent\n "
         },
+        "entryId": "<entry:7>",
         "isError": false,
         "role": "toolResult",
         "timestamp": "<epoch-ms>",
@@ -999,6 +1013,7 @@ expression: t.into_value()
             "type": "text"
           }
         ],
+        "entryId": "<entry:8>",
         "model": "fake-model",
         "provider": "fake",
         "role": "assistant",

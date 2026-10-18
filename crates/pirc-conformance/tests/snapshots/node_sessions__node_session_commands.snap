@@ -91,7 +91,15 @@ expression: t.into_value()
       },
       "history": [
         {
+          "branches": [
+            {
+              "entryId": "<entry:1>",
+              "selected": true,
+              "text": "p1"
+            }
+          ],
           "content": "p1",
+          "entryId": "<entry:1>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         }
@@ -535,7 +543,15 @@ expression: t.into_value()
       },
       "history": [
         {
+          "branches": [
+            {
+              "entryId": "<entry:1>",
+              "selected": true,
+              "text": "p1"
+            }
+          ],
           "content": "p1",
+          "entryId": "<entry:1>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -543,6 +559,7 @@ expression: t.into_value()
           "api": "openai-completions",
           "completedAt": "<epoch-ms>",
           "content": [],
+          "entryId": "<entry:2>",
           "errorMessage": "Inference request cancelled",
           "model": "fake-model",
           "provider": "fake",
@@ -561,16 +578,33 @@ expression: t.into_value()
           "content": "[Your previous response was interrupted by the user before it produced any text.]",
           "customType": "interrupted",
           "display": false,
+          "entryId": "<entry:3>",
           "role": "custom",
           "timestamp": "<epoch-ms>"
         },
         {
+          "branches": [
+            {
+              "entryId": "<entry:4>",
+              "selected": true,
+              "text": "f2"
+            }
+          ],
           "content": "f2",
+          "entryId": "<entry:4>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
         {
+          "branches": [
+            {
+              "entryId": "<entry:5>",
+              "selected": true,
+              "text": "s2"
+            }
+          ],
           "content": "s2",
+          "entryId": "<entry:5>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         }
@@ -673,7 +707,15 @@ expression: t.into_value()
       },
       "history": [
         {
+          "branches": [
+            {
+              "entryId": "<entry:1>",
+              "selected": true,
+              "text": "p1"
+            }
+          ],
           "content": "p1",
+          "entryId": "<entry:1>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -681,6 +723,7 @@ expression: t.into_value()
           "api": "openai-completions",
           "completedAt": "<epoch-ms>",
           "content": [],
+          "entryId": "<entry:2>",
           "errorMessage": "Inference request cancelled",
           "model": "fake-model",
           "provider": "fake",
@@ -699,16 +742,33 @@ expression: t.into_value()
           "content": "[Your previous response was interrupted by the user before it produced any text.]",
           "customType": "interrupted",
           "display": false,
+          "entryId": "<entry:3>",
           "role": "custom",
           "timestamp": "<epoch-ms>"
         },
         {
+          "branches": [
+            {
+              "entryId": "<entry:4>",
+              "selected": true,
+              "text": "f2"
+            }
+          ],
           "content": "f2",
+          "entryId": "<entry:4>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
         {
+          "branches": [
+            {
+              "entryId": "<entry:5>",
+              "selected": true,
+              "text": "s2"
+            }
+          ],
           "content": "s2",
+          "entryId": "<entry:5>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -716,6 +776,7 @@ expression: t.into_value()
           "api": "openai-completions",
           "completedAt": "<epoch-ms>",
           "content": [],
+          "entryId": "<entry:6>",
           "errorMessage": "Inference request cancelled",
           "model": "fake-model",
           "provider": "fake",
@@ -1306,7 +1367,15 @@ expression: t.into_value()
       },
       "history": [
         {
+          "branches": [
+            {
+              "entryId": "<entry:1>",
+              "selected": true,
+              "text": "p1"
+            }
+          ],
           "content": "p1",
+          "entryId": "<entry:1>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -1314,6 +1383,7 @@ expression: t.into_value()
           "api": "openai-completions",
           "completedAt": "<epoch-ms>",
           "content": [],
+          "entryId": "<entry:2>",
           "errorMessage": "Inference request cancelled",
           "model": "fake-model",
           "provider": "fake",
@@ -1332,16 +1402,33 @@ expression: t.into_value()
           "content": "[Your previous response was interrupted by the user before it produced any text.]",
           "customType": "interrupted",
           "display": false,
+          "entryId": "<entry:3>",
           "role": "custom",
           "timestamp": "<epoch-ms>"
         },
         {
+          "branches": [
+            {
+              "entryId": "<entry:4>",
+              "selected": true,
+              "text": "f2"
+            }
+          ],
           "content": "f2",
+          "entryId": "<entry:4>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
         {
+          "branches": [
+            {
+              "entryId": "<entry:5>",
+              "selected": true,
+              "text": "s2"
+            }
+          ],
           "content": "s2",
+          "entryId": "<entry:5>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -1349,6 +1436,7 @@ expression: t.into_value()
           "api": "openai-completions",
           "completedAt": "<epoch-ms>",
           "content": [],
+          "entryId": "<entry:6>",
           "errorMessage": "Inference request cancelled",
           "model": "fake-model",
           "provider": "fake",
@@ -1364,7 +1452,15 @@ expression: t.into_value()
           }
         },
         {
+          "branches": [
+            {
+              "entryId": "<entry:7>",
+              "selected": true,
+              "text": "p3"
+            }
+          ],
           "content": "p3",
+          "entryId": "<entry:7>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -1378,6 +1474,7 @@ expression: t.into_value()
               "type": "text"
             }
           ],
+          "entryId": "<entry:8>",
           "model": "fake-model",
           "provider": "fake",
           "role": "assistant",
@@ -1392,7 +1489,15 @@ expression: t.into_value()
           }
         },
         {
+          "branches": [
+            {
+              "entryId": "<entry:9>",
+              "selected": true,
+              "text": "s4"
+            }
+          ],
           "content": "s4",
+          "entryId": "<entry:9>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -1406,6 +1511,7 @@ expression: t.into_value()
               "type": "text"
             }
           ],
+          "entryId": "<entry:10>",
           "model": "fake-model",
           "provider": "fake",
           "role": "assistant",
@@ -1420,7 +1526,15 @@ expression: t.into_value()
           }
         },
         {
+          "branches": [
+            {
+              "entryId": "<entry:11>",
+              "selected": true,
+              "text": "f4"
+            }
+          ],
           "content": "f4",
+          "entryId": "<entry:11>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -1434,6 +1548,7 @@ expression: t.into_value()
               "type": "text"
             }
           ],
+          "entryId": "<entry:12>",
           "model": "fake-model",
           "provider": "fake",
           "role": "assistant",
@@ -1448,7 +1563,15 @@ expression: t.into_value()
           }
         },
         {
+          "branches": [
+            {
+              "entryId": "<entry:13>",
+              "selected": true,
+              "text": "p4"
+            }
+          ],
           "content": "p4",
+          "entryId": "<entry:13>",
           "role": "user",
           "timestamp": "<epoch-ms>"
         }
@@ -1598,7 +1721,15 @@ expression: t.into_value()
         },
         "history": [
           {
+            "branches": [
+              {
+                "entryId": "<entry:1>",
+                "selected": true,
+                "text": "p1"
+              }
+            ],
             "content": "p1",
+            "entryId": "<entry:1>",
             "role": "user",
             "timestamp": "<epoch-ms>"
           },
@@ -1606,6 +1737,7 @@ expression: t.into_value()
             "api": "openai-completions",
             "completedAt": "<epoch-ms>",
             "content": [],
+            "entryId": "<entry:2>",
             "errorMessage": "Inference request cancelled",
             "model": "fake-model",
             "provider": "fake",
@@ -1624,16 +1756,33 @@ expression: t.into_value()
             "content": "[Your previous response was interrupted by the user before it produced any text.]",
             "customType": "interrupted",
             "display": false,
+            "entryId": "<entry:3>",
             "role": "custom",
             "timestamp": "<epoch-ms>"
           },
           {
+            "branches": [
+              {
+                "entryId": "<entry:4>",
+                "selected": true,
+                "text": "f2"
+              }
+            ],
             "content": "f2",
+            "entryId": "<entry:4>",
             "role": "user",
             "timestamp": "<epoch-ms>"
           },
           {
+            "branches": [
+              {
+                "entryId": "<entry:5>",
+                "selected": true,
+                "text": "s2"
+              }
+            ],
             "content": "s2",
+            "entryId": "<entry:5>",
             "role": "user",
             "timestamp": "<epoch-ms>"
           },
@@ -1641,6 +1790,7 @@ expression: t.into_value()
             "api": "openai-completions",
             "completedAt": "<epoch-ms>",
             "content": [],
+            "entryId": "<entry:6>",
             "errorMessage": "Inference request cancelled",
             "model": "fake-model",
             "provider": "fake",
@@ -1656,7 +1806,15 @@ expression: t.into_value()
             }
           },
           {
+            "branches": [
+              {
+                "entryId": "<entry:7>",
+                "selected": true,
+                "text": "p3"
+              }
+            ],
             "content": "p3",
+            "entryId": "<entry:7>",
             "role": "user",
             "timestamp": "<epoch-ms>"
           },
@@ -1670,6 +1828,7 @@ expression: t.into_value()
                 "type": "text"
               }
             ],
+            "entryId": "<entry:8>",
             "model": "fake-model",
             "provider": "fake",
             "role": "assistant",
@@ -1684,7 +1843,15 @@ expression: t.into_value()
             }
           },
           {
+            "branches": [
+              {
+                "entryId": "<entry:9>",
+                "selected": true,
+                "text": "s4"
+              }
+            ],
             "content": "s4",
+            "entryId": "<entry:9>",
             "role": "user",
             "timestamp": "<epoch-ms>"
           },
@@ -1698,6 +1865,7 @@ expression: t.into_value()
                 "type": "text"
               }
             ],
+            "entryId": "<entry:10>",
             "model": "fake-model",
             "provider": "fake",
             "role": "assistant",
@@ -1712,7 +1880,15 @@ expression: t.into_value()
             }
           },
           {
+            "branches": [
+              {
+                "entryId": "<entry:11>",
+                "selected": true,
+                "text": "f4"
+              }
+            ],
             "content": "f4",
+            "entryId": "<entry:11>",
             "role": "user",
             "timestamp": "<epoch-ms>"
           },
@@ -1726,6 +1902,7 @@ expression: t.into_value()
                 "type": "text"
               }
             ],
+            "entryId": "<entry:12>",
             "model": "fake-model",
             "provider": "fake",
             "role": "assistant",
@@ -1740,12 +1917,28 @@ expression: t.into_value()
             }
           },
           {
+            "branches": [
+              {
+                "entryId": "<entry:13>",
+                "selected": true,
+                "text": "p4"
+              }
+            ],
             "content": "p4",
+            "entryId": "<entry:13>",
             "role": "user",
             "timestamp": "<epoch-ms>"
           },
           {
+            "branches": [
+              {
+                "entryId": "<entry:14>",
+                "selected": true,
+                "text": "p5"
+              }
+            ],
             "content": "p5",
+            "entryId": "<entry:14>",
             "role": "user",
             "timestamp": "<epoch-ms>"
           },
@@ -1759,6 +1952,7 @@ expression: t.into_value()
                 "type": "text"
               }
             ],
+            "entryId": "<entry:15>",
             "model": "other-model",
             "provider": "fake",
             "role": "assistant",

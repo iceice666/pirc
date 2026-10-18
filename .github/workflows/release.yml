@@ -1,0 +1,221 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing annotated release tag (vMAJOR.MINOR.PATCH)
+        required: true
+        type: string
+      android:
+        description: Include signed Android beta APK (run Release setup first)
+        default: true
+        type: boolean
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      tag: ${{ steps.metadata.outputs.tag }}
+      commit: ${{ steps.metadata.outputs.commit }}
+      android: ${{ steps.metadata.outputs.android }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+      - name: Validate tag, versions, changelog and successful main checks
+        id: metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_ANDROID: ${{ github.event_name == 'push' || inputs.android }}
+        run: bun scripts/release-ci.ts prepare
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-metadata
+          path: dist/ci/RELEASE.md
+          if-no-files-found: error
+          retention-days: 7
+
+  native:
+    needs: prepare
+    name: macOS ARM64 and Web archives
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with:
+          toolchain: 1.98.1
+      - name: Build from committed source and smoke-test archives
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          export PIRC_RELEASE_CARGO="$(command -v cargo)"
+          bun scripts/package-release.ts
+          cd "dist/releases/v$VERSION"
+          shasum -a 256 -c SHA256SUMS
+          mkdir smoke
+          tar -xzf "pirc-v$VERSION-darwin-arm64.tar.gz" -C smoke
+          test "$(smoke/pirc-v$VERSION-darwin-arm64/bin/pirc-gateway --version)" = "$VERSION"
+          test "$(smoke/pirc-v$VERSION-darwin-arm64/bin/pirc-node --version)" = "$VERSION"
+          test -s "smoke/pirc-v$VERSION-darwin-arm64/share/pirc/web/index.html"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-native
+          path: dist/releases/v${{ needs.prepare.outputs.version }}/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  android:
+    needs: prepare
+    if: needs.prepare.outputs.android == 'true'
+    name: Signed Android beta APK
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      PIRC_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      PIRC_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      PIRC_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      PIRC_ANDROID_REQUIRE_SIGNING: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: ./.github/actions/android-signing
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: flutter/flutter
+          ref: ad70ec4617166f1c38e5d2bfd388af71fda14f06
+          path: .flutter-sdk
+          persist-credentials: false
+      - name: Add pinned Flutter SDK to PATH
+        run: echo "$GITHUB_WORKSPACE/.flutter-sdk/bin" >> "$GITHUB_PATH"
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+      - name: Analyze, test and build release APK
+        working-directory: apps/android
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter analyze --no-pub
+          flutter test --no-pub
+          flutter build apk --debug --no-pub
+          cd android
+          # Flutter exposes JVM unit tests on the debug variant.
+          ./gradlew --no-configuration-cache testDebugUnitTest
+          cd ..
+          # Release must regenerate registrants after tests to strip dev plugins.
+          flutter build apk --release
+          python3 tool/check_release.py
+          python3 - <<'PYAPK'
+          import hashlib, os, re, subprocess
+          from pathlib import Path
+          sdk = Path(os.environ.get('ANDROID_HOME') or os.environ['ANDROID_SDK_ROOT'])
+          signer = sorted(sdk.glob('build-tools/*/apksigner'))[-1]
+          result = subprocess.check_output([str(signer), 'verify', '--print-certs', 'build/app/outputs/flutter-apk/app-release.apk'], text=True)
+          actual = re.search(r'Signer #1 certificate SHA-256 digest: ([0-9a-f]+)', result)
+          expected = hashlib.sha256((Path(os.environ['RUNNER_TEMP']) / 'pirc-signing.der').read_bytes()).hexdigest()
+          if not actual or actual.group(1) != expected:
+              raise SystemExit('APK signing certificate does not match configured identity')
+          print('APK signature verified against configured certificate: ' + expected)
+          PYAPK
+          mkdir -p ../../dist/ci/android
+          cp build/app/outputs/flutter-apk/app-release.apk "../../dist/ci/android/pirc-$VERSION-beta.apk"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-android
+          path: dist/ci/android/*.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/pirc-release.keystore" "$RUNNER_TEMP/pirc-signing.csr" "$RUNNER_TEMP/pirc-signing.der"
+
+  draft:
+    needs: [prepare, native, android]
+    if: >-
+      always() && needs.prepare.result == 'success' && needs.native.result == 'success' &&
+      (needs.android.result == 'success' || needs.android.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-metadata
+          path: dist/ci
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-native
+          path: dist/ci/assets
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: needs.prepare.outputs.android == 'true'
+        with:
+          name: release-android
+          path: dist/ci/assets
+      - name: Verify final asset set and checksums
+        env:
+          RELEASE_ANDROID: ${{ needs.prepare.outputs.android }}
+        run: |
+          bun scripts/release-ci.ts checksums
+          cd dist/ci/assets
+          sha256sum -c SHA256SUMS
+      - name: Create draft for existing tag (never replace a release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)" = "$RELEASE_COMMIT"
+          gh release create "$RELEASE_TAG" --verify-tag --draft \
+            --title "pirc $RELEASE_TAG" --notes-file dist/ci/RELEASE.md dist/ci/assets/*
+          gh release view "$RELEASE_TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"

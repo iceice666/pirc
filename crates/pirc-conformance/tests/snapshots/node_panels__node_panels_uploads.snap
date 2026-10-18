@@ -674,6 +674,13 @@ expression: p.into_value()
   {
     "observed": [
       {
+        "branches": [
+          {
+            "entryId": "<entry:1>",
+            "selected": true,
+            "text": "Look at these\n\nAttached file(s) available to read from the workspace:\n- .pirc/uploads/upload_<uuid:10>-notes.txt\n- .pirc/uploads/upload_<uuid:13>-evil.txt\n- .pirc/uploads/upload_<uuid:11>-data.bin"
+          }
+        ],
         "content": [
           {
             "text": "Look at these\n\nAttached file(s) available to read from the workspace:\n- .pirc/uploads/upload_<uuid:10>-notes.txt\n- .pirc/uploads/upload_<uuid:13>-evil.txt\n- .pirc/uploads/upload_<uuid:11>-data.bin",
@@ -690,11 +697,20 @@ expression: p.into_value()
             "type": "image"
           }
         ],
+        "entryId": "<entry:1>",
         "role": "user",
         "timestamp": "<epoch-ms>"
       },
       {
+        "branches": [
+          {
+            "entryId": "<entry:2>",
+            "selected": true,
+            "text": "Again\n\nAttached file(s) available to read from the workspace:\n- .pirc/uploads/upload_<uuid:10>-notes.txt"
+          }
+        ],
         "content": "Again\n\nAttached file(s) available to read from the workspace:\n- .pirc/uploads/upload_<uuid:10>-notes.txt",
+        "entryId": "<entry:2>",
         "role": "user",
         "timestamp": "<epoch-ms>"
       }
