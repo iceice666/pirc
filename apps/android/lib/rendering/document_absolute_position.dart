@@ -57,15 +57,22 @@ class NativeAbsoluteLength {
 /// Physical positioned axes. Both-auto static-position axes need flow markers
 /// and are deliberately not accepted by this first native positioning surface.
 class NativeAbsolutePositionSpec {
-  NativeAbsolutePositionSpec._(this.styles, this.lengths, this.direction);
+  NativeAbsolutePositionSpec._(
+    this.styles,
+    this.lengths,
+    this.direction,
+    this.fixedUsesViewport,
+  );
   final Map<String, String> styles;
   final Map<String, NativeAbsoluteLength?> lengths;
   final TextDirection direction;
+  final bool fixedUsesViewport;
   static NativeAbsolutePositionSpec? parse(
     Map<String, String> styles, {
     required double fontSize,
     required Size viewport,
     TextDirection direction = TextDirection.ltr,
+    bool fixedUsesViewport = true,
   }) {
     if (!const {
       'absolute',
@@ -150,11 +157,16 @@ class NativeAbsolutePositionSpec {
     if (int.tryParse(values['z-index'] ?? '0') case final int z when z < 0) {
       return null;
     }
-    return NativeAbsolutePositionSpec._(values, lengths, direction);
+    return NativeAbsolutePositionSpec._(
+      values,
+      lengths,
+      direction,
+      fixedUsesViewport,
+    );
   }
 
   bool get fixedToViewport =>
-      styles['position']?.trim().toLowerCase() == 'fixed';
+      fixedUsesViewport && styles['position']?.trim().toLowerCase() == 'fixed';
 
   double? value(String name, double basis) => lengths[name]?.resolve(basis);
   double edge(String side, double width) {

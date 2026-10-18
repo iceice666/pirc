@@ -477,12 +477,36 @@ Recreate with
 `node apps/android/tool/parity/capture_document_transform_style_chromium153.mjs`;
 the loopback server supplies `/transform-style.json`.
 
-These gates do not certify transformed containing blocks, perspective/3D,
-individual transform properties, textual inline fragments, transform-box
-variants or transformed overflow extents. Missing native boxes or unproved font
-bases withhold the affected computed values. General DOM writes still need a
-matching native frame. CSS defaults, timing/event variants, global getter errors
-and remaining DOM/layout APIs stay in the mobile plan.
+Common transformed blocks also establish native containing blocks for absolute
+and fixed descendants. Absolute elements choose the nearest positioned or
+transformed ancestor; fixed elements choose the nearest transformed ancestor,
+retaining `position: fixed` in scripts. Without one they stay viewport-fixed.
+Identity transforms establish a containing block too. Adding/removing transforms
+updates that ownership, and root or enclosing-panel scrolling moves local fixed
+content. Common block opacity composes the complete positioned subtree as one
+group without changing its click targets.
+
+`test/document_transform_cb_oracle_test.dart` compares 136 independent Chromium
+153 profiles across three states, with actual paint pixels and native clicks.
+`integration_test/document_transform_cb_test.dart` checks the same HTML/drivers
+through Android JavaScriptSandbox, real taps, geometry and two paint samples per
+profile. Recreate with
+`node apps/android/tool/parity/capture_document_transform_cb_chromium153.mjs`;
+the fixture server supplies `/transform-cb.json`. Geometry tolerance is 1/32 CSS
+px for subpixel layout rounding. Opaque pixels compare exactly. Android's 0.5
+opacity composition differs from Chromium by at most one RGB level (1/255), a
+recorded minor difference; alpha remains exact. Widget pixels compare exactly.
+
+These gates do not certify containing blocks that themselves own scrolling or
+clipping, general stacking/compositing between intermediate ancestors,
+perspective/3D, individual transform properties, textual inline fragments,
+inline/table/SVG containing blocks, transform-box variants or transformed
+overflow extents. CSSOM offset-parent/position reads along transformed paths and
+wider opacity replacement/inline coverage remain separate differences. Missing
+native boxes or unproved font bases withhold the affected computed values.
+General DOM writes still need a matching native frame. CSS defaults, timing/event
+variants, global getter errors and remaining DOM/layout APIs stay in the mobile
+plan.
 
 `document.scrollingElement` uses the initial HTML parser mode and native
 box/overflow measurements to select the standards root, quirks body, or null.

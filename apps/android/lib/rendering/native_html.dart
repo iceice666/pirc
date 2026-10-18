@@ -3448,6 +3448,45 @@ class _NativeHtmlFactory extends WidgetFactory {
   bool _absoluteSupported(dom.Element element) =>
       _absoluteSupport[element] ??= _calculateAbsoluteSupport(element);
 
+  bool _positioningBlock(dom.Element element) {
+    final styles = _flexChildStyles(element);
+    if (const {'absolute', 'fixed'}.contains(styles['position'])) return true;
+    final display =
+        styles['display'] ??
+        (const {
+              'div',
+              'section',
+              'article',
+              'main',
+              'header',
+              'footer',
+              'form',
+              'html',
+              'body',
+              'nav',
+              'aside',
+            }.contains(element.localName)
+            ? 'block'
+            : 'inline');
+    return const {'block', 'flex', 'grid', 'flow-root'}.contains(display);
+  }
+
+  bool _transformContainingBlock(dom.Element element) {
+    final css = _flexChildStyles(element);
+    return !markdownStyles &&
+        _positioningBlock(element) &&
+        const {
+          '',
+          'view-box',
+          'border-box',
+        }.contains(css['transform-box'] ?? '') &&
+        NativeDocumentTransformSpec.parse(
+              css['transform'],
+              origin: css['transform-origin'],
+            ) !=
+            null;
+  }
+
   bool _calculateAbsoluteSupport(dom.Element element) {
     if (markdownStyles) return false;
     final styles = _flexChildStyles(element);
@@ -3457,22 +3496,31 @@ class _NativeHtmlFactory extends WidgetFactory {
       viewport: imageViewport(),
     );
     if (spec == null) return false;
-    final fixed = spec.fixedToViewport;
-    if (fixed && (!hasDocumentViewport() || !hasPositioningViewport())) {
+    final fixed = spec.fixedToViewport, host = _absoluteHost(element);
+    final viewportFixed = fixed && host == null;
+    if (viewportFixed &&
+        (!hasDocumentViewport() || !hasPositioningViewport())) {
       return false;
     }
     dom.Element? current = element;
     while (current != null) {
       final css = _flexChildStyles(current);
-      final ownTransform =
-          identical(current, element) &&
-          NativeDocumentTransformSpec.parse(
-                css['transform'],
-                origin: css['transform-origin'],
-              ) !=
-              null;
-      if (!ownTransform &&
+      final supportedTransform = identical(current, element)
+          ? NativeDocumentTransformSpec.parse(
+                  css['transform'],
+                  origin: css['transform-origin'],
+                ) !=
+                null
+          : _transformContainingBlock(current);
+      if (!supportedTransform &&
           !const {'none', ''}.contains(css['transform'] ?? '')) {
+        return false;
+      }
+      if (!const {
+        '',
+        'view-box',
+        'border-box',
+      }.contains(css['transform-box'] ?? '')) {
         return false;
       }
       if (const [
@@ -3489,10 +3537,10 @@ class _NativeHtmlFactory extends WidgetFactory {
       )) {
         return false;
       }
-      if (fixed) {
-        // Fixed uses the viewport through ordinary positioned/scrolling boxes.
-        // Other containing blocks and nested stacking contexts need their own
-        // native composition rather than being flattened into this viewport.
+      // Viewport routing crosses all ancestors. A local fixed box only crosses
+      // the path below its real containing block; that block stays in the paint
+      // tree with its transform, opacity and enclosing clips.
+      if (fixed && (viewportFixed || current != host)) {
         if (css['display'] == 'none' ||
             current.attributes.containsKey('hidden') ||
             !const {
@@ -3509,8 +3557,8 @@ class _NativeHtmlFactory extends WidgetFactory {
           return false;
         }
         if (current != element) {
-          final position = css['position'] ?? 'static';
-          final itemParent = current.parent;
+          final position = css['position'] ?? 'static',
+              itemParent = current.parent;
           final itemDisplay = itemParent == null
               ? null
               : _flexChildStyles(itemParent)['display'];
@@ -3529,42 +3577,28 @@ class _NativeHtmlFactory extends WidgetFactory {
             return false;
           }
         }
-        current = current.parent;
-        continue;
       }
-      if (current != element && (css['position'] ?? 'static') != 'static') {
+      if (current == host) {
+        final position = css['position'] ?? 'static';
         if (!const {
+          'static',
           'relative',
           'absolute',
           'fixed',
-        }.contains(css['position'])) {
+        }.contains(position)) {
           return false;
         }
-        if (const {'absolute', 'fixed'}.contains(css['position']) &&
+        if (const {'absolute', 'fixed'}.contains(position) &&
             !_absoluteSupported(current)) {
           return false;
         }
-        if (css['position'] == 'relative' &&
+        if (position == 'relative' &&
             NativeDocumentRelativePositionSpec.parse(css) == null) {
           return false;
         }
-        if (css['position'] != 'fixed' &&
-            !const {'block', 'flex', 'grid', 'flow-root'}.contains(
-              css['display'] ??
-                  (const {
-                        'div',
-                        'section',
-                        'article',
-                        'main',
-                        'header',
-                        'footer',
-                        'form',
-                      }.contains(current.localName)
-                      ? 'block'
-                      : 'inline'),
-            )) {
-          return false;
-        }
+        if (!_positioningBlock(current)) return false;
+        // A containing block that owns scrolling needs positioned children
+        // inside its scroll/clip surface; preserve the explicit boundary here.
         if (const [
           'overflow',
           'overflow-x',
@@ -3580,10 +3614,13 @@ class _NativeHtmlFactory extends WidgetFactory {
   }
 
   dom.Element? _absoluteHost(dom.Element element) {
-    if (_flexChildStyles(element)['position'] == 'fixed') return null;
+    final fixed = _flexChildStyles(element)['position'] == 'fixed';
     var current = element.parent;
     while (current != null) {
-      if ((_flexChildStyles(current)['position'] ?? 'static') != 'static') {
+      if (_transformContainingBlock(current) ||
+          (!fixed &&
+              (_flexChildStyles(current)['position'] ?? 'static') !=
+                  'static')) {
         return current;
       }
       current = current.parent;
@@ -3637,6 +3674,7 @@ class _NativeHtmlFactory extends WidgetFactory {
                   .get<TextDirection>() ??
               Directionality.of(context),
           viewport: imageViewport(),
+          fixedUsesViewport: host == null,
         )!,
         child: item.child,
         overflowHitTest: nativeDocumentRestorePointerHit,
@@ -3645,8 +3683,9 @@ class _NativeHtmlFactory extends WidgetFactory {
 
   void _registerAbsolutePositioning(BuildTree tree) {
     final styles = _flexChildStyles(tree.element);
-    // Relative/absolute block surfaces own the padding-box coordinate system.
-    if (const {'relative', 'absolute', 'fixed'}.contains(styles['position'])) {
+    // Positioned and transformed block surfaces own the padding-box basis.
+    if (_transformContainingBlock(tree.element) ||
+        const {'relative', 'absolute', 'fixed'}.contains(styles['position'])) {
       tree.register(
         BuildOp(
           alwaysRenderBlock: false,
@@ -4606,6 +4645,59 @@ class _NativeHtmlFactory extends WidgetFactory {
     );
   }
 
+  void _registerDocumentOpacity(BuildTree tree) {
+    if (markdownStyles) return;
+    dom.Element? current = tree.element;
+    String raw = '1';
+    while (current != null) {
+      raw = (_flexChildStyles(current)['opacity'] ?? '1').trim().toLowerCase();
+      if (raw != 'inherit') break;
+      current = current.parent;
+    }
+    if (const {'initial', 'unset', 'inherit'}.contains(raw)) raw = '1';
+    final percent = raw.endsWith('%');
+    final number = double.tryParse(
+      percent ? raw.substring(0, raw.length - 1) : raw,
+    );
+    if (number == null || !number.isFinite) return;
+    final opacity = (number / (percent ? 100 : 1)).clamp(0.0, 1.0);
+    if (opacity == 1) return;
+    var blockWrapped = false;
+    Widget wrapped(Widget child) => Opacity(opacity: opacity, child: child);
+    tree.register(
+      BuildOp(
+        debugLabel: 'native-document-opacity',
+        alwaysRenderBlock: false,
+        // Compose the complete border/positioned/transform subtree as one group.
+        priority: 5000005780000000,
+        onRenderBlock: (parsed, placeholder) {
+          blockWrapped = true;
+          return placeholder.wrapWith((context, child) => wrapped(child));
+        },
+        onRenderInline: (parsed) {
+          if (blockWrapped ||
+              !const {
+                'img',
+                'canvas',
+                'svg',
+                'input',
+                'button',
+                'select',
+                'textarea',
+                'video',
+                'audio',
+              }.contains(parsed.element.localName)) {
+            return;
+          }
+          final bits = parsed.bits.whereType<WidgetBit>().toList();
+          if (bits.length == 1) {
+            bits.single.child.wrapWith((context, child) => wrapped(child));
+          }
+        },
+      ),
+    );
+  }
+
   void _registerDocumentTransform(BuildTree tree) {
     if (markdownStyles) return;
     final css = _flexChildStyles(tree.element);
@@ -4716,6 +4808,7 @@ class _NativeHtmlFactory extends WidgetFactory {
   void parse(BuildTree tree) {
     _registerPointerEvents(tree);
     _registerDocumentTransform(tree);
+    _registerDocumentOpacity(tree);
     _registerAbsolutePositioning(tree);
     final absolute = _absoluteSupported(tree.element);
     if (absolute) {
