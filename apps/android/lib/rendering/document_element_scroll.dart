@@ -39,6 +39,12 @@ Offset nativeDocumentScrollTranslation(RenderObject object) =>
     ? Offset(object._horizontalOffset.pixels, object._verticalOffset.pixels)
     : Offset.zero;
 
+/// Identity of a real element scroll viewport, before mapping it to a document.
+String? nativeDocumentScrollOwnerId(RenderObject object) =>
+    object is _RenderNativeDocumentElementScrollViewportRender
+    ? object._attachment.id
+    : null;
+
 /// Owns native scroll offsets for elements in one fetched document.
 ///
 /// A controller may be shared by the layout bridge and script host for a view.
@@ -104,6 +110,19 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
     _pendingAnchoring.clear();
     _anchorPlan = [];
   }
+
+  /// All owned native scroll surfaces, including visible/zero-range wrappers.
+  /// Geometry proof must account for them before ignoring a fixed zero range.
+  Map<String, RenderBox> get scrollGeometrySurfaces => {
+    if (!_disposed)
+      for (final a in _allAttachments)
+        if (!a.retired &&
+            identical(a.documentOwner, _documentOwner) &&
+            _activeAttachments(a.id).length == 1 &&
+            a.viewportRenderObject?.attached == true &&
+            a.viewportRenderObject!.hasSize)
+          a.id: a.viewportRenderObject!,
+  };
 
   Map<String, NativeDocumentScrollAnchorPort> get anchorScrollports => {
     if (!_disposed)

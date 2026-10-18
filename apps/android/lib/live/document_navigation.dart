@@ -1493,6 +1493,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         viewport: _layoutViewport,
         elementScrollMetrics: _elementScroll.metricsFor,
         elementScrollRanges: _elementScroll.scrollRangeFor,
+        elementScrollSurfaces: _elementScroll.scrollGeometrySurfaces,
 
         contentSize:
             document.scroll.hasClients &&

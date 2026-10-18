@@ -333,6 +333,16 @@ class _RenderAbsoluteItem extends RenderProxyBox
   NativeAbsolutePositionSpec spec;
   @override
   bool get fixedToViewport => spec.fixedToViewport;
+  @override
+  bool get scrollTranslationIndependent {
+    final layer = parent;
+    if (!fixedToViewport || layer is! _RenderAbsoluteLayer) return false;
+    final viewport = layer._fixedViewport;
+    return viewport != null &&
+        viewport.attached &&
+        MatrixUtils.getAsTranslation(layer.getTransformTo(viewport)) != null;
+  }
+
   bool Function(RenderBox, BoxHitTestResult, Offset)? overflowHitTest;
   @override
   bool hitTest(BoxHitTestResult result, {required Offset position}) {
@@ -650,6 +660,7 @@ class _RenderAbsoluteLayer extends RenderBox
 /// A viewport-fixed subtree never contributes to a scroll container's extent.
 abstract interface class NativeDocumentFixedSurface {
   bool get fixedToViewport;
+  bool get scrollTranslationIndependent;
 }
 
 /// Owns the document viewport outside its root Scrollable. Positioned render

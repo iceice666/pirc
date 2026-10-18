@@ -12,6 +12,26 @@ import 'package:pirc_mobile/rendering/html_document_content.dart';
 import 'package:pirc_mobile/theme.dart';
 
 const fixtureOrigin = String.fromEnvironment('PIRC_CHART_FIXTURE_ORIGIN');
+void expectScrollRectValues(dynamic actual, dynamic expected, String path) {
+  if (expected is num) {
+    expect(actual, closeTo(expected.toDouble(), .001), reason: path);
+  } else if (expected is List) {
+    expect(actual, isA<List>(), reason: path);
+    expect((actual as List).length, expected.length, reason: path);
+    for (var i = 0; i < expected.length; i++) {
+      expectScrollRectValues(actual[i], expected[i], '$path[$i]');
+    }
+  } else if (expected is Map) {
+    expect(actual, isA<Map>(), reason: path);
+    expect((actual as Map).keys.toSet(), expected.keys.toSet(), reason: path);
+    for (final key in expected.keys) {
+      expectScrollRectValues(actual[key], expected[key], '$path.$key');
+    }
+  } else {
+    expect(actual, expected, reason: path);
+  }
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
@@ -24,6 +44,7 @@ void main() {
       final cases = <Json>[];
       try {
         for (final entry in {
+          '/scroll-rect.json': 128,
           '/scroll-commands.json': 160,
           '/scroll-feedback.json': 96,
           '/scrolling-element.json': 88,
@@ -47,7 +68,7 @@ void main() {
       } finally {
         client.close(force: true);
       }
-      expect(cases, hasLength(344));
+      expect(cases, hasLength(472));
       final gateway = Gateway(),
           theme = await PircTheme.load(),
           accepted = <Json>[];
@@ -108,7 +129,17 @@ void main() {
             reason: '${document.scripts?.diagnostics}',
           );
           await tester.pump(const Duration(milliseconds: 30));
-          await tester.tap(find.text('Run', findRichText: true));
+          if (row['tap'] is Map) {
+            final point = obj(row['tap']);
+            await tester.tapAt(
+              Offset(
+                (point['x'] as num).toDouble(),
+                (point['y'] as num).toDouble(),
+              ),
+            );
+          } else {
+            await tester.tap(find.text('Run', findRichText: true));
+          }
           Json report = {};
           for (var attempt = 0; attempt < 250; attempt++) {
             await tester.pump(const Duration(milliseconds: 30));
@@ -129,12 +160,20 @@ void main() {
             reason:
                 '${row['mode']} ${row['target']} ${document.scripts?.diagnostics}',
           );
-          expect(
-            report,
-            equals(row['result']),
-            reason:
-                '${row['mode']} ${row['target']} ${row['viewport']} ${row['dpr']} ${row['theme']}',
-          );
+          if (row['target'] == 'scrollRect') {
+            expectScrollRectValues(
+              report,
+              row['result'],
+              '${row['mode']} ${row['viewport']} ${row['dpr']} ${row['theme']}',
+            );
+          } else {
+            expect(
+              report,
+              equals(row['result']),
+              reason:
+                  '${row['mode']} ${row['target']} ${row['viewport']} ${row['dpr']} ${row['theme']}',
+            );
+          }
           expect(document.scripts!.diagnostics, isEmpty);
           expect(tester.takeException(), isNull);
           accepted.add({
@@ -147,7 +186,7 @@ void main() {
           });
           if (accepted.length % 32 == 0) {
             debugPrintSynchronously(
-              'PIRC_SCROLL_FEEDBACK_PROGRESS ${accepted.length}/344',
+              'PIRC_SCROLL_FEEDBACK_PROGRESS ${accepted.length}/472',
             );
           }
         } finally {
@@ -159,7 +198,7 @@ void main() {
           tester.view.reset();
         }
       }
-      expect(accepted, hasLength(344));
+      expect(accepted, hasLength(472));
       debugPrintSynchronously(
         'PIRC_NATIVE_SCROLL_FEEDBACK_ACCEPTANCE ${jsonEncode(accepted)}',
       );
