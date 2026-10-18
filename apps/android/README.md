@@ -108,6 +108,23 @@ Promise ordering, record draining and private-snapshot suppression. The matching
 Node suites exercise the helper and the shipped bundle. Detached-subtree
 transient observation and bulk record grouping remain explicit differences.
 
+`document_absolute_position_test.dart` compares native absolute positioning with
+pinned Chromium geometry, actual screenshot pixels and topmost hit targets.
+It covers nearest relative/absolute block containing boxes, initial viewport
+positioning, percentage sizes, stretching, auto/percentage margins, min/max,
+flex/grid flow, inline/image/Canvas blockification, RTL and sibling overlap order.
+With the loopback fixture server and define used below, run
+`integration_test/document_absolute_test.dart` on a dedicated Android device.
+Its selected profiles execute actual JS click handlers that change position and
+size; settled rectangles must match and other flow boxes must not move.
+Recreate the reference with
+`node apps/android/tool/parity/capture_document_absolute_chromium153.mjs`.
+At least one physical inset on each axis and an ordinary visible-overflow block
+containing box are required. Both-auto static-position axes, inline containing
+blocks, positioned scrolling/clipping, transformed containing blocks, negative
+and complex nested stacking, positioned scroll/offset metrics, fixed and sticky
+positioning remain open. See the mobile plan for the complete boundaries.
+
 `integration_test/document_visibility_test.dart` runs without a fixture server.
 It checks the real Android JS engine and Flutter document view across eight
 phone/tablet, DPR 1/3 and light/dark profiles: `document.hidden`, read-only

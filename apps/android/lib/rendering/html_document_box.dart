@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import 'html_document_flex.dart';
 import 'document_relative_position.dart';
+import 'document_absolute_position.dart';
 import 'document_margin_collapse.dart';
 
 class _DocumentContainingBlock {
@@ -22,6 +23,14 @@ class _DocumentContainingBlock {
 
 _DocumentContainingBlock? _findDocumentContainingBlock(RenderObject? ancestor) {
   while (ancestor != null) {
+    if (ancestor is NativeDocumentPositioningBasis) {
+      final basis = ancestor as NativeDocumentPositioningBasis;
+      return _DocumentContainingBlock(
+        width: basis.positioningWidth,
+        height: basis.positioningHeight,
+        isActive: basis.positioningActive,
+      );
+    }
     if (ancestor is _RenderDocumentBox) {
       return _DocumentContainingBlock(
         width: ancestor.contentWidth,
@@ -971,11 +980,15 @@ class _RenderDocumentBox extends RenderProxyBox {
     }
   }
 
+  Size? publishedBorderSize;
+
   @override
   void performLayout() {
     _nativeDocumentBoxLayoutDepth++;
     try {
       _performBoxLayout();
+      final actual = child?.size ?? size;
+      publishedBorderSize = Size(actual.width, actual.height);
     } finally {
       _nativeDocumentBoxLayoutDepth--;
     }
@@ -1574,4 +1587,26 @@ nativeDocumentContainingBlockMetrics(RenderBox surface) {
     ancestor = ancestor.parent;
   }
   return null;
+}
+
+/// The owned box publishes its actual border size during its own layout.
+/// An ancestor must not read a grandchild RenderBox.size during layout.
+({RenderBox surface, Size size})? nativeDocumentPositioningSurface(
+  RenderBox marker, {
+  required Object owner,
+}) {
+  _RenderDocumentBox? found;
+  void visit(RenderObject node) {
+    if (node is _RenderDocumentBox) {
+      if (identical(node.spec.geometryOwner, owner)) found = node;
+      return;
+    }
+    node.visitChildren(visit);
+  }
+
+  visit(marker);
+  final actual = found?.publishedBorderSize;
+  if (actual == null) return null;
+  final surface = nativeDocumentBoxSurface(marker, owner: owner);
+  return surface == null ? null : (surface: surface, size: actual);
 }

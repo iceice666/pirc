@@ -15,6 +15,7 @@ import 'document_layout.dart';
 import 'document_computed_styles.dart';
 import 'document_offsets.dart';
 import 'document_relative_position.dart';
+import 'document_absolute_position.dart';
 import 'document_margin_collapse.dart';
 import 'document_element_scroll.dart';
 import 'document_canvas_pointer.dart';
@@ -2529,6 +2530,12 @@ class _NativeHtmlFactory extends WidgetFactory {
   documentPercentTopMargins;
   final int Function() layoutRevision;
   final NativeDocumentElementScrollController Function() elementScroll;
+  final _absoluteChildren =
+      <
+        dom.Element?,
+        List<({BuildTree tree, Widget child, Map<String, String> styles})>
+      >{};
+  final _absolutePlaceholders = <WidgetPlaceholder>{};
   final _geometryBlockWrapped = Expando<bool>();
   final _geometryOwnSizing = Expando<bool>();
   final _imageDensities = Expando<double>();
@@ -2781,6 +2788,7 @@ class _NativeHtmlFactory extends WidgetFactory {
   }
 
   void _registerScriptFocus(BuildTree tree) {
+    if (_absoluteSupported(tree.element)) return;
     final focusNode = _scriptFocusNodeForElement(tree.element);
     if (focusNode == null) return;
     final display = tree.getStyle('display')?.term?.toString();
@@ -2865,6 +2873,13 @@ class _NativeHtmlFactory extends WidgetFactory {
           parsed.setNonInherited<GestureRecognizer>(recognizer);
           return parsed;
         },
+      ),
+    );
+    tree.register(
+      BuildOp(
+        alwaysRenderBlock: false,
+        debugLabel: 'native-script-click-border-box',
+        priority: 5000005770000000,
         onRenderBlock: (parsed, placeholder) {
           final recognizer = parsed.getNonInherited<GestureRecognizer>();
           if (recognizer != null) {
@@ -2897,6 +2912,8 @@ class _NativeHtmlFactory extends WidgetFactory {
 
   @override
   Widget? customWidgetBuilder(dom.Element element) {
+    // Positioned replacements need their full CSS box before extraction.
+    if (_absoluteSupported(element)) return null;
     final built = _customWidgetForElement(element);
     if (built == null) return null;
     if (built is InlineCustomWidget) {
@@ -3248,6 +3265,203 @@ class _NativeHtmlFactory extends WidgetFactory {
               (_flexChildStyles(tree.element)['height']?.trim().endsWith('%') ??
                   false)));
 
+  Expando<bool> _absoluteSupport = Expando<bool>();
+  @override
+  void reset(State state) {
+    _absoluteChildren.clear();
+    _absolutePlaceholders.clear();
+    _absoluteSupport = Expando<bool>();
+    super.reset(state);
+  }
+
+  bool _absoluteSupported(dom.Element element) =>
+      _absoluteSupport[element] ??= _calculateAbsoluteSupport(element);
+
+  bool _calculateAbsoluteSupport(dom.Element element) {
+    if (markdownStyles) return false;
+    final styles = _flexChildStyles(element);
+    if (NativeAbsolutePositionSpec.parse(
+          styles,
+          fontSize: 16,
+          viewport: imageViewport(),
+        ) ==
+        null) {
+      return false;
+    }
+    dom.Element? current = element;
+    while (current != null) {
+      final css = _flexChildStyles(current);
+      if (const [
+        'transform',
+        'translate',
+        'rotate',
+        'scale',
+        'perspective',
+        'contain',
+        'filter',
+        'backdrop-filter',
+      ].any(
+        (name) =>
+            !const {'none', 'normal', 'auto', ''}.contains(css[name] ?? ''),
+      )) {
+        return false;
+      }
+      if (current != element && (css['position'] ?? 'static') != 'static') {
+        if (!const {'relative', 'absolute'}.contains(css['position'])) {
+          return false;
+        }
+        if (css['position'] == 'absolute' && !_absoluteSupported(current)) {
+          return false;
+        }
+        if (css['position'] == 'relative' &&
+            NativeDocumentRelativePositionSpec.parse(css) == null) {
+          return false;
+        }
+        if (!const {'block', 'flex', 'grid', 'flow-root'}.contains(
+          css['display'] ??
+              (const {
+                    'div',
+                    'section',
+                    'article',
+                    'main',
+                    'header',
+                    'footer',
+                    'form',
+                  }.contains(current.localName)
+                  ? 'block'
+                  : 'inline'),
+        )) {
+          return false;
+        }
+        if (const [
+          'overflow',
+          'overflow-x',
+          'overflow-y',
+        ].any((name) => !const {'visible', ''}.contains(css[name] ?? ''))) {
+          return false;
+        }
+        return true;
+      }
+      current = current.parent;
+    }
+    return true;
+  }
+
+  dom.Element? _absoluteHost(dom.Element element) {
+    var current = element.parent;
+    while (current != null) {
+      if ((_flexChildStyles(current)['position'] ?? 'static') != 'static') {
+        return current;
+      }
+      current = current.parent;
+    }
+    return null;
+  }
+
+  List<NativeAbsoluteEntry> _absoluteEntries(
+    BuildContext context,
+    dom.Element? host,
+  ) => [
+    for (final item in _absoluteChildren[host] ?? const [])
+      NativeAbsoluteEntry(
+        spec: NativeAbsolutePositionSpec.parse(
+          item.styles,
+          fontSize:
+              item.tree.inheritanceResolvers
+                  .resolve(context)
+                  .get<TextStyle>()
+                  ?.fontSize ??
+              16,
+          direction:
+              item.tree.inheritanceResolvers
+                  .resolve(context)
+                  .get<TextDirection>() ??
+              Directionality.of(context),
+          viewport: imageViewport(),
+        )!,
+        child: item.child,
+      ),
+  ];
+
+  void _registerAbsolutePositioning(BuildTree tree) {
+    final styles = _flexChildStyles(tree.element);
+    // Relative/absolute block surfaces own the padding-box coordinate system.
+    if (const {'relative', 'absolute'}.contains(styles['position'])) {
+      tree.register(
+        BuildOp(
+          alwaysRenderBlock: false,
+          debugLabel: 'native-absolute-containing-block',
+          priority: 5000005600000000,
+          onRenderBlock: (parsed, placeholder) => placeholder.wrapWith((
+            context,
+            child,
+          ) {
+            final entries = _absoluteEntries(context, parsed.element);
+            if (entries.isEmpty) return child;
+            final font =
+                parsed.inheritanceResolvers
+                    .resolve(context)
+                    .get<TextStyle>()
+                    ?.fontSize ??
+                16;
+            double edge(String side) =>
+                const {
+                  'none',
+                  'hidden',
+                }.contains(styles['border-$side-style'] ?? 'none')
+                ? 0
+                : _flexLength(
+                        styles['border-$side-width'] ?? '3px',
+                        font,
+                      )?.resolve(null) ??
+                      0;
+            return NativeDocumentAbsoluteLayer(
+              flow: child,
+              positioned: entries,
+              border: EdgeInsets.fromLTRB(
+                edge('left'),
+                edge('top'),
+                edge('right'),
+                edge('bottom'),
+              ),
+              boxSurface: (box) =>
+                  nativeDocumentPositioningSurface(box, owner: parsed.element),
+            );
+          }),
+        ),
+      );
+    }
+    if (!_absoluteSupported(tree.element)) return;
+    tree.register(
+      BuildOp(
+        alwaysRenderBlock: true,
+        debugLabel: 'native-absolute-extract',
+        priority: 9000009000000000,
+        onParsed: (parsed) {
+          // Build/extract before the parent flattens its inline runs. Returning
+          // an empty tree removes the flow bit entirely, preserving paragraphs.
+          parsed.build();
+          return parsed.parent.sub();
+        },
+        onRenderBlock: (parsed, placeholder) {
+          final focus = _scriptFocusNodeForElement(parsed.element);
+          _absoluteChildren
+              .putIfAbsent(_absoluteHost(parsed.element), () => [])
+              .add((
+                tree: parsed,
+                child: focus == null
+                    ? placeholder
+                    : Focus(focusNode: focus, child: placeholder),
+                styles: styles,
+              ));
+          final empty = WidgetPlaceholder(child: widget0);
+          _absolutePlaceholders.add(empty);
+          return empty;
+        },
+      ),
+    );
+  }
+
   void _documentSizing(BuildTree tree, {bool inlineReplaced = false}) {
     const properties = [
       'width',
@@ -3289,6 +3503,7 @@ class _NativeHtmlFactory extends WidgetFactory {
       }
     }
     final styles = _flexChildStyles(tree.element);
+    final absolute = _absoluteSupported(tree.element);
     double fraction(String side, [String property = 'padding']) {
       final length = _flexLength(styles['$property-$side'], 16);
       return length != null && length.percentage ? length.value / 100 : 0;
@@ -3432,10 +3647,11 @@ class _NativeHtmlFactory extends WidgetFactory {
               .element
               .attributes['data-pirc-document-style']]
         : null;
-    if (margin != EdgeInsets.zero ||
-        hasNegativeMargin ||
-        ownsFlexMargins ||
-        (collapsedTop?.contributions.isNotEmpty ?? false)) {
+    if (!absolute &&
+        (margin != EdgeInsets.zero ||
+            hasNegativeMargin ||
+            ownsFlexMargins ||
+            (collapsedTop?.contributions.isNotEmpty ?? false))) {
       tree.register(
         BuildOp(
           debugLabel: 'native-document-percentage-margin',
@@ -3475,9 +3691,11 @@ class _NativeHtmlFactory extends WidgetFactory {
           _flexLength(authored[property], fontSize);
 
       return NativeDocumentBox(
+        applySizing: !absolute,
         geometryOwner: parsed.element,
         geometryOwnerId: parsed.element.attributes['data-pirc-document-style'],
         tightAllocationIsAuthoritative:
+            absolute ||
             flexItem ||
             _flexChildStyles(
                   parsed.element.parent ?? parsed.element,
@@ -3543,8 +3761,18 @@ class _NativeHtmlFactory extends WidgetFactory {
         }.contains(tree.element.localName);
     if (!markdownStyles &&
         (const {'block', 'flex', 'grid', 'flow-root'}.contains(display) ||
-            blockified)) {
+            blockified ||
+            _absoluteSupported(tree.element))) {
       _documentSizing(tree);
+    }
+    if (_absoluteSupported(tree.element)) {
+      tree.register(
+        BuildOp(
+          alwaysRenderBlock: true,
+          debugLabel: 'native-absolute-blockification',
+        ),
+      );
+      return;
     }
     if (!markdownStyles && const {'flex', 'grid'}.contains(display)) {
       if (display == 'grid') {
@@ -3608,6 +3836,7 @@ class _NativeHtmlFactory extends WidgetFactory {
             builder: (context, _) {
               final resolved = original.inheritanceResolvers.resolve(context);
               final childWidgets = children
+                  .where((child) => !_absolutePlaceholders.contains(child))
                   .map((child) => WidgetPlaceholder.unwrap(context, child))
                   .where((child) => child != widget0)
                   .toList();
@@ -3627,7 +3856,8 @@ class _NativeHtmlFactory extends WidgetFactory {
                 final stretchColumns = <bool>[];
                 for (final element in original.element.children) {
                   final styles = customStylesBuilder(element) ?? {};
-                  if (styles['display']?.trim().toLowerCase() == 'none') {
+                  if (styles['display']?.trim().toLowerCase() == 'none' ||
+                      _absoluteSupported(element)) {
                     continue;
                   }
                   final start = styles['grid-column-start'];
@@ -3769,6 +3999,10 @@ class _NativeHtmlFactory extends WidgetFactory {
 
   @override
   void parseStyle(BuildTree tree, css.Declaration style) {
+    if (style.property.startsWith('margin') &&
+        _absoluteSupported(tree.element)) {
+      return;
+    }
     // Core caches sizing while visiting descendants. Registering its sizing
     // operation then resetting styles later keeps stale percentages/minimums.
     // Native document blocks own sizing from the start, so their populated
@@ -3776,7 +4010,8 @@ class _NativeHtmlFactory extends WidgetFactory {
     final display = tree.getStyle('display')?.term;
     final nativeBlock =
         !markdownStyles &&
-        (const {'block', 'flex', 'grid', 'flow-root'}.contains(display) ||
+        (_absoluteSupported(tree.element) ||
+            const {'block', 'flex', 'grid', 'flow-root'}.contains(display) ||
             ((_directDocumentFlexItem(tree.element) ||
                     _directDocumentGridItem(tree.element)) &&
                 const {'inline', 'inline-block', null}.contains(display) &&
@@ -4114,8 +4349,28 @@ class _NativeHtmlFactory extends WidgetFactory {
 
   @override
   void parse(BuildTree tree) {
+    _registerAbsolutePositioning(tree);
+    final absolute = _absoluteSupported(tree.element);
+    if (absolute) {
+      final replacement = _customWidgetForElement(tree.element);
+      if (replacement != null) {
+        tree.register(
+          BuildOp(
+            debugLabel: 'native-absolute-replacement',
+            alwaysRenderBlock: true,
+            priority: 0,
+            onRenderedChildren: (_, children) => WidgetPlaceholder(
+              child: replacement is InlineCustomWidget
+                  ? replacement.child
+                  : replacement,
+            ),
+          ),
+        );
+      }
+    }
     final rawReplacedElement =
         !markdownStyles &&
+        !absolute &&
         const {'img', 'canvas'}.contains(tree.element.localName);
     if (rawReplacedElement) {
       tree.register(
@@ -4726,7 +4981,16 @@ class _NativeHtmlFactory extends WidgetFactory {
   String? urlFull(String url) =>
       url.isEmpty ? null : Uri.tryParse(url)?.toString();
   @override
-  Widget buildBodyWidget(BuildContext context, Widget child) => child;
+  Widget buildBodyWidget(BuildContext context, Widget child) {
+    final entries = _absoluteEntries(context, null);
+    return entries.isEmpty
+        ? child
+        : NativeDocumentAbsoluteLayer(
+            flow: child,
+            positioned: entries,
+            initialContainingBlock: imageViewport(),
+          );
+  }
 
   @override
   Widget buildColumnWidget(
@@ -4759,6 +5023,9 @@ class _NativeHtmlFactory extends WidgetFactory {
     BuildTree tree,
     Iterable<WidgetPlaceholder> children,
   ) {
+    children = children
+        .where((child) => !_absolutePlaceholders.contains(child))
+        .toList();
     if (!markdownStyles && tree.isInline != true && children.length == 1) {
       if (_directDocumentFlexItem(tree.element)) {
         // A flex parent owns the allocated border box. Keep the block boundary

@@ -32,7 +32,7 @@ outside the agreed scope.
       the supported computed-style
       properties, list-item/inline-fragment measurements and common-library coverage;
       signed/font-relative/empty-block and bottom-edge
-      margin collapse, absolute/fixed/sticky positioning, unsupported relative-inset
+      margin collapse, remaining absolute/fixed/sticky positioning, unsupported relative-inset
       units and inline fragments, transformed/zoomed/table offset geometry,
       inline-fragment geometry and image/resize/chart/framework flows. Changed geometry
       still needs a matching native frame; a proved fixed-width ordinary block can
@@ -71,7 +71,8 @@ outside the agreed scope.
 - Relative positioning supports native block/flex/grid/flow-root surfaces,
   signed pixel/percentage physical insets and zero values in CSS length units.
   Nonzero font/viewport-relative units, calc(), logical insets, inline fragments,
-  and absolute/fixed/sticky positioning remain unsupported. A nonzero relative
+  and fixed/sticky positioning remain unsupported. The initial absolute-position
+  surface and its remaining gaps are described below. A nonzero relative
   inline inset does not acquire offset metadata merely because its syntax parses.
 - Some inserted classic-script lexical-scope behavior differs from the browser.
 - Two root-height fixtures retain extra trailing blank scroll space: 8 px with
@@ -1210,3 +1211,87 @@ notifications produce the exact hidden/visible event and Promise order; frame
 counters remain unchanged during each hidden interval and increase on resume.
 These are simulated lifecycle notifications, not physical OS background tests.
 Compact results are kept ignored; disposable outputs are removed after testing.
+
+## Native absolute positioning follow-up
+
+The native renderer extracts accepted absolute elements from normal flow and
+attaches them to their nearest supported relative/absolute block containing box.
+An element without a positioned ancestor uses the initial viewport. Layout uses
+the containing padding box and actual published border geometry; it never reads
+a grandchild RenderBox.size illegally during an ancestor's layout. Absolute
+children do not enlarge the normal-flow size or add flex/grid gaps. Geometry,
+painting, inherited direction and hit transforms follow the relocated widget.
+
+Accepted physical axes need at least one non-auto inset each. Signed px and
+percentage insets, em/pt and the existing vw/vh/vmin/vmax forms are accepted;
+auto widths can shrink to content, opposing insets stretch auto axes, CSS min/max
+and content-/border-box edge conversion constrain the result. Fixed/percentage
+and auto margins use the containing width. RTL resolves overconstrained
+horizontal axes from the right. Inline, image and Canvas replacements build a
+complete native CSS box before relocation. Nonnegative local sibling z-indices
+and equal-index source order determine paint/hit order.
+
+The document root routes visible positioned overflow to its actual widget even
+outside a short normal-flow root, while real ancestor clips still gate hits.
+Normal inline overflow retains its previous root-bounds gate. A separate common
+bug was found and fixed: empty clickable blocks had a zero-sized inner gesture
+surface; the gesture now wraps the actual border box inside relative motion and
+outside its size/decoration, without covering margins. Nested click dispatch
+continues to fire once.
+
+Remaining positioning work is explicit: both-auto axes need real static-position
+markers; inline containing blocks, positioned scroll/clipping containers,
+transforms/containment, logical insets, nonzero rem/calc and other unsupported
+lengths, negative z-index and complex nested stacking contexts remain open.
+Unsupported absolute declarations retain the previous flow fallback, so those
+cases do not have positional parity. offsetParent/offsetLeft/offsetTop for
+positioned subtrees remain withheld; native getBoundingClientRect is measured.
+Owned element scrollWidth/scrollHeight do not yet include relocated positioned
+overflow. Root scroll-overflow integration and physical-device behavior still
+need wider acceptance. Fixed and sticky positioning remain separate work.
+
+The frozen Chromium fixture compares phone/tablet, DPR 1/3 and light/dark,
+including actual screenshot samples and elementFromPoint targets. The native
+widget gate checks geometry plus those exact solid-color pixels and taps each
+sample, including a portion outside the positioned ancestor's border. Percentage
+geometry retains Chromium's 1/64 px quantization difference: isolated percentage
+terms differ by up to 0.0125 CSS px; the content-box percentage-padding case keeps a separate 1/32 CSS px bound
+for accumulated per-edge quantization. These are named case bounds, not a
+general geometry tolerance.
+The Android gate uses the shipped JS engine and document view, real click
+handlers, requestAnimationFrame measurement and CSS mutation; it checks that
+position/size update without moving other flow boxes. Broader state transitions
+and layout APIs are not implied by these gates.
+
+A prior relative-scroll test failed unchanged at HEAD: its 80 × 20 CSS px serif
+link used normal line height and wrapped text. Android measured 248 px scroll
+height, Chromium 153 measured 236 px, and the test incorrectly expected 220 px.
+The positioning gate now authors 20 px line-height and nowrap so it isolates
+positioned overflow and clipping; default serif font/wrapping/normal-line-height
+parity remains a named difference rather than being claimed repaired here.
+A separate mixed inline fixture verifies that extracting an absolute element
+leaves no block bit or extra line between neighboring inline images.
+
+A containing-block resize can change percentage edges while the absolute
+border-box constraints stay identical. A regression reproduces stale 10% padding
+when only its flow child changes width; the layer now invalidates the existing
+positioned subtree at that basis change. The same widget grows and shrinks with
+correct padding without requiring a document rebuild.
+
+Verification: all 168 frozen widget profiles pass geometry, 672 actual solid
+pixel probes and 672 native taps. The affected layout/interaction regression run
+has 629 passing tests; all 659 JavaScript tests pass. All 48 Android profiles pass
+initial measurements plus real click-driven position/size updates and unchanged
+flow neighbors on the final implementation. Static analysis and formatting are
+clean. Compact evidence is ignored; generated builds, owned emulator images and
+the isolated HEAD comparison copy are removed after the run, preserving the
+published APK.
+
+CSS pointer-events is not yet implemented by the native HTML renderer. An
+overlay requesting pointer-events:none can still intercept input; this remains
+an interaction gap to address before broader overlay acceptance. Vertical writing
+modes and grid-area-based absolute containing boxes also remain unverified.
+
+Final Android maximum initial geometry delta is 0.0125 CSS px in the percentage
+case; the remaining selected cases are exact. The controlled relative-scroll
+reference also confirms 220 px scroll height and a reachable link after scroll.

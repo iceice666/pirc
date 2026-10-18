@@ -45,7 +45,7 @@ void main() {
         tester.view.physicalSize = Size(width * dpr, height * dpr);
         addTearDown(tester.view.reset);
 
-        final prepared = _prepareDocument(capture);
+        final prepared = prepareNativeLayoutDocument(capture);
         final ids = (capture['targets'] as List).cast<String>().toSet();
         final controller = NativeDocumentLayoutController();
         addTearDown(controller.dispose);
@@ -138,8 +138,8 @@ void main() {
   }
 }
 
-class _PreparedDocument {
-  const _PreparedDocument({
+class PreparedNativeLayoutDocument {
+  const PreparedNativeLayoutDocument({
     required this.markup,
     required this.stylesByKey,
     required this.noBoxIds,
@@ -150,7 +150,9 @@ class _PreparedDocument {
   final Set<String> noBoxIds;
 }
 
-_PreparedDocument _prepareDocument(Map<String, dynamic> capture) {
+PreparedNativeLayoutDocument prepareNativeLayoutDocument(
+  Map<String, dynamic> capture,
+) {
   final document = html.parse(capture['html'] as String);
   final root = document.documentElement!;
   final body = document.body!;
@@ -211,7 +213,7 @@ _PreparedDocument _prepareDocument(Map<String, dynamic> capture) {
   // Match the production document view's explicit html/body block wrappers.
   // Root/body metrics require separate coverage: standards-mode root client
   // dimensions come from the viewport, while its bounding rect follows layout.
-  return _PreparedDocument(
+  return PreparedNativeLayoutDocument(
     markup:
         '<div${_attributes(root)}><div${_attributes(body)}>${body.innerHtml}</div></div>',
     stylesByKey: stylesByKey,

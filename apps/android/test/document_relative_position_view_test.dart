@@ -118,7 +118,7 @@ void main() {
     'relative overflow contributes scroll extent and clipped shifted link becomes reachable',
     (tester) async {
       final document = _document(
-        '#scroller{width:200px;height:100px;overflow:auto;border:1px solid}#link{display:block;position:relative;left:120px;top:200px;width:80px;height:20px}',
+        '#scroller{width:200px;height:100px;overflow:auto;border:1px solid}#link{display:block;position:relative;left:120px;top:200px;width:80px;height:20px;line-height:20px;white-space:nowrap}',
         '<div id="scroller"><a id="link" href="/overflow">Overflow link</a></div>',
       );
       addTearDown(document.dispose);

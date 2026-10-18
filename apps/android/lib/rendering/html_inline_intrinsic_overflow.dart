@@ -1,3 +1,4 @@
+import 'document_absolute_position.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
@@ -140,11 +141,12 @@ bool _containsOverflowMarker(RenderObject root) {
 /// is narrower than the control, while retaining ordinary clipping behavior.
 ///
 /// Layout and paint are delegated unchanged. During hit testing, the wrapper
-/// first uses normal child hit testing. If that misses, it may forward a hit
-/// directly to a marked control only when the point falls within that control
+/// first visits positioned paint in its overlay order, then normal children.
+/// If those miss, it may forward a hit directly to a marked inline control
+/// only when the point falls within that control
 /// and no explicit clip render object lies between the control and this root.
-/// The root's own bounds still gate hits through the standard [RenderBox]
-/// protocol.
+/// The root's own bounds gate inline overflow. Positioned paint may extend
+/// outside the normal-flow root; its actual enclosing viewport gates input.
 class NativeHtmlVisibleInlineOverflowRoot
     extends SingleChildRenderObjectWidget {
   const NativeHtmlVisibleInlineOverflowRoot({super.key, required super.child});
@@ -157,7 +159,40 @@ class NativeHtmlVisibleInlineOverflowRoot
 
 class RenderNativeHtmlVisibleInlineOverflowRoot extends RenderProxyBox {
   @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    if (hasSize && size.contains(position)) {
+      return super.hitTest(result, position: position);
+    }
+    // A positioned box can extend below a short normal-flow document. Its
+    // enclosing viewport still gates input; normal inline overflow stays gated.
+    if (hasSize && _hitPositioned(result, position)) {
+      result.add(BoxHitTestEntry(this, position));
+      return true;
+    }
+    return false;
+  }
+
+  bool _hitPositioned(BoxHitTestResult result, Offset position) {
+    final subtree = child;
+    if (subtree != null) {
+      for (final target in _positionedTargets(subtree)) {
+        if (_hasExplicitClipAncestor(target, this, position)) continue;
+        if (result.addWithPaintTransform(
+          transform: target.getTransformTo(this),
+          position: position,
+          hitTest: (result, p) => (target as NativeDocumentPositionedHitTarget)
+              .hitTestPositioned(result, position: p),
+        )) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    if (_hitPositioned(result, position)) return true;
     if (super.hitTestChildren(result, position: position)) return true;
     final currentChild = child;
     if (currentChild == null) return false;
@@ -173,6 +208,17 @@ class RenderNativeHtmlVisibleInlineOverflowRoot extends RenderProxyBox {
       if (hit) return true;
     }
     return false;
+  }
+}
+
+Iterable<RenderBox> _positionedTargets(RenderObject node) sync* {
+  if (node is RenderBox && node is NativeDocumentPositionedHitTarget) {
+    yield node;
+  }
+  final children = <RenderObject>[];
+  node.visitChildren(children.add);
+  for (final child in children.reversed) {
+    yield* _positionedTargets(child);
   }
 }
 
