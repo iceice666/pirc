@@ -101,12 +101,12 @@ outside the agreed scope.
   CSS cascade without attribute dependencies. Real CSS width changes wait for
   native layout before ResizeObserver updates the chart. Bitmap-only changes
   then retain proven unchanged geometry. The maximum observed bar-geometry
-  difference is 0.055 px from platform fonts. Twelve additional responsive cases
-  with authored pixel/percentage width and pixel height now initialize and resize
-  without diagnostics, including initial inline display, omitted backing attributes
-  and container-only width changes. The four intrinsic sizing-audit cases, CSS
-  attribute dependencies, arbitrary synchronous DOM write/read flows, other chart
-  types and animation remain unsupported or unverified.
+  difference is 0.055 px from platform fonts. All 16 additional responsive cases
+  now initialize and resize without diagnostics, including intrinsic dimensions,
+  authored pixel/percentage sizes, initial inline display, omitted backing
+  attributes and container-only width changes. CSS attribute dependencies,
+  arbitrary synchronous DOM write/read flows, additional chart configurations
+  and animation remain unsupported or unverified.
   Stock bar touch tooltips, blank/outside dismissal and rapid outside taps are
   covered, along with legend hide/show, including actual disappearance and
   restoration of the painted bars. The common label strikethrough now uses real
@@ -1047,3 +1047,71 @@ maximum is 0.013549 px within its named 0.02 px bound. Compact acceptance record
 remain ignored; disposable builds and emulator images are cleared while the
 published APK is preserved. General synchronous layout, broader chart/touch
 compatibility and real-device/account/remote-push acceptance remain open.
+
+## Stock chart types and nonfinite path arguments
+
+The stock-chart gate now exercises all eight Chart.js 4.5.1 types: bar, line,
+pie, doughnut, scatter, bubble, radar and polar area. Its 64 cases combine
+phone/tablet, DPR 1/3 and light/dark. Browser and native clients receive the exact
+same authored HTML and driver, with the unmodified pinned library and stock
+legend/tooltip behavior. Every case requires initialization, first/second data
+hits, outside dismissal, legend hide/show, data updates and container resizing.
+The fixture capture verifies that hits and resizing actually happened and that
+legend toggles remove and restore painted features.
+
+This exposed a real native pie initialization failure: the Canvas recorder
+threw on nonfinite arc arguments. Path methods now follow unrestricted-number
+conversion and ignore the whole path operation when any numeric argument is
+nonfinite. Missing required arguments and user conversion errors still throw;
+finite negative radii still fail. Finite coordinate/path/recording limits remain
+enforced. The change covers moveTo, lineTo, rect, quadraticCurveTo,
+bezierCurveTo, arc and ellipse, rather than patching the chart library. See the
+[HTML Canvas path algorithms](https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-arc).
+A separate 129-case Chromium observation matrix checks errors, conversion order
+and unchanged pixels; recorder regression checks also require the original path
+and drawing state to survive unchanged.
+
+Native acceptance compares real Flutter snapshots and painting, including
+negative-space probes, doughnut holes and actual line connections. Tooltip text
+must reach the painter; values, visibility, active indices, click callbacks,
+Canvas CSS/bitmap dimensions and probe colors remain independent checks.
+The stock fonts retain the existing platform-alias limitation: pixel geometry
+uses the prior bar gate's 2 px bound, with every difference over 0.1 px recorded.
+Angles have their own 1e-12-radian bound; numeric data and Canvas dimensions are
+not covered by the font tolerance. This does not claim identical fonts or whole
+chart-image pixels. Animation, custom plugins/configurations and other chart
+libraries remain separate acceptance work.
+
+The retained first-point sample in a hidden radar chart crosses a neutral tick
+backdrop edge: desktop `[248,248,248,196]` versus native `[244,244,244,200]` in
+the first observed profile. This named antialiasing difference has an 8 × DPR / 255
+per-channel bound (4 observed at DPR 1, 10 at DPR 3); both must remain neutral, while the data hide/show and all
+other sampled colors remain independently checked.
+
+Tooltip interiors composited over data have a separate 1/255-per-channel rounding
+allowance (observed polar-area `[6,40,19,255]` versus `[7,39,19,255]`). This
+applies only at samples at least 8 CSS px inside the tooltip background; solid
+data, transparent holes and clear-space samples keep their exact checks.
+
+Verification: all 648 JavaScript tests and all 64 native profiles pass, including
+512 chart stages and 56 painted line-connection checks. All profiles have empty
+script diagnostics. The 129 Chromium path observations agree with the recorder;
+analysis and formatting are clean. Actual maximum differences by chart type:
+
+| Type      | Profiles | Pixel geometry (CSS px) | Neutral edge channel delta | Tooltip channel delta |
+| --------- | -------: | ----------------------: | -------------------------: | --------------------: |
+| bar       |        8 |                0.977539 |                          0 |                     0 |
+| line      |        8 |                0.977539 |                          0 |                     0 |
+| pie       |        8 |                0.977539 |                          0 |                     0 |
+| doughnut  |        8 |                0.977539 |                          0 |                     0 |
+| scatter   |        8 |                0.304138 |                          0 |                     0 |
+| bubble    |        8 |                1.360138 |                          0 |                     0 |
+| radar     |        8 |                0.977539 |                         10 |                     0 |
+| polarArea |        8 |                0.977539 |                          0 |                     1 |
+
+All recorded angle differences are zero. Other selected color samples are
+exact. This closes the stock-type initialization/interaction gap for these
+configurations; default animation, custom configurations/plugins, arbitrary
+framework layout and physical-device/real-account/remote-push acceptance remain
+open. Compact evidence stays ignored; disposable builds/emulator disk images are
+removed while preserving the published APK.

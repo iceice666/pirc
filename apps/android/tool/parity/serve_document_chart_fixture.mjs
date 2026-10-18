@@ -53,6 +53,12 @@ const boxStyleProjection = readFileSync(path.join(scriptDirectory, 'fixtures/doc
 
 const canvasSizing = readFileSync(path.join(scriptDirectory, 'fixtures/document-canvas-sizing-chromium153.json'));
 
+const chartTypes = readFileSync(path.join(scriptDirectory, 'fixtures/document-chart-types-chromium153.json'));
+const chartTypesFixture = JSON.parse(chartTypes.toString('utf8'));
+if (chartTypesFixture.chartJs?.sha256 !== actualSha256 || typeof chartTypesFixture.driverSource !== 'string') {
+  throw new Error('Chart types fixture does not match the pinned library');
+}
+
 const requestedPort = configuredPort();
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -81,6 +87,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/chart-types.json') {
+    response.writeHead(200, {'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8'});
+    response.end(chartTypes);
     return;
   }
   if (pathname === '/canvas-sizing.json') {

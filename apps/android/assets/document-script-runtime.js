@@ -21925,6 +21925,16 @@ function createDocumentCanvas(deps) {
     }
   }
 
+  // Path WebIDL conversion precedes algorithm checks. Nonfinite numeric
+  // arguments make the whole operation a no-op, including negative radii.
+  // Convert every argument first; user conversion failures still propagate.
+  function pathNumbers(values, actualCount) {
+    if (actualCount < values.length) throw new TypeError('Not enough Canvas path arguments.');
+    const converted = values.map(value => +value);
+    if (!converted.every(Number.isFinite)) return null;
+    return converted.map(value => number(value));
+  }
+
   function addPathSegment(record, op, args) {
     currentPath(record);
     record.path.push({
@@ -22132,54 +22142,36 @@ function createDocumentCanvas(deps) {
       addPathSegment(record, 'closePath', []);
     };
     context.moveTo = function(x, y) {
-      addPathSegment(record, 'moveTo', [
-        number(x, 'x'), number(y, 'y')
-      ]);
+      const args = pathNumbers([x, y], arguments.length);
+      if (args) addPathSegment(record, 'moveTo', args);
     };
     context.lineTo = function(x, y) {
-      addPathSegment(record, 'lineTo', [
-        number(x, 'x'), number(y, 'y')
-      ]);
+      const args = pathNumbers([x, y], arguments.length);
+      if (args) addPathSegment(record, 'lineTo', args);
     };
     context.rect = function(x, y, width, height) {
-      addPathSegment(record, 'rect', [
-        number(x, 'x'), number(y, 'y'),
-        number(width, 'width'), number(height, 'height')
-      ]);
+      const args = pathNumbers([x, y, width, height], arguments.length);
+      if (args) addPathSegment(record, 'rect', args);
     };
     context.quadraticCurveTo = function(cpx, cpy, x, y) {
-      addPathSegment(record, 'quadraticCurveTo', [
-        number(cpx, 'control point x'), number(cpy, 'control point y'),
-        number(x, 'x'), number(y, 'y')
-      ]);
+      const args = pathNumbers([cpx, cpy, x, y], arguments.length);
+      if (args) addPathSegment(record, 'quadraticCurveTo', args);
     };
     context.bezierCurveTo = function(cp1x, cp1y, cp2x, cp2y, x, y) {
-      addPathSegment(record, 'bezierCurveTo', [
-        number(cp1x, 'first control point x'), number(cp1y, 'first control point y'),
-        number(cp2x, 'second control point x'), number(cp2y, 'second control point y'),
-        number(x, 'x'), number(y, 'y')
-      ]);
+      const args = pathNumbers([cp1x, cp1y, cp2x, cp2y, x, y], arguments.length);
+      if (args) addPathSegment(record, 'bezierCurveTo', args);
     };
     context.arc = function(x, y, radius, startAngle, endAngle, anticlockwise) {
-      const r = number(radius, 'radius');
-      if (r < 0)
-        throw errorWithName('IndexSizeError', 'Arc radius must not be negative.');
-      addPathSegment(record, 'arc', [
-        number(x, 'x'), number(y, 'y'), r,
-        number(startAngle, 'start angle'), number(endAngle, 'end angle'),
-        Boolean(anticlockwise)
-      ]);
+      const args = pathNumbers([x, y, radius, startAngle, endAngle], arguments.length);
+      if (!args) return;
+      if (args[2] < 0) throw errorWithName('IndexSizeError', 'Arc radius must not be negative.');
+      addPathSegment(record, 'arc', [...args, Boolean(anticlockwise)]);
     };
     context.ellipse = function(x, y, radiusX, radiusY, rotation, startAngle, endAngle, anticlockwise) {
-      const rx = number(radiusX, 'radiusX');
-      const ry = number(radiusY, 'radiusY');
-      if (rx < 0 || ry < 0)
-        throw errorWithName('IndexSizeError', 'Ellipse radii must not be negative.');
-      addPathSegment(record, 'ellipse', [
-        number(x, 'x'), number(y, 'y'), rx, ry,
-        number(rotation, 'rotation'), number(startAngle, 'start angle'),
-        number(endAngle, 'end angle'), Boolean(anticlockwise)
-      ]);
+      const args = pathNumbers([x, y, radiusX, radiusY, rotation, startAngle, endAngle], arguments.length);
+      if (!args) return;
+      if (args[2] < 0 || args[3] < 0) throw errorWithName('IndexSizeError', 'Ellipse radii must not be negative.');
+      addPathSegment(record, 'ellipse', [...args, Boolean(anticlockwise)]);
     };
 
     context.fill = function(rule) {

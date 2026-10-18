@@ -426,3 +426,121 @@ test('coordinate and accumulated transform limits fail without corrupting the ma
   assert.ok(diagnostics.some(([code]) => code === 'canvas.coordinate_limit'));
 });
 
+
+for (const [method, values] of Object.entries({
+  moveTo: [2, 2],
+  lineTo: [2, 2],
+  rect: [2, 2, 3, 3],
+  quadraticCurveTo: [2, 2, 4, 4],
+  bezierCurveTo: [2, 2, 3, 3, 4, 4],
+  arc: [4, 4, 2, 0, 1],
+  ellipse: [4, 4, 2, 3, 0, 0, 1],
+})) {
+  test('nonfinite ' + method + ' leaves path, drawing state and budgets unchanged', () => {
+    const { document, recorder, diagnostics } = createRecorder();
+    const ctx = document.addCanvas().getContext('2d');
+    ctx.rect(1, 1, 4, 4);
+    for (let i = 0; i < values.length; i++)
+      for (const invalid of [NaN, Infinity, -Infinity]) {
+        const args = values.slice();
+        args[i] = invalid;
+        assert.doesNotThrow(() => ctx[method](...args));
+      }
+    ctx.fill();
+    const snapshot = snapshots(recorder)[0];
+    assert.deepEqual(
+      snapshot.commands[0].state.path.map((s) => ({ op: s.op, args: s.args })),
+      [{ op: 'rect', args: [1, 1, 4, 4] }],
+    );
+    assert.deepEqual(diagnostics, []);
+  });
+  test(method + ' checks WebIDL arity and conversion before no-op rules', () => {
+    const { document, recorder } = createRecorder();
+    const ctx = document.addCanvas().getContext('2d');
+    assert.throws(() => ctx[method](...values.slice(1)), { name: 'TypeError' });
+    for (const invalid of [Symbol('x'), 1n]) {
+      const args = values.slice();
+      args[0] = NaN;
+      args[args.length - 1] = invalid;
+      assert.throws(() => ctx[method](...args), { name: 'TypeError' });
+    }
+    const trace = [];
+    const args = values.map((v, i) => ({
+      valueOf() {
+        trace.push(i);
+        return i === 0 ? NaN : v;
+      },
+    }));
+    ctx[method](...args);
+    assert.deepEqual(
+      trace,
+      values.map((_, i) => i),
+    );
+    assert.deepEqual(snapshots(recorder)[0].commands, []);
+  });
+}
+test('nonfinite arc and ellipse arguments take precedence over negative radii', () => {
+  const { document, recorder } = createRecorder();
+  const ctx = document.addCanvas().getContext('2d');
+  assert.doesNotThrow(() => ctx.arc(NaN, 0, -1, 0, 1));
+  assert.doesNotThrow(() => ctx.arc(0, 0, -1, 0, Infinity));
+  assert.doesNotThrow(() => ctx.ellipse(0, 0, -1, -1, NaN, 0, 1));
+  assert.throws(() => ctx.arc(0, 0, -1, 0, 1), { name: 'IndexSizeError' });
+  assert.throws(() => ctx.ellipse(0, 0, -1, 1, 0, 0, 1), { name: 'IndexSizeError' });
+  assert.deepEqual(snapshots(recorder)[0].commands, []);
+});
+
+test('path no-ops and conversion errors match frozen Chromium observations', () => {
+  const fixture = JSON.parse(
+    readFileSync(
+      new URL('./fixtures/document-chart-types-chromium153.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(fixture.browserVersion, '153.0.8010.12');
+  assert.ok(fixture.pathCases.length > 100);
+  const { document, recorder } = createRecorder();
+  const canvas = document.addCanvas(),
+    ctx = canvas.getContext('2d');
+  for (const row of fixture.pathCases) {
+    canvas.width = canvas.width;
+    ctx.fillStyle = '#ff0000';
+    ctx.rect(1, 1, 4, 4);
+    ctx.fill();
+    let args = row.args.slice();
+    const trace = [];
+    if (row.kind === 'nonfinite') args[row.index] = Number(row.special);
+    if (row.kind === 'arity') args = args.slice(0, row.count);
+    if (row.kind === 'conversion-error') {
+      args[0] = NaN;
+      args[args.length - 1] = row.special === 'symbol' ? Symbol('invalid') : 1n;
+    }
+    if (row.kind === 'trace')
+      args = args.map((v, i) => ({
+        valueOf() {
+          trace.push(i);
+          return i === 0 ? NaN : v;
+        },
+      }));
+    let error = null;
+    try {
+      ctx[row.method](...args);
+    } catch (e) {
+      error = e.name;
+    }
+    ctx.fill();
+    const commands = snapshots(recorder)[0].commands;
+    const description = row.method + ' ' + row.kind + ' ' + row.index + ' ' + row.special;
+    assert.equal(error, row.expected.error, description);
+    assert.deepEqual(trace, row.expected.trace, description);
+    assert.equal(ctx.fillStyle, row.expected.fillStyle, description);
+    assert.equal(row.expected.unchangedBitmap, true, description);
+    assert.deepEqual(commands[0].state.path, commands[1].state.path, description);
+  }
+});
+test('finite path coordinates retain the explicit native resource limit', () => {
+  const { document, diagnostics } = createRecorder();
+  const ctx = document.addCanvas().getContext('2d');
+  assert.throws(() => ctx.arc(0, 0, 1000000001, 0, 1), { name: 'NotSupportedError' });
+  assert.ok(diagnostics.some(([code]) => code === 'canvas.coordinate_limit'));
+});

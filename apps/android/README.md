@@ -137,10 +137,34 @@ The touch oracle is reproducible with
 `node apps/android/tool/parity/capture_document_chart_interactions_chromium153.mjs`.
 The native acceptance includes legend state and bar fill disappearance/restoration;
 label strikethrough uses real glyph ink bounds. Full TouchEvent/multitouch compatibility,
-other chart types and animation remain open.
+animation, custom plugins and untested chart configurations remain open.
 Neither the test library nor its fixture is included in the APK.
 
-The same command also audits 16 responsive sizing cases from
+With the same fixture server and define, run
+`integration_test/document_chart_types_test.dart` for the stock-chart gate:
+bar, line, pie, doughnut, scatter, bubble, radar and polar area across 64
+phone/tablet, DPR 1/3 and light/dark profiles. The exact shared HTML/driver tests
+first/second data hits, stock tooltips, outside dismissal, legend hide/show,
+data updates and resizing. It also checks actual data pixels, cleared space,
+doughnut holes and line connections. Recreate the frozen reference with
+`node apps/android/tool/parity/capture_document_chart_types_chromium153.mjs`.
+All browser resources are fulfilled locally by request interception; external
+requests are blocked, and the dedicated test browser remains mandatory.
+
+The stock font aliases keep the prior 2 px pixel-geometry bound, with raw
+differences recorded; angles use a separate 1e-12 bound. A neutral radar tick
+backdrop edge after hiding the data has an explicitly recorded 8 × DPR / 255-channel
+antialiasing bound. Canvas dimensions, solid data and clear-space probes stay exact.
+These are functional and selected-paint checks, not whole-image equality.
+Tooltip interiors composited over data have a separate 1/255-per-channel rounding
+allowance (observed polar-area `[6,40,19,255]` versus `[7,39,19,255]`). This
+applies only at samples at least 8 CSS px inside the tooltip background; solid
+data, transparent holes and clear-space samples keep their exact checks.
+The same reference includes 129 font-independent path-call observations that
+verify ignored nonfinite arguments, WebIDL arity/conversion errors and negative
+radii. The original chart library is unchanged and is excluded from the APK.
+
+The `document_chart_http_test.dart` command also audits 16 responsive sizing cases from
 `document-chart-responsive-layout-chromium153.json`, loading the exact authored
 HTML and driver used by the browser. All 16 cases must initialize without
 diagnostics and match native geometry and bar pixels, including Canvas with no
