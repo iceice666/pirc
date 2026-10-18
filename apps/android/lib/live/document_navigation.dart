@@ -20,6 +20,7 @@ import '../rendering/document_offsets.dart';
 import '../rendering/document_margin_collapse.dart';
 import '../rendering/document_layout_visibility.dart';
 import '../rendering/document_element_scroll.dart';
+import '../rendering/document_scroll_commands.dart';
 import 'common.dart';
 import 'gateway.dart';
 import 'document_navigation_state.dart';
@@ -1679,49 +1680,29 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         }
         final actions = scripts.takeScrollActions();
         if (actions.isEmpty) return;
-        final position = document.scroll.position;
-        double target = position.pixels;
-        final windowActions = <Json>[];
-        _elementScroll.applyActions([
-          for (final action in actions)
-            if (action['elementId'] is String &&
-                scripts.layoutElementIds.contains(action['elementId']))
-              {
-                'id': action['elementId'],
-                'op': action['kind'] == 'by' ? 'scrollBy' : 'scrollTo',
-                'left': action['x'],
-                'top': action['y'],
-                'behavior': action['behavior'],
-              },
-        ]);
-        windowActions.addAll(
-          actions.where((action) => !action.containsKey('elementId')),
-        );
-        for (final action in windowActions) {
-          final y = action['y'] as num?;
-          if (y != null) {
-            target = action['kind'] == 'by'
-                ? target + y.toDouble()
-                : y.toDouble();
+        // Preserve order across root and element targets. Each relative command
+        // reads actual pixels, never an earlier smooth animation's destination.
+        for (final action in actions) {
+          if (action['elementId'] is String) {
+            if (scripts.layoutElementIds.contains(action['elementId'])) {
+              _elementScroll.applyActions([
+                {
+                  'id': action['elementId'],
+                  'op': action['kind'] == 'by' ? 'scrollBy' : 'scrollTo',
+                  'left': action['x'],
+                  'top': action['y'],
+                  'behavior': action['behavior'],
+                },
+              ]);
+            }
+          } else {
+            applyNativeDocumentScrollAxis(
+              document.scroll,
+              (action['y'] as num?)?.toDouble(),
+              relative: action['kind'] == 'by',
+              behavior: action['behavior'] as String,
+            );
           }
-          target = target.clamp(
-            position.minScrollExtent,
-            position.maxScrollExtent,
-          );
-        }
-        // Position changes are reported back only after native layout. Multiple
-        // same-turn calls compose in order against the real scroll extent.
-        if (windowActions.isNotEmpty &&
-            windowActions.last['behavior'] == 'smooth') {
-          unawaited(
-            document.scroll.animateTo(
-              target,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-            ),
-          );
-        } else if (windowActions.isNotEmpty) {
-          document.scroll.jumpTo(target);
         }
         scripts.refreshLayout();
       });

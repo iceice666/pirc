@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import 'document_absolute_position.dart';
+import 'document_scroll_commands.dart';
 import 'document_scroll_anchor_state.dart';
 import 'html_document_box.dart';
 
@@ -387,80 +388,40 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
     _events.removeWhere((event) => event.sequence <= throughSequence);
   }
 
-  /// Applies native script scroll commands in their original order.
-  ///
-  /// Commands with the same target are folded to one final offset per axis.
-  /// Missing axes retain their previous value. Smooth behavior uses Flutter's
-  /// native animation with a 250 ms ease-in-out curve; its timing is not a
-  /// pixel-for-pixel reproduction of CSS smooth scrolling.
+  /// Executes each command in order against current native pixels. Omitted
+  /// axes stay at their current positions and cancel earlier animation too.
   void applyActions(List<Map<String, dynamic>> actions) {
     if (_disposed || actions.isEmpty) return;
-    final folded = <String, _FoldedScrollAction>{};
-
     for (final action in actions) {
       final rawId = action['id'];
       if (rawId is! String || rawId.isEmpty) continue;
       final matches = _activeAttachments(rawId);
       if (matches.length != 1) continue;
-      final attachment = matches.single;
-      if (attachment.retired) continue;
-
-      final rawOperation = action['op'];
-      final operation = switch (rawOperation) {
+      final a = matches.single;
+      if (a.retired) continue;
+      final operation = switch (action['op']) {
         'by' || 'scrollBy' => 'by',
         'to' || 'scrollTo' => 'to',
         _ => null,
       };
       if (operation == null) continue;
       final behavior = action['behavior'] == 'smooth' ? 'smooth' : 'auto';
-      final target = folded.putIfAbsent(
-        rawId,
-        () => _FoldedScrollAction(attachment),
-      );
-      if (!identical(target.attachment, attachment)) continue;
-
-      final left = _number(action['left']);
-      if (left != null && _isProgrammaticallyScrollable(attachment.overflowX)) {
-        final current = target.left ?? _pixels(attachment.horizontalController);
-        if (current != null) {
-          final clamped = _clampCommandTarget(
-            attachment.horizontalController,
-            operation == 'by' ? current + left : left,
-          );
-          if (clamped != null) {
-            target.left = clamped;
-            target.leftBehavior = behavior;
-          }
-        }
+      if (_isProgrammaticallyScrollable(a.overflowX)) {
+        applyNativeDocumentScrollAxis(
+          a.horizontalController,
+          _number(action['left']),
+          relative: operation == 'by',
+          behavior: behavior,
+        );
       }
-
-      final top = _number(action['top']);
-      if (top != null && _isProgrammaticallyScrollable(attachment.overflowY)) {
-        final current = target.top ?? _pixels(attachment.verticalController);
-        if (current != null) {
-          final clamped = _clampCommandTarget(
-            attachment.verticalController,
-            operation == 'by' ? current + top : top,
-          );
-          if (clamped != null) {
-            target.top = clamped;
-            target.topBehavior = behavior;
-          }
-        }
+      if (_isProgrammaticallyScrollable(a.overflowY)) {
+        applyNativeDocumentScrollAxis(
+          a.verticalController,
+          _number(action['top']),
+          relative: operation == 'by',
+          behavior: behavior,
+        );
       }
-    }
-
-    for (final action in folded.values) {
-      _applyAxis(
-        action.attachment.horizontalController,
-        action.left,
-        action.leftBehavior,
-      );
-      _applyAxis(
-        action.attachment.verticalController,
-        action.top,
-        action.topBehavior,
-      );
     }
   }
 
@@ -742,31 +703,10 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
     SchedulerBinding.instance.ensureVisualUpdate();
   }
 
-  static double? _pixels(ScrollController controller) =>
-      controller.hasClients && controller.positions.length == 1
-      ? controller.position.pixels
-      : 0.0;
-
   static double _currentPixels(ScrollController controller, double fallback) =>
       controller.hasClients && controller.positions.length == 1
       ? controller.position.pixels
       : fallback;
-
-  static double? _clampCommandTarget(
-    ScrollController controller,
-    double target,
-  ) {
-    if (!controller.hasClients || controller.positions.length != 1) {
-      return null;
-    }
-    final position = controller.position;
-    if (!position.hasContentDimensions || !position.hasViewportDimension) {
-      return null;
-    }
-    return target
-        .clamp(position.minScrollExtent, position.maxScrollExtent)
-        .toDouble();
-  }
 
   static double? _number(Object? value) {
     if (value is num && value.isFinite) return value.toDouble();
@@ -777,37 +717,6 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
       overflow == NativeDocumentOverflow.hidden ||
       overflow == NativeDocumentOverflow.auto ||
       overflow == NativeDocumentOverflow.scroll;
-
-  static void _applyAxis(
-    ScrollController controller,
-    double? target,
-    String? behavior,
-  ) {
-    if (target == null ||
-        !controller.hasClients ||
-        controller.positions.length != 1) {
-      return;
-    }
-    final position = controller.position;
-    if (!position.hasContentDimensions || !position.hasViewportDimension) {
-      return;
-    }
-    final clamped = target
-        .clamp(position.minScrollExtent, position.maxScrollExtent)
-        .toDouble();
-    if ((position.pixels - clamped).abs() <= 0.0001) return;
-    if (behavior == 'smooth') {
-      unawaited(
-        controller.animateTo(
-          clamped,
-          duration: smoothScrollDuration,
-          curve: Curves.easeInOut,
-        ),
-      );
-    } else {
-      controller.jumpTo(clamped);
-    }
-  }
 
   @override
   void dispose() {
@@ -1594,14 +1503,4 @@ class _NativeDocumentScrollEvent {
 
   final String id;
   final int sequence;
-}
-
-class _FoldedScrollAction {
-  _FoldedScrollAction(this.attachment);
-
-  final _NativeDocumentScrollAttachment attachment;
-  double? left;
-  double? top;
-  String? leftBehavior;
-  String? topBehavior;
 }

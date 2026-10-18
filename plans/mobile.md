@@ -10,9 +10,10 @@ are available from Git through Historical records, not repeated here.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** extend Canvas font/ink coverage,
-      synchronous DOM write/read layout, inline-fragment
-      measurements and common-library coverage. Broader image/framework flows
+- [ ] **Dynamic content compatibility:** add synchronous scroll-position feedback
+      after queued commands (repeated `scrollTop += delta` currently reads the
+      prior frame), wider synchronous DOM write/read layout, Canvas font/ink
+      coverage, inline-fragment measurements and common-library coverage. Broader image/framework flows
       remain unverified; preserve explicit unsupported errors.
 - [ ] **Physical phone/tablet acceptance of the rooms** ([plan 12](rewrite/12-android.md)):
       use a real account for pairing; a room's streaming replies, reconnect and
@@ -137,6 +138,25 @@ identity. Simultaneous root/outer/inner compensation, node replacement, hide/sho
 style suppression and end clamping are covered. Text/focus/find priority,
 RTL/horizontal writing, scroll snap/padding, complex transformed/out-of-flow
 geometry, image-load identity and simultaneous smooth scrolling remain open.
+
+Native root/element scroll commands now execute in their authored order. A
+relative command uses actual current pixels, including after a smooth command;
+instant-then-smooth retains the instant starting position. Same-position,
+zero-delta, omitted-axis and empty-option commands cancel prior animations.
+Native-frame scroll events still coalesce. The Chromium 153 command corpus has
+160 phone/tablet, DPR and theme profiles; widget tests compare immediate native
+positions and settled positions, while Android checks settled JS readings through
+the actual sandbox and native Run button.
+
+**Remaining synchronous-read difference:** JS scroll-position getters still read
+the last accepted native frame within the callback that queued a command. Two
+`element.scrollTop += 20` statements can queue two targets of 20 instead of
+reaching 40. Correct native command ordering does not resolve that feedback gap or
+general synchronous geometry after writes. The Android command gate records
+immediate JS mismatches separately (80 of 160 profiles); those results are not
+parity passes. CSS `scroll-behavior`
+default selection, exact animation timing, scrollend/Promise behavior and mixed
+root/element event ordering are not certified by this gate.
 
 Retained-document scrolling is owned by the document/VM lifecycle, including
 root offsets across a new PageStorage bucket. Switching the document in one view

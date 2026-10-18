@@ -2646,6 +2646,9 @@
           y = normalizeScrollCoordinate(second);
         } else {
           const options = arguments.length ? first : undefined;
+          // Chromium ignores a lone primitive, but null/undefined are empty
+          // dictionaries and still cancel an existing smooth scroll.
+          if (options != null && typeof options !== 'object' && typeof options !== 'function') return;
           let left;
           let top;
           let requestedBehavior;
@@ -2665,8 +2668,7 @@
             y = top === undefined ? 0 : normalizeScrollCoordinate(top);
           }
         }
-        if (kind === 'to' && x === null && y === null) return;
-        if (kind === 'by' && x === 0 && y === 0) return;
+        // Zero/omitted coordinates still abort a prior smooth scroll.
         if (elementScoped) {
           layout.queueElementScrollAction(this, kind, x, y, behavior);
         } else {

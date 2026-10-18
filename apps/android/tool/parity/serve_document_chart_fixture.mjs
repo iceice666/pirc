@@ -86,6 +86,9 @@ if (JSON.parse(elementAnchor.toString('utf8')).browserVersion !== '153.0.8010.12
 const scrollRetention = readFileSync(path.join(scriptDirectory, 'fixtures/document-scroll-retention-chromium153.json'));
 if (JSON.parse(scrollRetention.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected scroll-retention browser');
 
+const scrollCommands = readFileSync(path.join(scriptDirectory, 'fixtures/document-scroll-commands-chromium153.json'));
+if (JSON.parse(scrollCommands.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected scroll-command browser');
+
 const requestedPort = configuredPort();
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -114,6 +117,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/scroll-commands.json') {
+    response.writeHead(200, {'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8'});
+    response.end(scrollCommands);
     return;
   }
   if (pathname === '/scroll-retention.json') {

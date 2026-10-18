@@ -221,7 +221,7 @@ void main() {
   });
 
   testWidgets(
-    'folds actions by target, preserves omitted axes, and clamps both axes',
+    'applies actions in order, preserves omitted axes, and clamps both axes',
     (tester) async {
       final controller = NativeDocumentElementScrollController();
       addTearDown(controller.dispose);
