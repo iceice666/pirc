@@ -790,11 +790,24 @@ void _attachComputedStyles(
     if (!valid) continue;
     // Count encoded bytes too: non-ASCII custom values and JSON escapes must
     // not push the complete host response beyond its 4 MiB envelope.
-    final encodedSize = utf8.encode(jsonEncode(accepted)).length;
+    final textIndependent = spec.textContentSelectorsIndependent
+        ? [
+            for (final entry in spec.values.entries)
+              if (accepted[entry.key] == entry.value) entry.key,
+          ]
+        : const <String>[];
+    final encodedSize =
+        utf8.encode(jsonEncode(accepted)).length +
+        (textIndependent.isEmpty
+            ? 0
+            : utf8.encode(jsonEncode(textIndependent)).length);
     final cost = encodedSize > size ? encodedSize : size;
     if (cost > remaining) continue;
     remaining -= cost;
     box['computedStyle'] = accepted;
+    if (textIndependent.isNotEmpty) {
+      box['textIndependentStyleProperties'] = textIndependent;
+    }
     // CSSOM serializes dimensions to six decimals. Never use a rounded value
     // as proof of an identical used size: even a tiny change can wrap a line.
     if (box['kind'] == 'box' &&

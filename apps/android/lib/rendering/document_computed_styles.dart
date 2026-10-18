@@ -25,6 +25,7 @@ class NativeDocumentComputedStyleSpec {
     required this.fontSize,
     required this.rootFontSize,
     this.available = true,
+    this.textContentSelectorsIndependent = false,
     this.isReplaced = false,
     this.resizeSupported = true,
     this.canvasBitmapSizeIndependent = false,
@@ -79,6 +80,10 @@ class NativeDocumentComputedStyleSpec {
   /// False when custom-property data exceeded the helper's memory budget.
   /// Consumers should treat the computed-style declaration as unavailable.
   final bool available;
+
+  /// [values] stay valid after ordinary text-only changes when the native
+  /// cascade proves no text-sensitive matching. [lengths] remain layout backed.
+  final bool textContentSelectorsIndependent;
 }
 
 /// Builds the native computed-style base from the already-applied author
@@ -93,6 +98,7 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
   required double viewportWidth,
   required double viewportHeight,
   bool canvasBitmapAttributesIndependent = false,
+  bool textContentSelectorsIndependent = false,
   bool inlineBoxStyleOverridesIndependent = false,
   bool dark = false,
 }) {
@@ -530,6 +536,7 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
       fontSize: fontSize,
       rootFontSize: rootFontSize,
       available: available,
+      textContentSelectorsIndependent: textContentSelectorsIndependent,
       isReplaced: const {'img', 'canvas', 'svg'}.contains(name),
       resizeSupported: resizeSupported,
       canvasBitmapSizeIndependent:

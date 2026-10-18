@@ -77,6 +77,7 @@ function createPircDocumentLayout(options) {
   // not certify the child position, its surrounding line box, or scroll extents.
   let pendingProjectedStyles = new Map();
   let pendingCanvasSizingAxes = new Map();
+  let pendingOrdinaryTextOnly = true;
   let installed = false;
   let observer = null;
   let scrollActionQueue = null;
@@ -523,6 +524,30 @@ function createPircDocumentLayout(options) {
     return stableReplacedChildBox(element)?.computedStyle || null;
   }
 
+  function isOrdinaryTextMutation(record) {
+    if (!record) return false;
+    let parent;
+    if (record.type === 'characterData' && record.target?.nodeType === 3) {
+      parent = record.target.parentNode;
+    } else if (record.type === 'childList') {
+      const nodes = [...(record.addedNodes || []), ...(record.removedNodes || [])];
+      if (!nodes.length || nodes.some(node => node.nodeType !== 3)) return false;
+      parent = record.target;
+    } else return false;
+    if (!(parent instanceof ElementCtor) || parent.ownerDocument !== documentRef ||
+        !isConnected(parent)) return false;
+    // These nodes affect stylesheet sources, control state or automatic bidi
+    // direction, rather than just rendered text. Keep their full style fence.
+    const visited = new Set();
+    for (let node = parent; node instanceof ElementCtor; node = node.parentElement) {
+      if (visited.has(node) || node.namespaceURI !== 'http://www.w3.org/1999/xhtml' ||
+          ['style','script','title','textarea','option','select','bdi'].includes(node.localName) ||
+          String(readAttribute.call(node,'dir') || '').toLowerCase() === 'auto') return false;
+      visited.add(node);
+    }
+    return true;
+  }
+
   function consumeMutationRecords(records) {
     if (internalMutationDepth > 0 || !records || records.length === 0) return;
     // MutationRecord carries oldValue only. Recover each write's real successor
@@ -556,6 +581,7 @@ function createPircDocumentLayout(options) {
               readAttribute.call(record.target, record.attributeName)) === record.oldValue) continue;
       }
       relevant = true;
+      if (!isOrdinaryTextMutation(record)) pendingOrdinaryTextOnly = false;
       if (pendingProjectedStyles !== null) {
         const projected = projectedBoxStyleMutation(record, styleAfter.get(record));
         if (projected && pendingProjectedStyles.size < 5000) pendingProjectedStyles.set(record.target, projected);
@@ -659,7 +685,7 @@ function createPircDocumentLayout(options) {
     return { detached: false, box, viewport: layoutSnapshot.viewport };
   }
 
-  function requireComputedStyle(element) {
+  function requireComputedStyle(element, property = null) {
     validateElement(element);
     if (!isConnected(element)) return { detached: true, style: null };
     if (!enabled) {
@@ -675,6 +701,15 @@ function createPircDocumentLayout(options) {
     if (layoutSnapshot.revision !== current) {
       const style = partialComputedStyle(element);
       if (style) return {detached: false, style, id, revision: current};
+      const box = layoutSnapshot.boxes.get(id);
+      if (pendingOrdinaryTextOnly && box?.element === element && box.textIndependentStyleProperties &&
+          (property === null || box.textIndependentStyleProperties.has(property) ||
+           (!Object.prototype.hasOwnProperty.call(box.computedStyle, property) &&
+            (customPropertyName.test(property) || !isKnownComputedProperty(property))))) {
+        // Enumeration is unchanged by this proof. Actual value reads must name
+        // a host-certified cascade value; used lengths still require layout.
+        return {detached: false, style: box.computedStyle, id, revision: current};
+      }
       throw notSupported('computed_style_stale', 'Computed style is stale after a document mutation', {
         id,
         revision: current,
@@ -700,9 +735,9 @@ function createPircDocumentLayout(options) {
     return state;
   }
 
-  function declarationSnapshot(declaration) {
+  function declarationSnapshot(declaration, property = null) {
     const state = declarationState(declaration);
-    return requireComputedStyle(state.element);
+    return requireComputedStyle(state.element, property);
   }
 
   function readComputedProperty(style, key, id, revision) {
@@ -744,10 +779,10 @@ function createPircDocumentLayout(options) {
       enumerable: false,
       writable: false,
       value(propertyName) {
-        const snapshot = declarationSnapshot(this);
-        if (snapshot.detached) return '';
+        declarationState(this);
         const key = normalizeCssPropertyArgument(propertyName);
-        if (key === null) return '';
+        const snapshot = declarationSnapshot(this, key);
+        if (snapshot.detached || key === null) return '';
         return readComputedProperty(snapshot.style, key, snapshot.id, snapshot.revision);
       },
     },
@@ -756,10 +791,10 @@ function createPircDocumentLayout(options) {
       enumerable: false,
       writable: false,
       value(propertyName) {
-        const snapshot = declarationSnapshot(this);
-        if (snapshot.detached) return '';
+        declarationState(this);
         const key = normalizeCssPropertyArgument(propertyName);
-        if (key === null) return '';
+        const snapshot = declarationSnapshot(this, key);
+        if (snapshot.detached || key === null) return '';
         readComputedProperty(snapshot.style, key, snapshot.id, snapshot.revision);
         return '';
       },
@@ -825,7 +860,7 @@ function createPircDocumentLayout(options) {
         }
         const key = computedStylePropertyName(property);
         if (key === null) return undefined;
-        const snapshot = declarationSnapshot(receiver);
+        const snapshot = declarationSnapshot(receiver, key);
         if (snapshot.detached) {
           return customPropertyName.test(key) || isKnownComputedProperty(key) ? '' : undefined;
         }
@@ -1260,6 +1295,28 @@ function createPircDocumentLayout(options) {
       if (known && known !== element) throw new TypeError(`Layout box id is already owned by another element: ${id}`);
 
       const computedStyle = validateComputedStyle(source, id, computedStyleBudget);
+      let textIndependentStyleProperties = null;
+      if (Object.prototype.hasOwnProperty.call(source, 'textIndependentStyleProperties')) {
+        const descriptor = Object.getOwnPropertyDescriptor(source, 'textIndependentStyleProperties');
+        const raw = descriptor && Object.prototype.hasOwnProperty.call(descriptor,'value') ? descriptor.value : null;
+        if (!computedStyle || !Array.isArray(raw) || raw.length > MAX_COMPUTED_STYLE_PROPERTIES) {
+          throw new TypeError(`${id}.textIndependentStyleProperties requires a bounded array and computed style`);
+        }
+        const names = new Set();
+        for (let index = 0; index < raw.length; index++) {
+          const entry = Object.getOwnPropertyDescriptor(raw, String(index));
+          const name = entry && Object.prototype.hasOwnProperty.call(entry,'value') ? entry.value : null;
+          if (typeof name !== 'string' || !Object.prototype.hasOwnProperty.call(computedStyle,name) || names.has(name)) {
+            throw new TypeError(`${id}.textIndependentStyleProperties must name distinct supplied data properties`);
+          }
+          names.add(name);
+          computedStyleBudget.chars += name.length;
+          if (computedStyleBudget.chars > MAX_COMPUTED_STYLE_PACKET_CHARS) {
+            throw new RangeError('Computed-style text dependency metadata exceeds the packet budget');
+          }
+        }
+        textIndependentStyleProperties = names;
+      }
       const resize = validateResize(source, id);
       let canvasBitmapSizeIndependent = false;
       if (Object.prototype.hasOwnProperty.call(source, 'canvasBitmapSizeIndependent')) {
@@ -1391,7 +1448,7 @@ function createPircDocumentLayout(options) {
         }
         stagedBoxes.set(id, Object.freeze({
           id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset,
-          ...(computedStyle === undefined ? {} : { computedStyle }), resize, element, revision,
+          ...(computedStyle === undefined ? {} : { computedStyle }), textIndependentStyleProperties, resize, element, revision,
           canvasBitmapSizeIndependent, canvasEquivalentStyleWrites, clientWidthIndependentOfDescendantSizes,
           replacedBoxStyleProjection, stableReplacedChildId, canvasSizingProjection,
         }));
@@ -1415,6 +1472,7 @@ function createPircDocumentLayout(options) {
           scroll: null,
           offset: null,
           ...(computedStyle === undefined ? {} : { computedStyle }),
+          textIndependentStyleProperties,
           resize,
           element,
           revision,
@@ -1537,6 +1595,7 @@ function createPircDocumentLayout(options) {
     pendingSizeMutationTargets = new Set();
     pendingProjectedStyles = new Map();
     pendingCanvasSizingAxes = new Map();
+    pendingOrdinaryTextOnly = true;
     return {
       ok: true, revision: staged.revision, generation: staged.generation,
       scrollEvents: staged.scrollEvents.slice(), scrollChanges,
@@ -1600,6 +1659,7 @@ function createPircDocumentLayout(options) {
     install,
     revision: currentRevision,
     invalidate() {
+      pendingOrdinaryTextOnly = false;
       pendingSizeMutationTargets = null;
       pendingProjectedStyles = null;
       pendingCanvasSizingAxes = null;

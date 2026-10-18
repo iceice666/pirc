@@ -125,7 +125,7 @@ const driverSource = `(function(){
  function report(){var values={};['base','overlay','child'].forEach(function(id){var e=document.getElementById(id);if(e&&e.tagName!=='SPAN')values[id]=getComputedStyle(e).getPropertyValue('pointer-events');});document.getElementById('probe').textContent=JSON.stringify({phase:phase,trace:trace,pointer:values});}
  document.querySelectorAll('#host,[id]').forEach(function(e){if(['probe','toggle','program'].includes(e.id))return;e.addEventListener('click',function(event){trace.push({target:event.target.id,current:e.id,trusted:event.isTrusted});if(e.id==='host'){event.preventDefault();report();}});});
  document.getElementById('toggle').onclick=function(){var e=document.getElementById('overlay');e.style.pointerEvents=e.style.pointerEvents==='none'?'auto':'none';phase=e.style.pointerEvents;requestAnimationFrame(report);};
- document.getElementById('program').onclick=function(){document.getElementById('overlay').click();phase='program';requestAnimationFrame(report);};
+ document.getElementById('program').onclick=function(){document.getElementById('overlay').click();phase='program';report();};
  requestAnimationFrame(report);
 })();`;
 const browser = await chromium.launch({

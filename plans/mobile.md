@@ -88,8 +88,8 @@ outside the agreed scope.
   stale frames and unavailable declarations fail explicitly. Inline `element.style`
   remains independent. DOM writes followed immediately by style/geometry reads
   generally need a matching native frame; the proved unchanged parent width and
-  bounded edgeless-Canvas box-style/parent proofs below are exceptions. Arbitrary
-  framework flows remain unverified.
+  bounded edgeless-Canvas box-style/parent proofs and certified ordinary-text
+  cascade values below are exceptions. Arbitrary framework flows remain unverified.
 - Computed-style dimensions use measured native boxes and original containing
   blocks. Inline-fragment dimensions, auto margins, platform form-control UA
   properties, CSS font shorthand, transforms and unimplemented length expressions
@@ -1322,11 +1322,10 @@ blocked. Widget tests compare actual native hit targets and paint; Android
 integration uses the same unmodified browser driver in JavaScriptSandbox.
 The latter covers none, restored block/inline/button/Canvas, inline suppression,
 clipped and visible overflow, dynamic none/auto/none and programmatic activation.
-The programmatic click dispatches immediately; its final computed-style report
-runs on the next animation frame, identically in both environments. Reading styles
-again synchronously after the click handler mutates report text still produces
-stale/unmeasured diagnostics in native rendering. This existing DOM write/read
-limitation remains open; the pointer policy gate does not claim to repair it.
+The programmatic click and its final computed-style report now run immediately,
+identically in both environments. The ordinary-text cascade-value proof below
+repairs the previously recorded stale pointer-events read after report text
+changes. Geometry and unproved style mutations retain their separate fences.
 
 This gate covers HTML box policy. SVG shape-specific fill/stroke hit geometry,
 complex nested stacking contexts, hover, pointer capture and policy changes
@@ -1340,3 +1339,41 @@ JavaScript tests pass. All 88 Android profiles pass the frozen driver state afte
 every step, including exact restored button bounds; diagnostics stay empty.
 Static analysis is clean. Compact acceptance evidence is ignored; disposable
 builds and emulator images are removed after testing, preserving the published APK.
+
+
+## Computed styles after ordinary text updates
+
+The native cascade certifies text-independent selectors only when the complete
+parsed stylesheet/inline set is understood and contains no `:empty`/`:blank` dependency,
+including nested negation. Unsupported selectors/rules, retained imports, parse
+errors and unresolved values withhold this proof. Attribute and structural
+selectors may qualify because the runtime separately rejects element/attribute
+changes.
+
+After plain text replacement, character-data writes, text-node insertion/removal
+or replaceChildren with text, certified cascade values remain synchronously
+readable: colors, typography, display/pointer policy and supplied custom properties.
+Retained declarations and property enumeration stay live. Width, height, edges,
+rectangles and other measured geometry still require a matching native frame;
+no old rectangle is returned as a new layout result.
+
+The runtime keeps a full fence for mixed element/attribute/style changes,
+stylesheet/script/title text, text in form value containers, SVG text and
+automatic-direction content. Native metadata names only values computed without
+layout, is validated against the supplied declaration and shares its size budget.
+Missing proof or rejected packets do not weaken invalidation.
+
+The 48 frozen Chromium profiles use the same driver on Android for visible and
+hidden replacements, character data, append, remove and replaceChildren. They
+compare immediate cascade values and next-frame actual geometry at phone/tablet,
+DPR 1/3 and light/dark. The 88 pointer profiles restore the original immediate
+programmatic report rather than waiting for a frame. The Node regression covers
+mixed/special mutations, missing proof, retained declarations and atomic rejection.
+General synchronous write/read layout, selector-dependent text and the other
+remaining layout/library/physical-device gates stay open.
+
+Verification: 961 affected Flutter tests, all 694 JavaScript tests and all
+136 Android profiles pass on the final implementation, with empty script
+diagnostics. Format and static analysis are clean. Source/fixture driver identity
+is checked, and capture blocks all external requests. Compact local evidence is
+ignored; disposable builds and owned emulator images are removed after testing.

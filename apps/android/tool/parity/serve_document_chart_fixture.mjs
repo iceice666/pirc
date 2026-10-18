@@ -71,6 +71,9 @@ if (JSON.parse(absoluteFixture.toString('utf8')).browserVersion !== '153.0.8010.
 const pointerEvents = readFileSync(path.join(scriptDirectory, 'fixtures/document-pointer-events-chromium153.json'));
 if (JSON.parse(pointerEvents.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected pointer-events browser');
 
+const textStyle = readFileSync(path.join(scriptDirectory, 'fixtures/document-text-style-chromium153.json'));
+if (JSON.parse(textStyle.toString('utf8')).browserVersion !== '153.0.8010.12') throw new Error('Unexpected text-style browser');
+
 const requestedPort = configuredPort();
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -99,6 +102,11 @@ const server = createServer((request, response) => {
       'content-type': 'application/json; charset=utf-8',
     });
     response.end(interactions);
+    return;
+  }
+  if (pathname === '/text-style.json') {
+    response.writeHead(200, {'cache-control': 'no-store', 'content-type': 'application/json; charset=utf-8'});
+    response.end(textStyle);
     return;
   }
   if (pathname === '/pointer-events.json') {

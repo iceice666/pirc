@@ -2081,6 +2081,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
             result.canvasBitmapAttributesIndependent,
         inlineBoxStyleOverridesIndependent:
             result.inlineBoxStyleOverridesIndependent,
+        textContentSelectorsIndependent: result.textContentSelectorsIndependent,
         viewportWidth: environment.width,
         viewportHeight: environment.height,
         dark: schemeDark,

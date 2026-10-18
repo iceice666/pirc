@@ -88,6 +88,7 @@ class NativeDocumentStylesResult {
     required this.diagnostics,
     required this.canvasBitmapAttributesIndependent,
     required this.inlineBoxStyleOverridesIndependent,
+    required this.textContentSelectorsIndependent,
   });
 
   /// Winning values in emitted CSS order. Values exclude `!important`.
@@ -111,6 +112,10 @@ class NativeDocumentStylesResult {
 
   /// No important box declaration can outrank a normal inline box assignment.
   final bool inlineBoxStyleOverridesIndependent;
+
+  /// The complete parsed selector set cannot change matches when only ordinary
+  /// text nodes change. Structural element/attribute/style mutations are separate.
+  final bool textContentSelectorsIndependent;
 }
 
 /// Applies a deliberately bounded CSS author cascade to a full parsed DOM.
@@ -659,6 +664,7 @@ class _Cascade {
   final _cyclicVariables = <_VariableKey>{};
   final _reportedCycles = <String>{};
   bool _canvasBitmapDependenciesInspectable = true;
+  bool _textContentSelectorsInspectable = true;
   bool _hasImportantBoxDeclaration = false;
   int _order = 0;
   int _selectorProbeOrder = 0;
@@ -698,9 +704,11 @@ class _Cascade {
       final stylesheet = parsed.stylesheet;
       if (stylesheet == null) {
         _canvasBitmapDependenciesInspectable = false;
+        _textContentSelectorsInspectable = false;
         continue;
       }
       if (parsed.messages.isNotEmpty) {
+        _textContentSelectorsInspectable = false;
         _canvasBitmapDependenciesInspectable = false;
       }
       _inspectCanvasBitmapDependencies(stylesheet);
@@ -1015,6 +1023,9 @@ class _Cascade {
         _diagnostics,
       ),
       inlineBoxStyleOverridesIndependent: !_hasImportantBoxDeclaration,
+      textContentSelectorsIndependent:
+          _textContentSelectorsInspectable &&
+          !_diagnostics.any(_blocksCanvasBitmapIndependenceProof),
       canvasBitmapAttributesIndependent:
           _canvasBitmapDependenciesInspectable &&
           !_diagnostics.any(_blocksCanvasBitmapIndependenceProof),
@@ -1029,7 +1040,13 @@ class _Cascade {
       // Some csslib AST nodes have incomplete visitor implementations. A proof
       // must fail closed instead of assuming they contain no relevant syntax.
       _canvasBitmapDependenciesInspectable = false;
+      _textContentSelectorsInspectable = false;
       return;
+    }
+    if (dependencies.hasTextDependentSelector ||
+        dependencies.hasUnsupportedSelector ||
+        dependencies.hasUnsupportedRule) {
+      _textContentSelectorsInspectable = false;
     }
     _hasImportantBoxDeclaration |= dependencies.hasImportantBoxDeclaration;
     if (dependencies.hasAttributeSelector || dependencies.hasAttrFunction) {
@@ -1320,9 +1337,11 @@ class _Cascade {
     final sheet = parsed.stylesheet;
     if (sheet == null) {
       _canvasBitmapDependenciesInspectable = false;
+      _textContentSelectorsInspectable = false;
       return;
     }
     if (parsed.messages.isNotEmpty) {
+      _textContentSelectorsInspectable = false;
       _canvasBitmapDependenciesInspectable = false;
     }
     _inspectCanvasBitmapDependencies(sheet);
@@ -4783,10 +4802,19 @@ class _RootSelectorCollector extends css.Visitor {
 /// surface cannot be proven here.
 class _CanvasBitmapDependencyCollector extends css.Visitor {
   bool hasAttributeSelector = false;
+  bool hasTextDependentSelector = false;
   bool hasImportantBoxDeclaration = false;
   bool hasAttrFunction = false;
   bool hasUnsupportedSelector = false;
   bool hasUnsupportedRule = false;
+
+  @override
+  dynamic visitPseudoClassSelector(css.PseudoClassSelector node) {
+    if (const {'empty', 'blank'}.contains(node.name.toLowerCase())) {
+      hasTextDependentSelector = true;
+    }
+    return super.visitPseudoClassSelector(node);
+  }
 
   @override
   dynamic visitAttributeSelector(css.AttributeSelector node) {

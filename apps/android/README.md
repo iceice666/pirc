@@ -298,6 +298,16 @@ against their authored sizes. The fixture server binds only to loopback and no
 remote service is needed. SVG shape-specific hit geometry, pointer capture and
 mid-gesture policy changes remain separate acceptance work.
 
+`integration_test/document_text_style_test.dart` uses the same local server and
+define for 48 frozen Chromium profiles. It compares synchronous cascade values
+after visible/hidden text updates and next-frame native rectangles. Recreate the
+reference with `node apps/android/tool/parity/capture_document_text_style_chromium153.mjs`.
+`document_text_style_test.dart` checks native dependency proofs and packet metadata;
+`document_text_style_runtime_test.mjs` checks the shipped bundle's retained styles
+and invalidation. The pointer integration also checks immediate reads after its
+programmatic click. Geometry still requires native layout, and text-sensitive
+selectors or other DOM/style mutations retain their normal invalidation.
+
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
 [the test browser guide](tool/parity/TEST_BROWSER.md).
