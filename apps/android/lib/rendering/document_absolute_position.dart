@@ -7,6 +7,11 @@ abstract interface class NativeDocumentPositionedHitTarget {
   bool hitTestPositioned(BoxHitTestResult result, {required Offset position});
 }
 
+/// Child paint order for hit-test policy traversal through positioned layers.
+abstract interface class NativeDocumentPositionedChildOrder {
+  Iterable<RenderObject> get positionedPaintChildren;
+}
+
 /// A live containing-block basis, published only during actual native layout.
 abstract interface class NativeDocumentPositioningBasis {
   double? get positioningWidth;
@@ -230,9 +235,14 @@ class NativeAbsolutePositionSpec {
 }
 
 class NativeAbsoluteEntry {
-  const NativeAbsoluteEntry({required this.spec, required this.child});
+  const NativeAbsoluteEntry({
+    required this.spec,
+    required this.child,
+    this.overflowHitTest,
+  });
   final NativeAbsolutePositionSpec spec;
   final Widget child;
+  final bool Function(RenderBox, BoxHitTestResult, Offset)? overflowHitTest;
 }
 
 class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
@@ -247,7 +257,11 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
          children: [
            flow,
            for (final item in positioned)
-             _AbsoluteItem(spec: item.spec, child: item.child),
+             _AbsoluteItem(
+               spec: item.spec,
+               overflowHitTest: item.overflowHitTest,
+               child: item.child,
+             ),
          ],
        );
   final EdgeInsets border;
@@ -270,11 +284,16 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
 }
 
 class _AbsoluteItem extends SingleChildRenderObjectWidget {
-  const _AbsoluteItem({required this.spec, required super.child});
+  const _AbsoluteItem({
+    required this.spec,
+    required this.overflowHitTest,
+    required super.child,
+  });
   final NativeAbsolutePositionSpec spec;
+  final bool Function(RenderBox, BoxHitTestResult, Offset)? overflowHitTest;
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderAbsoluteItem(spec);
+      _RenderAbsoluteItem(spec, overflowHitTest);
   @override
   void updateRenderObject(
     BuildContext context,
@@ -282,14 +301,26 @@ class _AbsoluteItem extends SingleChildRenderObjectWidget {
   ) {
     renderObject
       ..spec = spec
+      ..overflowHitTest = overflowHitTest
       ..markNeedsLayout();
   }
 }
 
 class _RenderAbsoluteItem extends RenderProxyBox
     implements NativeDocumentPositioningBasis {
-  _RenderAbsoluteItem(this.spec);
+  _RenderAbsoluteItem(this.spec, this.overflowHitTest);
   NativeAbsolutePositionSpec spec;
+  bool Function(RenderBox, BoxHitTestResult, Offset)? overflowHitTest;
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    if (super.hitTest(result, position: position)) return true;
+    if (overflowHitTest?.call(this, result, position) == true) {
+      result.add(BoxHitTestEntry(this, position));
+      return true;
+    }
+    return false;
+  }
+
   Size basis = Size.zero;
   void updateBasis(Size next) {
     if (basis == next) return;
@@ -326,7 +357,9 @@ class _RenderAbsoluteLayer extends RenderBox
     with
         ContainerRenderObjectMixin<RenderBox, _AbsoluteParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, _AbsoluteParentData>
-    implements NativeDocumentPositionedHitTarget {
+    implements
+        NativeDocumentPositionedHitTarget,
+        NativeDocumentPositionedChildOrder {
   _RenderAbsoluteLayer(
     this.border,
     this.initialContainingBlock,
@@ -443,6 +476,9 @@ class _RenderAbsoluteLayer extends RenderBox
     });
     return [firstChild!, ...items];
   }
+
+  @override
+  Iterable<RenderObject> get positionedPaintChildren => _paintOrder;
 
   @override
   void paint(PaintingContext context, Offset offset) {

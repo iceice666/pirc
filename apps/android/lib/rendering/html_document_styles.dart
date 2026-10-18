@@ -1,3 +1,4 @@
+import 'document_pointer_style.dart';
 import 'dart:collection';
 
 import 'package:csslib/parser.dart' as css_parser;
@@ -893,6 +894,19 @@ class _Cascade {
             property: property,
           );
         }
+        if (property == 'pointer-events') {
+          var ancestor = parent;
+          var inherited = 'auto';
+          while (ancestor is dom.Element) {
+            final previous = stylesByElement[ancestor]?['pointer-events'];
+            if (previous != null) {
+              inherited = previous;
+              break;
+            }
+            ancestor = ancestor.parent;
+          }
+          value = nativeDocumentPointerValue(value, inherited);
+        }
         if (const {'overflow-x', 'overflow-y'}.contains(property)) {
           final keyword = value?.trim().toLowerCase();
           value = switch (keyword) {
@@ -1368,6 +1382,14 @@ class _Cascade {
         ),
       );
       return;
+    }
+
+    if (property == 'pointer-events' && !_containsVarUsage(expression)) {
+      final keyword = _expressionText(expression).trim().toLowerCase();
+      if (!nativeDocumentPointerKeywords.contains(keyword) &&
+          !_cssWideKeywords.contains(keyword)) {
+        return;
+      }
     }
 
     if (const {'overflow-x', 'overflow-y'}.contains(property) &&

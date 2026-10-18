@@ -1,3 +1,4 @@
+import 'document_pointer_events.dart';
 import 'document_absolute_position.dart';
 import 'dart:ui' as ui;
 
@@ -198,7 +199,14 @@ class RenderNativeHtmlVisibleInlineOverflowRoot extends RenderProxyBox {
     if (currentChild == null) return false;
 
     for (final marker in _overflowMarkers(currentChild)) {
-      if (_hasExplicitClipAncestor(marker, this, position)) continue;
+      if (_hasExplicitClipAncestor(
+        marker,
+        this,
+        position,
+        respectPointerEvents: true,
+      )) {
+        continue;
+      }
       final hit = result.addWithPaintTransform(
         transform: marker.getTransformTo(this),
         position: position,
@@ -236,11 +244,19 @@ Iterable<RenderNativeHtmlInlineOverflowMarker> _overflowMarkers(
 bool _hasExplicitClipAncestor(
   RenderObject marker,
   RenderBox root,
-  Offset position,
-) {
+  Offset position, {
+  bool respectPointerEvents = false,
+}) {
+  var pointerPolicyFound = false;
   final globalPosition = root.localToGlobal(position);
   RenderObject? ancestor = marker.parent;
   while (ancestor != null && ancestor != root) {
+    if (respectPointerEvents &&
+        !pointerPolicyFound &&
+        ancestor is RenderNativeDocumentPointerEvents) {
+      pointerPolicyFound = true;
+      if (!ancestor.enabled) return true;
+    }
     if (nativeDocumentScrollClipsGlobalPoint(ancestor, globalPosition) ||
         ancestor is RenderIgnorePointer && ancestor.ignoring ||
         ancestor is RenderAbsorbPointer && ancestor.absorbing ||
@@ -423,7 +439,16 @@ class NativeHtmlInlineOverflowRichText extends RichText {
 
 /// [RenderParagraph] that relaxes the width only for inline subtrees marked by
 /// [NativeHtmlInlineIntrinsicOverflow].
-class RenderNativeHtmlInlineOverflowParagraph extends RenderParagraph {
+class RenderNativeHtmlInlineOverflowParagraph extends RenderParagraph
+    implements NativeDocumentPointerRestoreTarget {
+  @override
+  bool hitTestRestored(BoxHitTestResult result, {required Offset position}) {
+    if (!nativeDocumentPointerTextAt(this, position)) return false;
+    hitTestChildren(result, position: position);
+    result.add(BoxHitTestEntry(this, position));
+    return true;
+  }
+
   RenderNativeHtmlInlineOverflowParagraph(
     super.text, {
     super.textAlign,

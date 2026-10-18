@@ -11,6 +11,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 - Android Canvas frames repaint independently of surrounding document content.
 - Android interactive documents receive visibility changes and pause pending animation callbacks while hidden.
 - Android improves native absolute positioning and makes empty clickable CSS boxes respond across their visible area.
+- Android interactive HTML respects pointer-events overlays and restored child controls, including dynamic policy changes, and preserves authored button sizes.
 - Gateway and node startup retry brief SQLite WAL-mode lock conflicts when processes open the same database concurrently.
 - PTC scripts that exhaust their JavaScript heap report an out-of-memory error reliably, including when the engine cannot allocate an error object.
 

@@ -2,6 +2,8 @@ import 'dart:collection';
 
 import 'package:html/dom.dart' as dom;
 
+import 'document_pointer_style.dart';
+
 import 'html_background_gradient.dart' show parseNativeCssColor;
 
 const _maxComputedStyleValueCount = 256;
@@ -228,6 +230,14 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
       accepted: const {'visible', 'hidden', 'collapse'},
     );
     if (visibility != null) values['visibility'] = visibility;
+    final pointerEvents = _resolveKeyword(
+      author['pointer-events'],
+      inheritedValue: parentSpec?.values['pointer-events'] ?? 'auto',
+      initialValue: 'auto',
+      inherited: true,
+      accepted: nativeDocumentPointerKeywords,
+    );
+    if (pointerEvents != null) values['pointer-events'] = pointerEvents;
 
     final boxSizing = author.containsKey('box-sizing')
         ? _resolveKeyword(

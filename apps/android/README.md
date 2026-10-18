@@ -282,6 +282,22 @@ scroll clamping after overflow changes. Unknown sizing expressions, changed chil
 require native measurement. Projection is bounded to 1,000,000 CSS pixels per
 axis; the existing bitmap and drawing budgets remain separate.
 
+`document_pointer_events_test.dart` compares 176 frozen Chromium 153 profiles
+for native HTML hit targets and paint, including inherited `none`, explicit child
+restoration, inline text, native buttons/Canvas, clipped/visible overflow and
+dynamic changes. `document_pointer_restore_clip_test.dart` covers rounded clips
+and text-field focus. Recreate the reference with
+`node apps/android/tool/parity/capture_document_pointer_events_chromium153.mjs`.
+
+`integration_test/document_pointer_events_test.dart` uses the same local server
+and `PIRC_CHART_FIXTURE_ORIGIN` define for 88 Android profiles. The frozen browser
+driver runs unchanged in JavaScriptSandbox; native touches, event targets,
+bubbling, computed policy, dynamic updates and programmatic click traces are
+compared after every step; restored native button border boxes are checked
+against their authored sizes. The fixture server binds only to loopback and no
+remote service is needed. SVG shape-specific hit geometry, pointer capture and
+mid-gesture policy changes remain separate acceptance work.
+
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see
 [the test browser guide](tool/parity/TEST_BROWSER.md).

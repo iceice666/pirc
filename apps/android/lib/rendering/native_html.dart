@@ -16,6 +16,8 @@ import 'document_computed_styles.dart';
 import 'document_offsets.dart';
 import 'document_relative_position.dart';
 import 'document_absolute_position.dart';
+import 'document_pointer_events.dart';
+import 'document_pointer_style.dart';
 import 'document_margin_collapse.dart';
 import 'document_element_scroll.dart';
 import 'document_canvas_pointer.dart';
@@ -2530,6 +2532,138 @@ class _NativeHtmlFactory extends WidgetFactory {
   documentPercentTopMargins;
   final int Function() layoutRevision;
   final NativeDocumentElementScrollController Function() elementScroll;
+  Expando<({bool enabled, bool ancestorNone})> _pointerPolicies = Expando();
+  final _pointerRecognizers = <NativeDocumentPointerTapRecognizer>[];
+
+  ({bool enabled, bool ancestorNone}) _pointerPolicy(dom.Element element) {
+    final cached = _pointerPolicies[element];
+    if (cached != null) return cached;
+    final parent = element.parent;
+    final inherited = parent == null
+        ? (enabled: true, ancestorNone: false)
+        : _pointerPolicy(parent);
+    final value = nativeDocumentPointerValue(
+      _flexChildStyles(element)['pointer-events'],
+      inherited.enabled ? 'auto' : 'none',
+    );
+    return _pointerPolicies[element] = (
+      enabled: value != 'none',
+      ancestorNone: !inherited.enabled || inherited.ancestorNone,
+    );
+  }
+
+  Widget _pointerBox(dom.Element element, Widget child) {
+    final policy = _pointerPolicy(element);
+    return policy.enabled && !policy.ancestorNone
+        ? child
+        : NativeDocumentPointerEvents(
+            enabled: policy.enabled,
+            surface: (box) => nativeDocumentBoxSurface(box, owner: element),
+            child: child,
+          );
+  }
+
+  bool _pointerInline(dom.Element element) {
+    if (_absoluteSupported(element)) return false;
+    final display = _flexChildStyles(element)['display'];
+    return display == 'inline' ||
+        (display == null &&
+            const {
+              'a',
+              'span',
+              'abbr',
+              'b',
+              'strong',
+              'i',
+              'em',
+              'small',
+              'code',
+              'label',
+              's',
+              'u',
+              'sup',
+              'sub',
+              'time',
+              'kbd',
+              'samp',
+            }.contains(element.localName));
+  }
+
+  void _registerPointerEvents(BuildTree tree) {
+    if (markdownStyles) return;
+    final element = tree.element, policy = _pointerPolicy(tree.element);
+    if (policy.enabled && !policy.ancestorNone) return;
+    tree.register(
+      BuildOp(
+        alwaysRenderBlock: false,
+        debugLabel: 'native-pointer-events',
+        priority: 9000008900000000,
+        onRenderBlock: (_, placeholder) => placeholder.wrapWith(
+          (_, child) => NativeDocumentPointerEvents(
+            enabled: policy.enabled,
+            surface: (box) => nativeDocumentBoxSurface(box, owner: element),
+            child: child,
+          ),
+        ),
+        onParsed: (parsed) {
+          if (!identical(parsed.element, element) ||
+              parsed.isInline != true ||
+              !_pointerInline(element)) {
+            return parsed;
+          }
+          dom.Element? fallback;
+          if (!policy.enabled) {
+            var ancestor = element.parent;
+            while (ancestor != null) {
+              if (_pointerPolicy(ancestor).enabled) {
+                if (_pointerInline(ancestor)) fallback = ancestor;
+                break;
+              }
+              ancestor = ancestor.parent;
+            }
+          }
+          final ancestorTarget = fallback;
+          final restores =
+              policy.enabled && policy.ancestorNone ||
+              ancestorTarget != null &&
+                  _pointerPolicy(ancestorTarget).ancestorNone;
+          final carrier = NativeDocumentPointerTapRecognizer(
+            restoresHit: restores,
+          );
+          _pointerRecognizers.add(carrier);
+          parsed.inherit<GestureRecognizer>((resolved, _) {
+            final inherited = resolved.get<GestureRecognizer>();
+            carrier.onTap = policy.enabled
+                ? inherited is TapGestureRecognizer
+                      ? inherited.onTap
+                      : null
+                : ancestorTarget == null
+                ? null
+                : _scriptTapEnabled(ancestorTarget)
+                ? () =>
+                      onScriptTap!(ancestorTarget, _linkAction(ancestorTarget))
+                : _linkAction(ancestorTarget);
+            return resolved.copyWith<GestureRecognizer>(value: carrier);
+          }, carrier);
+          return parsed;
+        },
+      ),
+    );
+  }
+
+  void _disposePointerRecognizers() {
+    for (final recognizer in _pointerRecognizers) {
+      recognizer.dispose();
+    }
+    _pointerRecognizers.clear();
+  }
+
+  @override
+  void dispose() {
+    _disposePointerRecognizers();
+    super.dispose();
+  }
+
   final _absoluteChildren =
       <
         dom.Element?,
@@ -2741,6 +2875,27 @@ class _NativeHtmlFactory extends WidgetFactory {
   }
 
   @override
+  Widget? buildGestureDetector(
+    BuildTree tree,
+    Widget child,
+    GestureRecognizer recognizer,
+  ) {
+    if (!markdownStyles &&
+        tree.isInline != true &&
+        recognizer is TapGestureRecognizer) {
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: recognizer.onTap,
+          child: child,
+        ),
+      );
+    }
+    return super.buildGestureDetector(tree, child, recognizer);
+  }
+
+  @override
   GestureRecognizer? buildGestureRecognizer(
     BuildTree tree, {
     GestureTapCallback? onTap,
@@ -2920,10 +3075,13 @@ class _NativeHtmlFactory extends WidgetFactory {
       return InlineCustomWidget(
         alignment: built.alignment,
         baseline: built.baseline,
-        child: _measureLayoutElement(element, built.child),
+        child: _pointerBox(
+          element,
+          _measureLayoutElement(element, built.child),
+        ),
       );
     }
-    return _measureLayoutElement(element, built);
+    return _pointerBox(element, _measureLayoutElement(element, built));
   }
 
   Widget? _customWidgetForElement(dom.Element element) {
@@ -3268,6 +3426,8 @@ class _NativeHtmlFactory extends WidgetFactory {
   Expando<bool> _absoluteSupport = Expando<bool>();
   @override
   void reset(State state) {
+    _disposePointerRecognizers();
+    _pointerPolicies = Expando();
     _absoluteChildren.clear();
     _absolutePlaceholders.clear();
     _absoluteSupport = Expando<bool>();
@@ -3380,6 +3540,7 @@ class _NativeHtmlFactory extends WidgetFactory {
           viewport: imageViewport(),
         )!,
         child: item.child,
+        overflowHitTest: nativeDocumentRestorePointerHit,
       ),
   ];
 
@@ -3494,7 +3655,7 @@ class _NativeHtmlFactory extends WidgetFactory {
       // treating them as CSS lengths would defeat auto-axis aspect ratios.
       for (final property in const ['width', 'height']) {
         final attribute = int.tryParse(tree.element.attributes[property] ?? '');
-        if (tree.element.localName != 'canvas' &&
+        if (tree.element.localName == 'img' &&
             !authored.containsKey(property) &&
             attribute != null &&
             attribute >= 0) {
@@ -3600,7 +3761,11 @@ class _NativeHtmlFactory extends WidgetFactory {
         ),
       );
     }
-    final borderBox = _documentUsesBorderBox(tree.element);
+    final nativeButton =
+        !markdownStyles && buttons.resolveControl(tree.element) != null;
+    final borderBox = nativeButton
+        ? tree.getStyle('box-sizing')?.term != 'content-box'
+        : _documentUsesBorderBox(tree.element);
     final flexItem = _directDocumentFlexItem(tree.element);
     _geometryOwnSizing[tree.element] = true;
     if (padding != EdgeInsets.zero) {
@@ -3687,6 +3852,29 @@ class _NativeHtmlFactory extends WidgetFactory {
       final resolved = parsed.inheritanceResolvers.resolve(context);
       final fontSize = resolved.get<TextStyle>()?.fontSize ?? 16;
       final item = _flexItem(parsed.element, true, fontSize);
+      double buttonEdges(List<String> sides) {
+        return sides.fold<double>(0, (sum, side) {
+          final defaultPadding = const {'left', 'right'}.contains(side)
+              ? '6px'
+              : '1px';
+          final padding =
+              _flexLength(
+                styles['padding-$side'] ?? defaultPadding,
+                fontSize,
+              )?.resolve(null) ??
+              0;
+          final borderStyle = styles['border-$side-style'] ?? 'solid';
+          final border = const {'none', 'hidden'}.contains(borderStyle)
+              ? 0.0
+              : _flexLength(
+                      styles['border-$side-width'] ?? '2px',
+                      fontSize,
+                    )?.resolve(null) ??
+                    0;
+          return sum + padding + border;
+        });
+      }
+
       NativeFlexLength? length(String property) =>
           _flexLength(authored[property], fontSize);
 
@@ -3717,8 +3905,12 @@ class _NativeHtmlFactory extends WidgetFactory {
         maxWidth: length('max-width'),
         minHeight: length('min-height'),
         maxHeight: length('max-height'),
-        horizontalEdges: item.mainEdges,
-        verticalEdges: item.crossEdges,
+        horizontalEdges: nativeButton
+            ? buttonEdges(['left', 'right'])
+            : item.mainEdges,
+        verticalEdges: nativeButton
+            ? buttonEdges(['top', 'bottom'])
+            : item.crossEdges,
         child: child,
       );
     }
@@ -3764,6 +3956,14 @@ class _NativeHtmlFactory extends WidgetFactory {
             blockified ||
             _absoluteSupported(tree.element))) {
       _documentSizing(tree);
+    }
+    if (!markdownStyles &&
+        display == 'inline-block' &&
+        !_absoluteSupported(tree.element) &&
+        buttons.resolveControl(tree.element) != null) {
+      // Core's sizing proxy does not publish authored intrinsic widths to the
+      // button's IntrinsicWidth wrapper. Use the native border-box surface.
+      _documentSizing(tree, inlineReplaced: true);
     }
     if (_absoluteSupported(tree.element)) {
       tree.register(
@@ -4032,7 +4232,13 @@ class _NativeHtmlFactory extends WidgetFactory {
         _ownsFixedFlexMargins(tree.element)) {
       return;
     }
-    if ((nativeBlock || _ownsInlineReplacedSizing(tree)) &&
+    final nativeInlineButton =
+        !markdownStyles &&
+        display == 'inline-block' &&
+        buttons.resolveControl(tree.element) != null;
+    if ((nativeBlock ||
+            _ownsInlineReplacedSizing(tree) ||
+            nativeInlineButton) &&
         const {
           'width',
           'height',
@@ -4349,6 +4555,7 @@ class _NativeHtmlFactory extends WidgetFactory {
 
   @override
   void parse(BuildTree tree) {
+    _registerPointerEvents(tree);
     _registerAbsolutePositioning(tree);
     final absolute = _absoluteSupported(tree.element);
     if (absolute) {
@@ -5364,6 +5571,7 @@ class _NativeHtmlFactory extends WidgetFactory {
         .toList(growable: false);
 
     Widget processRichText(RichText source) {
+      final pointerSpans = nativeDocumentHasPointerSpans(source.text);
       // Flutter wraps an oversized first placeholder onto a second line.
       // A paragraph containing only one atomic replaced element has no text
       // wrap opportunity; retain its intrinsic width without an empty line.
@@ -5379,7 +5587,7 @@ class _NativeHtmlFactory extends WidgetFactory {
         // Keep the established no-math path for ordinary HTML and file
         // controls. In particular, do not put unrelated file placeholders
         // inside the TeX paragraph adapter.
-        return hasInlineOverflow
+        return hasInlineOverflow || pointerSpans
             ? NativeHtmlInlineOverflowRichText.fromRichText(
                 source,
                 overflow: overflow,
@@ -5399,7 +5607,9 @@ class _NativeHtmlFactory extends WidgetFactory {
             ),
       );
       if (adapted is NativeMathParagraphContent) return adapted;
-      if (adapted is! RichText || !hasInlineOverflow) return adapted;
+      if (adapted is! RichText || (!hasInlineOverflow && !pointerSpans)) {
+        return adapted;
+      }
       return NativeHtmlInlineOverflowRichText.fromRichText(
         adapted,
         overflow: overflow,

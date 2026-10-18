@@ -1287,11 +1287,56 @@ clean. Compact evidence is ignored; generated builds, owned emulator images and
 the isolated HEAD comparison copy are removed after the run, preserving the
 published APK.
 
-CSS pointer-events is not yet implemented by the native HTML renderer. An
-overlay requesting pointer-events:none can still intercept input; this remains
-an interaction gap to address before broader overlay acceptance. Vertical writing
-modes and grid-area-based absolute containing boxes also remain unverified.
+The pointer-events overlay gap identified by this positioning gate is addressed
+by the native pointer policy gate below. Vertical writing modes and
+grid-area-based absolute containing boxes remain unverified.
 
 Final Android maximum initial geometry delta is 0.0125 CSS px in the percentage
 case; the remaining selected cases are exact. The controlled relative-scroll
 reference also confirms 220 px scroll height and a reachable link after scroll.
+
+## Native HTML pointer policy
+
+The native renderer now resolves inherited `pointer-events:auto/none`, explicit
+child restoration, `initial`/`inherit`/`unset`, CSS variables and invalid declaration
+fallback. Disabled surfaces remain painted; pointer hits can reach the underlying
+box. Restored native buttons, Canvas and ordinary blocks retain their gesture
+ancestors. The Android gate also exposed fixed button widths being compressed by
+the core intrinsic wrapper: raw inline-block buttons now use native sizing, and
+both widget and Android gates assert the actual authored 90 × 40 border box.
+Restored text uses recognizer metadata and real text fragment bounds,
+without converting text to atomic widget spans or changing line breaking.
+
+Restoration checks actual scrolling and rounded/path clips. Visible relative
+child overflow can still receive input outside an absolute ancestor's border;
+local positioned paint order decides which enabled surface wins. Dynamic style
+changes rebuild the policy, while click events from a restored child still bubble
+through a pointer-inert parent. Pointer policy does not disable programmatic
+`click()` or keyboard focus. A native text-field regression verifies rejected
+touch focus plus preserved programmatic focus and text input.
+
+The frozen Chromium 153 fixture contains 176 cases across phone/tablet, DPR 1/3
+and light/dark. It captures real touch hit targets, cumulative click traces,
+computed pointer policy and solid paint samples with all network requests
+blocked. Widget tests compare actual native hit targets and paint; Android
+integration uses the same unmodified browser driver in JavaScriptSandbox.
+The latter covers none, restored block/inline/button/Canvas, inline suppression,
+clipped and visible overflow, dynamic none/auto/none and programmatic activation.
+The programmatic click dispatches immediately; its final computed-style report
+runs on the next animation frame, identically in both environments. Reading styles
+again synchronously after the click handler mutates report text still produces
+stale/unmeasured diagnostics in native rendering. This existing DOM write/read
+limitation remains open; the pointer policy gate does not claim to repair it.
+
+This gate covers HTML box policy. SVG shape-specific fill/stroke hit geometry,
+complex nested stacking contexts, hover, pointer capture and policy changes
+mid-gesture remain outside this acceptance. Inline computed-style/fragment APIs
+still need their own native measurements. Positioned clipping containers and
+scroll/offset metrics retain the separate limitations listed above; this policy
+change does not certify those layout features.
+
+Verification: 943 affected Flutter layout/control/style tests and all 663
+JavaScript tests pass. All 88 Android profiles pass the frozen driver state after
+every step, including exact restored button bounds; diagnostics stay empty.
+Static analysis is clean. Compact acceptance evidence is ignored; disposable
+builds and emulator images are removed after testing, preserving the published APK.
