@@ -639,7 +639,13 @@
                         grouped
                       />{/each}
                   </RunCard>
-                {:else}<Message message={item.message} />{/if}
+                {:else}<Message
+                    message={item.message}
+                    branchDisabled={!app.canChangeBranch}
+                    onedit={(entryId, content) =>
+                      app.changeBranch('edit_message', entryId, content)}
+                    onswitch={(entryId) => app.changeBranch('switch_branch', entryId)}
+                  />{/if}
               {/each}
               {#each app.pendingInteractions as interaction (interaction.id)}
                 <InteractionCard

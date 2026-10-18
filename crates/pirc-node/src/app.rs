@@ -982,7 +982,12 @@ async fn snapshot(node: Node, request: Request) -> ApiResult<Response> {
             crate::log::error(&format!("reading session {session_id}: {error}"));
             ApiError::internal()
         })?;
-    let history = pirc_agent::session_store::history_with_operations(&branch);
+    let history =
+        pirc_agent::session_store::read_session_history(Path::new(&claimed.private_session_path))
+            .map_err(|error| {
+            crate::log::error(&format!("reading session history {session_id}: {error}"));
+            ApiError::internal()
+        })?;
     // No live runner: the settings the next agent starts with, so the
     // client does not fall back to another model.
     if agent.is_none() {
@@ -1178,6 +1183,13 @@ fn command_payload(value: &Value) -> ApiResult<CommandPayload> {
             message: message()?,
             upload_ids: upload_ids()?,
         },
+        "edit_message" => CommandPayload::EditMessage {
+            entry_id: string(map, "entryId", false, 1, 200)?,
+            message: message()?,
+        },
+        "switch_branch" => CommandPayload::SwitchBranch {
+            entry_id: string(map, "entryId", false, 1, 200)?,
+        },
         "stop" => CommandPayload::Stop,
         "clear_queue" => CommandPayload::ClearQueue,
         "send_now" => CommandPayload::SendNow {
@@ -1223,7 +1235,13 @@ async fn command(node: Node, request: Request) -> ApiResult<Response> {
         return Ok(Response::json(json!({ "command": row, "duplicate": true })));
     }
     node.runners
-        .dispatch(&session.id, &command_id, &payload, &request.user)
+        .dispatch(
+            &session.id,
+            &command_id,
+            &payload,
+            &request.user,
+            (&client_id, generation),
+        )
         .await?;
     let command = node.db.lock().get_command(&command_id)?;
     let status = if command.status == crate::store::CommandStatus::Accepted {
@@ -1601,7 +1619,21 @@ mod tests {
                 message: "m".into()
             }
         );
+        for value in [
+            json!({ "type": "edit_message", "entryId": "e1", "message": "revised" }),
+            json!({ "type": "switch_branch", "entryId": "e2" }),
+        ] {
+            assert_eq!(
+                serde_json::to_value(command_payload(&value).unwrap()).unwrap(),
+                value
+            );
+        }
         for bad in [
+            json!({ "type": "edit_message", "entryId": "e1", "message": "" }),
+            json!({ "type": "edit_message", "message": "revised" }),
+            json!({ "type": "switch_branch", "entryId": "" }),
+            json!({ "type": "switch_branch", "entryId": null }),
+            json!({ "type": "switch_branch", "entryId": "e".repeat(201) }),
             json!({ "type": "prompt", "message": "" }),
             json!({ "type": "prompt", "message": "m", "uploadIds": [""] }),
             json!({ "type": "send_now", "queue": "x", "index": 0, "message": "m" }),

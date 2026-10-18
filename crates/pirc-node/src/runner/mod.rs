@@ -119,6 +119,13 @@ pub enum CommandPayload {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         upload_ids: Option<Vec<String>>,
     },
+    EditMessage {
+        entry_id: String,
+        message: String,
+    },
+    SwitchBranch {
+        entry_id: String,
+    },
     Stop,
     ClearQueue,
     SendNow {
@@ -230,6 +237,9 @@ struct Managed {
 pub struct RunnerManager {
     node: WeakNode,
     state: Mutex<Managed>,
+    /// Serialize all writers, including delivery, across a branch mutation
+    /// and runner restart. Never hold the synchronous manager lock at await.
+    commands: Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>,
 }
 
 impl RunnerManager {
@@ -237,6 +247,7 @@ impl RunnerManager {
         Self {
             node,
             state: Mutex::default(),
+            commands: Mutex::default(),
         }
     }
 
@@ -244,6 +255,20 @@ impl RunnerManager {
         self.state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn command_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        let mut commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(lock) = commands.get(session_id).and_then(std::sync::Weak::upgrade) {
+            return lock;
+        }
+        commands.retain(|_, lock| lock.strong_count() > 0);
+        let lock = Arc::new(tokio::sync::Mutex::new(()));
+        commands.insert(session_id.to_owned(), Arc::downgrade(&lock));
+        lock
     }
 
     fn node(&self) -> ApiResult<Node> {
@@ -356,10 +381,44 @@ impl RunnerManager {
         command_id: &str,
         payload: &CommandPayload,
         user: &str,
+        lease: (&str, i64),
     ) -> ApiResult<Map<String, Value>> {
+        let lock = self.command_lock(session_id);
+        let _command = lock.lock().await;
         let node = self.node()?;
+        node.db
+            .lock()
+            .validate_lease(session_id, lease.0, lease.1)?;
         let runner = self.ensure(session_id).await?;
         node.db.lock().require_session_available(session_id)?;
+        let runner = match payload {
+            CommandPayload::EditMessage { entry_id, message } => self
+                .change_branch(&node, runner, entry_id, Some(message), lease)
+                .await
+                .inspect_err(|error| {
+                    let _ = node.db.lock().update_command(
+                        command_id,
+                        CommandStatus::Rejected,
+                        None,
+                        Some(&error.message),
+                    );
+                })?,
+            CommandPayload::SwitchBranch { entry_id } => self
+                .change_branch(&node, runner, entry_id, None, lease)
+                .await
+                .inspect_err(|error| {
+                    let _ = node.db.lock().update_command(
+                        command_id,
+                        CommandStatus::Rejected,
+                        None,
+                        Some(&error.message),
+                    );
+                })?,
+            _ => runner,
+        };
+        node.db
+            .lock()
+            .validate_lease(session_id, lease.0, lease.1)?;
         let built = build_rpc(&node, &runner, session_id, payload, user);
         let (rpc, run_id) = match built {
             Ok(built) => built,
@@ -454,10 +513,109 @@ impl RunnerManager {
         }
     }
 
+    /// Durable branch changes are performed only after the idle
+    /// process has fully exited. The caller holds the per-session writer lock,
+    /// so neither another command nor a delivery can restart it in between.
+    async fn change_branch(
+        &self,
+        node: &Node,
+        runner: Arc<Runner>,
+        entry_id: &str,
+        message: Option<&str>,
+        lease: (&str, i64),
+    ) -> ApiResult<Arc<Runner>> {
+        let session_id = runner.session_id.clone();
+        let busy = || {
+            ApiError::new(
+                409,
+                "session_busy",
+                "Stop running work and clear queued messages before changing branches",
+            )
+        };
+        let session = {
+            let db = node.db.lock();
+            if db
+                .latest_run(&session_id)?
+                .is_some_and(|run| run.status.is_open())
+            {
+                return Err(busy());
+            }
+            db.get_session(&session_id)?
+        };
+        let mut state = Map::new();
+        state.insert("type".into(), json!("get_state"));
+        let state = runner.request(state).await?;
+        if !truthy(state.get("success")) {
+            return Err(ApiError::runner_unavailable(
+                "Cannot verify that the session is idle",
+            ));
+        }
+        let data = state.get("data").ok_or_else(|| {
+            ApiError::runner_unavailable("Cannot verify that the session is idle")
+        })?;
+        if branch_state_busy(data) {
+            return Err(busy());
+        }
+        let approval_mode = data.get("approvalMode").and_then(Value::as_str);
+        let reduced = runner.state();
+        if reduced.partial_message.is_some()
+            || !reduced.operations.is_empty()
+            || !reduced.queue.steering.is_empty()
+            || !reduced.queue.follow_up.is_empty()
+        {
+            return Err(busy());
+        }
+        let mut panel = Map::new();
+        panel.insert("type".into(), json!("get_panel_state"));
+        let panel = runner.request(panel).await?;
+        if !truthy(panel.get("success")) {
+            return Err(ApiError::runner_unavailable(
+                "Cannot verify background tasks are idle",
+            ));
+        }
+        if branch_background_busy(panel.get("data").unwrap_or(&Value::Null)) {
+            return Err(busy());
+        }
+        runner
+            .stop(Duration::from_millis(node.config.shutdown_grace_ms))
+            .await;
+        if runner.alive() {
+            return Err(ApiError::runner_unavailable(
+                "The chat process has not stopped yet; retry branch change",
+            ));
+        }
+        let dir = std::path::Path::new(&session.private_session_path);
+        {
+            let db = node.db.lock();
+            db.require_session_available(&session_id)?;
+            // The controller may have expired or been replaced during idle RPCs
+            // or process shutdown. Hold the DB fence through the disk mutation so
+            // a competing lease acquisition cannot overtake this final check.
+            db.validate_lease(&session_id, lease.0, lease.1)?;
+            let result = match message {
+                Some(message) => pirc_agent::session_store::edit_session_message(
+                    dir,
+                    entry_id,
+                    message,
+                    approval_mode,
+                )
+                .map(|_| ()),
+                None => {
+                    pirc_agent::session_store::select_session_branch(dir, entry_id, approval_mode)
+                }
+            };
+            result.map_err(ApiError::bad_request)?;
+        }
+        node.branches.forget(dir);
+        self.ensure(&session_id).await
+    }
+
     /// `deliver`: start the agent if needed; `set_role`, `set_model`,
     /// `set_thinking_level` (each must succeed, else 503), then `deliver`.
     /// The message runs next, after any run in progress.
     pub async fn deliver(&self, session_id: &str, delivery: &Delivery) -> ApiResult<()> {
+        let lock = self.command_lock(session_id);
+        let _command = lock.lock().await;
         let node = self.node()?;
         let runner = self.ensure(session_id).await?;
         node.db.lock().require_session_available(session_id)?;
@@ -540,6 +698,8 @@ impl RunnerManager {
     /// "The chat process has not stopped yet; retry deletion" when it lives
     /// on; release its write leases.
     pub async fn stop_session(&self, session_id: &str) -> ApiResult<()> {
+        let lock = self.command_lock(session_id);
+        let _command = lock.lock().await;
         let node = self.node()?;
         // A start already probing the sandbox must finish before its files
         // can be removed.
@@ -576,6 +736,33 @@ impl RunnerManager {
         let runners: Vec<Arc<Runner>> = self.lock().runners.values().cloned().collect();
         futures_util::future::join_all(runners.iter().map(|runner| runner.stop(grace))).await;
     }
+}
+
+fn branch_state_busy(data: &Value) -> bool {
+    // Fail closed if an old agent does not provide the idle-state fields.
+    data.get("isStreaming").and_then(Value::as_bool) != Some(false)
+        || data.get("isCompacting").and_then(Value::as_bool) != Some(false)
+        || data.get("pendingMessageCount").and_then(Value::as_u64) != Some(0)
+        || data
+            .get("completionWaiting")
+            .is_some_and(|value| match value {
+                Value::Null | Value::Bool(false) => false,
+                Value::Array(items) => !items.is_empty(),
+                _ => true,
+            })
+}
+
+fn branch_background_busy(data: &Value) -> bool {
+    data.get("backgroundTasks")
+        .and_then(Value::as_array)
+        .is_some_and(|tasks| {
+            tasks.iter().any(|task| {
+                matches!(
+                    task.get("status").and_then(Value::as_str),
+                    Some("running" | "stopping")
+                )
+            })
+        })
 }
 
 /// `start`: prepare the sandbox and spawn the agent; on failure the
@@ -704,6 +891,17 @@ fn build_rpc(
                 runner.set_run(&run);
                 run_id = Some(run);
             }
+        }
+        CommandPayload::EditMessage { .. } => {
+            rpc.insert("type".into(), json!("resume_branch"));
+            let run = node.db.lock().create_run(session_id)?;
+            node.activity.notify_one();
+            runner.set_run(&run);
+            run_id = Some(run);
+        }
+        CommandPayload::SwitchBranch { .. } => {
+            // The new runner has already reloaded the selected branch.
+            rpc.insert("type".into(), json!("get_state"));
         }
         CommandPayload::SetModel { provider, model_id } => {
             rpc.insert("type".into(), json!("set_model"));
@@ -873,6 +1071,44 @@ mod tests {
         assert_eq!(basename("dir/notes.txt"), "notes.txt");
         assert_eq!(basename("a/b/"), "b");
         assert_eq!(basename("../.."), "..");
+    }
+
+    #[test]
+    fn branch_changes_require_idle_state() {
+        let idle = json!({ "isStreaming": false, "isCompacting": false, "pendingMessageCount": 0, "completionWaiting": [] });
+        assert!(!branch_state_busy(&idle));
+        assert!(branch_state_busy(&Value::Null));
+        for (key, value) in [
+            ("isStreaming", json!(true)),
+            ("isCompacting", json!(true)),
+            ("pendingMessageCount", json!(1)),
+            ("completionWaiting", json!({ "reason": "waiting" })),
+        ] {
+            let mut state = idle.clone();
+            state[key] = value;
+            assert!(branch_state_busy(&state), "{key}");
+        }
+        assert!(!branch_background_busy(
+            &json!({ "backgroundTasks": [{ "status": "completed" }] })
+        ));
+        for status in ["running", "stopping"] {
+            assert!(branch_background_busy(
+                &json!({ "backgroundTasks": [{ "status": status }] })
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn commands_and_deliveries_share_one_session_lock() {
+        let manager = RunnerManager::new(WeakNode::new());
+        let first = manager.command_lock("s");
+        let second = manager.command_lock("s");
+        let other = manager.command_lock("other");
+        let held = first.lock().await;
+        assert!(second.try_lock().is_err());
+        assert!(other.try_lock().is_ok());
+        drop(held);
+        assert!(second.try_lock().is_ok());
     }
 
     #[test]

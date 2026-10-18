@@ -948,10 +948,11 @@ struct CommandBody {
 }
 
 /// Keys a command payload may have (the node's `commandPayload` union).
-const COMMAND_KEYS: [&str; 9] = [
+const COMMAND_KEYS: [&str; 10] = [
     "type",
     "message",
     "uploadIds",
+    "entryId",
     "queue",
     "index",
     "provider",
@@ -1654,6 +1655,18 @@ mod tests {
             payload(json!({ "type": "send_now", "queue": "steering", "index": 2, "message": "x" }))
                 .unwrap(),
             json!({ "type": "send_now", "queue": "steering", "index": 2, "message": "x" })
+        );
+        for command in [
+            json!({"type": "edit_message", "entryId": "1234abcd", "message": "revised"}),
+            json!({"type": "switch_branch", "entryId": "1234abcd"}),
+        ] {
+            assert_eq!(payload(command.clone()).unwrap(), command);
+        }
+        assert!(
+            payload(
+                json!({"type": "switch_branch", "entryId": "x".repeat(COMMAND_STRING_MAX + 1)})
+            )
+            .is_err()
         );
         let long = "a".repeat(COMMAND_MESSAGE_MAX + 1);
         assert!(payload(json!({ "type": "prompt", "message": long })).is_err());

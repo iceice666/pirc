@@ -460,6 +460,9 @@ const CONTEXT_MAX_BYTES: f64 = 512.0 * 1024.0;
 pub(crate) trait Commands: 'static {
     fn refresh_models(&self) -> LocalBoxFuture<'_, ()>;
     fn is_running(&self) -> bool;
+    fn resume_branch(self: &Rc<Self>) -> Result<(), String> {
+        Err("Branch resume is unsupported".into())
+    }
     fn prompt(self: &Rc<Self>, text: String, images: Vec<UserBlock>) -> Result<(), String>;
     fn steer(self: &Rc<Self>, text: String, images: Vec<UserBlock>);
     fn follow_up(self: &Rc<Self>, text: String, images: Vec<UserBlock>);
@@ -499,6 +502,9 @@ pub(crate) trait Commands: 'static {
 }
 
 impl Commands for Agent {
+    fn resume_branch(self: &Rc<Self>) -> Result<(), String> {
+        Agent::resume_branch(self)
+    }
     fn refresh_models(&self) -> LocalBoxFuture<'_, ()> {
         Box::pin(Agent::refresh_models(self))
     }
@@ -612,6 +618,10 @@ pub(crate) async fn dispatch<A: Commands>(
         agent.refresh_models().await;
     }
     match kind {
+        Some("resume_branch") => {
+            agent.resume_branch()?;
+            Ok(None)
+        }
         Some("prompt") => {
             if agent.is_running() {
                 match command.get("streamingBehavior").and_then(Value::as_str) {

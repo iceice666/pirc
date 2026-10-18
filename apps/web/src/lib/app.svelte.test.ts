@@ -119,6 +119,121 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('message branch commands', () => {
+  function setup() {
+    app.connection = 'connected';
+    app.demo = undefined;
+    app.commandBusy = false;
+    app.activeSessionId = demoSnapshot.session.id;
+    app.sessionState = fromSnapshot({
+      ...demoSnapshot,
+      run: null,
+      partialMessage: undefined,
+      runnerStatus: 'ready',
+      control: { ...demoSnapshot.control, heldByCurrentClient: true, generation: 1 },
+      messages: [
+        {
+          id: 'user-1',
+          entryId: 'entry-1',
+          role: 'user',
+          content: 'Original',
+          createdAt: new Date(1).toISOString(),
+          branches: [
+            { entryId: 'entry-1', text: 'Original', selected: true },
+            { entryId: 'entry-2', text: 'Edited', selected: false },
+          ],
+        },
+      ],
+    });
+    const command = vi
+      .spyOn(api, 'command')
+      .mockResolvedValue({ commandId: 'branch', status: 'accepted' });
+    const refresh = vi
+      .spyOn(api, 'snapshot')
+      .mockResolvedValue({ ...demoSnapshot, run: null, messages: app.sessionState!.messages });
+    return { command, refresh };
+  }
+  it('refreshes stable branch metadata after accepted editing and switching', async () => {
+    const { command, refresh } = setup();
+    expect(await app.changeBranch('edit_message', 'entry-1', 'Revised')).toBe(true);
+    expect(command).toHaveBeenLastCalledWith(
+      app.activeSessionId,
+      expect.objectContaining({ kind: 'edit_message', entryId: 'entry-1', content: 'Revised' }),
+    );
+    expect(await app.changeBranch('switch_branch', 'entry-2')).toBe(true);
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+  it('reports rejected edits without discarding the composer draft or refreshing', async () => {
+    const { command, refresh } = setup();
+    app.draft = 'Unrelated unsent draft';
+    command.mockResolvedValue({ commandId: 'branch', status: 'rejected', message: 'Busy' });
+    expect(await app.changeBranch('edit_message', 'entry-1', 'Revised')).toBe(false);
+    expect(app.draft).toBe('Unrelated unsent draft');
+    expect(app.pageError).toContain('Busy');
+    expect(refresh).not.toHaveBeenCalled();
+  });
+  it('keeps mutation controls gated until a post-edit snapshot arrives, including failed refreshes', async () => {
+    const { refresh } = setup();
+    const pending = deferred<SessionSnapshot>();
+    refresh.mockReturnValueOnce(pending.promise);
+    app.hiddenMessages = 120;
+    const edit = app.changeBranch('edit_message', 'entry-1', 'Revised');
+    await Promise.resolve();
+    expect(app.canChangeBranch).toBe(false);
+    pending.resolve({ ...demoSnapshot, run: null, messages: [] });
+    expect(await edit).toBe(true);
+    expect(app.hiddenMessages).toBe(0);
+    expect(app.commandBusy).toBe(false);
+  });
+  it('does not offer to resubmit accepted edits when snapshot refresh fails', async () => {
+    const { refresh } = setup();
+    refresh.mockRejectedValueOnce(new Error('Refresh unavailable'));
+    expect(await app.changeBranch('edit_message', 'entry-1', 'Revised')).toBe(true);
+    expect(app.commandBusy).toBe(false);
+    expect(app.canChangeBranch).toBe(false);
+    expect(app.pageError).toContain('Refresh unavailable');
+    expect(await app.changeBranch('edit_message', 'entry-1', 'Duplicate')).toBe(false);
+    await app.refreshSnapshot();
+    expect(app.canChangeBranch).toBe(true);
+  });
+  it('waits for its own authoritative fetch even if a lifecycle snapshot is pending', async () => {
+    const { refresh } = setup();
+    const before = deferred<SessionSnapshot>();
+    const after = deferred<SessionSnapshot>();
+    refresh.mockReturnValueOnce(before.promise).mockReturnValueOnce(after.promise);
+    const lifecycle = app.refreshSnapshot();
+    const edit = app.changeBranch('edit_message', 'entry-1', 'Revised');
+    await Promise.resolve();
+    before.resolve({ ...demoSnapshot, run: null, messages: [] });
+    await lifecycle;
+    expect(app.canChangeBranch).toBe(false);
+    expect(app.sessionState!.messages).toHaveLength(1);
+    after.resolve({ ...demoSnapshot, run: null, messages: [] });
+    expect(await edit).toBe(true);
+    expect(app.sessionState!.messages).toEqual([]);
+  });
+  it('guards control, busy runs, unknown entries, and duplicate commands', async () => {
+    const { command } = setup();
+    expect(await app.changeBranch('edit_message', 'missing', 'Revised')).toBe(false);
+    app.sessionState = { ...app.sessionState!, run: { id: 'run', status: 'running' } };
+    expect(await app.changeBranch('switch_branch', 'entry-2')).toBe(false);
+    app.sessionState = {
+      ...app.sessionState!,
+      run: null,
+      control: { ...app.sessionState!.control, heldByCurrentClient: false },
+    };
+    expect(await app.changeBranch('edit_message', 'entry-1', 'Revised')).toBe(false);
+    app.sessionState = {
+      ...app.sessionState!,
+      control: { ...app.sessionState!.control, heldByCurrentClient: true },
+    };
+    app.commandBusy = true;
+    expect(await app.changeBranch('switch_branch', 'entry-2')).toBe(false);
+    app.commandBusy = false;
+    expect(command).not.toHaveBeenCalled();
+  });
+});
+
 describe('app asynchronous refreshes', () => {
   it('ignores a session list fetched before creating and opening a session', async () => {
     app.demo = undefined;

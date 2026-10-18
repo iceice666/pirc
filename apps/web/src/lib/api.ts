@@ -371,7 +371,7 @@ export const api = {
     // A selection can be made before this browser acquires control, while a new
     // session has no runner yet. Apply the visible settings before the prompt;
     // putting modelId on a message payload does not change the agent's model.
-    if (input.kind === 'prompt') {
+    if (input.kind === 'prompt' || input.kind === 'edit_message') {
       const applySetting = async (setting: Partial<SessionCommandInput>) => {
         const receipt = await api.command(sessionId, {
           ...input,
@@ -388,22 +388,26 @@ export const api = {
       if (input.thinkingLevel) await applySetting({ kind: 'set_thinking' });
     }
     const payload =
-      input.kind === 'prompt' || input.kind === 'steer' || input.kind === 'follow_up'
-        ? { type: input.kind, message: input.content ?? '', uploadIds: input.attachmentIds }
-        : input.kind === 'send_now'
-          ? {
-              type: input.kind,
-              queue: input.queued?.kind === 'follow_up' ? 'followUp' : 'steering',
-              index: input.queued?.index ?? 0,
-              message: input.content ?? '',
-            }
-          : input.kind === 'set_model'
-            ? { type: input.kind, provider: input.provider ?? '', modelId: input.modelId ?? '' }
-            : input.kind === 'set_thinking'
-              ? { type: input.kind, level: input.thinkingLevel ?? 'off' }
-              : input.kind === 'set_approval_mode'
-                ? { type: input.kind, mode: input.approvalMode ?? 'auto' }
-                : { type: input.kind };
+      input.kind === 'edit_message'
+        ? { type: input.kind, entryId: input.entryId, message: input.content ?? '' }
+        : input.kind === 'switch_branch'
+          ? { type: input.kind, entryId: input.entryId }
+          : input.kind === 'prompt' || input.kind === 'steer' || input.kind === 'follow_up'
+            ? { type: input.kind, message: input.content ?? '', uploadIds: input.attachmentIds }
+            : input.kind === 'send_now'
+              ? {
+                  type: input.kind,
+                  queue: input.queued?.kind === 'follow_up' ? 'followUp' : 'steering',
+                  index: input.queued?.index ?? 0,
+                  message: input.content ?? '',
+                }
+              : input.kind === 'set_model'
+                ? { type: input.kind, provider: input.provider ?? '', modelId: input.modelId ?? '' }
+                : input.kind === 'set_thinking'
+                  ? { type: input.kind, level: input.thinkingLevel ?? 'off' }
+                  : input.kind === 'set_approval_mode'
+                    ? { type: input.kind, mode: input.approvalMode ?? 'auto' }
+                    : { type: input.kind };
     const response = await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/commands`, {
       method: 'POST',
       body: JSON.stringify({

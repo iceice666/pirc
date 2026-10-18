@@ -168,7 +168,16 @@ internal fun piMessage(raw: JsonElement?, id: String = piMessageId(raw), now: ()
     val createdAt = at(raw["timestamp"], now)
     return when (raw["role"].string) {
         "assistant" -> assistantMessage(raw, id, now)
-        "user" -> Message(id = id, role = "user", content = text(raw["content"]), createdAt = createdAt, images = images(raw["content"]))
+        "user" -> Message(
+            id = id, role = "user", content = text(raw["content"]), createdAt = createdAt,
+            images = images(raw["content"]), entryId = raw["entryId"].string,
+            branches = (raw["branches"] as? JsonArray)?.mapNotNull { branch ->
+                val entryId = branch["entryId"].string ?: return@mapNotNull null
+                val branchText = branch["text"].string ?: return@mapNotNull null
+                val selected = (branch["selected"] as? JsonPrimitive)?.booleanOrNull ?: return@mapNotNull null
+                MessageBranch(entryId, branchText, selected)
+            } ?: emptyList(),
+        )
         "toolResult" -> {
             val result = toolResultFields(raw, raw["toolCallId"].text ?: id)
             Message(

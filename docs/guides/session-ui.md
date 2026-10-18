@@ -20,6 +20,14 @@ Blocked writes fail immediately: they are not queued or retried. A sidebar lock 
 
 Web run cards fold two or more consecutive tool-only turns, or one message with at least two tools. Collapsed cards show a generic title, count, duration, file chips and status; failures start expanded. Android also provides run cards and write-block/origin links. Model-written card titles from the mock were not implemented. Rows do not show a two-line current-tool preview because the list API supplies no preview text.
 
+## Editing messages and conversation versions
+
+Web and Android support editing your own messages in both Chat and Work. Once a session is idle and you hold control, choose **Edit message**, change the text, then **Save and regenerate**. Cancel leaves the conversation unchanged; a failed save keeps the draft available for correction or retry. Existing image attachments are retained.
+
+Saving creates a new conversation version at that message and asks the assistant to answer the revised text. It does not overwrite the original message or its replies. Use the previous/next version buttons beside a user message to return to another version and its latest continuation. Switching versions does not make a model request, and the selected conversation survives reconnects and runner restarts.
+
+Only the selected version's conversation context is used for subsequent replies. Editing and switching are unavailable during active runs or pending work, or without session control. **Neither operation undoes tool effects**: files, shell commands, external actions, and shared memory already changed by the agent remain changed. In coding sessions, review the working tree before regenerating a request that may repeat an operation.
+
 ## Activity transport
 
 The redesign introduced node protocol 7 activity messages:

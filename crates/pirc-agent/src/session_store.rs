@@ -5,12 +5,12 @@
 //! Every entry has a stable id and parent id; the active branch is the chain
 //! ending at the most recently appended (or last read) entry.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write as _;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
-use pirc_protocol::Message;
+use pirc_protocol::{Message, UserBlock, UserContent};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 
@@ -414,6 +414,249 @@ pub fn history_with_operations(branch: &[SessionEntry]) -> Vec<Value> {
     out
 }
 
+/// History with stable entry identities and user-message version selectors.
+/// Read all entries because inactive sibling versions are not on the active chain.
+pub fn read_session_history(dir: &Path) -> Result<Vec<Value>, String> {
+    let file = dir.join(SESSION_FILE);
+    if !file.exists() {
+        return Ok(Vec::new());
+    }
+    let entries = parse_entries(&js::read_text(&file)?)?;
+    let store = SessionStore {
+        dir: dir.to_path_buf(),
+        file,
+        by_id: index_of(&entries),
+        leaf_id: entries.last().map(|entry| entry.id.clone()),
+        entries,
+    };
+    let mut siblings: HashMap<Option<String>, Vec<Value>> = HashMap::new();
+    for entry in &store.entries {
+        if let EntryData::Message(Message::User { content, .. }) = &entry.data {
+            siblings.entry(entry.parent_id.clone()).or_default().push(serde_json::json!({"entryId": entry.id, "text": user_text(content), "selected": false}));
+        }
+    }
+    let mut out = Vec::new();
+    for entry in store.branch() {
+        for mut message in history_with_operations(std::slice::from_ref(&entry)) {
+            if let Some(object) = message.as_object_mut() {
+                object.insert("entryId".into(), Value::from(entry.id.as_str()));
+                if matches!(entry.data, EntryData::Message(Message::User { .. })) {
+                    let mut branches = siblings.get(&entry.parent_id).cloned().unwrap_or_default();
+                    for version in &mut branches {
+                        version["selected"] =
+                            Value::Bool(version["entryId"].as_str() == Some(entry.id.as_str()));
+                    }
+                    object.insert("branches".into(), Value::Array(branches));
+                }
+            }
+            out.push(message);
+        }
+    }
+    Ok(out)
+}
+
+fn user_text(content: &UserContent) -> String {
+    match content {
+        UserContent::Text(text) => text.clone(),
+        UserContent::Blocks(blocks) => blocks
+            .iter()
+            .filter_map(|block| match block {
+                UserBlock::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    }
+}
+
+/// Append a replacement user message without deleting any old continuation.
+/// Call only after the session's runner has been stopped and evicted.
+pub fn edit_session_message(
+    dir: &Path,
+    entry_id: &str,
+    text: &str,
+    effective_approval_mode: Option<&str>,
+) -> Result<String, String> {
+    if text.trim().is_empty() {
+        return Err("Message must not be empty".into());
+    }
+    let mut store = SessionStore::open(dir.to_path_buf(), "")?;
+    let entry = store
+        .branch()
+        .into_iter()
+        .find(|entry| entry.id == entry_id)
+        .ok_or("Message is not on the active branch")?;
+    let EntryData::Message(Message::User { content, .. }) = entry.data else {
+        return Err("Only user messages can be edited".into());
+    };
+    let content = match content {
+        UserContent::Text(_) => UserContent::Text(text.to_owned()),
+        UserContent::Blocks(blocks) => {
+            let mut replacement = vec![UserBlock::Text {
+                text: text.to_owned(),
+                text_signature: None,
+            }];
+            replacement.extend(
+                blocks
+                    .into_iter()
+                    .filter(|block| matches!(block, UserBlock::Image { .. })),
+            );
+            UserContent::Blocks(replacement)
+        }
+    };
+    let settings = branch_settings(&store.branch(), effective_approval_mode)?;
+    atomic_branch_mutation(&mut store, |store| {
+        store.leaf_id = entry.parent_id;
+        let id = store
+            .append(EntryData::Message(Message::User {
+                content,
+                timestamp: crate::now_ms(),
+            }))?
+            .id;
+        for data in settings {
+            store.append(data)?;
+        }
+        Ok(id)
+    })
+}
+
+/// Select a user variant and its most recently appended continuation.
+/// The custom entry durably selects that chain while remaining invisible to models.
+pub fn select_session_branch(
+    dir: &Path,
+    entry_id: &str,
+    effective_approval_mode: Option<&str>,
+) -> Result<(), String> {
+    let mut store = SessionStore::open(dir.to_path_buf(), "")?;
+    let target = store.get(entry_id).ok_or("Unknown message")?;
+    if !matches!(target.data, EntryData::Message(Message::User { .. })) {
+        return Err("Only user message versions can be selected".into());
+    }
+    // Only a visible version selector may change the conversation.
+    if !store.branch().iter().any(|entry| {
+        entry.parent_id == target.parent_id
+            && matches!(entry.data, EntryData::Message(Message::User { .. }))
+    }) {
+        return Err("Message version is not on the active branch".into());
+    }
+    let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
+    for entry in &store.entries {
+        if let Some(parent) = entry.parent_id.as_deref() {
+            children.entry(parent).or_default().push(&entry.id);
+        }
+    }
+    let mut descendants = HashSet::new();
+    let mut pending = vec![entry_id];
+    while let Some(id) = pending.pop() {
+        if descendants.insert(id)
+            && let Some(next) = children.get(id)
+        {
+            pending.extend(next.iter().copied());
+        }
+    }
+    let leaf = store
+        .entries
+        .iter()
+        .rev()
+        .find(|entry| descendants.contains(entry.id.as_str()))
+        .map(|entry| entry.id.clone())
+        .ok_or("Unknown branch")?;
+    let settings = branch_settings(&store.branch(), effective_approval_mode)?;
+    atomic_branch_mutation(&mut store, |store| {
+        store.leaf_id = Some(leaf);
+        store.append(EntryData::Custom {
+            custom_type: "pirc.branch_selection".into(),
+            data: Value::Null,
+        })?;
+        for data in settings {
+            store.append(data)?;
+        }
+        Ok(())
+    })
+}
+
+fn branch_settings(
+    branch: &[SessionEntry],
+    effective_approval_mode: Option<&str>,
+) -> Result<Vec<EntryData>, String> {
+    if effective_approval_mode
+        .is_some_and(|mode| !matches!(mode, "read-only" | "auto" | "full-access"))
+    {
+        return Err("Unknown approval mode".into());
+    }
+    let mut settings = Vec::new();
+    for kind in ["model_change", "thinking_level_change"] {
+        if let Some(entry) = branch
+            .iter()
+            .rev()
+            .find(|entry| entry.data.type_name() == kind)
+        {
+            settings.push(entry.data.clone());
+        }
+    }
+    if let Some(role) = branch.iter().rev().find(|entry| matches!(&entry.data, EntryData::Custom { custom_type, .. } if custom_type == "agent.role")) {
+        settings.push(role.data.clone());
+    }
+    // No explicit current mode must never restore a historical elevated mode.
+    settings.push(
+        effective_approval_mode
+            .map(|mode| EntryData::Custom {
+                custom_type: crate::auto_mode::APPROVAL_MODE_ENTRY.into(),
+                data: serde_json::json!({"mode": mode}),
+            })
+            .or_else(|| {
+                branch.iter().rev().find_map(|entry| match &entry.data {
+                    EntryData::Custom { custom_type, .. }
+                        if custom_type == crate::auto_mode::APPROVAL_MODE_ENTRY =>
+                    {
+                        Some(entry.data.clone())
+                    }
+                    _ => None,
+                })
+            })
+            .unwrap_or_else(|| EntryData::Custom {
+                custom_type: crate::auto_mode::APPROVAL_MODE_ENTRY.into(),
+                data: serde_json::json!({"mode": "read-only"}),
+            }),
+    );
+    Ok(settings)
+}
+
+/// Preserve the original bytes (including unknown/malformed lines), and publish
+/// all branch entries with one rename. Requires the external session writer lock.
+fn atomic_branch_mutation<T>(
+    store: &mut SessionStore,
+    mutate: impl FnOnce(&mut SessionStore) -> Result<T, String>,
+) -> Result<T, String> {
+    let original = store.file.clone();
+    let temporary = store
+        .dir
+        .join(format!(".session-{}.tmp", crate::random_uuid()));
+    let result = (|| {
+        let bytes = std::fs::read(&original).map_err(|error| error.to_string())?;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)
+            .map_err(|error| error.to_string())?;
+        file.write_all(&bytes).map_err(|error| error.to_string())?;
+        if !bytes.is_empty() && !bytes.ends_with(b"\n") {
+            file.write_all(b"\n").map_err(|error| error.to_string())?;
+        }
+        store.file = temporary.clone();
+        let value = mutate(store)?;
+        file.sync_all().map_err(|error| error.to_string())?;
+        std::fs::rename(&temporary, &original).map_err(|error| error.to_string())?;
+        Ok(value)
+    })();
+    store.file = original;
+    if result.is_err() {
+        let _ = std::fs::remove_file(temporary);
+    }
+    result
+}
+
 /// `contextEntriesOf(branch)`: what the model sees, the latest compaction
 /// summary, then messages from its `firstKeptEntryId` on, with entry ids.
 pub fn context_entries_of(branch: &[SessionEntry]) -> Vec<(String, Message)> {
@@ -591,6 +834,110 @@ mod tests {
             content: pirc_protocol::UserContent::Text(text.to_owned()),
             timestamp: 1,
         })
+    }
+
+    #[test]
+    fn edits_preserve_images_versions_and_selected_continuations() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path();
+        let mut store = SessionStore::open(dir.to_path_buf(), "/work").unwrap();
+        let original = store
+            .append(EntryData::Message(Message::User {
+                content: UserContent::Blocks(vec![
+                    UserBlock::Text {
+                        text: "old".into(),
+                        text_signature: None,
+                    },
+                    UserBlock::Image {
+                        data: "aGVsbG8=".into(),
+                        mime_type: "image/png".into(),
+                    },
+                ]),
+                timestamp: 1,
+            }))
+            .unwrap();
+        store
+            .append(EntryData::Custom {
+                custom_type: crate::auto_mode::APPROVAL_MODE_ENTRY.into(),
+                data: json!({"mode":"read-only"}),
+            })
+            .unwrap();
+        let old_continuation = store.append(user("old continuation")).unwrap();
+        drop(store);
+        let edited = edit_session_message(dir, &original.id, "new", None).unwrap();
+        let mut store = SessionStore::open(dir.to_path_buf(), "/work").unwrap();
+        assert!(
+            matches!(store.get(&edited).unwrap().message(), Some(Message::User { content: UserContent::Blocks(blocks), .. }) if blocks.len() == 2 && matches!(&blocks[1], UserBlock::Image { .. }))
+        );
+        let new_continuation = store.append(user("new continuation")).unwrap();
+        drop(store);
+        let history = read_session_history(dir).unwrap();
+        assert_eq!(history[0]["branches"].as_array().unwrap().len(), 2);
+        assert_eq!(history[0]["entryId"], edited);
+        select_session_branch(dir, &original.id, None).unwrap();
+        assert!(
+            read_session_branch(dir)
+                .unwrap()
+                .iter()
+                .any(|entry| entry.id == old_continuation.id)
+        );
+        assert!(edit_session_message(dir, &edited, "hidden", None).is_err());
+        select_session_branch(dir, &edited, None).unwrap();
+        let branch = read_session_branch(dir).unwrap();
+        assert!(branch.iter().any(|entry| entry.id == new_continuation.id));
+        assert_eq!(
+            crate::auto_mode::recorded_approval_mode(&branch)
+                .unwrap()
+                .as_str(),
+            "read-only"
+        );
+        assert!(edit_session_message(dir, &edited, "   ", None).is_err());
+        assert!(select_session_branch(dir, "missing", None).is_err());
+    }
+
+    #[test]
+    fn atomic_mutation_failure_preserves_original_bytes() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = SessionStore::open(root.path().to_path_buf(), "/work").unwrap();
+        store.append(user("original")).unwrap();
+        let original = std::fs::read(&store.file).unwrap();
+        let result: Result<(), String> = atomic_branch_mutation(&mut store, |store| {
+            store.append(user("never published"))?;
+            Err("injected failure".into())
+        });
+        assert!(result.is_err());
+        assert_eq!(std::fs::read(&store.file).unwrap(), original);
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn preserves_effective_approval_and_current_role() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = SessionStore::open(root.path().to_path_buf(), "/work").unwrap();
+        let original = store.append(user("original")).unwrap();
+        store
+            .append(EntryData::Custom {
+                custom_type: "agent.role".into(),
+                data: json!({"name":"reviewer","tools":["read"]}),
+            })
+            .unwrap();
+        drop(store);
+        edit_session_message(root.path(), &original.id, "edited", Some("auto")).unwrap();
+        let branch = read_session_branch(root.path()).unwrap();
+        assert_eq!(
+            crate::auto_mode::recorded_approval_mode(&branch)
+                .unwrap()
+                .as_str(),
+            "auto"
+        );
+        assert!(branch.iter().any(|entry| matches!(&entry.data, EntryData::Custom { custom_type, data } if custom_type == "agent.role" && data["name"] == "reviewer")));
+    }
+
+    #[test]
+    fn history_read_does_not_create_session() {
+        let root = tempfile::tempdir().unwrap();
+        assert!(read_session_history(root.path()).unwrap().is_empty());
+        assert!(!root.path().join(SESSION_FILE).exists());
     }
 
     fn lines(store: &SessionStore) -> Vec<Value> {

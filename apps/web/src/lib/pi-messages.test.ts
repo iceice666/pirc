@@ -11,6 +11,20 @@ import { fromSnapshot, reduceEvent } from './state';
 import type { ConversationMessage, SessionSnapshot } from './types';
 
 describe('Pi history conversion', () => {
+  it('preserves persisted entry IDs and branch versions separately from display IDs', () => {
+    const branches = [
+      { entryId: 'original', text: 'Original', selected: false },
+      { entryId: 'edited', text: 'Edited', selected: true },
+    ];
+    expect(
+      piHistory([
+        { role: 'user', content: 'Edited', timestamp: 1, entryId: 'edited', branches },
+      ])[0],
+    ).toMatchObject({ entryId: 'edited', content: 'Edited', branches });
+    expect(
+      piHistory([{ role: 'user', content: 'Live', timestamp: 2 }])[0]?.entryId,
+    ).toBeUndefined();
+  });
   const history = [
     { role: 'user', content: 'List files', timestamp: 1 },
     {

@@ -126,6 +126,17 @@ export function piMessage(
       return {
         id,
         role: 'user',
+        ...(typeof raw.entryId === 'string' ? { entryId: raw.entryId } : {}),
+        ...(Array.isArray(raw.branches)
+          ? {
+              branches: raw.branches.filter(
+                (branch: Raw) =>
+                  typeof branch?.entryId === 'string' &&
+                  typeof branch.text === 'string' &&
+                  typeof branch.selected === 'boolean',
+              ),
+            }
+          : {}),
         content: text(raw.content),
         createdAt,
         ...(found.length ? { images: found } : {}),

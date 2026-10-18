@@ -210,6 +210,17 @@ class AppState {
   );
   /** Commands need a live connection and the control lease. */
   canCommand = $derived(this.hasControl && this.connection === 'connected');
+  #historyRevision = 0;
+  #historyNeedsRefresh = $state<string>();
+  canChangeBranch = $derived(
+    this.#historyNeedsRefresh !== this.activeSessionId &&
+      this.canCommand &&
+      !this.demo &&
+      !this.commandBusy &&
+      !this.#sessionState?.partialMessage &&
+      !['queued', 'running', 'waiting_input', 'stopping'].includes(this.runStatus ?? '') &&
+      this.#sessionState?.runnerStatus !== 'starting',
+  );
 
   /** Everything waiting for you: questions, missed runs, memory proposals. */
   inbox = $derived<InboxItem[]>([
@@ -600,6 +611,7 @@ class AppState {
       // Switched to another session while this snapshot was loading.
       if (seq !== this.#openSeq) return;
       this.sessionState = fromSnapshot(snapshot);
+      if (this.#historyNeedsRefresh === id) this.#historyNeedsRefresh = undefined;
       this.hiddenMessages = Math.max(0, this.sessionState.messages.length - MESSAGE_PAGE);
       if (!demo) {
         void this.loadModels(id);
@@ -686,11 +698,22 @@ class AppState {
       return;
     }
     this.#snapshotLoading.add(seq);
+    const historyRevision = this.#historyRevision;
     try {
       const snapshot = await api.snapshot(id);
-      if (seq !== this.#openSeq || id !== this.activeSessionId || this.#snapshotAgain.has(seq))
+      if (
+        seq !== this.#openSeq ||
+        id !== this.activeSessionId ||
+        this.#snapshotAgain.has(seq) ||
+        historyRevision !== this.#historyRevision
+      )
         return;
       this.sessionState = fromSnapshot(snapshot);
+      if (this.#historyNeedsRefresh === id) this.#historyNeedsRefresh = undefined;
+      this.hiddenMessages = Math.min(
+        this.hiddenMessages,
+        Math.max(0, snapshot.messages.length - 1),
+      );
       const { id: snapshotSessionId, name } = this.sessionState.session;
       if (this.sessions.some((item) => item.id === snapshotSessionId && item.name !== name)) {
         this.sessions = this.sessions.map((item) =>
@@ -860,6 +883,71 @@ class AppState {
       }
     } catch (error) {
       this.pageError = errorMessage(error, 'The command was not accepted.');
+    } finally {
+      this.commandBusy = false;
+    }
+  }
+
+  /** Change only the conversation tree; tool effects in the workspace are not rolled back. */
+  async changeBranch(kind: 'edit_message' | 'switch_branch', entryId: string, content?: string) {
+    const state = this.sessionState;
+    const sessionId = this.activeSessionId;
+    if (!this.canChangeBranch || !state?.control.generation || !sessionId) return false;
+    const selection = this.#openSeq;
+    const message = state.messages.find((item) => item.role === 'user' && item.entryId === entryId);
+    const isVariant = state.messages.some((item) =>
+      item.branches?.some((branch) => branch.entryId === entryId),
+    );
+    if (kind === 'edit_message' ? !message || !content?.trim() : !isVariant) return false;
+    this.commandBusy = true;
+    this.pageError = '';
+    try {
+      const receipt = await api.command(sessionId, {
+        commandId: uuid(),
+        kind,
+        entryId,
+        content,
+        controlGeneration: state.control.generation,
+        ...(kind === 'edit_message'
+          ? {
+              modelId: this.selectedModelOption?.id,
+              provider: this.selectedModelOption?.provider,
+              thinkingLevel: this.thinking,
+            }
+          : {}),
+      });
+      if (receipt.status !== 'accepted')
+        throw new Error(receipt.message ?? 'The branch change was not accepted.');
+      // A coalesced lifecycle refresh may still be reading the old tree. Invalidate
+      // it and fetch our own authoritative snapshot before enabling another edit.
+      if (this.activeSessionId !== sessionId || selection !== this.#openSeq) return true;
+      const revision = ++this.#historyRevision;
+      this.#historyNeedsRefresh = sessionId;
+      try {
+        const snapshot = await api.snapshot(sessionId);
+        if (
+          this.activeSessionId === sessionId &&
+          selection === this.#openSeq &&
+          revision === this.#historyRevision
+        ) {
+          this.sessionState = fromSnapshot(snapshot);
+          this.hiddenMessages = Math.max(0, snapshot.messages.length - MESSAGE_PAGE);
+          this.#historyNeedsRefresh = undefined;
+        }
+      } catch (error) {
+        if (this.activeSessionId === sessionId)
+          this.pageError = errorMessage(
+            error,
+            'Message updated, but refreshing failed. Reload the session before editing again.',
+          );
+      }
+      // The mutation was accepted even when refreshing failed. Never offer to
+      // resubmit an already committed edit; keep history controls gated instead.
+      return true;
+    } catch (error) {
+      if (this.activeSessionId === sessionId)
+        this.pageError = errorMessage(error, 'The branch change was not accepted.');
+      return false;
     } finally {
       this.commandBusy = false;
     }

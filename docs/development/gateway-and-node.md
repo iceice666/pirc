@@ -129,6 +129,8 @@ Mutations that affect the agent require `{clientId,generation}` from a live cont
 
 ### Streaming semantics
 
+Session command payloads also accept `edit_message` with `{entryId, message}` and `switch_branch` with `{entryId}`. Both require the current control lease and an idle session. Editing creates a new user-message version, retaining image blocks, then regenerates the response; switching selects that user version's latest continuation without inference. Snapshot history includes stable `entryId` values and user-message `branches: [{entryId, text, selected}]`. Clients refresh the snapshot after a branch command or completed turn to obtain persisted entry identities. The node stops the idle runner before selecting the durable branch and initializes a fresh runner so cached feature state cannot leak from the previous conversation. Tool side effects are not rolled back.
+
 Gateway cursors are `<runnerEpoch>:<sequence>`. A cursor outside the bounded in-memory buffer or from another epoch yields `reset`; clients then fetch a snapshot. `message_update` deltas are assembled for the live partial message, while `message_end.message` replaces the partial as authoritative history. A run finishes only on `agent_settled`, not `agent_end`.
 
 ### Crash semantics

@@ -1,7 +1,9 @@
 <script lang="ts">
   import {
     Brain,
+    ChevronLeft,
     ChevronRight,
+    Pencil,
     CircleAlert,
     Copy,
     GitBranch,
@@ -21,9 +23,37 @@
     message: ConversationMessage;
     /** Already inside a run card: list the tools without another card around them. */
     grouped?: boolean;
+    branchDisabled?: boolean;
+    onedit?: (entryId: string, content: string) => Promise<boolean>;
+    onswitch?: (entryId: string) => Promise<boolean>;
   }
 
-  let { message, grouped = false }: Props = $props();
+  let { message, grouped = false, branchDisabled = true, onedit, onswitch }: Props = $props();
+  let editing = $state(false);
+  let editDraft = $state('');
+  let editBusy = $state(false);
+  let editError = $state('');
+  let version = $derived(message.branches?.findIndex((branch) => branch.selected) ?? -1);
+
+  function startEditing() {
+    editDraft = message.content;
+    editError = '';
+    editing = true;
+  }
+
+  async function saveEdit() {
+    if (!message.entryId || !onedit || branchDisabled || editBusy || !editDraft.trim()) return;
+    editBusy = true;
+    editError = '';
+    try {
+      if (await onedit(message.entryId, editDraft)) editing = false;
+      else editError = 'Could not save this edit. Your draft is still here; try again.';
+    } catch {
+      editError = 'Could not save this edit. Your draft is still here; try again.';
+    } finally {
+      editBusy = false;
+    }
+  }
 
   let thinkingOpen = $state(false);
   let systemOpen = $state(false);
@@ -202,7 +232,44 @@
           {/if}
         </div>
       {/if}
-      {#if hasBody}
+      {#if editing}
+        <form
+          class="message-editor"
+          onsubmit={(event) => {
+            event.preventDefault();
+            void saveEdit();
+          }}
+        >
+          <label>
+            <span>Edit message</span>
+            <textarea
+              aria-label="Edit message"
+              bind:value={editDraft}
+              disabled={editBusy}
+              rows="5"
+              onkeydown={(event) => {
+                if (event.key === 'Escape' && !editBusy) editing = false;
+              }}
+            ></textarea>
+          </label>
+          <p>
+            Saving creates a new branch and regenerates the response. Existing versions remain
+            available. Files and tool actions are not rolled back.
+          </p>
+          {#if message.images?.length || message.attachments?.length}<p>
+              Attachments will be kept.
+            </p>{/if}
+          {#if editError}<p role="alert">{editError}</p>{/if}
+          <div class="edit-actions">
+            <button type="button" disabled={editBusy} onclick={() => (editing = false)}
+              >Cancel</button
+            >
+            <button type="submit" disabled={branchDisabled || editBusy || !editDraft.trim()}
+              >{editBusy ? 'Saving…' : 'Save & regenerate'}</button
+            >
+          </div>
+        </form>
+      {:else if hasBody}
         <div class="message-copy">
           {#if message.role === 'user'}
             <span class="plain">{message.content}</span>
@@ -244,12 +311,41 @@
       {#if message.tools?.length}
         {@render toolStack(message.tools)}
       {/if}
-      {#if !message.isPartial && message.content}
+      {#if !message.isPartial && (message.content || message.role === 'user')}
         <div class="message-actions">
           <time datetime={message.createdAt}>{time(message.createdAt)}</time>
           {#if message.role === 'assistant' && message.model}<span class="message-model"
               >{message.model}</span
             >{/if}
+          {#if message.role === 'user' && message.entryId && onedit && !editing}
+            <button
+              type="button"
+              class="icon-action touch-target"
+              aria-label="Edit message"
+              title="Edit message"
+              disabled={branchDisabled}
+              onclick={startEditing}><Pencil size={14} /></button
+            >
+          {/if}
+          {#if message.role === 'user' && message.branches && message.branches.length > 1 && version >= 0 && onswitch}
+            <button
+              type="button"
+              class="icon-action touch-target"
+              aria-label="Previous version"
+              disabled={branchDisabled || editing || version === 0}
+              onclick={() => onswitch?.(message.branches![version - 1]!.entryId)}
+              ><ChevronLeft size={14} /></button
+            >
+            <span aria-label="Message version">{version + 1} / {message.branches.length}</span>
+            <button
+              type="button"
+              class="icon-action touch-target"
+              aria-label="Next version"
+              disabled={branchDisabled || editing || version === message.branches.length - 1}
+              onclick={() => onswitch?.(message.branches![version + 1]!.entryId)}
+              ><ChevronRight size={14} /></button
+            >
+          {/if}
           {#if message.content}
             <button
               type="button"
@@ -298,6 +394,47 @@
     align-items: flex-end;
     max-width: min(82%, 560px);
     margin-left: auto;
+  }
+  .message-editor {
+    width: min(560px, 100%);
+    padding: 12px;
+    border: 1px solid var(--line-dark);
+    border-radius: var(--radius-md);
+    background: var(--bubble);
+  }
+  .message-editor label,
+  .message-editor textarea {
+    display: block;
+    width: 100%;
+  }
+  .message-editor textarea {
+    box-sizing: border-box;
+    min-height: 100px;
+    margin-top: 8px;
+    padding: 8px;
+    resize: vertical;
+    font: inherit;
+    color: var(--ink);
+    background: var(--bg-subtle);
+    border: 1px solid var(--line-dark);
+    border-radius: var(--radius-sm);
+  }
+  .message-editor p {
+    color: var(--text-2);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .edit-actions button {
+    padding: 8px 12px;
+    border: 1px solid var(--line-dark);
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    background: var(--bg-subtle);
   }
   .message-copy {
     color: var(--ink);
