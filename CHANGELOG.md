@@ -37,6 +37,8 @@ The first published release with the 0.9.0 changes below (0.9.0 was tagged but i
 
 ### Fixed
 
+- Android interactive documents report updated scroll positions immediately after scripted changes, including repeated increments and range clamping.
+
 - Android preserves the order of consecutive scroll commands and correctly stops smooth scrolling with same-position or zero-distance calls.
 
 - Android preserves interactive document scroll positions when views are rebuilt and keeps positions isolated between pages.

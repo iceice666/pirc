@@ -390,21 +390,31 @@ past the original anchor; the native workspace gate also checks that a new
 fragment selected while unmounted still applies on reveal.
 Interrupted smooth scrolling and OS process-death restoration are separate gates.
 
-`document_scroll_commands_test.dart` compares immediate **native controller**
-positions and settled positions with 160 Chromium 153 command profiles. It also
-checks cancellation after animation has already started. Commands retain their
-root/element order; relative movement uses current pixels, and zero/omitted
-coordinates can stop an animation. The Node contract checks the exact shared
-HTML/driver plus the shipped JS command queue, including empty/null options.
-Recreate the reference with
-`node apps/android/tool/parity/capture_document_scroll_commands_chromium153.mjs`.
+`document_scroll_commands_test.dart` compares immediate native controller
+positions and settled positions with 160 Chromium 153 command profiles, including
+cancellation after animation has started. The JS bridge now reports immediate
+clamped positions from measured native ranges and unacknowledged commands. It
+keeps later commands across delayed measurements until their exact prefix is
+acknowledged. Standards root reads/writes use the viewport even without a separate
+html RenderBox. Root horizontal scrolling remains outside this gate.
+
+The additional 96-profile feedback corpus covers repeated setter increments,
+clamp-then-subtract, mixed methods, smooth cancellation, Promise jobs and RAF.
+Recreate the independent references with:
+
+```sh
+node apps/android/tool/parity/capture_document_scroll_commands_chromium153.mjs
+node apps/android/tool/parity/capture_document_scroll_feedback_chromium153.mjs
+```
+
 The Android `integration_test/document_scroll_commands_test.dart` uses the same
-loopback fixture server/define as above and verifies settled readings after a real
-Run click. It separately records immediate JS readings: same-callback getters
-still return the prior accepted frame, so synchronous read/modify/write scrolling
-remains a difference. Do not count these immediate mismatches as passed parity.
-Smooth animation follows Flutter's timing; CSS defaults and event-order variants
-remain in the mobile plan.
+loopback fixture server/define as above and checks all 256 profiles: immediate and
+settled readings, root aliases and intermediate traces. Node tests check exact
+shared HTML/drivers, the shipped bundle, delayed acknowledgements, bounded
+queues, measured ranges and lifecycle cancellation. Position feedback does not
+supply synchronous element rectangles after scrolling; those reads require a new
+native measurement. CSS defaults, timing/event variants, global getter errors
+and remaining DOM/layout APIs stay in the mobile plan.
 
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see

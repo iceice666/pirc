@@ -10,11 +10,10 @@ are available from Git through Historical records, not repeated here.
 
 ## Remaining work, in priority order
 
-- [ ] **Dynamic content compatibility:** add synchronous scroll-position feedback
-      after queued commands (repeated `scrollTop += delta` currently reads the
-      prior frame), wider synchronous DOM write/read layout, Canvas font/ink
-      coverage, inline-fragment measurements and common-library coverage. Broader image/framework flows
-      remain unverified; preserve explicit unsupported errors.
+- [ ] **Dynamic content compatibility:** wider synchronous DOM write/read layout,
+      standard root scrolling APIs (`document.scrollingElement`), Canvas font/ink
+      coverage, inline-fragment measurements and common-library coverage. Broader
+      image/framework flows remain unverified; preserve explicit unsupported errors.
 - [ ] **Physical phone/tablet acceptance:** use a real account for pairing,
       streaming/cancel/reconnect, panels, management consent and simultaneous
       web/app confirmations. Check keyboard (including CJK IME), safe areas,
@@ -138,18 +137,30 @@ instant-then-smooth retains the instant starting position. Same-position,
 zero-delta, omitted-axis and empty-option commands cancel prior animations.
 Native-frame scroll events still coalesce. The Chromium 153 command corpus has
 160 phone/tablet, DPR and theme profiles; widget tests compare immediate native
-positions and settled positions, while Android checks settled JS readings through
-the actual sandbox and native Run button.
+positions and settled positions. Android checks immediate and settled JS readings
+through the actual sandbox and native Run button.
 
-**Remaining synchronous-read difference:** JS scroll-position getters still read
-the last accepted native frame within the callback that queued a command. Two
-`element.scrollTop += 20` statements can queue two targets of 20 instead of
-reaching 40. Correct native command ordering does not resolve that feedback gap or
-general synchronous geometry after writes. The Android command gate records
-immediate JS mismatches separately (80 of 160 profiles); those results are not
-parity passes. CSS `scroll-behavior`
-default selection, exact animation timing, scrollend/Promise behavior and mixed
-root/element event ordering are not certified by this gate.
+**Scroll-position feedback:** root/element getters replay only unacknowledged
+commands over actual native positions and programmatic ranges. Consecutive
+`element.scrollTop += 20` calls now reach 40. Each accepted native packet names
+its processed command prefix, so an older frame cannot erase newer commands or
+replay an already consumed relative command. Native ranges include disabled axes
+and clamping; smooth destinations are not treated as current positions. The
+standards root uses viewport measurements even without a separate html box.
+The additional Chromium 153 feedback corpus has 96 profiles for setters,
+clamp-then-subtract, mixed methods, smooth cancellation, Promise jobs and RAF.
+The combined Android gate compares all 256 profiles, including aliases and
+intermediate traces; the former 80 immediate-read mismatches are resolved.
+
+**Remaining synchronous layout differences:** scroll-position feedback does not
+provide new element rectangles after scrolling or general DOM writes. Pending
+scroll changes fence rectangle reads until actual native measurement. CSS
+`scroll-behavior` default selection, exact animation timing, scrollend/Promise
+behavior and mixed root/element event ordering are not certified by this gate.
+Global getter exception propagation during stale layout is not certified on
+Android; Node's VM can return undefined instead of propagating the accessor
+error. These unsupported reads are separate from the certified clean-layout
+scroll-position updates.
 
 Retained-document scrolling is owned by the document/VM lifecycle, including
 root offsets across a new PageStorage bucket. Switching the document in one view

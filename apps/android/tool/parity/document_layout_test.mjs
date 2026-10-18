@@ -351,6 +351,8 @@ test('document layout helper', async (t) => {
     const element = Object.assign(Object.create(FakeElement.prototype), { id: 'pirc-9' });
     const layout = {
       viewport: () => ({ scrollX: 12.5, scrollY: 31, width: 390, height: 844 }),
+      pendingScrollActionCount: () => state.scrollActions.length,
+      recordScrollAction() {},
       setScrollActionQueue(callback) { scrollQueue = callback; },
       queueElementScrollAction(target, kind, x, y, behavior) {
         scrollQueue({ id: target.id }, kind, x, y, behavior);

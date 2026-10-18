@@ -2610,7 +2610,8 @@
     function queueScrollAction(kind, x, y, behavior, target) {
       const state = activeState;
       if (!state) return;
-      if (state.scrollActions.length >= MAX_PENDING_SCROLL_ACTIONS) {
+      if (state.scrollActions.length >= MAX_PENDING_SCROLL_ACTIONS ||
+          layout.pendingScrollActionCount() >= MAX_PENDING_SCROLL_ACTIONS) {
         diagnostic(
           'layout.scroll_action_limit',
           'warning',
@@ -2629,6 +2630,7 @@
         behavior: behavior
       };
       if (target && target.viewport !== true) action.elementId = target.id;
+      layout.recordScrollAction(action, target);
       state.scrollActions.push(Object.freeze(action));
     }
 
@@ -3025,6 +3027,7 @@
     if (!state?.document) return response();
     advanceClock(input?.now);
     const hidden = input?.hidden === true;
+    if (hidden) state.layout?.discardScrollFeedback();
     if (hidden !== state.hidden) {
       state.hidden = hidden;
       const event = new GlobalEvent('visibilitychange', {
@@ -3033,6 +3036,7 @@
       defineEventMember(event, 'isTrusted', true);
       state.document.dispatchEvent(event);
     }
+    if (hidden) state.layout?.discardScrollFeedback();
     return response();
   }
 
@@ -5942,7 +5946,7 @@
   }
 
   function dispatchNativeViewportScrollIfChanged(state) {
-    const viewport = state.layout.viewport();
+    const viewport = state.layout.nativeViewport();
     const previous = state.nativeScrollPosition;
     state.nativeScrollPosition = { scrollX: viewport.scrollX, scrollY: viewport.scrollY };
     // The first accepted measurement establishes the native starting point;

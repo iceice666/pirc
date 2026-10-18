@@ -15,28 +15,39 @@ const fixtureOrigin = String.fromEnvironment('PIRC_CHART_FIXTURE_ORIGIN');
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'ordered native scroll execution matches Chromium settled positions',
+    'native immediate and settled scroll feedback matches Chromium',
     (tester) async {
       final origin = Uri.parse(fixtureOrigin);
       expect(origin.host, '127.0.0.1');
       expect(origin.scheme, 'http');
       final client = HttpClient();
-      late Json fixture;
+      final cases = <Json>[];
       try {
-        final response = await (await client.getUrl(
-          origin.resolve('/scroll-commands.json'),
-        )).close();
-        expect(response.statusCode, 200);
-        fixture = obj(jsonDecode(await utf8.decoder.bind(response).join()));
+        for (final entry in {
+          '/scroll-commands.json': 160,
+          '/scroll-feedback.json': 96,
+        }.entries) {
+          final response = await (await client.getUrl(
+            origin.resolve(entry.key),
+          )).close();
+          expect(response.statusCode, 200);
+          final fixture = obj(
+            jsonDecode(await utf8.decoder.bind(response).join()),
+          );
+          expect(fixture['browserVersion'], '153.0.8010.12');
+          expect(fixture['cases'], hasLength(entry.value));
+          for (final raw in fixture['cases'] as List) {
+            cases.add({...obj(raw), 'fixtureHTML': fixture['html']});
+          }
+        }
       } finally {
         client.close(force: true);
       }
-      expect(fixture['browserVersion'], '153.0.8010.12');
-      expect(fixture['cases'], hasLength(160));
+      expect(cases, hasLength(256));
       final gateway = Gateway(),
           theme = await PircTheme.load(),
           accepted = <Json>[];
-      for (final raw in fixture['cases'] as List) {
+      for (final raw in cases) {
         final row = obj(raw),
             viewport = obj(row['viewport']),
             dpr = (row['dpr'] as num).toDouble();
@@ -47,7 +58,7 @@ void main() {
               (viewport['height'] as num).toDouble(),
             ) *
             dpr;
-        final source = (fixture['html'] as String).replaceFirst(
+        final source = (row['fixtureHTML'] as String).replaceFirst(
               '</body>',
               '<script>${row['driverSource']}</script></body>',
             ),
@@ -114,34 +125,25 @@ void main() {
             reason:
                 '${row['mode']} ${row['target']} ${document.scripts?.diagnostics}',
           );
-          final expected = obj(obj(row['result'])['settled']),
-              actual = obj(report['settled']);
-          for (final target in ['root', 'element']) {
-            for (final axis in ['left', 'top']) {
-              expect(
-                obj(actual[target])[axis],
-                closeTo((obj(expected[target])[axis] as num).toDouble(), .01),
-                reason: '${row['mode']} ${row['target']} $target.$axis',
-              );
-            }
-          }
+          expect(
+            report,
+            equals(row['result']),
+            reason:
+                '${row['mode']} ${row['target']} ${row['viewport']} ${row['dpr']} ${row['theme']}',
+          );
           expect(document.scripts!.diagnostics, isEmpty);
           expect(tester.takeException(), isNull);
-          // Preserve synchronous-read differences as evidence; they are a separate
-          // remaining gate, never certified by these settled-position assertions.
           accepted.add({
             'mode': row['mode'],
             'target': row['target'],
             'viewport': viewport,
             'dpr': dpr,
             'theme': row['theme'],
-            'settled': actual,
-            'immediate': report['immediate'],
-            'browserImmediate': obj(row['result'])['immediate'],
+            'report': report,
           });
-          if (accepted.length % 20 == 0) {
+          if (accepted.length % 32 == 0) {
             debugPrintSynchronously(
-              'PIRC_SCROLL_COMMAND_PROGRESS ${accepted.length}/160',
+              'PIRC_SCROLL_FEEDBACK_PROGRESS ${accepted.length}/256',
             );
           }
         } finally {
@@ -153,8 +155,9 @@ void main() {
           tester.view.reset();
         }
       }
+      expect(accepted, hasLength(256));
       debugPrintSynchronously(
-        'PIRC_NATIVE_SCROLL_COMMAND_ACCEPTANCE ${jsonEncode(accepted)}',
+        'PIRC_NATIVE_SCROLL_FEEDBACK_ACCEPTANCE ${jsonEncode(accepted)}',
       );
     },
     skip: fixtureOrigin.isEmpty,
