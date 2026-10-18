@@ -2624,12 +2624,14 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       }
       _clock.reset();
       _clock.start();
+      final documentParser = html.HtmlParser(source)..parse();
+      final documentMode = documentParser.compatMode;
       final initialEnvironment = _environment;
       final initialHidden = _documentHidden;
       _publishedHidden = initialHidden;
       _hostLayoutEnabled = _layoutCapture != null;
       await _run(
-        '__pircDocument.init(${jsonEncode({'hidden': initialHidden, 'hostLayout': _hostLayoutEnabled, 'canvasTextError': _canvasTextUnavailable, 'environment': initialEnvironment.toJson(), 'html': source, 'url': url, 'cookieState': opened['cookieState'], 'referrerPolicy': referrerPolicy, 'objectUrlNonce': _objectUrlNonce, 'referrer': referrer, 'history': history, 'now': _now})})',
+        '__pircDocument.init(${jsonEncode({'hidden': initialHidden, 'hostLayout': _hostLayoutEnabled, 'canvasTextError': _canvasTextUnavailable, 'environment': initialEnvironment.toJson(), 'html': source, 'documentMode': documentMode, 'url': url, 'cookieState': opened['cookieState'], 'referrerPolicy': referrerPolicy, 'objectUrlNonce': _objectUrlNonce, 'referrer': referrer, 'history': history, 'now': _now})})',
       );
       if (_disposed) return;
       ready = true;

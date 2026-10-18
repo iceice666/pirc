@@ -436,13 +436,27 @@ node apps/android/tool/parity/capture_document_scroll_feedback_chromium153.mjs
 ```
 
 The Android `integration_test/document_scroll_commands_test.dart` uses the same
-loopback fixture server/define as above and checks all 256 profiles: immediate and
+loopback fixture server/define as above and checks all 344 profiles: immediate and
 settled readings, root aliases and intermediate traces. Node tests check exact
 shared HTML/drivers, the shipped bundle, delayed acknowledgements, bounded
 queues, measured ranges and lifecycle cancellation. Position feedback does not
 supply synchronous element rectangles after scrolling; those reads require a new
 native measurement. CSS defaults, timing/event variants, global getter errors
 and remaining DOM/layout APIs stay in the mobile plan.
+
+`document.scrollingElement` uses the initial HTML parser mode and native
+box/overflow measurements to select the standards root, quirks body, or null.
+`document.compatMode` is read-only. Root/body viewport metrics use the actual
+viewport even without a separate html RenderBox, and identity queries do not
+create a missing body. The additional 88-profile corpus covers 11 modern,
+no-doctype, legacy-doctype and auto/hidden/clip overflow cases. Recreate it with
+`node apps/android/tool/parity/capture_document_scrolling_element_chromium153.mjs`.
+`test/document_mode_test.dart` checks the real startup payload against the
+browser's compatibility mode. The combined Android gate uses
+`/scrolling-element.json` on the same loopback fixture server. This follows the
+[CSSOM View scrolling-element rules](https://drafts.csswg.org/cssom-view/#dom-document-scrollingelement).
+Full quirks layout, inactive/XML/frameset Documents, mixed-axis routing and DOM
+doctype node removal remain separate differences in the mobile plan.
 
 Ordinary app rendering uses the platform fonts. Browser capture tools use
 a dedicated test browser, never the user's everyday Chrome; see

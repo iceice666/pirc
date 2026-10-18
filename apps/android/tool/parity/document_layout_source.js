@@ -11,6 +11,11 @@ function createPircDocumentLayout(options) {
   const resolveElementId = config.resolveElementId;
   const diagnostic = config.diagnostic;
   const enabled = config.enabled === true;
+  const initialMode = config.documentMode;
+  if (initialMode != null && !['quirks', 'limited quirks', 'no quirks'].includes(initialMode))
+    throw new TypeError('Native document mode is invalid');
+  // Mode is fixed by the initial HTML parse, not by later doctype mutations.
+  const standardsMode = initialMode == null ? inferInitialStandardsMode() : initialMode !== 'quirks';
 
   if (!documentRef || typeof ElementCtor !== 'function' || typeof HTMLElementCtor !== 'function') {
     throw new TypeError('createPircDocumentLayout requires document, Element, and HTMLElement');
@@ -1089,7 +1094,7 @@ function createPircDocumentLayout(options) {
     )]);
   }
 
-  function isStandardsModeDocument() {
+  function inferInitialStandardsMode() {
     const doctype = documentRef.doctype;
     if (!doctype) return false;
     const name = typeof doctype === 'string' ? doctype.split(/\s+/, 1)[0] : doctype.name;
@@ -1100,7 +1105,50 @@ function createPircDocumentLayout(options) {
     return true;
   }
 
+  function isStandardsModeDocument() { return standardsMode; }
+
+  function bodyElement() {
+    const root = documentRef.documentElement;
+    if (!root) return null;
+    // LinkeDOM's body getter creates a new body when absent. Ownership queries
+    // must inspect existing children without changing the document.
+    return Array.from(root.children || []).find(element =>
+      element.localName === 'body' || element.localName === 'frameset') || null;
+  }
+
+  function bodyPotentiallyScrollable(axis, parentClipAsHidden = false) {
+    const body = bodyElement();
+    if (!body || !body.parentElement) return false;
+    const result = requireBox(body);
+    if (result.detached || result.box.kind === 'none') return false;
+    const name = `overflow-${axis}`;
+    const bodyOverflow = getComputedStyle(body).getPropertyValue(name);
+    const parentOverflow = getComputedStyle(body.parentElement).getPropertyValue(name);
+    return bodyOverflow !== 'visible' && bodyOverflow !== 'clip' &&
+      parentOverflow !== 'visible' && (parentClipAsHidden || parentOverflow !== 'clip');
+  }
+
+  function scrollingElement() {
+    if (!documentRef.documentElement) return null;
+    if (isStandardsModeDocument()) return documentRef.documentElement || null;
+    const body = bodyElement();
+    if (!body) return null;
+    return !bodyPotentiallyScrollable('x', true) && !bodyPotentiallyScrollable('y', true) ? body : null;
+  }
+
+  function isViewportScrollOwner(element, axis) {
+    if (element === documentRef.documentElement) return isStandardsModeDocument();
+    return element === bodyElement() && !isStandardsModeDocument() && !bodyPotentiallyScrollable(axis);
+  }
+
   function metric(element, name) {
+    validateElement(element);
+    if (enabled && isConnected(element)) {
+      const viewportClient = element === documentRef.documentElement && isStandardsModeDocument() ||
+        element === bodyElement() && !isStandardsModeDocument();
+      if (viewportClient && (name === 'clientWidth' || name === 'clientHeight'))
+        return nativeViewport()[name === 'clientWidth' ? 'width' : 'height'];
+    }
     if (name === 'clientWidth' && enabled && isConnected(element)) {
       const current = currentRevision();
       if (layoutSnapshot && layoutSnapshot.revision !== current &&
@@ -1143,7 +1191,10 @@ function createPircDocumentLayout(options) {
     validateElement(element);
     // The standards root is the viewport scroll owner even when Flutter has no
     // separate html RenderBox. Its authoritative measurements are viewport data.
-    if (enabled && element === documentRef.documentElement && isStandardsModeDocument()) {
+    const axis = name === 'scrollLeft' || name === 'scrollWidth' ? 'x' : 'y';
+    if (element === documentRef.documentElement && !isStandardsModeDocument() &&
+        (name === 'scrollLeft' || name === 'scrollTop')) return 0;
+    if (enabled && isConnected(element) && isViewportScrollOwner(element, axis)) {
       if (name === 'scrollLeft') return viewport().scrollX;
       if (name === 'scrollTop') return viewport().scrollY;
       return documentScrollExtent(element, name);
@@ -1172,7 +1223,7 @@ function createPircDocumentLayout(options) {
         revision: currentRevision(),
       });
     }
-    if (element !== documentRef.documentElement || !isStandardsModeDocument()) {
+    if (!isViewportScrollOwner(element, name === 'scrollWidth' ? 'x' : 'y')) {
       throw notSupported('unavailable', `Native layout did not provide ${name} for this element`, {
         metric: name,
         revision: currentRevision(),
@@ -1215,8 +1266,14 @@ function createPircDocumentLayout(options) {
         revision: currentRevision(),
       });
     }
-    if (element === documentRef.documentElement && isStandardsModeDocument()) {
-      return { viewport: true };
+    if (element === documentRef.documentElement) {
+      return isStandardsModeDocument() ? { viewport: true } : null;
+    }
+    if (element === bodyElement() && !isStandardsModeDocument()) {
+      const x = bodyPotentiallyScrollable('x'), y = bodyPotentiallyScrollable('y');
+      if (x !== y) throw notSupported('quirks_mixed_scroll_owner',
+        'Mixed viewport and element axes need native split scroll ownership', {revision: currentRevision()});
+      if (!x) return {viewport: true};
     }
     const id = ownIdForElement(element);
     const current = currentRevision();
@@ -1245,6 +1302,13 @@ function createPircDocumentLayout(options) {
   function setElementScrollOffset(element, name, value) {
     const number = +value;
     const coordinate = Number.isFinite(number) ? number : 0;
+    if (element === bodyElement() && !isStandardsModeDocument() &&
+        isViewportScrollOwner(element, name === 'scrollLeft' ? 'x' : 'y')) {
+      if (typeof scrollActionQueue !== 'function') throw notSupported('unavailable', 'Native scrolling is unavailable', {revision: currentRevision()});
+      scrollActionQueue({viewport: true}, 'to', name === 'scrollLeft' ? coordinate : null,
+        name === 'scrollTop' ? coordinate : null, 'auto');
+      return;
+    }
     queueElementScrollAction(
       element,
       'to',
@@ -1462,7 +1526,7 @@ function createPircDocumentLayout(options) {
       if (Object.prototype.hasOwnProperty.call(source, 'clientWidthIndependentOfDescendantSizes')) {
         if (typeof source.clientWidthIndependentOfDescendantSizes !== 'boolean' ||
             source.kind !== 'box' || element.namespaceURI !== 'http://www.w3.org/1999/xhtml' ||
-            element === documentRef.documentElement || element === documentRef.body ||
+            element === documentRef.documentElement || element === bodyElement() ||
             !Object.prototype.hasOwnProperty.call(source, 'clientWidth') ||
             !Number.isFinite(source.clientWidth) || source.clientWidth < 0) {
           throw new TypeError(`${id}.clientWidthIndependentOfDescendantSizes requires a measured HTML box with clientWidth`);
@@ -1695,6 +1759,11 @@ function createPircDocumentLayout(options) {
 
   function install() {
     if (installed) return api;
+    Object.defineProperties(documentRef, {
+      scrollingElement: {configurable: true, enumerable: true, get: scrollingElement},
+      compatMode: {configurable: true, enumerable: true,
+        get() { return isStandardsModeDocument() ? 'CSS1Compat' : 'BackCompat'; }},
+    });
     Object.defineProperty(ElementCtor.prototype, 'getBoundingClientRect', {
       configurable: true,
       enumerable: false,

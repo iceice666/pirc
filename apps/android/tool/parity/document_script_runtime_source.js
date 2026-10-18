@@ -2790,6 +2790,7 @@
       MutationObserver: view.MutationObserver,
       ensureElementId, resolveElementId: id => activeState.elementsById.get(id),
       enabled: activeState.hostLayout,
+      documentMode: activeState.documentMode,
       diagnostic: (code, detail) => diagnostic(code, 'warning',
         'Native document geometry is unavailable until the matching layout is measured.', detail)
     });
@@ -5223,6 +5224,7 @@
       modulePreparations: 0,
       moduleGraph: null,
       hostLayout: input.hostLayout === true,
+      documentMode: input.documentMode,
       layout: null,
       layoutStylesSignature: null,
       pendingStylesheetLoads: 0,

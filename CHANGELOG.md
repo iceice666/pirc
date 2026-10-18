@@ -33,6 +33,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
+- Android interactive pages support `document.scrollingElement`, with parser-based document mode and viewport/body scroll ownership.
+
 - Android interactive documents report updated scroll positions immediately after scripted changes, including repeated increments and range clamping.
 
 - Android preserves the order of consecutive scroll commands and correctly stops smooth scrolling with same-position or zero-distance calls.

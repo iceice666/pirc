@@ -246,4 +246,6 @@ test('standards root scroll aliases use the measured viewport even without a sep
   assert.equal(run('window.scrollY'), 40);
   assert.equal(run('document.documentElement.scrollTop'), 40);
   assert.equal(run('document.documentElement.scrollHeight'), 2200);
+  assert.equal(run('document.documentElement.clientWidth'), 390);
+  assert.equal(run('document.documentElement.clientHeight'), 844);
 });
