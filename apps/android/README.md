@@ -496,14 +496,17 @@ actual constrained padding box remains the percentage/right/bottom basis even
 when flow content is taller; borders stay stationary. `overflow:clip` excludes
 trailing scroll-container padding from its reported overflow dimensions.
 
-The independent `document-transform-scroll-chromium153.json` corpus adds 128
+The independent `document-transform-scroll-chromium153.json` corpus has 192
 phone/tablet, DPR 1/3 and theme profiles. Widget and Android Sandbox gates compare
 three states for `auto`/`scroll`/`hidden`/`clip`, absolute/local fixed children,
 percentage sizes, right/bottom placement, positioned overflow, auto heights,
-content/border boxes and live size/overflow/transform changes. Scroll/client
-sizes, offsets and parents compare exactly; rectangles allow 1/32 CSS px for
-browser subpixel rounding. Before/after pixels compare exactly, and actual
-native taps must respect clipping. Recreate with
+content/border boxes and live size/overflow/transform changes. It also checks
+viewport-fixed overlays escaping ordinary scroll/clip ancestors, switching
+between viewport and local ownership, and native Canvas/button click targets.
+Scroll/client sizes, offsets and parents compare exactly; rectangles allow
+1/32 CSS px for browser subpixel rounding. Before/after pixels compare exactly.
+Chromium and Android execute the same click observer and actual pointer taps; their before/after event counts compare
+exactly, including clipped targets that must receive no click. Recreate with
 `node apps/android/tool/parity/capture_document_transform_scroll_chromium153.mjs`.
 Use `/transform-scroll.json` from the local fixture server and
 `integration_test/document_transform_scroll_test.dart` for Android acceptance.

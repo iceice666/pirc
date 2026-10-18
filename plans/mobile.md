@@ -83,12 +83,16 @@ are at `git show 7677d24:plans/mobile-audit.md`.
   inside the actual native scrollport; its constrained padding box supplies
   percentage and right/bottom bases while content can extend beyond it. Borders
   remain stationary; native paint and clicks share the scroll/clip path. A
-  separate 128-profile Chromium 153 corpus checks phone/tablet, DPR 1/3 and both
+  separate 192-profile Chromium 153 corpus checks phone/tablet, DPR 1/3 and both
   themes across three states, including reflow, overflow changes and transforms.
+  Viewport-fixed overlays escape ordinary overflow ancestors and switch to/from
+  local transform ownership; Canvas/button targets are included.
   Widget and Android Sandbox gates check exact scroll/client sizes, offsets and
   parent ids, rectangles within 1/32 CSS px, exact before/after pixels and real
-  clipped/visible taps. Mixed-axis normalization, scrollbars, rounded clips and
-  general transformed overflow propagation still need wider coverage.
+  clipped/visible taps. Browser and Android use the same observer and compare
+  actual before/after pointer click counts. Mixed-axis normalization, scrollbars,
+  rounded clips and general transformed overflow propagation still need wider
+  coverage.
 - Common 2D transformed paths now provide `offsetParent`, `offsetLeft` and
   `offsetTop` for ordinary, absolute and fixed boxes. Measurement follows real
   untransformed native layout translations, removes native scroll displacement

@@ -53,7 +53,7 @@ void main() {
       final client = HttpClient();
       final cases = <Json>[];
       try {
-        for (final entry in {'/transform-scroll.json': 128}.entries) {
+        for (final entry in {'/transform-scroll.json': 192}.entries) {
           final response = await (await client.getUrl(
             origin.resolve(entry.key),
           )).close();
@@ -73,7 +73,7 @@ void main() {
       } finally {
         client.close(force: true);
       }
-      expect(cases, hasLength(128));
+      expect(cases, hasLength(192));
       final gateway = Gateway(),
           theme = await PircTheme.load(),
           accepted = <Json>[];
@@ -90,7 +90,7 @@ void main() {
             dpr;
         final source = (row['html'] as String).replaceFirst(
               '</body>',
-              '<script>${row['driverSource']}document.getElementById("target").addEventListener("click",()=>{document.getElementById("probe").setAttribute("data-clicked",String(1+Number(document.getElementById("probe").getAttribute("data-clicked")||0)))});</script></body>',
+              '<script>${row['driverSource']}${row['clickObserverSource']}</script></body>',
             ),
             bytes = utf8.encode(source);
         final document = NativeFetchedDocument(
@@ -199,15 +199,18 @@ void main() {
           await tester.pump(const Duration(milliseconds: 30));
           await drainNativeInput();
           final clickedBefore =
-              html
-                  .parse(document.scripts?.content?.text ?? '')
-                  .getElementById('probe')
-                  ?.attributes['data-clicked'] ==
-              '1';
+              int.tryParse(
+                html
+                        .parse(document.scripts?.content?.text ?? '')
+                        .getElementById('probe')
+                        ?.attributes['data-clicked'] ??
+                    '0',
+              ) ??
+              0;
           expect(
             clickedBefore,
-            obj(obj(row['pixels'])['before'])['hit'] == 'target',
-            reason: 'before native clipped click ${row['mode']}',
+            obj(row['clicks'])['before'],
+            reason: 'before native/browser click count ${row['mode']}',
           );
           await tester.tap(find.text('Run', findRichText: true));
           Json report = {};
@@ -238,10 +241,6 @@ void main() {
           await checkPaint('changed');
           // Count clicks before and after the final browser sample, which may
           // intentionally fall outside the scrollport clip.
-          final marker = html
-              .parse(document.scripts?.content?.text ?? '')
-              .getElementById('probe')
-              ?.attributes['data-clicked'];
           final sample = obj(obj(row['pixels'])['changed']);
           await tester.tapAt(
             Offset(
@@ -258,8 +257,7 @@ void main() {
               ?.attributes['data-clicked'];
           expect(
             int.tryParse(afterClick ?? '0') ?? 0,
-            (int.tryParse(marker ?? '0') ?? 0) +
-                (sample['hit'] == 'target' ? 1 : 0),
+            obj(row['clicks'])['changed'],
             reason: 'changed native clipped click',
           );
           expect(document.scripts!.diagnostics, isEmpty);
@@ -275,7 +273,7 @@ void main() {
           });
           if (accepted.length % 32 == 0) {
             debugPrintSynchronously(
-              'PIRC_TRANSFORM_SCROLL_PROGRESS ${accepted.length}/128',
+              'PIRC_TRANSFORM_SCROLL_PROGRESS ${accepted.length}/192',
             );
           }
         } finally {
@@ -287,7 +285,7 @@ void main() {
           tester.view.reset();
         }
       }
-      expect(accepted, hasLength(128));
+      expect(accepted, hasLength(192));
       debugPrintSynchronously(
         'PIRC_NATIVE_TRANSFORM_SCROLL_ACCEPTANCE ${jsonEncode(accepted)}',
       );
