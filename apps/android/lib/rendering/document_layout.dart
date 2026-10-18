@@ -241,6 +241,7 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     Size? contentSize,
     Map<String, dynamic>? Function(String id)? elementScrollMetrics,
     Map<String, double>? Function(String id)? elementScrollRanges,
+    bool? Function(String id)? elementScrollActivity,
     Map<String, RenderBox> elementScrollSurfaces = const {},
     List<Map<String, dynamic>> scrollEvents = const [],
   }) {
@@ -336,7 +337,8 @@ class NativeDocumentLayoutController extends ChangeNotifier {
       final scroll = elementScrollMetrics?.call(id);
       if (scroll != null) {
         final range = elementScrollRanges?.call(id);
-        entry['scroll'] = {...scroll, 'range': ?range};
+        final active = elementScrollActivity?.call(id);
+        entry['scroll'] = {...scroll, 'range': ?range, 'active': ?active};
       }
       boxes.add(entry);
     }
@@ -346,7 +348,7 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     final ports = {
       for (final entry in elementScrollSurfaces.entries) entry.value: entry.key,
     };
-    var references = 0;
+    var references = 0, revealReferences = 0;
     for (final box in boxes) {
       final id = box['id'] as String, surface = styleSurfaces[id];
       if (surface == null ||
@@ -366,6 +368,21 @@ class NativeDocumentLayoutController extends ChangeNotifier {
       if (references + count > 16384) continue;
       references += count;
       box['scrollGeometry'] = geometry;
+      final reveal = _scrollRevealGeometry(
+        id,
+        surface,
+        root,
+        byId,
+        ports,
+        elementScrollRanges,
+      );
+      if (reveal != null) {
+        final n = (reveal['ports'] as List).length;
+        if (revealReferences + n <= 16384) {
+          revealReferences += n;
+          box['scrollReveal'] = reveal;
+        }
+      }
     }
     return <String, dynamic>{
       'revision': revision,
@@ -401,6 +418,86 @@ class NativeDocumentLayoutController extends ChangeNotifier {
       return null;
     }
     return [m[0], m[1], m[4], m[5]];
+  }
+
+  Map<String, dynamic>? _scrollRevealGeometry(
+    String id,
+    RenderBox surface,
+    _RenderNativeDocumentLayoutRoot root,
+    Map<String, Map<String, dynamic>> boxes,
+    Map<RenderBox, String> ports,
+    Map<String, double>? Function(String)? ranges,
+  ) {
+    try {
+      final chain = <Map<String, dynamic>>[];
+      var viewport = true;
+      RenderObject? current = surface;
+      while (!identical(current, root)) {
+        if (current == null) return null;
+        if (current is NativeDocumentFixedSurface &&
+            (current as NativeDocumentFixedSurface).fixedToViewport) {
+          if (!(current as NativeDocumentFixedSurface)
+              .scrollTranslationIndependent) {
+            return null;
+          }
+          viewport = false;
+          break;
+        }
+        current = current.parent;
+        if (current == null || identical(current, root)) continue;
+        final size = nativeDocumentRevealScrollport(current);
+        if (size == null) continue;
+        final owner = nativeDocumentScrollOwnerId(current);
+        if (current is! RenderBox ||
+            owner == null ||
+            owner == id ||
+            ports[current] != owner ||
+            boxes[owner]?['kind'] != 'box' ||
+            boxes[owner]?['scroll'] is! Map ||
+            ranges?.call(owner) == null ||
+            chain.length >= 64) {
+          return null;
+        }
+        final axes = _affineAxes(current.getTransformTo(root));
+        if (axes == null ||
+            (axes[0] * axes[3] - axes[1] * axes[2]).abs() < 1e-12) {
+          return null;
+        }
+        final transform = current.getTransformTo(root);
+        final origin = MatrixUtils.transformPoint(transform, Offset.zero);
+        final inverse = Matrix4.copy(transform);
+        if (inverse.invert() == 0) return null;
+        final absolute = MatrixUtils.transformRect(
+          surface.getTransformTo(root),
+          Offset.zero & surface.size,
+        );
+        final rect = MatrixUtils.transformRect(inverse, absolute);
+        final values = [
+          rect.left,
+          rect.top,
+          rect.width,
+          rect.height,
+          origin.dx,
+          origin.dy,
+          size.width,
+          size.height,
+        ];
+        if (values.any((n) => !n.isFinite || n.abs() > 9007199254740990)) {
+          return null;
+        }
+        chain.add({
+          'id': owner,
+          'rect': [rect.left, rect.top, rect.width, rect.height],
+          'origin': [origin.dx, origin.dy],
+          'width': size.width,
+          'height': size.height,
+          'axes': axes,
+        });
+      }
+      return {'viewport': viewport, 'ports': chain};
+    } on FlutterError {
+      return null;
+    }
   }
 
   Map<String, dynamic>? _scrollGeometry(

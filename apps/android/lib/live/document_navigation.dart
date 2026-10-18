@@ -1493,6 +1493,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         viewport: _layoutViewport,
         elementScrollMetrics: _elementScroll.metricsFor,
         elementScrollRanges: _elementScroll.scrollRangeFor,
+        elementScrollActivity: _elementScroll.isScrollingFor,
         elementScrollSurfaces: _elementScroll.scrollGeometrySurfaces,
 
         contentSize:
@@ -1513,6 +1514,9 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         packet['scrollActionThrough'] = scripts!.resolvedScrollActionId;
         (packet['viewport'] as Json)['scrollBehavior'] =
             _viewportScrollBehavior;
+        (packet['viewport'] as Json)['scrollActive'] =
+            document.scroll.hasClients &&
+            document.scroll.position.isScrollingNotifier.value;
         if (document.scroll.hasClients &&
             document.scroll.position.hasContentDimensions) {
           (packet['viewport'] as Json)['scrollRange'] = {

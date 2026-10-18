@@ -2577,6 +2577,7 @@
   }
 
   function installNativeScrollPositionGlobals(view, globalObject, layout) {
+    const ScrollPromise=Promise, resolveScroll=Promise.resolve.bind(Promise), rejectScroll=Promise.reject.bind(Promise);
     const aliases = [
       ['scrollX', 'scrollX'],
       ['scrollY', 'scrollY'],
@@ -2607,6 +2608,8 @@
       return behavior;
     }
 
+    const pendingScrollReveals=new Set();
+    const scrollTargetKey=target=>target?.id ?? null;
     function queueScrollAction(kind, x, y, behavior, target) {
       const state = activeState;
       if (!state) return;
@@ -2633,6 +2636,12 @@
       const effectiveBehavior = layout.resolveScrollBehavior(target, behavior);
       if (behavior === 'auto' && ['instant', 'smooth'].includes(effectiveBehavior))
         action.resolvedBehavior = effectiveBehavior;
+      for(const pending of pendingScrollReveals) {
+        if(pending.targets.has(scrollTargetKey(target))) {
+          pendingScrollReveals.delete(pending);
+          pending.resolve({interrupted:true});
+        }
+      }
       layout.recordScrollAction(action, target, effectiveBehavior);
       state.scrollActions.push(Object.freeze(action));
     }
@@ -2698,6 +2707,60 @@
         });
       }
     }
+
+    Object.defineProperty(Element$1.prototype,'scrollIntoView',{
+      configurable:true,enumerable:true,writable:true,
+      value:function scrollIntoView(arg=undefined) {
+        const element=this;
+        try {
+          if(!(element instanceof Element$1)) throw new TypeError('scrollIntoView requires an Element');
+          const options={behavior:'auto',block:'start',container:'all',inline:'nearest'};
+          if(arg==null || typeof arg==='object' || typeof arg==='function') {
+            if(arg!=null) {
+              options.behavior=normalizeScrollBehavior(arg.behavior);
+              for(const key of ['block','container','inline']) {
+                const raw=arg[key];if(raw===undefined) continue;
+                const value=''+raw,allowed=key==='container'?['all','nearest']:['start','center','end','nearest'];
+                if(!allowed.includes(value)) throw new TypeError(`Invalid scrollIntoView ${key}`);
+                options[key]=value;
+              }
+            }
+          } else if(!arg) options.block='end';
+          if(element.ownerDocument!==activeState.document || !element.isConnected)
+            return resolveScroll({interrupted:false});
+          const execute=()=>{
+            const plan=layout.scrollIntoViewPlan(element,options),state=activeState;
+            if(state.scrollActions.length+plan.length>MAX_PENDING_SCROLL_ACTIONS || layout.pendingScrollActionCount()+plan.length>MAX_PENDING_SCROLL_ACTIONS)
+              throw new RangeError('Native scrollIntoView action queue is full');
+            if(!Number.isSafeInteger(state.nextScrollActionId+plan.length-1)) throw new RangeError('Native scroll action id overflow');
+            const first=state.scrollActions.length;
+            for(const request of plan) queueScrollAction('to',request.x,request.y,options.behavior,request.target);
+            const animated=state.scrollActions.slice(first).some(action=>(action.resolvedBehavior ?? action.behavior)==='smooth');
+            if(!animated) return {interrupted:false};
+            const through=state.nextScrollActionId-1;
+            return new ScrollPromise((resolve,reject)=>{
+              const pending={targets:new Set(plan.map(request=>scrollTargetKey(request.target))),resolve};
+              pendingScrollReveals.add(pending);
+              const poll=()=>{
+                if(!pendingScrollReveals.has(pending)) return;
+                try {
+                  const result=layout.scrollIntoViewCompletion(plan,through);
+                  if(result) {pendingScrollReveals.delete(pending);resolve(result);}
+                  else view.requestAnimationFrame(poll);
+                } catch(error) {pendingScrollReveals.delete(pending);reject(error);}
+              };
+              view.requestAnimationFrame(poll);
+            });
+          };
+          if(!layout.hasCurrentBox(element) && layout.needsLayout()) {
+            return new ScrollPromise((resolve,reject)=>view.requestAnimationFrame(()=>{
+              try {resolve(execute());} catch(error) {reject(error);}
+            }));
+          }
+          return resolveScroll(execute());
+        } catch(error) {return rejectScroll(error);}
+      }
+    });
 
     const elementScrollTo = scrollMethod('to', true);
     const elementScrollMethods = [

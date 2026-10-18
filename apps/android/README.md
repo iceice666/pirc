@@ -568,8 +568,41 @@ Sandbox. The cases include auto/instant overrides, setters, aliases, explicit
 inherit/unset, invalid declarations, CSS variables and frame-matched mutations.
 Capture with `node apps/android/tool/parity/capture_document_scroll_behavior_chromium153.mjs`;
 use `/scroll-behavior.json` from the local fixture server. Animation timing still
-follows Flutter. Fragment navigation, `scrollIntoView`, scrollend/Promise semantics
-and general synchronous reads after DOM/style writes remain separate differences.
+follows Flutter. Fragment navigation, broader scrollend/Promise semantics and general synchronous
+reads after DOM/style writes remain separate differences; see the bounded
+`scrollIntoView` gate below.
+
+`Element.scrollIntoView()` now reveals actual native targets through nested
+scrollports. The 216-case `document-into-view-chromium153.json` fixture is captured
+independently with the guarded dedicated browser. It covers four alignments,
+boolean/dictionary options, nearest containers, hidden targets, native Canvas,
+button and input targets, CSS scroll margin/padding (including percentages and
+font units), clipping, scale/rotation/mirroring, replacement and append/await.
+
+Reproduce the capture with
+`node apps/android/tool/parity/capture_document_into_view_chromium153.mjs`.
+The shipped JS planner consumes the browser's independently measured input
+geometry in `document_into_view_runtime_test.mjs`; Flutter separately verifies
+native geometry and executes browser destinations in
+`test/document_into_view_oracle_test.dart`. Android runs the shared HTML/driver
+through the real Sandbox in `integration_test/document_into_view_test.dart`,
+using `/into-view.json` from the loopback fixture server. Scroll positions and
+Promise/option results are exact; affine rectangles use 1/32 CSS px tolerance.
+
+A smooth reveal uses real native acknowledgement/activity for completion and
+reports programmatic replacement or an observed stop short of its destination
+as interrupted. Flutter's animation duration/curve and the time when a smooth
+Promise completes remain different from this Chromium build: its root may
+still move at Promise completion or after a redundant instant root request.
+These intermediate pixels are not counted as matched. The Android test checks
+that native await pixels are settled and a replaced root stays at its instant
+endpoint. An appended target waits for a matching native frame; immediate reads
+after arbitrary DOM/style writes remain unsupported. RTL/vertical layout,
+horizontal root reveal, logical scroll inset properties, quirks/iframe/XML
+documents, sticky/fragmented/SVG boxes, scroll snap, fractional CSS/limit rounding, unresolved inset math/complex variable shorthands and broader
+invalid inset cascades are unverified. Other scroll APIs' Promise return values
+and fragment navigation remain separate differences. Physical acceptance and
+remote background push are still deferred as recorded in the mobile plan.
 
 `document.scrollingElement` uses the initial HTML parser mode and native
 box/overflow measurements to select the standards root, quirks body, or null.

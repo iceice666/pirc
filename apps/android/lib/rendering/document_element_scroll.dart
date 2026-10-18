@@ -45,6 +45,16 @@ String? nativeDocumentScrollOwnerId(RenderObject object) =>
     ? object._attachment.id
     : null;
 
+/// The actual padding-box scrollport. Clip-only/visible overflow does not
+/// create a scrolling box, while auto/hidden boxes count even at zero range.
+Size? nativeDocumentRevealScrollport(RenderObject object) =>
+    object is _RenderNativeDocumentElementScrollViewportRender &&
+        object.attached &&
+        object.hasSize &&
+        (object._scrollsX || object._scrollsY)
+    ? object.size
+    : null;
+
 /// Owns native scroll offsets for elements in one fetched document.
 ///
 /// A controller may be shared by the layout bridge and script host for a view.
@@ -379,6 +389,17 @@ class NativeDocumentElementScrollController extends ChangeNotifier {
       'width': width,
       'height': height,
     };
+  }
+
+  /// Native activity distinguishes a completed animation from user interruption.
+  bool? isScrollingFor(String id) {
+    if (metricsFor(id) == null) return null;
+    final attachment = _activeAttachments(id).single;
+    return [attachment.horizontalController, attachment.verticalController].any(
+      (controller) => controller.positions.any(
+        (position) => position.isScrollingNotifier.value,
+      ),
+    );
   }
 
   /// Programmatic limits from the actual laid-out native axes, including

@@ -37143,6 +37143,7 @@ function createPircDocumentLayout(options) {
   let pendingScrollActions = [];
   let lastQueuedScrollAction = 0;
   let acknowledgedScrollAction = 0;
+  let scrollActivityRefreshRequested = false;
   // A nonempty set can certify only an unaffected parent's clientWidth.
   // null means an unproved mutation forbids every partial read until layout.
   let pendingSizeMutationTargets = new Set();
@@ -37710,7 +37711,7 @@ function createPircDocumentLayout(options) {
 
   function status() {
     const current = currentRevision();
-    return { revision: current, required: enabled && layoutIsNeeded() };
+    return { revision: current, required: enabled && (layoutIsNeeded() || scrollActivityRefreshRequested) };
   }
 
   function nativeViewport() {
@@ -38372,6 +38373,92 @@ function createPircDocumentLayout(options) {
     return Math.ceil(Math.max(layoutSnapshot.viewport[viewportName], layoutSnapshot.viewport[contentName]));
   }
 
+  function scrollIntoViewPlan(element, options) {
+    const measured = requireBox(element);
+    if (measured.detached || measured.box.kind === 'none') return [];
+    const box = measured.box, proof = box.scrollReveal;
+    if (!proof || !box.scrollGeometry)
+      throw notSupported('scroll_into_view_unmeasured', 'ScrollIntoView needs native scrollport geometry', {revision:currentRevision()});
+    const cssFor = owner => {
+      const style = owner?.computedStyle;
+      if (!style || style.direction !== 'ltr' || style['writing-mode'] !== 'horizontal-tb')
+        throw notSupported('scroll_into_view_writing_mode', 'ScrollIntoView requires measured horizontal LTR styles', {revision:currentRevision()});
+      return style;
+    };
+    const css = cssFor(box);
+    const inset = (style, name, basis, percent, automatic) => {
+      const raw = style[name];
+      if (automatic && raw === 'auto') return 0;
+      if (typeof raw !== 'string') throw notSupported('scroll_into_view_insets', `Native CSS ${name} is unavailable`, {revision:currentRevision()});
+      const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))(px|%)$/.exec(raw);
+      if (!match || match[2] === '%' && !percent)
+        throw notSupported('scroll_into_view_insets', `Native CSS ${name} is unresolved`, {revision:currentRevision()});
+      const value = Number(match[1]) * (match[2] === '%' ? basis / 100 : 1);
+      if (!Number.isFinite(value) || automatic && value < 0)
+        throw notSupported('scroll_into_view_insets', `Native CSS ${name} is invalid`, {revision:currentRevision()});
+      return value;
+    };
+    const margin = Object.fromEntries(['top','right','bottom','left'].map(side =>
+      [side,inset(css,`scroll-margin-${side}`,0,false,false)]));
+    const align = (start,end,viewStart,viewEnd,mode) => {
+      if (end < start || viewEnd < viewStart)
+        throw notSupported('scroll_into_view_insets','Inverted reveal regions are unsupported',{revision:currentRevision()});
+      if (mode === 'start') return start - viewStart;
+      if (mode === 'end') return end - viewEnd;
+      if (mode === 'center') return (start + end - viewStart - viewEnd) / 2;
+      if (start < viewStart && end > viewEnd) return 0;
+      const larger = end - start > viewEnd - viewStart;
+      if (start < viewStart && !larger || end > viewEnd && larger) return start - viewStart;
+      if (start < viewStart && larger || end > viewEnd && !larger) return end - viewEnd;
+      return 0;
+    };
+    const destination = (rect, width, height, style, position, range) => {
+      if (!range) throw notSupported('scroll_into_view_range','Native scroll limits are unavailable',{revision:currentRevision()});
+      const left = inset(style,'scroll-padding-left',width,true,true),
+        right = width-inset(style,'scroll-padding-right',width,true,true),
+        top = inset(style,'scroll-padding-top',height,true,true),
+        bottom = height-inset(style,'scroll-padding-bottom',height,true,true);
+      const x = position.left+align(rect[0]-margin.left,rect[0]+rect[2]+margin.right,left,right,options.inline);
+      const y = position.top+align(rect[1]-margin.top,rect[1]+rect[3]+margin.bottom,top,bottom,options.block);
+      if (![x,y].every(n=>Number.isFinite(n)&&Math.abs(n)<=9007199254740990))
+        throw notSupported('scroll_into_view_range','ScrollIntoView coordinates are not finite',{revision:currentRevision()});
+      return {left:Math.min(range.maxLeft,Math.max(range.minLeft,Math.round(x))),top:Math.min(range.maxTop,Math.max(range.minTop,Math.round(y)))};
+    };
+    const plan = [], base = scrollGeometryDelta(box), viewport=layoutSnapshot.viewport;
+    let absolute=[box.x-viewport.scrollX+base.left,box.y-viewport.scrollY+base.top,box.width,box.height];
+    const mappedRect=(rect,map)=>{
+      const points=[[rect[0],rect[1]],[rect[0]+rect[2],rect[1]],[rect[0],rect[1]+rect[3]],[rect[0]+rect[2],rect[1]+rect[3]]].map(p=>map(...p));
+      const x=Math.min(...points.map(p=>p[0])),y=Math.min(...points.map(p=>p[1]));
+      return [x,y,Math.max(...points.map(p=>p[0]))-x,Math.max(...points.map(p=>p[1]))-y];
+    };
+    for (const port of proof.ports) {
+      const owner = layoutSnapshot.boxes.get(port.id);
+      if (owner?.element !== port.element) throw notSupported('scroll_into_view_unmeasured','Native scroll owner changed',{revision:currentRevision()});
+      const delta=scrollGeometryDelta(owner),a=port.axes,determinant=a[0]*a[3]-a[1]*a[2];
+      const ox=port.origin[0]-viewport.scrollX+delta.left,oy=port.origin[1]-viewport.scrollY+delta.top;
+      const rect=mappedRect(absolute,(x,y)=>[(a[3]*(x-ox)-a[2]*(y-oy))/determinant,(-a[1]*(x-ox)+a[0]*(y-oy))/determinant]);
+      const current=projectedScroll(owner.element,owner.scroll,owner.scroll.range);
+      const next=destination(rect,port.width,port.height,cssFor(owner),current,owner.scroll.range);
+      plan.push({target:{id:port.id},x:next.left,y:next.top});
+      const moved=[rect[0]-(next.left-current.left),rect[1]-(next.top-current.top),rect[2],rect[3]];
+      const left=Math.max(0,moved[0]),top=Math.max(0,moved[1]),right=Math.min(port.width,moved[0]+moved[2]),bottom=Math.min(port.height,moved[1]+moved[3]);
+      // Ancestors reveal the portion surviving the inner scrollport clip. Keep
+      // the original rectangle only when the intersection is entirely empty.
+      const exposed=right>left&&bottom>top?[left,top,right-left,bottom-top]:moved;
+      absolute=mappedRect(exposed,(x,y)=>[ox+a[0]*x+a[2]*y,oy+a[1]*x+a[3]*y]);
+      if (options.container === 'nearest') return plan;
+    }
+    if (proof.viewport) {
+      const root=layoutSnapshot.boxes.get(ownIdForElement(documentRef.documentElement));
+      if(absolute[0]+absolute[2]+margin.right>viewport.width && viewport.scrollRange?.maxLeft===0)
+        throw notSupported('scroll_into_view_root_horizontal','Root horizontal reveal has no native scroll range',{revision:currentRevision()});
+      const current=projectedScroll(null,{left:viewport.scrollX,top:viewport.scrollY},viewport.scrollRange);
+      const next=destination(absolute,viewport.width,viewport.height,cssFor(root),current,viewport.scrollRange);
+      plan.push({target:{viewport:true},x:next.left,y:next.top});
+    }
+    return plan;
+  }
+
   function elementScrollTarget(element) {
     validateElement(element);
     if (!isConnected(element)) return null;
@@ -38475,6 +38562,43 @@ function createPircDocumentLayout(options) {
     return box.resize || null;
   }
 
+  function requireScrollActivity(value) {
+    if(typeof value!=='boolean') throw new TypeError('Native scroll active must be boolean');
+    return value;
+  }
+
+  function scrollIntoViewCompletion(plan, through) {
+    if(acknowledgedScrollAction<through) {scrollActivityRefreshRequested=true;return null;}
+    let interrupted=false;
+    for(const request of plan) {
+      const id=request.target.id,owner=id?layoutSnapshot.boxes.get(id):null;
+      if(id && (!owner?.scroll || !isConnected(owner.element))) return {interrupted:true};
+      const metrics=id?owner.scroll:{left:layoutSnapshot.viewport.scrollX,top:layoutSnapshot.viewport.scrollY,active:layoutSnapshot.viewport.scrollActive};
+      if(metrics.active===true) {scrollActivityRefreshRequested=true;return null;}
+      if(metrics.active!==false) throw notSupported('scroll_into_view_activity','Native scroll completion is unmeasured',{revision:currentRevision()});
+      interrupted ||= Math.abs(metrics.left-request.x)>1/64 || Math.abs(metrics.top-request.y)>1/64;
+    }
+    return {interrupted};
+  }
+
+  function validateScrollReveal(raw,label) {
+    if (raw === undefined) return undefined;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.viewport !== 'boolean' || !Array.isArray(raw.ports) || raw.ports.length>64)
+      throw new TypeError(`${label} requires a viewport flag and bounded ports`);
+    const seen=new Set();
+    const ports=raw.ports.map(port=>{
+      if(!port || !isSafeId(port.id) || seen.has(port.id) || !Array.isArray(port.rect) || port.rect.length!==4 || !Array.isArray(port.axes) || port.axes.length!==4 || !Array.isArray(port.origin) || port.origin.length!==2)
+        throw new TypeError(`${label} requires distinct measured scrollports`);
+      seen.add(port.id);
+      const rect=port.rect.map((n,i)=>requireFiniteNumber(n,`${label}.rect[${i}]`,i>=2));
+      const axes=port.axes.map((n,i)=>requireFiniteNumber(n,`${label}.axes[${i}]`,false));
+      if(Math.abs(axes[0]*axes[3]-axes[1]*axes[2])<1e-12) throw new TypeError(`${label} requires invertible scroll axes`);
+      const origin=port.origin.map((n,i)=>requireFiniteNumber(n,`${label}.origin[${i}]`,false));
+      return Object.freeze({id:port.id,rect:Object.freeze(rect),axes:Object.freeze(axes),origin:Object.freeze(origin),width:requireFiniteNumber(port.width,`${label}.width`,true),height:requireFiniteNumber(port.height,`${label}.height`,true)});
+    });
+    return Object.freeze({viewport:raw.viewport,ports:Object.freeze(ports)});
+  }
+
   function validateScrollGeometry(raw, label) {
     if (raw === undefined) return undefined;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
@@ -38522,6 +38646,10 @@ function createPircDocumentLayout(options) {
         throw new TypeError('viewport.scrollBehavior must be auto or smooth');
       viewportValue.scrollBehavior = packet.viewport.scrollBehavior;
     }
+    if(Object.prototype.hasOwnProperty.call(packet.viewport,'scrollActive')) {
+      if(typeof packet.viewport.scrollActive!=='boolean') throw new TypeError('viewport.scrollActive must be boolean');
+      viewportValue.scrollActive=packet.viewport.scrollActive;
+    }
     const hasContentWidth = Object.prototype.hasOwnProperty.call(packet.viewport, 'contentWidth');
     const hasContentHeight = Object.prototype.hasOwnProperty.call(packet.viewport, 'contentHeight');
     if (hasContentWidth !== hasContentHeight) {
@@ -38544,7 +38672,7 @@ function createPircDocumentLayout(options) {
     const stagedBoxes = new Map();
     const stagedElements = new Map();
     const computedStyleBudget = { chars: 0 };
-    let scrollGeometryReferences = 0;
+    let scrollGeometryReferences = 0, scrollRevealReferences = 0;
     for (const source of packet.boxes) {
       if (!source || typeof source !== 'object' || Array.isArray(source)) throw new TypeError('Each layout box must be an object');
       const id = source.id;
@@ -38671,6 +38799,12 @@ function createPircDocumentLayout(options) {
         clientWidthIndependentOfDescendantSizes = source.clientWidthIndependentOfDescendantSizes;
       }
 
+      const scrollReveal = validateScrollReveal(source.scrollReveal,`${id}.scrollReveal`);
+      if(scrollReveal!==undefined) {
+        if(source.kind!=='box') throw new TypeError(`${id}.scrollReveal requires a box`);
+        scrollRevealReferences+=scrollReveal.ports.length;
+        if(scrollRevealReferences>16384) throw new RangeError('Scroll reveal metadata exceeds the packet budget');
+      }
       const scrollGeometry = validateScrollGeometry(source.scrollGeometry, `${id}.scrollGeometry`);
       if (scrollGeometry !== undefined) {
         if (source.kind !== 'box') throw new TypeError(`${id}.scrollGeometry requires a box`);
@@ -38730,11 +38864,12 @@ function createPircDocumentLayout(options) {
             top: requireFiniteNumber(rawScroll.top, `${id}.scroll.top`, false),
             width: requireFiniteNumber(rawScroll.width, `${id}.scroll.width`, true),
             height: requireFiniteNumber(rawScroll.height, `${id}.scroll.height`, true),
+            ...(rawScroll.active === undefined ? {} : {active: requireScrollActivity(rawScroll.active)}),
             ...(rawScroll.range === undefined ? {} : {range: validateScrollRange(rawScroll.range, `${id}.scroll.range`)}),
           });
         }
         stagedBoxes.set(id, Object.freeze({
-          id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset, scrollGeometry,
+          id, kind: source.kind, x, y, width, height, metrics: Object.freeze(metrics), scroll, offset, scrollGeometry, scrollReveal,
           ...(computedStyle === undefined ? {} : { computedStyle }), textIndependentStyleProperties, resize, element, revision,
           canvasBitmapSizeIndependent, canvasEquivalentStyleWrites, clientWidthIndependentOfDescendantSizes,
           replacedBoxStyleProjection, stableReplacedChildId, canvasSizingProjection,
@@ -38790,6 +38925,23 @@ function createPircDocumentLayout(options) {
       stagedBoxes.set(id, Object.freeze({...box, scrollGeometry: Object.freeze({
         viewport: box.scrollGeometry.viewport, ancestors: Object.freeze(ancestors),
       })}));
+    }
+
+    for(const [id,box] of stagedBoxes) {
+      if(!box.scrollReveal) continue;
+      if(!box.scrollGeometry || box.scrollReveal.viewport!==box.scrollGeometry.viewport) throw new TypeError(`${id}.scrollReveal requires matching scroll ancestry`);
+      let inner=box.element;
+      const ports=box.scrollReveal.ports.map(port=>{
+        const owner=stagedBoxes.get(port.id);
+        if(!owner || owner.kind!=='box' || !owner.scroll?.range || !isProperAncestor(owner.element,inner)) throw new TypeError(`${id}.scrollReveal requires ordered current scroll ancestors`);
+        inner=owner.element;
+        return Object.freeze({...port,element:owner.element});
+      });
+      for(const dep of box.scrollGeometry.ancestors) {
+        const port=ports.find(p=>p.id===dep.id);
+        if(!port || port.axes.some((n,i)=>n!==dep.axes[i])) throw new TypeError(`${id}.scrollReveal differs from native scroll axes`);
+      }
+      stagedBoxes.set(id,Object.freeze({...box,scrollReveal:Object.freeze({viewport:box.scrollReveal.viewport,ports:Object.freeze(ports)})}));
     }
 
     // Resolve stable-child ownership after every box has been staged.
@@ -38898,6 +39050,7 @@ function createPircDocumentLayout(options) {
     }
     for (const [id, element] of staged.elements) knownElements.set(id, element);
     lastGeneration = staged.generation;
+    scrollActivityRefreshRequested = false;
     pendingSizeMutationTargets = new Set();
     pendingProjectedStyles = new Map();
     pendingCanvasSizingAxes = new Map();
@@ -38990,6 +39143,8 @@ function createPircDocumentLayout(options) {
     scrollMetric(element, name) { return scrollMetric(element, name); },
     elementScrollTarget,
     queueElementScrollAction,
+    scrollIntoViewPlan,
+    scrollIntoViewCompletion,
     setScrollActionQueue(callback) {
       if (callback !== null && typeof callback !== 'function') throw new TypeError('Scroll action queue must be a function');
       scrollActionQueue = callback;
@@ -41582,6 +41737,7 @@ function createPircDocumentLayout(options) {
   }
 
   function installNativeScrollPositionGlobals(view, globalObject, layout) {
+    const ScrollPromise=Promise, resolveScroll=Promise.resolve.bind(Promise), rejectScroll=Promise.reject.bind(Promise);
     const aliases = [
       ['scrollX', 'scrollX'],
       ['scrollY', 'scrollY'],
@@ -41612,6 +41768,8 @@ function createPircDocumentLayout(options) {
       return behavior;
     }
 
+    const pendingScrollReveals=new Set();
+    const scrollTargetKey=target=>target?.id ?? null;
     function queueScrollAction(kind, x, y, behavior, target) {
       const state = activeState;
       if (!state) return;
@@ -41638,6 +41796,12 @@ function createPircDocumentLayout(options) {
       const effectiveBehavior = layout.resolveScrollBehavior(target, behavior);
       if (behavior === 'auto' && ['instant', 'smooth'].includes(effectiveBehavior))
         action.resolvedBehavior = effectiveBehavior;
+      for(const pending of pendingScrollReveals) {
+        if(pending.targets.has(scrollTargetKey(target))) {
+          pendingScrollReveals.delete(pending);
+          pending.resolve({interrupted:true});
+        }
+      }
       layout.recordScrollAction(action, target, effectiveBehavior);
       state.scrollActions.push(Object.freeze(action));
     }
@@ -41703,6 +41867,60 @@ function createPircDocumentLayout(options) {
         });
       }
     }
+
+    Object.defineProperty(Element$1.prototype,'scrollIntoView',{
+      configurable:true,enumerable:true,writable:true,
+      value:function scrollIntoView(arg=undefined) {
+        const element=this;
+        try {
+          if(!(element instanceof Element$1)) throw new TypeError('scrollIntoView requires an Element');
+          const options={behavior:'auto',block:'start',container:'all',inline:'nearest'};
+          if(arg==null || typeof arg==='object' || typeof arg==='function') {
+            if(arg!=null) {
+              options.behavior=normalizeScrollBehavior(arg.behavior);
+              for(const key of ['block','container','inline']) {
+                const raw=arg[key];if(raw===undefined) continue;
+                const value=''+raw,allowed=key==='container'?['all','nearest']:['start','center','end','nearest'];
+                if(!allowed.includes(value)) throw new TypeError(`Invalid scrollIntoView ${key}`);
+                options[key]=value;
+              }
+            }
+          } else if(!arg) options.block='end';
+          if(element.ownerDocument!==activeState.document || !element.isConnected)
+            return resolveScroll({interrupted:false});
+          const execute=()=>{
+            const plan=layout.scrollIntoViewPlan(element,options),state=activeState;
+            if(state.scrollActions.length+plan.length>MAX_PENDING_SCROLL_ACTIONS || layout.pendingScrollActionCount()+plan.length>MAX_PENDING_SCROLL_ACTIONS)
+              throw new RangeError('Native scrollIntoView action queue is full');
+            if(!Number.isSafeInteger(state.nextScrollActionId+plan.length-1)) throw new RangeError('Native scroll action id overflow');
+            const first=state.scrollActions.length;
+            for(const request of plan) queueScrollAction('to',request.x,request.y,options.behavior,request.target);
+            const animated=state.scrollActions.slice(first).some(action=>(action.resolvedBehavior ?? action.behavior)==='smooth');
+            if(!animated) return {interrupted:false};
+            const through=state.nextScrollActionId-1;
+            return new ScrollPromise((resolve,reject)=>{
+              const pending={targets:new Set(plan.map(request=>scrollTargetKey(request.target))),resolve};
+              pendingScrollReveals.add(pending);
+              const poll=()=>{
+                if(!pendingScrollReveals.has(pending)) return;
+                try {
+                  const result=layout.scrollIntoViewCompletion(plan,through);
+                  if(result) {pendingScrollReveals.delete(pending);resolve(result);}
+                  else view.requestAnimationFrame(poll);
+                } catch(error) {pendingScrollReveals.delete(pending);reject(error);}
+              };
+              view.requestAnimationFrame(poll);
+            });
+          };
+          if(!layout.hasCurrentBox(element) && layout.needsLayout()) {
+            return new ScrollPromise((resolve,reject)=>view.requestAnimationFrame(()=>{
+              try {resolve(execute());} catch(error) {reject(error);}
+            }));
+          }
+          return resolveScroll(execute());
+        } catch(error) {return rejectScroll(error);}
+      }
+    });
 
     const elementScrollTo = scrollMethod('to', true);
     const elementScrollMethods = [

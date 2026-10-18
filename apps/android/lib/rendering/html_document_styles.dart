@@ -192,6 +192,18 @@ class NativeDocumentStyleEngine {
 
 const _supportedBoxShorthands = <String, List<String>>{
   'inset': ['top', 'right', 'bottom', 'left'],
+  'scroll-margin': [
+    'scroll-margin-top',
+    'scroll-margin-right',
+    'scroll-margin-bottom',
+    'scroll-margin-left',
+  ],
+  'scroll-padding': [
+    'scroll-padding-top',
+    'scroll-padding-right',
+    'scroll-padding-bottom',
+    'scroll-padding-left',
+  ],
   'margin': ['margin-top', 'margin-right', 'margin-bottom', 'margin-left'],
   'padding': ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'],
   'border-color': [
@@ -1565,6 +1577,26 @@ class _Cascade {
     final expansion = _supportedBoxShorthands[property];
     if (expansion != null) {
       final values = _boxShorthandValues(expression);
+      if (values == null &&
+          const {'scroll-margin', 'scroll-padding'}.contains(property)) {
+        for (var index = 0; index < expansion.length; index++) {
+          _offer(
+            element,
+            expansion[index],
+            _Candidate(
+              valueExpression: expression,
+              value: _expressionText(expression),
+              important: declaration.important,
+              isInline: isInline,
+              specificity: specificity,
+              order: order,
+              suborder: index,
+              baseUrl: baseUrl,
+            ),
+          );
+        }
+        return;
+      }
       if (values == null) {
         _preserveInlineShorthand(
           element,

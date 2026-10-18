@@ -250,6 +250,21 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
     // non-inherited initial value, rather than omitting a known scalar.
     values['scroll-behavior'] = scrollBehavior ?? 'auto';
 
+    final writingMode = _resolveKeyword(
+      author['writing-mode'],
+      inheritedValue: parentSpec?.values['writing-mode'] ?? 'horizontal-tb',
+      initialValue: 'horizontal-tb',
+      inherited: true,
+      accepted: const {
+        'horizontal-tb',
+        'vertical-rl',
+        'vertical-lr',
+        'sideways-rl',
+        'sideways-lr',
+      },
+    );
+    if (writingMode != null) values['writing-mode'] = writingMode;
+
     final visibility = _resolveKeyword(
       author['visibility'],
       inheritedValue: parentSpec?.values['visibility'] ?? 'visible',
@@ -1629,6 +1644,8 @@ Map<String, String> _lengthsFor({
           ? ua['margin-$side']
           : '0px',
     for (final side in _sides) 'padding-$side': ua['padding-$side'] ?? '0px',
+    for (final side in _sides) 'scroll-margin-$side': '0px',
+    for (final side in _sides) 'scroll-padding-$side': 'auto',
     for (final side in _sides) 'border-$side-width': 'medium',
   };
   final initials = <String, String>{
@@ -1644,6 +1661,8 @@ Map<String, String> _lengthsFor({
     'left': 'auto',
     for (final side in _sides) 'margin-$side': '0px',
     for (final side in _sides) 'padding-$side': '0px',
+    for (final side in _sides) 'scroll-margin-$side': '0px',
+    for (final side in _sides) 'scroll-padding-$side': 'auto',
     for (final side in _sides) 'border-$side-width': 'medium',
   };
   for (final property in defaults.keys) {
@@ -1690,6 +1709,7 @@ Map<String, String> _lengthsFor({
     }
     final allowNegative =
         property.startsWith('margin-') ||
+        property.startsWith('scroll-margin-') ||
         const {'top', 'right', 'bottom', 'left'}.contains(property);
     final normalized = _normalizeGeometryLength(
       value,
