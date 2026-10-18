@@ -875,6 +875,25 @@ void main() {
       );
 
       expect(() => _captureOrNull(controller, revision: 1), throwsRangeError);
+      // A native fragment capture asks only for its target and real ports.
+      // A large document must not force unrelated IDs into the JS bridge.
+      final subset = controller.capture(
+        revision: 1,
+        generation: 1,
+        viewport: const Size(390, 796),
+        requestedIds: const {'id-0'},
+      );
+      expect(subset, isNotNull);
+      expect((subset!['boxes'] as List).map((box) => box['id']), ['id-0']);
+      expect(
+        controller.capture(
+          revision: 1,
+          generation: 2,
+          viewport: const Size(390, 796),
+          requestedIds: const {'not-owned'},
+        ),
+        isNull,
+      );
     });
 
     testWidgets('rejects stale revisions and reports unmeasured IDs', (

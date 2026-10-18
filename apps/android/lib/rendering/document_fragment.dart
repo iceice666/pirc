@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:html/parser.dart' as html;
+import 'package:html/dom.dart' as dom;
 
 const nativeFragmentAttribute = 'data-pirc-native-fragment';
 
@@ -15,8 +16,22 @@ class NativeDocumentFragmentTarget {
 class NativeDocumentFragmentIndex {
   NativeDocumentFragmentIndex(String source, String nonce) {
     final fragment = html.parseFragment(source);
+    _annotate(fragment.querySelectorAll('*'), nonce);
+    _annotatedHtml = fragment.outerHtml;
+  }
+
+  /// Annotates the renderer's existing DOM clone without serializing another
+  /// copy of inline script sources. The caller serializes its body afterwards.
+  NativeDocumentFragmentIndex.fromDocument(
+    dom.Document document,
+    String nonce,
+  ) {
+    _annotate(document.querySelectorAll('*'), nonce);
+  }
+
+  void _annotate(Iterable<dom.Element> elements, String nonce) {
     var sequence = 0;
-    for (final element in fragment.querySelectorAll('*')) {
+    for (final element in elements) {
       element.attributes.remove(nativeFragmentAttribute);
       final id = element.attributes['id'];
       final name = element.localName == 'a' ? element.attributes['name'] : null;
@@ -25,15 +40,23 @@ class NativeDocumentFragmentIndex {
       }
       final alias = 'pirc-$nonce-fragment-${++sequence}';
       element.attributes[nativeFragmentAttribute] = alias;
+      final nativeId = element.attributes['data-pirc-script-id'];
+      if (nativeId != null) _nativeIds[alias] = nativeId;
       if (id != null && id.isNotEmpty) _ids.putIfAbsent(id, () => alias);
       if (name != null && name.isNotEmpty) {
         _names.putIfAbsent(name, () => alias);
       }
     }
-    annotatedHtml = fragment.outerHtml;
   }
-  late final String annotatedHtml;
-  final _ids = <String, String>{}, _names = <String, String>{};
+
+  String? _annotatedHtml;
+  String get annotatedHtml =>
+      _annotatedHtml ??
+      (throw StateError('Serialize the annotated document clone directly'));
+  final _ids = <String, String>{},
+      _names = <String, String>{},
+      _nativeIds = <String, String>{};
+  String? nativeIdFor(String alias) => _nativeIds[alias];
   String? anchorFor(String value) => _ids[value] ?? _names[value];
 
   NativeDocumentFragmentTarget? select(String raw) {

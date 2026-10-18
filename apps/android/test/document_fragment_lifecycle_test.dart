@@ -35,10 +35,17 @@ void main() {
           tester.view.devicePixelRatio = dpr;
           tester.view.physicalSize = viewport * dpr;
           addTearDown(tester.view.reset);
-          final source = (row['html'] as String).replaceFirst(
-            '</body>',
-            '<a href="#other" style="position:fixed;top:64px;left:16px">Other</a></body>',
-          );
+          final source = (row['html'] as String)
+              .replaceFirst(
+                '</head>',
+                scenario == 'click-during-reveal'
+                    ? '<style>html{scroll-behavior:smooth}</style></head>'
+                    : '</head>',
+              )
+              .replaceFirst(
+                '</body>',
+                '<a href="#other" style="position:fixed;top:64px;left:16px">Other</a></body>',
+              );
           final gateway = DocumentGateway()
                 ..responses.add(response('/fragment', source)),
               windows = NativeDocumentWindows(gateway),
@@ -110,11 +117,15 @@ void main() {
             expect(window.current!.url, endsWith('#other'));
           } else {
             await tester.tap(find.text('Jump', findRichText: true));
-            for (var i = 0; i < 12 && !document.viewport.resolvingAnchor; i++) {
+            for (
+              var i = 0;
+              i < 12 && !document.scroll.position.isScrollingNotifier.value;
+              i++
+            ) {
               await tester.pump(const Duration(milliseconds: 5));
             }
             expect(
-              document.viewport.resolvingAnchor,
+              document.scroll.position.isScrollingNotifier.value,
               isTrue,
               reason: 'exercise a real in-flight reveal',
             );

@@ -12,6 +12,62 @@ import 'live_test.dart' show theme;
 import 'native_html_test.dart' show tapText;
 
 void main() {
+  for (final head in [
+    '<meta id="destination">',
+    '<style id="destination">/* hidden target */</style>',
+  ]) {
+    testWidgets('full DOM fragment priority includes unrendered $head', (
+      tester,
+    ) async {
+      final gateway = DocumentGateway()
+            ..responses.add(
+              response(
+                '/full-dom',
+                '<html><head>$head</head><body style="margin:0;height:3000px"><div style="height:1000px"></div><div id="destination" style="height:40px"></div><a href="#destination" style="position:fixed;top:20px;left:16px;display:block;width:100px;height:32px">Jump</a></body></html>',
+              ),
+            ),
+          windows = NativeDocumentWindows(gateway),
+          window = windows.target(
+            'report',
+            null,
+            sourceUrl: 'https://gateway.example/',
+          );
+      addTearDown(windows.dispose);
+      await window.load(
+        const NativeHtmlFormRequest(
+          url: '/full-dom',
+          method: 'GET',
+          target: '',
+        ),
+        baseUrl: window.sourceUrl,
+      );
+      windows.select(window);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme.build(Brightness.light),
+          home: NativeDocumentWorkspace(windows: windows),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final document = window.currentDocument!;
+      document.scroll.jumpTo(240);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Jump', findRichText: true));
+      await tester.pumpAndSettle();
+      expect(
+        document.scroll.offset,
+        240,
+        reason: 'unrendered first ID wins over the rendered duplicate',
+      );
+      expect(document.viewport.lastFragmentDifference, isNull);
+      expect(window.current!.url, endsWith('#destination'));
+      expect(gateway.calls, hasLength(1));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    });
+  }
+
   testWidgets(
     'a replaced viewport binds the same source without retaining a stale index',
     (tester) async {
