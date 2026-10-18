@@ -3597,15 +3597,6 @@ class _NativeHtmlFactory extends WidgetFactory {
           return false;
         }
         if (!_positioningBlock(current)) return false;
-        // A containing block that owns scrolling needs positioned children
-        // inside its scroll/clip surface; preserve the explicit boundary here.
-        if (const [
-          'overflow',
-          'overflow-x',
-          'overflow-y',
-        ].any((name) => !const {'visible', ''}.contains(css[name] ?? ''))) {
-          return false;
-        }
         return true;
       }
       current = current.parent;
@@ -3696,7 +3687,9 @@ class _NativeHtmlFactory extends WidgetFactory {
             child,
           ) {
             final entries = _absoluteEntries(context, parsed.element);
-            if (entries.isEmpty) return child;
+            if (entries.isEmpty || _ownsPositioningScrollport(styles)) {
+              return child;
+            }
             final font =
                 parsed.inheritanceResolvers
                     .resolve(context)
@@ -3760,6 +3753,12 @@ class _NativeHtmlFactory extends WidgetFactory {
       ),
     );
   }
+
+  bool _ownsPositioningScrollport(Map<String, String> styles) => const [
+    'overflow',
+    'overflow-x',
+    'overflow-y',
+  ].any((name) => !const {'visible', ''}.contains(styles[name] ?? ''));
 
   void _documentSizing(BuildTree tree, {bool inlineReplaced = false}) {
     const properties = [
@@ -3859,17 +3858,27 @@ class _NativeHtmlFactory extends WidgetFactory {
         debugLabel: 'native-document-element-scroll',
         alwaysRenderBlock: false,
         priority: 5000003800000000,
-        onRenderBlock: (_, placeholder) => placeholder.wrapWith(
-          (_, child) => NativeDocumentElementScroll(
-            key: ValueKey('pirc-element-scroll:$scrollId'),
-            controller: elementScroll(),
-            id: scrollId,
-            revision: layoutRevision(),
-            overflowX: computed(x, y),
-            overflowY: computed(y, x),
-            child: child,
-          ),
-        ),
+        onRenderBlock: (_, placeholder) =>
+            placeholder.wrapWith((context, child) {
+              final entries = _ownsPositioningScrollport(styles)
+                  ? _absoluteEntries(context, tree.element)
+                  : const <NativeAbsoluteEntry>[];
+              return NativeDocumentElementScroll(
+                key: ValueKey('pirc-element-scroll:$scrollId'),
+                controller: elementScroll(),
+                id: scrollId,
+                revision: layoutRevision(),
+                overflowX: computed(x, y),
+                overflowY: computed(y, x),
+                child: entries.isEmpty
+                    ? child
+                    : NativeDocumentAbsoluteLayer(
+                        flow: child,
+                        positioned: entries,
+                        useScrollportBasis: true,
+                      ),
+              );
+            }),
       ),
     );
     final relativePosition = NativeDocumentRelativePositionSpec.parse(

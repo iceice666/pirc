@@ -33,6 +33,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
+- Android keeps positioned interactive content inside its native scrolling and clipping container.
+
 - Android interactive pages report native offset parents and layout positions through common CSS transforms, absolute positioning and fixed positioning.
 
 - Android improves positioning and whole-element opacity inside transformed HTML containers.

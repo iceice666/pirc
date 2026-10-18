@@ -18,6 +18,12 @@ abstract interface class NativeDocumentRoutedPositionedRoot {
   RenderObject? get ordinaryFlow;
 }
 
+/// A native scrollport supplies its constrained padding-box basis while its
+/// content is laid out with unbounded scroll axes.
+abstract interface class NativeDocumentPositioningScrollport {
+  Size positioningPaddingSize(Size flowSize);
+}
+
 /// A live containing-block basis, published only during actual native layout.
 abstract interface class NativeDocumentPositioningBasis {
   double? get positioningWidth;
@@ -279,6 +285,7 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
     this.border = EdgeInsets.zero,
     this.initialContainingBlock,
     this.boxSurface,
+    this.useScrollportBasis = false,
   }) : hasFixedEntries = positioned.any((item) => item.spec.fixedToViewport),
        super(
          children: [
@@ -292,6 +299,7 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
          ],
        );
   final bool hasFixedEntries;
+  final bool useScrollportBasis;
   final EdgeInsets border;
   final Size? initialContainingBlock;
   final ({RenderBox surface, Size size})? Function(RenderBox)? boxSurface;
@@ -301,6 +309,7 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
     initialContainingBlock,
     boxSurface,
     hasFixedEntries,
+    useScrollportBasis,
   );
   @override
   void updateRenderObject(
@@ -311,6 +320,7 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
       ..border = border
       ..initialContainingBlock = initialContainingBlock
       ..boxSurface = boxSurface
+      ..useScrollportBasis = useScrollportBasis
       ..hasFixedEntries = hasFixedEntries
       ..markNeedsLayout();
   }
@@ -428,8 +438,10 @@ class _RenderAbsoluteLayer extends RenderBox
     this.initialContainingBlock,
     this.boxSurface,
     this.hasFixedEntries,
+    this.useScrollportBasis,
   );
   bool hasFixedEntries;
+  bool useScrollportBasis;
   RenderNativeDocumentPositioningViewport? _fixedViewport;
   @override
   bool get viewportRouted => _fixedViewport != null;
@@ -503,8 +515,15 @@ class _RenderAbsoluteLayer extends RenderBox
       surface.getTransformTo(this),
       Offset.zero,
     );
+    final scrollport = parent;
+    final scrollportSize =
+        useScrollportBasis && scrollport is NativeDocumentPositioningScrollport
+        ? (scrollport as NativeDocumentPositioningScrollport)
+              .positioningPaddingSize(flow.size)
+        : null;
     final basis =
         initialContainingBlock ??
+        scrollportSize ??
         Size(
           math.max(0, surfaceSize.width - border.horizontal),
           math.max(0, surfaceSize.height - border.vertical),
