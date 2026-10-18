@@ -1074,6 +1074,7 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
           isCurrent: () =>
               mounted &&
               !window.disposed &&
+              identical(widget.windows.active, window) &&
               window.current == current &&
               current.url == revealUrl &&
               window.fragmentRevealRevision == revision &&
@@ -1081,6 +1082,7 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
         );
       }
       if (mounted &&
+          identical(widget.windows.active, window) &&
           window.current == current &&
           window.fragmentRevealRevision == revision) {
         window.acknowledgeFragmentReveal(current, revision);
@@ -1699,7 +1701,10 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
   Set<String> _fragmentKnownIds = const {};
   int _fragmentLayoutRevision = 0;
   int _fragmentCaptureGeneration = 0;
-  NativeFragmentRevealResult _nativeFragmentReveal(String? id) {
+  NativeFragmentRevealResult _nativeFragmentReveal(
+    String? id,
+    NativeFragmentRevealPhase phase,
+  ) {
     final document = widget.document;
     if (!mounted ||
         !document.scroll.hasClients ||
@@ -1708,6 +1713,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
             (_scripts?.ready != true ||
                 _scripts!.hasPendingPublication ||
                 _scripts!.scrollActions.isNotEmpty ||
+                _scripts!.focusActions.isNotEmpty ||
                 _fragmentLayoutRevision != _scripts!.layoutRevision ||
                 !_scripts!.layoutElementIds.contains(_fragmentRootId)) ||
         !_scrollAnchors.settled ||
@@ -1715,6 +1721,9 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       return NativeFragmentRevealResult.unavailable;
     }
     if (id == null) {
+      if (phase == NativeFragmentRevealPhase.prepare) {
+        return NativeFragmentRevealResult.handled;
+      }
       applyNativeDocumentScrollAxis(
         document.scroll,
         0,
@@ -1762,8 +1771,27 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       'minTop': document.scroll.position.minScrollExtent,
       'maxTop': document.scroll.position.maxScrollExtent,
     };
+    if (phase == NativeFragmentRevealPhase.centered) {
+      final caret = document.viewport.focusCaret;
+      if (caret != null && caret.id == id) {
+        final rect = _layout.measureOwnedRect(id, caret.surface, caret.rect);
+        if (rect == null) return NativeFragmentRevealResult.unavailable;
+        final target =
+            (packet['boxes'] as List).where((box) => box['id'] == id).single
+                as Map;
+        target['focusRect'] = [rect.left, rect.top, rect.width, rect.height];
+      }
+    }
     try {
-      final plan = nativeDocumentRevealPlan(packet, id, rootId);
+      final plan = nativeDocumentRevealPlan(
+        packet,
+        id,
+        rootId,
+        centerFocus: phase == NativeFragmentRevealPhase.centered,
+      );
+      if (phase == NativeFragmentRevealPhase.prepare) {
+        return NativeFragmentRevealResult.handled;
+      }
       for (final action in plan) {
         if (action.elementId != null) {
           _elementScroll.applyActions([

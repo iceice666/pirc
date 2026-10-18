@@ -48,8 +48,6 @@ void main() {
           ),
         );
       },
-      // Known difference: fragment focus centering is not implemented yet.
-      skip: ['button', 'input'].contains(row['mode']),
     );
   }
 }

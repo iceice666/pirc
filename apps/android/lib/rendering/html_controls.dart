@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html;
+import 'html_control_box_style.dart';
+import 'html_control_intrinsic.dart';
+import 'html_control_border_painter.dart';
 
 enum NativeHtmlControlType { checkbox, radio }
 
@@ -623,8 +626,10 @@ class NativeHtmlControlWidget extends StatefulWidget {
     required this.state,
     required this.control,
     required this.accent,
+    this.boxStyle,
   });
 
+  final NativeHtmlControlBoxStyle? boxStyle;
   final NativeHtmlControlState state;
   final NativeHtmlControlDescriptor control;
   final Color accent;
@@ -760,6 +765,66 @@ class _NativeHtmlControlWidgetState extends State<NativeHtmlControlWidget> {
         ),
       ),
     );
+    final style = widget.boxStyle;
+    if (style != null) {
+      Size natural(BoxConstraints constraints) {
+        final padding = style.resolvePadding(constraints),
+            border = style.border.dimensions.resolve(
+              Directionality.of(context),
+            );
+        return Size(
+          size + padding.horizontal + border.horizontal,
+          size + padding.vertical + border.vertical,
+        );
+      }
+
+      final intrinsic = style.resolveLayout(
+        intrinsicBorderBoxSize: natural(const BoxConstraints()),
+        constraints: const BoxConstraints(),
+      );
+      return NativeHtmlControlIntrinsic(
+        intrinsicSize: intrinsic.size,
+        baselineFromTop: intrinsic.size.height,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final layout = style.resolveLayout(
+              intrinsicBorderBoxSize: natural(constraints),
+              constraints: constraints,
+            );
+            return CustomPaint(
+              foregroundPainter: NativeHtmlControlBorderPainter(
+                border: layout.border,
+                styleNames: layout.borderStyleNames,
+                borderRadius: layout.borderRadius,
+              ),
+              child: Container(
+                width: layout.size.width,
+                height: layout.size.height,
+                decoration: BoxDecoration(
+                  color: layout.backgroundColor,
+                  borderRadius: layout.borderRadius,
+                ),
+                padding:
+                    layout.padding +
+                    layout.border.dimensions.resolve(
+                      Directionality.of(context),
+                    ),
+                child: CustomPaint(
+                  painter: _NativeControlPainter(
+                    type: widget.control.type,
+                    checked: checked,
+                    disabled: widget.control.disabled,
+                    dark: Theme.of(context).brightness == Brightness.dark,
+                    focused: focused,
+                    accent: widget.accent,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    }
     if (widget.control.type == NativeHtmlControlType.checkbox) {
       final fontSize = DefaultTextStyle.of(context).style.fontSize ?? 15;
       return Transform.translate(
@@ -797,6 +862,7 @@ class _NativeControlPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
     final rect = Offset.zero & size;
     final edge = disabled
         ? (dark ? const Color(0xff626262) : const Color(0xffd1d1d1))
@@ -837,9 +903,9 @@ class _NativeControlPainter extends CustomPainter {
       if (checked) {
         canvas.drawPath(
           Path()
-            ..moveTo(3, 6.5)
-            ..lineTo(5.2, 8.7)
-            ..lineTo(10, 3.6),
+            ..moveTo(3 * size.width / 13, 6.5 * size.height / 13)
+            ..lineTo(5.2 * size.width / 13, 8.7 * size.height / 13)
+            ..lineTo(10 * size.width / 13, 3.6 * size.height / 13),
           Paint()
             ..color = dark
                 ? const Color(0xff3b3b3b)
@@ -855,10 +921,16 @@ class _NativeControlPainter extends CustomPainter {
       return;
     }
 
-    final center = rect.center;
-    canvas.drawCircle(center, 6.25, Paint()..color = checked ? chosen : edge);
-    canvas.drawCircle(center, 5.2, Paint()..color = fill);
-    if (checked) canvas.drawCircle(center, 3.0, Paint()..color = chosen);
+    final center = rect.center, scale = math.min(size.width, size.height) / 13;
+    canvas.drawCircle(
+      center,
+      6.25 * scale,
+      Paint()..color = checked ? chosen : edge,
+    );
+    canvas.drawCircle(center, 5.2 * scale, Paint()..color = fill);
+    if (checked) {
+      canvas.drawCircle(center, 3.0 * scale, Paint()..color = chosen);
+    }
   }
 
   @override

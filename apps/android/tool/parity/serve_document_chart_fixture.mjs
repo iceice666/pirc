@@ -143,6 +143,10 @@ const server = createServer((request, response) => {
     response.end(interactions);
     return;
   }
+  if(pathname === '/fragment-focus.json') {
+    response.writeHead(200,{'cache-control':'no-store','content-type':'application/json; charset=utf-8'});
+    response.end(readFileSync(path.join(scriptDirectory,'fixtures/document-fragment-focus-chromium153.json')));return;
+  }
   if(pathname === '/fragment-scroll.json') {
     response.writeHead(200,{'cache-control':'no-store','content-type':'application/json; charset=utf-8'});
     response.end(readFileSync(path.join(scriptDirectory,'fixtures/document-fragment-scroll-chromium153.json')));return;

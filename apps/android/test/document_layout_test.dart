@@ -896,6 +896,72 @@ void main() {
       );
     });
 
+    testWidgets(
+      'private caret evidence is bound to its owner and completed frame',
+      (tester) async {
+        final controller = NativeDocumentLayoutController();
+        addTearDown(controller.dispose);
+        const first = ValueKey('first-caret'),
+            second = ValueKey('second-caret');
+        Widget tree(int rootRevision, int firstRevision) => _document(
+          controller: controller,
+          revision: rootRevision,
+          knownIds: const {'a', 'b'},
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              NativeDocumentLayoutElement(
+                controller: controller,
+                revision: firstRevision,
+                id: 'a',
+                child: const SizedBox(key: first, width: 40, height: 30),
+              ),
+              NativeDocumentLayoutElement(
+                controller: controller,
+                revision: rootRevision,
+                id: 'b',
+                child: const SizedBox(key: second, width: 40, height: 30),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpWidget(tree(1, 1));
+        final own = tester.renderObject<RenderBox>(find.byKey(first)),
+            other = tester.renderObject<RenderBox>(find.byKey(second));
+        const caret = Rect.fromLTWH(2, 3, 2, 14);
+        expect(controller.measureOwnedRect('a', own, caret), isNotNull);
+        expect(
+          controller.measureOwnedRect('a', other, caret),
+          isNull,
+          reason: 'cannot borrow another control surface',
+        );
+        expect(controller.measureOwnedRect('unknown', own, caret), isNull);
+        expect(
+          controller.measureOwnedRect(
+            'a',
+            own,
+            Rect.fromLTWH(double.nan, 0, 2, 14),
+          ),
+          isNull,
+        );
+        expect(
+          (_capture(controller, revision: 1)['boxes'] as List).any(
+            (box) => (box as Map).containsKey('focusRect'),
+          ),
+          isFalse,
+          reason: 'private caret geometry never enters the VM packet',
+        );
+        await tester.pumpWidget(tree(2, 1));
+        expect(
+          controller.measureOwnedRect('a', own, caret),
+          isNull,
+          reason: 'stale owner revision',
+        );
+        await tester.pumpWidget(const SizedBox());
+        expect(controller.measureOwnedRect('b', other, caret), isNull);
+      },
+    );
+
     testWidgets('rejects stale revisions and reports unmeasured IDs', (
       tester,
     ) async {

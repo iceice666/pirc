@@ -349,26 +349,57 @@ retain their priority over a later rendered duplicate.
 The additional Chromium 153 corpus contains 280 profiles at phone/tablet sizes,
 DPR 1/3 and both themes. The workspace has 48 CSS px of app chrome, excluded from
 the browser document viewport; native tests assert the same available viewport.
-The native gate covers 248 first/repeated profiles, plus 88 initial-load profiles
-with and without real Android Sandbox scripts. It includes CSS padding/margins,
+The native geometry test now includes all 280 first/repeated profiles, plus 88
+initial-load profiles with and without real Android Sandbox scripts. It includes CSS padding/margins,
 negative margins, font lengths, percentages, transformed ports/targets, hidden
 and oversized targets, Canvas, zero-range ports, root padding and click-time DOM
-style mutations. Widget tests cover the 120 non-script first/repeated profiles
+style mutations. Widget tests cover the 136 non-script first/repeated profiles
 and 40 initial-load profiles. These are coordinate/navigation checks, not a
 claim of pixel-perfect rendering or all fragment behavior.
 
-**Explicit fragment differences:** the 32 button/input reference profiles are
-excluded from this gate: Chromium's fragment focus step first centers focusable
-controls, while the current native path only performs the standard fragment
-reveal. Their earlier scrollIntoView geometry gate does not certify fragment
-focus. Other focusable elements and focus event/keyboard behavior, `:target`
-styling, ancestor revealing, late DOM/image retry, targets without a measured
-box, inline/text/non-HTML fragments, RTL/vertical writing, sticky/SVG geometry,
-scroll snap, root horizontal scrolling and unresolved inset math remain open.
-Unsupported geometry uses the legacy native anchor fallback and records an
-explicit difference; failure to obtain a matching frame is bounded and also
-recorded. Backend redirect/hash inheritance, physical devices and remote push
-remain outside this gate.
+**Native fragment focus:** the former button/input focus exclusions are now
+enabled. Native DOM focus moves before reveal, and the existing trusted event
+bridge delivers blur/focusout/focus/focusin with activeElement and relatedTarget.
+Focusable links, controls and tabindex targets (including -1) receive
+native focus; disabled, hidden and inert targets are not focused.
+Nonfocusable targets clear document focus, while top fallback/missing anchors
+retain the link's focus. The selected native node is retained across the focus
+publication rather than reselecting another duplicate ID.
+
+Focus centering and start/nearest fragment reveal are composed from one completed
+native frame. Only the host's own instant scroll effects are translated through
+proved native axes; a pending smooth focus goal is not treated as a position.
+Textareas use their actual RenderEditable caret rectangle, checked against the
+same target/root/revision. This private caret evidence never enters VM packets.
+Native deferred caret reveal is suppressed during the focus handoff. Changing
+the selected window cancels the pending navigation and cannot steal focus or
+replay it on return; remount retention remains a separate existing contract.
+
+The additional 312-profile Chromium 153 focus corpus covers actual native focus,
+settled nested positions and first/repeated clicks at both sizes, DPRs and themes.
+Android also checks 88 initial loads, with real Sandbox scripts, trusted event
+order and relatedTarget/activeElement, including focus handlers changing CSS
+margins. It covers buttons, inputs, textareas, selects, checkboxes, links,
+tabindex, disabled/hidden/nonfocusable targets, top/missing fragments, insets,
+rotation, already visible targets and root/inner/all smooth defaults. The
+non-script widget gate has 152 click/repeat and 40 initial profiles. A separate
+widget gate checks CSS-sized toggle activation, labels, Space and radio arrow
+keys. The browser geometry tolerance is 1/32 CSS px; focus identity and event
+reports must match exactly. Exact animation timing is still Flutter-specific.
+
+**Remaining fragment differences:** reentrant focus redirection/navigation,
+filled/oversized control caret and selection variants, focus restoration across
+remount/background transitions, broader keyboard traversal, focus pseudo styling,
+additional toggle box-model combinations and exact toggle appearance/accent
+styling are not newly certified. A redirected focus is recorded as a difference.
+`:target`, ancestor revealing, late DOM/image retry, targets without a measured
+box, inline/text/
+non-HTML fragments, RTL/vertical writing, sticky/SVG geometry, scroll snap,
+root horizontal scrolling and unresolved inset math remain open. Unsupported
+geometry retains the native anchor fallback and an explicit difference; matching
+frame waits stay bounded. Backend redirect/hash inheritance, physical devices
+and remote push remain outside this gate. This does not establish pixel-perfect
+rendering or complete fragment behavior.
 
 **Remaining synchronous layout differences:** general DOM writes followed by
 geometry reads still need matching native measurement. Exact animation timing,

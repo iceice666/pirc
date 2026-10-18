@@ -23,6 +23,7 @@ void main() {
       'remount',
       'replace-cancel',
       'click-during-reveal',
+      'window-switch-cancel',
     ]) {
       testWidgets(
         'fragment lifecycle $scenario ${row['viewport']['width']} dpr${row['dpr']} ${row['theme']}',
@@ -63,6 +64,23 @@ void main() {
             ),
             baseUrl: window.sourceUrl,
           );
+          NativeDocumentWindow? other;
+          if (scenario == 'window-switch-cancel') {
+            gateway.responses.add(response('/other', '<p>Other window</p>'));
+            other = windows.target(
+              'other',
+              null,
+              sourceUrl: 'https://gateway.example/',
+            );
+            await other.load(
+              const NativeHtmlFormRequest(
+                url: '/other',
+                method: 'GET',
+                target: '',
+              ),
+              baseUrl: other.sourceUrl,
+            );
+          }
           windows.select(window);
           final document = window.currentDocument!;
           Widget workspace() => MaterialApp(
@@ -101,6 +119,28 @@ void main() {
             await tester.pumpAndSettle();
             expect(document.scroll.offset, 1000);
             expect(window.history, hasLength(2));
+          } else if (scenario == 'window-switch-cancel') {
+            await go('#destination');
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => windows.select(other!),
+            );
+            await tester.pumpAndSettle();
+            expect(windows.active, same(other));
+            expect(document.scroll.offset, 240);
+            expect(
+              window.hasPendingFragmentReveal,
+              isFalse,
+              reason: 'a newer window selection cancels pending navigation',
+            );
+            windows.select(window);
+            await tester.pumpAndSettle();
+            expect(
+              document.scroll.offset,
+              240,
+              reason:
+                  'returning preserves reading position rather than replaying canceled navigation',
+            );
+            expect(window.hasPendingFragmentReveal, isFalse);
           } else if (scenario == 'replace-cancel') {
             await go('#destination');
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -134,7 +174,7 @@ void main() {
             expect(window.current!.url, endsWith('#other'));
             expect(window.history, hasLength(3));
           }
-          expect(gateway.calls, hasLength(1));
+          expect(gateway.calls, hasLength(other == null ? 1 : 2));
           expect(tester.takeException(), isNull);
           await tester.pumpWidget(const SizedBox());
           await tester.pumpAndSettle();

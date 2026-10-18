@@ -607,20 +607,42 @@ renderer-only IDs do not enter script packets.
 
 Recreate the additional 280-profile reference with
 `node apps/android/tool/parity/capture_document_fragment_scroll_chromium153.mjs`.
-`test/document_fragment_scroll_test.dart` checks 120 non-script click/repeat
+`test/document_fragment_scroll_test.dart` checks 136 non-script click/repeat
 profiles and 40 initial URLs. The Android counterpart uses `/fragment-scroll.json`
-from the loopback server for 248 click/repeat profiles and 88 initial URLs,
+from the loopback server for all 280 click/repeat profiles and 88 initial URLs,
 including real Sandbox scripts and click-time style changes. All runs assert the
 same document viewport after excluding the workspace's 48 px chrome.
 
-The corpus explicitly excludes 32 button/input profiles because fragment focus
-centers controls in Chromium; native fragment focus is still open. Broader
-focus/keyboard events, `:target`, late target retry, ancestor revealing,
-unmeasured/inline/text/non-HTML targets, RTL/vertical writing, sticky/SVG boxes,
-scroll snap, root horizontal scrolling and unresolved inset math remain listed
-in the mobile plan. Unsupported geometry retains the native anchor fallback and
-records a difference; a missing matching frame has a bounded wait. Physical
-acceptance, backend redirect/hash inheritance and remote push are not certified.
+Fragment focus now uses real native focus nodes and the existing trusted event
+bridge. The former button/input exclusions are enabled. A completed native frame
+composes focus centering and fragment reveal; textarea caret bounds are measured
+from the owned editor, remain private to the host and do not enter VM packets.
+Only instant focus scroll effects are positions; pending smooth goals are not.
+Nonfocusable/disabled/hidden targets, tabindex, top/missing fragments and window
+selection cancellation have explicit native behavior.
+
+Recreate `document-fragment-focus-chromium153.json` with
+`node apps/android/tool/parity/capture_document_fragment_focus_chromium153.mjs`.
+Its widget gate checks 152 click/repeat and 40 initial profiles. Android's
+`integration_test/document_fragment_focus_test.dart` uses `/fragment-focus.json`
+for 312 click/repeat and 88 initial profiles, including real Sandbox event
+reports, relatedTarget/activeElement and focus-time CSS changes. Insets, rotated
+containers, already visible targets and root/inner/all smooth defaults are
+included. Focus/event reports are exact; geometry uses 1/32 CSS px tolerance.
+A separate widget test verifies CSS-sized toggles keep click, label, Space and
+radio arrow-key behavior.
+
+Reentrant focus redirection/navigation, filled/oversized-control caret and
+selection variants, focus restoration across remount/background transitions,
+broader traversal, focus pseudo styling, additional toggle box-model combinations
+and exact toggle appearance/accent styling remain outside this gate. Redirected
+focus records a difference.
+`:target`, late target retry, ancestor revealing, unmeasured/inline/text/non-HTML
+targets, RTL/vertical writing, sticky/SVG boxes, scroll snap, root horizontal
+scrolling and unresolved inset math remain listed in the mobile plan. Unsupported
+geometry retains the native anchor fallback; matching-frame waits are bounded.
+Physical acceptance, backend redirect/hash inheritance and remote push are not
+certified. Exact animation timing remains Flutter-specific.
 
 `document.scrollingElement` uses the initial HTML parser mode and native
 box/overflow measurements to select the standards root, quirks body, or null.

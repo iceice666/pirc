@@ -30,7 +30,7 @@ void main() {
       expect(fixture['browserVersion'], '153.0.8010.12');
       expect(fixture['cases'], hasLength(280));
       final theme = await PircTheme.load(), accepted = <Map>[];
-      final excluded = <Map>[], initialAccepted = <Map>[];
+      final initialAccepted = <Map>[];
       final gateway = FragmentScrollGateway();
       // Keep the real app event stream alive across document windows. A last
       // subscriber cancellation intentionally invalidates all native contexts.
@@ -40,17 +40,6 @@ void main() {
       expect(filter, anyOf('', 'css-smooth'));
       for (final row in fixture['cases'] as List) {
         if (filter.isNotEmpty && row['mode'] != filter) continue;
-        if (['button', 'input'].contains(row['mode'])) {
-          excluded.add({
-            'mode': row['mode'],
-            'scripted': row['scripted'],
-            'viewport': row['viewport'],
-            'dpr': row['dpr'],
-            'theme': row['theme'],
-            'difference': 'fragment focus centering remains unimplemented',
-          });
-          continue;
-        }
         if ([
           'default',
           'padding-margin',
@@ -83,18 +72,14 @@ void main() {
         );
         if (accepted.length % 35 == 0) {
           debugPrintSynchronously(
-            'PIRC_FRAGMENT_SCROLL_PROGRESS ${accepted.length}/248',
+            'PIRC_FRAGMENT_SCROLL_PROGRESS ${accepted.length}/280',
           );
         }
       }
-      expect(accepted, hasLength(filter.isEmpty ? 248 : 16));
-      expect(excluded, hasLength(filter.isEmpty ? 32 : 0));
+      expect(accepted, hasLength(filter.isEmpty ? 280 : 16));
       expect(initialAccepted, hasLength(filter.isEmpty ? 88 : 16));
       debugPrintSynchronously(
         'PIRC_NATIVE_FRAGMENT_SCROLL_INITIAL_ACCEPTANCE ${jsonEncode(initialAccepted)}',
-      );
-      debugPrintSynchronously(
-        'PIRC_FRAGMENT_SCROLL_KNOWN_DIFFERENCES ${jsonEncode(excluded)}',
       );
       debugPrintSynchronously(
         'PIRC_NATIVE_FRAGMENT_SCROLL_ACCEPTANCE ${jsonEncode(accepted)}',
