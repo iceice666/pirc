@@ -10,7 +10,7 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde_json::{Map, Value, json};
 
 use crate::chat::parse_tool_arguments;
-use crate::http::opencode_go_headers;
+use crate::http::opencode_headers;
 use crate::js::{self, get, present, truthy};
 use crate::sse::NativeDecoder;
 use crate::stream::{Cancelled, Emitter, StreamRequest, assistant, content_index};
@@ -405,7 +405,7 @@ impl NativeAnthropicRun {
             .as_deref()
             .unwrap_or(&request.provider.base_url);
         let opencode =
-            opencode_go_headers(request.provider.opencode_go, model_url, &request.session_id)
+            opencode_headers(request.provider.opencode_go, model_url, &request.session_id)
                 .map_err(|()| Failure::upstream("Invalid URL"))?;
         for (name, value) in opencode {
             headers.set(name, &value);

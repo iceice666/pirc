@@ -4,7 +4,8 @@
  *
  * Only providers whose every model uses a wire API the gateway implements are
  * kept (the others could be neither presets nor OAuth catalogs), and `cost`
- * is dropped (the gateway reports zero cost).
+ * is dropped (the gateway reports zero cost). Base URLs a provider has moved
+ * since the pinned release are rewritten through BASE_URL_MOVES.
  *
  *   bun scripts/model-catalog.ts          write the snapshot
  *   bun scripts/model-catalog.ts --check  fail when the snapshot is stale
@@ -25,6 +26,28 @@ export const SUPPORTED_APIS: ReadonlySet<string> = new Set([
 
 type CatalogModel = Record<string, unknown> & { api: string };
 
+/** `provider -> api -> [old, new]` base URL moves applied to the snapshot. */
+export const BASE_URL_MOVES: Readonly<
+  Record<string, Readonly<Record<string, readonly [string, string]>>>
+> = {
+  // OpenCode moved Zen/Go from `/zen/...` to per-API `/inference/...` paths.
+  'opencode-go': {
+    'openai-completions': [
+      'https://opencode.ai/zen/go/v1',
+      'https://opencode.ai/inference/go/openai/v1',
+    ],
+    'anthropic-messages': [
+      'https://opencode.ai/zen/go',
+      'https://opencode.ai/inference/go/anthropic',
+    ],
+  },
+};
+
+function moveBaseUrl(provider: string, model: Record<string, unknown>): Record<string, unknown> {
+  const move = BASE_URL_MOVES[provider]?.[String(model.api)];
+  return move && model.baseUrl === move[0] ? { ...model, baseUrl: move[1] } : model;
+}
+
 export function snapshot(
   version: string,
   providers: readonly string[],
@@ -34,7 +57,7 @@ export function snapshot(
   for (const provider of providers) {
     const entries = models(provider);
     if (!entries.length || !entries.every((model) => SUPPORTED_APIS.has(model.api))) continue;
-    kept[provider] = entries.map(({ cost: _cost, ...model }) => model);
+    kept[provider] = entries.map(({ cost: _cost, ...model }) => moveBaseUrl(provider, model));
   }
   return `${JSON.stringify({ piAi: version, providers: kept })}\n`;
 }

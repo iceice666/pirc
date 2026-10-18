@@ -332,8 +332,8 @@
     >{/if}
   {#if !savedPreset}<label class="backend-checkbox"
       ><input type="checkbox" bind:checked={opencodeGo} disabled={busy} /><span
-        >OpenCode Go compatibility (session routing + pirc User-Agent; automatic for
-        opencode.ai/zen/go)</span
+        >OpenCode compatibility (session routing + pirc User-Agent; automatic for opencode.ai/zen
+        and opencode.ai/inference)</span
       ></label
     >{/if}
 

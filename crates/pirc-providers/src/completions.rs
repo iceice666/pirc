@@ -15,7 +15,7 @@ use pirc_protocol::{
 use serde_json::{Map, Value, json};
 
 use crate::errors::pi_failure;
-use crate::http::{Headers, opencode_go_headers};
+use crate::http::{Headers, opencode_headers};
 use crate::js::{self, get, non_empty_str, present, truthy};
 use crate::json_parse::parse_streaming_json;
 use crate::pi::{
@@ -915,7 +915,7 @@ impl PiRun {
         {
             return Ok(self.error_without_request("Model credentials are unavailable."));
         }
-        let Ok(headers) = opencode_go_headers(
+        let Ok(headers) = opencode_headers(
             request.provider.opencode_go,
             &self.model.base_url,
             &request.session_id,

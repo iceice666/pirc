@@ -9,6 +9,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 - Android full-page HTML content improves viewport sizing, offsets, common margins, relative positioning, grid rows and computed-style reads, while keeping overflowing content reachable.
 - Gateway and node startup retry brief SQLite WAL-mode lock conflicts when processes open the same database concurrently.
 - PTC scripts that exhaust their JavaScript heap report an out-of-memory error reliably, including when the engine cannot allocate an error object.
+- OpenCode Zen and Go backends on the current `opencode.ai/inference/...` base URLs (and Zen on the legacy `opencode.ai/zen/...` ones) now send the OpenCode session and User-Agent headers automatically, and **Fetch models from endpoint** finds their model lists. The OpenCode Go preset uses `https://opencode.ai/inference/go/openai/v1`; the editor option is renamed **OpenCode compatibility**.
 
 Same node protocol (11) and database schemas; upgrade the gateway and every node together as usual (an older node answers the new project-file routes with 404).
 

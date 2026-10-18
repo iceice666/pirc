@@ -45,9 +45,16 @@ bun run check
 
 Set `PIRC_HOST`/`PIRC_PORT`, `PIRC_STATE_DIR`, the browser checks (`PIRC_TRUSTED_PROXIES`, `PIRC_IDENTITY_HEADER`, `PIRC_ALLOWED_USERS`, `PIRC_ALLOWED_ORIGINS`, `PIRC_ALLOWED_HOSTS`), and `PIRC_NODE_TOKENS`: a JSON object mapping each node ID to a **different random secret of at least 32 characters**. Model backends are configured here: in the web **Settings** (API-key/custom endpoints and subscription logins) and in `models.json` (`PIRC_MODELS_FILE`, default `$PIRC_CONFIG_DIR/models.json`); `SIGHUP` reloads the file. The gateway runs all inference, so endpoints must be reachable from it (see the root README's Agent section). Node settings such as `PIRC_WORKSPACES` or `PIRC_NODE_ID` are refused at startup.
 
-### OpenCode Go
+### OpenCode Zen and Go
 
-For [OpenCode Go](https://opencode.ai/docs/go/#where-can-i-use-it), use `https://opencode.ai/zen/go/v1` as the base URL and select the API required by your model (Chat Completions, Responses, or Anthropic Messages). Requests to `opencode.ai/zen/go` automatically include a stable per-conversation `x-opencode-session` and `User-Agent: pirc/<product-version>` across all transports. For a custom proxy URL, enable **OpenCode Go compatibility** in the backend editor, or set `"opencodeGo": true` on the provider in `models.json`. Your proxy must preserve these headers. No manual session header or API key replacement is needed.
+OpenCode serves each wire API under its own base URL. Pick the one for the API your model requires ([model list](https://opencode.ai/v2/docs/console/models/), [Go](https://opencode.ai/v2/docs/console/go/#where-can-i-use-it)):
+
+| API                          | Zen (pay as you go)                       | Go (subscription)                            |
+| ---------------------------- | ----------------------------------------- | -------------------------------------------- |
+| Chat Completions / Responses | `https://opencode.ai/inference/openai/v1` | `https://opencode.ai/inference/go/openai/v1` |
+| Anthropic Messages           | `https://opencode.ai/inference/anthropic` | `https://opencode.ai/inference/go/anthropic` |
+
+The legacy `https://opencode.ai/zen/v1` and `https://opencode.ai/zen/go/v1` base URLs keep working. Requests to `opencode.ai/inference/...` or `opencode.ai/zen/...` automatically include a stable per-conversation `x-opencode-session` and `User-Agent: pirc/<product-version>` across all transports. For a custom proxy URL, enable **OpenCode compatibility** in the backend editor, or set `"opencodeGo": true` on the provider in `models.json` (the key keeps its original name and covers Zen too). Your proxy must preserve these headers. No manual session header or API key replacement is needed. **Fetch models from endpoint** reads the plan's shared list (`/inference/v1/models` or `/inference/go/v1/models`) for any of these base URLs.
 
 ### Device tokens
 

@@ -14,7 +14,7 @@ use pirc_protocol::{AssistantContent, AssistantDelta, AssistantMessage, StopReas
 use serde_json::{Map, Value};
 
 use crate::errors::pi_failure;
-use crate::http::opencode_go_headers;
+use crate::http::opencode_headers;
 use crate::js::{self, get, present, truthy};
 use crate::json_parse::{parse_streaming_json, repair_json};
 use crate::pi::{NO_KEY, PiMessage, PiModel, api_name, history_message, pi_api, reasoning_effort};
@@ -255,7 +255,7 @@ impl AnthropicRun {
         {
             return Ok(self.error_without_request("Model credentials are unavailable."));
         }
-        let Ok(headers) = opencode_go_headers(
+        let Ok(headers) = opencode_headers(
             request.provider.opencode_go,
             &self.model.base_url,
             &request.session_id,
