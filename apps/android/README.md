@@ -13,7 +13,15 @@ compatibility is incomplete. See the [remaining mobile work](../../plans/mobile.
 ## Build and run
 
 Use Flutter 3.44.4 / Dart 3.12.2 or a compatible SDK, Android SDK and JDK 17.
-Android 10 (API 29) or later is required. Run from this directory:
+Android 10 (API 29) or later is required. From the repository root, `nix develop`
+provides Flutter, its matching Dart SDK, and JDK 17 alongside the Rust and web tools.
+The Android SDK must be installed separately for native builds; point
+`ANDROID_HOME` at your Android SDK. `flutter pub get` prepares the local Flutter
+SDK configuration used by Gradle; do not commit `android/local.properties`.
+Flutter tests and analysis work with the Nix SDK. Native Gradle 9 builds currently
+reject the SDK's read-only `packages/integration_test/android` project directory;
+use a writable Flutter SDK installation for those builds until this is addressed.
+Run from this directory:
 
 ```sh
 flutter pub get

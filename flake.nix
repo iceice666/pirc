@@ -60,12 +60,21 @@
               rustc
               clippy
               rustfmt
+              jdk17
+              # Flutter includes its matching Dart SDK; avoid mixing Dart versions.
+              (flutter344.override {
+                supportedTargetFlutterPlatforms = [
+                  "universal"
+                  "android"
+                ];
+              })
             ])
             ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               pkgs.bubblewrap
               pkgs.chromium
             ];
-          shellHook = ''echo "pirc development shell (Rust + Bun for web tooling)"'';
+          JAVA_HOME = "${pkgs.jdk17}";
+          shellHook = ''echo "pirc development shell (Rust + Bun + Flutter/Dart + JDK 17)"'';
         };
         formatter = pkgs.nixfmt-rfc-style;
       }
