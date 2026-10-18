@@ -596,11 +596,31 @@ relative history length, URL hashes, document reuse and request counts are exact
 The existing document RPC supplies a complete final URL; backend redirect/hash
 inheritance is outside this renderer test.
 
-Fragment focus, `:target` styling, late target retries, discarded head/script/
-unsupported-node targets, ancestor revealing and text/non-HTML fragments remain
-uncertified. The fragment path still uses the HTML core's native anchor scrolling,
-so CSS scroll margin/padding, nested alignment and animation remain different
-from the bounded element-reveal API. See the mobile plan for the next work.
+Fragment scrolling now uses measured native layout for both ordinary and
+scripted HTML, including actual nested scrollports, zero-range ports, clipping,
+common affine transforms and CSS scroll margin/padding (including percentages
+and font lengths). It plans all destinations before scrolling and honors CSS
+smooth defaults; exact animation timing remains Flutter-specific. Initial
+requests defer until the DOM index and native frame agree and earlier
+DOM/history publications finish; later navigation cancels stale requests. The full parsed DOM preserves hidden head-node priority;
+renderer-only IDs do not enter script packets.
+
+Recreate the additional 280-profile reference with
+`node apps/android/tool/parity/capture_document_fragment_scroll_chromium153.mjs`.
+`test/document_fragment_scroll_test.dart` checks 120 non-script click/repeat
+profiles and 40 initial URLs. The Android counterpart uses `/fragment-scroll.json`
+from the loopback server for 248 click/repeat profiles and 88 initial URLs,
+including real Sandbox scripts and click-time style changes. All runs assert the
+same document viewport after excluding the workspace's 48 px chrome.
+
+The corpus explicitly excludes 32 button/input profiles because fragment focus
+centers controls in Chromium; native fragment focus is still open. Broader
+focus/keyboard events, `:target`, late target retry, ancestor revealing,
+unmeasured/inline/text/non-HTML targets, RTL/vertical writing, sticky/SVG boxes,
+scroll snap, root horizontal scrolling and unresolved inset math remain listed
+in the mobile plan. Unsupported geometry retains the native anchor fallback and
+records a difference; a missing matching frame has a bounded wait. Physical
+acceptance, backend redirect/hash inheritance and remote push are not certified.
 
 `document.scrollingElement` uses the initial HTML parser mode and native
 box/overflow measurements to select the standards root, quirks body, or null.

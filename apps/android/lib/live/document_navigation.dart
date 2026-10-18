@@ -13,7 +13,7 @@ import '../rendering/html_document_styles.dart';
 import '../rendering/native_html.dart';
 import '../rendering/document_absolute_position.dart';
 import '../rendering/document_layout.dart';
-import '../rendering/document_fragment.dart';
+import '../rendering/document_reveal.dart';
 import '../rendering/document_scroll_anchor.dart';
 import '../rendering/document_touch_boundary.dart';
 import '../rendering/document_computed_styles.dart';
@@ -1060,7 +1060,6 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
           (explicit && !window.hasPendingFragmentReveal)) {
         return;
       }
-      window.acknowledgeFragmentReveal(current, revision);
       final document = current.document!;
       if (savedOffset != null) {
         if (document.scroll.hasClients) {
@@ -1069,16 +1068,22 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
           );
         }
       } else {
-        final target = document.viewport.fragmentTarget(fragment);
-        final plainTop =
-            !document.content.isHtml &&
-            (fragment.isEmpty ||
-                decodeNativeDocumentFragment(fragment).toLowerCase() == 'top');
-        if (target?.top == true || plainTop) {
-          if (document.scroll.hasClients) document.scroll.jumpTo(0);
-        } else if (target != null) {
-          await document.viewport.scrollToFragmentTarget(target);
-        }
+        await document.viewport.scrollToFragment(
+          fragment,
+          allowUnindexedTop: !document.content.isHtml,
+          isCurrent: () =>
+              mounted &&
+              !window.disposed &&
+              window.current == current &&
+              current.url == revealUrl &&
+              window.fragmentRevealRevision == revision &&
+              (!explicit || window.hasPendingFragmentReveal),
+        );
+      }
+      if (mounted &&
+          window.current == current &&
+          window.fragmentRevealRevision == revision) {
+        window.acknowledgeFragmentReveal(current, revision);
       }
     });
   }
@@ -1478,6 +1483,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
     _elementScroll.addListener(_nativeLayoutChanged);
     widget.document.scroll.addListener(_nativeScrollChanged);
     _layout.addListener(_nativeLayoutChanged);
+    widget.document.viewport.bindNativeReveal(this, _nativeFragmentReveal);
   }
 
   void _nativeScrollChanged() => _scripts?.refreshLayout();
@@ -1509,6 +1515,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         revision: revision,
         generation: generation,
         viewport: _layoutViewport,
+        requestedIds: scripts?.layoutElementIds,
         elementScrollMetrics: _elementScroll.metricsFor,
         elementScrollRanges: _elementScroll.scrollRangeFor,
         elementScrollActivity: _elementScroll.isScrollingFor,
@@ -1688,6 +1695,103 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
     }
   }
 
+  String? _fragmentRootId;
+  Set<String> _fragmentKnownIds = const {};
+  int _fragmentLayoutRevision = 0;
+  int _fragmentCaptureGeneration = 0;
+  NativeFragmentRevealResult _nativeFragmentReveal(String? id) {
+    final document = widget.document;
+    if (!mounted ||
+        !document.scroll.hasClients ||
+        !document.scroll.position.hasContentDimensions ||
+        _scripts != null &&
+            (_scripts?.ready != true ||
+                _scripts!.hasPendingPublication ||
+                _scripts!.scrollActions.isNotEmpty ||
+                _fragmentLayoutRevision != _scripts!.layoutRevision ||
+                !_scripts!.layoutElementIds.contains(_fragmentRootId)) ||
+        !_scrollAnchors.settled ||
+        !_elementScroll.anchoringSettled) {
+      return NativeFragmentRevealResult.unavailable;
+    }
+    if (id == null) {
+      applyNativeDocumentScrollAxis(
+        document.scroll,
+        0,
+        relative: false,
+        behavior: 'auto',
+        cssBehavior: _viewportScrollBehavior,
+      );
+      return NativeFragmentRevealResult.handled;
+    }
+    final rootId = _fragmentRootId;
+    if (rootId == null || !_fragmentKnownIds.contains(id)) {
+      return NativeFragmentRevealResult.unavailable;
+    }
+    final surfaces = _elementScroll.scrollGeometrySurfaces;
+    final ids = {
+      id,
+      rootId,
+      for (final entry in surfaces.entries)
+        if (nativeDocumentRevealScrollport(entry.value) != null &&
+            _fragmentKnownIds.contains(entry.key))
+          entry.key,
+    };
+    if (ids.length > NativeDocumentLayoutController.maximumElementCount) {
+      return NativeFragmentRevealResult.unsupported;
+    }
+    final packet = _layout.capture(
+      revision: _fragmentLayoutRevision,
+      generation: ++_fragmentCaptureGeneration,
+      requestedIds: ids,
+      viewport: _layoutViewport,
+      scrollOffset: Offset(0, document.scroll.offset),
+      contentSize: Size(
+        _layoutViewport.width,
+        document.scroll.position.maxScrollExtent +
+            document.scroll.position.viewportDimension,
+      ),
+      elementScrollMetrics: _elementScroll.metricsFor,
+      elementScrollRanges: _elementScroll.scrollRangeFor,
+      elementScrollSurfaces: surfaces,
+    );
+    if (packet == null) return NativeFragmentRevealResult.unavailable;
+    (packet['viewport'] as Json)['scrollRange'] = {
+      'minLeft': 0,
+      'maxLeft': 0,
+      'minTop': document.scroll.position.minScrollExtent,
+      'maxTop': document.scroll.position.maxScrollExtent,
+    };
+    try {
+      final plan = nativeDocumentRevealPlan(packet, id, rootId);
+      for (final action in plan) {
+        if (action.elementId != null) {
+          _elementScroll.applyActions([
+            {
+              'id': action.elementId,
+              'op': 'to',
+              'left': action.destination.dx,
+              'top': action.destination.dy,
+              'behavior': 'auto',
+            },
+          ]);
+        } else {
+          applyNativeDocumentScrollAxis(
+            document.scroll,
+            action.destination.dy,
+            relative: false,
+            behavior: 'auto',
+            cssBehavior: _viewportScrollBehavior,
+          );
+        }
+      }
+      _scripts?.refreshLayout();
+      return NativeFragmentRevealResult.handled;
+    } on UnsupportedError {
+      return NativeFragmentRevealResult.unsupported;
+    }
+  }
+
   String _viewportScrollBehavior = 'auto';
   bool _scrollScheduled = false;
   void _scheduleScroll() {
@@ -1797,6 +1901,11 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
   void didUpdateWidget(covariant NativeFetchedDocumentView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.document != widget.document) {
+      oldWidget.document.viewport.bindNativeReveal(this, null);
+      widget.document.viewport.bindNativeReveal(this, _nativeFragmentReveal);
+      _fragmentRootId = null;
+      _fragmentKnownIds = const {};
+      _viewportScrollBehavior = 'auto';
       _clearTouchBoundary();
       _scrollAnchors.nodes = const {};
       oldWidget.document.elementScroll.removeListener(_nativeLayoutChanged);
@@ -1817,6 +1926,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
 
   @override
   void dispose() {
+    widget.document.viewport.bindNativeReveal(this, null);
     _clearTouchBoundary();
     widget.document.scroll.removeListener(_nativeScrollChanged);
     _scripts?.bindLayout(this, null);
@@ -2052,12 +2162,27 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
     for (final element in styled.querySelectorAll('*')) {
       final key = '${next++}';
       element.attributes['data-pirc-document-style'] = key;
+      // Scripted DOM nodes retain only VM-owned IDs. Assigning new IDs when
+      // the engine becomes ready would replace live editor identities.
+      if (_scripts == null) {
+        element.attributes['data-pirc-script-id'] = 'native-static-$key';
+      }
       indexStyles[key] = Map.of(result.stylesByElement[element] ?? {});
       // Author inline declarations already participate in the cascade. Keeping
       // them here would let HtmlWidget override an external important winner.
       element.attributes.remove('style');
     }
+    final fragments = document.viewport.indexDocument(styled);
+    _fragmentKnownIds = {
+      ...?_scripts?.layoutElementIds,
+      ...styled
+          .querySelectorAll('*')
+          .map((element) => element.attributes['data-pirc-script-id'])
+          .whereType<String>(),
+    };
+    _fragmentLayoutRevision = _scripts?.layoutRevision ?? 0;
     final root = styled.documentElement!;
+    _fragmentRootId = root.attributes['data-pirc-script-id'];
     final body = styled.body!;
     final rootKey = root.attributes['data-pirc-document-style']!;
     final bodyKey = body.attributes['data-pirc-document-style']!;
@@ -2119,7 +2244,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         '<div${attrs(body.attributes)}>${body.innerHtml}</div></div>';
     final noBoxIds = nativeDocumentNoBoxIds(
       document: styled,
-      knownIds: _scripts?.layoutElementIds ?? const {},
+      knownIds: _fragmentKnownIds,
       stylesByElement: result.stylesByElement,
     );
     final computedStyles = nativeDocumentComputedStyleSpecs(
@@ -2144,10 +2269,10 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       computedStyles: computedStyles,
     );
     final rendered = NativeHtmlDocument(
-      layoutController: _scripts == null ? null : _layout,
+      layoutController: _layout,
       elementScrollController: _elementScroll,
       layoutRevision: _scripts?.layoutRevision ?? 0,
-      layoutKnownIds: _scripts?.layoutElementIds ?? const {},
+      layoutKnownIds: _fragmentKnownIds,
       layoutNoBoxIds: noBoxIds,
       layoutComputedStyles: computedStyles,
       documentPercentTopMargins: nativeDocumentPercentTopMarginGroups(
@@ -2182,6 +2307,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       ),
       imageDark: dark,
       viewport: document.viewport,
+      fragmentIndex: fragments,
       historyController: document.historyControls,
       onNavigate: widget.onLink,
       onFormSubmit: widget.onSubmit,

@@ -163,6 +163,10 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _tail = Future.value();
   final _startupFinished = Completer<void>();
   int _pendingEvents = 0;
+
+  /// Native defaults must wait until prior DOM/history publications have drained.
+  bool get hasPendingPublication =>
+      loading || _pendingEvents != 0 || _layoutRefreshQueued;
   final List<Json> _resourceQueue = [];
   final List<Json> _resourceCompletions = [];
   final Map<String, int> _lastResourceId = {};

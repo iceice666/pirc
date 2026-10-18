@@ -219,6 +219,7 @@ class NativeHtmlDocument extends StatefulWidget {
     this.markdownStyles = true,
     this.onNavigate,
     this.viewport,
+    this.fragmentIndex,
     this.authorStylesBuilder,
     this.imageViewport,
     this.imageDark,
@@ -300,6 +301,7 @@ class NativeHtmlDocument extends StatefulWidget {
   final bool? imageDark;
   final ValueChanged<NativeHtmlLink>? onNavigate;
   final NativeHtmlViewportController? viewport;
+  final NativeDocumentFragmentIndex? fragmentIndex;
   final Map<String, String>? Function(dom.Element)? authorStylesBuilder;
   final NativeHtmlHistoryController? historyController;
   final NativeHtmlFilePicker? filePicker;
@@ -419,7 +421,8 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     final sourceChanged =
         old.nodes != widget.nodes ||
         documentChanged ||
-        !identical(old.viewport, widget.viewport);
+        !identical(old.viewport, widget.viewport) ||
+        !identical(old.fragmentIndex, widget.fragmentIndex);
     final historyChanged = old.historyController != widget.historyController;
     final carriedSnapshot =
         sourceChanged &&
@@ -694,8 +697,9 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       ),
     );
     if (widget.viewport != null) {
-      final fragments = NativeDocumentFragmentIndex(content, nonce);
-      content = fragments.annotatedHtml;
+      final fragments =
+          widget.fragmentIndex ?? NativeDocumentFragmentIndex(content, nonce);
+      if (widget.fragmentIndex == null) content = fragments.annotatedHtml;
       widget.viewport!._bindFragments(this, fragments);
     }
     _pruneScriptFocusableNodes(content);
@@ -6154,8 +6158,26 @@ class NativeHtmlViewportController {
     key = GlobalKey<HtmlWidgetState>();
   }
 
+  final _fragmentNonce = List.generate(
+    16,
+    (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ).join();
+  NativeDocumentFragmentIndex indexDocument(dom.Document document) =>
+      NativeDocumentFragmentIndex.fromDocument(document, _fragmentNonce);
   Object? _fragmentOwner;
   NativeDocumentFragmentIndex? _fragments;
+  Object? _nativeRevealOwner;
+  NativeFragmentRevealResult Function(String?)? _nativeReveal;
+  String? lastFragmentDifference;
+  void bindNativeReveal(
+    Object owner,
+    NativeFragmentRevealResult Function(String?)? reveal,
+  ) {
+    if (reveal == null && !identical(owner, _nativeRevealOwner)) return;
+    _nativeRevealOwner = reveal == null ? null : owner;
+    _nativeReveal = reveal;
+  }
+
   void _bindFragments(Object owner, NativeDocumentFragmentIndex fragments) {
     _fragmentOwner = owner;
     _fragments = fragments;
@@ -6170,6 +6192,60 @@ class NativeHtmlViewportController {
 
   NativeDocumentFragmentTarget? fragmentTarget(String raw) =>
       _fragments?.select(raw);
+
+  int _completedFragmentReveals = 0;
+  @visibleForTesting
+  int get completedFragmentReveals => _completedFragmentReveals;
+
+  Future<bool> scrollToFragment(
+    String fragment, {
+    bool Function()? isCurrent,
+    bool allowUnindexedTop = false,
+  }) async {
+    lastFragmentDifference = null;
+    try {
+      for (var attempt = 0; attempt < 128; attempt++) {
+        if (isCurrent?.call() == false) return false;
+        final target =
+            _fragments?.select(fragment) ??
+            (_fragments == null &&
+                    allowUnindexedTop &&
+                    (fragment.isEmpty ||
+                        decodeNativeDocumentFragment(fragment).toLowerCase() ==
+                            'top')
+                ? const NativeDocumentFragmentTarget.top()
+                : null);
+        if (_fragments != null && target == null) return false;
+        if (target != null) {
+          final nativeId = target.top
+              ? null
+              : _fragments?.nativeIdFor(target.anchor!);
+          final handler = _nativeReveal;
+          if (handler == null) {
+            lastFragmentDifference = 'unmeasured_target';
+            return target.anchor == null ? false : _scrollAlias(target.anchor!);
+          }
+          if (!target.top && nativeId == null) {
+            WidgetsBinding.instance.ensureVisualUpdate();
+            await WidgetsBinding.instance.endOfFrame;
+            continue;
+          }
+          final result = handler(nativeId);
+          if (result == NativeFragmentRevealResult.handled) return true;
+          if (result == NativeFragmentRevealResult.unsupported) {
+            lastFragmentDifference = 'unsupported_native_geometry';
+            return target.anchor == null ? false : _scrollAlias(target.anchor!);
+          }
+        }
+        WidgetsBinding.instance.ensureVisualUpdate();
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      lastFragmentDifference = 'layout_not_ready';
+      return false;
+    } finally {
+      _completedFragmentReveals++;
+    }
+  }
 
   bool resolvingAnchor = false;
   final _resolvingUrls = <String, int>{};
@@ -6198,3 +6274,5 @@ class NativeHtmlViewportController {
   Future<bool> scrollToAnchor(String id) =>
       _scrollAlias(_fragments?.anchorFor(id) ?? id);
 }
+
+enum NativeFragmentRevealResult { handled, unavailable, unsupported }

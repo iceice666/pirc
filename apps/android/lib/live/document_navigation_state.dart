@@ -955,7 +955,10 @@ class NativeDocumentWindow extends ChangeNotifier {
     bool leavingDocument = false,
     bool cancelFragmentReveal = true,
   }) {
-    if (cancelFragmentReveal) _pendingFragmentReveal = null;
+    if (cancelFragmentReveal) {
+      _pendingFragmentReveal = null;
+      _fragmentRevealRevision++;
+    }
     final item = current;
     if (item == null || historyPostResubmissionRequired) return;
     final document = item.document;

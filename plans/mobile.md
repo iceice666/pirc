@@ -332,12 +332,43 @@ profiles and reruns the 216 Sandbox reveal profiles. Source URLs are delivered
 as complete final URLs by the existing document RPC; backend redirect/fragment
 inheritance is not newly certified by this renderer gate.
 
-This does not certify fragment focus, `:target` styling, ancestor revealing,
-late DOM/image retry, IDs discarded with head/script/unsupported nodes, text
-fragments or non-HTML fragment semantics. Fragment scrolling still uses the HTML
-core's native anchor path; its animation, nested alignment and CSS scroll
-margin/padding are not equivalent to the separately implemented element reveal
-API. Those remain explicit follow-up work, not completed scroll parity.
+**Native fragment geometry:** ordinary HTML and scripted pages now use the
+same measured native layout evidence as element reveal. The host computes every
+scroll destination before applying any command, using real inner-to-outer
+scrollports (including zero-range ports), clipping, affine transforms and actual
+scroll limits. Physical CSS scroll margins and padding include measured font
+lengths and percentage padding. Root and nested `scroll-behavior` defaults are
+honored; smooth animation timing still follows Flutter rather than Chromium.
+Initial requests wait for their DOM index, matching layout revision and prior
+DOM/history publications to drain, so the initial handoff cannot discard a
+new smooth animation; later history/URL changes cancel a pending request. Renderer-only IDs remain outside
+script layout packets, and private captures can select a bounded subset from a
+larger document. The index now uses the full parsed DOM, so discarded head nodes
+retain their priority over a later rendered duplicate.
+
+The additional Chromium 153 corpus contains 280 profiles at phone/tablet sizes,
+DPR 1/3 and both themes. The workspace has 48 CSS px of app chrome, excluded from
+the browser document viewport; native tests assert the same available viewport.
+The native gate covers 248 first/repeated profiles, plus 88 initial-load profiles
+with and without real Android Sandbox scripts. It includes CSS padding/margins,
+negative margins, font lengths, percentages, transformed ports/targets, hidden
+and oversized targets, Canvas, zero-range ports, root padding and click-time DOM
+style mutations. Widget tests cover the 120 non-script first/repeated profiles
+and 40 initial-load profiles. These are coordinate/navigation checks, not a
+claim of pixel-perfect rendering or all fragment behavior.
+
+**Explicit fragment differences:** the 32 button/input reference profiles are
+excluded from this gate: Chromium's fragment focus step first centers focusable
+controls, while the current native path only performs the standard fragment
+reveal. Their earlier scrollIntoView geometry gate does not certify fragment
+focus. Other focusable elements and focus event/keyboard behavior, `:target`
+styling, ancestor revealing, late DOM/image retry, targets without a measured
+box, inline/text/non-HTML fragments, RTL/vertical writing, sticky/SVG geometry,
+scroll snap, root horizontal scrolling and unresolved inset math remain open.
+Unsupported geometry uses the legacy native anchor fallback and records an
+explicit difference; failure to obtain a matching frame is bounded and also
+recorded. Backend redirect/hash inheritance, physical devices and remote push
+remain outside this gate.
 
 **Remaining synchronous layout differences:** general DOM writes followed by
 geometry reads still need matching native measurement. Exact animation timing,

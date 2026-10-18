@@ -244,13 +244,16 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     bool? Function(String id)? elementScrollActivity,
     Map<String, RenderBox> elementScrollSurfaces = const {},
     List<Map<String, dynamic>> scrollEvents = const [],
+    Set<String>? requestedIds,
   }) {
     if (_disposed) return null;
     final root = _root;
     if (root == null) return null;
-    if (root.knownIds.length > maximumElementCount) {
+    final requested = requestedIds ?? root.knownIds;
+    if (!root.knownIds.containsAll(requested)) return null;
+    if (requested.length > maximumElementCount) {
       throw RangeError.range(
-        root.knownIds.length,
+        requested.length,
         0,
         maximumElementCount,
         'knownIds',
@@ -266,7 +269,7 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     }
 
     if (!nativeDocumentMarginsAreSettled(root)) return null;
-    final known = root.knownIds.toList()..sort();
+    final known = requested.toList()..sort();
     final boxes = <Map<String, dynamic>>[];
 
     final styleSurfaces = <String, RenderBox>{};
