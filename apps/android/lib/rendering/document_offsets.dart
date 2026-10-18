@@ -1,9 +1,12 @@
-import 'dart:ui' show TextDirection;
+import 'dart:ui' show Size, TextDirection;
+import 'document_absolute_position.dart';
+import 'document_transform.dart';
 import 'document_relative_position.dart';
 import 'package:html/dom.dart' as dom;
 
 enum NativeDocumentOffsetOrigin {
   initialContainingBlock,
+  viewport,
   borderBox,
   paddingEdge,
   zero,
@@ -17,11 +20,13 @@ class NativeDocumentOffsetSpec {
     required this.parentId,
     required this.origin,
     this.originId,
+    this.requiresPositionedSurface = false,
   });
 
   final String? parentId;
   final NativeDocumentOffsetOrigin origin;
   final String? originId;
+  final bool requiresPositionedSurface;
 }
 
 /// Resolve offset-parent semantics before html/body are converted to native
@@ -44,7 +49,18 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
   bool ordinary(dom.Element element) {
     final css = styles(element);
     final position = value(element, 'position', 'static');
-    if (position != 'static' && position != 'relative') return false;
+    if (!const {'static', 'relative', 'absolute', 'fixed'}.contains(position)) {
+      return false;
+    }
+    if (const {'absolute', 'fixed'}.contains(position) &&
+        NativeAbsolutePositionSpec.parse(
+              css,
+              fontSize: 16,
+              viewport: Size.zero,
+            ) ==
+            null) {
+      return false;
+    }
     if (position == 'relative') {
       final spec = NativeDocumentRelativePositionSpec.parse(
         css,
@@ -57,8 +73,25 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
         return false;
       }
     }
+    final transform = value(element, 'transform', 'none');
+    if (transform != 'none' &&
+        (NativeDocumentTransformSpec.parse(
+                  transform,
+                  origin: css['transform-origin'],
+                ) ==
+                null ||
+            (!const {'absolute', 'fixed'}.contains(position) &&
+                !_hasNativeRelativeBox(element, stylesByElement)))) {
+      return false;
+    }
+    if (!const {
+      '',
+      'view-box',
+      'border-box',
+    }.contains(value(element, 'transform-box', ''))) {
+      return false;
+    }
     for (final property in const [
-      'transform',
       'translate',
       'rotate',
       'scale',
@@ -113,11 +146,18 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
     return true;
   }
 
+  bool transformed(dom.Element element) =>
+      value(element, 'transform', 'none') != 'none';
+  bool positioned(dom.Element element) => const {
+    'absolute',
+    'fixed',
+  }.contains(value(element, 'position', 'static'));
   for (final element in document.querySelectorAll('*')) {
     final elementId = id(element);
     if (elementId == null) continue;
     if (identical(element, body)) {
-      result[elementId] = const NativeDocumentOffsetSpec(
+      result[elementId] = NativeDocumentOffsetSpec(
+        requiresPositionedSurface: positioned(element),
         parentId: null,
         origin: NativeDocumentOffsetOrigin.zero,
       );
@@ -140,11 +180,27 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
       );
       continue;
     }
+    final fixed = value(element, 'position', 'static') == 'fixed';
     var ancestor = element.parent;
-    while (ancestor != null &&
-        !identical(ancestor, body) &&
-        value(ancestor, 'position', 'static') != 'relative') {
-      ancestor = ancestor.parent;
+    if (fixed) {
+      while (ancestor != null && !transformed(ancestor)) {
+        ancestor = ancestor.parent;
+      }
+      if (ancestor == null) {
+        result[elementId] = const NativeDocumentOffsetSpec(
+          parentId: null,
+          origin: NativeDocumentOffsetOrigin.viewport,
+          requiresPositionedSurface: true,
+        );
+        continue;
+      }
+    } else {
+      while (ancestor != null &&
+          !identical(ancestor, body) &&
+          value(ancestor, 'position', 'static') == 'static' &&
+          !transformed(ancestor)) {
+        ancestor = ancestor.parent;
+      }
     }
     if (ancestor == null) continue;
     final parentId = id(ancestor);
@@ -152,7 +208,15 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
     final staticBody =
         identical(ancestor, body) &&
         value(body, 'position', 'static') == 'static';
-    final originId = staticBody ? id(root) : parentId;
+    if (staticBody && !transformed(body) && positioned(element)) {
+      result[elementId] = NativeDocumentOffsetSpec(
+        parentId: parentId,
+        origin: NativeDocumentOffsetOrigin.initialContainingBlock,
+        requiresPositionedSurface: true,
+      );
+      continue;
+    }
+    final originId = staticBody && !positioned(element) ? id(root) : parentId;
     if (originId == null) continue;
     result[elementId] = NativeDocumentOffsetSpec(
       parentId: parentId,
@@ -160,6 +224,7 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
       origin: identical(ancestor, body)
           ? NativeDocumentOffsetOrigin.borderBox
           : NativeDocumentOffsetOrigin.paddingEdge,
+      requiresPositionedSurface: positioned(element),
     );
   }
   return result;

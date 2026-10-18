@@ -463,6 +463,32 @@ class NativeDocumentLayoutController extends ChangeNotifier {
     if (spec.origin == NativeDocumentOffsetOrigin.zero) {
       return {'top': 0, 'left': 0, 'parentId': null};
     }
+    final positioned = _nativePositionedSurface(element, surface, root);
+    if (spec.requiresPositionedSurface && positioned == null) return null;
+    if (spec.origin == NativeDocumentOffsetOrigin.viewport) {
+      if (positioned == null || !positioned.viewportFixed) return null;
+      final local = _unscrolledOrigin(surface, positioned.surface);
+      if (local == null) return null;
+      final offset = local + positioned.offset;
+      if (!offset.dx.isFinite ||
+          !offset.dy.isFinite ||
+          offset.dx.abs() > 9007199254740990 ||
+          offset.dy.abs() > 9007199254740990) {
+        return null;
+      }
+      return {
+        'top': (offset.dy + .5).floor(),
+        'left': (offset.dx + .5).floor(),
+        'parentId': null,
+      };
+    }
+    if (spec.requiresPositionedSurface && positioned!.viewportFixed) {
+      return null;
+    }
+    final initialParent =
+        spec.requiresPositionedSurface &&
+        spec.origin == NativeDocumentOffsetOrigin.initialContainingBlock &&
+        positioned?.initialContainingBlock == true;
     RenderBox? measuredAncestor(String? id) {
       if (id == null ||
           !root.knownIds.contains(id) ||
@@ -487,15 +513,23 @@ class NativeDocumentLayoutController extends ChangeNotifier {
           !identical(current, root)) {
         current = current.parent;
       }
-      if (!identical(current, owner)) return null;
+      if (!identical(current, owner) && !initialParent) return null;
       final box = owner.boxSurface?.call(owner) ?? owner;
-      return box.attached && box.hasSize && identical(_nearestRoot(box), root)
-          ? box
-          : null;
+      if (!box.attached ||
+          !box.hasSize ||
+          !identical(_nearestRoot(box), root)) {
+        return null;
+      }
+      if (owner.offsetSpec?.requiresPositionedSurface == true &&
+          _nativePositionedSurface(owner, box, root) == null) {
+        return null;
+      }
+      return box;
     }
 
-    // The parent must be a unique current measured ancestor even when a
-    // browser body rule selects the root as the coordinate origin.
+    // Ordinary parents remain unique current native ancestors. A proved
+    // initial containing block can name the logical body outside its physical
+    // out-of-flow branch; both owners still belong to this measured root.
     if (spec.parentId != null && measuredAncestor(spec.parentId) == null) {
       return null;
     }
@@ -852,20 +886,61 @@ _RenderNativeDocumentLayoutRoot? _nearestRoot(RenderObject element) {
   return null;
 }
 
+({
+  RenderBox surface,
+  Offset offset,
+  bool viewportFixed,
+  bool initialContainingBlock,
+})?
+_nativePositionedSurface(
+  _RenderNativeDocumentLayoutElement element,
+  RenderBox surface,
+  _RenderNativeDocumentLayoutRoot root,
+) {
+  RenderObject? current = surface;
+  while (current != null && !identical(current, root)) {
+    final geometry = nativeDocumentPositionedLayout(current);
+    if (geometry != null && current is RenderBox) {
+      return (
+        surface: current,
+        offset: geometry.offset,
+        viewportFixed: geometry.fixedToViewport,
+        initialContainingBlock: geometry.initialContainingBlock,
+      );
+    }
+    if (current is _RenderNativeDocumentLayoutElement &&
+        !identical(current, element)) {
+      return null;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
 Offset? _unscrolledOrigin(RenderBox element, RenderBox root) {
-  Offset? position;
+  var position = Offset.zero;
+  RenderObject current = element;
   try {
-    position = MatrixUtils.getAsTranslation(element.getTransformTo(root));
+    while (!identical(current, root)) {
+      final parent = current.parent;
+      if (parent == null) return null;
+      // CSS paint transforms do not enter CSSOM offset layout coordinates.
+      // Keep relative/positioned native offsets and remove each actual scroll
+      // translation in its local layout space, without inverting paint bounds.
+      if (!nativeDocumentIsCssTransform(parent)) {
+        final matrix = Matrix4.identity();
+        parent.applyPaintTransform(current, matrix);
+        final translation = MatrixUtils.getAsTranslation(matrix);
+        if (translation == null) return null;
+        position += translation;
+      }
+      position += nativeDocumentScrollTranslation(parent);
+      current = parent;
+    }
   } on FlutterError {
     return null;
   }
-  if (position == null) return null;
-  RenderObject? current = element.parent;
-  while (current != null && !identical(current, root)) {
-    position = position! + nativeDocumentScrollTranslation(current);
-    current = current.parent;
-  }
-  return identical(current, root) ? position : null;
+  return position;
 }
 
 EdgeInsets? _borderInsets(RenderBox element) {
