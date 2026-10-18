@@ -38,6 +38,7 @@ class _SchedulerGateway extends Gateway {
   void Function(_PumpRecord record)? onPump;
   final pumps = <_PumpRecord>[];
   int snapshots = 0;
+  double now = 0, lastPumpAt = 0;
   int activeEvaluations = 0;
   int maxConcurrentEvaluations = 0;
 
@@ -50,7 +51,9 @@ class _SchedulerGateway extends Gateway {
     'html': '<!doctype html><html><body>fixture</body></html>',
     'diagnostics': <Json>[],
     'scheduler': {
-      'timerDelayMs': timerDelayMs,
+      'timerDelayMs': timerDelayMs == null
+          ? null
+          : (timerDelayMs! - (now - lastPumpAt)).clamp(0, double.infinity),
       'animationFrame': animationFrame,
     },
   };
@@ -79,6 +82,10 @@ class _SchedulerGateway extends Gateway {
         try {
           final source = args['source'] as String;
           if (source == 'runtime') return {'value': ''};
+          if (source.startsWith('__pircDocument.') && source.endsWith(')')) {
+            final value = _arguments(source)['now'];
+            if (value is num) now = value.toDouble();
+          }
           if (source.startsWith('__pircDocument.snapshot(')) {
             snapshots++;
             return {'value': jsonEncode(_snapshot())};
@@ -90,6 +97,7 @@ class _SchedulerGateway extends Gateway {
               animationFrame: event['animationFrame'] == true,
             );
             pumps.add(record);
+            lastPumpAt = record.now;
             if (failPump) {
               throw PlatformException(
                 code: 'SCRIPT_TIMEOUT',
@@ -114,7 +122,8 @@ class _SchedulerGateway extends Gateway {
               'value': jsonEncode({'defaultPrevented': false}),
             };
           }
-          if (source.startsWith('__pircDocument.init(')) {
+          if (source.startsWith('__pircDocument.init(') ||
+              source.startsWith('__pircDocument.updateVisibility(')) {
             return {
               'value': jsonEncode({'defaultPrevented': false}),
             };

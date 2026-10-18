@@ -2998,6 +2998,42 @@
     });
   }
 
+  function installDocumentVisibility(document) {
+    const state = activeState;
+    Object.defineProperties(document, {
+      hidden: {enumerable: true, configurable: true, get: () => state.hidden},
+      visibilityState: {enumerable: true, configurable: true,
+        get: () => state.hidden ? 'hidden' : 'visible'}
+    });
+    let handler = null;
+    const listener = event => { if (handler) handler.call(document, event); };
+    Object.defineProperty(document, 'onvisibilitychange', {
+      enumerable: true, configurable: true, get: () => handler,
+      set: value => {
+        const next = typeof value === 'function' ? value : null;
+        if (!handler && next) document.addEventListener('visibilitychange', listener);
+        if (handler && !next) document.removeEventListener('visibilitychange', listener);
+        handler = next;
+      }
+    });
+  }
+
+  function updateVisibility(input) {
+    const state = activeState;
+    if (!state?.document) return response();
+    advanceClock(input?.now);
+    const hidden = input?.hidden === true;
+    if (hidden !== state.hidden) {
+      state.hidden = hidden;
+      const event = new GlobalEvent('visibilitychange', {
+        bubbles: true, cancelable: false, composed: false
+      });
+      defineEventMember(event, 'isTrusted', true);
+      state.document.dispatchEvent(event);
+    }
+    return response();
+  }
+
   function installDocumentStorageHandler(view) {
     let storageHandler = null, storageHandlerInstalled = false;
     const storageListener = event => {
@@ -3492,7 +3528,7 @@
 
   // These events need an explicit Window/Document path because LinkeDOM's
   // generic EventTarget path does not model Window capture for a Document.
-  const focusEventTypes = new Set(['focus', 'blur', 'focusin', 'focusout', 'input', 'change', 'scroll']);
+  const focusEventTypes = new Set(['focus', 'blur', 'focusin', 'focusout', 'input', 'change', 'scroll', 'visibilitychange']);
   const focusEventListeners = new WeakMap();
   const focusEventHandlerProperties = new WeakMap();
   const focusEventPatchedWindows = new WeakSet();
@@ -3584,7 +3620,8 @@
         else if (record.listener && typeof record.listener.handleEvent === 'function')
           record.listener.handleEvent.call(record.listener, event);
       } catch (error) {
-        diagnostic(type === 'scroll' ? 'script.scroll_listener_error' : 'script.focus_listener_error',
+        diagnostic(type === 'visibilitychange' ? 'script.visibility_listener_error' :
+          type === 'scroll' ? 'script.scroll_listener_error' : 'script.focus_listener_error',
           'error', exceptionMessage(error));
       }
       if (event._stopImmediatePropagationFlag)
@@ -3724,6 +3761,7 @@
     patchFocusWindowHooks(activeState && activeState.window);
 
     for (const type of focusEventTypes) {
+      if (type === 'visibilitychange') continue;
       const property = 'on' + type;
       Object.defineProperty(HTMLElement.prototype, property, {
         configurable: true,
@@ -5188,6 +5226,7 @@
       media: null,
       stylesheetRequestOptions: new Map(),
       documentFetch: null,
+      hidden: input.hidden === true,
       readyState: 'loading',
       currentScript: null,
       initialScriptIndexes: null,
@@ -5253,6 +5292,7 @@
       installWindowResizeHandler(view);
       installDocumentScrollHandler(view, document);
       installDocumentStorageHandler(view);
+      installDocumentVisibility(document);
       // Initialize the window target only after listener tracking is installed.
       const windowEventMethods = ['addEventListener', 'removeEventListener', 'dispatchEvent']
         .map(name => [name, view[name].bind(view)]);
@@ -5997,6 +6037,7 @@
 
   const api = Object.freeze({
     updateLayout: updateLayout,
+    updateVisibility: updateVisibility,
     readObjectURL: function(url) {
       try {
         const value = activeState && activeState.objectUrls && activeState.objectUrls.read(url);

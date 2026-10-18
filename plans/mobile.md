@@ -1170,3 +1170,43 @@ performance acceptance gap, not a claim of matching smoothness. Initial/data
 runs and all six other operation stages retain their reported callback/elapsed
 ranges in ignored compact evidence. Disposable builds and emulator disk images
 are removed after the run; the published APK is retained.
+
+## Native document visibility lifecycle follow-up
+
+The shipped runtime exposes read-only `document.hidden` and `visibilityState`
+before page scripts execute, plus `document.onvisibilitychange`. Host changes
+produce trusted, bubbling, noncancelable/noncomposed events at Document with
+Window capture/bubble propagation. The existing event path preserves once,
+abort, removal, handler replacement, exception isolation and Promise work.
+The event flags follow the [HTML visibility algorithm](https://html.spec.whatwg.org/multipage/interaction.html#page-visibility).
+
+Visibility combines document attachment, the active window's TickerMode and app
+visibility. An inactive but still visible app is not reported hidden; hidden,
+paused and detached app states are. The prior foreground-only scheduler still
+suspends in inactive state; an ordinary visible but unfocused browser page may
+continue animation, so this scheduling difference remains explicit.
+
+Lifecycle notifications share the serialized VM queue and retain rapid edges,
+including changes while initialization or another visibility evaluation is in
+flight. They commit event/Promise effects without draining timers, native
+animation continuations, parser Scripts or native layout. Normal resume then
+services the retained work. A hidden window previously could finish already
+selected native frame callbacks; it now suspends that batch and resumes once
+without selecting a replacement frame.
+
+The pinned Chromium 153 fixture proves initial read-only properties and synthetic
+event propagation only. The dedicated Headless Shell stayed visible during
+attempted background/window-state changes, so it does not establish real browser
+background event delivery. Runtime/host tests verify the host-driven hidden and
+visible transitions separately. Physical phone/tablet OS transitions, process
+freeze/death, chart retarget/interruption, inactive-state scheduling and actual
+smoothness remain open; broader native layout gaps are unchanged.
+
+Verification: 657 JavaScript checks and 127 affected Flutter host/view tests pass;
+static analysis and formatting are clean. All eight Android profiles (two
+viewports, DPR 1/3, light/dark) pass through the real Android JS engine and
+Flutter document view. TickerMode changes and simulated AppLifecycleState
+notifications produce the exact hidden/visible event and Promise order; frame
+counters remain unchanged during each hidden interval and increase on resume.
+These are simulated lifecycle notifications, not physical OS background tests.
+Compact results are kept ignored; disposable outputs are removed after testing.

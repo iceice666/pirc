@@ -31,6 +31,9 @@ class _FilePickerGateway extends Gateway {
         if (source.startsWith('__pircDocument.init')) {
           return {'value': jsonEncode(_response(actions: initActions))};
         }
+        if (source.startsWith('__pircDocument.updateVisibility')) {
+          return {'value': jsonEncode(_response())};
+        }
         if (source.startsWith('__pircDocument.dispatch')) {
           dispatchSources.add(source);
           final actions = dispatchActions;

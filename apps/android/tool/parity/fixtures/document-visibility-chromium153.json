@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "browserVersion": "153.0.8010.12",
+  "probe": "(function(){\n const d=document;const events=[];let strictHidden=false,strictState=false;\n try{(function(){'use strict';d.hidden=true})()}catch(e){strictHidden=e.name==='TypeError'}\n try{(function(){'use strict';d.visibilityState='hidden'})()}catch(e){strictState=e.name==='TypeError'}\n const initial={hidden:d.hidden,state:d.visibilityState,handler:d.onvisibilitychange,strictHidden,strictState};\n function record(name){return function(e){events.push({name,thisDocument:this===d,thisWindow:this===window,target:e.target===d,current:e.currentTarget===d?'document':'window',phase:e.eventPhase,bubbles:e.bubbles,cancelable:e.cancelable,composed:e.composed,trusted:e.isTrusted});e.preventDefault()}}\n const capture=record('capture'),body=record('document'),bubble=record('bubble');\n window.addEventListener('visibilitychange',capture,true);d.addEventListener('visibilitychange',body);\n d.onvisibilitychange=record('handler');window.addEventListener('visibilitychange',bubble);\n const event=new Event('visibilitychange',{bubbles:true});d.dispatchEvent(event);\n window.removeEventListener('visibilitychange',capture,true);d.removeEventListener('visibilitychange',body);window.removeEventListener('visibilitychange',bubble);d.onvisibilitychange=null;\n return {initial,events,after:{defaultPrevented:event.defaultPrevented,currentTarget:event.currentTarget,eventPhase:event.eventPhase}};\n})()",
+  "result": {
+    "initial": {
+      "hidden": false,
+      "state": "visible",
+      "handler": null,
+      "strictHidden": true,
+      "strictState": true
+    },
+    "events": [
+      {
+        "name": "capture",
+        "thisDocument": false,
+        "thisWindow": true,
+        "target": true,
+        "current": "window",
+        "phase": 1,
+        "bubbles": true,
+        "cancelable": false,
+        "composed": false,
+        "trusted": false
+      },
+      {
+        "name": "document",
+        "thisDocument": true,
+        "thisWindow": false,
+        "target": true,
+        "current": "document",
+        "phase": 2,
+        "bubbles": true,
+        "cancelable": false,
+        "composed": false,
+        "trusted": false
+      },
+      {
+        "name": "handler",
+        "thisDocument": true,
+        "thisWindow": false,
+        "target": true,
+        "current": "document",
+        "phase": 2,
+        "bubbles": true,
+        "cancelable": false,
+        "composed": false,
+        "trusted": false
+      },
+      {
+        "name": "bubble",
+        "thisDocument": false,
+        "thisWindow": true,
+        "target": true,
+        "current": "window",
+        "phase": 3,
+        "bubbles": true,
+        "cancelable": false,
+        "composed": false,
+        "trusted": false
+      }
+    ],
+    "after": {
+      "defaultPrevented": false,
+      "currentTarget": null,
+      "eventPhase": 0
+    }
+  },
+  "scope": "Initial readonly properties and synthetic DOM event propagation. Real tab/background transitions are not established by this Headless Shell capture.",
+  "specification": "https://html.spec.whatwg.org/multipage/interaction.html#page-visibility"
+}

@@ -46,6 +46,10 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     final lifecycle = WidgetsBinding.instance.lifecycleState;
     _foreground = lifecycle == null || lifecycle == AppLifecycleState.resumed;
+    _appVisible =
+        lifecycle == null ||
+        lifecycle == AppLifecycleState.resumed ||
+        lifecycle == AppLifecycleState.inactive;
   }
   final Gateway gateway;
   final Future<String> Function() _loadRuntime;
@@ -1303,13 +1307,60 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
+  bool get _documentHidden => !_attached || !_visible || !_appVisible;
+  bool? _publishedHidden;
+  final _visibilityChanges = <bool>[];
+  bool _visibilityQueued = false;
+
+  // Visibility is a lifecycle task: publish even when timers/frames are frozen.
+  // Keep each edge queued so a quick hide/show still reaches both handlers.
+  void _serviceVisibility() {
+    if (_disposed || _id == null || _publishedHidden == null) return;
+    final hidden = _documentHidden;
+    final previous = _visibilityChanges.isEmpty
+        ? _publishedHidden
+        : _visibilityChanges.last;
+    if (previous != hidden) _visibilityChanges.add(hidden);
+    if (!ready || _visibilityQueued || _visibilityChanges.isEmpty) return;
+    _visibilityQueued = true;
+    _pendingEvents++;
+    final identity = _id;
+    _tail = _tail.then((_) async {
+      try {
+        while (!_disposed &&
+            ready &&
+            _id == identity &&
+            _visibilityChanges.isNotEmpty) {
+          final next = _visibilityChanges.first;
+          await _run(
+            '__pircDocument.updateVisibility(${jsonEncode({'hidden': next, 'now': _now})})',
+            lifecycleOnly: true,
+          );
+          if (_disposed || !ready || _id != identity) break;
+          _publishedHidden = next;
+          _visibilityChanges.removeAt(0);
+        }
+      } catch (error) {
+        await _failInteraction(error);
+      } finally {
+        _visibilityQueued = false;
+        _pendingEvents--;
+        if (!_disposed && _pendingEvents == 0) notifyListeners();
+        _schedule();
+      }
+    });
+  }
+
   final Stopwatch _clock = Stopwatch();
   final double Function()? clockMilliseconds;
   Timer? _wake;
   double? _timerDue;
   bool _hasAnimationFrame = false;
   bool _lastPumpWasFrame = false;
-  bool _attached = true, _visible = true, _foreground = true;
+  bool _attached = true,
+      _visible = true,
+      _foreground = true,
+      _appVisible = true;
   int _pointerInputGeneration = 0;
   double _nextFrameAt = 0, _lastPumpAt = 0;
   String? _lastMarkup;
@@ -1339,6 +1390,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       _clearFilePickerActions();
     }
     _visible = visible;
+    _serviceVisibility();
     unawaited(_serviceEnvironment());
     _serviceResources();
     _schedule();
@@ -1353,7 +1405,11 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       _clearFocusActions();
     }
     _foreground = foreground;
+    _appVisible =
+        state == AppLifecycleState.resumed ||
+        state == AppLifecycleState.inactive;
     if (!foreground) _cancelLayoutWaits();
+    _serviceVisibility();
     unawaited(_serviceEnvironment());
     _serviceResources();
     _schedule();
@@ -1977,6 +2033,16 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       final id = _classicScriptId(current);
       final frameId = _frameContinuationId(current);
       if (id == null && frameId != null) {
+        if (!_visible ||
+            _publishedHidden == true ||
+            _visibilityChanges.isNotEmpty) {
+          return _ClassicScriptDrain(
+            active: false,
+            processed: processed,
+            yielded: false,
+            taskCount: taskCount,
+          );
+        }
         if (taskCount >= _maxClassicScriptsPerTurn) {
           return _ClassicScriptDrain(
             active: true,
@@ -2212,6 +2278,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     bool allowPopups = false,
     bool refreshLayoutFirst = false,
     bool checkLayoutFirst = false,
+    bool lifecycleOnly = false,
   }) async {
     final actionGeneration = expectedActionGeneration ?? _formActionGeneration;
     final focusEpoch = expectedFocusEpoch ?? _focusActionEpoch;
@@ -2260,6 +2327,21 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     if (_disposed) return _mergeClassicScriptResponses(responses);
     onInitialResult?.call(result);
     _validateResult(result);
+    if (lifecycleOnly) {
+      // A second evaluation includes handler Promise jobs. Do not drain a
+      // selected animation frame, scripts or layout while publishing activity.
+      final fresh = await _classicScriptControl('snapshot', {'now': _now});
+      _validateResult(fresh);
+      _rememberClassicScriptResponse(responses, fresh);
+      return _commitResponses(
+        responses,
+        identity: identity,
+        owner: owner,
+        actionGeneration: actionGeneration,
+        focusEpoch: focusEpoch,
+        allowPopups: false,
+      );
+    }
     var taskCount = 0;
     final initialDrain = await _drainScriptTasks(
       result,
@@ -2510,13 +2592,16 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       _clock.reset();
       _clock.start();
       final initialEnvironment = _environment;
+      final initialHidden = _documentHidden;
+      _publishedHidden = initialHidden;
       _hostLayoutEnabled = _layoutCapture != null;
       await _run(
-        '__pircDocument.init(${jsonEncode({'hostLayout': _hostLayoutEnabled, 'canvasTextError': _canvasTextUnavailable, 'environment': initialEnvironment.toJson(), 'html': source, 'url': url, 'cookieState': opened['cookieState'], 'referrerPolicy': referrerPolicy, 'objectUrlNonce': _objectUrlNonce, 'referrer': referrer, 'history': history, 'now': _now})})',
+        '__pircDocument.init(${jsonEncode({'hidden': initialHidden, 'hostLayout': _hostLayoutEnabled, 'canvasTextError': _canvasTextUnavailable, 'environment': initialEnvironment.toJson(), 'html': source, 'url': url, 'cookieState': opened['cookieState'], 'referrerPolicy': referrerPolicy, 'objectUrlNonce': _objectUrlNonce, 'referrer': referrer, 'history': history, 'now': _now})})',
       );
       if (_disposed) return;
       ready = true;
       _publishedEnvironment = initialEnvironment;
+      _serviceVisibility();
       unawaited(_serviceEnvironment());
       if (_nativeStorage) {
         _queueStoragePoll();

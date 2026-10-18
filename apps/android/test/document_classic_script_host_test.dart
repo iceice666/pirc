@@ -44,6 +44,7 @@ class _ClassicScriptsGateway extends Gateway {
   Completer<void>? rawGate;
   Completer<void>? rawStarted;
   int _snapshotIndex = 0;
+  bool _visibilitySnapshot = false;
 
   @override
   Future<dynamic> call(String method, [Json args = const {}]) async {
@@ -77,7 +78,20 @@ class _ClassicScriptsGateway extends Gateway {
     if (source.startsWith('__pircDocument.init(')) {
       return _encoded(initResponse);
     }
+    if (source.startsWith('__pircDocument.updateVisibility(')) {
+      _visibilitySnapshot = true;
+      return _encoded(_snapshot());
+    }
     if (source.startsWith('__pircDocument.snapshot(')) {
+      if (_visibilitySnapshot) {
+        _visibilitySnapshot = false;
+        final pending = pumpResponse?['classicScript'];
+        return _encoded({
+          ..._snapshot(timerDelayMs: pending == null ? null : 0),
+          'classicScript': ?pending,
+        });
+      }
+
       if (_snapshotIndex < snapshots.length) {
         return _encoded(snapshots[_snapshotIndex++]);
       }

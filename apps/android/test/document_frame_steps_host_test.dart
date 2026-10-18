@@ -135,10 +135,11 @@ void main() {
       await tester.pump(Duration.zero);
     },
   );
-  for (final detachAtCapture in [false, true]) {
+  for (final suspension in ['none', 'detach', 'hide']) {
+    final detachAtCapture = suspension != 'none';
     testWidgets(
       detachAtCapture
-          ? 'detaching during the frame checkpoint suspends the continuation and resumes it once'
+          ? '$suspension during the frame checkpoint suspends the continuation and resumes it once'
           : 'Promise changes after serialized task results are measured before frame continuation',
       (tester) async {
         final gateway = _FrameGateway();
@@ -153,7 +154,10 @@ void main() {
           captured.add(revision);
           if (detachAtCapture && revision == 2 && !detached) {
             detached = true;
-            scripts.setActivity(attached: false, visible: true);
+            scripts.setActivity(
+              attached: suspension != 'detach',
+              visible: suspension != 'hide',
+            );
             return null;
           }
           return {

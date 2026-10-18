@@ -108,6 +108,20 @@ Promise ordering, record draining and private-snapshot suppression. The matching
 Node suites exercise the helper and the shipped bundle. Detached-subtree
 transient observation and bulk record grouping remain explicit differences.
 
+`integration_test/document_visibility_test.dart` runs without a fixture server.
+It checks the real Android JS engine and Flutter document view across eight
+phone/tablet, DPR 1/3 and light/dark profiles: `document.hidden`, read-only
+`visibilityState`, ordered `visibilitychange` events, Promise updates and
+animation suspension/resumption after window and simulated app activity changes.
+The host tests also retain rapid hide/show edges during startup and in-flight
+evaluations. A visible but unfocused (`inactive`) app stays visible to the DOM;
+its existing scheduler still pauses until foreground resumes.
+Recreate the pinned initial-property/synthetic-event browser observations with
+`node apps/android/tool/parity/capture_document_visibility_chromium153.mjs`.
+The dedicated Headless Shell does not prove real browser background transitions;
+physical OS lifecycle delivery and chart-specific interruption remain separate
+acceptance work. Neither the fixture nor test code is included in the APK.
+
 `document_chart_http_test.dart` uses the pinned test-only Chart.js 4.5.1 UMD and
 Chromium 153 fixture for phone/tablet at DPR 1/3. It compares actual native
 geometry and painted bar/tooltip pixels, taps both bars and blank/outside areas,
