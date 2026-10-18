@@ -367,6 +367,27 @@ pub struct ProbeTarget<'a> {
     pub api_key: Option<&'a str>,
 }
 
+/// OpenCode splits inference by wire API (`/inference[/go]/{openai,anthropic}`)
+/// but lists every model once per plan, at `/inference[/go]/v1/models`.
+fn opencode_models_url(base: &str) -> Option<String> {
+    let url = reqwest::Url::parse(base).ok()?;
+    if !crate::http::is_opencode_endpoint(&url) {
+        return None;
+    }
+    let segments: Vec<&str> = url.path_segments()?.filter(|s| !s.is_empty()).collect();
+    let (plan, rest) = match segments.as_slice() {
+        ["inference", "go", rest @ ..] => ("/go", rest),
+        ["inference", rest @ ..] => ("", rest),
+        _ => return None,
+    };
+    match rest {
+        ["openai" | "anthropic"] | ["openai" | "anthropic", "v1"] => {
+            Some(format!("https://opencode.ai/inference{plan}/v1/models"))
+        }
+        _ => None,
+    }
+}
+
 /// `discoverModels`: list models from the endpoint itself. Redirects are
 /// refused so a key is never forwarded.
 pub async fn discover_models(
@@ -376,7 +397,9 @@ pub async fn discover_models(
 ) -> Result<Vec<DiscoveredModel>, BackendError> {
     let base = target.base_url.trim_end_matches('/');
     let anthropic = target.api == ModelApi::AnthropicMessages;
-    let url = if anthropic {
+    let url = if let Some(url) = opencode_models_url(base) {
+        url
+    } else if anthropic {
         format!("{base}/v1/models?limit=1000")
     } else {
         format!("{base}/models")
@@ -619,5 +642,26 @@ mod tests {
             .map(|i| json!({ "id": format!("m{i}") }))
             .collect();
         assert_eq!(parse_model_list(&json!(many)).unwrap().len(), MAX_MODELS);
+    }
+
+    #[test]
+    fn opencode_lists_models_per_plan() {
+        let zen = Some("https://opencode.ai/inference/v1/models".to_owned());
+        let go = Some("https://opencode.ai/inference/go/v1/models".to_owned());
+        for (base, expected) in [
+            ("https://opencode.ai/inference/openai/v1", &zen),
+            ("https://opencode.ai/inference/openai/v1/", &zen),
+            ("https://opencode.ai/inference/anthropic", &zen),
+            ("https://opencode.ai/inference/go/openai/v1", &go),
+            ("https://opencode.ai/inference/go/anthropic", &go),
+            ("https://opencode.ai/inference/go/anthropic/v1", &go),
+            // Already list their models at `{base}/models` or `{base}/v1/models`.
+            ("https://opencode.ai/inference/v1", &None),
+            ("https://opencode.ai/zen/go/v1", &None),
+            ("https://opencode.ai/inference/google/v1beta", &None),
+            ("https://proxy.example/inference/openai/v1", &None),
+        ] {
+            assert_eq!(&opencode_models_url(base), expected, "{base}");
+        }
     }
 }

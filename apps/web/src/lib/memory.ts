@@ -1,5 +1,5 @@
 /**
- * The assistant's memory, held by the gateway (docs/history/assistant.md): USER
+ * The assistant's memory, held by the gateway (docs/architecture/assistant-memory.md): USER
  * entries (who you are; changed only with your approval), the assistant's
  * MEMORY notes, and its USER proposals waiting for you.
  */

@@ -22,7 +22,7 @@ use serde_json::{Map, Value, json};
 
 use crate::LocalBoxFuture;
 use crate::agent::{Agent, Delivery};
-use crate::feature::{Feature, FeatureCommand, off_in_chat};
+use crate::feature::{Feature, FeatureCommand, off_in_mode};
 use crate::tools::js::{self, JsRegex, js_regex};
 use crate::tools::result_schema::{bool_, by_action, int, nullable, obj, one_of_strings, str_};
 use crate::tools::{ToolContext, ToolResult, ToolSpec, spec_tool, typed};
@@ -935,7 +935,7 @@ impl Feature for BackgroundFeature {
     }
 
     fn tools(&self, agent: &Rc<Agent>) -> Vec<Rc<dyn crate::tools::Tool>> {
-        if off_in_chat(agent, "background") {
+        if off_in_mode(agent, "background") {
             return Vec::new();
         }
         vec![Rc::new(BackgroundTool::new(self.state.clone(), agent))]

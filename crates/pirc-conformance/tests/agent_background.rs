@@ -6,8 +6,8 @@
 //! and `background_stop`, pseudo-terminal tasks, stopping on shutdown,
 //! headless agents and chats. The `background_task` tool itself is in
 //! `agent_background_ptc.rs`. Tasks wait for a trigger file the test
-//! creates, so they finish at known points. The M5 target of the agent
-//! port (docs/history/rust-rewrite.md).
+//! creates, so they finish at known points. The historical feature
+//! baseline (docs/development/historical-records.md).
 
 mod background_support;
 

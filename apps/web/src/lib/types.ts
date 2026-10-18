@@ -13,6 +13,8 @@ export type CommandKind =
   | 'prompt'
   | 'steer'
   | 'follow_up'
+  | 'edit_message'
+  | 'switch_branch'
   | 'stop'
   | 'clear_queue'
   | 'send_now'
@@ -143,6 +145,9 @@ export type NoticeLevel = 'info' | 'warning' | 'error';
 
 export interface ConversationMessage {
   id: string;
+  /** Persisted session-tree entry, unlike the timestamp-based display id. */
+  entryId?: string;
+  branches?: Array<{ entryId: string; text: string; selected: boolean }>;
   role: 'user' | 'assistant' | 'system';
   content: string;
   createdAt: string;
@@ -410,6 +415,7 @@ export interface SessionCommandInput {
   commandId: string;
   kind: CommandKind;
   controlGeneration: number;
+  entryId?: string;
   content?: string;
   modelId?: string;
   provider?: string;

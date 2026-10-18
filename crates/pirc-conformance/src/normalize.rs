@@ -78,7 +78,14 @@ impl Normalizer {
                 entries.sort_by(|a, b| a.0.cmp(b.0));
                 let mut out = Map::new();
                 for (key, item) in entries {
-                    let item = self.value(item);
+                    let item = if key == "entryId"
+                        && item.as_str().is_some_and(|id| {
+                            id.len() == 8 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+                        }) {
+                        Value::String(self.placeholder("entry", item.as_str().unwrap()))
+                    } else {
+                        self.value(item)
+                    };
                     let key = self.text(key);
                     assert!(
                         !out.contains_key(&key),
@@ -248,6 +255,23 @@ mod tests {
             value,
             json!({ "id": "session_<uuid:1>", "path": "/api/sessions/session_<uuid:1>",
                 "other": "<uuid:2>" })
+        );
+    }
+
+    #[test]
+    fn entry_metadata_keeps_variant_identity_without_masking_text() {
+        let mut normalizer = Normalizer::default();
+        assert_eq!(
+            normalizer.value(&json!({
+                "entryId": "abcd1234",
+                "branches": [{"entryId": "abcd1234"}, {"entryId": "abcd5678"}],
+                "text": "abcd1234"
+            })),
+            json!({
+                "entryId": "<entry:1>",
+                "branches": [{"entryId": "<entry:1>"}, {"entryId": "<entry:2>"}],
+                "text": "abcd1234"
+            })
         );
     }
 

@@ -1,6 +1,6 @@
 //! The node's SQLite store: the node half of `apps/gateway/src/database.ts`
 //! with a fresh schema (`schema.sql`, only the tables a node uses). No
-//! TS-era database is read (docs/history/rust-rewrite.md, decisions): one is
+//! TS-era database is read (docs/development/historical-records.md): one is
 //! refused at start-up with a pointer to the upgrade notes, as the gateway
 //! does.
 //!
@@ -21,6 +21,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+use pirc_protocol::NodeRole;
 pub use pirc_protocol::WorkspaceKind;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
@@ -674,10 +675,7 @@ fn workspace_kind(value: &str) -> WorkspaceKind {
 }
 
 fn kind_text(kind: WorkspaceKind) -> &'static str {
-    match kind {
-        WorkspaceKind::Chat => "chat",
-        WorkspaceKind::Directory => "directory",
-    }
+    kind.mode().id
 }
 
 /// A stored enum (`snake_case` text) as its Rust value; an unknown text is
@@ -822,14 +820,10 @@ fn stale_interaction(message: &str) -> ApiError {
 /// coding node's directory workspaces only (`buildNodeApp`). An operator
 /// pointing the other role at the state must not expose its workspaces.
 pub fn check_role(workspaces: &[Workspace], chat: bool) -> Result<(), String> {
-    let expected = if chat {
-        WorkspaceKind::Chat
-    } else {
-        WorkspaceKind::Directory
-    };
+    let role = if chat { NodeRole::Chat } else { NodeRole::Node };
     if workspaces
         .iter()
-        .any(|workspace| workspace.kind != expected)
+        .any(|workspace| workspace.kind.mode().node_role != role)
     {
         // TS named its executables; `pirc-chat` is `pirc-node chat` now,
         // and the text keeps the old name as well, for logs and scripts.
@@ -1086,7 +1080,7 @@ impl Store for Connection {
         hash: Option<&str>,
         user: &str,
     ) -> ApiResult<()> {
-        if self.get_workspace(workspace_id)?.kind != WorkspaceKind::Directory {
+        if !self.get_workspace(workspace_id)?.kind.mode().project_config {
             return Err(ApiError::bad_request(
                 "Only directory workspaces have a project config",
             ));

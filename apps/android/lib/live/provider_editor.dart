@@ -715,7 +715,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
             ),
           if (catalogId == null)
             _checkbox(
-              'OpenCode Go compatibility (session routing + pirc User-Agent; automatic for opencode.ai/zen/go)',
+              'OpenCode compatibility (session routing + pirc User-Agent; automatic for opencode.ai/zen and opencode.ai/inference)',
               opencodeGo,
               _setGo,
               busy,

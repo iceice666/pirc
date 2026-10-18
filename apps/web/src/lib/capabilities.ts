@@ -80,7 +80,7 @@ export const projectFilesApi = {
 
 /**
  * A directory workspace a chat project is linked to
- * (docs/history/assistant.md): a default and an ordering for its assistant, never a permission.
+ * (docs/architecture/assistant-memory.md): a default and an ordering for its assistant, never a permission.
  */
 export interface ProjectLink {
   workspaceId: string;

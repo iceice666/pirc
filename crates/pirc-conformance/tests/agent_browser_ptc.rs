@@ -1,5 +1,5 @@
-//! The `browser_*` tools run from `ptc` scripts (docs/history/rust-rewrite.md,
-//! M5; the node's browser is M8): page tools and their summaries, the
+//! The `browser_*` tools run from `ptc` scripts (docs/architecture/ptc.md):
+//! page tools and their summaries, the
 //! screenshot, tabs, recording, node errors, and the handoff to the human
 //! (returned in the panel, confirmed in the dialog, cancelled, and without
 //! a human). The test answers the node's `browser_request`s. Needs the

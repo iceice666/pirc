@@ -12,4 +12,4 @@
 | [Browser](browser.md)                          | Fetching, interaction, takeover, recording and browser settings                                                                           |
 | [Schedules and notifications](schedules.md)    | Scheduled runs, approvals, missed runs, time zones and push notifications                                                                 |
 
-For environment variables and host prerequisites, use the [gateway](../deploy/gateway.md), [node](../deploy/node.md), and [sandbox/browser deployment](../deploy/sandbox-and-browser.md) references. For pending UI work, see the [mobile audit](../../plans/README.md#phase-6--android-parity), not the completed design history.
+For environment variables and host prerequisites, use the [gateway](../deploy/gateway.md), [node](../deploy/node.md), and [sandbox/browser deployment](../deploy/sandbox-and-browser.md) references. For pending UI work, see the [mobile follow-ups](../../plans/mobile.md), not the completed design history.

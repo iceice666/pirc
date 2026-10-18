@@ -5,8 +5,8 @@
  * Linux only: the snapshots are recorded on Linux, the platform CI and
  * deployments use. On macOS `/tmp` is `/private/tmp`, Seatbelt lists Unix
  * sockets and the node warns about its temporary directory, so transcripts
- * differ without the contract changing (docs/history/rust-rewrite.md, "Complete
- * macOS runtime validation"). Elsewhere the run is skipped and recording
+ * differ without the contract changing (historical macOS runtime validation notes
+ * indexed in docs/development/historical-records.md). Elsewhere the run is skipped and recording
  * refused, so macOS output never replaces the Linux snapshots.
  */
 const record = process.argv.includes('--record');

@@ -16,13 +16,23 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 - Android supports viewport-fixed HTML overlays and acknowledges native scrolling before animation callbacks.
 - Android keeps the reading position stable when interactive HTML changes content above the viewport.
 - Android preserves reading positions inside nested HTML scrolling panels.
+- Android versionName is 0.3.0 and versionCode is 3; no APK is published. No Linux/x86_64 binaries are included; Nix packaging is retained.
+- Android versionName is 0.2.0 and versionCode is 2. No Android APK or new native Android Context tab is included in this release.
+
+## [0.7.0] - 2026-10-18
+
+### Fixed
+
+- Android full-page HTML content improves viewport sizing, offsets, common margins, relative positioning, grid rows and computed-style reads, while keeping overflowing content reachable.
 - Gateway and node startup retry brief SQLite WAL-mode lock conflicts when processes open the same database concurrently.
 - PTC scripts that exhaust their JavaScript heap report an out-of-memory error reliably, including when the engine cannot allocate an error object.
+- OpenCode Zen and Go backends on the current `opencode.ai/inference/...` base URLs (and Zen on the legacy `opencode.ai/zen/...` ones) now send the OpenCode session and User-Agent headers automatically, and **Fetch models from endpoint** finds their model lists. The OpenCode Go preset uses `https://opencode.ai/inference/go/openai/v1`; the editor option is renamed **OpenCode compatibility**.
 
 Same node protocol (11) and database schemas; upgrade the gateway and every node together as usual (an older node answers the new project-file routes with 404).
 
 ### Added
 
+- You can edit your own messages in Chat and Work sessions, on the Web and in the Android app (**Edit message** → **Save & regenerate**). Saving keeps the original message and its replies as an earlier version, starts a new version from the edited text (attachments kept) and regenerates the reply; the previous/next buttons beside the message switch between versions without a model request, and the selected version survives reconnects and restarts. Only the selected version is used as context for later replies. Editing and switching need session control and an idle session (no running work or queued messages). **Tool effects are not undone**: files, commands, external actions and memory changed by the agent stay changed. Session commands `edit_message` (`{entryId, message}`) and `switch_branch` (`{entryId}`); snapshot history now includes `entryId` and user-message `branches`. An older node rejects these commands, so upgrade nodes with the gateway.
 - The Android app can manage shared project files and delete chat projects with a preview, memory decisions and interrupted-deletion retry.
 - Chat projects (and the top-level Chats) have project files: files every chat in the project can read, such as notes, documents or data (project page → Settings → Project files, or `GET`/`POST`/`DELETE /api/workspaces/:id/files`). The chat node keeps them in `<stateDir>/chat/<workspaceId>/files`; chats get that directory read-only in their sandbox and its path in their system prompt (`## Project files`), and the assistant cannot change them. They are shared, not copied: an upload, a replacement (same name) or a removal reaches chats already running. Chats started before the project's first file are not given them; start a new chat. At most 50 files per project, each within the node's upload limit. Deleting a project deletes its files.
 
@@ -141,7 +151,7 @@ Compatible with 0.4.0: same node protocol (10) and state; upgrade the gateway an
 
 ### Validation limitations
 
-- The user explicitly waived the remaining full PTC/task-time and native provider/subscription smoke-test gate, including unresolved polyglot review/accounting results. These are not reported as passed. Previously accepted sandbox/browser security gaps remain documented in the [rewrite plan](docs/history/rust-rewrite.md) and [security audit](docs/history/security-audit.md).
+- The user explicitly waived the remaining full PTC/task-time and native provider/subscription smoke-test gate, including unresolved polyglot review/accounting results. These are not reported as passed. Previously accepted sandbox/browser security gaps remain documented in the [cutover record](docs/development/historical-records.md#rust-cutover-and-validation-scope) and [security decisions](docs/architecture/security-decisions.md).
 
 ### Security
 
@@ -181,7 +191,7 @@ Compatible with 0.4.0: same node protocol (10) and state; upgrade the gateway an
 
 ### Migration
 
-- Upgrade the gateway (it ships the web bundle) and every chat and coding node from the same release, then reload web clients and update the Android app. Rename hook matchers that name `code` to `ptc` (they still apply, with a warning in the session). Scripts that relied on Bun or Node APIs must use tools instead. See [Upgrades](docs/deploy/upgrades.md#programmatic-tool-calling-the-code-tool-removed).
+- Upgrade the gateway (it ships the web bundle) and every chat and coding node from the same release, then reload web clients and update the Android app. Rename hook matchers that name `code` to `ptc` (they still apply, with a warning in the session). Scripts that relied on Bun or Node APIs must use tools instead. See [PTC migration record](docs/development/historical-records.md#ptc-evaluation-outcome).
 
 ### Known limits
 
@@ -232,7 +242,9 @@ This is the first tagged release. Earlier development used 0.1.0 without a publi
 - Linux/x86_64 binaries are not published or newly runtime-validated as part of this release. Nix packaging is retained.
 - Token allocations are estimates scaled to matching provider input usage, not exact per-section tokenizer counts.
 
-[Unreleased]: https://github.com/iceice666/pirc/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/iceice666/pirc/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/iceice666/pirc/releases/tag/v0.7.0
+[0.6.1]: https://github.com/iceice666/pirc/releases/tag/v0.6.1
 [0.6.0]: https://github.com/iceice666/pirc/releases/tag/v0.6.0
 [0.5.0]: https://github.com/iceice666/pirc/releases/tag/v0.5.0
 [0.4.1]: https://github.com/iceice666/pirc/releases/tag/v0.4.1

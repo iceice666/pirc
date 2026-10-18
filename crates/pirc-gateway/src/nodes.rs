@@ -797,12 +797,15 @@ impl LinkSession {
         for workspace in &mut parsed.workspaces {
             sanitize_repo(workspace);
         }
-        let chat = parsed.role == NodeRole::Chat;
-        if parsed
-            .workspaces
-            .iter()
-            .any(|workspace| (workspace.kind == Some(pirc_protocol::WorkspaceKind::Chat)) != chat)
-        {
+        // Absent from older nodes: directory.
+        if parsed.workspaces.iter().any(|workspace| {
+            workspace
+                .kind
+                .unwrap_or(pirc_protocol::WorkspaceKind::Directory)
+                .mode()
+                .node_role
+                != parsed.role
+        }) {
             return self.close(1008, "workspace kind does not match node role");
         }
         if !self.app.accept_node_role(&self.node_id, parsed.role) {

@@ -1,5 +1,5 @@
-//! Auto mode around `ptc` scripts (`agent-auto-mode.test.ts`, M5,
-//! docs/history/rust-rewrite.md): shell calls a script makes are gated one by one
+//! Auto mode around `ptc` scripts (`agent-auto-mode.test.ts`,
+//! docs/architecture/ptc.md): shell calls a script makes are gated one by one
 //! (refused without a UI, asked about with one, withdrawn when the run is
 //! cancelled), the user's deny-list applies to the script text itself, and
 //! an ordinary script is neither classified nor leased. These need the PTC

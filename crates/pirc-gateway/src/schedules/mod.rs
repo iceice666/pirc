@@ -1,6 +1,6 @@
 //! Scheduled agent runs (`apps/gateway/src/daemon/schedules.ts`,
 //! `schedule-routes.ts`, the schedule parts of `daemon/app.ts`;
-//! docs/history/cron.md) and their agent operations (`schedule.*` in
+//! docs/guides/schedules.md) and their agent operations (`schedule.*` in
 //! `daemon/agent-ops.ts`).
 //!
 //! The gateway keeps each user's schedules and one timer for the earliest

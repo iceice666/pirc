@@ -4,8 +4,8 @@
 //! hidden context, the end-of-run reminder, restoring the list in a new
 //! process (and skipping damaged history), headless agents, and chats,
 //! which leave the tool out unless the config brings it back. The tool
-//! itself is in `agent_todo_ptc.rs`. The M5 target of the agent port
-//! (docs/history/rust-rewrite.md).
+//! itself is in `agent_todo_ptc.rs`. The historical feature baseline
+//! (docs/development/historical-records.md).
 
 use std::collections::VecDeque;
 

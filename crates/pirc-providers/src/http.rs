@@ -55,18 +55,27 @@ impl Headers {
     }
 }
 
-/// `opencodeGoHeaders` (`agent/providers/opencode-go.ts`): routing headers
-/// for OpenCode Go, by flag or by its well-known endpoint.
-pub fn opencode_go_headers(
+/// Whether `url` is one of OpenCode's hosted inference endpoints: Zen and Go,
+/// under either the legacy `/zen/...` or the current `/inference/...` paths.
+pub fn is_opencode_endpoint(url: &reqwest::Url) -> bool {
+    let path = url.path();
+    url.host_str() == Some("opencode.ai")
+        && ["/zen", "/inference"].iter().any(|prefix| {
+            path.strip_prefix(prefix)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+        })
+}
+
+/// Routing headers for OpenCode Zen and Go (`x-opencode-session` plus a
+/// product User-Agent), by flag or by their well-known endpoints. The flag
+/// keeps its historical `opencodeGo` name in configuration.
+pub fn opencode_headers(
     opencode_go: Option<bool>,
     base_url: &str,
     session_id: &str,
 ) -> Result<Vec<(&'static str, String)>, ()> {
     let url = reqwest::Url::parse(base_url).map_err(|_| ())?;
-    let path = url.path();
-    let enabled = opencode_go == Some(true)
-        || (url.host_str() == Some("opencode.ai")
-            && (path == "/zen/go" || path.starts_with("/zen/go/")));
+    let enabled = opencode_go == Some(true) || is_opencode_endpoint(&url);
     Ok(if enabled {
         vec![
             ("x-opencode-session", session_id.to_owned()),
@@ -95,13 +104,22 @@ mod tests {
     }
 
     #[test]
-    fn detects_opencode_go() {
-        let on = |url: &str, flag| !opencode_go_headers(flag, url, "s").unwrap().is_empty();
+    fn detects_opencode_endpoints() {
+        let on = |url: &str, flag| !opencode_headers(flag, url, "s").unwrap().is_empty();
         assert!(on("https://opencode.ai/zen/go/v1", None));
         assert!(on("https://OPENCODE.ai/zen/go", None));
-        assert!(!on("https://opencode.ai/zen/v1", None));
+        assert!(on("https://opencode.ai/zen/v1", None));
+        assert!(on("https://opencode.ai/zen", None));
+        assert!(on("https://opencode.ai/inference/openai/v1", None));
+        assert!(on("https://opencode.ai/inference/anthropic", None));
+        assert!(on("https://opencode.ai/inference/go/openai/v1/", None));
+        assert!(on("https://opencode.ai/inference/go/anthropic", None));
+        assert!(!on("https://opencode.ai/zenith/v1", None));
+        assert!(!on("https://opencode.ai/inferences", None));
+        assert!(!on("https://opencode.ai/docs/go", None));
+        assert!(!on("https://api.opencode.ai.example/zen/v1", None));
         assert!(on("https://proxy.example/v1", Some(true)));
         assert!(!on("https://proxy.example/v1", Some(false)));
-        assert!(opencode_go_headers(None, "not a url", "s").is_err());
+        assert!(opencode_headers(None, "not a url", "s").is_err());
     }
 }

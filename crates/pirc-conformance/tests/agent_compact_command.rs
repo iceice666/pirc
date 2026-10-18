@@ -1,8 +1,8 @@
 //! The `/compact [instructions]` slash command (`agent/features/
 //! compact.ts`, feature `compact`), with the test playing the agent's
 //! node: a compaction with and without focus instructions, a new session,
-//! a failing summarizer and a busy agent. The M5 target of the agent port
-//! (docs/history/rust-rewrite.md).
+//! a failing summarizer and a busy agent. The historical feature baseline
+//! (docs/development/historical-records.md).
 
 use pirc_conformance::{AgentOptions, AgentRun, Gate, ModelReply, Recorder};
 use serde_json::json;

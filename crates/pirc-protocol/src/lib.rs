@@ -12,6 +12,7 @@
 
 mod inference;
 mod link;
+pub mod mode;
 mod models;
 mod repo;
 mod socket_path;
@@ -27,6 +28,7 @@ pub use link::{
     RegisteredWorkspace, Registration, SessionActivity, SessionRun, TerminalKind, WorkspaceKind,
     WorkspaceRole,
 };
+pub use mode::Mode;
 pub use models::{InferenceConfig, Model, ModelApi, ModelRef, Models, Provider, ThinkingLevel};
 pub use repo::{REPO_MAX_CHARS, normalize_origin, valid_repo};
 pub use socket_path::SocketPath;

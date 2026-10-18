@@ -48,6 +48,8 @@ data class ToolUpdate(
     val parentId: String? = null,
 )
 
+data class MessageBranch(val entryId: String, val text: String, val selected: Boolean)
+
 data class Message(
     val id: String,
     /** `user`, `assistant` or `system`. */
@@ -71,6 +73,8 @@ data class Message(
     val level: String? = null,
     val label: String? = null,
     val meta: String? = null,
+    val entryId: String? = null,
+    val branches: List<MessageBranch> = emptyList(),
 )
 
 data class RunState(
@@ -134,5 +138,5 @@ data class SessionState(
     val needsSnapshot: Boolean = false,
 )
 
-/** Whether an agent runs inside its node's OS sandbox, and why not (docs/history/sandbox.md). */
+/** Whether an agent runs inside its node's OS sandbox, and why not (docs/deploy/sandbox-and-browser.md). */
 data class SandboxStatus(val active: Boolean, val reason: String? = null)

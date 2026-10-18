@@ -1,6 +1,6 @@
 /**
  * Release sizes of the Rust executables against their budget
- * (crates/size-budget.json; docs/history/rust-rewrite.md). Shipped bytes are the
+ * (crates/size-budget.json; docs/development/historical-records.md). Shipped bytes are the
  * point of the rewrite, so a binary over budget fails `bun run size:check`.
  *
  *   bun scripts/binary-size.ts          build, report, fail when over budget

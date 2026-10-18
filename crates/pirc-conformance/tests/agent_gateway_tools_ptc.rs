@@ -1,7 +1,7 @@
 //! The `schedule` tool (and `web_search` from a script) run from `ptc`
 //! scripts, as `agent-schedules.test.ts` and `agent-web-search.test.ts`
 //! do: proposals, immediate changes, run results in chunks, failures, and
-//! the tool's absence. Needs the `ptc` runtime (docs/history/rust-rewrite.md, M5).
+//! the tool's absence. Needs the `ptc` runtime (docs/architecture/ptc.md).
 
 mod feature_support;
 

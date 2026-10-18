@@ -1,4 +1,4 @@
-//! `pirc-gateway`, being rewritten in Rust (docs/history/rust-rewrite.md, M2): the
+//! `pirc-gateway`, rewritten in Rust (docs/development/historical-records.md): the
 //! central daemon. It authenticates browsers (forward auth), indexes
 //! sessions, buffers their events and routes every session request to the
 //! node that owns it. It never runs agents, terminals or workspace

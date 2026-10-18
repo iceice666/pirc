@@ -100,6 +100,24 @@ it('addresses a queued message by its queue and index for send_now', async () =>
   ]);
 });
 
+it('regenerates an edited tree entry with selected settings, without replacing attachments', async () => {
+  const { bodies } = mockCommands();
+  await api.command('session', { ...input, kind: 'edit_message', entryId: 'entry-1' });
+  expect(bodies.map((body) => body.payload)).toEqual([
+    { type: 'set_model', provider: 'anthropic', modelId: 'claude-opus-5-5' },
+    { type: 'set_thinking', level: 'high' },
+    { type: 'edit_message', entryId: 'entry-1', message: 'hello' },
+  ]);
+});
+
+it('switches a branch without sending prompt settings or attachments', async () => {
+  const { bodies } = mockCommands();
+  await api.command('session', { ...input, kind: 'switch_branch', entryId: 'entry-2' });
+  expect(bodies.map((body) => body.payload)).toEqual([
+    { type: 'switch_branch', entryId: 'entry-2' },
+  ]);
+});
+
 it('applies chat memory decisions without requiring a node snapshot', () => {
   const raw = { sessionId: 's1', epoch: 2, sequence: 1 };
   expect(

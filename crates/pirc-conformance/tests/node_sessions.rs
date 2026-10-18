@@ -4,7 +4,7 @@
 //! the agent runs (with the fake model held mid-reply), the run's outcome
 //! on provider errors and retries, agent dialogs answered as interactions,
 //! and what a snapshot reports once the runner is gone. Recorded from the
-//! TS node (docs/history/rust-rewrite.md, M6).
+//! TS node (docs/development/historical-records.md).
 
 mod node_sessions_support;
 

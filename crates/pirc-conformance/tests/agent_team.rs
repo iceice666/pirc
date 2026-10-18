@@ -6,8 +6,8 @@
 //! started as a team member or one-shot subagent (`PIRC_TEAM_AGENT`),
 //! whose write leases go to its parent as `team_call`s answered by
 //! `team_result` lines. Spawning, messaging and waiting run inside `ptc`
-//! scripts and are in `agent_team_ptc.rs`. The M5 target of the agent
-//! port (docs/history/rust-rewrite.md).
+//! scripts and are in `agent_team_ptc.rs`. The historical feature
+//! baseline (docs/development/historical-records.md).
 
 use std::collections::VecDeque;
 

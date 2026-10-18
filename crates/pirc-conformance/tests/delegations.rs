@@ -793,7 +793,7 @@ async fn put_links(api: &Api, r: &mut Recorder, step: &str, workspace: &str, ids
     );
 }
 
-/// A chat project linked to directory workspaces (docs/history/assistant.md):
+/// A chat project linked to directory workspaces (docs/architecture/assistant-memory.md):
 /// the links its settings edit, the workspace list its assistant gets, and
 /// `delegate` and `memory_search` without a workspace.
 #[tokio::test(flavor = "multi_thread")]

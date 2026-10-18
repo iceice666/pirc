@@ -1,4 +1,4 @@
-//! `browser` (`agent/features/browser.ts`, docs/history/browser.md): the
+//! `browser` (`agent/features/browser.ts`, docs/guides/browser.md): the
 //! agent side of the browser tools. `web_fetch` and the interactive page
 //! tools drive one tab group per session in the node's Chromium over the
 //! browser channel (`browser_request`); the node's browser itself is M8.

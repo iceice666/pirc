@@ -371,7 +371,7 @@ describe('BackendSettings', () => {
     await click('Add model');
     expect(field('Model ID').value).toBe('');
     const go = Array.from(target.querySelectorAll('label'))
-      .find((label) => label.textContent?.includes('OpenCode Go compatibility'))!
+      .find((label) => label.textContent?.includes('OpenCode compatibility'))!
       .querySelector<HTMLInputElement>('input')!;
     go.click();
     await tick();
@@ -467,7 +467,7 @@ describe('BackendSettings', () => {
     expect(field('Base URL').value).toBe('https://api.openai.example/v1');
     expect(field('API').value).toBe('openai-responses');
     expect(field('API').disabled).toBe(true);
-    expect(target.textContent).not.toContain('OpenCode Go compatibility');
+    expect(target.textContent).not.toContain('OpenCode compatibility');
     expect(target.textContent).toContain('400K context · 128K output · reasoning');
     const filter = target.querySelector<HTMLInputElement>('input[aria-label="Filter models"]')!;
     filter.value = 'mini';

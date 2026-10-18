@@ -28,7 +28,7 @@ use self::model::{
     goal_widget, is_open, parse_goal, start_round, valid_max_rounds,
 };
 use crate::agent::{Agent, Delivery};
-use crate::feature::{BeforeStart, Feature, FeatureCommand, off_in_chat};
+use crate::feature::{BeforeStart, Feature, FeatureCommand, off_in_mode};
 use crate::session_store::EntryData;
 use crate::tools::result_schema::{bool_, fields, int, nullable, obj, one_of_strings, str_};
 use crate::tools::{Tool, ToolContext, ToolResult, ToolSpec, js, spec_tool};
@@ -140,7 +140,7 @@ impl State {
     }
 
     fn enabled(&self, agent: &Agent) -> bool {
-        !self.child && self.settings(agent).enabled && !off_in_chat(agent, "goal")
+        !self.child && self.settings(agent).enabled && !off_in_mode(agent, "goal")
     }
 
     fn goal(&self) -> Option<Goal> {

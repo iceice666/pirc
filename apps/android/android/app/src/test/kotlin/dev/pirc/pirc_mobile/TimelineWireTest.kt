@@ -8,6 +8,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TimelineWireTest {
+    @Test fun messageBranchesSurviveSnapshotDecoderAndFlutterChannel() {
+        val raw = PircJson.parseToJsonElement("""{"session":{"id":"s","workspaceId":"w","name":"Session"},"history":[{"role":"user","entryId":"new","timestamp":1000,"content":"Revised","branches":[{"entryId":"old","text":"Original","selected":false},{"entryId":"new","text":"Revised","selected":true},{"entryId":"invalid","text":"Missing selection"}]}]}""")
+        val state = snapshotState(raw)
+        val message = state.messages.single()
+        assertEquals("new", message.entryId)
+        assertEquals(listOf(MessageBranch("old", "Original", false), MessageBranch("new", "Revised", true)), message.branches)
+        val wire = (state.wire()["messages"] as List<*>).single() as Map<*, *>
+        assertEquals("new", wire["entryId"])
+        assertEquals(listOf(
+            mapOf("entryId" to "old", "text" to "Original", "selected" to false),
+            mapOf("entryId" to "new", "text" to "Revised", "selected" to true),
+        ), wire["branches"])
+    }
+
     @Test fun timelineMetadataSurvivesTheFlutterChannel() {
         val tool = ToolCall("t", "read", startedAt=1000L, endedAt=2200L)
         val message = Message("m", "assistant", "", 1000L, isPartial=true,

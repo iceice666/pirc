@@ -45,9 +45,16 @@ bun run check
 
 Set `PIRC_HOST`/`PIRC_PORT`, `PIRC_STATE_DIR`, the browser checks (`PIRC_TRUSTED_PROXIES`, `PIRC_IDENTITY_HEADER`, `PIRC_ALLOWED_USERS`, `PIRC_ALLOWED_ORIGINS`, `PIRC_ALLOWED_HOSTS`), and `PIRC_NODE_TOKENS`: a JSON object mapping each node ID to a **different random secret of at least 32 characters**. Model backends are configured here: in the web **Settings** (API-key/custom endpoints and subscription logins) and in `models.json` (`PIRC_MODELS_FILE`, default `$PIRC_CONFIG_DIR/models.json`); `SIGHUP` reloads the file. The gateway runs all inference, so endpoints must be reachable from it (see the root README's Agent section). Node settings such as `PIRC_WORKSPACES` or `PIRC_NODE_ID` are refused at startup.
 
-### OpenCode Go
+### OpenCode Zen and Go
 
-For [OpenCode Go](https://opencode.ai/docs/go/#where-can-i-use-it), use `https://opencode.ai/zen/go/v1` as the base URL and select the API required by your model (Chat Completions, Responses, or Anthropic Messages). Requests to `opencode.ai/zen/go` automatically include a stable per-conversation `x-opencode-session` and `User-Agent: pirc/<product-version>` across all transports. For a custom proxy URL, enable **OpenCode Go compatibility** in the backend editor, or set `"opencodeGo": true` on the provider in `models.json`. Your proxy must preserve these headers. No manual session header or API key replacement is needed.
+OpenCode serves each wire API under its own base URL. Pick the one for the API your model requires ([model list](https://opencode.ai/v2/docs/console/models/), [Go](https://opencode.ai/v2/docs/console/go/#where-can-i-use-it)):
+
+| API                          | Zen (pay as you go)                       | Go (subscription)                            |
+| ---------------------------- | ----------------------------------------- | -------------------------------------------- |
+| Chat Completions / Responses | `https://opencode.ai/inference/openai/v1` | `https://opencode.ai/inference/go/openai/v1` |
+| Anthropic Messages           | `https://opencode.ai/inference/anthropic` | `https://opencode.ai/inference/go/anthropic` |
+
+The legacy `https://opencode.ai/zen/v1` and `https://opencode.ai/zen/go/v1` base URLs keep working. Requests to `opencode.ai/inference/...` or `opencode.ai/zen/...` automatically include a stable per-conversation `x-opencode-session` and `User-Agent: pirc/<product-version>` across all transports. For a custom proxy URL, enable **OpenCode compatibility** in the backend editor, or set `"opencodeGo": true` on the provider in `models.json` (the key keeps its original name and covers Zen too). Your proxy must preserve these headers. No manual session header or API key replacement is needed. **Fetch models from endpoint** reads the plan's shared list (`/inference/v1/models` or `/inference/go/v1/models`) for any of these base URLs.
 
 ### Device tokens
 
@@ -128,6 +135,8 @@ Every session route is answered by the node that owns the session; the gateway c
 Mutations that affect the agent require `{clientId,generation}` from a live control lease. Commands additionally require a client-generated `commandId`. Reusing the ID with the same canonical payload returns the known command; using it with a different payload returns `409`.
 
 ### Streaming semantics
+
+Session command payloads also accept `edit_message` with `{entryId, message}` and `switch_branch` with `{entryId}`. Both require the current control lease and an idle session. Editing creates a new user-message version, retaining image blocks, then regenerates the response; switching selects that user version's latest continuation without inference. Snapshot history includes stable `entryId` values and user-message `branches: [{entryId, text, selected}]`. Clients refresh the snapshot after a branch command or completed turn to obtain persisted entry identities. The node stops the idle runner before selecting the durable branch and initializes a fresh runner so cached feature state cannot leak from the previous conversation. Tool side effects are not rolled back.
 
 Gateway cursors are `<runnerEpoch>:<sequence>`. A cursor outside the bounded in-memory buffer or from another epoch yields `reset`; clients then fetch a snapshot. `message_update` deltas are assembled for the live partial message, while `message_end.message` replaces the partial as authoritative history. A run finishes only on `agent_settled`, not `agent_end`.
 

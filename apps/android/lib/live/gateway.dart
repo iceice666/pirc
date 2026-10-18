@@ -236,7 +236,17 @@ class LiveController extends ChangeNotifier {
       connection == 'live' &&
       control['held'] == true &&
       !_pairingMutation;
-  bool get canWrite => canControl && !busy;
+  bool _historyRefreshing = false, _historyNeedsSnapshot = false;
+  int _historyRevision = 0;
+  bool get canWrite =>
+      canControl && !busy && !_historyRefreshing && !_historyNeedsSnapshot;
+  bool get canChangeHistory =>
+      canWrite &&
+      !running &&
+      !unknownCommand &&
+      !_historyNeedsSnapshot &&
+      state['runnerStatus'] != 'starting' &&
+      !messages.any((message) => message['partial'] == true);
   bool get chat => workspaces.any(
     (w) =>
         w['id'] == obj(state['session'])['workspaceId'] && w['kind'] == 'chat',
@@ -252,7 +262,9 @@ class LiveController extends ChangeNotifier {
     _historyInitialized = false;
   }
 
-  void _applySnapshot(Json next) {
+  void _applySnapshot(Json next, {bool authoritativeHistory = false}) {
+    if (_historyNeedsSnapshot && !authoritativeHistory) return;
+    _historyNeedsSnapshot = false;
     _approvalSnapshotRevision++;
     state = next;
     if (!_historyInitialized) {
@@ -569,6 +581,8 @@ class LiveController extends ChangeNotifier {
     final selection = ++_selection;
     final account = _accountRevision;
     sessionId = id;
+    ++_historyRevision;
+    _historyNeedsSnapshot = false;
     final target = sessions.where((s) => s['id'] == id).firstOrNull;
     final workspace = workspaces
         .where((w) => w['id'] == target?['workspaceId'])
@@ -1090,9 +1104,12 @@ class LiveController extends ChangeNotifier {
   Future<void> refreshSession() async {
     final id = sessionId;
     if (id == null) return;
+    final revision = _historyRevision, selection = _selection;
     final next = obj(await gateway.call('refresh', {'sessionId': id}));
-    if (sessionId == id) {
-      _applySnapshot(next);
+    if (sessionId == id &&
+        selection == _selection &&
+        revision == _historyRevision) {
+      _applySnapshot(next, authoritativeHistory: true);
       changed();
     }
   }
@@ -1156,6 +1173,61 @@ class LiveController extends ChangeNotifier {
         changed();
       }
     }
+  }
+
+  /// Only persistent, currently visible user turns can be edited or switched.
+  Future<bool> changeMessageHistory(String entryId, {String? message}) async {
+    if (!canChangeHistory || entryId.isEmpty) return false;
+    final valid = messages.any(
+      (turn) =>
+          turn['role'] == 'user' &&
+          (message != null
+              ? turn['entryId'] == entryId
+              : rows(turn['branches']).any(
+                  (branch) =>
+                      branch['entryId'] == entryId &&
+                      branch['selected'] != true,
+                )),
+    );
+    if (!valid || (message != null && message.trim().isEmpty)) return false;
+    final id = sessionId, selection = _selection, account = _accountRevision;
+    ++_historyRevision;
+    final accepted = await sendCommand({
+      'type': message == null ? 'switch_branch' : 'edit_message',
+      'entryId': entryId,
+      'message': ?message,
+    });
+    if (!accepted ||
+        sessionId != id ||
+        selection != _selection ||
+        account != _accountRevision) {
+      return false;
+    }
+    ++_historyRevision;
+    _historyRefreshing = true;
+    _historyNeedsSnapshot = true;
+    changed();
+    try {
+      final next = obj(await gateway.call('refresh', {'sessionId': id}));
+      if (sessionId == id &&
+          selection == _selection &&
+          account == _accountRevision) {
+        _resetHistory();
+        _applySnapshot(next, authoritativeHistory: true);
+      }
+    } catch (e) {
+      if (sessionId == id &&
+          selection == _selection &&
+          account == _accountRevision) {
+        actionError = 'Message updated, but refreshing failed: ${describe(e)}';
+      }
+    } finally {
+      _historyRefreshing = false;
+      changed();
+    }
+    // The command was accepted even if refreshing failed; do not offer to
+    // resubmit an already committed edit.
+    return true;
   }
 
   Future<void> acknowledgeCommand() async {

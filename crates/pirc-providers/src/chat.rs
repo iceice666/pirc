@@ -7,7 +7,7 @@ use pirc_protocol::{
 };
 use serde_json::{Map, Value, json};
 
-use crate::http::{Headers, opencode_go_headers};
+use crate::http::{Headers, opencode_headers};
 use crate::js::{self, get, non_empty_str, present, truthy};
 use crate::sse::NativeDecoder;
 use crate::stream::{Cancelled, Emitter, StreamRequest, assistant, content_index, now_ms};
@@ -391,7 +391,7 @@ impl ChatRun {
             .as_deref()
             .unwrap_or(&request.provider.base_url);
         let opencode =
-            opencode_go_headers(request.provider.opencode_go, model_url, &request.session_id)
+            opencode_headers(request.provider.opencode_go, model_url, &request.session_id)
                 .map_err(|()| Failure::upstream("Invalid URL"))?;
         for (name, value) in opencode {
             headers.set(name, &value);

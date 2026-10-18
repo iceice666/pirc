@@ -1,4 +1,4 @@
-//! Delegation (`apps/gateway/src/daemon/delegations.ts`, docs/history/assistant.md):
+//! Delegation (`apps/gateway/src/daemon/delegations.ts`, docs/architecture/assistant-memory.md):
 //! the assistant in a chat hands a task to a new session in one of the
 //! user's directory workspaces, or more instructions to a session it
 //! started before. The user approves each one in the chat, where it shows
@@ -19,7 +19,7 @@ use tokio::sync::mpsc;
 
 use crate::agent_ops::OpContext;
 use crate::app::{App, AppState};
-use crate::db::{Capability, Session, Store, Workspace, WorkspaceKind};
+use crate::db::{Capability, Session, Store, Workspace};
 use crate::dispatch::{
     Progress, clip, deliver, is_watched_event, one_line, read_progress, redact_secrets,
     resolve_directory_workspace, start_session, workspace_online,
@@ -342,9 +342,7 @@ pub fn workspaces(app: &App, project: Option<&str>) -> ApiResult<Value> {
     };
     let mut listed: Vec<(Option<Linked>, Value)> = all
         .iter()
-        .filter(|workspace| {
-            workspace.kind == WorkspaceKind::Directory && workspace.id.contains(':')
-        })
+        .filter(|workspace| workspace.kind.mode().delegate_target && workspace.id.contains(':'))
         .map(|workspace| {
             let linked = project_links::linked(&links, &repos, workspace);
             let mut item = Map::new();
@@ -506,7 +504,7 @@ fn linked_default(app: &App, project: &str) -> ApiResult<Workspace> {
         [link] => conn
             .get_workspace(&link.workspace_id)
             .ok()
-            .filter(|workspace| workspace.kind == WorkspaceKind::Directory)
+            .filter(|workspace| workspace.kind.mode().delegate_target)
             .ok_or_else(|| {
                 ApiError::new(
                     404,
@@ -1457,9 +1455,9 @@ pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {
     }
 }
 
-/// Memory belongs to the assistant, which lives in chat workspaces (`requireChat`).
-fn require_chat(context: &OpContext) -> ApiResult<()> {
-    if context.workspace.kind != WorkspaceKind::Chat {
+/// `requireChat`: only a mode that delegates may.
+fn require_delegate(context: &OpContext) -> ApiResult<()> {
+    if !context.workspace.kind.mode().delegate {
         return Err(ApiError::new(
             403,
             "forbidden",
@@ -1470,7 +1468,7 @@ fn require_chat(context: &OpContext) -> ApiResult<()> {
 }
 
 pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Value> {
-    require_chat(context)?;
+    require_delegate(context)?;
     match op {
         Op::Create(args) => {
             let delegation = create(app, &context.user, &context.session, args)?;

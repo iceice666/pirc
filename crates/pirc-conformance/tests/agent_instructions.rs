@@ -3,7 +3,7 @@
 //! (`agent/features/project-instructions.ts`), frozen in the session when
 //! the chat starts and left out of other workspaces, and the role an agent
 //! runs in (`agent/features/role.ts`), from the configure line or
-//! `set_role`. The M5 target of the agent port (docs/history/rust-rewrite.md).
+//! `set_role`. The historical feature baseline (docs/development/historical-records.md).
 
 use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder};
 use serde_json::{Value, json};

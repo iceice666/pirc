@@ -9,6 +9,10 @@
 | [Prompt and Context contracts](prompt-context.md)                               | Prompt sections, assistant configuration, node-local snapshots and authorized relays       |
 | [Session activity and list updates](../guides/session-ui.md#activity-transport) | Node activity, session origins and client updates                                          |
 
+- [Assistant memory and delegation](assistant-memory.md): frozen context, memory ownership, repository identity and delegation contracts.
+- [PTC runtime contracts](ptc.md): discovery, per-operation authority, attachments and execution lifecycle.
+- [Security decisions and accepted limits](security-decisions.md): current trust boundaries and accepted risks.
+
 See also [native management authorization](native-management.md) for temporary App management grants and browser consent.
 
-Historical feature designs live in [history](../history/README.md); the accepted hybrid tool migration and its evidence live in [PTC evaluations](../evaluations/ptc/README.md).
+Completed designs, Rust cutover provenance and PTC evaluation evidence are available through [Historical records in Git](../development/historical-records.md).

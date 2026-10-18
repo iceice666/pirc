@@ -1,7 +1,7 @@
 //! The `todo` tool (`agent/features/todo/`), with the test playing the
 //! agent's node. `todo` is not a direct tool: the model reaches it only
 //! from a `ptc` script, so these transcripts replay only on an agent with
-//! the PTC runtime (docs/history/rust-rewrite.md, M5). The slash commands are in
+//! the PTC runtime (docs/architecture/ptc.md). The slash commands are in
 //! `agent_todo.rs`.
 
 use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder};

@@ -2,8 +2,8 @@
 //! (features off): the two-tool surface, operations through the policy
 //! chain with their events and session entries, preflight refusals, the
 //! script store, attachments, hooks and refusals inside scripts, timeouts
-//! and cancellation (`apps/gateway/test/agent-ptc.test.ts`). The M5 target
-//! of the PTC runtime port (docs/history/rust-rewrite.md). Scenarios that need
+//! and cancellation (`apps/gateway/test/agent-ptc.test.ts`). The historical
+//! PTC baseline (docs/development/historical-records.md). Scenarios that need
 //! features (todo, browser, sandbox, background) are in `agent_ptc_features.rs`.
 
 use std::sync::LazyLock;

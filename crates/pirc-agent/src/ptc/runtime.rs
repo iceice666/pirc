@@ -1,5 +1,5 @@
-//! One `ptc` execution (`agent/ptc/runtime.ts`; docs/evaluations/ptc/
-//! ptc-only.md §4–5): the host side.
+//! One `ptc` execution (`agent/ptc/runtime.ts`; docs/architecture/ptc.md):
+//! the host side.
 //!
 //! The script runs in a QuickJS realm in a `ptc-guest` child process
 //! (`pirc_ptc::guest`), started with an empty environment inside the

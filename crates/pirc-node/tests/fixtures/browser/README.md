@@ -1,7 +1,7 @@
 # Browser golden corpus (M8)
 
 What Playwright itself does on these pages, recorded before the node's browser
-was ported to Rust (`docs/history/rust-rewrite.md`, M8). The Rust browser's tests
+was ported to Rust (see the baseline provenance in `docs/development/historical-records.md`). The Rust browser's tests
 replay the same cases against their CDP driver and compare with `expected/`.
 
 - `pages/`: the fixture pages (the first four come from the M1 browser spike).

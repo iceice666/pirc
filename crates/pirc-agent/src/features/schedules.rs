@@ -1,4 +1,4 @@
-//! `schedules` (`agent/features/schedules.ts`, docs/history/cron.md): the
+//! `schedules` (`agent/features/schedules.ts`, docs/guides/schedules.md): the
 //! gateway keeps the user's schedules and starts each run in a new
 //! session. The `schedule` tool lists them and proposes new ones or
 //! changes, which the user approves in the chat; pausing and deleting take
@@ -15,7 +15,6 @@ use crate::LocalBoxFuture;
 use crate::agent::Agent;
 use crate::capabilities::Capabilities;
 use crate::channels::{ChannelError, process_gateway};
-use crate::config::WorkspaceKind;
 use crate::feature::{Feature, FeatureCommand};
 use crate::tools::prompts::{PromptVar, tool_prompt};
 use crate::tools::result_schema::{ActionFields, arr, by_action, int, nullable, obj, str_};
@@ -627,7 +626,7 @@ async fn cron_command(agent: &Rc<Agent>, args: &str) -> Result<(), String> {
     let id = words.get(1).copied().unwrap_or("");
     let ui = agent.ui();
     let attempt = async {
-        if agent.config().workspace_kind == WorkspaceKind::Chat {
+        if agent.config().mode().full_assistant() {
             let context = gateway
                 .gateway
                 .request("assistant.context", Map::new(), None)

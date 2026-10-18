@@ -13,7 +13,6 @@ use serde_json::{Map, Value, json};
 
 use crate::agent::Agent;
 use crate::channels::process_gateway;
-use crate::config::WorkspaceKind;
 use crate::feature::{Feature, FeatureCommand};
 use crate::host::AgentHost;
 use crate::redact::redact_secrets;
@@ -313,9 +312,7 @@ struct RecapFeature {
 
 /// `available`: a human, a directory workspace and a gateway.
 fn available(agent: &Agent) -> bool {
-    agent.has_ui()
-        && agent.config().workspace_kind == WorkspaceKind::Directory
-        && process_gateway().is_some()
+    agent.has_ui() && agent.config().mode().recap && process_gateway().is_some()
 }
 
 fn report(content: String) -> Message {

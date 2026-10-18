@@ -1,4 +1,4 @@
-# Rust rewrite of the server executables; see docs/history/rust-rewrite.md.
+# Rust rewrite of the server executables; see docs/development/historical-records.md.
 [workspace]
 resolver = "3"
 members = ["crates/*"]
@@ -6,7 +6,7 @@ members = ["crates/*"]
 [workspace.package]
 edition = "2024"
 # The product version (scripts/version.ts keeps it in sync with package.json).
-version = "0.6.1"
+version = "0.7.0"
 # OXC 0.153 in the locked PTC dependencies requires Rust 1.97.
 rust-version = "1.97"
 publish = false
@@ -25,7 +25,7 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 
-# Shipped bytes are the goal of the rewrite: see docs/history/rust-rewrite.md.
+# Shipped bytes are the goal of the rewrite: see docs/development/historical-records.md.
 [profile.release]
 lto = "fat"
 codegen-units = 1

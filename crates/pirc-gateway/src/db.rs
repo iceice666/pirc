@@ -29,13 +29,13 @@ const SCHEMA: &str = include_str!("schema.sql");
 /// `schema.sql` is always the newest whole.
 const MIGRATIONS: &[(i64, &str)] = &[
     (
-        // Repository identity by normalized `origin` (docs/history/assistant.md).
+        // Repository identity by normalized `origin` (docs/architecture/assistant-memory.md).
         1001,
         "ALTER TABLE workspaces ADD COLUMN repo TEXT;
          ALTER TABLE memory_records ADD COLUMN repo TEXT;",
     ),
     (
-        // Projects linked to workspaces (docs/history/assistant.md).
+        // Projects linked to workspaces (docs/architecture/assistant-memory.md).
         1002,
         "CREATE TABLE project_links (
            project_workspace_id TEXT NOT NULL REFERENCES workspaces(id), workspace_id TEXT NOT NULL,
@@ -47,7 +47,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
         // Agents' schedule deletions wait for the user (security audit L10);
         1003,
         "ALTER TABLE schedule_proposals ADD COLUMN operation TEXT NOT NULL DEFAULT 'save';
-         -- The delegation checkbox for auto mode, and retention (docs/history/assistant.md).
+         -- The delegation checkbox for auto mode, and retention (docs/architecture/assistant-memory.md).
          ALTER TABLE delegations ADD COLUMN as_user_request INTEGER NOT NULL DEFAULT 0;
          CREATE INDEX delegations_follows ON delegations(follows);",
     ),
@@ -306,9 +306,14 @@ impl WorkspaceKind {
     }
 
     pub fn as_str(self) -> &'static str {
+        self.mode().id
+    }
+
+    /// What this kind allows (`pirc_protocol::mode`).
+    pub fn mode(self) -> &'static pirc_protocol::Mode {
         match self {
-            Self::Directory => "directory",
-            Self::Chat => "chat",
+            Self::Directory => pirc_protocol::WorkspaceKind::Directory.mode(),
+            Self::Chat => pirc_protocol::WorkspaceKind::Chat.mode(),
         }
     }
 }
@@ -982,7 +987,12 @@ impl Store for Connection {
         workspace_id: &str,
         patch: &CapabilitiesPatch,
     ) -> ApiResult<Capabilities> {
-        if self.get_workspace(workspace_id)?.kind != WorkspaceKind::Chat {
+        if !self
+            .get_workspace(workspace_id)?
+            .kind
+            .mode()
+            .full_assistant()
+        {
             return Err(ApiError::new(
                 400,
                 "invalid_input",

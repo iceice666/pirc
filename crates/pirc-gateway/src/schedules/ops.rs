@@ -1,6 +1,6 @@
 //! The `schedule.*` operations agents ask for (`daemon/agent-ops.ts`).
 //!
-//! Where a session's agent may schedule (docs/history/cron.md): an
+//! Where a session's agent may schedule (docs/guides/schedules.md): an
 //! assistant chat in its own chat or any directory workspace it may
 //! delegate to; any other session only in its own workspace. A scheduled
 //! run may not start more work: no new schedules, resumes or runs from it.
@@ -12,9 +12,10 @@ use super::fields::{Checked, agent_input, object};
 use super::{Ctx, Input, Schedule, with};
 use crate::agent_ops::OpContext;
 use crate::app::AppState;
-use crate::db::{Workspace, WorkspaceKind};
+use crate::db::Workspace;
 use crate::dispatch::resolve_directory_workspace;
 use crate::error::{ApiError, ApiResult};
+use pirc_protocol::mode::ScheduleScope;
 
 pub enum Op {
     /// The user's schedules this session may manage, and the default time zone.
@@ -97,13 +98,14 @@ pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {
     Some(parsed.map_err(|_| ()))
 }
 
-fn is_chat(context: &OpContext) -> bool {
-    context.workspace.kind == WorkspaceKind::Chat
+/// Whether the session may schedule in other workspaces.
+fn schedules_anywhere(context: &OpContext) -> bool {
+    context.workspace.kind.mode().schedule_scope == ScheduleScope::Any
 }
 
 /// `scheduleScope(...).allows`.
 fn allows(context: &OpContext, schedule: &Schedule) -> bool {
-    is_chat(context) || schedule.spec.workspace_id == context.workspace.id
+    schedules_anywhere(context) || schedule.spec.workspace_id == context.workspace.id
 }
 
 /// `scheduleScope(...).resolve`, worked out before the database is locked
@@ -121,7 +123,7 @@ fn scope_resolution(
     if reference == own.id || reference.to_lowercase() == own.display_name.to_lowercase() {
         return Some(Ok(own.clone()));
     }
-    if is_chat(context) {
+    if schedules_anywhere(context) {
         return Some(resolve_directory_workspace(app, reference));
     }
     Some(Err(ApiError::new(

@@ -9,7 +9,8 @@ use std::path::Path;
 
 use indexmap::IndexMap;
 use pirc_policy::PathPolicy;
-use pirc_protocol::{ModelRef, Models, ThinkingLevel};
+use pirc_protocol::mode::PromptStyle;
+use pirc_protocol::{Mode, ModelRef, Models, ThinkingLevel};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
@@ -127,6 +128,16 @@ pub enum WorkspaceKind {
     #[default]
     Directory,
     Chat,
+}
+
+impl WorkspaceKind {
+    /// What this kind allows (`pirc_protocol::mode`).
+    pub fn mode(self) -> &'static Mode {
+        match self {
+            Self::Directory => pirc_protocol::WorkspaceKind::Directory.mode(),
+            Self::Chat => pirc_protocol::WorkspaceKind::Chat.mode(),
+        }
+    }
 }
 
 /// `AgentConfig`.
@@ -669,7 +680,8 @@ pub fn load_agent_config(
         },
         None => pirc_policy::default_path_policy(&writable, &js::home_dir()),
     };
-    let prompts = if workspace_kind == WorkspaceKind::Chat {
+    let mode = workspace_kind.mode();
+    let prompts = if mode.prompt == PromptStyle::Assistant {
         let soul_file = js::path_join(&[&config_dir, "SOUL.md"]);
         let chat_file = js::path_join(&[&config_dir, "CHAT.md"]);
         let soul = read_assistant_prompt(&soul_file)?;
@@ -730,12 +742,13 @@ pub fn load_agent_config(
     protected_paths.push(js::path_join(&[&config_dir, "SOUL.md"]));
     protected_paths.push(js::path_join(&[&config_dir, "CHAT.md"]));
     // A chat project's instructions: only the user edits them, from the web.
-    if workspace_kind == WorkspaceKind::Chat
+    if mode.project_instructions
         && let Some(file) = truthy_env(env, "PIRC_PROJECT_INSTRUCTIONS")
     {
         protected_paths.push(js::path_resolve(&[&file]));
     }
-    let project_files = (workspace_kind == WorkspaceKind::Chat)
+    let project_files = mode
+        .project_files
         .then(|| truthy_env(env, "PIRC_PROJECT_FILES"))
         .flatten();
     Ok(AgentConfig {
@@ -758,6 +771,13 @@ pub fn load_agent_config(
         system_prompt,
         workspace_kind,
     })
+}
+
+impl AgentConfig {
+    /// What this session's workspace allows.
+    pub fn mode(&self) -> &'static Mode {
+        self.workspace_kind.mode()
+    }
 }
 
 /// `configRoles(config)`: the roles this agent's workspace defines.

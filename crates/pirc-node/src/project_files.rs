@@ -25,7 +25,7 @@ use rustix::fs::{AtFlags, renameat, unlinkat};
 use serde_json::{Value, json};
 
 use crate::error::{ApiError, ApiResult};
-use crate::store::{Workspace, WorkspaceKind};
+use crate::store::Workspace;
 use crate::util::{hex, random_bytes};
 
 /// The directory below a chat workspace's own.
@@ -59,7 +59,10 @@ impl ProjectFile {
 
 /// A chat workspace's files directory (`None` for a directory workspace).
 pub fn files_dir(workspace: &Workspace) -> Option<PathBuf> {
-    (workspace.kind == WorkspaceKind::Chat)
+    workspace
+        .kind
+        .mode()
+        .project_files
         .then(|| Path::new(&workspace.canonical_path).join(FILES_DIR))
 }
 
@@ -209,6 +212,7 @@ mod tests {
     use serde_json::Map;
 
     use super::*;
+    use crate::store::WorkspaceKind;
 
     fn workspace(dir: &Path, kind: WorkspaceKind) -> Workspace {
         Workspace {

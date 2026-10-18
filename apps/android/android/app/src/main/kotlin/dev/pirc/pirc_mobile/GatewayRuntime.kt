@@ -41,6 +41,8 @@ fun SessionState.wire(): Map<String, Any?> = mapOf(
     "interactions" to interactions.map { it.wire() },
     "messages" to messages.map { m -> mapOf(
         "id" to m.id, "role" to m.role, "content" to m.content, "createdAt" to m.createdAt,
+        "entryId" to m.entryId,
+        "branches" to m.branches.map { mapOf("entryId" to it.entryId, "text" to it.text, "selected" to it.selected) },
         "partial" to m.isPartial, "thinking" to m.thinking, "error" to m.errorMessage,
         "label" to m.label, "systemKind" to m.systemKind, "level" to m.level, "meta" to m.meta,
         "thinkingRedacted" to m.thinkingRedacted, "stopReason" to m.stopReason, "model" to m.model,

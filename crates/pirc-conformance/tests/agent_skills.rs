@@ -3,8 +3,8 @@
 //! node's config directory and the workspace (with their precedence and a
 //! skipped invalid skill), the system-prompt list, reading a skill's files
 //! and the protection of them, `/skill` and `/skill:<name>`, rescanning,
-//! and the switch that turns skills off. The M5 target of the agent port
-//! (docs/history/rust-rewrite.md).
+//! and the switch that turns skills off. The historical feature baseline
+//! (docs/development/historical-records.md).
 
 use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder};
 use serde_json::{Value, json};

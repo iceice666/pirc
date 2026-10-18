@@ -11,7 +11,7 @@ use axum::http::{HeaderMap, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use pirc_protocol::{HttpMethod, NodeHttpRequest, RegisteredWorkspace};
+use pirc_protocol::{HttpMethod, Mode, NodeHttpRequest, RegisteredWorkspace};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
@@ -293,7 +293,7 @@ pub async fn patch_capabilities(
     Ok(ok(json!({ "capabilities": capabilities })))
 }
 
-/// The workspaces a chat project is linked to (docs/history/assistant.md).
+/// The workspaces a chat project is linked to (docs/architecture/assistant-memory.md).
 pub async fn get_links(State(app): State<AppState>, Path(workspace_id): Path<String>) -> Handled {
     let links = crate::project_links::project_links(&app.db.lock(), &workspace_id)?;
     Ok(ok(crate::project_links::view(&app, &links)?))
@@ -323,28 +323,45 @@ pub async fn put_links(
     Ok(ok(crate::project_links::view(&app, &links)?))
 }
 
-/// The node and node-local URL of a workspace's `rest`, if it is `kind`.
+/// A workspace resource the node keeps and the gateway relays.
+#[derive(Clone, Copy)]
+enum NodeResource {
+    Instructions,
+    Files,
+    ProjectConfig,
+}
+
+impl NodeResource {
+    fn allowed(self, mode: &Mode) -> bool {
+        match self {
+            Self::Instructions => mode.project_instructions,
+            Self::Files => mode.project_files,
+            Self::ProjectConfig => mode.project_config,
+        }
+    }
+
+    fn refusal(self) -> &'static str {
+        match self {
+            Self::Instructions => "Only chat projects have instructions",
+            Self::Files => "Only chat projects have project files",
+            Self::ProjectConfig => "Only directory workspaces have a project config",
+        }
+    }
+}
+
+/// The node and node-local URL of a workspace's `rest`, if its mode has
+/// `resource`.
 fn workspace_on_node(
     app: &AppState,
     workspace_id: &str,
-    kind: WorkspaceKind,
+    resource: NodeResource,
     rest: &str,
 ) -> Result<(String, String), ApiError> {
     let workspace = app.db.lock().get_workspace(workspace_id)?;
     let local = match workspace.local_id() {
-        Some(local) if workspace.kind == kind => local.to_owned(),
+        Some(local) if resource.allowed(workspace.kind.mode()) => local.to_owned(),
         _ => {
-            return Err(ApiError::new(
-                400,
-                "invalid_input",
-                if kind == WorkspaceKind::Chat && rest.starts_with("/files") {
-                    "Only chat projects have project files"
-                } else if kind == WorkspaceKind::Chat {
-                    "Only chat projects have instructions"
-                } else {
-                    "Only directory workspaces have a project config"
-                },
-            ));
+            return Err(ApiError::new(400, "invalid_input", resource.refusal()));
         }
     };
     if app.nodes.get(&workspace.host_id).is_none() {
@@ -366,8 +383,12 @@ pub async fn get_instructions(
     Extension(identity): Extension<Identity>,
     Path(workspace_id): Path<String>,
 ) -> Handled {
-    let (node_id, url) =
-        workspace_on_node(&app, &workspace_id, WorkspaceKind::Chat, "/instructions")?;
+    let (node_id, url) = workspace_on_node(
+        &app,
+        &workspace_id,
+        NodeResource::Instructions,
+        "/instructions",
+    )?;
     Ok(forward(
         app.relay(&node_id, &identity, HttpMethod::Get, url, None)
             .await?,
@@ -386,8 +407,12 @@ pub async fn patch_instructions(
     Path(workspace_id): Path<String>,
     ReqBody(body): ReqBody,
 ) -> Handled {
-    let (node_id, url) =
-        workspace_on_node(&app, &workspace_id, WorkspaceKind::Chat, "/instructions")?;
+    let (node_id, url) = workspace_on_node(
+        &app,
+        &workspace_id,
+        NodeResource::Instructions,
+        "/instructions",
+    )?;
     let TextBody { text } = body.parse()?;
     length_within(&text, 0, 100_000)?;
     Ok(forward(
@@ -408,7 +433,7 @@ pub async fn get_project_files(
     Extension(identity): Extension<Identity>,
     Path(workspace_id): Path<String>,
 ) -> Handled {
-    let (node_id, url) = workspace_on_node(&app, &workspace_id, WorkspaceKind::Chat, "/files")?;
+    let (node_id, url) = workspace_on_node(&app, &workspace_id, NodeResource::Files, "/files")?;
     Ok(forward(
         app.relay(&node_id, &identity, HttpMethod::Get, url, None)
             .await?,
@@ -439,7 +464,7 @@ pub async fn upload_project_file(
     let (node_id, url) = workspace_on_node(
         &app,
         &workspace_id,
-        WorkspaceKind::Chat,
+        NodeResource::Files,
         &format!("/files?filename={}", urlencoding_component(&filename)),
     )?;
     let Body::Raw {
@@ -486,7 +511,7 @@ pub async fn delete_project_file(
     let (node_id, url) = workspace_on_node(
         &app,
         &workspace_id,
-        WorkspaceKind::Chat,
+        NodeResource::Files,
         &format!("/files?name={}", urlencoding_component(&name)),
     )?;
     Ok(forward(
@@ -503,7 +528,7 @@ pub async fn project_config(
     let (node_id, url) = workspace_on_node(
         &app,
         &workspace_id,
-        WorkspaceKind::Directory,
+        NodeResource::ProjectConfig,
         "/project-config",
     )?;
     Ok(forward(
@@ -529,7 +554,7 @@ pub async fn project_trust(
     let (node_id, url) = workspace_on_node(
         &app,
         &workspace_id,
-        WorkspaceKind::Directory,
+        NodeResource::ProjectConfig,
         "/project-trust",
     )?;
     let trust: TrustBody = body.parse()?;
@@ -732,7 +757,12 @@ pub async fn delete_session(
             }
         }
         let session = conn.claim_session(&session_id, user, true)?;
-        if conn.get_workspace(&session.workspace_id)?.kind != WorkspaceKind::Chat {
+        if !conn
+            .get_workspace(&session.workspace_id)?
+            .kind
+            .mode()
+            .delete_sessions
+        {
             return Err(ApiError::new(400, "invalid_input", "Only chats can be deleted").into());
         }
         session
@@ -918,10 +948,11 @@ struct CommandBody {
 }
 
 /// Keys a command payload may have (the node's `commandPayload` union).
-const COMMAND_KEYS: [&str; 9] = [
+const COMMAND_KEYS: [&str; 10] = [
     "type",
     "message",
     "uploadIds",
+    "entryId",
     "queue",
     "index",
     "provider",
@@ -1624,6 +1655,18 @@ mod tests {
             payload(json!({ "type": "send_now", "queue": "steering", "index": 2, "message": "x" }))
                 .unwrap(),
             json!({ "type": "send_now", "queue": "steering", "index": 2, "message": "x" })
+        );
+        for command in [
+            json!({"type": "edit_message", "entryId": "1234abcd", "message": "revised"}),
+            json!({"type": "switch_branch", "entryId": "1234abcd"}),
+        ] {
+            assert_eq!(payload(command.clone()).unwrap(), command);
+        }
+        assert!(
+            payload(
+                json!({"type": "switch_branch", "entryId": "x".repeat(COMMAND_STRING_MAX + 1)})
+            )
+            .is_err()
         );
         let long = "a".repeat(COMMAND_MESSAGE_MAX + 1);
         assert!(payload(json!({ "type": "prompt", "message": long })).is_err());

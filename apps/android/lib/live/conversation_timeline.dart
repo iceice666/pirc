@@ -87,6 +87,102 @@ class TimelineMessage extends StatefulWidget {
 
 class _TimelineMessageState extends State<TimelineMessage> {
   bool thinkingOpen = false, systemOpen = false;
+  TextEditingController? edit;
+  bool saving = false;
+  String? editError;
+
+  @override
+  void dispose() {
+    edit?.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant TimelineMessage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message['entryId'] != widget.message['entryId'] ||
+        oldWidget.controller != widget.controller) {
+      edit?.dispose();
+      edit = null;
+      editError = null;
+      saving = false;
+    }
+  }
+
+  Future<void> saveEdit() async {
+    final draft = edit;
+    if (draft == null || draft.text.trim().isEmpty || saving) return;
+    setState(() {
+      saving = true;
+      editError = null;
+    });
+    final success = await widget.controller.changeMessageHistory(
+      value(widget.message, 'entryId'),
+      message: draft.text,
+    );
+    if (!mounted || edit != draft) return;
+    setState(() {
+      saving = false;
+      if (success) {
+        edit = null;
+        draft.dispose();
+      } else {
+        editError =
+            widget.controller.actionError ??
+            'Editing is unavailable. Wait for the session to be idle and take control.';
+      }
+    });
+  }
+
+  Widget messageEditor() => SizedBox(
+    width: double.infinity,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: edit,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 12,
+          enabled: !saving,
+          decoration: const InputDecoration(labelText: 'Edit message'),
+          onChanged: (_) => setState(() {}),
+        ),
+        const Text(
+          'Saving creates a new branch and regenerates the response. '
+          'Files and tool actions are not rolled back. Attachments are kept.',
+          style: TextStyle(fontSize: 12),
+        ),
+        if (editError != null)
+          Text(editError!, style: const TextStyle(color: Colors.red)),
+        Wrap(
+          alignment: WrapAlignment.end,
+          children: [
+            TextButton(
+              onPressed: saving
+                  ? null
+                  : () => setState(() {
+                      edit?.dispose();
+                      edit = null;
+                      editError = null;
+                    }),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed:
+                  !saving &&
+                      widget.controller.canChangeHistory &&
+                      edit!.text.trim().isNotEmpty
+                  ? saveEdit
+                  : null,
+              child: Text(saving ? 'Saving…' : 'Save and regenerate'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+
   Widget markdown(
     String source, {
     bool compact = false,
@@ -152,7 +248,12 @@ class _TimelineMessageState extends State<TimelineMessage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.controller,
+    builder: (context, _) => buildMessage(context),
+  );
+
+  Widget buildMessage(BuildContext context) {
     final m = widget.message,
         p = palette(context),
         phone = MediaQuery.sizeOf(context).width <= 650;
@@ -242,6 +343,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
             ),
           ),
         if (text.isNotEmpty ||
+            (user && edit != null) ||
             isPartial ||
             messageError(m).isNotEmpty ||
             rows(m['images']).isNotEmpty)
@@ -262,7 +364,9 @@ class _TimelineMessageState extends State<TimelineMessage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (user)
+                if (user && edit != null)
+                  messageEditor()
+                else if (user)
                   SelectableText(
                     text,
                     style: webText(context, size: 15).copyWith(height: 22 / 15),
@@ -374,7 +478,8 @@ class _TimelineMessageState extends State<TimelineMessage> {
                 ? 12
                 : 8,
           ),
-        if (!isPartial && text.isNotEmpty)
+        if (!isPartial &&
+            (text.isNotEmpty || user && value(m, 'entryId').isNotEmpty))
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Opacity(
@@ -408,6 +513,41 @@ class _TimelineMessageState extends State<TimelineMessage> {
                       ),
                     ),
                     const SizedBox(width: 6),
+                  ],
+                  if (user && value(m, 'entryId').isNotEmpty) ...[
+                    if (rows(m['branches']).length > 1) ...[
+                      WebIconButton(
+                        LucideIcons.chevronLeft,
+                        'Previous version',
+                        size: 28,
+                        iconSize: 14,
+                        onPressed: branchAction(m, -1),
+                      ),
+                      Text(
+                        '${selectedBranch(m) + 1}/${rows(m['branches']).length}',
+                        style: webText(context, size: 12, color: 'text.muted'),
+                      ),
+                      WebIconButton(
+                        LucideIcons.chevronRight,
+                        'Next version',
+                        size: 28,
+                        iconSize: 14,
+                        onPressed: branchAction(m, 1),
+                      ),
+                    ],
+                    WebIconButton(
+                      LucideIcons.pencil,
+                      'Edit message',
+                      size: 28,
+                      iconSize: 14,
+                      onPressed:
+                          widget.controller.canChangeHistory && edit == null
+                          ? () => setState(() {
+                              edit = TextEditingController(text: text);
+                              editError = null;
+                            })
+                          : null,
+                    ),
                   ],
                   WebIconButton(
                     LucideIcons.copy,
@@ -448,6 +588,37 @@ class _TimelineMessageState extends State<TimelineMessage> {
             : content,
       ),
     );
+  }
+
+  int selectedBranch(Json message) => rows(
+    message['branches'],
+  ).indexWhere((branch) => branch['selected'] == true);
+
+  VoidCallback? branchAction(Json message, int delta) {
+    final branches = rows(message['branches']);
+    final selected = selectedBranch(message), target = selected + delta;
+    if (!widget.controller.canChangeHistory ||
+        edit != null ||
+        selected < 0 ||
+        target < 0 ||
+        target >= branches.length) {
+      return null;
+    }
+    return () async {
+      final success = await widget.controller.changeMessageHistory(
+        value(branches[target], 'entryId'),
+      );
+      if (!success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.controller.actionError ??
+                  'Unable to switch message version.',
+            ),
+          ),
+        );
+      }
+    };
   }
 
   Widget system(BuildContext context) {

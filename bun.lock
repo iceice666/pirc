@@ -15,7 +15,7 @@
     },
     "apps/web": {
       "name": "@pirc/web",
-      "version": "0.6.1",
+      "version": "0.7.0",
       "dependencies": {
         "@lucide/svelte": "0.544.0",
         "@xterm/addon-fit": "0.10.0",

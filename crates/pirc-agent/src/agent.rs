@@ -1615,6 +1615,18 @@ impl Agent {
         QueueItem::User { text, images }
     }
 
+    /// Regenerate from an already persisted user-message branch.
+    pub fn resume_branch(self: &Rc<Self>) -> Result<(), String> {
+        if self.running.get() {
+            return Err("Agent is already running".into());
+        }
+        if !matches!(self.all_messages().last(), Some(Message::User { .. })) {
+            return Err("Branch must end with a user message".into());
+        }
+        self.start_run(Vec::new());
+        Ok(())
+    }
+
     /// `prompt`: start a run; `Err` while one is active.
     pub fn prompt(self: &Rc<Self>, text: String, images: Vec<UserBlock>) -> Result<(), String> {
         if self.try_command(&text) {
@@ -2719,7 +2731,7 @@ impl Agent {
     }
 
     /// `runOperation`: one `ptc` operation, observable like a direct call
-    /// (docs/evaluations/ptc/ptc-only.md §6): `tool_execution_*` events under
+    /// (docs/architecture/ptc.md): `tool_execution_*` events under
     /// the capability's name, linked to the `ptc` call by
     /// `parentToolCallId`, and a `ptc.operation` session entry with the
     /// result as the tool returned it (never a `message`: the model sees

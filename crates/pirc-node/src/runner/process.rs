@@ -24,7 +24,7 @@ use super::reducer::ReducedState;
 use crate::error::{ApiError, ApiResult};
 use crate::sandbox::Prepared;
 use crate::services::{Node, WeakNode};
-use crate::store::{RunStatus, RunnerState, SessionRow, Store, Workspace, WorkspaceKind};
+use crate::store::{RunStatus, RunnerState, SessionRow, Store, Workspace};
 use crate::util::{head16, now_ms, prefix_uuid, uuid};
 
 /// Interactions the node asks itself (sandbox approvals) carry rpc ids
@@ -731,7 +731,7 @@ fn spawn_child(
         let db = node.db.lock();
         let epoch = db.increment_epoch(&session.id)?;
         db.stale_epoch_interactions(&session.id, epoch)?;
-        let trust = if workspace.kind == WorkspaceKind::Directory {
+        let trust = if workspace.kind.mode().project_config {
             db.get_workspace_trust(&workspace.id)?
         } else {
             None
@@ -766,14 +766,7 @@ fn spawn_child(
     // Allowlisted operations on the gateway go through this node.
     set("PIRC_GATEWAY", "1".into());
     // `chat` makes the agent a personal assistant (see chat.rs).
-    set(
-        "PIRC_WORKSPACE_KIND",
-        match workspace.kind {
-            WorkspaceKind::Chat => "chat",
-            WorkspaceKind::Directory => "directory",
-        }
-        .into(),
-    );
+    set("PIRC_WORKSPACE_KIND", workspace.kind.mode().id.into());
     // The project config hash the user trusted; the agent ignores
     // .pirc/config.json hooks, env and allowedPaths unless they still match.
     set("PIRC_PROJECT_TRUST", trust);
