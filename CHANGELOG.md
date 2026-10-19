@@ -6,10 +6,15 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Changed
 
-- **Breaking: mode files no longer accept `ui.group`.** The Web and Android clients place a workspace in Chat or Work by its mode's `assistant` capability and show panels, settings, session deletion and the session noun by capability instead of the legacy `kind`, so a per-session mode on a coding node (such as a scratch mode) appears under Work with only the panels it has. Remove `group:` from every `$PIRC_CONFIG_DIR/modes/*.md` before upgrading, or the file is skipped and its workspaces become unavailable. **Node protocol 13: upgrade the gateway and all nodes together.** Database schemas are unchanged. See the upgrade notes.
+- **Breaking: mode files no longer accept `ui.group`.** The Web and Android clients place a workspace in Chat or Work by its mode's `assistant` capability and show panels, settings, session deletion and the session noun by capability instead of the legacy `kind`, so a per-session mode on a coding node (such as a scratch mode) appears under Work with only the panels it has. Remove `group:` from every `$PIRC_CONFIG_DIR/modes/*.md` before upgrading, or the file is skipped and its workspaces become unavailable. **Node protocol 13: upgrade the gateway and all nodes together.** The gateway database migrates to schema 1005 (delegation audit columns) on start; nodes' schemas are unchanged. See the upgrade notes.
 
 ### Added
 
+- **Delegation approval setting** per chat project (and the top-level Chats): `always` (default, today's card), `untrusted` (starts at once unless the chat read outside content since your last message) or `never`. With `untrusted` or `never`, delegation is no longer a human-only operation; read the risk in the chat projects guide before switching. At most 4 delegations started without the card run at once; they use the role's model or the workspace default. `PATCH /api/workspaces/:id/capabilities` accepts `delegation_approval`.
+- The assistant passes your exact words that asked for the work (`quote`, checked against your last three messages); the delegated session's auto mode reads them, never the assistant's task text, as your request for that run.
+- A chat shows the delegations it started while they run, with **Open** and **Stop** (`POST /api/delegations/:id/stop`).
+- A delegated session's confirmations (auto mode, network access, commands outside the sandbox) are relayed to the chat that started it and pushed as "… needs you"; answer them there, from **Needs you** (Allow / Deny) or from the notification, without taking control of either session. Nodes gain the gateway-only `POST /api/sessions/:id/interactions/:interactionId/relayed-answer`; upgrade nodes with the gateway.
+- `scripts/approval-stats.ts`: a read-only count of approval prompts in delegated and ordinary sessions.
 - Adding a workspace lets you pick among the modes its device accepts (`GET /api/nodes` now lists each node's `modes`); the path is asked only for modes that work in a directory.
 - A chat's list of delegation targets names each workspace's mode when the targets differ in mode, so the assistant can send one-off work to a scratch workspace and repository work to a repository.
 

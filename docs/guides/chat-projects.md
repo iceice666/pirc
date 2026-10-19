@@ -4,7 +4,7 @@
 
 A chat project is a chat workspace on the chat node (`pirc-node chat`): the top-level **Chats** workspace, or one you created with **New project** in the web app (see [Gateway and node reference](../development/gateway-and-node.md#node)). Each chat project has two settings of its own, both under **Settings → Projects** in the web app:
 
-- **Capabilities** turn off assistant features for every chat in the project. The gateway enforces them.
+- **Capabilities** turn off assistant features for every chat in the project, and set when its delegations wait for your approval ([Delegation](#delegation)). The gateway enforces them.
 - **Instructions** are text that every new chat in the project gets in its system prompt. The node stores them.
 - **Project files** are files every chat in the project can read. The node stores them.
 - **Linked workspaces** (projects only, not the top-level Chats) name the repositories the project is about. The gateway stores them.
@@ -48,12 +48,13 @@ curl -X PATCH 'https://pirc.example.org/api/workspaces/chat%3Aworkspace_1234/cap
     "memory_search": true,
     "remote_recall": true,
     "schedules": true,
-    "web_search": true
+    "web_search": true,
+    "delegation_approval": "always"
   }
 }
 ```
 
-`GET` on the same URL returns the current policy. A `PATCH` changes only the capabilities it names. Unknown names, values that are not booleans, and a `version` other than `1` are rejected with `400`, and so is a `PATCH` for a directory workspace.
+`GET` on the same URL returns the current policy. A `PATCH` changes only the capabilities it names. Unknown names, values that are not booleans (or, for `delegation_approval`, not `always`, `untrusted` or `never`), and a `version` other than `1` are rejected with `400`, and so is a `PATCH` for a directory workspace.
 
 ### What happens to work already in progress
 
@@ -67,6 +68,30 @@ Turning a capability off takes effect at the gateway right away. Running chats a
 ### Teammates and subagents
 
 A chat's teammates and subagents get the project's policy as it stands when they start. Their tools are the ones allowed by **both** the project policy and their role's `tools` allowlist (`roles/<name>.md`). A role cannot give back a capability the project turned off. (Today teammates and subagents have no gateway access at all, so they could not use these features even with the capability on.)
+
+## Delegation
+
+With `delegation` on, the assistant can hand a task to a coding session in one of your directory workspaces with `delegate`. The assistant agrees the plan with you in the chat first; the **Delegation approval** setting next to the switch (`delegation_approval`) decides whether you then confirm each delegation again:
+
+| Setting            | A delegation…                                                                                                                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `always` (default) | waits for you: the chat shows a card with the workspace and the whole task, where you can also pick the model and thinking level, and **Delegate** or **Don't**. Nothing runs until you do; the card lapses after `PIRC_DELEGATION_TTL_MS`. |
+| `untrusted`        | starts at once, unless the chat has read outside content since your last message (any tool result, such as web search or pages, the browser, files, `memory_search`, or a delegation report): then it waits for the card.                   |
+| `never`            | always starts at once.                                                                                                                                                                                                                      |
+
+Existing projects and the top-level Chats keep `always` until you change it. Follow-ups (`follows`) follow the same setting. At most 4 delegations started without the card run at once per user; more wait for the card. A delegation that starts without the card runs on the role's model, or the workspace default: there is no card to pick one on. You can still change the model in the delegated session.
+
+**What you give up with `untrusted` and `never`.** A chat reads content it does not control (web pages and search results, the browser, `memory_search`, delegation reports), and a prompt injection there can ask the assistant to delegate. `untrusted` refuses that only for content read since your last message; `never` not at all. In the delegated session, auto mode judges how destructive an action is, not whether you wanted it: an injected task can change and commit code in the workspace, and install packages from the default registries, without asking. What still stops it is the sandbox (no new hosts, no credential stores, no writes outside the workspace without your approval), auto mode's danger rules and your deny list. Delegated sessions never inherit a chat's full access. See [Security decisions](../architecture/security-decisions.md#delegation-approval).
+
+**Your words as the request.** When the assistant delegates, it passes your exact words that asked for the work (`quote`), from one of your last three messages; the chat's agent checks them against those messages and refuses anything else. The delegated session's auto mode reads those words, never the assistant's task text, as your request for the run the delegation starts, so an action you asked for in so many words can pass without a prompt. This holds under every setting. On the card, **Treat this task as my request for auto mode** still counts the whole task too.
+
+**In the chat.** A running delegation shows in its chat as a card, "Delegated to {workspace} — {title}", with **Open** and **Stop**, and in the session list with its delegation marker. Stop takes control of the delegated session when no other client holds it, stops the run and lets go; if another device controls that session, stop it there. You are notified when it finishes or fails, as before.
+
+**Approvals reach the chat.** When the delegated session waits on a confirmation (auto mode's dangerous action, network access, a command outside the sandbox, a deny-list match), the chat that started it shows the same question, naming the session and workspace, and the notification says the session needs you. **Needs you** offers **Allow** and **Deny** on the waiting session. Answering in the chat, from Needs you or from the notification answers the original question on its node; it needs no control of the delegated session or the chat. Other questions (`ask_user_question`) are still answered in the delegated session.
+
+**Audit.** Each delegation records how it started (`dispatch`: `approved` or `auto`), where the chat's context came from when the assistant asked (`origins_json`), and the quote with your message ids (`quote`, `quote_entry_ids`), in the gateway's `delegations` table; they are deleted with the delegation.
+
+The baseline of approval prompts in delegated and ordinary sessions can be measured read-only with `bun scripts/approval-stats.ts --gateway-db <gateway.sqlite> --node-db <nodeId>=<node's gateway.sqlite>` (repeat `--node-db` per node; `--since`, `--json`); it opens both databases read-only.
 
 ## Instructions
 
@@ -161,7 +186,7 @@ Deleting the project deletes its files with it (see [Deleting a project](#deleti
 A project is usually about one or a few repositories. Linking them tells the project's assistant so, without you naming the workspace every time:
 
 - **Workspace list.** New chats list the linked workspaces first in their `## Workspaces` section, marked "linked to this project", then the other clones of their repositories (workspaces whose node reports the same `origin`), then everything else. A linked workspace that is offline, or that its node no longer has, stays listed and is marked so.
-- **Delegation.** `delegate` without a workspace goes to the linked workspace when exactly one is linked. With several linked, the assistant is asked to name one; with none, it must name one as before. If the one linked workspace was removed from its node, the assistant is told so (not that the node is offline) and must name another. The confirmation card shows the target as always, and you approve every delegation.
+- **Delegation.** `delegate` without a workspace goes to the linked workspace when exactly one is linked. With several linked, the assistant is asked to name one; with none, it must name one as before. If the one linked workspace was removed from its node, the assistant is told so (not that the node is offline) and must name another. A link is not a permission: delegations to linked and unlinked workspaces follow the same [Delegation approval](#delegation) setting.
 - **Search.** `memory_search` without a workspace looks in the linked workspaces and the other clones of their repositories first. If nothing is found there it searches every workspace and says so. The assistant can pass `everywhere: true` to search every workspace at once, or name a workspace as before.
 
 A link is **a default and an ordering, never a permission**. The assistant can still delegate to and search workspaces that are not linked, and the `delegation` and `memory_search` capabilities still decide whether it can do either at all.

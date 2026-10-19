@@ -50,12 +50,12 @@ deletion are not open work.
    NVIDIA/render-node binds on Linux (unverified on hardware), plus a NixOS module
    option replacing the node's `PrivateDevices`. Security-boundary change: each
    phase needs the user's go-ahead and a recorded decision.
-7. **Delegation without the approval card.** [Delegation autonomy](delegation-autonomy.md):
-   a per-assistant-workspace dispatch policy (`always` / `untrusted` / `never`),
-   verified user quotes as auto mode intent instead of the unticked checkbox,
-   delegated-session approvals relayed to the chat, then optional session allows
-   and soft/hard danger. Reverses delegation as a human-only operation when
-   enabled; needs the user's decision recorded.
+7. **Delegation auto mode precision.** [Delegation autonomy](delegation-autonomy.md)
+   phases 0–2 (dispatch policy, verified quotes, relayed approvals) were
+   implemented 2026-10-19 with the user's decisions recorded in Security
+   decisions. Remaining: phase 3 (session allows, soft/hard danger), only after
+   reassessing with `scripts/approval-stats.ts`; plus real-device checks of
+   relayed approvals and Stop.
 
 ## Shelved: project-only memory (B)
 

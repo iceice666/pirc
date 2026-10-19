@@ -1,11 +1,19 @@
 # Upgrades
 
-## Unreleased: mode tabs by capability, node protocol 13
+## Unreleased: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13
 because the mode catalog the gateway sends no longer has `ui.group`. Protocol 12
 nodes are refused by the new gateway and protocol 13 nodes by an older one.
-Database schemas are unchanged.
+
+On first start the gateway migrates its database from schema 1000–1004 to 1005:
+`delegations` gains `dispatch`, `origins_json`, `quote` and `quote_entry_ids`,
+and delegations that already started are marked `dispatch='approved'`. A 0.8.x
+gateway refuses a database at schema 1005: back up its state directory if you may
+need to roll back. Node schemas are unchanged; nodes gain the gateway-only
+`relayed-answer` route that relayed delegation approvals need. Every chat
+workspace keeps `delegation_approval: always` (the approval card) until you
+change it.
 
 **Breaking: remove `group:` from every mode file before upgrading.** Clients now
 place a mode's workspaces by its `assistant` capability (`full`: Chat, `user`:

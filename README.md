@@ -16,7 +16,7 @@ The gateway never runs agents or tools; it only runs model requests on their beh
 
 - **Persistent sessions across machines:** reconnect from the web or Android, follow streaming runs, respond to approvals, and switch between assistant chats and coding workspaces.
 - **Coding tools and collaboration:** file and shell tools, programmatic tool calling (PTC), background tasks, subagents and agent teams, with workspace write leases and per-session approval modes (`read-only`, `auto`, `full-access`).
-- **Chat projects:** project instructions, shared read-only project files, linked coding workspaces, approved task delegation, and project deletion with a preview and memory review.
+- **Chat projects:** project instructions, shared read-only project files, linked coding workspaces, task delegation (approved per task, or per project setting) with its approvals relayed to the chat, and project deletion with a preview and memory review.
 - **Memory and context:** observational memory for long sessions, shared USER/MEMORY notes for chats, approved USER preferences in coding sessions, and workspace-memory search across repository clones.
 - **Workspace panels:** files, Git changes and history, interactive terminals, and browser viewing and takeover. Scheduled runs and push notifications help follow work away from the session.
 - **Gateway-managed models:** subscription logins, API keys and custom endpoints, without configuring provider credentials on every node.
