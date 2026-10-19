@@ -124,6 +124,8 @@ jobs:
           repository: flutter/flutter
           ref: ad70ec4617166f1c38e5d2bfd388af71fda14f06
           path: .flutter-sdk
+          # Flutter reads its version from the git history; shallow is 0.0.0-unknown.
+          fetch-depth: 0
           persist-credentials: false
       - name: Add pinned Flutter SDK to PATH
         run: echo "$GITHUB_WORKSPACE/.flutter-sdk/bin" >> "$GITHUB_PATH"
