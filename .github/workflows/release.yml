@@ -157,6 +157,9 @@ jobs:
           actual = re.search(r'Signer #1 certificate SHA-256 digest: ([0-9a-f]+)', result)
           expected = hashlib.sha256((Path(os.environ['RUNNER_TEMP']) / 'pirc-signing.der').read_bytes()).hexdigest()
           if not actual or actual.group(1) != expected:
+              # Certificate digests and signer details are public; print them to diagnose.
+              print(result)
+              print('expected configured certificate SHA-256: ' + expected)
               raise SystemExit('APK signing certificate does not match configured identity')
           print('APK signature verified against configured certificate: ' + expected)
           PYAPK
