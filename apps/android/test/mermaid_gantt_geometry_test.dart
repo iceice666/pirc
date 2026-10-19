@@ -7,20 +7,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/rendering/mermaid/gantt_parser.dart';
 import 'package:pirc_mobile/rendering/mermaid/gantt_rendering.dart';
 
-import '../tool/parity/capture_fonts.dart' show loadParityFonts;
+import '../tool/parity/capture_fonts.dart'
+    show loadParityFonts, noPingFang, pingFangFont;
 
 const _fixturePath = '../../fixtures/mobile-parity/mermaid-gantt-expected.json';
 const _sfFontPath = '/System/Library/Fonts/SFNS.ttf';
-const _pingFangDirectory =
-    '/System/Library/AssetsV2/com_apple_MobileAsset_Font7';
 
 Future<void> _loadComparisonFonts(WidgetTester tester) async {
   await tester.runAsync(() async {
     await loadParityFonts();
-    final pingFang = Directory(_pingFangDirectory)
-        .listSync(recursive: true)
-        .whereType<File>()
-        .firstWhere((file) => file.path.endsWith('/PingFang.ttc'));
+    final pingFang = pingFangFont()!;
     await (FontLoader(
       'sans-serif',
     )..addFont(pingFang.readAsBytes().then(ByteData.sublistView))).load();
@@ -150,6 +146,7 @@ void main() {
               );
             }
           },
+          skip: noPingFang,
         );
       }
     }
@@ -171,6 +168,7 @@ void main() {
           );
         }
       },
+      skip: noPingFang,
     );
   });
 }

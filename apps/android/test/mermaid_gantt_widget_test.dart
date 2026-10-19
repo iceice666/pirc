@@ -56,11 +56,7 @@ bool _hasGanttPainter(WidgetTester tester) => tester
 Future<void> _loadFonts(WidgetTester tester) async {
   await tester.runAsync(loadParityFonts);
   await tester.runAsync(() async {
-    final pingFang =
-        Directory('/System/Library/AssetsV2/com_apple_MobileAsset_Font7')
-            .listSync(recursive: true)
-            .whereType<File>()
-            .firstWhere((file) => file.path.endsWith('/PingFang.ttc'));
+    final pingFang = pingFangFont()!;
     await (FontLoader(
       'sans-serif',
     )..addFont(pingFang.readAsBytes().then(ByteData.sublistView))).load();
@@ -173,16 +169,17 @@ void main() {
         semantics.dispose();
       }
     },
+    skip: noPingFang,
   );
 
-  testWidgets('streaming Gantt remains literal until the document completes', (
-    tester,
-  ) async {
-    await _loadFonts(tester);
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 900);
-    addTearDown(tester.view.reset);
-    const source = '''```mermaid
+  testWidgets(
+    'streaming Gantt remains literal until the document completes',
+    (tester) async {
+      await _loadFonts(tester);
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 900);
+      addTearDown(tester.view.reset);
+      const source = '''```mermaid
 gantt
 title Streamed plan
 todayMarker off
@@ -190,34 +187,36 @@ section Work
 Ship : 2026-07-06, 1d
 ```''';
 
-    await tester.pumpWidget(
-      _markdownApp(source, brightness: Brightness.light, streaming: true),
-    );
-    expect(find.byType(NativeMermaid), findsOneWidget);
-    expect(
-      tester.widget<NativeMermaid>(find.byType(NativeMermaid)).ready,
-      isFalse,
-    );
-    expect(_hasGanttPainter(tester), isFalse);
-    final literal = tester
-        .widgetList<Text>(find.byType(Text))
-        .map((widget) => widget.data ?? widget.textSpan?.toPlainText() ?? '')
-        .join('\n');
-    expect(literal, contains('title Streamed plan'));
-    expect(literal, contains('Ship : 2026-07-06, 1d'));
+      await tester.pumpWidget(
+        _markdownApp(source, brightness: Brightness.light, streaming: true),
+      );
+      expect(find.byType(NativeMermaid), findsOneWidget);
+      expect(
+        tester.widget<NativeMermaid>(find.byType(NativeMermaid)).ready,
+        isFalse,
+      );
+      expect(_hasGanttPainter(tester), isFalse);
+      final literal = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((widget) => widget.data ?? widget.textSpan?.toPlainText() ?? '')
+          .join('\n');
+      expect(literal, contains('title Streamed plan'));
+      expect(literal, contains('Ship : 2026-07-06, 1d'));
 
-    await tester.pumpWidget(
-      _markdownApp(source, brightness: Brightness.light, streaming: false),
-    );
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-    expect(
-      tester.widget<NativeMermaid>(find.byType(NativeMermaid)).ready,
-      isTrue,
-    );
-    expect(find.byType(NativeMermaidGantt), findsOneWidget);
-    expect(_hasGanttPainter(tester), isTrue);
-  });
+      await tester.pumpWidget(
+        _markdownApp(source, brightness: Brightness.light, streaming: false),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.widget<NativeMermaid>(find.byType(NativeMermaid)).ready,
+        isTrue,
+      );
+      expect(find.byType(NativeMermaidGantt), findsOneWidget);
+      expect(_hasGanttPainter(tester), isTrue);
+    },
+    skip: noPingFang,
+  );
 
   testWidgets(
     'unsupported Gantt syntax preserves source and reports fallback',
