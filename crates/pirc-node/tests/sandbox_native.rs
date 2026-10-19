@@ -873,8 +873,14 @@ async fn host_unix_sockets_are_hidden_but_the_allowed() {
     let Some(f) = fixture("host-sockets") else {
         return;
     };
+    // Direct Unix socket binds must fit SUN_LEN even in a deeply nested
+    // checkout. Keep the host sockets outside the workspace, at short paths.
+    let sockets = tempfile::Builder::new()
+        .prefix("pirc-sockets-")
+        .tempdir_in("/tmp")
+        .unwrap();
     let serve = |name: &str| {
-        let path = f.root.join("outside").join(name);
+        let path = sockets.path().join(name);
         let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
         std::thread::spawn(move || {
             for mut stream in listener.incoming().flatten() {
