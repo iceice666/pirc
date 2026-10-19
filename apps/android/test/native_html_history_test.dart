@@ -347,7 +347,7 @@ void main() {
       await tester.enterText(_editableWithValue('old default'), 'history edit');
       final snapshot = controller.capture()!;
       await tester.pumpWidget(const SizedBox());
-      expect(controller.capture(), isNull);
+      expect(controller.capture()!.controls.values.single.text, 'history edit');
 
       controller.restore(snapshot);
       await tester.pumpWidget(

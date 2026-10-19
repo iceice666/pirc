@@ -15,6 +15,7 @@ import '../rendering/native_html.dart';
 import '../rendering/document_scroll_anchor.dart';
 import '../rendering/document_fragment.dart';
 import '../rendering/document_disclosures.dart';
+import '../rendering/html_document_controls.dart';
 import '../rendering/document_element_scroll.dart';
 import 'gateway.dart';
 import 'document_scripts.dart';
@@ -210,6 +211,7 @@ class NativeFetchedDocument {
   NativeDocumentScripts? scripts;
   final scriptFileSelections = NativeHtmlScriptFileSelections();
   final historyControls = NativeHtmlHistoryController();
+  final liveControls = NativeHtmlDocumentControls();
   final disclosures = NativeDocumentDisclosures();
   final viewport = NativeHtmlViewportController();
   late final fragmentTarget = NativeDocumentTargetState(url);
@@ -236,6 +238,7 @@ class NativeFetchedDocument {
     scripts?.dispose();
     scriptFileSelections.clear();
     historyControls.dispose();
+    liveControls.dispose();
     scroll.dispose();
     elementScroll.dispose();
   }

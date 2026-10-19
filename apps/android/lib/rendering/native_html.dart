@@ -64,6 +64,7 @@ import 'html_form_feedback.dart';
 import 'html_form_submission.dart';
 import 'html_script_submission.dart';
 import 'html_history_controls.dart';
+import 'html_document_controls.dart';
 import 'html_policy.dart';
 import 'html_named_properties.dart';
 import 'html_syntax.dart';
@@ -200,6 +201,7 @@ class NativeHtmlDocument extends StatefulWidget {
     this.onScriptClick,
     this.onDetailsActivate,
     this.preserveControlValues = false,
+    this.retainedControls,
     this.onScriptControlClick,
     this.scriptFilePickerActions = const [],
     this.takeScriptFilePickerActions,
@@ -278,6 +280,7 @@ class NativeHtmlDocument extends StatefulWidget {
 
   /// Static presentation updates retain live values; script snapshots stay authoritative.
   final bool preserveControlValues;
+  final NativeHtmlDocumentControls? retainedControls;
   final Map<String, NativeDocumentCanvasSnapshot> canvases;
   final Map<String, ui.Image> canvasImages;
   final Future<bool> Function(
@@ -357,6 +360,8 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
   NativeHtmlRangeState? ranges;
   NativeHtmlDateState? dates;
   NativeHtmlFileInputState? files;
+  NativeHtmlDetachedControls? _parkedControls;
+  bool _claimedRetainedControls = false;
   NativeHtmlForms? forms;
   NativeHtmlHistoryController? _attachedHistoryController;
   int _scriptSourceGeneration = 0;
@@ -386,11 +391,87 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
   void initState() {
     super.initState();
     _elementScroll.beginDocument(widget.scriptDocument ?? this);
-    serialize();
+    final retained = widget.retainedControls?.take(this);
+    if (retained != null) _restoreControlModels(retained);
+    serialize(force: retained != null);
     FocusManager.instance.addListener(_handleNativeFocusChange);
     _scheduleScriptFilePickers();
     _scheduleScriptFormActions();
     _attachHistoryController(widget.historyController);
+  }
+
+  void _clearControlModels() {
+    controls = null;
+    textFields = null;
+    selects = null;
+    ranges = null;
+    dates = null;
+    files = null;
+  }
+
+  void _restoreControlModels(NativeHtmlDetachedControls value) {
+    controls = value.controls;
+    textFields = value.textFields;
+    selects = value.selects;
+    ranges = value.ranges;
+    dates = value.dates;
+    files = value.files;
+    _renderedScriptDocument = widget.scriptDocument;
+    _claimedRetainedControls = true;
+    // A replaced HtmlWidget must not reparent its factory with retired bindings.
+    widget.viewport?.resetContent();
+  }
+
+  void _parkControlModels(NativeHtmlDocumentControls? owner) {
+    if (owner == null ||
+        controls == null ||
+        textFields == null ||
+        selects == null ||
+        ranges == null ||
+        dates == null ||
+        files == null) {
+      return;
+    }
+    final snapshot = captureNativeHtmlHistory();
+    final value = NativeHtmlDetachedControls(
+      controls: controls!,
+      textFields: textFields!,
+      ranges: ranges!,
+      selects: selects!,
+      dates: dates!,
+      files: files!,
+    );
+    if (!owner.retain(this, value)) return;
+    forms?.dispose();
+    forms = null;
+    buttons?.invalidatePendingActivations();
+    _parkedControls = value;
+    _clearControlModels();
+    _attachedHistoryController?.detach(this, snapshot: snapshot);
+    _attachedHistoryController = null;
+  }
+
+  @override
+  void deactivate() {
+    _parkControlModels(widget.retainedControls);
+    super.deactivate();
+  }
+
+  @override
+  void activate() {
+    super.activate();
+    if (_parkedControls != null) {
+      final value = widget.retainedControls?.take(this);
+      _parkedControls = null;
+      if (value != null) {
+        _restoreControlModels(value);
+      } else {
+        _renderedScriptDocument = null;
+      }
+      serialize(force: true);
+      _attachHistoryController(widget.historyController);
+      setState(() {});
+    }
   }
 
   @override
@@ -403,6 +484,25 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
   @override
   void didUpdateWidget(covariant NativeHtmlDocument old) {
     super.didUpdateWidget(old);
+    var inheritedControls = false;
+    final lifetimeChanged = old.retainedControls != widget.retainedControls;
+    if (lifetimeChanged) {
+      _parkControlModels(old.retainedControls);
+      _parkedControls = null;
+      final retained = widget.retainedControls?.take(this);
+      if (retained != null) {
+        forms?.dispose();
+        forms = null;
+        controls?.dispose();
+        textFields?.dispose();
+        selects?.dispose();
+        ranges?.dispose();
+        dates?.dispose();
+        files?.dispose();
+        _restoreControlModels(retained);
+        inheritedControls = true;
+      }
+    }
     if (!identical(old.viewport, widget.viewport)) {
       old.viewport?._unbindFragments(this);
       old.viewport?._unbindFragmentFocus(this);
@@ -435,13 +535,16 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
         sourceChanged &&
             !documentChanged &&
             !historyChanged &&
+            !widget.preserveControlValues &&
             old.scriptSnapshot == widget.scriptSnapshot
         ? old.historyController?.capture()
         : null;
-    if (sourceChanged || historyChanged) {
+    if (sourceChanged || historyChanged || lifetimeChanged) {
       old.historyController?.detach(this);
       _attachedHistoryController = null;
-      if (sourceChanged) serialize();
+      if (sourceChanged || inheritedControls || lifetimeChanged) {
+        serialize(force: inheritedControls || lifetimeChanged);
+      }
       _attachHistoryController(widget.historyController);
       if (carriedSnapshot != null) {
         widget.historyController?.restore(carriedSnapshot);
@@ -485,7 +588,8 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     _attachedHistoryController?.detach(
       this,
       snapshot:
-          widget.scriptSnapshot == null &&
+          widget.retainedControls == null &&
+              widget.scriptSnapshot == null &&
               widget.onScriptEvent == null &&
               widget.onScriptClick == null
           ? captureNativeHtmlHistory()
@@ -508,15 +612,20 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
 
   void _attachHistoryController(NativeHtmlHistoryController? controller) {
     _attachedHistoryController = controller;
-    controller?.attach(this);
+    controller?.attach(this, retainedControls: _claimedRetainedControls);
+    _claimedRetainedControls = false;
   }
 
   @override
   NativeHtmlControlSnapshot? captureNativeHtmlHistory() {
-    final currentControls = controls;
-    final currentTextFields = textFields;
-    final currentRanges = ranges;
-    final currentSelects = selects;
+    final parked = _parkedControls;
+    final available = parked != null && !parked.taken && !parked.isDisposed
+        ? parked
+        : null;
+    final currentControls = controls ?? available?.controls;
+    final currentTextFields = textFields ?? available?.textFields;
+    final currentRanges = ranges ?? available?.ranges;
+    final currentSelects = selects ?? available?.selects;
     final currentContent = content;
     if (currentControls == null ||
         currentTextFields == null ||
@@ -531,7 +640,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       textFields: currentTextFields,
       ranges: currentRanges,
       selects: currentSelects,
-      dates: dates,
+      dates: dates ?? available?.dates,
     );
   }
 
@@ -575,7 +684,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     }
   }
 
-  void serialize() {
+  void serialize({bool force = false}) {
     slots.clear();
     String node(md.Node n) {
       if (n is NativeHtmlRaw) return n.html;
@@ -603,7 +712,8 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       widget.nodes.map(node).join('\n'),
       markdownPolicy: widget.markdownStyles,
     );
-    if (sanitizedContent != sanitized ||
+    if (force ||
+        sanitizedContent != sanitized ||
         _renderedScriptDocument != widget.scriptDocument) {
       if (sanitizedContent != null) {
         _scriptSourceGeneration++;
@@ -1770,10 +1880,11 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     final window = scope.window;
     final document = window?.currentDocument;
     final selection = windows.selectionRevision;
+    final retained = widget.retainedControls;
     return createNativeHtmlFilePicker(
       windows.gateway,
       isCurrent: () =>
-          mounted &&
+          (retained == null ? mounted : !retained.isDisposed) &&
           !windows.disposed &&
           identity == windows.accountIdentity &&
           selection == windows.selectionRevision &&

@@ -1,0 +1,977 @@
+{
+  "browserVersion": "153.0.8010.12",
+  "html": "<!doctype html><html><head><meta charset=\"utf-8\"><style>body{margin:0;font:16px/24px Arial;}input,textarea,select{display:block;margin:4px 0;}input[type=checkbox],input[type=radio]{display:inline-block;}</style></head><body><form id=\"form\">\n<input id=\"text\" name=\"text\" value=\"initial\"><input id=\"off\" name=\"off\" autocomplete=\"off\" value=\"original\"><input id=\"password\" name=\"password\" type=\"password\" value=\"server\" autocomplete=\"off\"><textarea id=\"notes\" name=\"notes\">initial notes</textarea>\n<input id=\"check\" name=\"check\" type=\"checkbox\" autocomplete=\"off\"><input id=\"radioA\" type=\"radio\" name=\"choice\" value=\"a\" checked autocomplete=\"off\"><input id=\"radioB\" type=\"radio\" name=\"choice\" value=\"b\" autocomplete=\"off\">\n<select id=\"select\" name=\"select\" autocomplete=\"off\"><option value=\"a\">A</option><option value=\"b\">B</option></select><input id=\"range\" name=\"range\" type=\"range\" value=\"10\" autocomplete=\"off\"><input id=\"date\" name=\"date\" type=\"date\" value=\"2024-06-15\" autocomplete=\"off\"><input id=\"file\" name=\"file\" type=\"file\" multiple><button type=\"reset\">Reset</button></form></body></html>",
+  "editedValues": {
+    "text": "草稿🙂還在",
+    "off": "private off value",
+    "password": "synthetic password",
+    "notes": "第一行\n第二行",
+    "check": true,
+    "choice": "b",
+    "select": "b",
+    "range": "73",
+    "date": "2025-10-30"
+  },
+  "cases": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 1,
+      "theme": "light",
+      "initial": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      },
+      "edited": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "resumed": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "reset": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          7,
+          7
+        ],
+        "files": []
+      },
+      "fresh": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 1,
+      "theme": "dark",
+      "initial": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      },
+      "edited": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "resumed": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "reset": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          7,
+          7
+        ],
+        "files": []
+      },
+      "fresh": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 3,
+      "theme": "light",
+      "initial": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      },
+      "edited": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "resumed": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "reset": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          7,
+          7
+        ],
+        "files": []
+      },
+      "fresh": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 3,
+      "theme": "dark",
+      "initial": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      },
+      "edited": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "resumed": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "reset": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          7,
+          7
+        ],
+        "files": []
+      },
+      "fresh": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 1,
+      "theme": "light",
+      "initial": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      },
+      "edited": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "resumed": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "reset": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          7,
+          7
+        ],
+        "files": []
+      },
+      "fresh": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 1,
+      "theme": "dark",
+      "initial": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      },
+      "edited": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "resumed": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "reset": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          7,
+          7
+        ],
+        "files": []
+      },
+      "fresh": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 3,
+      "theme": "light",
+      "initial": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      },
+      "edited": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "resumed": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "reset": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          7,
+          7
+        ],
+        "files": []
+      },
+      "fresh": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 3,
+      "theme": "dark",
+      "initial": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      },
+      "edited": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "resumed": {
+        "values": {
+          "text": "草稿🙂還在",
+          "off": "private off value",
+          "password": "synthetic password",
+          "notes": "第一行\n第二行",
+          "select": "b",
+          "range": "73",
+          "date": "2025-10-30",
+          "check": true,
+          "choice": "b"
+        },
+        "selection": [
+          1,
+          4
+        ],
+        "files": [
+          {
+            "name": "fixture.bin",
+            "type": "application/octet-stream",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ]
+      },
+      "reset": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          7,
+          7
+        ],
+        "files": []
+      },
+      "fresh": {
+        "values": {
+          "text": "initial",
+          "off": "original",
+          "password": "server",
+          "notes": "initial notes",
+          "select": "a",
+          "range": "10",
+          "date": "2024-06-15",
+          "check": false,
+          "choice": "a"
+        },
+        "selection": [
+          0,
+          0
+        ],
+        "files": []
+      }
+    }
+  ]
+}

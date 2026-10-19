@@ -112,14 +112,17 @@ abstract interface class NativeHtmlHistoryBinding {
 class NativeHtmlHistoryController {
   NativeHtmlHistoryBinding? _binding;
   NativeHtmlControlSnapshot? _pending;
+  bool _pendingFromDetach = false;
   bool _disposed = false;
 
   bool get isDisposed => _disposed;
 
+  /// Returns eligible live edits or their queued snapshot while detached.
+  /// Password, file and autocomplete-off values stay outside this projection.
   NativeHtmlControlSnapshot? capture() {
     if (_disposed) return null;
     final binding = _binding;
-    if (binding == null) return null;
+    if (binding == null) return _pending;
     return binding.captureNativeHtmlHistory() ??
         NativeHtmlControlSnapshot.empty;
   }
@@ -129,6 +132,7 @@ class NativeHtmlHistoryController {
     final binding = _binding;
     if (binding == null) {
       _pending = snapshot;
+      _pendingFromDetach = false;
     } else {
       binding.restoreNativeHtmlHistory(snapshot);
     }
@@ -136,12 +140,19 @@ class NativeHtmlHistoryController {
 
   /// Attaches the live renderer. A queued snapshot is applied after the
   /// renderer has finished building its control registries.
-  void attach(NativeHtmlHistoryBinding binding) {
+  void attach(
+    NativeHtmlHistoryBinding binding, {
+    bool retainedControls = false,
+  }) {
     if (_disposed) return;
     _binding = binding;
     final pending = _pending;
+    final applyPending = !retainedControls || !_pendingFromDetach;
     _pending = null;
-    if (pending != null) binding.restoreNativeHtmlHistory(pending);
+    _pendingFromDetach = false;
+    if (pending != null && applyPending) {
+      binding.restoreNativeHtmlHistory(pending);
+    }
   }
 
   /// Detaches only the renderer that currently owns this controller. A static
@@ -153,13 +164,17 @@ class NativeHtmlHistoryController {
   }) {
     if (!identical(_binding, binding)) return;
     _binding = null;
-    if (snapshot != null) _pending = snapshot;
+    if (snapshot != null) {
+      _pending = snapshot;
+      _pendingFromDetach = true;
+    }
   }
 
   /// Clears queued and live state when its fetched document is discarded.
   void dispose() {
     _disposed = true;
     _pending = null;
+    _pendingFromDetach = false;
     _binding = null;
   }
 }

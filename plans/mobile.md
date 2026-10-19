@@ -14,12 +14,11 @@ are available from Git through Historical records, not repeated here.
       broader DOM APIs, Canvas font/ink coverage, inline-fragment measurements
       and common-library coverage. Broader image/framework flows remain
       unverified; preserve explicit unsupported errors.
-- [ ] **Document control lifetime:** retain file selections, password and
-      autocomplete-off values after a full same-document workspace teardown and
-      remount. Presentation reparses and retained views now keep these live;
-      full remount currently restores only eligible history snapshots. Preserve
-      account/document disposal and authored Reset behavior; verify CJK composing
-      input and focus through these lifecycle transitions.
+- [ ] **Scripted document lifecycle and device input:** static fetched documents
+      now retain native controls through complete workspace removal/remount,
+      same-frame replacement and reparenting. Broader scripted picker/resource
+      lifetimes remain unverified. Check real CJK IME, focus and keyboard behavior
+      across workspace/background/low-memory transitions on physical devices.
 - [ ] **Fragment scrolling and target state:** complete CSS scroll margin/padding,
       nested-container alignment, remaining focus state, late-loaded targets and
       nodes discarded from rendered markup. Target lookup, initial URLs and
@@ -230,10 +229,20 @@ summary do not open that element itself. Named peers close consistently. Static
 fetched documents retain live disclosure attributes across native reparses,
 resize and remount; eligible declarative form drafts follow the existing
 history-control policy. Live file selections, passwords and autocomplete-off
-values survive presentation reparses and retained views; a full workspace
-teardown/remount currently carries only eligible snapshots, so those excluded
-values still need document-owned lifetime support. A completed traversal is not
+values survive presentation reparses and retained views. Static fetched
+responses now own detached native control models in memory, so these values,
+selected file bytes and text selection also survive complete workspace
+removal/remount, same-frame replacement and GlobalKey reparenting. Reset keeps
+authored defaults; a fresh response, closed document or retired account cannot
+inherit excluded values or late picker results. Eligible history snapshots stay
+separate and never export password/file/autocomplete-off values. CJK composing
+ranges survive a static viewport reparse in widget tests; real IME and focus
+transitions still require physical acceptance. A completed traversal is not
 replayed on remount.
+An independent eight-profile Chromium 153 control corpus checks 40 states.
+Twenty-two native tests cover restoration, delayed file selection, retirement,
+Reset and fresh responses. These are static-document value/ownership gates,
+not new pixel proof or certification of scripted picker/resource lifetimes.
 The independent Chromium 153 corpus covers 96 phone/tablet, DPR 1/3, theme and
 initial/click profiles and 432 states. Native widgets compare 288 visible target
 rectangles/root positions within 1/32 CSS px, exact focus/open state, nested
