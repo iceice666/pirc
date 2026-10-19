@@ -8,7 +8,7 @@ import '../document_navigation_widget_test.dart' show DocumentGateway;
 /// Uses the actual JS runtime and Dart host with a local VM protocol peer.
 /// Only HTTP/Android IPC are controlled; no DOM snapshots are fabricated.
 class DocumentVmGateway extends DocumentGateway {
-  DocumentVmGateway._(this.process) {
+  DocumentVmGateway.forTest(this.process) {
     process.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter())
@@ -30,7 +30,7 @@ class DocumentVmGateway extends DocumentGateway {
       if (stderr.length < 8192) stderr.write(data);
     });
   }
-  static Future<DocumentVmGateway> start() async => DocumentVmGateway._(
+  static Future<DocumentVmGateway> start() async => DocumentVmGateway.forTest(
     await Process.start(Platform.environment['PIRC_TEST_NODE'] ?? 'node', [
       'tool/parity/document_vm_host.mjs',
     ]),

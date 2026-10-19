@@ -4753,6 +4753,11 @@
       environment: activeState && activeState.media ? activeState.media.snapshot() : null,
       canvases: activeState && activeState.canvas ? activeState.canvas.snapshots() : [],
       imageReferences: activeState?.images?.retainedImageIds() || [],
+      htmlImages: activeState?.images
+        ? Array.from(activeState.document.querySelectorAll('img')).flatMap(image => {
+          const state = activeState.images.renderState(image);
+          return state ? [{id: ensureElementId(image), ...state}] : [];
+        }) : [],
       diagnostics: activeState ? activeState.diagnostics.slice() : [],
       now: activeState ? activeState.now : 0,
       scheduler: schedulerSnapshot(),

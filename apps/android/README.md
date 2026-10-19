@@ -79,6 +79,23 @@ can continue those callbacks.
 Recreate the resource reference with
 `node apps/android/tool/parity/capture_document_live_resources_chromium153.mjs`.
 
+`test/document_live_runtime_assets_test.dart` adds linked stylesheets, initial
+and dynamic raster images, imported module dependencies and module cache reuse
+across document view replacement. Managed raster images share the document's
+decoded image with JS/Canvas. Startup waits for script ownership; terminal engine
+failure releases ordinary image loading. Separate image metadata validates
+native handles without introducing author-visible HTML/CSS attributes. SVG and multi-frame images keep
+their vector/animation display paths; responsive/picture candidate selection and unobserved
+images keep the ordinary provider. Script-side failures use the established
+display fallback so its larger image limits are preserved.
+Same-snapshot presentation updates preserve native inputs locally; newer script
+snapshots apply their own values without stale history writes. Recreate the
+browser reference with
+`node apps/android/tool/parity/capture_document_live_assets_chromium153.mjs`.
+These tests include exact opaque screenshot probes and bounded geometry/style
+checks. Wider image/SVG caching, lazy/responsive transitions, pending-image
+presentation and complex resource graphs remain listed in the mobile plan.
+
 ## Build and run
 
 Use Flutter 3.44.4 / Dart 3.12.2 or a compatible SDK, Android SDK and JDK 17.
