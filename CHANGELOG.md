@@ -4,6 +4,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-19
+
 ### Added
 
 - Gateway-owned workspace modes load from `$PIRC_CONFIG_DIR/modes/<id>.md` at startup and on SIGHUP. Chat/Work are editable default files, not reserved built-ins; custom modes combine validated capabilities, ordered prompt sections, feature defaults and operation allowlists. Nodes explicitly accept ids with `PIRC_MODES`; agents receive validated `PIRC_MODE` snapshots and role/team tool lists cannot widen the mode ceiling. Missing modes leave history readable but refuse new work; changed modes stop affected agents and terminals. Existing clients retain Chat/Work compatibility; dynamic mode navigation is deferred. **Node protocol 12: upgrade gateway and all nodes together.** Database schemas are unchanged. See the modes guide and upgrade notes.
@@ -21,8 +23,6 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 - Android supports viewport-fixed HTML overlays and acknowledges native scrolling before animation callbacks.
 - Android keeps the reading position stable when interactive HTML changes content above the viewport.
 - Android preserves reading positions inside nested HTML scrolling panels.
-- Android versionName is 0.3.0 and versionCode is 3; no APK is published. No Linux/x86_64 binaries are included; Nix packaging is retained.
-- Android versionName is 0.2.0 and versionCode is 2. No Android APK or new native Android Context tab is included in this release.
 
 ## [0.7.0] - 2026-10-18
 
