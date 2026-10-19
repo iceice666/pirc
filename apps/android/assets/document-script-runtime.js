@@ -40148,6 +40148,7 @@ function createPircDocumentLayout(options) {
   // display still requires a native top layer; do not emulate it as a div.
   const dialogReturnValues = new WeakMap();
   const closingDialogs = new WeakSet();
+  const dialogPreviousFocus = new WeakMap();
   class PircHTMLDialogElement extends HTMLElement {
     constructor(ownerDocument, localName = 'dialog') {
       if (!ownerDocument) throw new TypeError('Illegal constructor');
@@ -40160,7 +40161,31 @@ function createPircDocumentLayout(options) {
       if (typeof value === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
       dialogReturnValues.set(this, String(value));
     }
+    show() { return showDocumentDialog(this); }
     close(value) { return closeDocumentDialog(this, value); }
+  }
+
+  function showDocumentDialog(element) {
+    if (!(element instanceof PircHTMLDialogElement)) throw new TypeError('Illegal invocation');
+    if (element.hasAttribute('open')) return;
+    const before = new PircToggleEvent('beforetoggle', {
+      oldState: 'closed', newState: 'open', cancelable: true
+    });
+    defineEventMember(before, 'isTrusted', true);
+    if (!element.dispatchEvent(before) || element.hasAttribute('open')) return;
+    queueDetailsToggle(element, 'closed', 'open');
+    element.setAttribute('open', '');
+    const state = activeState;
+    dialogPreviousFocus.set(element, state ? state.activeElement : null);
+    if (!state || !element.isConnected || element.ownerDocument !== state.document) return;
+    // Chromium 153 delegates to an eligible autofocus descendant first, then
+    // the first focusable descendant, and finally to the dialog itself.
+    const candidates = Array.from(element.querySelectorAll('*'))
+      .filter(candidate => isFocusableHTMLElement(candidate, state));
+    const control = candidates.find(candidate => candidate.hasAttribute('autofocus')) ||
+      candidates[0] || element;
+    if (isFocusableHTMLElement(control, state)) focusElement(control);
+    else if (state.activeElement) blurElement(state.activeElement);
   }
 
   function closeDocumentDialog(element, value) {
@@ -40181,11 +40206,24 @@ function createPircDocumentLayout(options) {
       element.removeAttribute('open');
       if (converted !== undefined) dialogReturnValues.set(element, converted);
       queueDetailsToggle(element, 'open', 'closed');
+      const previouslyFocused = dialogPreviousFocus.get(element);
+      dialogPreviousFocus.delete(element);
+      if (previouslyFocused && state && state.activeElement && isInside(state.activeElement, element)) {
+        // Call the internal focusing algorithm, never an author-replaced .focus.
+        focusElement(previouslyFocused, {preventScroll: true});
+      }
+      const hiddenFocus = state && state.activeElement;
       scheduleTimer('timeout', () => {
         if (activeState !== state) return;
         const event = new GlobalEvent('close', {bubbles: false, cancelable: false});
         defineEventMember(event, 'isTrusted', true);
         element.dispatchEvent(event);
+        // With no eligible restoration target, Chromium drops hidden focus at
+        // a later rendering opportunity, after the close notification.
+        if (activeState === state && state.activeElement === hiddenFocus &&
+            hiddenFocus && !isFocusableHTMLElement(hiddenFocus, state)) {
+          blurElement(hiddenFocus);
+        }
       }, 0, []);
     } finally {
       closingDialogs.delete(element);
@@ -42985,6 +43023,8 @@ function createPircDocumentLayout(options) {
         const summary = Array.from(current.children).find(child => child.localName === 'summary');
         if (!summary || !isInside(element, summary)) return true;
       }
+      if (current.localName === 'dialog' && !current.hasAttribute('open') &&
+          !inlineStyleValue(current, 'display')) return true;
       if (inlineStyleValue(current, 'display') === 'none')
         return true;
       const visibility = inlineStyleValue(current, 'visibility');
@@ -43014,6 +43054,7 @@ function createPircDocumentLayout(options) {
         return false;
       return true;
     }
+    if (tag === 'dialog') return true;
     if (['textarea', 'select', 'button'].includes(tag))
       return !isDisabledFormControl(element);
     if ((tag === 'a' || tag === 'area') && element.hasAttribute('href'))

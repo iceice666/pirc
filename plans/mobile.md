@@ -11,9 +11,10 @@ are available from Git through Historical records, not repeated here.
 ## Remaining work, in priority order
 
 - [ ] **Native dialog presentation:** dialog form closing and explicit `open`
-      attribute visibility now work through the script/native host. Complete
-      `show()`/`showModal()`, the native top layer/backdrop, inert background,
-      focus trapping/restoration, Escape/Back cancellation and `requestClose()`.
+      attribute visibility, nonmodal `show()` and bounded initial/restored focus
+      now work through the script/native host. Complete `showModal()`, the native
+      top layer/backdrop, inert background, focus trapping, Escape/Back
+      cancellation and `requestClose()`.
       Default browser dialog positioning/intrinsic styling, modern invoker and
       `closedby` behavior, event-handler attribute/IDL replacement and dialog
       task-source scheduling still need coverage. `alert`/`confirm`/`prompt`
@@ -382,10 +383,38 @@ claim event-loop parity. The [HTML Standard's dialog algorithms](https://html.sp
 use distinct task sources for those notifications. Native validation feedback
 paint can obscure a different area than Chromium's popup; invalid-state geometry
 and behavior are checked, but that covered pixel is not a parity claim. Modal
-presentation, default dialog UA layout/focus and the remaining APIs listed above
-are still unfinished. `show()`/`showModal()` are not installed, so their presence
-does not falsely advertise implementation to capability checks. This closing increment is not complete dialog support or
-physical Android acceptance.
+presentation, default dialog UA layout and the remaining APIs listed above
+are still unfinished. `showModal()` is not installed, so its presence does not
+falsely advertise modality to capability checks. This increment is not complete
+dialog support or physical Android acceptance.
+
+Nonmodal `show()` now fires a cancelable trusted opening `beforetoggle`, respects
+cancellation and listener changes, and coalesces asynchronous toggle events.
+Repeated show calls do not steal focus. Initial focus delegates to an eligible
+autofocus descendant, then the first focusable descendant, then the dialog;
+closing restores the previously focused eligible control only while focus
+remains inside. External focus is preserved, restoration uses `preventScroll`,
+and authored `.focus()` replacements do not intercept the internal algorithm.
+Closed nested dialogs are skipped by the focus eligibility check. Dialog native
+focus nodes are programmatically focusable without adding an ordinary Tab stop.
+
+`document-dialog-show-chromium153.json` records 24 independent programmatic
+opening/focus cases, including synchronous and settled event payloads, plus
+eight phone/tablet, DPR 1/3, light/dark profiles with eight actual-input states.
+The shipped runtime and real Flutter host check native primary focus, edited
+values, local return values, visibility, geometry and 32 background probes.
+The authored `position:static` fixture also retains a known difference: after
+replacing dialog contents with a default `<p>`, Chromium moves the dialog's top
+to 48 CSS px through margin collapse; Flutter keeps it at 32 CSS px. Tests assert
+both measurements explicitly; the other rectangle components/states remain
+matched, and corresponding dialog-local background probes do not assert equal
+screen positions for that state. The browser's default positioning/intrinsic
+layout is still pending. Full stylesheet-driven synchronous focus eligibility, shadow/
+scrollable focus delegates, text selection on dialog focus, popover interaction,
+render-task scheduling of hidden-focus cleanup and physical keyboard/IME focus
+remain outside this bounded focus gate. The close/toggle task-source ordering
+difference above is also retained; these gates do not certify a full browser
+event loop.
 
 Native Canvas supports matched text measurement, intrinsic/pixel/percentage
 sizing, container resizing, the eight stock Chart.js chart types and their default

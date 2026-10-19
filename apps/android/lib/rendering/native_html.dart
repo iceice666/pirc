@@ -1304,7 +1304,8 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
         element.localName == 'a' && element.attributes.containsKey('href');
     final tabIndex = int.tryParse(element.attributes['tabindex'] ?? '');
     final summary = nativeHtmlDetailsSummaryFor(element) == element;
-    if (id == null || (!anchor && !summary && tabIndex == null)) {
+    final dialog = element.localName == 'dialog';
+    if (id == null || (!anchor && !summary && !dialog && tabIndex == null)) {
       return const [];
     }
     final node = _scriptFocusableNodes[id];
@@ -1318,9 +1319,12 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     }
     final tabIndex = int.tryParse(element.attributes['tabindex'] ?? '');
     return _scriptFocusableNodes.putIfAbsent(
-      id,
-      () => FocusNode(debugLabel: 'HTML script focus $id'),
-    )..skipTraversal = tabIndex != null && tabIndex < 0;
+        id,
+        () => FocusNode(debugLabel: 'HTML script focus $id'),
+      )
+      ..skipTraversal = tabIndex != null
+          ? tabIndex < 0
+          : element.localName == 'dialog';
   }
 
   void _cancelFocusRevealSuppression() {
@@ -3252,7 +3256,10 @@ class _NativeHtmlFactory extends WidgetFactory {
         element.localName == 'a' && element.attributes.containsKey('href');
     final tabIndex = int.tryParse(element.attributes['tabindex'] ?? '');
     final summary = nativeHtmlDetailsSummaryFor(element) == element;
-    if (id == null || (!anchor && !summary && tabIndex == null)) return null;
+    final dialog = element.localName == 'dialog';
+    if (id == null || (!anchor && !summary && !dialog && tabIndex == null)) {
+      return null;
+    }
     if (controls.resolveControl(element) != null ||
         textFields.resolveControl(element) != null ||
         selects.resolveControl(element) != null ||

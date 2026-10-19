@@ -112,10 +112,16 @@ through view removal, submit/invalid events, return values and no navigation.
 scripts and native/computed closed visibility, including author display overrides.
 Recreate the independent reference with
 `node apps/android/tool/parity/capture_document_dialog_form_chromium153.mjs`.
-This is a closing-path increment: `show()`/`showModal()` are not installed; modality/focus/default UA
-layout and close-request APIs remain listed in the mobile plan. The tests keep
-the observed close/toggle task-order difference explicit. Validation popup paint
-has separate visual acceptance; an obscured pixel is not compared as background.
+`test/document_live_runtime_dialog_show_test.dart` also verifies nonmodal
+`show()`, real native initial/restored focus, edits and close behavior in eight
+phone/tablet, DPR and theme profiles. Its independent reference is recreated by
+`node apps/android/tool/parity/capture_document_dialog_show_chromium153.mjs`;
+`document_dialog_show_test.mjs` checks 24 synchronous/settled opening/focus cases.
+The fixture retains and explicitly asserts the 16 CSS px default-paragraph
+margin-collapse difference. `showModal()` is not installed; modality, default UA
+layout, broader focus delegates and close-request APIs remain in the mobile plan.
+The tests keep the observed close/toggle task-order difference explicit.
+Validation popup paint has separate visual acceptance; an obscured pixel is not compared as background.
 
 ## Build and run
 

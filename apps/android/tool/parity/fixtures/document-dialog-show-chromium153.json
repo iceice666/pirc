@@ -1,0 +1,6349 @@
+{
+  "browserVersion": "153.0.8010.12",
+  "html": "<!doctype html><html><head><style>\nbody{margin:0;font:16px/24px Arial;background:white;color:black}\nbutton,input{font:16px/24px Arial}button{display:block;width:180px;height:32px;margin:0;padding:0;border:0;box-sizing:border-box}\ndialog{position:static;margin:0;padding:0;border:0;width:240px;height:128px;background:#204060;color:white}\n</style></head><body><button id=\"open\" onclick=\"document.getElementById('dialog').show()\">Open</button><dialog id=\"dialog\"><form method=\"dialog\"><input id=\"first\" value=\"first\"><input id=\"draft\" autofocus value=\"ready\"><button id=\"save\" value=\"saved\">Save</button></form></dialog><button id=\"outside\">Outside</button><button id=\"close\" onclick=\"document.getElementById('dialog').close()\">Close</button><button id=\"empty\" onclick=\"const d=document.getElementById('dialog');d.innerHTML='&lt;p&gt;Message&lt;/p&gt;';d.show()\">Empty</button><script>\nwindow.events=[];\nfor(const type of ['beforetoggle','toggle','close','focus','blur','focusin','focusout']) document.addEventListener(type,e=>events.push({type:e.type,id:e.target.id,old:e.oldState??null,new:e.newState??null,source:e.source?.id||null,related:e.relatedTarget?.id||null,bubbles:e.bubbles,cancelable:e.cancelable,trusted:e.isTrusted}),true);\n</script></body></html>",
+  "cases": [
+    {
+      "name": "autofocus",
+      "script": "d.show()"
+    },
+    {
+      "name": "first-control",
+      "setup": "draft.removeAttribute(\"autofocus\")",
+      "script": "d.show()"
+    },
+    {
+      "name": "dialog-autofocus",
+      "setup": "d.setAttribute(\"autofocus\",\"\")",
+      "script": "d.show()"
+    },
+    {
+      "name": "fallback-dialog",
+      "setup": "d.innerHTML=\"<p>Message</p>\"",
+      "script": "d.show()"
+    },
+    {
+      "name": "negative-tabindex",
+      "setup": "draft.removeAttribute(\"autofocus\");first.setAttribute(\"tabindex\",\"-1\")",
+      "script": "d.show()"
+    },
+    {
+      "name": "negative-autofocus",
+      "setup": "draft.setAttribute(\"tabindex\",\"-1\")",
+      "script": "d.show()"
+    },
+    {
+      "name": "disabled-autofocus",
+      "setup": "draft.disabled=true",
+      "script": "d.show()"
+    },
+    {
+      "name": "hidden-first",
+      "setup": "draft.removeAttribute(\"autofocus\");first.style.display=\"none\"",
+      "script": "d.show()"
+    },
+    {
+      "name": "inert-autofocus",
+      "setup": "draft.setAttribute(\"inert\",\"\")",
+      "script": "d.show()"
+    },
+    {
+      "name": "closed-nested-dialog",
+      "setup": "d.innerHTML='<dialog><input autofocus id=\"nested\"></dialog><button id=\"last\">Last</button>'",
+      "script": "d.show()"
+    },
+    {
+      "name": "cancel-opening",
+      "setup": "d.addEventListener(\"beforetoggle\",e=>e.preventDefault())",
+      "script": "d.show()"
+    },
+    {
+      "name": "handler-opens",
+      "setup": "d.addEventListener(\"beforetoggle\",()=>d.open=true,{once:true})",
+      "script": "d.show()"
+    },
+    {
+      "name": "handler-removes",
+      "setup": "d.addEventListener(\"beforetoggle\",()=>d.remove(),{once:true})",
+      "script": "d.show()"
+    },
+    {
+      "name": "already-open",
+      "setup": "d.open=true",
+      "script": "d.show()"
+    },
+    {
+      "name": "repeat-show",
+      "script": "d.show();outside.focus();d.show()"
+    },
+    {
+      "name": "restore-focus",
+      "script": "d.show();d.close(\"done\")"
+    },
+    {
+      "name": "keep-outside-focus",
+      "script": "d.show();outside.focus();d.close(\"done\")"
+    },
+    {
+      "name": "removed-previous-focus",
+      "script": "d.show();opener.remove();d.close()"
+    },
+    {
+      "name": "disabled-previous-focus",
+      "script": "d.show();opener.disabled=true;d.close()"
+    },
+    {
+      "name": "author-focus-override",
+      "setup": "draft.focus=()=>{throw Error(\"author focus called\")};opener.focus=()=>{throw Error(\"author restore called\")}",
+      "script": "d.show();d.close()"
+    },
+    {
+      "name": "manual-open-no-restore",
+      "script": "d.open=true;draft.focus();d.close()"
+    },
+    {
+      "name": "focus-handler-redirect",
+      "setup": "draft.addEventListener(\"focus\",()=>outside.focus(),{once:true})",
+      "script": "d.show();d.close()"
+    },
+    {
+      "name": "detached-show",
+      "setup": "d.remove()",
+      "script": "d.show()"
+    },
+    {
+      "name": "hidden-dialog",
+      "setup": "d.style.display=\"none\"",
+      "script": "d.show()"
+    }
+  ],
+  "states": [
+    {
+      "name": "autofocus",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "draft",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "draft",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "first-control",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "first",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "first",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "dialog-autofocus",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "draft",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "draft",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "fallback-dialog",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "dialog",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "dialog",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "dialog",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "dialog",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "dialog",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "dialog",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "dialog",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "dialog",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "dialog",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "dialog",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "negative-tabindex",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "first",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "first",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "negative-autofocus",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "draft",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "draft",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "disabled-autofocus",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "first",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "first",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "hidden-first",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "draft",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "draft",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "inert-autofocus",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "first",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "first",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "first",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "first",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "closed-nested-dialog",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "last",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "last",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "last",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "last",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "last",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "last",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "last",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "last",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "last",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "last",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "cancel-opening",
+      "synchronous": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "open",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "open",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "handler-opens",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "open",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "open",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "handler-removes",
+      "synchronous": {
+        "open": true,
+        "connected": false,
+        "value": "",
+        "active": "open",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": false,
+        "value": "",
+        "active": "open",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "already-open",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "open",
+        "events": []
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "open",
+        "events": []
+      }
+    },
+    {
+      "name": "repeat-show",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "outside",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "outside",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "restore-focus",
+      "synchronous": {
+        "open": false,
+        "connected": true,
+        "value": "done",
+        "active": "open",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": false,
+        "connected": true,
+        "value": "done",
+        "active": "open",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "keep-outside-focus",
+      "synchronous": {
+        "open": false,
+        "connected": true,
+        "value": "done",
+        "active": "outside",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": false,
+        "connected": true,
+        "value": "done",
+        "active": "outside",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "removed-previous-focus",
+      "synchronous": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "draft",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "body",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "disabled-previous-focus",
+      "synchronous": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "draft",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "body",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "author-focus-override",
+      "synchronous": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "open",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "open",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "manual-open-no-restore",
+      "synchronous": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "draft",
+        "events": [
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "body",
+        "events": [
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "focus-handler-redirect",
+      "synchronous": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "outside",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": false,
+        "connected": true,
+        "value": "",
+        "active": "outside",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "draft",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "outside",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focus",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusin",
+            "id": "outside",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": "draft",
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "open",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "closed",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "detached-show",
+      "synchronous": {
+        "open": true,
+        "connected": false,
+        "value": "",
+        "active": "open",
+        "events": []
+      },
+      "result": {
+        "open": true,
+        "connected": false,
+        "value": "",
+        "active": "open",
+        "events": []
+      }
+    },
+    {
+      "name": "hidden-dialog",
+      "synchronous": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "body",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      },
+      "result": {
+        "open": true,
+        "connected": true,
+        "value": "",
+        "active": "body",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "blur",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "focusout",
+            "id": "open",
+            "old": null,
+            "new": null,
+            "source": null,
+            "related": null,
+            "bubbles": true,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "old": "closed",
+            "new": "open",
+            "source": null,
+            "related": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ]
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 1,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "value": "",
+            "active": "body",
+            "draft": "ready",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": []
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "value": "",
+            "active": "draft",
+            "draft": "ready",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "saved",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "open",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "draft",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "outside",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "outside",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-outside",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "empty",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "dialog",
+            "draft": null,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              48,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              172
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-empty",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": null,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 1,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "value": "",
+            "active": "body",
+            "draft": "ready",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": []
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "value": "",
+            "active": "draft",
+            "draft": "ready",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "saved",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "open",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "draft",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "outside",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "outside",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-outside",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "empty",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "dialog",
+            "draft": null,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              48,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              172
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-empty",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": null,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 3,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "value": "",
+            "active": "body",
+            "draft": "ready",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": []
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "value": "",
+            "active": "draft",
+            "draft": "ready",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "saved",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "open",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "draft",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "outside",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "outside",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-outside",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "empty",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "dialog",
+            "draft": null,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              48,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              172
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-empty",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": null,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 3,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "value": "",
+            "active": "body",
+            "draft": "ready",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": []
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "value": "",
+            "active": "draft",
+            "draft": "ready",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "saved",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "open",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "draft",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "outside",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "outside",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-outside",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "empty",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "dialog",
+            "draft": null,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              48,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              172
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-empty",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": null,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 1,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "value": "",
+            "active": "body",
+            "draft": "ready",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": []
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "value": "",
+            "active": "draft",
+            "draft": "ready",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "saved",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "open",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "draft",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "outside",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "outside",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-outside",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "empty",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "dialog",
+            "draft": null,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              48,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              172
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-empty",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": null,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 1,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "value": "",
+            "active": "body",
+            "draft": "ready",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": []
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "value": "",
+            "active": "draft",
+            "draft": "ready",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "saved",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "open",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "draft",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "outside",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "outside",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-outside",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "empty",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "dialog",
+            "draft": null,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              48,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              172
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-empty",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": null,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 3,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "value": "",
+            "active": "body",
+            "draft": "ready",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": []
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "value": "",
+            "active": "draft",
+            "draft": "ready",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "saved",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "open",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "draft",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "outside",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "outside",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-outside",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "empty",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "dialog",
+            "draft": null,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              48,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              172
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-empty",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": null,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 3,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "value": "",
+            "active": "body",
+            "draft": "ready",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": []
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "value": "",
+            "active": "draft",
+            "draft": "ready",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "saved",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "open",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "draft",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "outside",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "outside",
+            "draft": "草稿🙂",
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              240,
+              128
+            ],
+            "events": [],
+            "point": [
+              236,
+              156
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-outside",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": "草稿🙂",
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "empty",
+          "value": {
+            "open": true,
+            "value": "saved",
+            "active": "dialog",
+            "draft": null,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              48,
+              240,
+              128
+            ],
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "closed",
+                "new": "open",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "point": [
+              236,
+              172
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "close-empty",
+          "value": {
+            "open": false,
+            "value": "saved",
+            "active": "close",
+            "draft": null,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null,
+            "events": [
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "old": null,
+                "new": null,
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "old": "open",
+                "new": "closed",
+                "source": null,
+                "related": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
