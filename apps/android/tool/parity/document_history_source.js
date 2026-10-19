@@ -119,15 +119,20 @@ function createDocumentHistory(options) {
     entryKey = snapshot.entryKey; graph = nextGraph; stateValue = nextState;
     scroll = snapshot.scrollRestoration === 'manual' ? 'manual' : 'auto';
     options.setURL(url);
-    options.updateTarget?.(snapshot);
     if (changed) {
       pendingTraversalIndex = null;
       // Capture both URLs before listeners run; a popstate handler may push again.
       const before = new URLCtor(oldURL), after = new URLCtor(url);
-      const hashChanged = before.hash !== after.hash ||
-        before.href.includes('#') !== after.href.includes('#');
+      const hashChanged = before.href.split('#')[0] === after.href.split('#')[0] &&
+        (before.hash !== after.hash ||
+          before.href.includes('#') !== after.href.includes('#'));
       options.dispatchPopState(stateValue);
+      // Traversal exposes the new URL/state before selecting its target.
+      // popstate sees the previous target; hashchange sees the selected one.
+      options.updateTarget?.(snapshot);
       if (hashChanged) options.dispatchHashChange(oldURL, url);
+    } else {
+      options.updateTarget?.(snapshot);
     }
   }
   return {history, History, update};

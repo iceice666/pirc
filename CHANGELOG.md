@@ -37,6 +37,8 @@ The first published release with the 0.9.0 changes below (0.9.0 was tagged but i
 
 ### Fixed
 
+- Android initial page routing preserves document targets and history reading positions.
+
 - Android initial document links wait for generated targets and retain the selected node through loading and remounts.
 
 - Android document targets update native styles and preserve target identity through History API changes.

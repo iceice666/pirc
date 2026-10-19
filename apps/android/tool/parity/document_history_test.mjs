@@ -148,3 +148,15 @@ test('persisted controls restore into the scripted DOM without input/change even
   assert.deepEqual(r.json('inputEvents'),[]);
   assert.equal(r.run('document.querySelector("input").defaultValue'),'initial');
 });
+
+test('traversal selects its target after popstate and before hashchange', () => {
+  const r = runtime('<div id="one"></div><div id="two"></div><script>window.targets=[];for(const type of ["popstate","hashchange"])addEventListener(type,()=>targets.push([type,location.hash,document.querySelector(":target")?.id]))</script>', 'https://example.test/start#one');
+  r.call('updateHistory', {url:'https://example.test/start#two',entryKey:'native-2',index:2,length:3,ackRevision:0,targetRevision:1,targetUrl:'https://example.test/start#two'});
+  assert.deepEqual(r.json('targets'), [['popstate','#two','one'],['hashchange','#two','two']]);
+});
+
+test('traversal across query routes suppresses hashchange', () => {
+  const r = runtime('<script>window.events=[];for(const type of ["popstate","hashchange"])addEventListener(type,()=>events.push(type))</script>', 'https://example.test/start?route=changed#one');
+  r.call('updateHistory', {url:'https://example.test/start?route=original',entryKey:'native-2',index:2,length:3,ackRevision:0});
+  assert.deepEqual(r.json('events'), ['popstate']);
+});

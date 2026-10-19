@@ -429,11 +429,48 @@ and reflow after initial selection. The remount case holds the resource beyond
 128 frames and then reveals the same retained document. Native selector/style/
 rectangle reports and root scrolling are compared with the shared browser source;
 geometry allows 1/32 CSS px. This does not establish exact loading timing or
-pixel-perfect output. History API writes before initial selection, the
-initial focus/load event order and removal of a selected node before its first
-native frame remain uncertified.
+pixel-perfect output. The initial focus/load event order and removal of a
+selected node before its first native frame remain uncertified.
 
-**Remaining fragment differences:** reentrant focus redirection/navigation,
+**Initial History API routing:** pending initial target reveal now survives
+`pushState`/`replaceState`, including the shared entry-insertion path. The VM's
+selected node determines reveal after parser/DCL URL rewrites and remains selected
+through load-time rewrites. HTML documents initially lacking a fragment also wait
+for that initial selection; removing a fragment does not invent a top jump over
+a script-established reading position. Initial selection waits for parser completion
+and queued History actions; native reveal separately checks published layout. A
+no-op layout refresh cannot strand the selection waiter.
+
+A source entry captured before initial reveal records that its scroll snapshot
+is provisional. The VM captures this marker and the measured/projected root
+position when it queues the History action, before later host publications. Its
+first traversal prefers a currently resolvable fragment and
+otherwise keeps the captured native position; after reveal its actual offset is
+recorded normally. This marker survives entry metadata/refetch copies. Valid
+reading snapshots on reload/refetch retain their established restoration path.
+A root absolute scroll accepted after initial target selection is reported by the
+VM; native initial reveal retains nested-container work while preserving that
+root position. Relative scrolling after an absolute reset shares the same root
+base. A scroll before selection still yields to the initial fragment. Traversal updates
+URL/state before `popstate`, selects the target after that callback, then emits
+`hashchange` when applicable. Reading-position restoration also waits for destination
+layout and anchor compensation, avoiding an extra shift when `:target` changes
+height. Static pages whose anchor boxes cannot be measured retain their native
+reading-position fallback after the existing bounded layout wait and record
+`history_layout_not_ready`; their restoration timing is not certified.
+
+The Chromium 153 initial-History corpus covers 288 phone/tablet, DPR 1/3 and theme
+profiles and 880 loaded/rewrite/back/forward states. It checks parser, DCL and load
+writes; both methods; same/other fragments, query routes, fragment removal;
+initially fragment-less pages; multiple writes; and explicit loading-time root
+scrolling. Android compares real Sandbox selectors, state/relative history length,
+exact event reports/styles and measured rectangles/root positions (1/32 CSS px).
+A subset remounts after initial routing. This does not certify arbitrary loading
+or traversal event timing.
+
+**Remaining fragment differences:** relative-only root scrolls after selection without a later absolute
+reset, scroll/History writes interleaved before the first native frame, broader
+fresh-response restoration ordering, reentrant focus redirection/navigation,
 filled/oversized control caret and selection variants, focus restoration across
 remount/background transitions, broader keyboard traversal, focus pseudo styling,
 additional toggle box-model combinations and exact toggle appearance/accent

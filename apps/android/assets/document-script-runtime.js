@@ -26778,15 +26778,20 @@ function createDocumentHistory(options) {
     entryKey = snapshot.entryKey; graph = nextGraph; stateValue = nextState;
     scroll = snapshot.scrollRestoration === 'manual' ? 'manual' : 'auto';
     options.setURL(url);
-    options.updateTarget?.(snapshot);
     if (changed) {
       pendingTraversalIndex = null;
       // Capture both URLs before listeners run; a popstate handler may push again.
       const before = new URLCtor(oldURL), after = new URLCtor(url);
-      const hashChanged = before.hash !== after.hash ||
-        before.href.includes('#') !== after.href.includes('#');
+      const hashChanged = before.href.split('#')[0] === after.href.split('#')[0] &&
+        (before.hash !== after.hash ||
+          before.href.includes('#') !== after.href.includes('#'));
       options.dispatchPopState(stateValue);
+      // Traversal exposes the new URL/state before selecting its target.
+      // popstate sees the previous target; hashchange sees the selected one.
+      options.updateTarget?.(snapshot);
       if (hashChanged) options.dispatchHashChange(oldURL, url);
+    } else {
+      options.updateTarget?.(snapshot);
     }
   }
   return {history, History, update};
@@ -41832,6 +41837,8 @@ function createPircDocumentLayout(options) {
         }
       }
       layout.recordScrollAction(action, target, effectiveBehavior);
+      if (state.initialFragmentSelected && action.elementId == null && kind === 'to' && y != null)
+        state.initialRootScrollOverride = true;
       state.scrollActions.push(Object.freeze(action));
     }
 
@@ -42342,6 +42349,7 @@ function createPircDocumentLayout(options) {
       initial: state.initialHistory, scope: state.objectUrlNonce,
       getURL: () => state.url, setURL: url => { state.url = url; },
       updateTarget: snapshot => {
+        if (snapshot.initialFragmentRevealPending === false) state.initialFragmentObservationPending = false;
         if (Number.isSafeInteger(snapshot.targetRevision) && snapshot.targetRevision >= 0 &&
             typeof snapshot.targetUrl === 'string' && snapshot.targetRevision !== state.fragmentTargetRevision) {
           state.fragmentTargetRevision = snapshot.targetRevision;
@@ -42350,10 +42358,18 @@ function createPircDocumentLayout(options) {
       },
       getBaseURL: currentDocumentBaseUrl, nextActionOrder: nextActionOrder,
       enqueue: action => {
+        let captured = action;
+        if (state.hostLayout && ['push','replace'].includes(action.method)) {
+          captured = {...action, initialScrollSnapshotPending: !state.loadDispatched || state.loadEventDispatching ||
+            (state.initialFragmentObservationPending && !state.initialRootScrollOverride)};
+          try { captured.sourceScrollTop = state.layout.viewport().scrollY; }
+          catch (error) { diagnostic('history.initial_scroll_unmeasured', 'info', exceptionMessage(error)); }
+          Object.freeze(captured);
+        }
         const pending = state.navigationActions.filter(value => value.kind === 'history');
-        if (pending.length >= 128 || utf8ByteLength(JSON.stringify(pending.concat(action))) > 2 * 1024 * 1024)
+        if (pending.length >= 128 || utf8ByteLength(JSON.stringify(pending.concat(captured))) > 2 * 1024 * 1024)
           throw new globalThis.DOMException('Pending history changes exceed the document limit.', 'QuotaExceededError');
-        state.navigationActions.push(action);
+        state.navigationActions.push(captured);
       },
       dispatchPopState: value => {
         const event = new GlobalEvent('popstate', {bubbles: false, cancelable: false});
@@ -43737,6 +43753,7 @@ function createPircDocumentLayout(options) {
       documentBaseURL: activeState && activeState.document ? currentDocumentBaseUrl() : null,
       fragmentTargetId: activeState?.fragmentTarget ? ensureElementId(activeState.fragmentTarget) : null,
       fragmentTargetReady: activeState?.domContentLoaded === true,
+      initialRootScrollOverride: activeState?.initialRootScrollOverride === true,
       stylesheets: activeState ? activeState.stylesheetSnapshot : null,
       environment: activeState && activeState.media ? activeState.media.snapshot() : null,
       canvases: activeState && activeState.canvas ? activeState.canvas.snapshots() : [],
@@ -44189,6 +44206,7 @@ function createPircDocumentLayout(options) {
       return;
     state.readyState = 'complete';
     state.loadDispatched = true;
+    state.loadEventDispatching = true;
     try {
       state.window.dispatchEvent(
         new GlobalEvent('load', { bubbles: false, cancelable: false })
@@ -44200,7 +44218,7 @@ function createPircDocumentLayout(options) {
         exceptionMessage(error),
         { event: 'load' }
       );
-    }
+    } finally { state.loadEventDispatching = false; }
   }
 
   function dispatchDOMContentLoadedIfReady() {
@@ -44223,6 +44241,7 @@ function createPircDocumentLayout(options) {
       );
     }
     selectFragmentTarget(state.url);
+    state.initialFragmentSelected = true;
     dispatchDocumentLoadIfReady();
   }
 
@@ -44429,6 +44448,10 @@ function createPircDocumentLayout(options) {
       url: url,
       sourceDocumentUrl: url,
       fragmentTarget: null,
+      initialFragmentSelected: false,
+      initialRootScrollOverride: false,
+      initialFragmentObservationPending: input.history?.initialFragmentRevealPending === true,
+      loadEventDispatching: false,
       fragmentTargetRevision: Number.isSafeInteger(input.history?.targetRevision) ? input.history.targetRevision : 0,
       initialCookieState: input.cookieState,
       initialHistory: input.history && typeof input.history === 'object' ? input.history : {},

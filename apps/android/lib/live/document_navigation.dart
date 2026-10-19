@@ -962,6 +962,9 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
             stateGraph: obj(action['stateGraph']),
             entryKey: action['entryKey'] as String,
             scrollRestoration: action['scrollRestoration'] as String,
+            initialScrollSnapshotPending:
+                action['initialScrollSnapshotPending'] as bool?,
+            sourceScrollTop: (action['sourceScrollTop'] as num?)?.toDouble(),
           );
         }
       });
@@ -1063,7 +1066,11 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
         cancel();
         return;
       }
-      if (!scripts.initialTargetSelectionPending) {
+      // The native reveal already waits for current layout publication. A
+      // no-op layout refresh need not notify listeners when it becomes idle,
+      // so waiting for publication here can strand a history traversal.
+      if (!scripts.initialTargetSelectionPending &&
+          scripts.navigationActions.isEmpty) {
         done.complete(true);
       }
     }
@@ -1074,7 +1081,12 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
     windows.addListener(wake);
     try {
       wake();
-      return await done.future;
+      if (!await done.future) return false;
+      // A traversal notification can arrive before the VM applies its target.
+      // Await the serialized snapshot directly: idle no-op refreshes need not
+      // emit a listener notification.
+      await scripts.updateHistory(window.scriptHistorySnapshot);
+      return isCurrent();
     } finally {
       _fragmentWaits.remove(cancel);
       scripts.removeListener(wake);
@@ -1096,19 +1108,21 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
     _revealed = current;
     _revealedFragmentRevision = revision;
     final explicit = window.hasPendingFragmentReveal;
+    final initial = current.document!.initialFragmentRevealPending;
     if (!explicit &&
+        !initial &&
         (window.historyChangeKind == 'pushState' ||
             window.historyChangeKind == 'replaceState' ||
             window.historyChangeKind == 'traverse' &&
                 current.scrollRestoration == 'manual')) {
       return;
     }
-    final savedOffset =
+    final storedOffset =
         explicit || current.document!.initialFragmentRevealPending
         ? null
         : current.scrollOffset;
     final hash = current.url.indexOf('#');
-    if (savedOffset == null && hash < 0) return;
+    if (storedOffset == null && hash < 0 && !initial) return;
     final revealUrl = current.url;
     final fragment = hash < 0 ? '' : revealUrl.substring(hash + 1);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -1128,8 +1142,12 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
           current.url == revealUrl &&
           window.fragmentRevealRevision == revision &&
           (!explicit || window.hasPendingFragmentReveal);
+      var savedOffset = storedOffset;
+      var preserveRootOffset = false;
       NativeDocumentFragmentTarget? retainedTarget;
-      if (!explicit && savedOffset == null && document.content.isHtml) {
+      if (!explicit &&
+          (savedOffset == null || current.scrollOffsetBeforeInitialFragment) &&
+          document.content.isHtml) {
         if (!await _waitForInitialFragmentDocument(
           window,
           document,
@@ -1137,32 +1155,44 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
         )) {
           return;
         }
+        if (current.scrollOffsetBeforeInitialFragment &&
+            hash >= 0 &&
+            document.viewport.fragmentTarget(fragment) != null) {
+          savedOffset = null;
+        }
         final scripts = document.scripts;
-        if (scripts?.fragmentTargetReady == true) {
+        preserveRootOffset =
+            initial && scripts?.initialRootScrollOverride == true;
+        if (savedOffset == null && scripts?.fragmentTargetReady == true) {
           final id = scripts!.fragmentTargetId;
           final top =
               id == null &&
+              hash >= 0 &&
               (fragment.isEmpty ||
                   decodeNativeDocumentFragment(fragment).toLowerCase() ==
                       'top');
           retainedTarget = top
               ? const NativeDocumentFragmentTarget.top()
               : NativeDocumentFragmentTarget.native(id);
+        } else if (hash < 0) {
+          // No fragment means no initial scrolling; preserve any script scroll.
+          retainedTarget = const NativeDocumentFragmentTarget.native(null);
         }
       }
       if (!isCurrent()) return;
       if (savedOffset != null) {
-        if (document.scroll.hasClients) {
-          document.scroll.jumpTo(
-            savedOffset.clamp(0, document.scroll.position.maxScrollExtent),
-          );
-        }
+        await document.viewport.restoreScrollOffset(
+          document.scroll,
+          savedOffset,
+          isCurrent: isCurrent,
+        );
       } else {
         await document.viewport.scrollToFragment(
           fragment,
           allowUnindexedTop: !document.content.isHtml,
           isCurrent: isCurrent,
           retainedTarget: retainedTarget,
+          preserveRootOffset: preserveRootOffset,
         );
       }
       if (mounted &&
@@ -1170,7 +1200,14 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
           window.current == current &&
           window.fragmentRevealRevision == revision) {
         document.initialFragmentRevealPending = false;
+        current.scrollOffsetBeforeInitialFragment = false;
+        current.scrollOffset =
+            document.scroll.lastKnownOffset ?? current.scrollOffset;
         window.acknowledgeFragmentReveal(current, revision);
+        unawaited(
+          document.scripts?.updateHistory(window.scriptHistorySnapshot) ??
+              Future.value(),
+        );
       }
     });
   }
@@ -1796,6 +1833,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
   NativeFragmentRevealResult _nativeFragmentReveal(
     String? id,
     NativeFragmentRevealPhase phase,
+    bool preserveRootOffset,
   ) {
     final document = widget.document;
     if (!mounted ||
@@ -1816,7 +1854,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       return NativeFragmentRevealResult.unavailable;
     }
     if (id == null) {
-      if (phase == NativeFragmentRevealPhase.prepare) {
+      if (phase == NativeFragmentRevealPhase.prepare || preserveRootOffset) {
         return NativeFragmentRevealResult.handled;
       }
       applyNativeDocumentScrollAxis(
@@ -1898,7 +1936,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
               'behavior': 'auto',
             },
           ]);
-        } else {
+        } else if (!preserveRootOffset) {
           applyNativeDocumentScrollAxis(
             document.scroll,
             action.destination.dy,

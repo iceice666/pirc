@@ -6300,12 +6300,16 @@ class NativeHtmlViewportController {
   Object? _fragmentOwner;
   NativeDocumentFragmentIndex? _fragments;
   Object? _nativeRevealOwner;
-  NativeFragmentRevealResult Function(String?, NativeFragmentRevealPhase)?
+  NativeFragmentRevealResult Function(String?, NativeFragmentRevealPhase, bool)?
   _nativeReveal;
   String? lastFragmentDifference;
   void bindNativeReveal(
     Object owner,
-    NativeFragmentRevealResult Function(String?, NativeFragmentRevealPhase)?
+    NativeFragmentRevealResult Function(
+      String?,
+      NativeFragmentRevealPhase,
+      bool,
+    )?
     reveal,
   ) {
     if (reveal == null && !identical(owner, _nativeRevealOwner)) return;
@@ -6358,11 +6362,44 @@ class NativeHtmlViewportController {
   @visibleForTesting
   int get completedFragmentReveals => _completedFragmentReveals;
 
+  /// Restore reading position after the destination's native layout settles.
+  /// A target style change may otherwise anchor-compensate an earlier jump.
+  Future<bool> restoreScrollOffset(
+    ScrollController scroll,
+    double offset, {
+    bool Function()? isCurrent,
+  }) async {
+    for (var attempt = 0; attempt < 128; attempt++) {
+      if (isCurrent?.call() == false) return false;
+      final handler = _nativeReveal;
+      if (scroll.hasClients &&
+          scroll.position.hasContentDimensions &&
+          (handler == null ||
+              handler(null, NativeFragmentRevealPhase.prepare, false) ==
+                  NativeFragmentRevealResult.handled)) {
+        scroll.jumpTo(offset.clamp(0, scroll.position.maxScrollExtent));
+        return true;
+      }
+      WidgetsBinding.instance.ensureVisualUpdate();
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    // Some static documents contain boxes outside anchor measurement support.
+    // Retain their known native reading position and expose the missing gate.
+    lastFragmentDifference = 'history_layout_not_ready';
+    if (isCurrent?.call() != false &&
+        scroll.hasClients &&
+        scroll.position.hasContentDimensions) {
+      scroll.jumpTo(offset.clamp(0, scroll.position.maxScrollExtent));
+    }
+    return false;
+  }
+
   Future<bool> scrollToFragment(
     String fragment, {
     bool Function()? isCurrent,
     bool allowUnindexedTop = false,
     NativeDocumentFragmentTarget? retainedTarget,
+    bool preserveRootOffset = false,
   }) async {
     lastFragmentDifference = null;
     var focusPrepared = false, centerFocus = false;
@@ -6402,7 +6439,11 @@ class NativeHtmlViewportController {
             continue;
           }
           if (!focusPrepared) {
-            final ready = handler(nativeId, NativeFragmentRevealPhase.prepare);
+            final ready = handler(
+              nativeId,
+              NativeFragmentRevealPhase.prepare,
+              preserveRootOffset,
+            );
             if (ready == NativeFragmentRevealResult.unsupported) {
               lastFragmentDifference = 'unsupported_native_geometry';
               return target.anchor == null
@@ -6434,6 +6475,7 @@ class NativeHtmlViewportController {
             centerFocus
                 ? NativeFragmentRevealPhase.centered
                 : NativeFragmentRevealPhase.standard,
+            preserveRootOffset,
           );
           if (result == NativeFragmentRevealResult.handled) return true;
           if (result == NativeFragmentRevealResult.unsupported) {

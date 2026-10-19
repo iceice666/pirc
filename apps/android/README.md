@@ -667,6 +667,20 @@ It covers parser/defer/module delays, inline/DCL targets, late-load negatives,
 wheel scrolling, remounts beyond 128 frames and subsequent reflow. Loading timing,
 streaming HTML, wider image/lifecycle behavior and pixel parity remain open.
 
+Initial History API writes preserve the pending reveal across entry creation.
+Parser/DCL routing uses the VM-selected target, while load-time URL rewrites retain
+that target. Source entries captured before initial reveal keep a provisional
+snapshot for their first return. The VM records the source scroll at action time;
+later History writes preserve reading position. Traversal selects its target
+after `popstate` and before `hashchange`.
+Native nested reveal also retains an absolute root scroll issued after selection.
+Recreate the 288-profile / 880-state reference with
+`node apps/android/tool/parity/capture_document_initial_history_chromium153.mjs`;
+`integration_test/document_initial_history_test.dart` uses `/initial-history.json`.
+It covers loaded/rewrite/back/forward states, no-fragment pages, multiple writes
+and remounts. Relative-only initial scrolls, interleaved scroll/History callbacks,
+fresh-response ordering and broader focus/load timing remain in the plan.
+
 `document.scrollingElement` uses the initial HTML parser mode and native
 box/overflow measurements to select the standards root, quirks body, or null.
 `document.compatMode` is read-only. Root/body viewport metrics use the actual
