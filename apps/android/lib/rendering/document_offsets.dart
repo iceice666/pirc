@@ -2,6 +2,7 @@ import 'dart:ui' show Size, TextDirection;
 import 'document_absolute_position.dart';
 import 'document_transform.dart';
 import 'document_relative_position.dart';
+import 'document_computed_styles.dart';
 import 'package:html/dom.dart' as dom;
 
 enum NativeDocumentOffsetOrigin {
@@ -35,6 +36,7 @@ class NativeDocumentOffsetSpec {
 Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
   required dom.Document document,
   required Map<dom.Element, Map<String, String>> stylesByElement,
+  Map<String, NativeDocumentComputedStyleSpec> computedStyles = const {},
 }) {
   final result = <String, NativeDocumentOffsetSpec>{};
   final root = document.documentElement;
@@ -65,6 +67,7 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
       final spec = NativeDocumentRelativePositionSpec.parse(
         css,
         direction: TextDirection.ltr,
+        computedLengths: computedStyles[id(element)]?.lengths ?? const {},
       );
       if (spec == null) return false;
       // Nonzero relative insets need the same native block surface that the

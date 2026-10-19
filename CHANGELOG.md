@@ -37,6 +37,8 @@ The first published release with the 0.9.0 changes below (0.9.0 was tagged but i
 
 ### Fixed
 
+- Android interactive content keeps relative positioning and link hits aligned with font and viewport units.
+
 - Android Back/Forward no longer waits for a layout timeout on ready static pages.
 
 - Android initial page routing preserves document targets and history reading positions.

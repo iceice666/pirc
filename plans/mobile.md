@@ -62,10 +62,20 @@ are at `git show 7677d24:plans/mobile-audit.md`.
 - Basic `display:flow-root` sizing and the margin barrier are covered. Float
   placement/containment and negative percentage/auto flex margins are not.
 - Relative positioning supports native block/flex/grid/flow-root surfaces,
-  signed pixel/percentage physical insets and zero CSS length values. Nonzero
-  font/viewport-relative units, `calc()`, logical insets and inline fragments
-  remain unsupported. A parsed nonzero inline inset does not by itself gain
-  offset metadata. Common absolute positioning and viewport-fixed overlays are
+  signed pixel/percentage physical insets and zero CSS length values. Common
+  nonzero `em`/`rem`/`vw`/`vh` physical insets use the native cascade's reliable
+  canonical lengths, including mixed shorthand/longhands and nested relative
+  ancestors. Paint and offset support use the same result; missing font/root
+  font/viewport evidence remains unsupported rather than guessed. A separate
+  Chromium 153 corpus checks 64 phone/tablet, DPR 1/3 and theme profiles across
+  192 initial/font-change/resize states in the real fetched Flutter document.
+  It compares rectangles within 1/32 CSS px, integer offsets/parent identities
+  and computed style values exactly, two opaque screenshot samples exactly,
+  shifted/old-position clicks and retained input edits. The unchanged old-code
+  case fails by 40px. Android Sandbox/physical acceptance is not established by
+  this widget gate. Other font/viewport units, `calc()`, logical insets, inline
+  fragments and broader CSS syntax remain open. A parsed nonzero inline inset
+  does not by itself gain offset metadata. Common absolute positioning and viewport-fixed overlays are
   implemented, including native hit targets. Common 2D transformed block
   containing blocks now support absolute/local fixed children, including
   identity transforms and dynamic ownership changes. Sticky positioning, zoom,

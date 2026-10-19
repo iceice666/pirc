@@ -104,7 +104,15 @@ mutation over local HTTP on Android.
 root/body offsets, flex/grid flow slots and scroller extents with Chromium.
 The relative fetched-page tests check shifted link hits, clipped scrolling,
 resizing and retained input state; the renderer tests also verify semantics and
-flow baselines. Fixed grid rows retain their sizes in auto-height containers.
+flow baselines. Common relative `em`/`rem`/`vw`/`vh` insets also use reliable
+computed lengths for paint and offset support. Recreate their separate 64-profile
+/ 192-state reference with
+`node apps/android/tool/parity/capture_document_relative_units_chromium153.mjs`;
+`document_relative_units_test.dart` checks actual fetched-page rectangles,
+styles, offsets, opaque pixels, shifted link hits and retained drafts through
+font changes and resize. Missing length bases stay unsupported. This is a native
+widget gate; Android Sandbox and physical-device coverage remain in the plan.
+Fixed grid rows retain their sizes in auto-height containers.
 `document_computed_styles_oracle_test.dart` compares the supported style values
 with the dedicated Chromium reference. The production runtime and Android HTTP
 checks cover live read-only declarations, native dimensions and mutation fences.

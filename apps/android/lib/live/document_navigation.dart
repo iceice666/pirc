@@ -2465,6 +2465,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       layoutOffsetSpecs: nativeDocumentOffsetSpecs(
         document: styled,
         stylesByElement: result.stylesByElement,
+        computedStyles: computedStyles,
       ),
       nodes: [NativeHtmlRaw(markup)],
       authorStylesBuilder: (element) =>

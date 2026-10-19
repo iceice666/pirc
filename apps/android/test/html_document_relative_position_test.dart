@@ -89,6 +89,56 @@ void main() {
       expect(spec.resolve(containingHeight: 40), const Offset(0, 20));
     });
 
+    test(
+      'common font/viewport insets require finite canonical pixel lengths',
+      () {
+        for (final unit in ['em', 'rem', 'vw', 'vh']) {
+          final css = {'position': 'relative', 'top': '2$unit'};
+          expect(NativeDocumentRelativePositionSpec.parse(css), isNull);
+          final spec = NativeDocumentRelativePositionSpec.parse(
+            css,
+            computedLengths: {'top': '24px'},
+          );
+          expect(spec!.resolve(), const Offset(0, 24));
+          for (final invalid in ['auto', '24%', 'Infinitypx', 'NaNpx']) {
+            expect(
+              NativeDocumentRelativePositionSpec.parse(
+                css,
+                computedLengths: {'top': invalid},
+              ),
+              isNull,
+            );
+          }
+        }
+      },
+    );
+
+    test(
+      'mixed relative shorthand keeps winning physical sides and zero units',
+      () {
+        final spec = NativeDocumentRelativePositionSpec.parse(
+          {
+            'position': 'relative',
+            'inset': '1em 2rem 3vh 4vw',
+            'top': 'auto',
+            'left': '25%',
+          },
+          computedLengths: {
+            'top': 'auto',
+            'right': '48px',
+            'bottom': '30px',
+            'left': '25%',
+          },
+        );
+        expect(spec!.resolve(containingWidth: 200), const Offset(50, -30));
+        final zero = NativeDocumentRelativePositionSpec.parse(
+          {'position': 'relative', 'top': '0em'},
+          computedLengths: {'top': 'auto'},
+        );
+        expect(zero!.isNoOp, isTrue);
+      },
+    );
+
     test('retains harmless zero units, including logical zero insets', () {
       final spec = _parse({
         'position': 'relative',

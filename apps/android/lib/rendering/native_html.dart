@@ -3734,7 +3734,15 @@ class _NativeHtmlFactory extends WidgetFactory {
           return false;
         }
         if (position == 'relative' &&
-            NativeDocumentRelativePositionSpec.parse(css) == null) {
+            NativeDocumentRelativePositionSpec.parse(
+                  css,
+                  computedLengths:
+                      layoutComputedStyles()[current
+                              .attributes['data-pirc-script-id']]
+                          ?.lengths ??
+                      const {},
+                ) ==
+                null) {
           return false;
         }
         if (!_positioningBlock(current)) return false;
@@ -4031,6 +4039,10 @@ class _NativeHtmlFactory extends WidgetFactory {
     final relativePosition = NativeDocumentRelativePositionSpec.parse(
       styles,
       direction: TextDirection.ltr,
+      computedLengths:
+          layoutComputedStyles()[tree.element.attributes['data-pirc-script-id']]
+              ?.lengths ??
+          const {},
     );
     if (relativePosition != null) {
       tree.register(
