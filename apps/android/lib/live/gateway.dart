@@ -1154,6 +1154,42 @@ class LiveController extends ChangeNotifier {
     changed();
   }
 
+  /// The open chat's running/waiting delegations (snapshot `delegations`,
+  /// kept current by `delegations_changed`). Empty on older gateways.
+  List<Json> get delegations => rows(state['delegations'])
+      .where(
+        (d) =>
+            d['id'] is String &&
+            d['targetSessionId'] is String &&
+            const ['running', 'waiting_input'].contains(d['status']),
+      )
+      .toList();
+
+  /// `POST /api/delegations/:id/stop`, no lease. Throws with the gateway's
+  /// message on 404/409 (e.g. another device controls the delegated session).
+  Future<void> stopDelegation(String delegationId) =>
+      gateway.call('stopDelegation', {'delegationId': delegationId});
+
+  /// Allow or deny a relayed (`relay.`) delegation approval on [chatId]
+  /// without its control lease, then refresh the session list.
+  Future<void> answerRelayedApproval(
+    String chatId,
+    String interactionId,
+    bool confirmed,
+  ) async {
+    final account = _accountRevision;
+    await gateway.call('answerRelayed', {
+      'sessionId': chatId,
+      'interactionId': interactionId,
+      'pairingStamp': pairingStamp,
+      'confirmed': confirmed,
+    });
+    if (account == _accountRevision && !_disposed) {
+      unawaited(refreshList());
+      unawaited(attention.refresh());
+    }
+  }
+
   Future<void> refreshSession() async {
     final id = sessionId;
     if (id == null) return;

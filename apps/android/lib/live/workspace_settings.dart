@@ -120,6 +120,13 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
   String saved = '';
   int maxChars = 8000;
   int _instructionEditRevision = 0;
+  static const delegationApprovalLabels = {
+    'always': 'Ask me every time',
+    'untrusted': 'Only when the chat read outside content',
+    'never': 'Never ask',
+  };
+  static const delegationApprovalNeverWarning =
+      'A prompt injection in content the assistant reads can then start work in your workspaces without asking.';
   bool get online => workspaceOnline(widget.workspace, widget.controller.nodes);
 
   @override
@@ -473,9 +480,95 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
           'web_search': 'Web search',
         }.entries)
           capabilityToggle(e.key, e.value, cap),
+        delegationApprovalSelect(cap),
       ],
     ),
   );
+
+  /// Who must approve a delegation: only meaningful while delegation is on.
+  /// Older gateways omit the field; it then reads as `always`.
+  Widget delegationApprovalSelect(Json capabilities) {
+    final raw = '${capabilities['delegation_approval'] ?? 'always'}';
+    final value = delegationApprovalLabels.containsKey(raw) ? raw : 'always';
+    final enabled =
+        capabilities['delegation'] == true && !saving.contains('capabilities');
+    final text = webText(
+      context,
+      size: 13,
+      color: 'text.secondary',
+    ).copyWith(height: kTextHeightNone);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Delegation approval', style: text)),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Semantics(
+                  label: 'Delegation approval',
+                  enabled: enabled,
+                  child: Opacity(
+                    opacity: enabled ? 1 : .5,
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        key: const ValueKey('capability-delegation-approval'),
+                        value: value,
+                        isDense: true,
+                        isExpanded: true,
+                        style: text,
+                        borderRadius: BorderRadius.circular(10),
+                        items: [
+                          for (final e in delegationApprovalLabels.entries)
+                            DropdownMenuItem(
+                              value: e.key,
+                              child: Text(
+                                e.value,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: enabled
+                            ? (next) {
+                                if (next == null || next == value) return;
+                                mutate('capabilities', {
+                                  'capabilities': {'delegation_approval': next},
+                                }, 'Project capabilities saved.');
+                              }
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (capabilities['delegation'] != true)
+            paragraph('Applies only while delegation is allowed.')
+          else if (value == 'untrusted')
+            paragraph(
+              'Outside content: web pages, search, browser, memory search, and delegation reports since your last message.',
+            )
+          else if (value == 'never')
+            Padding(
+              key: const ValueKey('delegation-approval-warning'),
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                delegationApprovalNeverWarning,
+                style: webText(
+                  context,
+                  size: 13,
+                  color: 'status.danger',
+                ).copyWith(height: 1.55),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget capabilityToggle(String key, String label, Json capabilities) {
     final value = capabilities[key] == true;
     final enabled = !saving.contains('capabilities');

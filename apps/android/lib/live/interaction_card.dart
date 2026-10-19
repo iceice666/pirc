@@ -8,6 +8,21 @@ import 'gateway.dart';
 import 'timeline_models.dart' show instant;
 import 'web_controls.dart';
 
+/// A delegated session's confirm relayed to the chat that started it. The
+/// gateway answers these without the chat's control lease.
+bool isRelayedInteraction(Json? question) =>
+    '${question?['id'] ?? ''}'.startsWith('relay.');
+
+/// "From {sessionName} ({workspace})" for a relayed interaction, else null.
+String? relayedFromLabel(Json question) {
+  final relayed = obj(question['relayed']);
+  if (relayed['sessionId'] is! String) return null;
+  final name = '${relayed['sessionName'] ?? ''}'.trim();
+  final workspace = '${relayed['workspace'] ?? ''}'.trim();
+  return 'From ${name.isEmpty ? 'a delegated session' : name}'
+      '${workspace.isEmpty ? '' : ' ($workspace)'}';
+}
+
 /// The web InteractionCard's presentation and local answer draft. No transport.
 class NativeInteractionCard extends StatefulWidget {
   const NativeInteractionCard({
@@ -17,9 +32,13 @@ class NativeInteractionCard extends StatefulWidget {
     this.disabled = false,
     this.models = const [],
     this.initialChoice,
+    this.onOpenSession,
   });
   final Json question;
   final Future<void> Function(Json) onAnswer;
+
+  /// Opens a relayed interaction's delegated session.
+  final ValueChanged<String>? onOpenSession;
   final bool disabled;
   final List<Json> models;
   final String? initialChoice;
@@ -516,6 +535,47 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
                           ).copyWith(height: 18 / 15),
                         ),
                       ),
+                      if (relayedFromLabel(q) case final from?)
+                        Padding(
+                          key: const ValueKey('interaction-relayed-from'),
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            children: [
+                              Text(
+                                from,
+                                style: webText(
+                                  context,
+                                  size: 12,
+                                  color: 'text.muted',
+                                ).copyWith(height: 18 / 12),
+                              ),
+                              if (widget.onOpenSession != null)
+                                Semantics(
+                                  link: true,
+                                  child: GestureDetector(
+                                    key: const ValueKey(
+                                      'interaction-relayed-open',
+                                    ),
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () => widget.onOpenSession!(
+                                      '${obj(q['relayed'])['sessionId']}',
+                                    ),
+                                    child: Text(
+                                      'Open',
+                                      style: webText(
+                                        context,
+                                        size: 12,
+                                        weight: FontWeight.w500,
+                                        color: 'accent.default',
+                                      ).copyWith(height: 18 / 12),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       if (q['description'] != null)
                         SelectionArea(
                           child: Text(

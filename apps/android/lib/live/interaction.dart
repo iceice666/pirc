@@ -87,6 +87,19 @@ class _QuestionSheetState extends State<QuestionSheet> {
       question != null &&
       uncertainQuestion?['id'] == question['id'] &&
       '${uncertainQuestion?['epoch']}' == '${question['epoch']}';
+
+  /// Relayed delegation approvals are answered without the chat's control
+  /// lease (the gateway exempts `relay.` ids), so they never ask to take control.
+  bool _mayAnswer(Json q) =>
+      isRelayedInteraction(q) ||
+      (widget.embedded ? c.canWrite : lease['held'] == true);
+  void _openRelayedSession(String sessionId) {
+    if (!widget.embedded && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    unawaited(c.open(sessionId));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -457,12 +470,14 @@ class _QuestionSheetState extends State<QuestionSheet> {
       } else {
         current = next;
         // Reading a notification must not itself take control from another client.
-        final control = obj(
-          await c.gateway.call('control', {
-            'sessionId': session,
-            'acquire': false,
-          }),
-        );
+        final control = isRelayedInteraction(next)
+            ? <String, dynamic>{}
+            : obj(
+                await c.gateway.call('control', {
+                  'sessionId': session,
+                  'acquire': false,
+                }),
+              );
         if (!mounted || token != revision || !sameConversation) return;
         lease = control;
         await loadModels();
@@ -512,12 +527,15 @@ class _QuestionSheetState extends State<QuestionSheet> {
         }
         return;
       }
-      final control = obj(
-        await c.gateway.call('control', {
-          'sessionId': session,
-          'acquire': false,
-        }),
-      );
+      final relayed = isRelayedInteraction(exact);
+      final control = relayed
+          ? <String, dynamic>{}
+          : obj(
+              await c.gateway.call('control', {
+                'sessionId': session,
+                'acquire': false,
+              }),
+            );
       if (!stillCurrent()) return;
       c.state = state;
       _rememberQuestionState(state);
@@ -529,7 +547,7 @@ class _QuestionSheetState extends State<QuestionSheet> {
         handledNotice = false;
         handledMessage = _handledMessage;
         _handledQuestion = null;
-        error = control['held'] == true
+        error = relayed || control['held'] == true
             ? LiveController.describe(cause)
             : 'Control changed. Check the latest state before answering.';
       });
@@ -659,7 +677,7 @@ class _QuestionSheetState extends State<QuestionSheet> {
         _requiresManualReview ||
         !sameConversation ||
         c.connection != 'live' ||
-        !(widget.embedded ? c.canWrite : lease['held'] == true)) {
+        !_mayAnswer(q)) {
       return;
     }
     final requestController = c;
@@ -778,8 +796,9 @@ class _QuestionSheetState extends State<QuestionSheet> {
                 error != null ||
                 !sameConversation ||
                 c.connection != 'live' ||
-                !(widget.embedded ? c.canWrite : lease['held'] == true),
+                !_mayAnswer(q),
             onAnswer: (answer) => submit(answer, expectedQuestion: q),
+            onOpenSession: _openRelayedSession,
           ),
         if (error != null) WebNotice(error!, error: true),
         if (handledNotice) WebNotice(handledMessage),
@@ -787,6 +806,7 @@ class _QuestionSheetState extends State<QuestionSheet> {
             !loading &&
             q != null &&
             !_requiresManualReview &&
+            !isRelayedInteraction(q) &&
             lease['held'] != true) ...[
           Text(
             'Controlled by ${lease['holderName'] ?? lease['holderClientId'] ?? 'another device'}',

@@ -23,6 +23,8 @@ sealed interface TimelineEvent {
     data class StatusUpdated(val key: String, val text: String?) : TimelineEvent
     data class ApprovalModeChanged(val mode: String) : TimelineEvent
     data class SessionRenamed(val name: String) : TimelineEvent
+    /** The chat's full list of running/waiting delegations. */
+    data class DelegationsChanged(val delegations: List<ChatDelegation>) : TimelineEvent
     /** The session was deleted; this is terminal and must not trigger a snapshot refetch. */
     data object SessionDeleted : TimelineEvent
     /** Side-panel data changed (memory, background, team, git); refetch lazily. */
@@ -156,6 +158,8 @@ fun normalizeEvent(raw: JsonElement, now: () -> Long = System::currentTimeMillis
         }
         type == "session_renamed" && data["name"].string != null -> TimelineEvent.SessionRenamed(data["name"].string!!)
         type == "session_deleted" -> TimelineEvent.SessionDeleted
+        type == "delegations_changed" && data["delegations"].array != null ->
+            TimelineEvent.DelegationsChanged(chatDelegations(data["delegations"]))
         type == "runner_stderr" -> TimelineEvent.Noop
         type in SNAPSHOT_EVENTS -> TimelineEvent.Reset("cursor_expired")
         else -> TimelineEvent.Reset("epoch_changed")
@@ -166,6 +170,33 @@ fun normalizeEvent(raw: JsonElement, now: () -> Long = System::currentTimeMillis
         sequence = raw["sequence"].number ?: 0,
         cursor = "${raw["epoch"].text ?: "0"}:${raw["sequence"].text ?: "0"}",
         event = event,
+    )
+}
+
+/** A chat's active delegations; malformed items are dropped, as on the web. */
+fun chatDelegations(raw: JsonElement?): List<ChatDelegation> =
+    raw.array.orEmpty().mapNotNull { item ->
+        val id = item["id"].string ?: return@mapNotNull null
+        val target = item["targetSessionId"].string ?: return@mapNotNull null
+        val status = item["status"].string?.takeIf { it == "running" || it == "waiting_input" }
+            ?: return@mapNotNull null
+        ChatDelegation(
+            id = id,
+            title = item["title"].string ?: "",
+            workspace = item["workspace"].string ?: "",
+            status = status,
+            dispatch = if (item["dispatch"].string == "auto") "auto" else "approved",
+            targetSessionId = target,
+        )
+    }
+
+private fun relayedFrom(raw: JsonElement?): RelayedFrom? {
+    val sessionId = raw["sessionId"].string ?: return null
+    return RelayedFrom(
+        sessionId = sessionId,
+        sessionName = raw["sessionName"].string ?: "",
+        workspace = raw["workspace"].string ?: "",
+        delegationId = raw["delegationId"].string ?: "",
     )
 }
 
@@ -181,6 +212,7 @@ private fun interaction(raw: JsonElement): Interaction {
         description = request["message"].text,
         expiresAt = raw["expiresAt"].number,
         status = raw["status"].text ?: "pending",
+        relayed = relayedFrom(request["relayed"]),
     )
     return when (kind) {
         "select" -> base.copy(
@@ -234,6 +266,7 @@ fun snapshotState(raw: JsonElement, now: () -> Long = System::currentTimeMillis)
         // A snapshot taken mid-stream carries the live partial separately.
         messages = if (partial != null) messages.filter { it.id != partial.id } + partial else messages,
         interactions = raw["interactions"].array.orEmpty().map(::interaction),
+        delegations = chatDelegations(raw["delegations"]),
         queue = queue(raw["queue"]["steering"], raw["queue"]["followUp"]),
         cursor = "${watermark["epoch"].text ?: "0"}:${watermark["sequence"].text ?: "0"}",
         runnerEpoch = watermark["epoch"].text ?: sessionJson["runnerEpoch"].text ?: "0",
@@ -343,6 +376,7 @@ fun SessionState.reduce(envelope: EventEnvelope, now: () -> Long = System::curre
         }
         is TimelineEvent.QueueUpdated -> base.copy(queue = event.queue)
         is TimelineEvent.SessionRenamed -> base.copy(session = session.copy(name = event.name))
+        is TimelineEvent.DelegationsChanged -> base.copy(delegations = event.delegations)
     }
 }
 

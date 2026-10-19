@@ -147,4 +147,70 @@ class GatewayContractTest {
         assertEquals(PircJson.parseToJsonElement("""{"confirmed":false}"""), checkedAnswer(state,"memory:p:3","0",mapOf("confirmed" to false)).rpc())
     }
 
+    private val relayedSnapshot = PircJson.parseToJsonElement("""{"session":{"id":"chat","workspaceId":"w","name":"Chat","runnerEpoch":"4"},"watermark":{"epoch":"4","sequence":2},
+        "interactions":[{"id":"relay.d1.interaction_7","rpcId":"relay.d1.interaction_7","sessionId":"chat","runnerEpoch":0,"kind":"confirm","status":"pending",
+          "request":{"method":"confirm","title":"Run rm -rf build?","message":"Auto mode stopped a dangerous command","confirmLabel":"Allow",
+            "relayed":{"sessionId":"delegated","sessionName":"Fix build","workspace":"repo on mac","delegationId":"d1"}},"createdAt":1}],
+        "delegations":[{"id":"d1","title":"Fix build","workspace":"repo on mac","status":"waiting_input","dispatch":"auto","targetSessionId":"delegated"},
+          {"id":"d2","title":"Done","workspace":"x","status":"completed","targetSessionId":"t"},
+          {"id":"d3","title":"No target","workspace":"x","status":"running"},
+          {"id":"d4","title":"Approved","workspace":"lib on pi","status":"running","targetSessionId":"t4"}]}""")
+
+    @Test fun snapshotParsesRelayedApprovalsAndActiveDelegations() {
+        val state = snapshotState(relayedSnapshot)
+        val q = state.interactions.single()
+        assertEquals(RelayedFrom("delegated", "Fix build", "repo on mac", "d1"), q.relayed)
+        assertEquals("0", q.runnerEpoch)
+        assertEquals(
+            mapOf("sessionId" to "delegated", "sessionName" to "Fix build", "workspace" to "repo on mac", "delegationId" to "d1"),
+            q.wire()["relayed"],
+        )
+        // Malformed or finished delegations are dropped, as on the web.
+        assertEquals(
+            listOf(
+                ChatDelegation("d1", "Fix build", "repo on mac", "waiting_input", "auto", "delegated"),
+                ChatDelegation("d4", "Approved", "lib on pi", "running", "approved", "t4"),
+            ),
+            state.delegations,
+        )
+        assertEquals(listOf("d1", "d4"), (state.wire()["delegations"] as List<*>).map { (it as Map<*, *>)["id"] })
+        // An ordinary question has no relay, and older snapshots no delegations.
+        assertNull(question.wire()["relayed"])
+        assertEquals(emptyList<Any>(), state().wire()["delegations"])
+    }
+
+    @Test fun delegationsChangedReplacesTheListWithoutASnapshot() {
+        val state = snapshotState(relayedSnapshot)
+        val event = normalizeEvent(PircJson.parseToJsonElement("""{"type":"delegations_changed","sessionId":"chat","epoch":"4","sequence":3,
+            "data":{"delegations":[{"id":"d4","title":"Approved","workspace":"lib on pi","status":"running","dispatch":"approved","targetSessionId":"t4"}]}}"""))
+        val next = state.reduce(event)
+        assertFalse(next.needsSnapshot)
+        assertEquals(listOf("d4"), next.delegations.map { it.id })
+        assertEquals("4:3", next.cursor)
+        val cleared = next.reduce(normalizeEvent(PircJson.parseToJsonElement(
+            """{"type":"delegations_changed","sessionId":"chat","epoch":"4","sequence":4,"data":{"delegations":[]}}""")))
+        assertEquals(emptyList<ChatDelegation>(), cleared.delegations)
+    }
+
+    @Test fun relayedConfirmIsCheckedLikeAnyOtherAndAnswersWithConfirmedOnly() {
+        val state = snapshotState(relayedSnapshot)
+        val id = "relay.d1.interaction_7"
+        assertEquals(PircJson.parseToJsonElement("""{"confirmed":true}"""), checkedAnswer(state, id, "0", mapOf("confirmed" to true)).rpc())
+        assertEquals(PircJson.parseToJsonElement("""{"confirmed":false}"""), checkedAnswer(state, id, "0", mapOf("confirmed" to false)).rpc())
+        try { checkedAnswer(state, id, "4", mapOf("confirmed" to true)); fail("the relay's own epoch must match") }
+        catch (e: ApiException) { assertEquals(409, e.status) }
+    }
+
+    @Test fun relayedAnswersNeverAcquireTheControlLease() = kotlinx.coroutines.runBlocking {
+        var acquisitions = 0
+        val acquire: suspend () -> Long = { acquisitions++; 7L }
+        assertNull(answerGeneration("relay.d1.interaction_7", acquire))
+        assertEquals(0, acquisitions)
+        assertEquals(7L, answerGeneration("interaction_7", acquire))
+        assertEquals(7L, answerGeneration("memory:p:3", acquire))
+        assertEquals(2, acquisitions)
+        assertTrue(isRelayedInteraction("relay.x"))
+        assertFalse(isRelayedInteraction("interaction_relay.x"))
+    }
+
 }

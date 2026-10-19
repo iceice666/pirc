@@ -228,17 +228,25 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
         )
     }
 
-    open suspend fun answer(sessionId: String, interactionId: String, clientId: String, generation: Long, answer: InteractionAnswer) {
+    /**
+     * A null [generation] answers without the control lease; the gateway accepts
+     * that only for relayed (`relay.`) delegation approvals.
+     */
+    open suspend fun answer(sessionId: String, interactionId: String, clientId: String, generation: Long?, answer: InteractionAnswer) {
         send(
             "POST",
             "${session(sessionId)}/interactions/${interactionId.urlSegment()}/answer",
             buildJsonObject {
                 put("clientId", clientId)
-                put("generation", generation)
+                if (generation != null) put("generation", generation)
                 put("answer", answer.rpc())
             },
         )
     }
+
+    /** Stop a delegation's run; no lease. 409 when another device controls it or nothing runs. */
+    open suspend fun stopDelegation(delegationId: String): String? =
+        send("POST", "/api/delegations/${delegationId.urlSegment()}/stop", buildJsonObject {})["status"].text
 
     /**
      * Store a file on the session's node. Images ride in the model's context;

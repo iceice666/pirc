@@ -118,5 +118,36 @@ class ControlTest {
         }
     }
 
+    @Test
+    fun relayedAnswersOmitTheGenerationAndStopNeedsNoLease() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val api = PircApi(Pairing(server.url("/").toString().trimEnd('/'), "pirc_dev_" + "e".repeat(43)))
+            server.enqueue(MockResponse.Builder().code(204).build())
+            server.enqueue(MockResponse.Builder().code(200).body("""{"status":"stopping"}""").build())
+            server.enqueue(MockResponse.Builder().code(409).body("""{"error":{"code":"conflict","message":"Another device controls the delegated session"}}""").build())
+
+            api.answer("chat", "relay.d1.interaction_7", me, null, InteractionAnswer.Confirm(true))
+            val answer = server.takeRequest()
+            assertEquals("/api/sessions/chat/interactions/relay.d1.interaction_7/answer", answer.url.encodedPath)
+            val body = PircJsonObject(answer.body!!.utf8())
+            assertEquals(null, body["generation"])
+            assertEquals("""{"confirmed":true}""", body["answer"].toString())
+
+            assertEquals("stopping", api.stopDelegation("d1"))
+            val stop = server.takeRequest()
+            assertEquals("POST", stop.method)
+            assertEquals("/api/delegations/d1/stop", stop.url.encodedPath)
+
+            try {
+                api.stopDelegation("d1")
+                fail("expected ApiException")
+            } catch (error: ApiException) {
+                assertEquals(409, error.status)
+                assertEquals("Another device controls the delegated session", error.message)
+            }
+        }
+    }
+
     private fun PircJsonObject(text: String): JsonObject = PircJson.parseToJsonElement(text).jsonObject
 }

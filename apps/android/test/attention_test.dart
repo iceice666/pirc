@@ -269,6 +269,55 @@ void main() {
     },
   );
   testWidgets(
+    'a delegated session waiting on a relayed approval offers Allow and Deny',
+    (t) async {
+      t.view.devicePixelRatio = 1;
+      t.view.physicalSize = const Size(390, 844);
+      addTearDown(t.view.reset);
+      final g = AttentionGateway();
+      g.data['sessions'] = [
+        {
+          ...rows(g.data['sessions']).first,
+          'origin': {
+            'kind': 'delegation',
+            'delegationId': 'd1',
+            'fromSessionId': 'chat',
+            'title': 'Fix build',
+            'status': 'waiting_input',
+            'approval': {
+              'sessionId': 'chat',
+              'interactionId': 'relay.d1.interaction_7',
+              'title': 'Run rm -rf build?',
+              'message': 'Auto mode stopped a dangerous command',
+            },
+          },
+        },
+        ...rows(g.data['sessions']).skip(1),
+      ];
+      g.handler = (m, args) async =>
+          m == 'answerRelayed' ? {} : g.normal(m, args);
+      final c = LiveController(g)..mode = 'work';
+      await t.pumpWidget(MobileApp(theme: theme, controller: c));
+      await t.pumpAndSettle();
+      expect(find.text('Run rm -rf build?'), findsOneWidget);
+      expect(find.text('Reply'), findsOneWidget);
+      expect(find.text('Deny'), findsOneWidget);
+      await t.tap(find.text('Allow'));
+      await t.pumpAndSettle();
+      final call = g.calls.singleWhere((c) => c.$1 == 'answerRelayed').$2;
+      expect(call['sessionId'], 'chat');
+      expect(call['interactionId'], 'relay.d1.interaction_7');
+      expect(call['confirmed'], true);
+      // No lease is taken to answer it.
+      expect(
+        g.calls.where((c) => c.$1 == 'control' && c.$2['acquire'] == true),
+        isEmpty,
+      );
+      await t.pumpWidget(const SizedBox());
+      await g.stream.close();
+    },
+  );
+  testWidgets(
     'forget requires the second inline click; restore history sends the selected version',
     (t) async {
       final g = AttentionGateway(), c = LiveController(g);

@@ -93,6 +93,31 @@ data class InteractionOption(val value: String, val label: String, val descripti
 /** Optional checkbox on a confirmation, used for delegated user requests. */
 data class UserRequestChoice(val label: String, val checked: Boolean)
 
+/** Where a relayed (`relay.`) confirm comes from: the delegated session that waits on it. */
+data class RelayedFrom(
+    val sessionId: String,
+    val sessionName: String,
+    val workspace: String,
+    val delegationId: String,
+)
+
+/** A running or waiting delegation a chat started (snapshot `delegations`, `delegations_changed`). */
+data class ChatDelegation(
+    val id: String,
+    val title: String,
+    /** Label `repo on node`. */
+    val workspace: String,
+    /** `running` or `waiting_input`. */
+    val status: String,
+    /** `auto` or `approved`. */
+    val dispatch: String,
+    val targetSessionId: String,
+)
+
+/** Relayed interactions need no control lease: the gateway answers them for any viewer. */
+const val RELAY_INTERACTION_PREFIX = "relay."
+fun isRelayedInteraction(id: String) = id.startsWith(RELAY_INTERACTION_PREFIX)
+
 data class Interaction(
     val id: String,
     val runnerEpoch: String,
@@ -113,6 +138,8 @@ data class Interaction(
     val modelChoice: kotlinx.serialization.json.JsonObject? = null,
     val language: String? = null,
     val userRequestChoice: UserRequestChoice? = null,
+    /** Set on a delegated session's confirm relayed to the chat that started it. */
+    val relayed: RelayedFrom? = null,
 )
 
 /** One session as a client sees it: snapshot plus every event applied since. */
@@ -134,6 +161,8 @@ data class SessionState(
     val statuses: Map<String, String> = emptyMap(),
     /** The running agent's OS sandbox; null with no runner. */
     val sandbox: SandboxStatus? = null,
+    /** Running or waiting delegations this chat started; empty on older gateways. */
+    val delegations: List<ChatDelegation> = emptyList(),
     /** The events can no longer be applied (epoch changed, reset): fetch a new snapshot. */
     val needsSnapshot: Boolean = false,
 )

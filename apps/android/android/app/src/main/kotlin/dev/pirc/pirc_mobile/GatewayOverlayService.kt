@@ -11,6 +11,7 @@ import android.view.*
 import android.widget.*
 import dev.pirc.android.core.ApiException
 import dev.pirc.android.core.timeline.Interaction
+import dev.pirc.android.core.timeline.isRelayedInteraction
 import kotlinx.coroutines.*
 import org.json.JSONObject
 
@@ -284,10 +285,12 @@ class GatewayOverlayService: Service() {
                     next.kind !in listOf("confirm","select") || next.multiple || next.options.size > 3 ||
                         next.modelChoice != null || next.userRequestChoice != null -> status="請開啟完整對話輸入答案"
                     else -> {
-                        val lease = runtime.lease(sessionId, acquire=true)
+                        // A relayed delegation approval needs no control lease.
+                        val relayed = isRelayedInteraction(next.id)
+                        val lease = if (relayed) null else runtime.lease(sessionId, acquire=true)
                         if (!isCurrentRefresh()) return@launch
-                        ready=lease["held"]==true
-                        status=if(ready) "控制：此裝置" else "控制權在其他裝置，請開啟完整對話確認是否接管"
+                        ready=relayed || lease?.get("held")==true
+                        status=if(relayed) "來自 ${next.relayed?.sessionName?.takeIf { it.isNotBlank() } ?: "委派的工作階段"}" else if(ready) "控制：此裝置" else "控制權在其他裝置，請開啟完整對話確認是否接管"
                         if(ready && next.expiresAt!=null) expiryJob=scope.launch expiry@{
                             delay((next.expiresAt!!-System.currentTimeMillis()).coerceAtLeast(1))
                             if (!isCurrentRefresh()) return@expiry

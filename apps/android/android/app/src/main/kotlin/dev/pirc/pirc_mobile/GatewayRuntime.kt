@@ -39,6 +39,7 @@ fun SessionState.wire(): Map<String, Any?> = mapOf(
     "sandbox" to sandbox?.let { mapOf("active" to it.active, "reason" to it.reason) },
     "queue" to queue.map { mapOf("id" to it.id, "kind" to it.kind, "content" to it.content, "index" to it.index) },
     "interactions" to interactions.map { it.wire() },
+    "delegations" to delegations.map { it.wire() },
     "messages" to messages.map { m -> mapOf(
         "id" to m.id, "role" to m.role, "content" to m.content, "createdAt" to m.createdAt,
         "entryId" to m.entryId,
@@ -63,7 +64,19 @@ fun Interaction.wire() = mapOf("id" to id, "epoch" to runnerEpoch, "kind" to kin
     "multiple" to multiple, "placeholder" to placeholder, "initialValue" to initialValue,
     "confirmLabel" to confirmLabel, "cancelLabel" to cancelLabel, "modelChoice" to modelChoice.wire(), "language" to language,
     "userRequestChoice" to userRequestChoice?.let { mapOf("label" to it.label, "checked" to it.checked) },
-    "options" to options.map { mapOf("value" to it.value, "label" to it.label, "description" to it.description) })
+    "options" to options.map { mapOf("value" to it.value, "label" to it.label, "description" to it.description) },
+    "relayed" to relayed?.let { mapOf("sessionId" to it.sessionId, "sessionName" to it.sessionName,
+        "workspace" to it.workspace, "delegationId" to it.delegationId) })
+fun ChatDelegation.wire() = mapOf("id" to id, "title" to title, "workspace" to workspace, "status" to status,
+    "dispatch" to dispatch, "targetSessionId" to targetSessionId)
+
+/**
+ * The control generation an answer must carry, or null for a relayed (`relay.`)
+ * delegation approval: the gateway answers those without the chat's lease, so
+ * acquiring it would only take control away from another device.
+ */
+suspend fun answerGeneration(interactionId: String, acquire: suspend () -> Long): Long? =
+    if (isRelayedInteraction(interactionId)) null else acquire()
 
 /** Recheck the exact question against a fresh snapshot. The session cursor epoch
  * belongs to the daemon stream and may differ from the node interaction epoch.
@@ -1145,7 +1158,7 @@ class GatewayRuntime private constructor(val context: Context) {
         if (uncertain.getBoolean(key, false)) throw ApiException(409, "outcome_unknown", "先前回答結果不明，請檢查最新狀態，不可重送")
         val before = snapshot(id)
         val answer = checkedAnswer(before, interactionId, epoch, data)
-        val generation = generation(id)
+        val generation = answerGeneration(interactionId) { generation(id) }
         // Persist before the POST: process death must not turn uncertainty into a retry.
         if (!uncertain.edit().putBoolean(key, true).commit())
             throw ApiException(503, "outcome_unknown", "無法保存回答狀態，回答未送出；請檢查最新狀態")
@@ -1160,6 +1173,21 @@ class GatewayRuntime private constructor(val context: Context) {
         }
         snapshot(id).wire()
     }
+    /**
+     * Allow or deny a relayed delegation approval from outside its chat (the
+     * session list's "Needs you"). The exact question is read from the chat's
+     * fresh snapshot, then answered like any other, without the lease.
+     */
+    suspend fun answerRelayed(chatId: String, interactionId: String, pairingStamp: String, confirmed: Boolean): Map<String, Any?> {
+        if (!isRelayedInteraction(interactionId))
+            throw ApiException(400, "invalid_answer", "Not a relayed approval")
+        val question = snapshot(chatId).interactions.find { it.id == interactionId }
+            ?: throw ApiException(409, "stale", "問題已不存在，請重新整理")
+        return answer(chatId, interactionId, question.runnerEpoch, pairingStamp, mapOf("confirmed" to confirmed))
+    }
+    /** `POST /api/delegations/:id/stop`; no lease. */
+    suspend fun stopDelegation(delegationId: String): Map<String, Any?> =
+        mapOf("status" to api().stopDelegation(delegationId))
     suspend fun reconcileAnswer(id: String, interactionId: String, epoch: String, pairingStamp: String): Map<String, Any?> = answerLock.withLock {
         validatePairingStamp(pairingStamp)
         // Do not clear the durable uncertainty marker until this fresh read has

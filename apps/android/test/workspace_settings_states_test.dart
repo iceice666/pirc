@@ -384,4 +384,78 @@ void main() {
     await finish(t, c, g);
     handle.dispose();
   });
+  testWidgets('delegation approval select saves the policy and warns on never', (
+    t,
+  ) async {
+    final g = FakeGateway();
+    final patches = <dynamic>[];
+    var policy = 'always';
+    g.handler = (_, a) async {
+      final path = '${a['path']}';
+      if (path.endsWith('/instructions')) return instructions('Instructions');
+      if (a['method'] == 'PATCH') {
+        patches.add(a['body']);
+        policy = '${(a['body'] as Map)['capabilities']['delegation_approval']}';
+      }
+      return {
+        'capabilities': {
+          ...capabilities['capabilities']!,
+          'delegation_approval': policy,
+        },
+      };
+    };
+    final c = await mount(t, g, chat);
+    t.view.physicalSize = const Size(390, 1800);
+    await t.pumpAndSettle();
+    expect(find.text('Delegation approval'), findsOneWidget);
+    expect(find.text('Ask me every time'), findsOneWidget);
+
+    await t.ensureVisible(
+      find.byKey(const ValueKey('capability-delegation-approval')),
+    );
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const ValueKey('capability-delegation-approval')));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Never ask').last);
+    await t.pumpAndSettle();
+    expect(patches, [
+      {
+        'capabilities': {'delegation_approval': 'never'},
+      },
+    ]);
+    expect(
+      find.text(
+        'A prompt injection in content the assistant reads can then start work in your workspaces without asking.',
+      ),
+      findsOneWidget,
+    );
+    await finish(t, c, g);
+  });
+  testWidgets('delegation approval is disabled while delegation is off', (
+    t,
+  ) async {
+    final g = FakeGateway();
+    g.handler = (_, a) async => '${a['path']}'.endsWith('/instructions')
+        ? instructions('Instructions')
+        // An older gateway: no delegation_approval field, read as `always`.
+        : {
+            'capabilities': {
+              ...capabilities['capabilities']!,
+              'delegation': false,
+            },
+          };
+    final c = await mount(t, g, chat);
+    t.view.physicalSize = const Size(390, 1800);
+    await t.pumpAndSettle();
+    final select = t.widget<DropdownButton<String>>(
+      find.byKey(const ValueKey('capability-delegation-approval')),
+    );
+    expect(select.value, 'always');
+    expect(select.onChanged, isNull);
+    expect(
+      find.text('Applies only while delegation is allowed.'),
+      findsOneWidget,
+    );
+    await finish(t, c, g);
+  });
 }

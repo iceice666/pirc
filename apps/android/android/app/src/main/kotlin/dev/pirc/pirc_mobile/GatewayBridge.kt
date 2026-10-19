@@ -886,6 +886,9 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             optionalString("watchTag"),
                         )
                         "commandStatus" -> runtime.unknownCommand(str("sessionId"))
+                        "stopDelegation" -> runtime.stopDelegation(str("delegationId"))
+                        "answerRelayed" -> runtime.answerRelayed(str("sessionId"), str("interactionId"), str("pairingStamp"),
+                            args["confirmed"] as? Boolean ?: throw IllegalArgumentException("confirmed must be a boolean"))
                         "acknowledgeCommand" -> { runtime.acknowledgeCommand(str("sessionId")); null }
                         "recordingOpen" -> recordings.open(str("sessionId"), str("path"))
                         "recordingControl" -> recordings.control((args["id"] as Number).toLong(), str("action"), (args["position"] as? Number)?.toLong(), (args["volume"] as? Number)?.toDouble(), (args["rate"] as? Number)?.toDouble())

@@ -339,7 +339,7 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
           'The repositories this project is about. Its assistant lists them first, hands a task to the linked workspace when only one is linked and the task names none, and searches their notes (and those of other clones of the same repository) first.',
         ),
         _description(
-          'A link is not a permission: you still approve every delegation, and the assistant can still reach workspaces that are not linked. Chats already open keep the workspace list they started with.',
+          "A link is not a permission: delegations to linked and unlinked workspaces alike follow the project's Delegation approval setting, and the assistant can still reach workspaces that are not linked. Chats already open keep the workspace list they started with.",
         ),
         if (loading)
           Padding(

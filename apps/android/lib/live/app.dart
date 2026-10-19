@@ -22,6 +22,7 @@ import 'conversation_header.dart';
 import 'conversation_empty.dart';
 import 'conversation_composer.dart';
 import 'conversation_timeline.dart';
+import 'delegations_strip.dart';
 import 'conversation_jump_latest.dart';
 import 'conversation_earlier_messages.dart';
 import 'timeline_models.dart';
@@ -1618,6 +1619,14 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
                                             embedded: true,
                                             onLayout: _keepBottomAfterLayout,
                                           ),
+                                        DelegationsStrip(
+                                          key: ValueKey(
+                                            '${c.sessionId}:delegations',
+                                          ),
+                                          delegations: c.delegations,
+                                          onOpen: (id) => c.open(id),
+                                          onStop: c.stopDelegation,
+                                        ),
                                       ],
                                     ),
                                   ),
