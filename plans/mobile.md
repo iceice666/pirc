@@ -41,6 +41,9 @@ are available from Git through Historical records, not repeated here.
 
 ## Deferred presentation and compatibility boundaries
 
+The local App branch is integrated with origin/main `4bfc083d` (0.9.0, node
+protocol 13). Its gateway-owned modes and delegation approvals are included;
+those new features still need the real-account/device acceptance listed above.
 The frozen visual corpus is web revision `bd3d909`. Small visual differences,
 uncommon syntax and the legacy audit's fine-grained layout/style findings remain
 deferred, not verified pixel parity. New 0.6.x features, including native project

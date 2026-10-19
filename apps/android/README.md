@@ -39,10 +39,11 @@ Production application identity and store distribution remain release decisions;
 do not treat these builds as store releases. No signing key, pairing credential
 or local APK belongs in Git.
 
-Upgrade the gateway and every node together. The 0.6.x server uses node protocol
-11; this protocol is between the servers, not the app's REST connection. The app's
-management grants and cross-device interaction synchronization need the matching
-gateway/web update from this change.
+Upgrade the gateway and every node together. The 0.9.x server uses node protocol
+13; this protocol is between the servers, not the app's REST connection. The app's
+mode catalog, delegation approvals, management grants and cross-device interaction
+synchronization need the matching gateway/web update. See the
+[upgrade notes](../../docs/deploy/upgrades.md).
 
 ## Workspace modes
 
