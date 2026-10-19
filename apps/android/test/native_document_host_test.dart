@@ -368,13 +368,31 @@ void main() {
       final calls = gateway.calls.length;
 
       await hostKey.currentState!.back();
-      await tester.pumpAndSettle();
+      final backFrames = await tester.pumpAndSettle();
+      expect(
+        backFrames,
+        lessThan(20),
+        reason: 'Ready layout must not wait for the bounded fallback.',
+      );
+      expect(
+        document.viewport.lastFragmentDifference,
+        isNot('history_layout_not_ready'),
+      );
       expect(window.current, same(entryA));
       expect(document.scroll.offset, closeTo(offsetA, 0.5));
       expect(gateway.calls, hasLength(calls));
 
       await hostKey.currentState!.forward();
-      await tester.pumpAndSettle();
+      final forwardFrames = await tester.pumpAndSettle();
+      expect(
+        forwardFrames,
+        lessThan(20),
+        reason: 'Ready layout must not wait for the bounded fallback.',
+      );
+      expect(
+        document.viewport.lastFragmentDifference,
+        isNot('history_layout_not_ready'),
+      );
       expect(window.current, same(entryB));
       expect(document.scroll.offset, closeTo(offsetB, 0.5));
       expect(gateway.calls, hasLength(calls));

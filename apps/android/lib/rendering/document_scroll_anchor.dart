@@ -62,6 +62,9 @@ class RenderNativeDocumentScrollAnchorViewport extends RenderProxyBox {
 
   void _bind() {
     controller.addListener(_scrolled);
+    // A child can finish a deferred layout without relaying out this viewport.
+    // Recheck after its measured frame arrives, including static documents.
+    measurements.addListener(_requestCheck);
     elements?.bindAnchoring(
       this,
       nodes: () => data.nodes,
@@ -78,6 +81,7 @@ class RenderNativeDocumentScrollAnchorViewport extends RenderProxyBox {
 
   void _unbind() {
     controller.removeListener(_scrolled);
+    measurements.removeListener(_requestCheck);
     elements?.unbindAnchoring(this);
     _state.reset();
   }

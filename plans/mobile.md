@@ -31,11 +31,13 @@ are available from Git through Historical records, not repeated here.
       separate from synthetic management-consent tests.
 - [ ] **Remote background push:** real relay/delivery remains unverified. The
       user declined third-party relay testing; do not run it without authorization.
-- [ ] **Distribution decisions:** production signing and sideload-only versus
-      F-Droid/Play; token rotation before the 30-day expiry versus monthly
-      re-pairing, including the near-expiry warning (A7); native Context inspector
-      later or never. Preview APKs use a separate application ID and local test
-      key, not production signing.
+- [ ] **Distribution decisions:** sideload-only versus F-Droid/Play and the
+      production application identity; token rotation before the 30-day expiry
+      versus monthly re-pairing, including the near-expiry warning (A7); native
+      Context inspector later or never. A dedicated release key is configured in
+      origin's Actions secrets and Release setup passed on 2026-10-19. CI keeps
+      the preview application ID; migrating from the old debug-signed beta needs
+      uninstall/reinstall. Local preview builds still use the local debug key.
 
 ## Deferred presentation and compatibility boundaries
 
@@ -455,9 +457,14 @@ base. A scroll before selection still yields to the initial fragment. Traversal 
 URL/state before `popstate`, selects the target after that callback, then emits
 `hashchange` when applicable. Reading-position restoration also waits for destination
 layout and anchor compensation, avoiding an extra shift when `:target` changes
-height. Static pages whose anchor boxes cannot be measured retain their native
-reading-position fallback after the existing bounded layout wait and record
-`history_layout_not_ready`; their restoration timing is not certified.
+height. Root anchoring also listens for completed native measurement frames:
+a deferred child layout can become ready without relaying out its viewport.
+The retained static-HTML Back/Forward regression checks both saved offsets and
+completion in fewer than 20 test pumps, without `history_layout_not_ready`; the
+old path waited 130 pumps. This is a host lifecycle regression, not a browser
+animation/timing guarantee or new Android-device acceptance. Truly unavailable
+geometry still uses the bounded native reading-position fallback and records
+`history_layout_not_ready`.
 
 The Chromium 153 initial-History corpus covers 288 phone/tablet, DPR 1/3 and theme
 profiles and 880 loaded/rewrite/back/forward states. It checks parser, DCL and load
