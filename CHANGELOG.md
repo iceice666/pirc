@@ -6,6 +6,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
+- Android scripted dialog forms close locally and preserve return values, validation and input state across view replacement.
 - Android interactive pages keep images and script-updated form values consistent when switching views.
 - Android script file selection survives document view replacement and updates the active file controls.
 - Android static documents retain form inputs and selected files when reopening the same live document view.

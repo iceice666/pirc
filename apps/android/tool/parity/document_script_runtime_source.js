@@ -959,6 +959,58 @@
     inserted: root => initializeDetails(root, false)
   };
 
+  // Dialog form closing is local DOM state, never a navigation request. Modal
+  // display still requires a native top layer; do not emulate it as a div.
+  const dialogReturnValues = new WeakMap();
+  const closingDialogs = new WeakSet();
+  class PircHTMLDialogElement extends HTMLElement {
+    constructor(ownerDocument, localName = 'dialog') {
+      if (!ownerDocument) throw new TypeError('Illegal constructor');
+      super(ownerDocument, localName);
+    }
+    get open() { return this.hasAttribute('open'); }
+    set open(value) { this.toggleAttribute('open', Boolean(value)); }
+    get returnValue() { return dialogReturnValues.get(this) || ''; }
+    set returnValue(value) {
+      if (typeof value === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
+      dialogReturnValues.set(this, String(value));
+    }
+    close(value) { return closeDocumentDialog(this, value); }
+  }
+
+  function closeDocumentDialog(element, value) {
+    if (!(element instanceof PircHTMLDialogElement)) throw new TypeError('Illegal invocation');
+    let converted;
+    if (value !== undefined) {
+      if (typeof value === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
+      converted = String(value);
+    }
+    if (!element.hasAttribute('open') || closingDialogs.has(element)) return;
+    const state = activeState;
+    closingDialogs.add(element);
+    try {
+      const before = new PircToggleEvent('beforetoggle', {oldState: 'open', newState: 'closed'});
+      defineEventMember(before, 'isTrusted', true);
+      element.dispatchEvent(before);
+      if (!element.hasAttribute('open')) return;
+      element.removeAttribute('open');
+      if (converted !== undefined) dialogReturnValues.set(element, converted);
+      queueDetailsToggle(element, 'open', 'closed');
+      scheduleTimer('timeout', () => {
+        if (activeState !== state) return;
+        const event = new GlobalEvent('close', {bubbles: false, cancelable: false});
+        defineEventMember(event, 'isTrusted', true);
+        element.dispatchEvent(event);
+      }, 0, []);
+    } finally {
+      closingDialogs.delete(element);
+    }
+  }
+
+  function HTMLDialogElement() { throw new TypeError('Illegal constructor'); }
+  Object.defineProperty(HTMLDialogElement, 'prototype', {value: PircHTMLDialogElement.prototype, writable: false});
+  Object.defineProperty(PircHTMLDialogElement.prototype, 'constructor', {value: HTMLDialogElement, writable: true, configurable: true});
+
   function registerTree(root) {
     const state = activeState;
     if (!state || !state.document || !root || !isOwnedNode(root, state))
@@ -1605,6 +1657,18 @@
   }
 
   function queueSubmissionAction(form, submitter) {
+    const resolved = submitterForForm(form, submitter);
+    const method = resolved !== form && resolved.hasAttribute('formmethod')
+      ? resolved.getAttribute('formmethod') : form.getAttribute('method');
+    if (normalizedMethod(method) === 'dialog') {
+      const dialog = form.closest('dialog');
+      if (dialog instanceof PircHTMLDialogElement) {
+        const value = resolved === form ? '' :
+          resolved.localName === 'input' && normalizedInputType(resolved) === 'image' ? '0,0' : String(resolved.value || '');
+        closeDocumentDialog(dialog, value);
+      }
+      return true;
+    }
     const command = createSubmissionAction(form, submitter);
     if (!command)
       return false;
@@ -2742,6 +2806,11 @@
       liveValues: liveValues,
       diagnostic: diagnostic,
       Event: PublicEvent,
+      createInvalidEvent: () => {
+        const event = new GlobalEvent('invalid', {bubbles: false, cancelable: true});
+        defineEventMember(event, 'isTrusted', true);
+        return event;
+      },
       prototypes: [
         HTMLInputElement.prototype,
         HTMLTextAreaElement.prototype,
@@ -3085,6 +3154,7 @@
     defineGlobal('HTMLButtonElement', HTMLButtonElement, false);
     defineGlobal('HTMLFormElement', HTMLFormElement, false);
     defineGlobal('HTMLDetailsElement', HTMLDetailsElement, false);
+    defineGlobal('HTMLDialogElement', HTMLDialogElement, false);
     defineGlobal('ToggleEvent', PircToggleEvent, false);
     defineGlobal('SubmitEvent', PircSubmitEvent, false);
     defineGlobal('FormDataEvent', PircFormDataEvent, false);
@@ -3803,7 +3873,7 @@
 
   // These events need an explicit Window/Document path because LinkeDOM's
   // generic EventTarget path does not model Window capture for a Document.
-  const focusEventTypes = new Set(['focus', 'blur', 'focusin', 'focusout', 'input', 'change', 'scroll', 'visibilitychange', 'toggle']);
+  const focusEventTypes = new Set(['focus', 'blur', 'focusin', 'focusout', 'input', 'change', 'scroll', 'visibilitychange', 'toggle', 'beforetoggle', 'close', 'cancel', 'invalid']);
   const focusEventListeners = new WeakMap();
   const focusEventHandlerProperties = new WeakMap();
   const focusEventPatchedWindows = new WeakSet();
@@ -5573,6 +5643,7 @@
       registerHTMLClass('label', HTMLLabelElement);
       registerHTMLClass('fieldset', HTMLFieldSetElement);
       registerHTMLClass('details', HTMLDetailsElement);
+      registerHTMLClass('dialog', PircHTMLDialogElement);
       const view = parseHTML(html);
       const document = view.document;
       activeState.window = view;

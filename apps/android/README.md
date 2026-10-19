@@ -105,6 +105,18 @@ These tests include exact opaque screenshot probes and bounded geometry/style
 checks. Cross-provider image caching, lazy/responsive transitions, pending-image
 presentation and complex resource graphs remain listed in the mobile plan.
 
+`test/document_live_runtime_dialog_form_test.dart` checks dialog form closing
+through the shipped runtime and real Flutter controls, including retained edits
+through view removal, submit/invalid events, return values and no navigation.
+`test/document_dialog_state_test.dart` checks runtime activation without authored
+scripts and native/computed closed visibility, including author display overrides.
+Recreate the independent reference with
+`node apps/android/tool/parity/capture_document_dialog_form_chromium153.mjs`.
+This is a closing-path increment: `show()`/`showModal()` are not installed; modality/focus/default UA
+layout and close-request APIs remain listed in the mobile plan. The tests keep
+the observed close/toggle task-order difference explicit. Validation popup paint
+has separate visual acceptance; an obscured pixel is not compared as background.
+
 ## Build and run
 
 Use Flutter 3.44.4 / Dart 3.12.2 or a compatible SDK, Android SDK and JDK 17.

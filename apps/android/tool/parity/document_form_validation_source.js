@@ -447,7 +447,9 @@ function createDocumentFormValidation(deps) {
 
   function dispatchInvalid(control) {
     if (typeof control.dispatchEvent !== 'function' || typeof invalidEvent !== 'function') return true;
-    const event = new invalidEvent('invalid', { bubbles: false, cancelable: true });
+    const event = typeof options.createInvalidEvent === 'function'
+      ? options.createInvalidEvent()
+      : new invalidEvent('invalid', { bubbles: false, cancelable: true });
     return control.dispatchEvent(event);
   }
 

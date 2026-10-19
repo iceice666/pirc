@@ -10,6 +10,14 @@ are available from Git through Historical records, not repeated here.
 
 ## Remaining work, in priority order
 
+- [ ] **Native dialog presentation:** dialog form closing and explicit `open`
+      attribute visibility now work through the script/native host. Complete
+      `show()`/`showModal()`, the native top layer/backdrop, inert background,
+      focus trapping/restoration, Escape/Back cancellation and `requestClose()`.
+      Default browser dialog positioning/intrinsic styling, modern invoker and
+      `closedby` behavior, event-handler attribute/IDL replacement and dialog
+      task-source scheduling still need coverage. `alert`/`confirm`/`prompt`
+      remain explicit unsupported APIs; do not replace them with async booleans.
 - [ ] **Dynamic content compatibility:** wider synchronous DOM write/read layout,
       broader DOM APIs, Canvas font/ink coverage, inline-fragment measurements
       and common-library coverage. Broader image/framework flows remain
@@ -345,6 +353,39 @@ script image decode limits; error-state pixel equivalence is not certified.
 Late script observation can therefore perform another fetch. Cross-provider
 caching, wider responsive/lazy and pending-image presentation, complex stylesheet
 imports/module graphs and real Android/transport/device acceptance remain open.
+
+Dialog form closing now stays in the document: effective `method="dialog"`
+(including submitter overrides) validates and fires submit as appropriate, closes
+its nearest ancestor dialog and sets its return value without constructing
+FormData or a navigation command. Native forms without authored scripts activate
+the runtime for dialog semantics. The transport-side unsupported-method guard
+is preserved. `HTMLDialogElement`, reflected `open`, independent `returnValue`
+and `close()` cover the tested closing path; cloned elements have independent
+return state and public construction is illegal. Closed dialogs default to
+`display:none`, with author display overrides respected by paint and computed
+style. Captured invalid events now reach ancestor capture listeners as trusted
+UA events; public synthetic events remain untrusted.
+
+A separate Chromium 153 reference has 15 programmatic states and eight
+phone/tablet, DPR 1/3 and theme profiles with six real-input states each. The
+shipped runtime/Flutter gate checks values, captured event fields, native visibility,
+rectangles within 1/32 CSS px and eight unobscured background pixel probes.
+Native edits and closing survive complete view removal/reattachment without a
+second engine or navigation. Submit cancellation, invalid/novalidate inputs,
+external submitters, direct submit, no submitter, method overrides and authored
+close-method overrides have gates.
+
+Two differences remain explicit: the host's timer queue sends `toggle` before
+`close`, while the captured Chromium pointer path sends `close` first. Tests
+assert both observed orders separately and compare their payloads; they do not
+claim event-loop parity. The [HTML Standard's dialog algorithms](https://html.spec.whatwg.org/multipage/interactive-elements.html)
+use distinct task sources for those notifications. Native validation feedback
+paint can obscure a different area than Chromium's popup; invalid-state geometry
+and behavior are checked, but that covered pixel is not a parity claim. Modal
+presentation, default dialog UA layout/focus and the remaining APIs listed above
+are still unfinished. `show()`/`showModal()` are not installed, so their presence
+does not falsely advertise implementation to capability checks. This closing increment is not complete dialog support or
+physical Android acceptance.
 
 Native Canvas supports matched text measurement, intrinsic/pixel/percentage
 sizing, container resizing, the eight stock Chart.js chart types and their default

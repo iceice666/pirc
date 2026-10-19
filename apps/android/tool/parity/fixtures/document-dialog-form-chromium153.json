@@ -1,0 +1,2852 @@
+{
+  "browserVersion": "153.0.8010.12",
+  "html": "<!doctype html><html><head><style>body{margin:0;font:16px/24px Arial;background:white;color:black}#open{display:block;box-sizing:border-box;width:180px;height:32px;margin:0;padding:0;border:0}dialog{position:static;margin:0;padding:0;border:0;width:180px;height:96px;background:#204060;color:white}button,input{font:16px/24px Arial}#outside{display:none}</style></head><body><button id=\"open\" type=\"button\" onclick=\"document.getElementById('dialog').open=true\">Open</button><dialog id=\"dialog\"><form id=\"form\" method=\"dialog\"><input id=\"required\" name=\"draft\" required value=\"ready\"><button id=\"yes\" value=\"yes\">Accept</button><button id=\"skip\" formnovalidate value=\"skip\">Skip</button></form></dialog><form id=\"outside\" method=\"dialog\"><button id=\"outsideSubmit\">Outside</button></form><button id=\"external\" form=\"form\" value=\"external\">External</button><div id=\"status\">Ready</div><script>\nwindow.events=[]; window.prevent=false; window.closedCount=0;\nfor(const type of ['submit','formdata','beforetoggle','toggle','close','invalid'])document.addEventListener(type,e=>{if(e.type==='close'){closedCount++;document.getElementById('status').textContent='Closed: '+document.getElementById('dialog').returnValue;}events.push({type:e.type,id:e.target.id,submitter:e.submitter?.id||null,source:e.source?.id||null,old:e.oldState??null,new:e.newState??null,bubbles:e.bubbles,cancelable:e.cancelable,trusted:e.isTrusted});if(e.type==='submit'&&prevent)e.preventDefault();},true);\n</script></body></html>",
+  "actions": [
+    {
+      "name": "initial",
+      "script": ""
+    },
+    {
+      "name": "open-attribute",
+      "script": "document.getElementById(\"dialog\").open=true"
+    },
+    {
+      "name": "accept",
+      "script": "document.getElementById(\"yes\").click()"
+    },
+    {
+      "name": "cancel-submit",
+      "script": "document.getElementById(\"dialog\").open=true;window.prevent=true;document.getElementById(\"yes\").click();window.prevent=false"
+    },
+    {
+      "name": "invalid",
+      "script": "document.getElementById(\"required\").value=\"\";document.getElementById(\"form\").requestSubmit(document.getElementById(\"yes\"))"
+    },
+    {
+      "name": "skip-validation",
+      "script": "document.getElementById(\"skip\").click()"
+    },
+    {
+      "name": "request-no-submitter",
+      "script": "const d=document.getElementById(\"dialog\");d.open=true;d.returnValue=\"kept\";document.getElementById(\"required\").value=\"ready\";document.getElementById(\"form\").requestSubmit()"
+    },
+    {
+      "name": "direct-submit",
+      "script": "document.getElementById(\"dialog\").open=true;document.getElementById(\"required\").value=\"\";document.getElementById(\"form\").submit()"
+    },
+    {
+      "name": "outside-dialog",
+      "script": "document.getElementById(\"outside\").requestSubmit()"
+    },
+    {
+      "name": "external-submitter",
+      "script": "document.getElementById(\"dialog\").open=true;document.getElementById(\"required\").value=\"ready\";document.getElementById(\"external\").click()"
+    },
+    {
+      "name": "close-manually",
+      "script": "document.getElementById(\"dialog\").open=true;document.getElementById(\"dialog\").close(\"manual\")"
+    },
+    {
+      "name": "close-closed",
+      "script": "document.getElementById(\"dialog\").close(\"ignored\")"
+    },
+    {
+      "name": "close-undefined",
+      "script": "document.getElementById(\"dialog\").open=true;document.getElementById(\"dialog\").close(undefined)"
+    },
+    {
+      "name": "property-handler",
+      "script": "const d=document.getElementById(\"dialog\");d.onclose=()=>window.handler=\"property\";d.open=true;d.close()"
+    },
+    {
+      "name": "empty-return",
+      "script": "const d=document.getElementById(\"dialog\");d.open=true;d.close(\"\")"
+    }
+  ],
+  "states": [
+    {
+      "name": "initial",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "",
+        "draft": "ready",
+        "events": [],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "open-attribute",
+      "result": {
+        "open": true,
+        "attribute": true,
+        "value": "",
+        "draft": "ready",
+        "events": [],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "accept",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "yes",
+        "draft": "ready",
+        "events": [
+          {
+            "type": "submit",
+            "id": "form",
+            "submitter": "yes",
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": true,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "cancel-submit",
+      "result": {
+        "open": true,
+        "attribute": true,
+        "value": "yes",
+        "draft": "ready",
+        "events": [
+          {
+            "type": "submit",
+            "id": "form",
+            "submitter": "yes",
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": true,
+            "cancelable": true,
+            "trusted": true
+          }
+        ],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "invalid",
+      "result": {
+        "open": true,
+        "attribute": true,
+        "value": "yes",
+        "draft": "",
+        "events": [
+          {
+            "type": "invalid",
+            "id": "required",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": false,
+            "cancelable": true,
+            "trusted": true
+          }
+        ],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "skip-validation",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "skip",
+        "draft": "",
+        "events": [
+          {
+            "type": "submit",
+            "id": "form",
+            "submitter": "skip",
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": true,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "request-no-submitter",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "",
+        "draft": "ready",
+        "events": [
+          {
+            "type": "submit",
+            "id": "form",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": true,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "direct-submit",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "",
+        "draft": "",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "outside-dialog",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "",
+        "draft": "",
+        "events": [
+          {
+            "type": "submit",
+            "id": "outside",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": true,
+            "cancelable": true,
+            "trusted": true
+          }
+        ],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "external-submitter",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "external",
+        "draft": "ready",
+        "events": [
+          {
+            "type": "submit",
+            "id": "form",
+            "submitter": "external",
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": true,
+            "cancelable": true,
+            "trusted": true
+          },
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "close-manually",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "manual",
+        "draft": "ready",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "close-closed",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "manual",
+        "draft": "ready",
+        "events": [],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "close-undefined",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "manual",
+        "draft": "ready",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ],
+        "handler": null,
+        "instance": true
+      }
+    },
+    {
+      "name": "property-handler",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "manual",
+        "draft": "ready",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ],
+        "handler": "property",
+        "instance": true
+      }
+    },
+    {
+      "name": "empty-return",
+      "result": {
+        "open": false,
+        "attribute": false,
+        "value": "",
+        "draft": "ready",
+        "events": [
+          {
+            "type": "beforetoggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "toggle",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          },
+          {
+            "type": "close",
+            "id": "dialog",
+            "submitter": null,
+            "source": null,
+            "old": null,
+            "new": null,
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true
+          }
+        ],
+        "handler": "property",
+        "instance": true
+      }
+    }
+  ],
+  "cases": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 1,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "accepted",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "yes",
+            "draft": "草稿🙂",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "yes",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "yes",
+            "draft": "",
+            "events": [
+              {
+                "type": "invalid",
+                "id": "required",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "skip",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "skip",
+            "draft": "",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "skip",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "external",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "external",
+            "draft": "final",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "external",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 1,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "accepted",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "yes",
+            "draft": "草稿🙂",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "yes",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "yes",
+            "draft": "",
+            "events": [
+              {
+                "type": "invalid",
+                "id": "required",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "skip",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "skip",
+            "draft": "",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "skip",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "external",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "external",
+            "draft": "final",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "external",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 3,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "accepted",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "yes",
+            "draft": "草稿🙂",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "yes",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "yes",
+            "draft": "",
+            "events": [
+              {
+                "type": "invalid",
+                "id": "required",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              33,
+              65,
+              97,
+              255
+            ]
+          }
+        },
+        {
+          "name": "skip",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "skip",
+            "draft": "",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "skip",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "external",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "external",
+            "draft": "final",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "external",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 3,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "accepted",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "yes",
+            "draft": "草稿🙂",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "yes",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "yes",
+            "draft": "",
+            "events": [
+              {
+                "type": "invalid",
+                "id": "required",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              33,
+              65,
+              97,
+              255
+            ]
+          }
+        },
+        {
+          "name": "skip",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "skip",
+            "draft": "",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "skip",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "external",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "external",
+            "draft": "final",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "external",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 1,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "accepted",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "yes",
+            "draft": "草稿🙂",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "yes",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "yes",
+            "draft": "",
+            "events": [
+              {
+                "type": "invalid",
+                "id": "required",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "skip",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "skip",
+            "draft": "",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "skip",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "external",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "external",
+            "draft": "final",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "external",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 1,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "accepted",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "yes",
+            "draft": "草稿🙂",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "yes",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "yes",
+            "draft": "",
+            "events": [
+              {
+                "type": "invalid",
+                "id": "required",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "skip",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "skip",
+            "draft": "",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "skip",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "external",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "external",
+            "draft": "final",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "external",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 3,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "accepted",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "yes",
+            "draft": "草稿🙂",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "yes",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "yes",
+            "draft": "",
+            "events": [
+              {
+                "type": "invalid",
+                "id": "required",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "skip",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "skip",
+            "draft": "",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "skip",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "external",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "external",
+            "draft": "final",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "external",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 3,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "initial",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "",
+            "draft": "ready",
+            "events": [],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "accepted",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "yes",
+            "draft": "草稿🙂",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "yes",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "open": true,
+            "attribute": true,
+            "value": "yes",
+            "draft": "",
+            "events": [
+              {
+                "type": "invalid",
+                "id": "required",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": true,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "block",
+            "background": "rgb(32, 64, 96)",
+            "rect": [
+              0,
+              32,
+              180,
+              96
+            ],
+            "point": [
+              176,
+              124
+            ],
+            "pixel": [
+              32,
+              64,
+              96,
+              255
+            ]
+          }
+        },
+        {
+          "name": "skip",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "skip",
+            "draft": "",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "skip",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        },
+        {
+          "name": "external",
+          "value": {
+            "open": false,
+            "attribute": false,
+            "value": "external",
+            "draft": "final",
+            "events": [
+              {
+                "type": "submit",
+                "id": "form",
+                "submitter": "external",
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": true,
+                "cancelable": true,
+                "trusted": true
+              },
+              {
+                "type": "beforetoggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "close",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": null,
+                "new": null,
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              },
+              {
+                "type": "toggle",
+                "id": "dialog",
+                "submitter": null,
+                "source": null,
+                "old": "open",
+                "new": "closed",
+                "bubbles": false,
+                "cancelable": false,
+                "trusted": true
+              }
+            ],
+            "handler": null,
+            "instance": true,
+            "display": "none",
+            "background": "rgb(32, 64, 96)",
+            "rect": null
+          }
+        }
+      ]
+    }
+  ]
+}
