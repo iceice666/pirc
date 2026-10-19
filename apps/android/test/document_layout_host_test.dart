@@ -14,6 +14,7 @@ class _Gateway extends Gateway {
   final calls = <String>[];
   List<Json> pendingActions = [];
   List<Json> pendingScroll = [];
+  Completer<void>? historyEntered, historyRelease;
   Json snapshot() => {
     'html':
         '<html><body><div data-pirc-script-id="pirc-1">revision $revision</div></body></html>',
@@ -39,6 +40,11 @@ class _Gateway extends Gateway {
     if (method != 'documentScriptEvaluate') throw StateError(method);
     final source = args['source'] as String;
     calls.add(source);
+    if (source.startsWith('__pircDocument.updateHistory(') &&
+        historyRelease != null) {
+      if (historyEntered?.isCompleted == false) historyEntered!.complete();
+      await historyRelease!.future;
+    }
     if (source == 'runtime') return {'value': ''};
     if (source.startsWith('__pircDocument.beginClassicScript(')) {
       return {
@@ -201,6 +207,46 @@ void main() {
       expect(scripts.takeScrollActions().map((a) => a['actionId']), [1]);
     },
   );
+
+  test('matching History snapshots wait for queued VM publication', () async {
+    final gateway = _Gateway()..pendingScript = false;
+    final scripts = NativeDocumentScripts(
+      gateway,
+      loadRuntime: () async => 'runtime',
+    );
+    addTearDown(() async {
+      scripts.dispose();
+      await scripts.closed;
+    });
+    await scripts.start(
+      source: '<div>Page</div>',
+      url: 'https://example.test/',
+    );
+    gateway.historyEntered = Completer<void>();
+    gateway.historyRelease = Completer<void>();
+    final snapshot = <String, dynamic>{
+      'url': 'https://example.test/#one',
+      'entryKey': 'entry-1',
+      'index': 0,
+      'length': 1,
+    };
+    final first = scripts.updateHistory(snapshot);
+    await gateway.historyEntered!.future;
+    var published = false;
+    final duplicate = scripts.updateHistory(snapshot).then((_) {
+      published = true;
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(published, isFalse);
+    gateway.historyRelease!.complete();
+    await first;
+    await duplicate;
+    expect(published, isTrue);
+    expect(
+      gateway.calls.where((s) => s.startsWith('__pircDocument.updateHistory(')),
+      hasLength(1),
+    );
+  });
 
   test('native scroll events acknowledge only accepted captures', () async {
     final gateway = _Gateway()

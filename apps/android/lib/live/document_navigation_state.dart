@@ -211,7 +211,7 @@ class NativeFetchedDocument {
   final historyControls = NativeHtmlHistoryController();
   final viewport = NativeHtmlViewportController();
   late final fragmentTarget = NativeDocumentTargetState(url);
-  late bool initialFragmentRevealPending = url.contains('#');
+  late bool initialFragmentRevealPending = content.isHtml || url.contains('#');
   final scroll = NativeDocumentScrollController();
   // A view can unmount while the document/VM remains in history or another
   // browsing context. Only retiring that document discards its element offsets.
@@ -272,6 +272,9 @@ class NativeDocumentHistoryItem {
   String scrollRestoration = 'auto';
   Object? appState;
   double? scrollOffset;
+  // The captured position predates initial target reveal. On first traversal,
+  // prefer a resolvable fragment; otherwise retain this real reading position.
+  bool scrollOffsetBeforeInitialFragment = false;
   NativeHtmlControlSnapshot? formControlSnapshot;
   bool requiresHistoryRefetch = false;
 }
@@ -416,6 +419,7 @@ class NativeDocumentWindow extends ChangeNotifier {
     if (currentDocument case final document?) ...{
       'targetRevision': document.fragmentTarget.revision,
       'targetUrl': document.fragmentTarget.url,
+      'initialFragmentRevealPending': document.initialFragmentRevealPending,
     },
     if (_previousHistoryEntryKey != null)
       'previousEntryKey': _previousHistoryEntryKey,
@@ -431,8 +435,13 @@ class NativeDocumentWindow extends ChangeNotifier {
     required Map<String, Object?> stateGraph,
     String? entryKey,
     String? scrollRestoration,
+    bool? initialScrollSnapshotPending,
+    double? sourceScrollTop,
   }) {
     final item = current;
+    if (sourceScrollTop != null && !sourceScrollTop.isFinite) {
+      throw const FormatException('Invalid source scroll snapshot.');
+    }
     if (disposed || item == null || !identical(item.document, document)) {
       throw const FormatException('History API document is no longer active.');
     }
@@ -460,14 +469,25 @@ class NativeDocumentWindow extends ChangeNotifier {
       if (history.any((entry) => entry.entryKey == key)) {
         throw const FormatException('History API entry key is already in use.');
       }
-      _rememberScroll();
+      item.scrollOffsetBeforeInitialFragment =
+          initialScrollSnapshotPending ??
+          (document.initialFragmentRevealPending &&
+              document.scripts?.initialRootScrollOverride != true);
+      _rememberScroll(
+        preserveInitialFragment: true,
+        sourceScrollTop: sourceScrollTop,
+      );
       final pushed =
           NativeDocumentHistoryItem(canonicalUrl, document, entryKey: key)
             ..stateGraph = graph
             ..scrollRestoration = mode
             ..scrollOffset = item.scrollOffset
             ..formControlSnapshot = item.formControlSnapshot;
-      _addHistoryItem(pushed);
+      _addHistoryItem(
+        pushed,
+        preserveInitialFragment: true,
+        sourceScrollTop: sourceScrollTop,
+      );
       _historyChangeKind = 'pushState';
     } else {
       if (entryKey != null &&
@@ -476,7 +496,7 @@ class NativeDocumentWindow extends ChangeNotifier {
           'replaceState cannot change its entry key.',
         );
       }
-      _rememberScroll();
+      _rememberScroll(preserveInitialFragment: true);
       item
         ..url = canonicalUrl
         ..stateGraph = graph
@@ -964,9 +984,13 @@ class NativeDocumentWindow extends ChangeNotifier {
   void _rememberScroll({
     bool leavingDocument = false,
     bool cancelFragmentReveal = true,
+    bool preserveInitialFragment = false,
+    double? sourceScrollTop,
   }) {
     if (cancelFragmentReveal) {
-      currentDocument?.initialFragmentRevealPending = false;
+      if (!preserveInitialFragment) {
+        currentDocument?.initialFragmentRevealPending = false;
+      }
       _pendingFragmentReveal = null;
       _fragmentRevealRevision++;
     }
@@ -991,7 +1015,8 @@ class NativeDocumentWindow extends ChangeNotifier {
       }
     }
     if (document == null) return;
-    item.scrollOffset = document.scroll.lastKnownOffset ?? item.scrollOffset;
+    item.scrollOffset =
+        sourceScrollTop ?? document.scroll.lastKnownOffset ?? item.scrollOffset;
     item.formControlSnapshot =
         document.historyControls.capture() ?? item.formControlSnapshot;
   }
@@ -1025,6 +1050,8 @@ class NativeDocumentWindow extends ChangeNotifier {
       index = historyIndex;
       final freshDocument = item.document;
       if (freshDocument != null) {
+        freshDocument.initialFragmentRevealPending =
+            item.scrollOffset == null || item.scrollOffsetBeforeInitialFragment;
         freshDocument
           ..historyApiAckRevision =
               oldDocument?.historyApiAckRevision ??
@@ -1058,6 +1085,8 @@ class NativeDocumentWindow extends ChangeNotifier {
                 ..scrollRestoration = sibling.scrollRestoration
                 ..appState = sibling.appState
                 ..scrollOffset = sibling.scrollOffset
+                ..scrollOffsetBeforeInitialFragment =
+                    sibling.scrollOffsetBeforeInitialFragment
                 ..formControlSnapshot = sibling.formControlSnapshot
                 ..requiresHistoryRefetch = sibling.requiresHistoryRefetch;
         }
@@ -1085,6 +1114,8 @@ class NativeDocumentWindow extends ChangeNotifier {
         ..formControlSnapshot =
             item.formControlSnapshot ?? oldEntry.formControlSnapshot;
       if (item.document != null) {
+        item.document!.initialFragmentRevealPending =
+            item.scrollOffset == null || item.scrollOffsetBeforeInitialFragment;
         item.document!
           ..historyApiAckRevision =
               oldEntry.document?.historyApiAckRevision ?? 0
@@ -1119,6 +1150,8 @@ class NativeDocumentWindow extends ChangeNotifier {
           );
     return copied
       ..stateGraph = source.stateGraph
+      ..scrollOffsetBeforeInitialFragment =
+          source.scrollOffsetBeforeInitialFragment
       ..scrollRestoration = source.scrollRestoration
       ..appState = source.appState
       ..requiresHistoryRefetch = incoming.requiresHistoryRefetch;
@@ -1268,8 +1301,14 @@ class NativeDocumentWindow extends ChangeNotifier {
     }
   }
 
-  void _addHistoryItem(NativeDocumentHistoryItem item) {
+  void _addHistoryItem(
+    NativeDocumentHistoryItem item, {
+    bool preserveInitialFragment = false,
+    double? sourceScrollTop,
+  }) {
     _rememberScroll(
+      sourceScrollTop: sourceScrollTop,
+      preserveInitialFragment: preserveInitialFragment,
       leavingDocument:
           current?.document == null ||
           item.document == null ||

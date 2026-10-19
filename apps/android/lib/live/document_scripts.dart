@@ -190,6 +190,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   String? documentBaseUrl;
   String? fragmentTargetId;
   bool? fragmentTargetReady;
+  bool initialRootScrollOverride = false;
   List<NativeDocumentStylesheet>? get stylesheets =>
       _hasStylesSnapshot ? _documentStyles?.stylesheets : null;
 
@@ -891,6 +892,15 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
               );
             }
             if (method != 'scroll') {
+              if (action.containsKey('initialScrollSnapshotPending') &&
+                      action['initialScrollSnapshotPending'] is! bool ||
+                  action.containsKey('sourceScrollTop') &&
+                      (action['sourceScrollTop'] is! num ||
+                          !(action['sourceScrollTop'] as num).isFinite)) {
+                throw const FormatException(
+                  'Invalid initial History scroll snapshot.',
+                );
+              }
               final url = action['url'];
               final key = action['entryKey'];
               if (url is! String ||
@@ -1162,7 +1172,9 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> updateHistory(Json snapshot) {
     if (_disposed || !ready || !_attached) return Future.value();
     final encoded = jsonEncode(snapshot);
-    if (_lastHistorySnapshot == encoded) return Future.value();
+    // The matching snapshot may still be queued in the serialized VM tail.
+    // Callers restoring history need its completion, not just its identity.
+    if (_lastHistorySnapshot == encoded) return _tail;
     _lastHistorySnapshot = encoded;
     final generation = _formActionGeneration;
     _pendingEvents++;
@@ -1924,6 +1936,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       'documentBaseURL',
       'fragmentTargetId',
       'fragmentTargetReady',
+      'initialRootScrollOverride',
       'now',
       'scheduler',
       'classicScript',
@@ -2886,6 +2899,11 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       throw const FormatException('Invalid fragment target readiness.');
     }
     fragmentTargetReady = targetReady as bool?;
+    final rootOverride = decoded['initialRootScrollOverride'];
+    if (rootOverride != null && rootOverride is! bool) {
+      throw const FormatException('Invalid initial root scroll override.');
+    }
+    initialRootScrollOverride = rootOverride == true;
     final markup = decoded['html'];
     if (markup is! String) {
       throw const FormatException('Missing document HTML.');
