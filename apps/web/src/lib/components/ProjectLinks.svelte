@@ -121,9 +121,9 @@
     those of other clones of the same repository) first.
   </p>
   <p>
-    A link is not a permission: you still approve every delegation, and the assistant can still
-    reach workspaces that are not linked. Chats already open keep the workspace list they started
-    with.
+    A link is not a permission: delegations to linked and unlinked workspaces alike follow the
+    project's Delegation approval setting, and the assistant can still reach workspaces that are not
+    linked. Chats already open keep the workspace list they started with.
   </p>
   {#if disabled}
     <p>Linked workspaces are unavailable in demo mode.</p>

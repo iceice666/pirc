@@ -534,4 +534,81 @@ describe('app asynchronous refreshes', () => {
     pending.resolve();
     await first;
   });
+
+  it('answers a relayed confirm without holding the control lease', async () => {
+    app.demo = undefined;
+    const session = { ...demoSnapshot.session, id: 's-chat' };
+    const relayed = { ...proposalInteraction, id: 'relay.d1.interaction_1', runnerEpoch: '0' };
+    const local = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '0' };
+    app.activeSessionId = session.id;
+    app.sessionState = {
+      ...fromSnapshot(snapshotFor(session, [relayed, local])),
+      control: { heldByCurrentClient: false, holderClientId: 'other', generation: 3 },
+    };
+    const answer = vi.spyOn(api, 'answerInteraction').mockResolvedValue();
+    const takeControl = vi.spyOn(api, 'takeControl');
+
+    await app.answerInteraction(relayed.id, { action: 'answer', value: false }, '0');
+
+    expect(answer).toHaveBeenCalledWith(
+      session.id,
+      relayed.id,
+      { action: 'answer', value: false },
+      undefined,
+    );
+    expect(takeControl).not.toHaveBeenCalled();
+    expect(app.sessionState?.interactions).toEqual([local]);
+  });
+
+  it('applies delegations_changed to the open chat', () => {
+    const session = { ...demoSnapshot.session, id: 's-chat' };
+    const state = fromSnapshot(snapshotFor(session));
+    const delegation = {
+      id: 'd1',
+      title: 'Fix the tests',
+      workspace: 'repo on node',
+      status: 'running',
+      dispatch: 'approved',
+      targetSessionId: 'worker',
+    };
+    const updated = reduceEvent(
+      state,
+      normalizeEvent({
+        sessionId: session.id,
+        epoch: state.runnerEpoch,
+        sequence: 1,
+        type: 'delegations_changed',
+        data: { delegations: [delegation] },
+      }),
+    );
+    expect(updated.delegations).toEqual([delegation]);
+    expect(updated.needsSnapshot).toBe(false);
+  });
+
+  it('answers a delegated approval from "Needs you" in the chat that holds it', async () => {
+    app.demo = undefined;
+    const approval = {
+      sessionId: 's-chat',
+      interactionId: 'relay.d1.interaction_1',
+      title: 'Allow network access?',
+    };
+    const answer = vi.spyOn(api, 'answerRelayed').mockResolvedValue();
+    vi.spyOn(api, 'sessions').mockResolvedValue([]);
+    await app.answerApproval(approval, true);
+    expect(answer).toHaveBeenCalledWith('s-chat', 'relay.d1.interaction_1', true);
+    expect(app.pageError).toBe('');
+
+    answer.mockRejectedValueOnce(new ApiError('Already answered', 409, 'conflict'));
+    await app.answerApproval(approval, false);
+    expect(app.pageError).toBe('Already answered');
+    expect(app.answeringInteractionIds).toEqual([]);
+  });
+
+  it('reports why a delegation could not be stopped', async () => {
+    app.demo = undefined;
+    const stop = vi.spyOn(api, 'stopDelegation').mockResolvedValueOnce({ status: 'stopping' });
+    await expect(app.stopDelegation('d1')).resolves.toBeUndefined();
+    stop.mockRejectedValueOnce(new ApiError('Another device controls it', 409, 'conflict'));
+    await expect(app.stopDelegation('d1')).resolves.toBe('Another device controls it');
+  });
 });

@@ -187,6 +187,8 @@ export function reduceEvent(
       };
     case 'queue_updated':
       return { ...base, queue: event.queue };
+    case 'delegations_changed':
+      return { ...base, delegations: event.delegations };
     case 'approval_mode_changed':
       return { ...base, approvalMode: event.mode };
     case 'control_updated':

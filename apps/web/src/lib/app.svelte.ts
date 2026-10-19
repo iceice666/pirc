@@ -44,12 +44,13 @@ import type {
   ModelOption,
   NodeSummary,
   QueueItem,
+  RelayedApproval,
   SessionSummary,
   SessionUpdateInput,
   ThinkingLevel,
   Workspace,
 } from './types';
-import { modelKey } from './types';
+import { isRelayed, modelKey } from './types';
 
 export type Upload = Attachment & { preview?: string; uploading?: boolean };
 
@@ -215,6 +216,8 @@ class AppState {
   pendingInteractions = $derived(
     this.#sessionState?.interactions.filter((item) => item.status === 'pending') ?? [],
   );
+  /** Delegations the open chat started that still run or wait for you. */
+  delegations = $derived(this.#sessionState?.delegations ?? []);
   /** Commands need a live connection and the control lease. */
   canCommand = $derived(this.hasControl && this.connection === 'connected');
   #historyRevision = 0;
@@ -232,7 +235,12 @@ class AppState {
   /** Everything waiting for you: questions, missed runs, memory proposals. */
   inbox = $derived<InboxItem[]>([
     ...this.sessions
-      .filter(needsInput)
+      .filter(
+        (session) =>
+          needsInput(session) ||
+          // Its confirm waits in the chat that delegated it.
+          (session.origin?.kind === 'delegation' && !!session.origin.approval),
+      )
       .map((session) => ({ kind: 'session' as const, id: `session:${session.id}`, session })),
     ...this.missedRuns.map(({ schedule, run }) => ({
       kind: 'missed' as const,
@@ -1102,13 +1110,21 @@ class AppState {
         );
       return;
     }
-    if (!state?.control.generation) return;
+    // A delegated session's relayed confirm needs no control lease: answer it
+    // from any device that sees the chat.
+    const relayed = isRelayed(interactionId);
+    if (!relayed && !state?.control.generation) return;
     const runnerEpoch = interaction.runnerEpoch;
     this.answeringInteractionIds = [...this.answeringInteractionIds, interactionId];
     this.interactionNotice = '';
     try {
       if (!this.demo)
-        await api.answerInteraction(sessionId, interactionId, answer, state.control.generation);
+        await api.answerInteraction(
+          sessionId,
+          interactionId,
+          answer,
+          relayed ? undefined : state?.control.generation,
+        );
       const current = this.sessionState;
       if (current?.session.id === sessionId)
         this.sessionState = {
@@ -1160,6 +1176,46 @@ class AppState {
       this.answeringInteractionIds = this.answeringInteractionIds.filter(
         (id) => id !== interactionId,
       );
+    }
+  }
+
+  /**
+   * Allow or deny a delegated session's confirm from "Needs you": it is
+   * relayed to the chat that started the delegation, so it is answered
+   * there, without that chat's control lease.
+   */
+  async answerApproval(approval: RelayedApproval, confirmed: boolean) {
+    if (this.demo || this.answeringInteractionIds.includes(approval.interactionId)) return;
+    this.answeringInteractionIds = [...this.answeringInteractionIds, approval.interactionId];
+    try {
+      await api.answerRelayed(approval.sessionId, approval.interactionId, confirmed);
+      const current = this.sessionState;
+      if (current?.session.id === approval.sessionId)
+        this.sessionState = {
+          ...current,
+          interactions: current.interactions.filter((item) => item.id !== approval.interactionId),
+        };
+    } catch (error) {
+      this.pageError = errorMessage(
+        error,
+        confirmed ? 'The request could not be allowed.' : 'The request could not be denied.',
+      );
+    } finally {
+      this.answeringInteractionIds = this.answeringInteractionIds.filter(
+        (id) => id !== approval.interactionId,
+      );
+    }
+    void this.refreshSessions();
+  }
+
+  /** Stop a delegation the open chat started; resolves to the error to show, if any. */
+  async stopDelegation(delegationId: string): Promise<string | undefined> {
+    if (this.demo) return undefined;
+    try {
+      await api.stopDelegation(delegationId);
+      return undefined;
+    } catch (error) {
+      return errorMessage(error, 'The delegation could not be stopped.');
     }
   }
 

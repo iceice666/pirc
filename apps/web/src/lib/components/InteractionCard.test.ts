@@ -146,3 +146,40 @@ it('shows the memory proposal and exact quote with Approve / Reject, including c
   buttons[1]!.click();
   expect(onanswer).not.toHaveBeenCalled();
 });
+
+it('names the delegated session a relayed confirm comes from, with an Open link', () => {
+  target = document.createElement('div');
+  document.body.append(target);
+  const onanswer = vi.fn();
+  const onopen = vi.fn();
+  component = mount(InteractionCard, {
+    target,
+    props: {
+      interaction: {
+        id: 'relay.d1.interaction_1',
+        runnerEpoch: '0',
+        kind: 'confirm',
+        status: 'pending',
+        title: 'Allow network access?',
+        relayed: {
+          sessionId: 'worker',
+          sessionName: 'Fix the tests',
+          workspace: 'repo on node',
+          delegationId: 'd1',
+        },
+      },
+      onanswer,
+      onopen,
+    },
+  });
+  flushSync();
+  expect(target.querySelector('.relayed')?.textContent).toContain(
+    'From Fix the tests (repo on node)',
+  );
+  const button = (label: string) =>
+    [...target.querySelectorAll('button')].find((b) => b.textContent?.trim() === label)!;
+  button('Open').click();
+  expect(onopen).toHaveBeenCalledWith('worker');
+  button('Yes, continue').click();
+  expect(onanswer).toHaveBeenCalledWith({ action: 'answer', value: true });
+});

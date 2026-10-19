@@ -133,3 +133,56 @@ it('does not request or edit policies in demo mode', async () => {
   expect(switches()).toHaveLength(0);
   expect(target.textContent).toContain('unavailable in demo mode');
 });
+
+const approvalSelect = () => target.querySelector<HTMLSelectElement>('select')!;
+
+it('saves the delegation approval policy, with its warning, once the gateway confirms it', async () => {
+  policy.delegation_approval = 'always';
+  await setup();
+  expect(approvalSelect().value).toBe('always');
+  expect(Array.from(approvalSelect().options).map((option) => option.textContent)).toEqual([
+    'Ask me every time',
+    'Only when the chat read outside content',
+    'Never ask',
+  ]);
+  vi.mocked(fetch).mockResolvedValueOnce(
+    response({ capabilities: { ...policy, delegation_approval: 'never' } }),
+  );
+  approvalSelect().value = 'never';
+  approvalSelect().dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+  expect(fetch).toHaveBeenLastCalledWith(
+    '/api/workspaces/home%3Achat%2Fproject/capabilities',
+    expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ capabilities: { delegation_approval: 'never' } }),
+    }),
+  );
+  expect(approvalSelect().value).toBe('never');
+  expect(target.textContent).toContain('A prompt injection in content the assistant reads');
+});
+
+it('keeps the saved approval policy when saving it fails', async () => {
+  policy.delegation_approval = 'untrusted';
+  await setup();
+  expect(target.textContent).toContain('Outside content: web pages');
+  vi.mocked(fetch).mockResolvedValueOnce(response({ error: { message: 'Not authorized' } }, 403));
+  approvalSelect().value = 'never';
+  approvalSelect().dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+  expect(approvalSelect().value).toBe('untrusted');
+  expect(target.querySelector('[role="alert"]')?.textContent).toBe('Not authorized');
+});
+
+it('reads an older gateway without the approval policy as always asking', async () => {
+  await setup();
+  expect(approvalSelect().value).toBe('always');
+  expect(approvalSelect().disabled).toBe(false);
+});
+
+it('disables the approval policy while delegation is off', async () => {
+  policy.delegation = false;
+  await setup();
+  expect(approvalSelect().disabled).toBe(true);
+  expect(target.textContent).toContain('Applies only while delegation is allowed.');
+});

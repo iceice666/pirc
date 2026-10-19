@@ -3,7 +3,10 @@
   import {
     capabilitiesApi,
     CAPABILITY_LABELS,
+    DELEGATION_APPROVAL_LABELS,
     type Capability,
+    type CapabilitiesUpdate,
+    type DelegationApproval,
     type ProjectCapabilities,
   } from '../capabilities';
 
@@ -48,17 +51,31 @@
     };
   });
 
-  async function toggle(key: Capability, input: HTMLInputElement) {
-    if (!workspaceId || !capabilities || loading || saving || disabled) return;
+  // Older gateways omit the field and always ask.
+  const approval = $derived(capabilities?.delegation_approval ?? 'always');
+
+  function toggle(key: Capability, input: HTMLInputElement) {
+    if (!capabilities) return;
     const value = input.checked;
     // Only the gateway response changes the displayed policy, never an optimistic local value.
     input.checked = capabilities[key];
+    void save({ [key]: value });
+  }
+
+  function selectApproval(select: HTMLSelectElement) {
+    const value = select.value as DelegationApproval;
+    select.value = approval;
+    void save({ delegation_approval: value });
+  }
+
+  async function save(update: CapabilitiesUpdate) {
+    if (!workspaceId || !capabilities || loading || saving || disabled) return;
     const current = generation;
     saving = true;
     error = '';
     status = '';
     try {
-      const response = await capabilitiesApi.update(workspaceId, { [key]: value });
+      const response = await capabilitiesApi.update(workspaceId, update);
       if (current !== generation) return;
       capabilities = response.capabilities;
       status = 'Project capabilities saved.';
@@ -99,6 +116,31 @@
             />
           </label>
         {/each}
+        <label class="capability-toggle">
+          <span>Delegation approval</span>
+          <select
+            value={approval}
+            disabled={!capabilities.delegation}
+            onchange={(event) => selectApproval(event.currentTarget)}
+          >
+            {#each Object.entries(DELEGATION_APPROVAL_LABELS) as [key, label] (key)}
+              <option value={key}>{label}</option>
+            {/each}
+          </select>
+        </label>
+        {#if !capabilities.delegation}
+          <p class="hint">Applies only while delegation is allowed.</p>
+        {:else if approval === 'untrusted'}
+          <p class="hint">
+            Outside content: web pages, search, browser, memory search, and delegation reports since
+            your last message.
+          </p>
+        {:else if approval === 'never'}
+          <p class="hint warning">
+            A prompt injection in content the assistant reads can then start work in your workspaces
+            without asking.
+          </p>
+        {/if}
       </fieldset>
     {/if}
     {#if error}
@@ -137,7 +179,17 @@
     padding: 0;
     accent-color: var(--accent);
   }
-  [role='alert'] {
+  .capability-toggle select {
+    width: auto;
+    flex: none;
+  }
+  .hint {
+    margin: 0 0 8px;
+    color: var(--text-2);
+    font-size: 13px;
+  }
+  [role='alert'],
+  .warning {
     color: var(--danger);
   }
 </style>

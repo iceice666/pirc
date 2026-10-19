@@ -21,7 +21,9 @@
   import { fade } from 'svelte/transition';
   import { app } from './lib/app.svelte';
   import Composer from './lib/components/Composer.svelte';
+  import DelegationStrip from './lib/components/DelegationStrip.svelte';
   import InteractionCard from './lib/components/InteractionCard.svelte';
+  import { isRelayed } from './lib/types';
   import JobsMenu from './lib/components/JobsMenu.svelte';
   import Message from './lib/components/Message.svelte';
   import MobileTabs from './lib/components/MobileTabs.svelte';
@@ -649,13 +651,21 @@
                   />{/if}
               {/each}
               {#each app.pendingInteractions as interaction (interaction.id)}
+                <!-- A relayed confirm needs no control lease. -->
                 <InteractionCard
                   {interaction}
-                  disabled={!app.canCommand || app.answeringInteractionIds.includes(interaction.id)}
+                  disabled={(!app.canCommand && !isRelayed(interaction.id)) ||
+                    app.answeringInteractionIds.includes(interaction.id)}
                   onanswer={(answer) =>
                     app.answerInteraction(interaction.id, answer, interaction.runnerEpoch)}
+                  onopen={openSession}
                 />
               {/each}
+              <DelegationStrip
+                delegations={app.delegations}
+                onopen={openSession}
+                onstop={(id) => app.stopDelegation(id)}
+              />
               {#if unseenContent && !following}
                 <div class="jump-latest">
                   <button

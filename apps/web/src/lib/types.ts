@@ -126,7 +126,31 @@ export type SessionOrigin =
       fromSessionId: string;
       /** The delegation's status; absent from older gateways. */
       status?: DelegationStatus;
+      /** A confirm it waits on, relayed to the chat that started it (answer it there). */
+      approval?: RelayedApproval;
     };
+
+/** A delegated session's pending confirm, as the chat that started it holds it. */
+export interface RelayedApproval {
+  /** The chat that holds the relayed interaction. */
+  sessionId: string;
+  /** `relay.…`: answering needs no control lease. */
+  interactionId: string;
+  title: string;
+  message?: string;
+}
+
+/** A running or waiting delegation a chat started (its snapshot and `delegations_changed`). */
+export interface ChatDelegation {
+  id: string;
+  title: string;
+  /** Label such as "repo on node". */
+  workspace: string;
+  status: 'running' | 'waiting_input';
+  /** `auto`: started without asking (the workspace's delegation approval policy). */
+  dispatch: 'auto' | 'approved';
+  targetSessionId: string;
+}
 
 /** A delegation's status once its session exists. */
 export type DelegationStatus = 'running' | 'waiting_input' | 'completed' | 'failed';
@@ -256,6 +280,16 @@ export interface ConfirmInteraction extends InteractionBase {
    * for the delegated run's auto mode (that run only).
    */
   userRequestChoice?: { label: string; checked: boolean };
+  /**
+   * A delegated session's confirm, relayed to the chat that started it. Its
+   * id starts with `relay.`; answering needs no control lease.
+   */
+  relayed?: {
+    sessionId: string;
+    sessionName: string;
+    workspace: string;
+    delegationId: string;
+  };
 }
 
 export interface InputInteraction extends InteractionBase {
@@ -302,6 +336,8 @@ export interface SessionSnapshot {
   messages: ConversationMessage[];
   partialMessage?: ConversationMessage;
   interactions: PendingInteraction[];
+  /** Delegations this chat started that still run or wait; absent from older gateways. */
+  delegations?: ChatDelegation[];
   queue: QueueItem[];
   control: ControlLease;
   cursor: string;
@@ -320,6 +356,9 @@ export interface SessionSnapshot {
   /** The running agent's OS sandbox; absent with no runner. */
   sandbox?: { active: boolean; reason?: string };
 }
+
+/** A delegated session's confirm relayed to its chat: answered without the control lease. */
+export const isRelayed = (interactionId: string) => interactionId.startsWith('relay.');
 
 /** Stable selection key: model IDs are only unique within one backend. */
 export const modelKey = (model: { provider: string; id: string }) =>
@@ -516,6 +555,8 @@ export type GatewayEvent =
   | { type: 'interaction_updated'; interaction: PendingInteraction }
   | { type: 'interaction_removed'; interactionId: string; runnerEpoch?: string }
   | { type: 'queue_updated'; queue: QueueItem[] }
+  /** The chat's full current list of active delegations. */
+  | { type: 'delegations_changed'; delegations: ChatDelegation[] }
   | { type: 'approval_mode_changed'; mode: ApprovalMode }
   | { type: 'widget_updated'; key: string; lines?: string[] }
   | { type: 'status_updated'; key: string; text?: string }

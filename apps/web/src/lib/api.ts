@@ -18,6 +18,7 @@ import type {
   BackendProbeInput,
   BackendProviderInput,
   BackendSettingsSnapshot,
+  ChatDelegation,
   ConnectionTestResult,
   DiscoveredModel,
   ProviderAuthSession,
@@ -97,8 +98,41 @@ function sessionOrigin(raw: any): SessionOrigin | undefined {
       ...(['running', 'waiting_input', 'completed', 'failed'].includes(raw.status)
         ? { status: raw.status }
         : {}),
+      ...(typeof raw.approval?.sessionId === 'string' &&
+      typeof raw.approval?.interactionId === 'string'
+        ? {
+            approval: {
+              sessionId: raw.approval.sessionId,
+              interactionId: raw.approval.interactionId,
+              title: String(raw.approval.title ?? ''),
+              ...(typeof raw.approval.message === 'string'
+                ? { message: raw.approval.message }
+                : {}),
+            },
+          }
+        : {}),
     };
   return undefined;
+}
+
+/** A chat's active delegations (snapshot `delegations`, `delegations_changed`); malformed items dropped. */
+function chatDelegations(raw: unknown): ChatDelegation[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (item: any) =>
+        typeof item?.id === 'string' &&
+        typeof item.targetSessionId === 'string' &&
+        (item.status === 'running' || item.status === 'waiting_input'),
+    )
+    .map((item: any) => ({
+      id: item.id,
+      title: String(item.title ?? ''),
+      workspace: String(item.workspace ?? ''),
+      status: item.status,
+      dispatch: item.dispatch === 'auto' ? 'auto' : 'approved',
+      targetSessionId: item.targetSessionId,
+    }));
 }
 
 function interaction(raw: any): PendingInteraction {
@@ -157,6 +191,16 @@ function interaction(raw: any): PendingInteraction {
             },
           }
         : {}),
+      ...(typeof request.relayed?.sessionId === 'string'
+        ? {
+            relayed: {
+              sessionId: request.relayed.sessionId,
+              sessionName: String(request.relayed.sessionName ?? ''),
+              workspace: String(request.relayed.workspace ?? ''),
+              delegationId: String(request.relayed.delegationId ?? ''),
+            },
+          }
+        : {}),
     };
   if (raw.kind === 'editor')
     return { ...base, kind: 'editor', initialValue: request.prefill ?? '' };
@@ -206,6 +250,7 @@ export function snapshotFromRaw(raw: any, lease: unknown): SessionSnapshot {
     ),
     partialMessage: partial,
     interactions: (raw.interactions ?? []).map(interaction),
+    ...(Array.isArray(raw.delegations) ? { delegations: chatDelegations(raw.delegations) } : {}),
     queue: queueItems(raw.queue ?? {}, iso(undefined)),
     control: controlLease(lease),
     cursor: `${raw.watermark?.epoch ?? 0}:${raw.watermark?.sequence ?? 0}`,
@@ -467,7 +512,8 @@ export const api = {
     sessionId: string,
     interactionId: string,
     answer: InteractionAnswer,
-    generation: number,
+    /** Omitted for a relayed (`relay.`) interaction: it needs no control lease. */
+    generation?: number,
   ) => {
     const rpcAnswer =
       answer.action === 'cancel'
@@ -490,12 +536,27 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({
           clientId: getClientId(),
-          generation,
+          ...(generation !== undefined ? { generation } : {}),
           answer: rpcAnswer,
         }),
       },
     );
   },
+  /**
+   * Allow or deny a delegated session's confirm relayed to the chat that
+   * started it (`relay.` ids). No control lease: the gateway answers it
+   * for whoever may see the chat, even while another device controls it.
+   */
+  answerRelayed: (sessionId: string, interactionId: string, confirmed: boolean) =>
+    request<void>(
+      `/api/sessions/${encodeURIComponent(sessionId)}/interactions/${encodeURIComponent(interactionId)}/answer`,
+      { method: 'POST', body: JSON.stringify({ answer: { confirmed } }) },
+    ),
+  /** Stop a delegation's run (no lease; 409 when another device controls it or nothing runs). */
+  stopDelegation: (delegationId: string) =>
+    request<{ status: string }>(`/api/delegations/${encodeURIComponent(delegationId)}/stop`, {
+      method: 'POST',
+    }),
   /**
    * Stored on the session's node. Images ride in the model's context;
    * anything else is copied into the workspace for the agent's file tools —
@@ -698,6 +759,8 @@ export function normalizeEvent(raw: any): EventEnvelope {
             : { type: 'noop' };
   else if (raw.type === 'session_renamed' && typeof raw.data?.name === 'string')
     event = { type: 'session_renamed', name: raw.data.name };
+  else if (raw.type === 'delegations_changed' && Array.isArray(raw.data?.delegations))
+    event = { type: 'delegations_changed', delegations: chatDelegations(raw.data.delegations) };
   else if (raw.type === 'runner_stderr') event = { type: 'noop' };
   else if (SNAPSHOT_EVENTS.has(raw.type)) event = { type: 'reset', reason: 'cursor_expired' };
   return {

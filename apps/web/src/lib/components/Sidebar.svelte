@@ -454,10 +454,17 @@
   <div class="inbox-item" data-kind={item.kind}>
     {#if item.kind === 'session'}
       {@const session = item.session}
+      {@const approval =
+        session.origin?.kind === 'delegation' ? session.origin.approval : undefined}
+      {@const answering =
+        !!approval && app.answeringInteractionIds.includes(approval.interactionId)}
       <button class="inbox-main" type="button" onclick={() => onselect(session.id)}>
         <span class="status-dot waiting"></span>
         <span class="inbox-text">
           <strong>{session.name}</strong>
+          {#if approval}<small class="inbox-approval" title={approval.message ?? approval.title}
+              >{approval.title}</small
+            >{/if}
           <small
             >{session.origin
               ? `${session.origin.kind === 'schedule' ? 'Scheduled' : 'Delegated'} · ${session.origin.title}`
@@ -466,6 +473,21 @@
         </span>
       </button>
       <div class="inbox-actions">
+        {#if approval}
+          <!-- Answered in the chat that delegated it, without its control lease. -->
+          <button
+            type="button"
+            class="pill-button primary"
+            disabled={answering}
+            onclick={() => app.answerApproval(approval, true)}>Allow</button
+          >
+          <button
+            type="button"
+            class="pill-button"
+            disabled={answering}
+            onclick={() => app.answerApproval(approval, false)}>Deny</button
+          >
+        {/if}
         <button type="button" class="pill-button" onclick={() => onselect(session.id)}>Reply</button
         >
       </div>
@@ -1206,7 +1228,8 @@
     background: var(--bg-layer);
   }
   .inbox-item[data-kind='missed'],
-  .inbox-item[data-kind='memory'] {
+  .inbox-item[data-kind='memory'],
+  .inbox-item:has(.inbox-approval) {
     flex-wrap: wrap;
   }
   .inbox-main {
@@ -1246,6 +1269,9 @@
   .inbox-text small {
     color: var(--muted);
     font-size: 11.5px;
+  }
+  .inbox-text small.inbox-approval {
+    color: var(--text-2);
   }
   .inbox-actions {
     flex: none;

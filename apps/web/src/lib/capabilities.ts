@@ -9,14 +9,29 @@ export const CAPABILITY_LABELS = {
 } as const;
 
 export type Capability = keyof typeof CAPABILITY_LABELS;
-export type ProjectCapabilities = { version: 1 } & Record<Capability, boolean>;
+
+/** When a delegation from this workspace's chats waits for the user's approval. */
+export type DelegationApproval = 'always' | 'untrusted' | 'never';
+export const DELEGATION_APPROVAL_LABELS: Record<DelegationApproval, string> = {
+  always: 'Ask me every time',
+  untrusted: 'Only when the chat read outside content',
+  never: 'Never ask',
+};
+
+export type ProjectCapabilities = { version: 1 } & Record<Capability, boolean> & {
+    /** Absent from older gateways, which always ask. */
+    delegation_approval?: DelegationApproval;
+  };
+export type CapabilitiesUpdate = Partial<Record<Capability, boolean>> & {
+  delegation_approval?: DelegationApproval;
+};
 type CapabilitiesResponse = { capabilities: ProjectCapabilities };
 const path = (workspaceId: string) =>
   `/api/workspaces/${encodeURIComponent(workspaceId)}/capabilities`;
 
 export const capabilitiesApi = {
   get: (workspaceId: string) => request<CapabilitiesResponse>(path(workspaceId)),
-  update: (workspaceId: string, capabilities: Partial<Record<Capability, boolean>>) =>
+  update: (workspaceId: string, capabilities: CapabilitiesUpdate) =>
     request<CapabilitiesResponse>(path(workspaceId), {
       method: 'PATCH',
       body: JSON.stringify({ capabilities }),

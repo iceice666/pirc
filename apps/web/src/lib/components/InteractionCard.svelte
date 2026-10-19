@@ -16,9 +16,14 @@
     interaction: PendingInteraction;
     disabled?: boolean;
     onanswer: (answer: InteractionAnswer) => void;
+    /** Open a session: a relayed confirm's delegated session. */
+    onopen?: (sessionId: string) => void;
   }
 
-  let { interaction, disabled = false, onanswer }: Props = $props();
+  let { interaction, disabled = false, onanswer, onopen }: Props = $props();
+
+  /** A delegated session's confirm, relayed to this chat. */
+  const relayed = $derived(interaction.kind === 'confirm' ? interaction.relayed : undefined);
 
   const initialValue = () =>
     interaction.kind === 'input' || interaction.kind === 'editor'
@@ -112,6 +117,13 @@
       <span class="eyebrow">Your input is needed</span>
       <h3 id="interaction-{interaction.id}">{interaction.title}</h3>
       {#if interaction.description}<p>{interaction.description}</p>{/if}
+      {#if relayed}
+        <p class="relayed">
+          <span>From {relayed.sessionName} ({relayed.workspace})</span>
+          {#if onopen}<button type="button" onclick={() => onopen(relayed.sessionId)}>Open</button
+            >{/if}
+        </p>
+      {/if}
     </div>
   </header>
 
@@ -289,6 +301,24 @@
   }
   .confirm-copy {
     margin-top: 12px;
+  }
+  .interaction-card header p.relayed {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    margin-top: 6px;
+    white-space: normal;
+  }
+  .relayed button {
+    padding: 0;
+    border: 0;
+    color: var(--accent);
+    background: transparent;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .relayed button:hover {
+    text-decoration: underline;
   }
   .option-list {
     display: grid;
