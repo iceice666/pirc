@@ -884,6 +884,16 @@ function createDocumentImages(dependencies) {
     }
   }
 
+  function renderState(image) {
+    if (!isImage(image) || image.ownerDocument !== document || !imageStates.has(image))
+      return null;
+    const state = ensureObserved(image);
+    return {
+      status: state.status,
+      ...(state.status === 'loaded' ? {imageId: state.imageId} : {})
+    };
+  }
+
   function retainedImageIds() {
     const ids = [];
     for (const state of loadedStates) {
@@ -899,6 +909,7 @@ function createDocumentImages(dependencies) {
     prepareTree,
     complete,
     canvasSource: imageSource,
+    renderState,
     retainedImageIds
   };
 }

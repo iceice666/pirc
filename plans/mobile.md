@@ -18,9 +18,10 @@ are available from Git through Historical records, not repeated here.
       retain native controls through complete workspace removal/remount,
       same-frame replacement and reparenting. Already-authorized script file
       choosers survive temporary view removal/replacement. The shipped runtime
-      and Flutter host now have a combined gate for fetch/abort, external classic
-      scripts and choosers. Image, stylesheet, module and wider UI lifetimes
-      remain unverified. Check real CJK IME, focus and keyboard behavior across
+      and Flutter host have combined gates for fetch/abort, external classic
+      scripts, choosers, simple linked styles, raster images and module graphs.
+      Wider framework/resource lifetimes, responsive/lazy transitions and
+      cross-provider SVG/image caching remain unverified. Check real CJK IME, focus and keyboard behavior across
       workspace/background/low-memory transitions on devices.
 - [ ] **Fragment scrolling and target state:** complete CSS scroll margin/padding,
       nested-container alignment, remaining focus state, late-loaded targets and
@@ -295,8 +296,37 @@ reattachment; the browser reference can run callbacks while merely CSS-hidden.
 That scheduling difference is explicit; the resource gate compares resumed
 outcomes. This gate adds no screenshot/pixel claim and does not replace actual
 Android Sandbox IPC, native transport/CORS/cookie policy or system picker/device
-acceptance. Image, stylesheet and module remounts and broader framework flows
-remain separate work. Release CI now prepares Node.js 22 for these widget tests.
+acceptance. Broader framework flows remain separate work. Release CI prepares
+Node.js 22 for these widget tests.
+
+Script-managed raster HTML images now use the same document-owned decoded
+version as JavaScript and Canvas, avoiding an independent display fetch that
+could return a different image. Startup defers display fetching until script
+ownership is known; an unavailable engine releases ordinary image loading.
+Image state is a separate bounded snapshot projection, not authored HTML/CSS
+attributes. Unknown handles, duplicate element IDs and invalid states fail at
+the host boundary. Current HTML references retain their native image versions;
+retirement still belongs to the document pool. SVG keeps its vector widget path; multi-frame images retain the animation
+provider.
+Presentation updates of the same script snapshot now preserve native controls
+locally; they do not replay a stale history projection into a VM that may already
+have changed those values. A fresh script snapshot remains authoritative.
+The independent eight-profile Chromium 153 asset corpus covers 48 states,
+including a no-store image with a deliberately different second response.
+Twenty-four native scenarios compare 88 states through the shipped runtime,
+real styles/layout/controls and actual image decoding. They check linked CSS,
+initial/dynamic raster images, retained input, an imported module dependency,
+module cache reuse and one execution per module across view replacement.
+Panel rectangles use 1/32 CSS px tolerance, live colors compare exactly, and
+448 opaque screenshot probes compare both the HTML image and Canvas exactly.
+This is bounded pixel evidence, not whole-page screenshot parity.
+Unobserved ordinary, responsive/picture, animated and SVG images retain the
+established native image provider and candidate/vector selection. Script-side image errors
+also retain the established display fallback, including sources outside the
+script image decode limits; error-state pixel equivalence is not certified.
+Late script observation can therefore perform another fetch. Cross-provider
+caching, wider responsive/lazy and pending-image presentation, complex stylesheet
+imports/module graphs and real Android/transport/device acceptance remain open.
 
 Native Canvas supports matched text measurement, intrinsic/pixel/percentage
 sizing, container resizing, the eight stock Chart.js chart types and their default

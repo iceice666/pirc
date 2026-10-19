@@ -21,16 +21,15 @@ typedef NativeDocumentImageDecoder =
 /// retained by earlier Canvas commands after an HTML image changes its source.
 class NativeDocumentImagePool {
   NativeDocumentImagePool({
-    NativeDocumentImageDecoder? decoder,
+    this._decoder,
     Future<void> Function(ui.Image)? release,
-  }) : _decoder = decoder ?? _decode,
-       _release = release ?? _releaseAfterFrame;
+  }) : _release = release ?? _releaseAfterFrame;
 
   static const maxEncodedBytes = 2 * 1024 * 1024;
   static const maxEntries = 64;
   static const maxPixels = 16 * 1024 * 1024;
   static const maxDimension = 8192;
-  final NativeDocumentImageDecoder _decoder;
+  final NativeDocumentImageDecoder? _decoder;
   final Future<void> Function(ui.Image) _release;
   final _entries = <String, _ImageVersion>{};
   final _undelivered = <String>{};
@@ -38,6 +37,14 @@ class NativeDocumentImagePool {
   final _releasing = <Future<void>>{};
   Map<String, ui.Image> _images = const {};
   Map<String, ui.Image> get images => _images;
+  Set<String> get animatedImageIds => {
+    for (final entry in _entries.entries)
+      if (entry.value.animated) entry.key,
+  };
+  Set<String> get vectorImageIds => {
+    for (final entry in _entries.entries)
+      if (entry.value.vector) entry.key,
+  };
   bool _disposed = false;
   int _serial = 0, _decoding = 0, _allocatedPixels = 0, _retiring = 0;
   bool get disposed => _disposed;
@@ -64,8 +71,17 @@ class NativeDocumentImagePool {
     _decoding++;
     var reserved = 0;
     ui.Image? image;
+    var animated = false;
+    final NativeDocumentImageDecoder decodeImage =
+        _decoder ??
+        (bytes, mime, reserve) => _decode(
+          bytes,
+          mime,
+          reserve,
+          onFrameCount: (frames) => animated = frames > 1,
+        );
     try {
-      image = await _decoder(bytes, mimeType, (width, height) async {
+      image = await decodeImage(bytes, mimeType, (width, height) async {
         if (_disposed) throw StateError('Image document is closed.');
         if (width <= 0 ||
             height <= 0 ||
@@ -95,7 +111,13 @@ class NativeDocumentImagePool {
       }
       if (_disposed) throw StateError('Image document changed during decode.');
       final id = 'canvas-image-${++_serial}';
-      _entries[id] = _ImageVersion(image, reserved);
+      _entries[id] = _ImageVersion(
+        image,
+        reserved,
+        animated: animated,
+        vector:
+            mimeType.split(';').first.trim().toLowerCase() == 'image/svg+xml',
+      );
       _undelivered.add(id);
       _refresh();
       final result = <String, dynamic>{
@@ -193,8 +215,9 @@ class NativeDocumentImagePool {
   static Future<ui.Image> _decode(
     Uint8List bytes,
     String mime,
-    Future<void> Function(int, int) reserve,
-  ) async {
+    Future<void> Function(int, int) reserve, {
+    void Function(int)? onFrameCount,
+  }) async {
     final normalized = await NativeRasterImages.prepare(bytes, mime);
     if (mime.split(';').first.trim().toLowerCase() == 'image/svg+xml') {
       final size = svgImageSize(utf8.decode(normalized));
@@ -225,6 +248,7 @@ class NativeDocumentImagePool {
       descriptor = await ui.ImageDescriptor.encoded(buffer);
       await reserve(descriptor.width, descriptor.height);
       codec = await descriptor.instantiateCodec();
+      onFrameCount?.call(codec.frameCount);
       final frame = await codec.getNextFrame();
       return frame.image;
     } finally {
@@ -236,7 +260,13 @@ class NativeDocumentImagePool {
 }
 
 class _ImageVersion {
-  const _ImageVersion(this.image, this.pixels);
+  const _ImageVersion(
+    this.image,
+    this.pixels, {
+    this.vector = false,
+    this.animated = false,
+  });
+  final bool vector, animated;
   final ui.Image image;
   final int pixels;
 }

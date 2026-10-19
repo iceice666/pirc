@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart'
 import 'package:html/parser.dart' as html;
 import '../rendering/html_document_content.dart';
 import '../rendering/document_canvas.dart';
+import '../rendering/document_html_image.dart';
 import 'gateway.dart';
 import 'document_script_resources.dart';
 import 'document_script_images.dart';
@@ -1563,6 +1564,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _failInteraction(Object error) async {
     if (_disposed) return;
     ready = false;
+    _retainLoadedHtmlImages();
     _storagePollNeeded = false;
     _storageEvents.clear();
     await _storageSubscription?.cancel();
@@ -2560,6 +2562,19 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   NativeHtmlDocumentContent? content;
   Map<String, NativeDocumentCanvasSnapshot> canvases = const {};
   String _lastCanvases = "[]";
+  Map<String, NativeDocumentHtmlImage> htmlImages = const {};
+  String _lastHtmlImages = '[]';
+
+  void _retainLoadedHtmlImages() {
+    // The VM can stop while display resources remain valid. Keep decoded
+    // versions visible, but release pending/error targets to the native fallback.
+    htmlImages = Map.unmodifiable({
+      for (final entry in htmlImages.entries)
+        if (entry.value.status == 'loaded') entry.key: entry.value,
+    });
+    _lastHtmlImages = '';
+  }
+
   List<String> diagnostics = const [];
 
   static bool needsRuntime(NativeHtmlDocumentContent content) {
@@ -2702,6 +2717,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       }
     } catch (error) {
       if (!_disposed) {
+        _retainLoadedHtmlImages();
         _storagePollNeeded = false;
         _storageEvents.clear();
         await _storageSubscription?.cancel();
@@ -2962,7 +2978,19 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         rawImages.any((id) => id is! String)) {
       throw const FormatException('Invalid document image references.');
     }
+    final encodedHtmlImages = jsonEncode(decoded['htmlImages'] ?? const []);
+    final nextHtmlImages = encodedHtmlImages == _lastHtmlImages
+        ? htmlImages
+        : decodeNativeDocumentHtmlImages(
+            decoded['htmlImages'],
+            available: _imagePool.images.keys.toSet(),
+            vectors: _imagePool.vectorImageIds,
+            animated: _imagePool.animatedImageIds,
+          );
     final retainedImages = rawImages.cast<String>().toSet();
+    for (final image in nextHtmlImages.values) {
+      if (image.imageId != null) retainedImages.add(image.imageId!);
+    }
     for (final canvas in (nextCanvases ?? canvases).values) {
       for (final command in canvas.commands) {
         if (command.op == 'drawImage') {
@@ -2971,6 +2999,8 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
     _imagePool.retain(retainedImages);
+    htmlImages = nextHtmlImages;
+    _lastHtmlImages = encodedHtmlImages;
     if (_lastMarkup != markup) {
       content = NativeHtmlDocumentContent.fromBytes(
         Uint8List.fromList(utf8.encode(markup)),

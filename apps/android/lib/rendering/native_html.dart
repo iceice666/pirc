@@ -11,6 +11,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'svg_dimensions.dart';
 import 'document_canvas.dart';
+import 'document_html_image.dart';
 import 'document_layout.dart';
 import 'document_fragment.dart';
 import 'document_computed_styles.dart';
@@ -218,6 +219,8 @@ class NativeHtmlDocument extends StatefulWidget {
     this.scriptDocument,
     this.canvases = const {},
     this.canvasImages = const {},
+    this.htmlImages = const {},
+    this.deferImageLoading = false,
     this.onScriptEvent,
     this.onScriptDetailedEvent,
     this.onScriptTouchClickQueued,
@@ -288,6 +291,8 @@ class NativeHtmlDocument extends StatefulWidget {
   final NativeHtmlDocumentControls? retainedControls;
   final Map<String, NativeDocumentCanvasSnapshot> canvases;
   final Map<String, ui.Image> canvasImages;
+  final Map<String, NativeDocumentHtmlImage> htmlImages;
+  final bool deferImageLoading;
   final Future<bool> Function(
     String id,
     String type,
@@ -367,6 +372,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
   NativeHtmlFileInputState? files;
   NativeHtmlDetachedControls? _parkedControls;
   bool _claimedRetainedControls = false;
+  Object? _renderedScriptSnapshot;
   NativeHtmlForms? forms;
   NativeHtmlHistoryController? _attachedHistoryController;
   int _scriptSourceGeneration = 0;
@@ -541,6 +547,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             !documentChanged &&
             !historyChanged &&
             !widget.preserveControlValues &&
+            widget.scriptSnapshot == null &&
             old.scriptSnapshot == widget.scriptSnapshot
         ? old.historyController?.capture()
         : null;
@@ -551,7 +558,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
         serialize(force: inheritedControls || lifetimeChanged);
       }
       _attachHistoryController(widget.historyController);
-      if (carriedSnapshot != null) {
+      if (carriedSnapshot != null && !carriedSnapshot.isEmpty) {
         widget.historyController?.restore(carriedSnapshot);
       }
     }
@@ -690,6 +697,12 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
   }
 
   void serialize({bool force = false}) {
+    // Repainting the same script snapshot must retain live native edits without
+    // round-tripping a stale history projection back into the running VM.
+    final preserveValues =
+        widget.preserveControlValues ||
+        widget.scriptSnapshot != null &&
+            identical(_renderedScriptSnapshot, widget.scriptSnapshot);
     slots.clear();
     String node(md.Node n) {
       if (n is NativeHtmlRaw) return n.html;
@@ -749,7 +762,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       if (sameDocument && previousControls != null) {
         controls!.adoptInteractionState(
           previousControls,
-          preserveValues: widget.preserveControlValues,
+          preserveValues: preserveValues,
         );
       }
       previousControls?.dispose();
@@ -759,7 +772,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       if (previousTextFields != null && sameDocument) {
         textFields!.adoptEditingState(
           previousTextFields,
-          preserveValues: widget.preserveControlValues,
+          preserveValues: preserveValues,
         );
       }
       previousTextFields?.dispose();
@@ -771,7 +784,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       if (sameDocument && previousRanges != null) {
         ranges!.adoptInteractionState(
           previousRanges,
-          preserveValues: widget.preserveControlValues,
+          preserveValues: preserveValues,
         );
       }
       previousRanges?.dispose();
@@ -780,7 +793,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       if (sameDocument && previousSelects != null) {
         selects!.adoptInteractionState(
           previousSelects,
-          preserveValues: widget.preserveControlValues,
+          preserveValues: preserveValues,
         );
       }
       previousSelects?.dispose();
@@ -789,7 +802,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       if (sameDocument && previousDates != null) {
         dates!.adoptInteractionState(
           previousDates,
-          preserveValues: widget.preserveControlValues,
+          preserveValues: preserveValues,
         );
       }
       previousDates?.dispose();
@@ -858,6 +871,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     }
     _pruneScriptFocusableNodes(content);
     _bindScriptControls();
+    _renderedScriptSnapshot = widget.scriptSnapshot;
   }
 
   void _captureSubmissionFiles() {
@@ -2271,6 +2285,8 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             widget.authorStylesBuilder,
             widget.canvases,
             widget.canvasImages,
+            widget.htmlImages,
+            widget.deferImageLoading,
             widget.layoutController,
             widget.layoutOffsetSpecs,
             widget.documentTopMargins,
@@ -2335,6 +2351,8 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             () => widget.documentPercentTopMargins,
             () => widget.layoutRevision,
             () => _elementScroll,
+            () => widget.htmlImages,
+            () => widget.deferImageLoading,
           ),
           onTapUrl: (url) {
             if (widget.viewport?.resolvingAnchorUrl(url) == true) return false;
@@ -2797,9 +2815,13 @@ class _NativeHtmlFactory extends WidgetFactory {
     this.documentPercentTopMargins,
     this.layoutRevision,
     this.elementScroll,
+    this.htmlImages,
+    this.deferImageLoading,
   );
   // HtmlWidget retains its factory when rebuild triggers change. Read the
   // current document viewport instead of capturing the first build.
+  final Map<String, NativeDocumentHtmlImage> Function() htmlImages;
+  final bool Function() deferImageLoading;
   final bool Function() hasDocumentViewport;
   final bool Function() hasPositioningViewport;
   final Size Function() imageViewport;
@@ -6011,6 +6033,36 @@ class _NativeHtmlFactory extends WidgetFactory {
       return Text(src.image?.alt ?? '');
     }
     final density = _imageDensities[tree.element] ?? 1;
+    final managed =
+        htmlImages()[tree.element.attributes['data-pirc-script-id']];
+    final responsive =
+        tree.element.attributes.containsKey('srcset') ||
+        tree.element.parent?.localName == 'picture';
+    if (managed != null &&
+        !managed.vector &&
+        !managed.animated &&
+        managed.status != 'error' &&
+        !responsive) {
+      Widget image;
+      if (managed.status == 'loaded') {
+        final decoded = canvasImages()[managed.imageId];
+        image = decoded == null
+            ? Text(src.image?.alt ?? '')
+            : RawImage(image: decoded, scale: density, fit: BoxFit.contain);
+      } else {
+        image = const SizedBox.shrink();
+      }
+      image = Semantics(image: true, label: src.image?.alt, child: image);
+      if (src.image?.title?.isNotEmpty == true) {
+        image = Tooltip(message: src.image!.title!, child: image);
+      }
+      return image;
+    }
+    // Let startup scripts establish image ownership before an independent
+    // display fetch can race the script resource request.
+    if (deferImageLoading()) return const SizedBox.shrink();
+    // SVG keeps the existing vector widget path; the Canvas pool's SVG bitmap
+    // is not a replacement for resolution-independent HTML image rendering.
     if (images != null) {
       return NativeImageDensity(
         density: density,

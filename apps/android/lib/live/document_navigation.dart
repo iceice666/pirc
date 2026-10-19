@@ -2582,6 +2582,11 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       onScriptRestoreControls: _scripts?.restoreControls,
       canvases: _scripts?.canvases ?? const {},
       canvasImages: _scripts?.canvasImages ?? const {},
+      htmlImages: _scripts?.htmlImages ?? const {},
+      deferImageLoading:
+          _scripts != null &&
+          !_scripts!.ready &&
+          _scripts!.initialTargetSelectionPending,
       imageBuilder: (uri, title, alt) => NativeMarkdownImage(
         gateway: widget.gateway,
         source: uri,
