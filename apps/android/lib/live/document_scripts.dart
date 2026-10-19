@@ -192,6 +192,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   final Map<String, int> _lastResourceId = {};
   final _imagePool = NativeDocumentImagePool();
   Map<String, ui.Image> get canvasImages => _imagePool.images;
+  Map<String, Uint8List> get vectorImageSources => _imagePool.vectorSources;
   int _activeResources = 0;
   final Set<String> _activeResourceRequests = {};
   final Set<String> _cancelledResourceRequests = {};

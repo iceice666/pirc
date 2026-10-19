@@ -2582,6 +2582,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       onScriptRestoreControls: _scripts?.restoreControls,
       canvases: _scripts?.canvases ?? const {},
       canvasImages: _scripts?.canvasImages ?? const {},
+      vectorImageSources: _scripts?.vectorImageSources ?? const {},
       htmlImages: _scripts?.htmlImages ?? const {},
       deferImageLoading:
           _scripts != null &&

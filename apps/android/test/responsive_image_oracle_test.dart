@@ -10,6 +10,7 @@ import 'package:pirc_mobile/live/markdown_image.dart';
 import 'package:pirc_mobile/rendering/html_document_content.dart';
 import 'package:pirc_mobile/rendering/html_document_styles.dart';
 import 'package:pirc_mobile/rendering/html_responsive_image.dart';
+import 'package:pirc_mobile/rendering/native_image_frame.dart';
 import 'live_test.dart' show FakeGateway, theme;
 import 'markdown_image_test.dart' show waitImage;
 
@@ -120,11 +121,11 @@ void main() {
             find.byType(NativeMarkdownImage),
           );
           expect(widget.source.toString(), c['expectedCurrentSrc']);
-          final frameFinder = find.byWidgetPredicate(
-            (widget) => widget.runtimeType.toString() == '_MarkdownImageFrame',
-          );
+          final frameFinder = find.byType(NativeImageFrame);
           expect(frameFinder, findsOneWidget);
-          final frame = tester.renderObject(frameFinder) as dynamic;
+          final frame = tester.renderObject<RenderNativeImageFrame>(
+            frameFinder,
+          );
           expect(
             frame.getMaxIntrinsicWidth(double.infinity),
             closeTo((c['expectedNaturalWidth'] as num).toDouble(), 1),
