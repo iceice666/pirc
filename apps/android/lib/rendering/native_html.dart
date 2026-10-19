@@ -2368,6 +2368,11 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
           customStylesBuilder: (element) {
             final tag = element.localName;
             final styles = <String, String>{};
+            if (tag == 'dialog') {
+              styles['display'] = element.attributes.containsKey('open')
+                  ? 'block'
+                  : 'none';
+            }
             if (!widget.markdownStyles) {
               if (tag == 'form') styles['display'] = 'block';
               if (const {

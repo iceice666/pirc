@@ -211,6 +211,8 @@ Map<String, NativeDocumentComputedStyleSpec> nativeDocumentComputedStyleSpecs({
             initialValue: 'inline',
             accepted: _displayKeywords,
           )
+        : name == 'dialog' && !element.attributes.containsKey('open')
+        ? 'none'
         : _uaDisplay(name);
     if (display != null) {
       final parentDisplay = parentSpec?.values['display'];

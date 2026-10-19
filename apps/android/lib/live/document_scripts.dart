@@ -2585,9 +2585,17 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         .parse(content.text)
         .querySelectorAll('*')
         .any(
-          (element) => element.attributes.keys.any(
-            (key) => key.toString().toLowerCase().startsWith('on'),
-          ),
+          (element) =>
+              element.localName == 'dialog' ||
+              (element.localName == 'form' &&
+                  element.attributes['method']?.trim().toLowerCase() ==
+                      'dialog') ||
+              (const {'button', 'input'}.contains(element.localName) &&
+                  element.attributes['formmethod']?.trim().toLowerCase() ==
+                      'dialog') ||
+              element.attributes.keys.any(
+                (key) => key.toString().toLowerCase().startsWith('on'),
+              ),
         );
   }
 
