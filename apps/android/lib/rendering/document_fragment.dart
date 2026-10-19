@@ -108,20 +108,32 @@ class NativeDocumentTargetState {
   String url;
   int revision = 0;
   bool _pending = true;
+  bool ancestorsRevealed = false;
+  int _handledRevealRevision = -1;
+  bool get revealHandled => _handledRevealRevision == revision;
+  void markRevealHandled(int value) {
+    if (value == revision) _handledRevealRevision = value;
+  }
+
   String? _nativeId;
   void navigate(String value) {
     url = value;
     revision++;
+    ancestorsRevealed = false;
     _pending = true;
   }
 
-  dom.Element? resolve(dom.Document document) {
+  dom.Element? resolve(
+    dom.Document document, {
+    bool Function(dom.Element)? reveal,
+  }) {
     final elements = document.querySelectorAll('*');
     if (_pending) {
       final hash = url.indexOf('#');
       final target = hash < 0
           ? null
           : nativeDocumentFragmentElement(document, url.substring(hash + 1));
+      ancestorsRevealed = target != null && (reveal?.call(target) ?? false);
       _nativeId = target?.attributes['data-pirc-script-id'];
       _pending = false;
     }

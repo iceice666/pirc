@@ -257,7 +257,12 @@ class NativeHtmlRangeState extends ChangeNotifier {
 
   /// Preserves active native gesture/focus resources across a same-document
   /// script snapshot. Values and descriptors remain those of this new state.
-  void adoptInteractionState(NativeHtmlRangeState previous) {
+  /// [preserveValues] is for presentation changes of an unchanged static DOM;
+  /// script publications keep fresh DOM values and authored reset defaults.
+  void adoptInteractionState(
+    NativeHtmlRangeState previous, {
+    bool preserveValues = false,
+  }) {
     if (identical(this, previous)) return;
     final oldById = _uniqueRecordsByScriptId(previous._records);
     final newById = _uniqueRecordsByScriptId(_records);
@@ -268,6 +273,7 @@ class NativeHtmlRangeState extends ChangeNotifier {
       final newKey = entry.value.key;
       final oldRecord = old.value;
       final newRecord = entry.value.value;
+      if (preserveValues) newRecord.value = oldRecord.value;
       newRecord.focusNode.dispose();
       newRecord
         ..focusNode = oldRecord.focusNode

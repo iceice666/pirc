@@ -198,6 +198,8 @@ class NativeHtmlDocument extends StatefulWidget {
     this.onLink,
     this.onFormSubmit,
     this.onScriptClick,
+    this.onDetailsActivate,
+    this.preserveControlValues = false,
     this.onScriptControlClick,
     this.scriptFilePickerActions = const [],
     this.takeScriptFilePickerActions,
@@ -272,6 +274,10 @@ class NativeHtmlDocument extends StatefulWidget {
   final Future<void> Function(List<Map<String, dynamic>>)?
   onScriptRestoreControls;
   final Object? scriptDocument;
+  final ValueChanged<String>? onDetailsActivate;
+
+  /// Static presentation updates retain live values; script snapshots stay authoritative.
+  final bool preserveControlValues;
   final Map<String, NativeDocumentCanvasSnapshot> canvases;
   final Map<String, ui.Image> canvasImages;
   final Future<bool> Function(
@@ -476,7 +482,15 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       focusNode.dispose();
     }
     _retiredScriptFocusableNodes.clear();
-    _attachedHistoryController?.detach(this);
+    _attachedHistoryController?.detach(
+      this,
+      snapshot:
+          widget.scriptSnapshot == null &&
+              widget.onScriptEvent == null &&
+              widget.onScriptClick == null
+          ? captureNativeHtmlHistory()
+          : null,
+    );
     _attachedHistoryController = null;
     forms?.dispose();
     controls?.dispose();
@@ -618,14 +632,20 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
           _renderedScriptDocument == widget.scriptDocument;
       controls = NativeHtmlControlState.fromHtml(sanitized);
       if (sameDocument && previousControls != null) {
-        controls!.adoptInteractionState(previousControls);
+        controls!.adoptInteractionState(
+          previousControls,
+          preserveValues: widget.preserveControlValues,
+        );
       }
       previousControls?.dispose();
       textFields = NativeHtmlTextFieldState.fromHtml(
         controls!.annotateHtml(sanitized),
       );
       if (previousTextFields != null && sameDocument) {
-        textFields!.adoptEditingState(previousTextFields);
+        textFields!.adoptEditingState(
+          previousTextFields,
+          preserveValues: widget.preserveControlValues,
+        );
       }
       previousTextFields?.dispose();
       _renderedScriptDocument = widget.scriptDocument;
@@ -634,19 +654,28 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       );
       ranges = NativeHtmlRangeState.fromHtml(textSource);
       if (sameDocument && previousRanges != null) {
-        ranges!.adoptInteractionState(previousRanges);
+        ranges!.adoptInteractionState(
+          previousRanges,
+          preserveValues: widget.preserveControlValues,
+        );
       }
       previousRanges?.dispose();
       final rangeSource = ranges!.annotateHtml(textSource);
       selects = NativeHtmlSelectState.fromHtml(rangeSource);
       if (sameDocument && previousSelects != null) {
-        selects!.adoptInteractionState(previousSelects);
+        selects!.adoptInteractionState(
+          previousSelects,
+          preserveValues: widget.preserveControlValues,
+        );
       }
       previousSelects?.dispose();
       final selectSource = selects!.annotateHtml(rangeSource);
       dates = NativeHtmlDateState.fromHtml(selectSource);
       if (sameDocument && previousDates != null) {
-        dates!.adoptInteractionState(previousDates);
+        dates!.adoptInteractionState(
+          previousDates,
+          preserveValues: widget.preserveControlValues,
+        );
       }
       previousDates?.dispose();
       final dateSource = dates!.annotateHtml(selectSource);
@@ -2140,6 +2169,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             files!,
             _scriptFocusableNode,
             detailsGroups!,
+            widget.onDetailsActivate,
             buttons!,
             forms!,
             widget.markdownStyles,
@@ -2613,6 +2643,7 @@ class _NativeHtmlFactory extends WidgetFactory {
     this.files,
     this.scriptFocusableNode,
     this.detailsGroups,
+    this.onDetailsActivate,
     this.buttons,
     this.forms,
     this.markdownStyles,
@@ -2811,6 +2842,7 @@ class _NativeHtmlFactory extends WidgetFactory {
   final NativeHtmlFileInputState files;
   final FocusNode Function(dom.Element) scriptFocusableNode;
   final NativeHtmlDetailsGroups detailsGroups;
+  final ValueChanged<String>? onDetailsActivate;
   final NativeHtmlButtonState buttons;
   final NativeHtmlForms forms;
   final bool markdownStyles;
@@ -5416,6 +5448,10 @@ class _NativeHtmlFactory extends WidgetFactory {
           ? null
           : (element) => onScriptTap!(element, null),
       summaryFocusNode: scriptFocusableNode,
+      onStaticActivate: onDetailsActivate == null
+          ? null
+          : (element) =>
+                onDetailsActivate!(element.attributes['data-pirc-script-id']!),
     )) {
       return;
     }

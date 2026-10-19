@@ -21,8 +21,22 @@ with `node apps/android/tool/parity/capture_document_details_chromium153.mjs`
 from the repository root; `tool/parity/document_details_test.mjs` compares the
 runtime to it, while `test/native_html_details_script_test.dart` checks native
 activation across phone/tablet sizes, themes and DPRs. Pixel appearance, default
-summaries without authored markup, ancestor revealing and physical-device
-acceptance remain separate boundaries in the mobile plan.
+summaries without authored markup and physical-device acceptance remain
+separate boundaries in the mobile plan.
+
+Fragment links reveal containing disclosures before native focus/scrolling,
+including nested accordions, named groups, initial URLs, repeated activation
+and history traversal. Static fetched documents retain open state and eligible
+text drafts across resize/remount. Presentation reparses retain live file,
+password, autocomplete-off and other control values while Reset still uses the
+authored defaults. Full workspace teardown still needs lifetime support for
+values excluded from history snapshots. Recreate the 96-profile reference with
+`node apps/android/tool/parity/capture_document_details_fragment_chromium153.mjs`;
+`test/document_details_fragment_test.dart` checks native visible geometry,
+focus, scrolling and retained reading position. Hidden-until-found/beforematch,
+shadow-tree revealing, custom marker appearance and closed-descendant CSSOM
+geometry remain documented differences. These gates do not establish full
+browser compatibility or new pixel parity.
 
 ## Build and run
 
@@ -688,7 +702,7 @@ selection variants, focus restoration across remount/background transitions,
 broader traversal, focus pseudo styling, additional toggle box-model combinations
 and exact toggle appearance/accent styling remain outside this gate. Redirected
 focus records a difference.
-Late target retry, ancestor revealing, unmeasured/inline/text/non-HTML
+Late target retry, hidden-until-found/beforematch revealing, unmeasured/inline/text/non-HTML
 targets, RTL/vertical writing, sticky/SVG boxes, scroll snap, root horizontal
 scrolling and unresolved inset math remain listed in the mobile plan. Unsupported
 geometry retains the native anchor fallback; matching-frame waits are bounded.

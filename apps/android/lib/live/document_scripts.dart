@@ -190,6 +190,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   String? documentBaseUrl;
   String? fragmentTargetId;
   bool? fragmentTargetReady;
+  bool fragmentAncestorsRevealed = false;
   bool initialRootScrollOverride = false;
   List<NativeDocumentStylesheet>? get stylesheets =>
       _hasStylesSnapshot ? _documentStyles?.stylesheets : null;
@@ -1936,6 +1937,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       'documentBaseURL',
       'fragmentTargetId',
       'fragmentTargetReady',
+      'fragmentAncestorsRevealed',
       'initialRootScrollOverride',
       'now',
       'scheduler',
@@ -2899,6 +2901,11 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       throw const FormatException('Invalid fragment target readiness.');
     }
     fragmentTargetReady = targetReady as bool?;
+    final ancestorsRevealed = decoded['fragmentAncestorsRevealed'];
+    if (ancestorsRevealed != null && ancestorsRevealed is! bool) {
+      throw const FormatException('Invalid fragment ancestor state.');
+    }
+    fragmentAncestorsRevealed = ancestorsRevealed == true;
     final rootOverride = decoded['initialRootScrollOverride'];
     if (rootOverride != null && rootOverride is! bool) {
       throw const FormatException('Invalid initial root scroll override.');
