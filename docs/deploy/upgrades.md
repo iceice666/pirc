@@ -1,6 +1,26 @@
 # Upgrades
 
-## Unreleased: gateway-owned workspace modes, node protocol 12
+## Unreleased: mode tabs by capability, node protocol 13
+
+Upgrade the gateway and every node together: the node protocol moves to 13
+because the mode catalog the gateway sends no longer has `ui.group`. Protocol 12
+nodes are refused by the new gateway and protocol 13 nodes by an older one.
+Database schemas are unchanged.
+
+**Breaking: remove `group:` from every mode file before upgrading.** Clients now
+place a mode's workspaces by its `assistant` capability (`full`: Chat, `user`:
+Work), so `ui.group` was removed. Mode files reject unknown fields: a file that
+still contains `group:` is skipped with a warning naming it, and its workspaces
+become unavailable (history readable, no new work) until you delete the line
+and reload the gateway (SIGHUP). This includes the default `chat.md` and
+`directory.md` the gateway created earlier and read-only directories provided
+by Nix. Compare with `pirc-gateway modes --print-defaults`.
+
+`GET /api/nodes` lists each node's accepted mode ids (`modes`). Web and Android
+clients ask capabilities instead of the legacy `kind`, which stays in workspace
+JSON for one more release.
+
+## 0.8.0: gateway-owned workspace modes, node protocol 12
 
 Upgrade the gateway and every node together. Protocol 11 nodes are refused by
 the new gateway and protocol 12 nodes by an older gateway; the close reason

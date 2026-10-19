@@ -122,9 +122,11 @@ impl Serialize for ConnectedNode {
                 None => serde_json::to_value(workspace).unwrap_or(Value::Null),
             })
             .collect();
-        let mut node = serializer.serialize_struct("ConnectedNode", 5)?;
+        let mut node = serializer.serialize_struct("ConnectedNode", 6)?;
         node.serialize_field("id", &self.id)?;
         node.serialize_field("role", &self.role)?;
+        // The mode ids this node accepts (`PIRC_MODES`), for create dialogs.
+        node.serialize_field("modes", &self.modes)?;
         node.serialize_field("workspaces", &workspaces)?;
         node.serialize_field("connectedAt", &self.connected_at)?;
         node.serialize_field("lastSeenAt", &self.last_seen_at)?;

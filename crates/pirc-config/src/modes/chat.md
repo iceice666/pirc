@@ -2,7 +2,6 @@
 label: Chat
 description: The personal assistant's chats and projects.
 ui:
-  group: chat
   noun: chat
 # Transitional host restriction until nodes accept explicit mode ids.
 workdir: per-session

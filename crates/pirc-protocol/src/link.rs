@@ -308,7 +308,7 @@ mod tests {
     #[test]
     fn round_trips_node_frames() {
         for frame in [
-            json!({ "type": "register", "role": "node", "protocol": 12, "modes": ["directory"],
+            json!({ "type": "register", "role": "node", "protocol": 13, "modes": ["directory"],
                 "workspaces": [{ "id": "w", "displayName": "W", "mode": "directory",
                     "roles": [{ "name": "default", "source": "workspace" }] }] }),
             json!({ "type": "heartbeat" }),

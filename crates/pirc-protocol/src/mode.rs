@@ -92,13 +92,13 @@ pub enum ScheduleScope {
     Any,
 }
 
-/// Presentation metadata; clients do not consume this until phase 3.
+/// Presentation metadata. Clients place a mode's workspaces in the Chat or
+/// Work tab by [`AssistantAccess`] (`full` is Chat), not by any field here.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ModeUi {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
-    pub group: String,
     pub noun: String,
 }
 
@@ -311,7 +311,6 @@ impl Mode {
         }
         text(&self.label, "label", 100, true)?;
         text(&self.description, "description", 500, false)?;
-        text(&self.ui.group, "ui.group", 100, true)?;
         text(&self.ui.noun, "ui.noun", 100, true)?;
         if let Some(icon) = &self.ui.icon {
             text(icon, "ui.icon", 100, true)?;
@@ -373,7 +372,6 @@ pub fn default_work() -> Mode {
         description: "Coding sessions in a repository.".into(),
         ui: ModeUi {
             icon: None,
-            group: "work".into(),
             noun: "session".into(),
         },
         workdir: Workdir::Workspace,
@@ -411,7 +409,6 @@ pub fn default_chat() -> Mode {
         description: "The personal assistant's chats and projects.".into(),
         ui: ModeUi {
             icon: None,
-            group: "chat".into(),
             noun: "chat".into(),
         },
         workdir: Workdir::PerSession,
@@ -529,7 +526,12 @@ mod tests {
     fn validates_ranges_sections_and_vocabulary() {
         refuses(json!({"unknown":true}), "unknown field");
         refuses(
-            json!({"ui":{"group":"work","noun":"session","unknown":true}}),
+            json!({"ui":{"noun":"session","unknown":true}}),
+            "unknown field",
+        );
+        // `ui.group` was removed: the tab follows `assistant`.
+        refuses(
+            json!({"ui":{"group":"work","noun":"session"}}),
             "unknown field",
         );
         refuses(json!({"label":" "}), "label");

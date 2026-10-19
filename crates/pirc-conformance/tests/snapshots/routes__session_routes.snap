@@ -960,6 +960,9 @@ expression: t.into_value()
           "connectedAt": "<epoch-ms>",
           "id": "test",
           "lastSeenAt": "<epoch-ms>",
+          "modes": [
+            "directory"
+          ],
           "role": "node",
           "workspaces": [
             {

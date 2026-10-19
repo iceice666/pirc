@@ -13,14 +13,14 @@ expression: t.into_value()
   {
     "observed": {
       "closed": 4426,
-      "reason": "node protocol 9 != daemon 12"
+      "reason": "node protocol 9 != daemon 13"
     },
     "step": "older protocol"
   },
   {
     "observed": {
       "closed": 4426,
-      "reason": "node protocol 1 != daemon 12"
+      "reason": "node protocol 1 != daemon 13"
     },
     "step": "no protocol"
   },
@@ -79,6 +79,9 @@ expression: t.into_value()
           "connectedAt": "<epoch-ms>",
           "id": "test",
           "lastSeenAt": "<epoch-ms>",
+          "modes": [
+            "directory"
+          ],
           "role": "node",
           "workspaces": [
             {

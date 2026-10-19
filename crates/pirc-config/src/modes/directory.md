@@ -2,7 +2,6 @@
 label: Work
 description: Coding sessions in a repository.
 ui:
-  group: work
   noun: session
 # Transitional host restriction until nodes accept explicit mode ids.
 workdir: workspace

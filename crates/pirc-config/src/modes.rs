@@ -289,7 +289,7 @@ mod tests {
             "---\nscalar\n---\n",
             "---\nlabel: [\n---\n",
             "---\nlabel: A\nlabel: B\n---\n",
-            "---\nui: {group: chat, group: work}\n---\n",
+            "---\nui: {noun: chat, noun: work}\n---\n",
             "---\n123: wrong-key\n---\n",
         ] {
             assert!(parse_mode("chat", text).is_err(), "{text:?}");
