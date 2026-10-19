@@ -33,6 +33,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
+- Android Back/Forward no longer waits for a layout timeout on ready static pages.
+
 - Android initial page routing preserves document targets and history reading positions.
 
 - Android initial document links wait for generated targets and retain the selected node through loading and remounts.

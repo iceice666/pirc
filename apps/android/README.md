@@ -34,7 +34,9 @@ The application ID is `dev.pirc.mobile.preview`. Local release-mode builds use
 the existing Android debug signing key for preview installs. Release CI requires
 a persistent keystore supplied through Actions secrets; see
 [Release CI setup](../../docs/development/releasing.md#github-release-ci-setup-once-per-repository).
-Public distribution and a production signing identity remain a release decision;
+Origin's CI now has a dedicated release key. Its APKs require uninstalling the
+old debug-signed beta first; local preview builds retain their debug identity.
+Production application identity and store distribution remain release decisions;
 do not treat these builds as store releases. No signing key, pairing credential
 or local APK belongs in Git.
 
@@ -702,6 +704,8 @@ snapshot for their first return. The VM records the source scroll at action time
 later History writes preserve reading position. Traversal selects its target
 after `popstate` and before `hashchange`.
 Native nested reveal also retains an absolute root scroll issued after selection.
+Root anchoring observes completed native child-layout measurements, so retained
+static-page history does not wait for the bounded fallback after layout is ready.
 Recreate the 288-profile / 880-state reference with
 `node apps/android/tool/parity/capture_document_initial_history_chromium153.mjs`;
 `integration_test/document_initial_history_test.dart` uses `/initial-history.json`.

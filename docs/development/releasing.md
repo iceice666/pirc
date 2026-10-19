@@ -93,6 +93,15 @@ release. All actions/toolchains are pinned. macOS runs use GitHub's
    preview builds keep their existing signing behavior when CI variables are not
    set. The setup check does not prove physical-device acceptance.
 
+The original repository's dedicated release key was configured on 2026-10-19;
+[Release setup passed](https://github.com/iceice666/pirc/actions/runs/39224437750).
+Its public certificate SHA-256 is
+`f612b5ff5a6f60155debbaa671e2d0ca9248d75d16f65dc64fcd11f7c99f9d81`.
+This intentionally replaces the debug identity used by the initial 0.6.1 beta;
+that beta must be uninstalled before installing an APK signed with the new key.
+The application ID is still the preview ID. Local builds without CI signing
+variables still use the debug key. Forks must configure their own secrets.
+
 ## Running the Release workflow
 
 1. Follow checklist steps 1–6 above, including version/build-number increments,
