@@ -40,6 +40,11 @@ deletion are not open work.
    (brute-force cosine in Rust, no SQLite extension). Stays on SQLite; Postgres
    and sqlite-vec are rejected there. Each phase needs the user's go-ahead;
    phase 2 also needs the embeddings source decided.
+6. **GPU access in the agent sandbox.** [Sandbox GPU](sandbox-gpu.md): an opt-in
+   node setting adds two measured Seatbelt rules for Metal on macOS and exact
+   NVIDIA/render-node binds on Linux (unverified on hardware), plus a NixOS module
+   option replacing the node's `PrivateDevices`. Security-boundary change: each
+   phase needs the user's go-ahead and a recorded decision.
 
 ## Shelved: project-only memory (B)
 
