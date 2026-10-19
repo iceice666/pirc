@@ -83,6 +83,10 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
             "/api/sessions/:id/interactions/:interactionId/answer",
             answer,
         ),
+        post(
+            "/api/sessions/:id/interactions/:interactionId/relayed-answer",
+            relayed_answer,
+        ),
         post("/api/sessions/:id/uploads", upload),
     ];
     if config.chat() {
@@ -1382,6 +1386,31 @@ async fn answer(node: Node, request: Request) -> ApiResult<Response> {
     node.db
         .lock()
         .validate_lease(&session.id, &client_id, generation)?;
+    answer_interaction(&node, &session, &interaction_id, answer).await
+}
+
+/// The gateway relays the session owner's answer from the chat that
+/// delegated this session's task, without a control lease (the gateway
+/// checks the user and the delegation; docs/architecture/security-decisions.md).
+/// Only a confirmation's yes or no.
+async fn relayed_answer(node: Node, request: Request) -> ApiResult<Response> {
+    let session = claim_mutable(&node, &request)?;
+    let interaction_id = param(&request, "interactionId").to_owned();
+    let map = object(request.json())?;
+    let answer = interaction_answer(map.get("answer").unwrap_or(&Value::Null))?;
+    let confirm = node.db.lock().get_interaction(&interaction_id)?.kind == "confirm";
+    if !confirm || !answer.get("confirmed").is_some_and(Value::is_boolean) {
+        return Err(ApiError::invalid_input());
+    }
+    answer_interaction(&node, &session, &interaction_id, answer).await
+}
+
+async fn answer_interaction(
+    node: &Node,
+    session: &SessionRow,
+    interaction_id: &str,
+    answer: Map<String, Value>,
+) -> ApiResult<Response> {
     let active = node
         .runners
         .get(&session.id)
@@ -1395,7 +1424,7 @@ async fn answer(node: Node, request: Request) -> ApiResult<Response> {
         })?;
     let epoch = active.epoch();
     let interaction = node.db.lock().claim_interaction(
-        &interaction_id,
+        interaction_id,
         &session.id,
         epoch,
         &Value::Object(answer.clone()),

@@ -452,6 +452,7 @@ pub(crate) struct ModelHost {
     pub entries: Vec<(String, pirc_protocol::Message)>,
     pub branch: Vec<crate::session_store::SessionEntry>,
     pub run_requests: Vec<String>,
+    pub run_quotes: Vec<String>,
 }
 
 impl ModelHost {
@@ -470,6 +471,7 @@ impl ModelHost {
             entries: Vec::new(),
             branch: Vec::new(),
             run_requests: Vec::new(),
+            run_quotes: Vec::new(),
         }
     }
 
@@ -615,6 +617,9 @@ impl AgentHost for ModelHost {
     }
     fn run_user_requests(&self) -> Vec<String> {
         self.run_requests.clone()
+    }
+    fn run_user_quotes(&self) -> Vec<String> {
+        self.run_quotes.clone()
     }
 }
 

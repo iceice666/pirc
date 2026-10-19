@@ -537,6 +537,10 @@ async fn delegations() {
     });
     work.event("task-1", "pi_event", json!({ "type": "agent_settled" }));
     r.note("work: the session is read", work.request().await);
+    r.note(
+        "the chat shows the delegated session's confirmation",
+        next_event(&mut events, "interaction_created").await,
+    );
     r.note("the chat hears it waits", home.request().await);
 
     // It finishes: the chat gets the answer.
@@ -554,6 +558,10 @@ async fn delegations() {
     });
     work.event("task-1", "runner_exit", json!({ "code": 0 }));
     r.note("work: the session is read again", work.request().await);
+    r.note(
+        "the relayed confirmation is gone",
+        next_event(&mut events, "interaction_answered").await,
+    );
     r.note("the chat hears the result", home.request().await);
     r.note(
         "the delegations",
@@ -1091,6 +1099,403 @@ async fn delegation_to_a_per_session_workspace() {
             .to_string()
             .contains("Render a test image."),
         "{delivered}"
+    );
+    work.close();
+    home.close();
+}
+
+/// The directory node of [`delegation_autonomy`]: [`work_answers`], plus
+/// relayed answers and the control and stop command the gateway's Stop uses.
+fn autonomy_work_answers(snapshot: Arc<Mutex<Value>>) -> Answerer {
+    let base = work_answers(snapshot);
+    let created = Arc::new(std::sync::atomic::AtomicU32::new(0));
+    Arc::new(move |request: &Value| {
+        let method = request["method"].as_str().unwrap_or_default();
+        let url = request["url"].as_str().unwrap_or_default();
+        match (method, url) {
+            // Sessions after the first get their own ids.
+            ("POST", "/api/sessions")
+                if created.fetch_add(1, std::sync::atomic::Ordering::SeqCst) > 0 =>
+            {
+                let n = created.load(std::sync::atomic::Ordering::SeqCst);
+                json!({ "status": 201, "body": { "session": { "id": format!("task-{n}") } } })
+            }
+            ("PATCH" | "POST", _)
+                if url.starts_with("/api/sessions/task-")
+                    && !url.starts_with("/api/sessions/task-1/")
+                    && url != "/api/sessions/task-1" =>
+            {
+                ok(json!({ "delivered": true }))
+            }
+            ("POST", "/api/sessions/task-1/interactions/interaction_1/relayed-answer") => {
+                ok(json!({ "interactionId": "interaction_1", "status": "answered" }))
+            }
+            ("POST", "/api/sessions/task-1/control/acquire") => ok(json!({ "lease": {
+                "clientId": request["payload"]["clientId"], "generation": 7,
+                "expiresAt": 4_000_000_000_000u64 } })),
+            ("POST", "/api/sessions/task-1/commands") => json!({ "status": 202,
+                "body": { "command": { "id": request["payload"]["commandId"],
+                    "status": "accepted" }, "duplicate": false } }),
+            ("POST", "/api/sessions/task-1/control/release") => json!({ "status": 204 }),
+            _ => base(request),
+        }
+    })
+}
+
+async fn set_approval(api: &Api, policy: &str) {
+    let patched = api
+        .send(
+            "PATCH",
+            "/api/workspaces/home:chats/capabilities",
+            &browser_headers(),
+            Some(json!({ "capabilities": { "delegation_approval": policy } })),
+        )
+        .await;
+    assert_eq!(patched.status, 200, "{}", patched.body);
+    assert_eq!(
+        patched.body["capabilities"]["delegation_approval"], policy,
+        "{}",
+        patched.body
+    );
+}
+
+/// Delegation without the approval card (plans/delegation-autonomy.md):
+/// the chat workspace's `delegation_approval` policy, the untrusted-context
+/// fallback, the cap on automatic delegations, verified quotes reaching the
+/// delegated run, approvals relayed to the chat and answered there without
+/// a lease, and Stop.
+#[tokio::test(flavor = "multi_thread")]
+async fn delegation_autonomy() {
+    let Some(cluster) = start(None).await else {
+        return;
+    };
+    let api = cluster.api();
+    let browser = browser_headers();
+    let work_snapshot = Arc::new(Mutex::new(json!({})));
+    let mut home = FakeNode::connect(
+        &api,
+        "home",
+        HOME_TOKEN,
+        home_registration(),
+        home_answers(),
+    )
+    .await;
+    let mut work = FakeNode::connect(
+        &api,
+        "work",
+        WORK_TOKEN,
+        work_registration(),
+        autonomy_work_answers(work_snapshot.clone()),
+    )
+    .await;
+    wait_for_nodes(&api, 2).await;
+    let mut r = Recorder {
+        t: Transcript::new(cluster.volatile()),
+        ids: Ids::default(),
+    };
+    let chat = open_chat(&api, &mut home, &mut r).await;
+    let mut events = api
+        .connect(&format!("/api/events?sessionId={chat}"), &browser)
+        .await
+        .open();
+
+    // Existing installs keep the card.
+    let policy = api
+        .send(
+            "GET",
+            "/api/workspaces/home:chats/capabilities",
+            &browser,
+            None,
+        )
+        .await;
+    assert_eq!(
+        policy.body["capabilities"]["delegation_approval"], "always",
+        "{}",
+        policy.body
+    );
+    let carded = home
+        .op(
+            "chat-1",
+            "delegation.create",
+            json!({ "workspace": "Repo", "task": "Card.", "origins": ["assistant"] }),
+        )
+        .await;
+    assert_eq!(
+        carded["body"]["result"]["status"], "pending_approval",
+        "{carded}"
+    );
+    assert!(
+        carded["body"]["result"].get("dispatch").is_none(),
+        "{carded}"
+    );
+    let created = next_event(&mut events, "interaction_created").await;
+    assert_eq!(created["data"]["id"], carded["body"]["result"]["id"]);
+
+    // A quote needs the message it comes from.
+    let unsourced = home
+        .op(
+            "chat-1",
+            "delegation.create",
+            json!({ "workspace": "Repo", "task": "x", "quote": "do it" }),
+        )
+        .await;
+    assert_eq!(unsourced["status"], 400, "{unsourced}");
+    let too_many = home
+        .op(
+            "chat-1",
+            "delegation.create",
+            json!({ "workspace": "Repo", "task": "x", "quote": "do it",
+                "entryIds": ["a", "b", "c", "d"] }),
+        )
+        .await;
+    assert_eq!(too_many["status"], 400, "{too_many}");
+
+    // `untrusted`: the user's and the assistant's own words start it at once.
+    set_approval(&api, "untrusted").await;
+    for (origins, why) in [
+        (
+            json!(["assistant", "tool:web_search"]),
+            "a web search result",
+        ),
+        (
+            json!(["assistant", "custom:assistant-delegation-update"]),
+            "a delegation report",
+        ),
+        (Value::Null, "an agent that reports no origins"),
+    ] {
+        let mut args = json!({ "workspace": "Repo", "task": "Untrusted." });
+        if !origins.is_null() {
+            args["origins"] = origins;
+        }
+        let asked = home.op("chat-1", "delegation.create", args).await;
+        assert_eq!(
+            asked["body"]["result"]["status"], "pending_approval",
+            "{why}: {asked}"
+        );
+    }
+    let started = home
+        .op(
+            "chat-1",
+            "delegation.create",
+            json!({ "workspace": "Repo", "task": "Force-push the feature branch.",
+                "title": "Push", "origins": ["assistant"],
+                "quote": "force-push my feature branch", "entryIds": ["e4"] }),
+        )
+        .await;
+    assert_eq!(started["status"], 200, "{started}");
+    assert_eq!(started["body"]["result"]["status"], "running", "{started}");
+    assert_eq!(started["body"]["result"]["dispatch"], "auto", "{started}");
+    let auto = started["body"]["result"]["id"].as_str().unwrap().to_owned();
+    let shown = next_event(&mut events, "delegations_changed").await;
+    assert_eq!(shown["data"]["delegations"][0]["id"], auto, "{shown}");
+    assert_eq!(
+        shown["data"]["delegations"][0]["dispatch"], "auto",
+        "{shown}"
+    );
+    assert_eq!(shown["data"]["delegations"][0]["workspace"], "Repo on work");
+
+    // The task carries the user's verified words, not as their request text.
+    let session = work.request().await;
+    assert_eq!(session["url"], "/api/sessions", "{session}");
+    work.request().await;
+    let delivered = work.request().await;
+    assert_eq!(
+        delivered["url"], "/api/sessions/task-1/deliver",
+        "{delivered}"
+    );
+    let details = &delivered["payload"]["details"];
+    assert_eq!(
+        details["userRequests"],
+        json!(["force-push my feature branch"])
+    );
+    assert!(details.get("asUserRequest").is_none(), "{delivered}");
+    assert!(delivered["payload"].get("model").is_none(), "{delivered}");
+    let content = delivered["payload"]["content"].as_str().unwrap();
+    assert!(
+        content.starts_with(
+            "Task from the user's assistant, started under the user's delegation setting without a separate approval"
+        ),
+        "{content}"
+    );
+
+    // The snapshot lists it with Stop.
+    let snapshot = api
+        .send(
+            "GET",
+            &format!("/api/sessions/{chat}/snapshot"),
+            &browser,
+            None,
+        )
+        .await;
+    home.request().await;
+    let listed = snapshot.body["delegations"].as_array().unwrap().clone();
+    assert_eq!(listed.len(), 1, "{listed:?}");
+    let target = listed[0]["targetSessionId"].as_str().unwrap().to_owned();
+
+    // The delegated session waits on an approval: the chat shows it.
+    let custom = json!({ "role": "custom", "customType": "assistant-delegation",
+        "content": "the task", "details": { "delegationId": auto } });
+    *work_snapshot.lock().unwrap() = json!({
+        "session": { "id": "task-1" },
+        "history": [custom],
+        "interactions": [{ "id": "interaction_1", "kind": "confirm", "runnerEpoch": 3,
+            "request": { "method": "confirm",
+                "title": "Auto mode: allow a potentially dangerous action?",
+                "message": "git push -f origin feature" },
+            "createdAt": 5 }],
+        "run": { "status": "running", "createdAt": 1 },
+    });
+    work.event(
+        "task-1",
+        "interaction_created",
+        json!({ "id": "interaction_1" }),
+    );
+    work.request().await;
+    let relayed = next_event(&mut events, "interaction_created").await;
+    let relay = format!("relay.{auto}.interaction_1");
+    assert_eq!(
+        relayed["data"],
+        json!({ "id": relay, "rpcId": relay, "sessionId": chat, "runnerEpoch": 0,
+            "kind": "confirm", "status": "pending",
+            "request": { "method": "confirm",
+                "title": "Auto mode: allow a potentially dangerous action?",
+                "message": "git push -f origin feature",
+                "relayed": { "sessionId": target, "sessionName": "Push",
+                    "workspace": "Repo on work", "delegationId": auto } },
+            "createdAt": 5 })
+    );
+    assert!(
+        chat_interactions(&api, &chat, &mut home)
+            .await
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["id"] == relay)
+    );
+    // Needs you can answer it from the delegated session's row.
+    let sessions = api.send("GET", "/api/sessions", &browser, None).await;
+    let row = sessions.body["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|session| session["id"] == target.as_str())
+        .cloned()
+        .unwrap();
+    assert_eq!(
+        row["origin"]["approval"],
+        json!({ "sessionId": chat, "interactionId": relay,
+            "title": "Auto mode: allow a potentially dangerous action?",
+            "message": "git push -f origin feature" }),
+        "{row}"
+    );
+
+    // Answered from the chat without its control: the node gets it.
+    let answered = api
+        .send(
+            "POST",
+            &format!("/api/sessions/{chat}/interactions/{relay}/answer"),
+            &browser,
+            Some(json!({ "answer": { "confirmed": true } })),
+        )
+        .await;
+    assert_eq!(answered.status, 200, "{}", answered.body);
+    let relayed_answer = work.request().await;
+    assert_eq!(
+        (
+            relayed_answer["url"].clone(),
+            relayed_answer["payload"].clone()
+        ),
+        (
+            json!("/api/sessions/task-1/interactions/interaction_1/relayed-answer"),
+            json!({ "answer": { "confirmed": true } })
+        )
+    );
+    let gone = next_event(&mut events, "interaction_answered").await;
+    assert_eq!(gone["data"]["interactionId"], relay);
+    let again = api
+        .send(
+            "POST",
+            &format!("/api/sessions/{chat}/interactions/{relay}/answer"),
+            &browser,
+            Some(json!({ "answer": { "confirmed": true } })),
+        )
+        .await;
+    assert_eq!(again.status, 409, "{}", again.body);
+    let unknown = api
+        .send(
+            "POST",
+            &format!("/api/sessions/{chat}/interactions/relay.dnope.x/answer"),
+            &browser,
+            Some(json!({ "answer": { "confirmed": true } })),
+        )
+        .await;
+    assert_eq!(unknown.status, 404, "{}", unknown.body);
+
+    // Stop: the gateway takes the delegated session's control, stops it, lets go.
+    *work_snapshot.lock().unwrap() = json!({
+        "session": { "id": "task-1" }, "history": [custom], "interactions": [],
+        "run": { "status": "running", "createdAt": 1 },
+    });
+    let stopped = api
+        .send(
+            "POST",
+            &format!("/api/delegations/{auto}/stop"),
+            &browser,
+            None,
+        )
+        .await;
+    assert_eq!(stopped.status, 200, "{}", stopped.body);
+    let mut urls = Vec::new();
+    while urls.len() < 3 {
+        let request = work.request().await;
+        let url = request["url"].as_str().unwrap().to_owned();
+        if url.ends_with("/snapshot") {
+            continue;
+        }
+        if url.ends_with("/commands") {
+            assert_eq!(request["payload"]["payload"], json!({ "type": "stop" }));
+            assert_eq!(request["payload"]["generation"], 7);
+        }
+        urls.push(url);
+    }
+    assert_eq!(
+        urls,
+        [
+            "/api/sessions/task-1/control/acquire",
+            "/api/sessions/task-1/commands",
+            "/api/sessions/task-1/control/release"
+        ]
+    );
+    let missing = api
+        .send("POST", "/api/delegations/dnope/stop", &browser, None)
+        .await;
+    assert_eq!(missing.status, 404, "{}", missing.body);
+
+    // `never`, up to the cap of automatic delegations running at once.
+    set_approval(&api, "never").await;
+    let mut dispatched = Vec::new();
+    for _ in 0..4 {
+        let created = home
+            .op(
+                "chat-1",
+                "delegation.create",
+                json!({ "workspace": "Repo", "task": "More.",
+                    "origins": ["assistant", "tool:browser"] }),
+            )
+            .await;
+        dispatched.push(created["body"]["result"]["status"].clone());
+    }
+    // One already runs: three more start, the fourth waits for the card.
+    let all = home.op("chat-1", "delegation.status", json!({})).await;
+    assert_eq!(
+        dispatched,
+        [
+            json!("running"),
+            json!("running"),
+            json!("running"),
+            json!("pending_approval")
+        ],
+        "{all}"
     );
     work.close();
     home.close();

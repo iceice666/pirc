@@ -48,6 +48,9 @@ pub const DELEGATE_TOOL: &str = "delegate";
 pub const DELEGATIONS_TOOL: &str = "delegation_status";
 pub const SEARCH_TOOL: &str = "memory_search";
 const MEMORY_TOOLS: [&str; 2] = [NOTE_TOOL, PROPOSE_TOOL];
+/// A delegation's quote must come from the user's last this many messages
+/// (auto mode's classifier window; the gateway's `QUOTE_MESSAGES`).
+const QUOTE_MESSAGES: usize = 3;
 /// Session entry: a note revision this chat wrote (`learn` after a restart).
 const NOTE_REVISION: &str = "assistant.note_revision";
 /// A chat waits this long for its memory before starting without it (and
@@ -294,7 +297,7 @@ fn render_workspaces_with_delegation(workspaces: &[Value], delegation: bool) -> 
     if !linked.is_empty() && delegation {
         lines.push(String::new());
         lines.push(format!(
-            "The user linked this project to the workspaces marked “linked to this project”: it is about them. {} You can still hand tasks to any workspace, and the user approves every delegation.",
+            "The user linked this project to the workspaces marked “linked to this project”: it is about them. {} You can still hand tasks to any workspace; the user's delegation approval setting applies to all of them.",
             if linked.len() == 1 {
                 format!("{DELEGATE_TOOL} without a workspace goes to that one.")
             } else {
@@ -413,6 +416,29 @@ pub fn find_quote(branch: &[SessionEntry], quote: &str) -> Option<String> {
         }
         _ => None,
     })
+}
+
+/// The newest of the user's last `messages` messages in this chat that
+/// contains `quote` (as [`find_quote`]): words they said a while ago are
+/// not taken as asking for work now.
+pub fn find_recent_quote(branch: &[SessionEntry], quote: &str, messages: usize) -> Option<String> {
+    let wanted = words(quote);
+    if js::len16(&wanted) < 2 {
+        return None;
+    }
+    branch
+        .iter()
+        .rev()
+        .filter_map(|entry| match &entry.data {
+            EntryData::Message(Message::User { content, .. }) => Some((entry, content)),
+            _ => None,
+        })
+        .take(messages)
+        .find_map(|(entry, content)| {
+            words(&user_text(content))
+                .contains(&wanted)
+                .then(|| entry.id.clone())
+        })
 }
 
 /// `currentOrigins`: where what the assistant knows right now came from:
@@ -767,7 +793,7 @@ fn delegation_data(delegation: &Value) -> Value {
     for key in ["id", "title", "workspace", "status"] {
         out.insert(key.to_owned(), json!(string(delegation.get(key))));
     }
-    for key in ["role", "model", "thinking", "session", "result"] {
+    for key in ["role", "model", "thinking", "dispatch", "session", "result"] {
         if let Some(value) = delegation.get(key).filter(|v| v.is_string()) {
             out.insert(key.to_owned(), value.clone());
         }
@@ -819,6 +845,12 @@ fn delegation_schema() -> Value {
             ("role", str_(None)),
             ("model", str_(None)),
             ("thinking", str_(None)),
+            (
+                "dispatch",
+                str_(Some(
+                    "approved: the user approved it; auto: it started without asking",
+                )),
+            ),
             ("session", str_(Some("Name of the session doing the work"))),
             ("result", str_(Some("This chunk of the final answer"))),
             ("resultOffset", int(None)),
@@ -832,6 +864,7 @@ fn delegation_schema() -> Value {
             "role",
             "model",
             "thinking",
+            "dispatch",
             "session",
             "result",
             "resultOffset",
@@ -942,6 +975,7 @@ impl AssistantTool {
                         "task": param("The whole task, standing on its own."),
                         "title": param("A short title; it names the new session."),
                         "follows": param("An earlier delegation's id (like d1a2b3c4d): send the task to its session instead."),
+                        "quote": param("The user's exact words, from one of their last three messages, that asked for this work. They are checked against those messages."),
                         "role": {
                             "type": "string",
                             "pattern": "^[a-z][a-z0-9_-]{0,39}$",
@@ -1036,7 +1070,7 @@ impl AssistantTool {
         match self.kind {
             Kind::Note => self.note(&agent, &args, &ctx).await,
             Kind::Propose => self.propose(&agent, &args, &ctx).await,
-            Kind::Delegate => self.delegate(&args, &ctx).await,
+            Kind::Delegate => self.delegate(&agent, &args, &ctx).await,
             Kind::Delegations => self.delegations(&args, &ctx).await,
             Kind::Search => self.search(&args, &ctx).await,
         }
@@ -1282,12 +1316,37 @@ impl AssistantTool {
 
     async fn delegate(
         &self,
+        agent: &Agent,
         args: &Map<String, Value>,
         ctx: &ToolContext,
     ) -> Result<ToolResult, String> {
         let task = trimmed(args, "task");
         if task.is_empty() {
             return Ok(text("task is required", None, true));
+        }
+        let branch = agent.branch();
+        // What the chat read since the user's last message decides whether
+        // an `untrusted` policy starts it at once. Earlier delegate calls
+        // only report what the gateway recorded.
+        let origins: Vec<String> = current_origins(&branch, &agent.running_script_capabilities())
+            .into_iter()
+            .filter(|origin| *origin != format!("tool:{DELEGATE_TOOL}"))
+            .collect();
+        let quote = args
+            .get("quote")
+            .and_then(Value::as_str)
+            .map(js::trim)
+            .filter(|quote| !quote.is_empty());
+        let mut verified = None;
+        if let Some(raw) = quote {
+            let Some(found) = find_recent_quote(&branch, raw, QUOTE_MESSAGES) else {
+                return Ok(text(
+                    "That quote is not in the user's last three messages in this chat. Quote their exact words, or leave quote out.",
+                    None,
+                    true,
+                ));
+            };
+            verified = Some((redact_secrets(raw), found));
         }
         // Without a workspace or follows, the gateway uses the project's only
         // linked workspace, or says to name one.
@@ -1303,6 +1362,11 @@ impl AssistantTool {
                 request.insert(key.to_owned(), json!(value));
             }
         }
+        request.insert("origins".to_owned(), json!(origins));
+        if let Some((quote, entry)) = verified {
+            request.insert("quote".to_owned(), json!(quote));
+            request.insert("entryIds".to_owned(), json!([entry]));
+        }
         match self.request("delegation.create", request, ctx).await {
             Ok(result) => {
                 let role = result
@@ -1310,13 +1374,21 @@ impl AssistantTool {
                     .filter(|role| js::truthy(Some(role)))
                     .map(|role| format!(", role {}", js::string_of(role)))
                     .unwrap_or_default();
+                let (id, title, workspace) = (
+                    string(result.get("id")),
+                    string(result.get("title")),
+                    string(result.get("workspace")),
+                );
                 Ok(typed(
-                    format!(
-                        "Asked the user to approve delegation {} (“{}”, {}{role}). They can pick the model when approving. Nothing runs until they do; you will get a message when it finishes, fails or needs them.",
-                        string(result.get("id")),
-                        string(result.get("title")),
-                        string(result.get("workspace"))
-                    ),
+                    if result.get("dispatch").and_then(Value::as_str) == Some("auto") {
+                        format!(
+                            "Started delegation {id} (“{title}”, {workspace}{role}) without asking: the user's delegation approval setting allows it. The user sees it in this chat and can stop it. You will get a message when it finishes, fails or needs them."
+                        )
+                    } else {
+                        format!(
+                            "Asked the user to approve delegation {id} (“{title}”, {workspace}{role}). They can pick the model when approving. Nothing runs until they do; you will get a message when it finishes, fails or needs them."
+                        )
+                    },
                     json!({ "delegation": delegation_data(&result) }),
                     Some(json!({ "delegationId": result.get("id") })),
                     false,

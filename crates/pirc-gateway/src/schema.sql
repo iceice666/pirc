@@ -100,7 +100,12 @@ CREATE TABLE delegations (
   -- The model (and thinking level) it runs on, and the role its new session starts in.
   model_json TEXT, thinking TEXT, role TEXT,
   -- 1: the user approved it as their own request for auto mode, for the run it starts.
-  as_user_request INTEGER NOT NULL DEFAULT 0
+  as_user_request INTEGER NOT NULL DEFAULT 0,
+  -- How it started: 'approved' (the user's card), 'auto' (the chat's delegation
+  -- approval policy), NULL before it started. The origins of the chat's context
+  -- the agent reported (JSON array), and the user's own words it verified
+  -- (quote, JSON array of their message entry ids).
+  dispatch TEXT, origins_json TEXT, quote TEXT, quote_entry_ids TEXT
 );
 CREATE INDEX delegations_owner ON delegations(owner_user, status);
 CREATE INDEX delegations_follows ON delegations(follows);

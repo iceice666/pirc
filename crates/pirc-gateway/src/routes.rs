@@ -776,6 +776,13 @@ pub async fn list_sessions(
             }
             if let Some(origin) = origins.get(&session.id) {
                 public["origin"] = json!(origin);
+                // A delegated session's approval, answerable from Needs you.
+                if let crate::db::SessionOrigin::Delegation { delegation_id, .. } = origin
+                    && let Some(approval) =
+                        crate::delegations::pending_approval(&app, delegation_id)
+                {
+                    public["origin"]["approval"] = approval;
+                }
             }
             public
         })
@@ -1023,6 +1030,11 @@ pub async fn snapshot(
     };
     interactions.extend(app.pending_gateway_interactions(&claimed.session.id, &identity.user));
     body.insert("interactions".into(), Value::Array(interactions));
+    // The delegations it started that still run (with Stop).
+    body.insert(
+        "delegations".into(),
+        crate::delegations::active(&app, &claimed.session.id),
+    );
     body.insert(
         "watermark".into(),
         json!(
@@ -1356,6 +1368,22 @@ pub async fn answer(
 ) -> Handled {
     let claimed = app.claim(&identity, &session_id)?;
     app.require_writable(&claimed.session)?;
+    // A delegated session's dialog relayed to this chat: the owner answers
+    // it without holding a control lease (docs/architecture/security-decisions.md).
+    if interaction_id.starts_with(crate::delegations::RELAY_PREFIX) {
+        let given = body.json().and_then(|body| body.get("answer")).cloned();
+        if let Some(answer) = crate::delegations::answer_relayed(
+            &app,
+            &claimed.session.id,
+            &interaction_id,
+            &identity.user,
+            given.as_ref(),
+        )
+        .await?
+        {
+            return Ok(ok(answer));
+        }
+    }
     // `answerBody`: a client and a held generation; the rest passes through.
     let (client_id, generation) = match body.json() {
         Some(Value::Object(answer)) => match (&answer.get("clientId"), &answer.get("generation")) {

@@ -63,4 +63,9 @@ pub trait AgentHost {
     fn run_user_requests(&self) -> Vec<String> {
         Vec::new()
     }
+    /// The user's own words a delegated task carried, verified in their
+    /// chat (never the task text), during the run it started.
+    fn run_user_quotes(&self) -> Vec<String> {
+        Vec::new()
+    }
 }

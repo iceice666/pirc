@@ -162,6 +162,10 @@ pub struct Agent {
     /// `details.asUserRequest`): auto mode's classifier reads them as user
     /// requests until the run ends.
     run_user_requests: RefCell<Vec<String>>,
+    /// The user's own words a delegated task carried (`details.userRequests`,
+    /// verified in their chat by its agent): the classifier reads them as
+    /// user requests until the run ends.
+    run_user_quotes: RefCell<Vec<String>>,
     /// The UI with dialogs linked to the operation that opens them.
     ui: Rc<dyn Ui>,
     has_ui: bool,
@@ -707,6 +711,7 @@ impl Agent {
                 auto_mode: AutoMode::new(),
                 approval_mode: Cell::new(None),
                 run_user_requests: RefCell::new(Vec::new()),
+                run_user_quotes: RefCell::new(Vec::new()),
                 ui,
                 has_ui: options.has_ui,
                 emit_raw: options.emit,
@@ -1880,6 +1885,7 @@ impl Agent {
             agent.running.set(false);
             // The user's approval of a delegated task covered this run only.
             agent.run_user_requests.borrow_mut().clear();
+            agent.run_user_quotes.borrow_mut().clear();
             *agent.controller.borrow_mut() = None;
             agent.run_active.set(false);
             agent.run_done.notify_waiters();
@@ -1989,9 +1995,19 @@ impl Agent {
                     ..
                 } = &*message
                     && custom_type == "assistant-delegation"
-                    && details.get("asUserRequest") == Some(&Value::Bool(true))
                 {
-                    self.run_user_requests.borrow_mut().push(id);
+                    if details.get("asUserRequest") == Some(&Value::Bool(true)) {
+                        self.run_user_requests.borrow_mut().push(id);
+                    }
+                    if let Some(quotes) = details.get("userRequests").and_then(Value::as_array) {
+                        self.run_user_quotes.borrow_mut().extend(
+                            quotes
+                                .iter()
+                                .filter_map(Value::as_str)
+                                .filter(|quote| !quote.trim().is_empty())
+                                .map(str::to_owned),
+                        );
+                    }
                 }
                 self.admitted(&message);
             }
@@ -3312,6 +3328,9 @@ impl AgentHost for Agent {
     }
     fn run_user_requests(&self) -> Vec<String> {
         self.run_user_requests.borrow().clone()
+    }
+    fn run_user_quotes(&self) -> Vec<String> {
+        self.run_user_quotes.borrow().clone()
     }
 }
 

@@ -130,6 +130,7 @@ expression: t.into_value()
     "body": {
       "capabilities": {
         "delegation": true,
+        "delegation_approval": "always",
         "memory_search": true,
         "remote_recall": true,
         "schedules": true,
@@ -148,6 +149,7 @@ expression: t.into_value()
     "body": {
       "capabilities": {
         "delegation": true,
+        "delegation_approval": "always",
         "memory_search": true,
         "remote_recall": false,
         "schedules": true,
@@ -212,6 +214,7 @@ expression: t.into_value()
     "body": {
       "capabilities": {
         "delegation": true,
+        "delegation_approval": "always",
         "memory_search": true,
         "remote_recall": true,
         "schedules": true,
@@ -321,6 +324,7 @@ expression: t.into_value()
           "result": {
             "capabilities": {
               "delegation": true,
+              "delegation_approval": "always",
               "memory_search": true,
               "remote_recall": true,
               "schedules": true,
@@ -914,6 +918,7 @@ expression: t.into_value()
   },
   {
     "body": {
+      "delegations": [],
       "history": [],
       "interactions": [
         {
@@ -993,6 +998,7 @@ expression: t.into_value()
   },
   {
     "body": {
+      "delegations": [],
       "history": [],
       "interactions": [
         {
@@ -2322,6 +2328,7 @@ expression: t.into_value()
           "result": {
             "capabilities": {
               "delegation": true,
+              "delegation_approval": "always",
               "memory_search": true,
               "remote_recall": true,
               "schedules": true,
@@ -2401,6 +2408,7 @@ expression: t.into_value()
           "result": {
             "capabilities": {
               "delegation": true,
+              "delegation_approval": "always",
               "memory_search": true,
               "remote_recall": true,
               "schedules": true,
@@ -2790,6 +2798,7 @@ expression: t.into_value()
           "result": {
             "capabilities": {
               "delegation": true,
+              "delegation_approval": "always",
               "memory_search": true,
               "remote_recall": true,
               "schedules": true,

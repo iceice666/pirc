@@ -183,8 +183,13 @@ fn reply_text(content: &[AssistantContent]) -> String {
 /// `recentUserRequests`: the human's most recent requests (never tool
 /// output, which may be attacker-controlled), and the custom messages in
 /// `also` (a delegated task the user approved as their request, during
-/// its run), without the gateway's label.
-fn recent_user_requests(entries: &[(String, Message)], also: &[String]) -> Vec<String> {
+/// its run), without the gateway's label; then `quotes`, the user's own
+/// words a delegated task carried, as their newest requests.
+fn recent_user_requests(
+    entries: &[(String, Message)],
+    also: &[String],
+    quotes: &[String],
+) -> Vec<String> {
     let mut out = Vec::new();
     for (id, message) in entries.iter().rev() {
         if out.len() >= USER_MESSAGES {
@@ -214,6 +219,12 @@ fn recent_user_requests(entries: &[(String, Message)], also: &[String]) -> Vec<S
         let trimmed = js::trim(&text);
         if !trimmed.is_empty() {
             out.insert(0, js::head16(trimmed, MAX_USER_CHARS).to_owned());
+        }
+    }
+    for quote in quotes.iter().take(USER_MESSAGES) {
+        let trimmed = js::trim(quote);
+        if !trimmed.is_empty() {
+            out.push(js::head16(trimmed, MAX_USER_CHARS).to_owned());
         }
     }
     out
@@ -303,7 +314,11 @@ pub fn classifier_prompt(
     hint: &str,
     use_memory: bool,
 ) -> String {
-    let requests = recent_user_requests(&host.context_entries(), &host.run_user_requests());
+    let requests = recent_user_requests(
+        &host.context_entries(),
+        &host.run_user_requests(),
+        &host.run_user_quotes(),
+    );
     let notes = if use_memory {
         memory_notes(&host.branch())
     } else {

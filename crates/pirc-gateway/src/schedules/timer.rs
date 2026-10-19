@@ -250,7 +250,7 @@ pub(super) async fn check(app: &AppState, id: &str) -> Result<(), String> {
     .map_err(|failure| failure.0)?;
     let outcome: ApiResult<()> = with(app, |ctx| match progress {
         Progress::Dropped => ctx.finish(id, "failed", "The agent stopped before it took the task"),
-        Progress::Waiting => {
+        Progress::Waiting(_) => {
             if run.status != "waiting_input" {
                 ctx.set_run_status(&run, "waiting_input")?;
             }

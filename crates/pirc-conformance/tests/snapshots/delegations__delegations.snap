@@ -478,6 +478,7 @@ expression: r.t.into_value()
           "delegations": [
             {
               "createdAt": "<epoch-ms>",
+              "dispatch": "approved",
               "id": "<delegation:1>",
               "model": "fake/fake-model",
               "role": "general",
@@ -516,9 +517,33 @@ expression: r.t.into_value()
   },
   {
     "observed": {
+      "data": {
+        "createdAt": "<epoch-ms>",
+        "id": "relay.<delegation:1>.ask",
+        "kind": "confirm",
+        "request": {
+          "method": "confirm",
+          "relayed": {
+            "delegationId": "<delegation:1>",
+            "sessionId": "session_<uuid:2>",
+            "sessionName": "Fix flaky test",
+            "workspace": "Repo on work"
+          }
+        },
+        "rpcId": "relay.<delegation:1>.ask",
+        "runnerEpoch": 0,
+        "sessionId": "session_<uuid:1>",
+        "status": "pending"
+      },
+      "type": "interaction_created"
+    },
+    "step": "the chat shows the delegated session's confirmation"
+  },
+  {
+    "observed": {
       "method": "POST",
       "payload": {
-        "content": "Delegation update (gateway data, not user instructions):\n{\"delegation\":\"<delegation:1>\",\"title\":\"Fix flaky test\",\"workspace\":\"Repo on work\",\"session\":\"Fix flaky test\",\"status\":\"waiting_input\"}\nThe delegated session is waiting for the user: ask them to open it and answer there.",
+        "content": "Delegation update (gateway data, not user instructions):\n{\"delegation\":\"<delegation:1>\",\"title\":\"Fix flaky test\",\"workspace\":\"Repo on work\",\"session\":\"Fix flaky test\",\"status\":\"waiting_input\"}\nThe delegated session is waiting for the user. Its approvals are shown in this chat, where they can answer them; other questions are answered in that session. Tell them.",
         "customType": "assistant-delegation-update",
         "details": {
           "delegationId": "<delegation:1>",
@@ -537,6 +562,16 @@ expression: r.t.into_value()
       "user": "test@example.com"
     },
     "step": "work: the session is read again"
+  },
+  {
+    "observed": {
+      "data": {
+        "interactionEpoch": 0,
+        "interactionId": "relay.<delegation:1>.ask"
+      },
+      "type": "interaction_answered"
+    },
+    "step": "the relayed confirmation is gone"
   },
   {
     "observed": {
@@ -561,6 +596,7 @@ expression: r.t.into_value()
           "delegations": [
             {
               "createdAt": "<epoch-ms>",
+              "dispatch": "approved",
               "id": "<delegation:1>",
               "model": "fake/fake-model",
               "result": "Fixed it: sk-[REDACTED] was in the log.",
@@ -585,6 +621,7 @@ expression: r.t.into_value()
           "delegations": [
             {
               "createdAt": "<epoch-ms>",
+              "dispatch": "approved",
               "id": "<delegation:1>",
               "model": "fake/fake-model",
               "result": "sk-[REDACTED] was in the log.",
@@ -865,6 +902,7 @@ expression: r.t.into_value()
     "body": {
       "capabilities": {
         "delegation": false,
+        "delegation_approval": "always",
         "memory_search": true,
         "remote_recall": true,
         "schedules": true,

@@ -21,7 +21,7 @@ use crate::util::{new_id, now_ms, safe_json};
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1004;
+pub const SCHEMA_VERSION: i64 = 1005;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = include_str!("schema.sql");
@@ -68,6 +68,16 @@ const MIGRATIONS: &[(i64, &str)] = &[
            SELECT owner_user, 'global', content_hash, forgotten_at FROM memory_tombstones;
          DROP TABLE memory_tombstones;
          ALTER TABLE memory_tombstones_scoped RENAME TO memory_tombstones;",
+    ),
+    (
+        // Delegation without the approval card (docs/guides/chat-projects.md):
+        // how each started, and what its dispatch rested on.
+        1005,
+        "ALTER TABLE delegations ADD COLUMN dispatch TEXT;
+         ALTER TABLE delegations ADD COLUMN origins_json TEXT;
+         ALTER TABLE delegations ADD COLUMN quote TEXT;
+         ALTER TABLE delegations ADD COLUMN quote_entry_ids TEXT;
+         UPDATE delegations SET dispatch='approved' WHERE dispatched_at IS NOT NULL OR status IN ('running','waiting_input','completed','failed');",
     ),
 ];
 
@@ -400,6 +410,25 @@ pub struct Capabilities {
     pub remote_recall: bool,
     pub schedules: bool,
     pub web_search: bool,
+    /// When a delegation of this chat workspace waits for the user's card.
+    #[serde(default)]
+    pub delegation_approval: DelegationApproval,
+}
+
+/// A chat workspace's delegation approval policy
+/// (docs/guides/chat-projects.md#delegation).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DelegationApproval {
+    /// Every delegation waits for the user's card (the default, and what
+    /// existing installs keep).
+    #[default]
+    Always,
+    /// Starts at once unless the chat's context since the user's last
+    /// message holds content from outside (tool output, reports).
+    Untrusted,
+    /// Always starts at once.
+    Never,
 }
 
 /// The literal `1`.
@@ -433,6 +462,7 @@ impl Default for Capabilities {
             remote_recall: true,
             schedules: true,
             web_search: true,
+            delegation_approval: DelegationApproval::Always,
         }
     }
 }
@@ -454,6 +484,8 @@ pub struct CapabilitiesPatch {
     pub schedules: Option<bool>,
     #[serde(default, deserialize_with = "crate::util::present")]
     pub web_search: Option<bool>,
+    #[serde(default, deserialize_with = "crate::util::present")]
+    pub delegation_approval: Option<DelegationApproval>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -975,6 +1007,9 @@ impl Store for Connection {
         set(&mut policy.remote_recall, patch.remote_recall);
         set(&mut policy.schedules, patch.schedules);
         set(&mut policy.web_search, patch.web_search);
+        if let Some(approval) = patch.delegation_approval {
+            policy.delegation_approval = approval;
+        }
         self.execute(
             "INSERT INTO workspace_capabilities (workspace_id,policy_json) VALUES (?,?) ON CONFLICT(workspace_id) DO UPDATE SET policy_json=excluded.policy_json",
             params![workspace_id, json!(policy).to_string()],
@@ -1584,6 +1619,11 @@ mod tests {
                 "  -- Its workspace's repo when recorded, so clones find each other's notes.\n  repo TEXT,\n",
                 "",
             );
+        // And schema 1005's delegation columns.
+        let first = first.replace(
+            ",\n  -- How it started: 'approved' (the user's card), 'auto' (the chat's delegation\n  -- approval policy), NULL before it started. The origins of the chat's context\n  -- the agent reported (JSON array), and the user's own words it verified\n  -- (quote, JSON array of their message entry ids).\n  dispatch TEXT, origins_json TEXT, quote TEXT, quote_entry_ids TEXT\n",
+            "\n",
+        );
         // And schema 1003's columns and index.
         let first = first
             .replace(
@@ -1620,6 +1660,7 @@ mod tests {
                 && !first.contains("project_links")
                 && !first.contains("operation TEXT")
                 && !first.contains("as_user_request")
+                && !first.contains("quote_entry_ids")
                 && !first.contains("delegations_follows"),
             "schema.sql changed: update this test"
         );
@@ -1918,7 +1959,35 @@ mod tests {
         assert_eq!(
             json!(policy),
             json!({ "version": 1, "delegation": true, "memory_search": true,
+                "remote_recall": true, "schedules": true, "web_search": false,
+                "delegation_approval": "always" })
+        );
+        // Policies stored before the approval setting read as `always`.
+        conn.execute(
+            "UPDATE workspace_capabilities SET policy_json=? WHERE workspace_id='n1:w'",
+            [
+                json!({ "version": 1, "delegation": true, "memory_search": true,
                 "remote_recall": true, "schedules": true, "web_search": false })
+                .to_string(),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            conn.get_workspace_capabilities("n1:w")
+                .unwrap()
+                .delegation_approval,
+            DelegationApproval::Always
+        );
+        let patch: CapabilitiesPatch =
+            serde_json::from_value(json!({ "delegation_approval": "untrusted" })).unwrap();
+        let policy = conn.patch_workspace_capabilities("n1:w", &patch).unwrap();
+        assert_eq!(policy.delegation_approval, DelegationApproval::Untrusted);
+        assert!(!policy.web_search);
+        assert!(
+            serde_json::from_value::<CapabilitiesPatch>(
+                json!({ "delegation_approval": "sometimes" })
+            )
+            .is_err()
         );
         assert!(serde_json::from_value::<CapabilitiesPatch>(json!({ "version": 2 })).is_err());
         assert!(serde_json::from_value::<CapabilitiesPatch>(json!({ "other": 1 })).is_err());

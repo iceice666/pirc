@@ -470,6 +470,7 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/native-management/requests/{id}/deny"),
     ("POST", "/api/native-management/requests/{id}/claim"),
     ("DELETE", "/api/devices/{id}"),
+    ("POST", "/api/delegations/{id}/stop"),
     ("PUT", "/api/providers/{id}"),
     ("DELETE", "/api/providers/{id}"),
     ("GET", "/api/provider-auth/sessions/{id}"),

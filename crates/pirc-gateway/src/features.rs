@@ -7,7 +7,7 @@ use axum::extract::{Extension, Path, State};
 use axum::http::{HeaderValue, Method, header};
 use axum::middleware::Next;
 use axum::response::Response;
-use axum::routing::{delete, get};
+use axum::routing::{delete, get, post};
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -22,6 +22,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/devices", get(list_devices).post(pair_device))
         .route("/api/devices/{id}", delete(revoke_device))
+        .route("/api/delegations/{id}/stop", post(stop_delegation))
         .merge(crate::memory::routes())
         .merge(crate::schedules::routes())
         .merge(crate::push::routes())
@@ -120,6 +121,20 @@ async fn revoke_device(
     }
     app.devices.revoke(user, &id)?;
     Ok(no_content())
+}
+
+/// Stop a delegation's run from the chat that started it.
+async fn stop_delegation(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path(id): Path<String>,
+) -> Handled {
+    if id.encode_utf16().count() > 40 {
+        return Err(ApiError::invalid_input().into());
+    }
+    Ok(ok(
+        crate::delegations::stop(&app, &identity.user, &id).await?
+    ))
 }
 
 impl App {

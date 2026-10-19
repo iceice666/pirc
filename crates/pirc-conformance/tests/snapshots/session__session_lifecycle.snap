@@ -102,6 +102,7 @@ expression: t.into_value()
         },
         "thinkingLevel": "low"
       },
+      "delegations": [],
       "history": [],
       "interactions": [],
       "notifications": [],
@@ -235,6 +236,7 @@ expression: t.into_value()
         },
         "thinkingLevel": "low"
       },
+      "delegations": [],
       "history": [
         {
           "branches": [

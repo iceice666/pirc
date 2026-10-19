@@ -1,15 +1,17 @@
 //! Delegation (`apps/gateway/src/daemon/delegations.ts`, docs/architecture/assistant-memory.md):
 //! the assistant in a chat hands a task to a new session in one of the
 //! user's directory workspaces, or more instructions to a session it
-//! started before. The user approves each one in the chat, where it shows
-//! as a confirmation. Then the gateway creates and names the session on the
-//! target node, delivers the task as a custom message (never as the user's
-//! words), follows the session, and tells the chat when the task finishes,
-//! fails or needs the user. Also its agent operations (`delegation.create`,
-//! `delegation.status` in `agent-ops.ts`) and the push it sends (`announce`
-//! in `daemon/app.ts`).
+//! started before. The chat workspace's delegation approval policy decides
+//! whether the user approves it in the chat first, where it shows as a
+//! confirmation, or it starts at once (docs/guides/chat-projects.md). Then
+//! the gateway creates and names the session on the target node, delivers
+//! the task as a custom message (never as the user's words), follows the
+//! session, relays the approvals it waits on to the chat, and tells the chat
+//! when the task finishes, fails or needs the user. Also its agent
+//! operations (`delegation.create`, `delegation.status` in `agent-ops.ts`)
+//! and the push it sends (`announce` in `daemon/app.ts`).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
@@ -19,7 +21,7 @@ use tokio::sync::mpsc;
 
 use crate::agent_ops::OpContext;
 use crate::app::{App, AppState};
-use crate::db::{Capability, Session, Store, Workspace};
+use crate::db::{Capability, DelegationApproval, Session, Store, Workspace};
 use crate::dispatch::{
     Progress, clip, deliver, is_watched_event, one_line, read_progress, redact_secrets,
     resolve_directory_workspace, start_session, workspace_online,
@@ -28,7 +30,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::events::GatewayEvent;
 use crate::project_links::{self, Linked};
 use crate::push::PushMessage;
-use crate::util::{hex, now_ms, random_bytes};
+use crate::util::{hex, new_id as random_id, now_ms, random_bytes};
 
 pub const TASK_MAX_CHARS: usize = 20_000;
 const TITLE_MAX_CHARS: usize = 80;
@@ -39,6 +41,18 @@ const RESULT_NOTICE_CHARS: usize = 4000;
 /// One `delegation_status` read of a result.
 pub const RESULT_CHUNK_CHARS: usize = 12_000;
 const PENDING_MAX: usize = 10;
+/// Delegations started without a card that may run at once per user; more
+/// wait for the card.
+pub const AUTO_RUNNING_MAX: usize = 4;
+/// A quote must come from one of the user's last this many messages
+/// (auto mode's classifier window).
+pub const QUOTE_MESSAGES: usize = 3;
+const QUOTE_MAX_CHARS: usize = 2000;
+/// What a chat's context may hold for `untrusted` to start a delegation at
+/// once: only the user's and the assistant's own words.
+const TRUSTED_ORIGINS: &[&str] = &["assistant", "user"];
+/// Ids of delegated sessions' dialogs relayed to the chat start with this.
+pub const RELAY_PREFIX: &str = "relay.";
 /// The chat hears about these; the user already sees an approval happen.
 const NOTIFIED: &[&str] = &[
     "rejected",
@@ -62,7 +76,7 @@ fn next_step(status: &str) -> Option<&'static str> {
         "completed" => "It finished: tell the user what came of it.",
         "failed" => "It failed: tell the user why.",
         "waiting_input" => {
-            "The delegated session is waiting for the user: ask them to open it and answer there."
+            "The delegated session is waiting for the user. Its approvals are shown in this chat, where they can answer them; other questions are answered in that session. Tell them."
         }
         "rejected" => "The user declined it: do not ask again unless they want it.",
         "expired" => "Nobody approved it in time: ask again only if it is still wanted.",
@@ -107,6 +121,12 @@ pub struct Delegation {
     /// approving: the delegated run's classifier counts the task as one of
     /// their requests, for that run only.
     pub as_user_request: bool,
+    /// `approved` (the card) or `auto` (the policy); `None` before it started.
+    pub dispatch: Option<String>,
+    /// The user's own words the chat's agent found in their recent
+    /// messages: the delegated run's classifier reads them as their request.
+    /// (Its message ids and the chat's origins are kept for audit only.)
+    pub quote: Option<String>,
     pub status: String,
     /// The delegated session (gateway session id), once dispatched.
     pub target_session_id: Option<String>,
@@ -143,6 +163,8 @@ fn row_of(row: &rusqlite::Row<'_>) -> rusqlite::Result<Delegation> {
         model,
         thinking: row.get("thinking")?,
         as_user_request: row.get::<_, i64>("as_user_request")? != 0,
+        dispatch: row.get("dispatch")?,
+        quote: row.get("quote")?,
         status: row.get("status")?,
         target_session_id: row.get("target_session_id")?,
         result: row.get("result")?,
@@ -207,6 +229,9 @@ struct Shared {
     scheduled: Mutex<HashSet<String>>,
     /// `id:status` pairs being reported, so one status is never pushed twice at once.
     reporting: Mutex<HashSet<String>>,
+    /// The confirm dialogs each delegation's session waits on, as its node
+    /// reported them when last read, relayed to the chat that asked.
+    relays: Mutex<HashMap<String, Vec<Value>>>,
 }
 
 fn shared(app: &App) -> Arc<Shared> {
@@ -299,6 +324,9 @@ fn brief(conn: &Connection, delegation: &Delegation, full: bool, offset: u64) ->
     }
     if let Some(thinking) = delegation.thinking.as_deref().filter(|t| !t.is_empty()) {
         out.insert("thinking".into(), json!(thinking));
+    }
+    if let Some(dispatch) = delegation.dispatch.as_deref() {
+        out.insert("dispatch".into(), json!(dispatch));
     }
     if let Some(target) = delegation
         .target_session_id
@@ -409,7 +437,8 @@ fn roles(app: &App, workspace: &Workspace) -> Option<Vec<pirc_protocol::Workspac
 }
 
 /// Delegations of this assistant session waiting for the user's approval,
-/// as interactions (`pendingInteractions`).
+/// as interactions (`pendingInteractions`), then the dialogs its delegated
+/// sessions wait on, relayed.
 pub fn pending_interactions(app: &App, session_id: &str) -> Vec<Value> {
     let conn = app.db.lock();
     let pending = rows(
@@ -417,13 +446,183 @@ pub fn pending_interactions(app: &App, session_id: &str) -> Vec<Value> {
         "assistant_session_id=? AND status='pending_approval' AND expires_at>?",
         &[&session_id, &now_ms()],
     );
-    match pending {
+    let mut out: Vec<Value> = match pending {
         Ok(pending) => pending
             .iter()
             .map(|delegation| interaction_of(&conn, delegation))
             .collect(),
         Err(_) => Vec::new(),
+    };
+    let active = rows(
+        &conn,
+        "assistant_session_id=? AND status IN ('running','waiting_input')",
+        &[&session_id],
+    )
+    .unwrap_or_default();
+    let relays = lock(&shared(app).relays).clone();
+    for delegation in active {
+        for dialog in relays.get(&delegation.id).into_iter().flatten() {
+            out.push(relayed_of(&conn, &delegation, dialog));
+        }
     }
+    out
+}
+
+/// The running or waiting delegations of a chat, as its snapshot and
+/// `delegations_changed` show them (with Stop).
+pub fn active(app: &App, session_id: &str) -> Value {
+    let conn = app.db.lock();
+    let active = rows(
+        &conn,
+        "assistant_session_id=? AND status IN ('running','waiting_input')",
+        &[&session_id],
+    )
+    .unwrap_or_default();
+    Value::Array(
+        active
+            .iter()
+            .map(|delegation| {
+                json!({
+                    "id": delegation.id,
+                    "title": delegation.title,
+                    "workspace": label(&conn, &delegation.workspace_id),
+                    "status": delegation.status,
+                    "dispatch": delegation.dispatch.as_deref().unwrap_or("approved"),
+                    "targetSessionId": delegation.target_session_id,
+                })
+            })
+            .collect(),
+    )
+}
+
+/// Tell the chat's clients its running delegations changed.
+fn publish_active(app: &App, chat_id: &str) {
+    let Ok(chat) = app.db.lock().get_session(chat_id) else {
+        return;
+    };
+    app.events.publish(
+        &chat.id,
+        chat.runner_epoch,
+        "delegations_changed",
+        json!({ "delegations": active(app, &chat.id) }),
+    );
+}
+
+fn relay_id(delegation_id: &str, dialog_id: &str) -> String {
+    format!("{RELAY_PREFIX}{delegation_id}.{dialog_id}")
+}
+
+/// A delegated session's dialog as the chat shows it: the same question,
+/// naming the session it comes from.
+fn relayed_of(conn: &Connection, delegation: &Delegation, dialog: &Value) -> Value {
+    let id = relay_id(&delegation.id, dialog["id"].as_str().unwrap_or_default());
+    let target = delegation.target_session_id.clone().unwrap_or_default();
+    let mut request = Map::new();
+    request.insert("method".into(), json!("confirm"));
+    for key in ["title", "message", "confirmLabel", "cancelLabel"] {
+        if let Some(value) = dialog["request"].get(key).filter(|v| v.is_string()) {
+            request.insert(key.into(), value.clone());
+        }
+    }
+    request.insert(
+        "relayed".into(),
+        json!({
+            "sessionId": target,
+            "sessionName": session_name(conn, &target),
+            "workspace": label(conn, &delegation.workspace_id),
+            "delegationId": delegation.id,
+        }),
+    );
+    let mut out = Map::new();
+    out.insert("id".into(), json!(id));
+    out.insert("rpcId".into(), json!(id));
+    out.insert("sessionId".into(), json!(delegation.assistant_session_id));
+    out.insert("runnerEpoch".into(), json!(0));
+    out.insert("kind".into(), json!("confirm"));
+    out.insert("status".into(), json!("pending"));
+    out.insert("request".into(), Value::Object(request));
+    if let Some(expires) = dialog.get("expiresAt").filter(|v| v.is_number()) {
+        out.insert("expiresAt".into(), expires.clone());
+    }
+    out.insert(
+        "createdAt".into(),
+        dialog.get("createdAt").cloned().unwrap_or(json!(now_ms())),
+    );
+    Value::Object(out)
+}
+
+/// The relayed dialog a delegated session waits on, for the session
+/// list's Needs you: `{sessionId, interactionId, title, message}`.
+pub fn pending_approval(app: &App, delegation_id: &str) -> Option<Value> {
+    let dialog = lock(&shared(app).relays)
+        .get(delegation_id)?
+        .first()?
+        .clone();
+    let delegation = row(&app.db.lock(), delegation_id).ok().flatten()?;
+    if !["running", "waiting_input"].contains(&delegation.status.as_str()) {
+        return None;
+    }
+    Some(json!({
+        "sessionId": delegation.assistant_session_id,
+        "interactionId": relay_id(delegation_id, dialog["id"].as_str().unwrap_or_default()),
+        "title": dialog["request"]["title"],
+        "message": dialog["request"]["message"],
+    }))
+}
+
+/// Replace what the chat shows of a delegation's dialogs with `dialogs`
+/// (the confirm dialogs its session waits on now): new ones are created in
+/// the chat, gone ones answered there.
+fn set_relays(app: &App, delegation: &Delegation, dialogs: Vec<Value>) {
+    let dialogs: Vec<Value> = dialogs
+        .into_iter()
+        .filter(|dialog| {
+            dialog["kind"] == "confirm" && dialog["id"].as_str().is_some_and(|id| !id.is_empty())
+        })
+        .collect();
+    let before = {
+        let shared = shared(app);
+        let mut relays = lock(&shared.relays);
+        let before = if dialogs.is_empty() {
+            relays.remove(&delegation.id)
+        } else {
+            relays.insert(delegation.id.clone(), dialogs.clone())
+        };
+        before.unwrap_or_default()
+    };
+    let ids = |list: &[Value]| -> Vec<String> {
+        list.iter()
+            .filter_map(|dialog| dialog["id"].as_str().map(str::to_owned))
+            .collect()
+    };
+    let (old, new) = (ids(&before), ids(&dialogs));
+    if old == new {
+        return;
+    }
+    let Ok(chat) = app.db.lock().get_session(&delegation.assistant_session_id) else {
+        return;
+    };
+    for gone in old.iter().filter(|id| !new.contains(id)) {
+        app.events.publish(
+            &chat.id,
+            chat.runner_epoch,
+            "interaction_answered",
+            json!({ "interactionId": relay_id(&delegation.id, gone), "interactionEpoch": 0 }),
+        );
+    }
+    for dialog in &dialogs {
+        if old
+            .iter()
+            .any(|id| Some(id.as_str()) == dialog["id"].as_str())
+        {
+            continue;
+        }
+        let relayed = relayed_of(&app.db.lock(), delegation, dialog);
+        app.events
+            .publish(&chat.id, chat.runner_epoch, "interaction_created", relayed);
+    }
+    // Needs you shows the waiting session's approval.
+    app.sessions_changed(Some(&delegation.owner_user));
 }
 
 fn interaction_of(conn: &Connection, delegation: &Delegation) -> Value {
@@ -488,6 +687,41 @@ pub struct CreateArgs {
     title: Option<String>,
     follows: Option<String>,
     role: Option<String>,
+    /// The user's words the chat's agent verified, and their message ids.
+    quote: Option<String>,
+    entry_ids: Vec<String>,
+    /// Where the chat's context since the user's last message came from;
+    /// `None` from an older agent (counted as untrusted).
+    origins: Option<Vec<String>>,
+}
+
+/// Whether a delegation may start without the card: the chat workspace's
+/// policy, what the chat's context holds, and how many already run so.
+fn starts_at_once(
+    conn: &Connection,
+    user: &str,
+    policy: DelegationApproval,
+    origins: Option<&[String]>,
+) -> ApiResult<bool> {
+    let allowed = match policy {
+        DelegationApproval::Always => false,
+        DelegationApproval::Never => true,
+        DelegationApproval::Untrusted => origins.is_some_and(|origins| {
+            origins
+                .iter()
+                .all(|origin| TRUSTED_ORIGINS.contains(&origin.as_str()))
+        }),
+    };
+    if !allowed {
+        return Ok(false);
+    }
+    let running = rows(
+        conn,
+        "owner_user=? AND dispatch='auto' AND status IN ('running','waiting_input')",
+        &[&user],
+    )?
+    .len();
+    Ok(running < AUTO_RUNNING_MAX)
 }
 
 fn new_id(conn: &Connection) -> ApiResult<String> {
@@ -548,8 +782,15 @@ fn linked_default(app: &App, project: &str) -> ApiResult<Workspace> {
     }
 }
 
-/// Record a delegation and ask the user in the chat; nothing runs before they approve.
-fn create(app: &App, user: &str, assistant: &Session, input: CreateArgs) -> ApiResult<Delegation> {
+/// Record a delegation, then start it at once when the chat workspace's
+/// policy allows, or ask the user in the chat; nothing runs before they
+/// approve.
+fn create(
+    app: &AppState,
+    user: &str,
+    assistant: &Session,
+    input: CreateArgs,
+) -> ApiResult<Delegation> {
     app.db
         .lock()
         .require_session_capability(&assistant.id, Capability::Delegation)?;
@@ -644,15 +885,31 @@ fn create(app: &App, user: &str, assistant: &Session, input: CreateArgs) -> ApiR
             ));
         }
     }
+    let quote = input
+        .quote
+        .as_deref()
+        .map(|quote| js_trim(&redact_secrets(quote)).to_owned())
+        .filter(|quote| !quote.is_empty());
+    if quote.is_some() && input.entry_ids.is_empty() {
+        return Err(ApiError::new(
+            400,
+            "invalid_input",
+            "A quote needs the user's message it comes from",
+        ));
+    }
     let delegation = {
         let conn = app.db.lock();
+        let policy = conn
+            .get_workspace_capabilities(&assistant.workspace_id)?
+            .delegation_approval;
+        let at_once = starts_at_once(&conn, user, policy, input.origins.as_deref())?;
         let waiting = rows(
             &conn,
             "owner_user=? AND status='pending_approval'",
             &[&user],
         )?
         .len();
-        if waiting >= PENDING_MAX {
+        if !at_once && waiting >= PENDING_MAX {
             return Err(ApiError::new(
                 429,
                 "too_many_requests",
@@ -674,7 +931,7 @@ fn create(app: &App, user: &str, assistant: &Session, input: CreateArgs) -> ApiR
         let id = new_id(&conn)?;
         let at = now_ms();
         conn.execute(
-            "INSERT INTO delegations (id,owner_user,assistant_session_id,workspace_id,title,task,follows,role,status,expires_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,'pending_approval',?,?,?)",
+            "INSERT INTO delegations (id,owner_user,assistant_session_id,workspace_id,title,task,follows,role,status,expires_at,created_at,updated_at,dispatch,origins_json,quote,quote_entry_ids) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             params![
                 id,
                 user,
@@ -684,13 +941,32 @@ fn create(app: &App, user: &str, assistant: &Session, input: CreateArgs) -> ApiR
                 task,
                 previous.as_ref().map(|p| p.id.clone()),
                 role,
-                at.saturating_add(i64::try_from(app.config.delegation_ttl_ms).unwrap_or(i64::MAX)),
+                if at_once { "running" } else { "pending_approval" },
+                if at_once {
+                    at
+                } else {
+                    at.saturating_add(
+                        i64::try_from(app.config.delegation_ttl_ms).unwrap_or(i64::MAX),
+                    )
+                },
                 at,
-                at
+                at,
+                at_once.then_some("auto"),
+                input.origins.as_ref().map(|origins| json!(origins).to_string()),
+                quote,
+                quote.as_ref().map(|_| json!(input.entry_ids).to_string()),
             ],
         )?;
         row(&conn, &id)?.ok_or_else(ApiError::internal)?
     };
+    if delegation.status == "running" {
+        publish_active(app, &assistant.id);
+        app.sessions_changed(Some(user));
+        let background = app.clone();
+        let id = delegation.id.clone();
+        tokio::spawn(async move { dispatch(&background, &id).await });
+        return Ok(delegation);
+    }
     let interaction = interaction_of(&app.db.lock(), &delegation);
     app.events.publish(
         &assistant.id,
@@ -820,9 +1096,10 @@ pub fn answer(
     let changed = {
         let at = now_ms();
         app.db.lock().execute(
-            "UPDATE delegations SET status=?, model_json=?, thinking=?, as_user_request=?, updated_at=? WHERE id=? AND status='pending_approval' AND expires_at>?",
+            "UPDATE delegations SET status=?, dispatch=?, model_json=?, thinking=?, as_user_request=?, updated_at=? WHERE id=? AND status='pending_approval' AND expires_at>?",
             params![
                 if approved { "running" } else { "rejected" },
+                approved.then_some("approved"),
                 model.as_ref().map(|model| model.json().to_string()),
                 thinking,
                 as_user_request,
@@ -843,6 +1120,7 @@ pub fn answer(
     let id = delegation.id.clone();
     let background = app.clone();
     if approved {
+        publish_active(app, &delegation.assistant_session_id);
         tokio::spawn(async move { dispatch(&background, &id).await });
     } else {
         tokio::spawn(async move { report(&background, &id).await });
@@ -850,6 +1128,196 @@ pub fn answer(
     Ok(Some(
         json!({ "interactionId": delegation.id, "status": "answered" }),
     ))
+}
+
+/// The user answered, in the chat `session_id`, a dialog one of its
+/// delegated sessions waits on (`relay.<delegation>.<dialog>`). `None` when
+/// the id is not a relay. The node still decides: the answer goes to the
+/// original dialog, from the owning user, without the delegated session's
+/// control lease (decided 2026-10-19; docs/architecture/security-decisions.md).
+pub async fn answer_relayed(
+    app: &AppState,
+    session_id: &str,
+    interaction_id: &str,
+    user: &str,
+    answer: Option<&Value>,
+) -> ApiResult<Option<Value>> {
+    let Some((delegation_id, dialog_id)) = interaction_id
+        .strip_prefix(RELAY_PREFIX)
+        .and_then(|rest| rest.split_once('.'))
+    else {
+        return Ok(None);
+    };
+    let stale = || {
+        ApiError::new(
+            409,
+            "stale_interaction",
+            "The delegated session no longer waits on this",
+        )
+    };
+    let (delegation, target) = {
+        let conn = app.db.lock();
+        let delegation = match row(&conn, delegation_id)? {
+            Some(delegation) if delegation.assistant_session_id == session_id => delegation,
+            _ => {
+                return Err(ApiError::not_found(format!(
+                    "No interaction {interaction_id}"
+                )));
+            }
+        };
+        if delegation.owner_user != user {
+            return Err(ApiError::new(
+                403,
+                "forbidden",
+                "Delegation belongs to another user",
+            ));
+        }
+        let target = delegation
+            .target_session_id
+            .as_deref()
+            .filter(|target| !target.is_empty())
+            .ok_or_else(stale)?;
+        let target = conn.get_session(target)?;
+        (delegation, target)
+    };
+    let relayed = lock(&shared(app).relays)
+        .get(&delegation.id)
+        .is_some_and(|dialogs| dialogs.iter().any(|dialog| dialog["id"] == dialog_id));
+    if !relayed {
+        return Err(stale());
+    }
+    if target.owner_user.as_deref() != Some(user) {
+        return Err(ApiError::new(
+            403,
+            "forbidden",
+            "The delegated session belongs to another user",
+        ));
+    }
+    app.require_writable(&target)?;
+    let (Some(node_id), Some(remote)) = (&target.node_id, &target.pi_session_id) else {
+        return Err(stale());
+    };
+    // `answer ?? {}`; only a confirmation is relayed.
+    let confirmed = answer.and_then(|value| value.get("confirmed")) == Some(&Value::Bool(true));
+    crate::dispatch::node_request(
+        app,
+        node_id,
+        user,
+        pirc_protocol::HttpMethod::Post,
+        format!(
+            "/api/sessions/{}/interactions/{}/relayed-answer",
+            crate::routes::urlencoding_component(remote),
+            crate::routes::urlencoding_component(dialog_id)
+        ),
+        Some(json!({ "answer": { "confirmed": confirmed } })),
+    )
+    .await
+    .map_err(|failure| ApiError::new(409, "stale_interaction", failure.0))?;
+    // Shown as answered at once; the next read of the session confirms it.
+    let remaining: Vec<Value> = lock(&shared(app).relays)
+        .get(&delegation.id)
+        .map(|dialogs| {
+            dialogs
+                .iter()
+                .filter(|dialog| dialog["id"] != dialog_id)
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    set_relays(app, &delegation, remaining);
+    schedule(app, delegation.id.clone());
+    Ok(Some(
+        json!({ "interactionId": interaction_id, "status": "answered" }),
+    ))
+}
+
+/// Stop a running delegation's run (`POST /api/delegations/:id/stop`): the
+/// gateway takes the delegated session's control when nobody holds it,
+/// stops the run and lets go.
+pub async fn stop(app: &AppState, user: &str, id: &str) -> ApiResult<Value> {
+    let (delegation, target) = {
+        let conn = app.db.lock();
+        let delegation = get(&conn, user, id)?;
+        let target = delegation
+            .target_session_id
+            .as_deref()
+            .filter(|target| !target.is_empty())
+            .filter(|_| ["running", "waiting_input"].contains(&delegation.status.as_str()))
+            .ok_or_else(|| {
+                ApiError::new(409, "conflict", format!("Delegation {id} is not running"))
+            })?;
+        let target = conn.get_session(target)?;
+        (delegation, target)
+    };
+    app.require_writable(&target)?;
+    let (Some(node_id), Some(remote)) = (&target.node_id, &target.pi_session_id) else {
+        return Err(ApiError::new(
+            409,
+            "conflict",
+            format!("Delegation {id} is not running"),
+        ));
+    };
+    let url = |path: &str| {
+        format!(
+            "/api/sessions/{}{path}",
+            crate::routes::urlencoding_component(remote)
+        )
+    };
+    let conflict =
+        |failure: crate::dispatch::NodeFailure| ApiError::new(409, "conflict", failure.0);
+    let client = format!("gateway-stop-{}", delegation.id);
+    let lease = crate::dispatch::node_request(
+        app,
+        node_id,
+        user,
+        pirc_protocol::HttpMethod::Post,
+        url("/control/acquire"),
+        Some(json!({ "clientId": client, "force": false })),
+    )
+    .await
+    .map_err(|failure| {
+        ApiError::new(
+            409,
+            "conflict",
+            format!(
+                "Could not take control of the delegated session ({}); stop it there",
+                failure.0
+            ),
+        )
+    })?;
+    let generation = lease["lease"]["generation"].as_i64().unwrap_or(0);
+    let stopped = crate::dispatch::node_request(
+        app,
+        node_id,
+        user,
+        pirc_protocol::HttpMethod::Post,
+        url("/commands"),
+        Some(json!({
+            "commandId": random_id("command"),
+            "clientId": client,
+            "generation": generation,
+            "payload": { "type": "stop" },
+        })),
+    )
+    .await;
+    let released = crate::dispatch::node_request(
+        app,
+        node_id,
+        user,
+        pirc_protocol::HttpMethod::Post,
+        url("/control/release"),
+        Some(json!({ "clientId": client, "generation": generation })),
+    )
+    .await;
+    if let Err(failure) = released {
+        crate::log::warn(&format!(
+            "delegation {id}: releasing control: {}",
+            failure.0
+        ));
+    }
+    stopped.map_err(conflict)?;
+    schedule(app, delegation.id.clone());
+    Ok(json!({ "status": "stopping" }))
 }
 
 /// Lapse approvals nobody gave in time.
@@ -880,8 +1348,14 @@ fn sweep(app: &AppState) {
 
 fn task_message(delegation: &Delegation) -> String {
     format!(
-        "Task from the user's assistant, approved by the user (delegation {}):\n\n{}\n\nWork on it here. When you are done, end with a short summary of what you did and anything left over: the assistant receives your final message.",
-        delegation.id, delegation.task
+        "Task from the user's assistant, {} (delegation {}):\n\n{}\n\nWork on it here. When you are done, end with a short summary of what you did and anything left over: the assistant receives your final message.",
+        if delegation.dispatch.as_deref() == Some("auto") {
+            "started under the user's delegation setting without a separate approval"
+        } else {
+            "approved by the user"
+        },
+        delegation.id,
+        delegation.task
     )
 }
 
@@ -956,6 +1430,11 @@ async fn start_task(app: &AppState, delegation: &Delegation) -> Result<(), Strin
         // The delegated agent's auto mode counts the task as the user's
         // request for the run it starts.
         details["asUserRequest"] = json!(true);
+    }
+    if let Some(quote) = &delegation.quote {
+        // The user's own words, verified in their chat: the delegated run's
+        // auto mode reads them as their request (never the task text).
+        details["userRequests"] = json!([quote]);
     }
     task.insert("details".into(), details);
     if let Some(role) = delegation.role.as_deref().filter(|role| !role.is_empty())
@@ -1069,7 +1548,8 @@ async fn check(app: &AppState, id: &str) -> Result<(), String> {
             "failed",
             "The agent stopped before it took the task",
         ),
-        Progress::Waiting => {
+        Progress::Waiting(dialogs) => {
+            set_relays(app, &delegation, dialogs);
             if delegation.status == "waiting_input" {
                 return Ok(());
             }
@@ -1080,6 +1560,7 @@ async fn check(app: &AppState, id: &str) -> Result<(), String> {
             tokio::spawn(async move { report(&background, &id).await });
         }
         Progress::Working => {
+            set_relays(app, &delegation, Vec::new());
             // Answered: back to work, and a later wait is reported again.
             if delegation.status == "waiting_input" {
                 update(app, id, "running", true);
@@ -1133,6 +1614,10 @@ fn update(app: &App, id: &str, status: &str, forget_report: bool) {
         crate::log::warn(&format!("delegation {id}: {error}"));
     }
     status_shown(app, id);
+    let found = row(&app.db.lock(), id);
+    if let Ok(Some(delegation)) = found {
+        publish_active(app, &delegation.assistant_session_id);
+    }
 }
 
 /// The session list shows a delegated session's status: clients reload it.
@@ -1153,6 +1638,11 @@ fn finish(app: &AppState, id: &str, status: &str, result: &str) {
     );
     if !matches!(changed, Ok(1..)) {
         return;
+    }
+    let found = row(&app.db.lock(), id);
+    if let Ok(Some(delegation)) = found {
+        set_relays(app, &delegation, Vec::new());
+        publish_active(app, &delegation.assistant_session_id);
     }
     status_shown(app, id);
     announce(app, id);
@@ -1417,10 +1907,20 @@ fn role_name(value: &Value) -> Result<String, ()> {
     }
 }
 
+/// An array of at most `max` strings of `1..=chars` UTF-16 units.
+fn strings_in(value: &Value, max: usize, chars: usize) -> Result<Vec<String>, ()> {
+    let items = value
+        .as_array()
+        .filter(|items| items.len() <= max)
+        .ok_or(())?;
+    items.iter().map(|item| string_in(item, 1, chars)).collect()
+}
+
 fn parse_create(args: &Value) -> Result<CreateArgs, ()> {
     let object = args.as_object().ok_or(())?;
     let (mut workspace, mut task, mut title, mut follows, mut role) =
         (None, None, None, None, None);
+    let (mut quote, mut entry_ids, mut origins) = (None, Vec::new(), None);
     for (key, value) in object {
         match key.as_str() {
             "workspace" => workspace = Some(string_in(value, 1, 300)?),
@@ -1428,6 +1928,9 @@ fn parse_create(args: &Value) -> Result<CreateArgs, ()> {
             "title" => title = Some(string_in(value, 0, 300)?),
             "follows" => follows = Some(string_in(value, 1, 40)?),
             "role" => role = Some(role_name(value)?),
+            "quote" => quote = Some(string_in(value, 1, QUOTE_MAX_CHARS)?),
+            "entryIds" => entry_ids = strings_in(value, QUOTE_MESSAGES, 200)?,
+            "origins" => origins = Some(strings_in(value, 100, 200)?),
             _ => return Err(()),
         }
     }
@@ -1437,6 +1940,9 @@ fn parse_create(args: &Value) -> Result<CreateArgs, ()> {
         title,
         follows,
         role,
+        quote,
+        entry_ids,
+        origins,
     })
 }
 
@@ -1526,6 +2032,8 @@ mod tests {
             model: None,
             thinking: None,
             as_user_request: false,
+            dispatch: None,
+            quote: None,
             status: "completed".into(),
             target_session_id: None,
             result: None,

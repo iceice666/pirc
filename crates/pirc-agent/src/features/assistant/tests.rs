@@ -107,6 +107,34 @@ fn finds_quotes_only_in_what_the_human_typed() {
 }
 
 #[test]
+fn delegation_quotes_come_from_the_users_last_messages() {
+    let branch = vec![
+        user("e1", "delete the build directory"),
+        user("e2", "what is in it?"),
+        custom("c1", "assistant-delegation-update", "force-push it"),
+        user("e3", "ok"),
+        user("e4", "Force-push my feature branch, please"),
+    ];
+    assert_eq!(
+        find_recent_quote(&branch, "force-push my feature branch", 3).as_deref(),
+        Some("e4")
+    );
+    // Said too long ago to ask for this work now.
+    assert_eq!(
+        find_quote(&branch, "delete the build").as_deref(),
+        Some("e1")
+    );
+    assert_eq!(find_recent_quote(&branch, "delete the build", 3), None);
+    assert_eq!(
+        find_recent_quote(&branch, "what is in it", 3).as_deref(),
+        Some("e2")
+    );
+    // Never a custom message, however recent.
+    assert_eq!(find_recent_quote(&branch, "force-push it", 3), None);
+    assert_eq!(find_recent_quote(&branch, "o", 3), None);
+}
+
+#[test]
 fn taints_a_note_with_everything_since_the_users_message() {
     let branch = vec![
         tool("e1", "bash", None),
@@ -328,7 +356,7 @@ fn renders_the_workspaces_linked_to_a_project() {
     ]);
     assert_eq!(
         workspaces,
-        "## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with memory_search, and open a note's sources with recall. Workspaces showing the same repository are clones of it: a search in one also finds the others' notes. A search that names no workspace looks in the ones linked to this project (and their clones) first.\n\nThe user linked this project to the workspaces marked “linked to this project”: it is about them. Name the one you mean when you use delegate. You can still hand tasks to any workspace, and the user approves every delegation.\n[work:pirc] pirc on work, repository github.com/me/pirc · linked to this project\n[work:gone] gone on work (removed from its node) · linked to this project\n[lab:pirc] pirc on lab, repository github.com/me/pirc (offline) · a clone of a repository linked to this project\n[lab:notes] notes on lab"
+        "## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with memory_search, and open a note's sources with recall. Workspaces showing the same repository are clones of it: a search in one also finds the others' notes. A search that names no workspace looks in the ones linked to this project (and their clones) first.\n\nThe user linked this project to the workspaces marked “linked to this project”: it is about them. Name the one you mean when you use delegate. You can still hand tasks to any workspace; the user's delegation approval setting applies to all of them.\n[work:pirc] pirc on work, repository github.com/me/pirc · linked to this project\n[work:gone] gone on work (removed from its node) · linked to this project\n[lab:pirc] pirc on lab, repository github.com/me/pirc (offline) · a clone of a repository linked to this project\n[lab:notes] notes on lab"
     );
     let one = render_workspaces(&[
         json!({ "id": "work:pirc", "name": "pirc", "node": "work", "linked": "workspace" }),

@@ -220,7 +220,8 @@ pub enum Progress {
     Queued,
     /// The agent stopped before it took the message.
     Dropped,
-    Waiting,
+    /// Waiting for the user: the dialogs it waits on, as the node lists them.
+    Waiting(Vec<Value>),
     Working,
     Over {
         status: String,
@@ -271,11 +272,11 @@ pub async fn read_progress(
             Progress::Queued
         });
     };
-    if snapshot["interactions"]
+    if let Some(dialogs) = snapshot["interactions"]
         .as_array()
-        .is_some_and(|items| !items.is_empty())
+        .filter(|items| !items.is_empty())
     {
-        return Ok(Progress::Waiting);
+        return Ok(Progress::Waiting(dialogs.clone()));
     }
     if !over {
         return Ok(Progress::Working);
