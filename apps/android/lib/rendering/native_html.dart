@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
+import 'dart:typed_data';
+import 'native_image_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
@@ -219,6 +221,7 @@ class NativeHtmlDocument extends StatefulWidget {
     this.scriptDocument,
     this.canvases = const {},
     this.canvasImages = const {},
+    this.vectorImageSources = const {},
     this.htmlImages = const {},
     this.deferImageLoading = false,
     this.onScriptEvent,
@@ -291,6 +294,7 @@ class NativeHtmlDocument extends StatefulWidget {
   final NativeHtmlDocumentControls? retainedControls;
   final Map<String, NativeDocumentCanvasSnapshot> canvases;
   final Map<String, ui.Image> canvasImages;
+  final Map<String, Uint8List> vectorImageSources;
   final Map<String, NativeDocumentHtmlImage> htmlImages;
   final bool deferImageLoading;
   final Future<bool> Function(
@@ -2285,6 +2289,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             widget.authorStylesBuilder,
             widget.canvases,
             widget.canvasImages,
+            widget.vectorImageSources,
             widget.htmlImages,
             widget.deferImageLoading,
             widget.layoutController,
@@ -2352,6 +2357,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             () => widget.layoutRevision,
             () => _elementScroll,
             () => widget.htmlImages,
+            () => widget.vectorImageSources,
             () => widget.deferImageLoading,
           ),
           onTapUrl: (url) {
@@ -2816,11 +2822,13 @@ class _NativeHtmlFactory extends WidgetFactory {
     this.layoutRevision,
     this.elementScroll,
     this.htmlImages,
+    this.vectorImageSources,
     this.deferImageLoading,
   );
   // HtmlWidget retains its factory when rebuild triggers change. Read the
   // current document viewport instead of capturing the first build.
   final Map<String, NativeDocumentHtmlImage> Function() htmlImages;
+  final Map<String, Uint8List> Function() vectorImageSources;
   final bool Function() deferImageLoading;
   final bool Function() hasDocumentViewport;
   final bool Function() hasPositioningViewport;
@@ -6038,17 +6046,36 @@ class _NativeHtmlFactory extends WidgetFactory {
     final responsive =
         tree.element.attributes.containsKey('srcset') ||
         tree.element.parent?.localName == 'picture';
+    final vectorSource = vectorImageSources()[managed?.imageId];
     if (managed != null &&
-        !managed.vector &&
+        (!managed.vector || vectorSource != null) &&
         !managed.animated &&
         managed.status != 'error' &&
         !responsive) {
       Widget image;
       if (managed.status == 'loaded') {
         final decoded = canvasImages()[managed.imageId];
-        image = decoded == null
-            ? Text(src.image?.alt ?? '')
-            : RawImage(image: decoded, scale: density, fit: BoxFit.contain);
+        if (managed.vector && vectorSource != null) {
+          final size = svgImageSize(utf8.decode(vectorSource));
+          image = size.isEmpty
+              ? SizedBox(
+                  width: size.width / density,
+                  height: size.height / density,
+                )
+              : NativeImageFrame(
+                  naturalSize: size / density,
+                  child: SvgPicture.memory(
+                    vectorSource,
+                    excludeFromSemantics: true,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => Text(src.image?.alt ?? ''),
+                  ),
+                );
+        } else {
+          image = decoded == null
+              ? Text(src.image?.alt ?? '')
+              : RawImage(image: decoded, scale: density, fit: BoxFit.contain);
+        }
       } else {
         image = const SizedBox.shrink();
       }
@@ -6061,8 +6088,8 @@ class _NativeHtmlFactory extends WidgetFactory {
     // Let startup scripts establish image ownership before an independent
     // display fetch can race the script resource request.
     if (deferImageLoading()) return const SizedBox.shrink();
-    // SVG keeps the existing vector widget path; the Canvas pool's SVG bitmap
-    // is not a replacement for resolution-independent HTML image rendering.
+    // Responsive/animated images and SVG sources beyond the document's encoded
+    // source budget keep the established provider and vector rendering path.
     if (images != null) {
       return NativeImageDensity(
         density: density,

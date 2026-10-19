@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:pirc_mobile/live/document_navigation.dart';
@@ -50,15 +51,18 @@ class AssetGateway extends DocumentVmGateway {
   }
 }
 
-void main() {
+void main() => runLiveAssetCases(
+  'tool/parity/fixtures/document-live-assets-chromium153.json',
+);
+
+void runLiveAssetCases(String fixturePath) {
   final runtime = File('assets/document-script-runtime.js').readAsStringSync();
-  final fixture =
-      jsonDecode(
-            File(
-              'tool/parity/fixtures/document-live-assets-chromium153.json',
-            ).readAsStringSync(),
-          )
-          as Map;
+  final fixture = jsonDecode(File(fixturePath).readAsStringSync()) as Map;
+  final imagePath = fixture['imagePath'] as String? ?? '/photo.png';
+  final imageMime = fixture['imageMime'] as String? ?? 'image/png';
+  final imageBytes = base64Decode(
+    (fixture['imageBase64'] ?? fixture['png']) as String,
+  );
   for (final row in fixture['cases'] as List) {
     for (final scenario in [
       'remount',
@@ -255,14 +259,9 @@ void main() {
               diagnostic: () => '${doc.scripts?.diagnostics}',
             );
             if (startup) {
-              await awaitRequest('/photo.png');
+              await awaitRequest(imagePath);
               await replace(1);
-              reply(
-                '/photo.png',
-                base64Decode(fixture['png'] as String),
-                'image/png',
-                type: 'image',
-              );
+              reply(imagePath, imageBytes, imageMime, type: 'image');
               await driveDocumentVm(
                 t,
                 () => find
@@ -304,14 +303,9 @@ void main() {
             );
             await compare('style');
             await t.tap(button('Load image'));
-            await awaitRequest('/photo.png');
+            await awaitRequest(imagePath);
             await replace(2);
-            reply(
-              '/photo.png',
-              base64Decode(fixture['png'] as String),
-              'image/png',
-              type: 'image',
-            );
+            reply(imagePath, imageBytes, imageMime, type: 'image');
             await driveDocumentVm(
               t,
               () => find
@@ -339,7 +333,12 @@ void main() {
                 isTrue,
               );
               expect(doc.scripts!.htmlImages, isNotEmpty);
-              expect(find.byType(RawImage), findsOneWidget);
+              expect(
+                find.byType(
+                  imageMime == 'image/svg+xml' ? SvgPicture : RawImage,
+                ),
+                findsOneWidget,
+              );
               expect(
                 g.imageCalls,
                 0,

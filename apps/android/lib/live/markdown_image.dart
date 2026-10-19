@@ -1,11 +1,10 @@
 import 'dart:convert';
-import 'dart:math' as math;
 import '../rendering/svg_dimensions.dart';
 import '../rendering/native_image_density.dart';
+import '../rendering/native_image_frame.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../rendering/native_raster_images.dart';
@@ -288,7 +287,7 @@ class _NativeMarkdownImageState extends State<NativeMarkdownImage> {
                 fit: BoxFit.contain,
                 errorBuilder: (_, _, _) => fallback(),
               );
-        content = _MarkdownImageFrame(
+        content = NativeImageFrame(
           naturalSize: dimensions,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(widget.borderRadius),
@@ -311,97 +310,5 @@ class _NativeMarkdownImageState extends State<NativeMarkdownImage> {
       image = Tooltip(message: widget.title!, child: image);
     }
     return KeyedSubtree(key: _visibilityKey, child: image);
-  }
-}
-
-/// Gives Markdown's replaced image CSS-like intrinsic widths without a
-/// LayoutBuilder: tables may shrink the image below its natural width, while
-/// unconstrained rows retain the natural dimensions.
-class _MarkdownImageFrame extends SingleChildRenderObjectWidget {
-  const _MarkdownImageFrame({required this.naturalSize, required super.child});
-
-  final Size naturalSize;
-
-  @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderMarkdownImageFrame(naturalSize);
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    covariant _RenderMarkdownImageFrame renderObject,
-  ) {
-    renderObject.naturalSize = naturalSize;
-  }
-}
-
-class _RenderMarkdownImageFrame extends RenderProxyBox {
-  _RenderMarkdownImageFrame(this._naturalSize);
-
-  Size _naturalSize;
-
-  Size get naturalSize => _naturalSize;
-  set naturalSize(Size value) {
-    if (_naturalSize == value) return;
-    _naturalSize = value;
-    markNeedsLayout();
-  }
-
-  double get _aspectRatio => _naturalSize.width / _naturalSize.height;
-
-  @override
-  double computeMinIntrinsicWidth(double height) => 0;
-
-  @override
-  double computeMaxIntrinsicWidth(double height) => height.isFinite
-      ? math.min(_naturalSize.width, math.max(0, height) * _aspectRatio)
-      : _naturalSize.width;
-
-  @override
-  double computeMinIntrinsicHeight(double width) => width.isFinite
-      ? math.min(_naturalSize.width, math.max(0, width)) / _aspectRatio
-      : _naturalSize.height;
-
-  @override
-  double computeMaxIntrinsicHeight(double width) =>
-      computeMinIntrinsicHeight(width);
-
-  Size _computeSize(BoxConstraints constraints) {
-    var width = _naturalSize.width;
-    if (constraints.hasBoundedWidth) {
-      width = math.min(width, constraints.maxWidth);
-    }
-    if (constraints.hasBoundedHeight) {
-      width = math.min(width, constraints.maxHeight * _aspectRatio);
-    }
-    var height = width / _aspectRatio;
-    if (width < constraints.minWidth) {
-      width = constraints.minWidth;
-      height = width / _aspectRatio;
-    }
-    if (height < constraints.minHeight) {
-      height = constraints.minHeight;
-      width = height * _aspectRatio;
-    }
-    return constraints.constrain(Size(width, height));
-  }
-
-  @override
-  Size computeDryLayout(BoxConstraints constraints) =>
-      _computeSize(constraints);
-
-  @override
-  double? computeDryBaseline(
-    BoxConstraints constraints,
-    TextBaseline baseline,
-  ) => _computeSize(constraints).height;
-
-  @override
-  double? computeDistanceToActualBaseline(TextBaseline baseline) => size.height;
-
-  @override
-  void performLayout() {
-    size = _computeSize(constraints);
-    child?.layout(BoxConstraints.tight(size), parentUsesSize: true);
   }
 }

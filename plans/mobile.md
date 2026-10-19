@@ -19,9 +19,10 @@ are available from Git through Historical records, not repeated here.
       same-frame replacement and reparenting. Already-authorized script file
       choosers survive temporary view removal/replacement. The shipped runtime
       and Flutter host have combined gates for fetch/abort, external classic
-      scripts, choosers, simple linked styles, raster images and module graphs.
+      scripts, choosers, simple linked styles, raster/SVG images and module graphs.
       Wider framework/resource lifetimes, responsive/lazy transitions and
-      cross-provider SVG/image caching remain unverified. Check real CJK IME, focus and keyboard behavior across
+      cross-provider image caching remain unverified. Check real CJK IME,
+      focus and keyboard behavior across
       workspace/background/low-memory transitions on devices.
 - [ ] **Fragment scrolling and target state:** complete CSS scroll margin/padding,
       nested-container alignment, remaining focus state, late-loaded targets and
@@ -306,8 +307,8 @@ ownership is known; an unavailable engine releases ordinary image loading.
 Image state is a separate bounded snapshot projection, not authored HTML/CSS
 attributes. Unknown handles, duplicate element IDs and invalid states fail at
 the host boundary. Current HTML references retain their native image versions;
-retirement still belongs to the document pool. SVG keeps its vector widget path; multi-frame images retain the animation
-provider.
+retirement still belongs to the document pool. Multi-frame images retain the
+animation provider.
 Presentation updates of the same script snapshot now preserve native controls
 locally; they do not replay a stale history projection into a VM that may already
 have changed those values. A fresh script snapshot remains authoritative.
@@ -320,8 +321,25 @@ module cache reuse and one execution per module across view replacement.
 Panel rectangles use 1/32 CSS px tolerance, live colors compare exactly, and
 448 opaque screenshot probes compare both the HTML image and Canvas exactly.
 This is bounded pixel evidence, not whole-page screenshot parity.
-Unobserved ordinary, responsive/picture, animated and SVG images retain the
-established native image provider and candidate/vector selection. Script-side image errors
+Managed SVG images now share an immutable copy of the original source with the
+Canvas decode. Display uses `SvgPicture.memory`, preserving vector scaling and
+existing intrinsic/table sizing; it never substitutes the pool's bitmap. Source
+copies exposed by the document pool are immutable to callers. The pool reserves
+at most 32 MiB in aggregate (including retiring versions) and drops its source
+references with their decoded versions. Failed and obsolete decodes return their
+reservations. This is a pool budget, not a process-wide memory ceiling: Flutter's
+existing SVG/vector caches may retain loader/compiled entries until their normal
+eviction. At the source-cache limit, SVG
+keeps its established vector/provider path; that case may refetch and is not
+certified as source/pixel parity. A separate eight-profile Chromium SVG reference
+checks the same 48 browser states and 88 native comparison states/448 opaque
+pixels through actual loading, remount, same-frame replacement and startup. A
+stopped-script case retains the loaded vector without fetching again. A 2x2 SVG
+enlarged to 128x128 also checks distinct opaque colors within one bitmap texel,
+proving the display remains vector-based. These gates do not certify arbitrary
+SVG filters, fonts, animations or Canvas vector rasterization at every scale.
+Unobserved ordinary, responsive/picture and animated images retain the
+established native image provider and candidate selection. Script-side image errors
 also retain the established display fallback, including sources outside the
 script image decode limits; error-state pixel equivalence is not certified.
 Late script observation can therefore perform another fetch. Cross-provider

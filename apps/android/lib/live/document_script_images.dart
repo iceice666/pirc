@@ -27,6 +27,7 @@ class NativeDocumentImagePool {
 
   static const maxEncodedBytes = 2 * 1024 * 1024;
   static const maxEntries = 64;
+  static const maxVectorSourceBytes = 32 * 1024 * 1024;
   static const maxPixels = 16 * 1024 * 1024;
   static const maxDimension = 8192;
   final NativeDocumentImageDecoder? _decoder;
@@ -37,6 +38,10 @@ class NativeDocumentImagePool {
   final _releasing = <Future<void>>{};
   Map<String, ui.Image> _images = const {};
   Map<String, ui.Image> get images => _images;
+  Map<String, Uint8List> _vectorSources = const {};
+  Map<String, Uint8List> get vectorSources => _vectorSources;
+  int _allocatedVectorSourceBytes = 0;
+  int get allocatedVectorSourceBytes => _allocatedVectorSourceBytes;
   Set<String> get animatedImageIds => {
     for (final entry in _entries.entries)
       if (entry.value.animated) entry.key,
@@ -69,6 +74,20 @@ class NativeDocumentImagePool {
       );
     }
     _decoding++;
+    final vector =
+        mimeType.split(';').first.trim().toLowerCase() == 'image/svg+xml';
+    // Copy before the first await: caller mutations must not change the version
+    // used by either Canvas or the vector widget. Sources are document scoped.
+    final decodeBytes = vector
+        ? Uint8List.fromList(bytes).asUnmodifiableView()
+        : bytes;
+    Uint8List? vectorSource;
+    if (vector &&
+        _allocatedVectorSourceBytes + decodeBytes.length <=
+            maxVectorSourceBytes) {
+      vectorSource = decodeBytes;
+      _allocatedVectorSourceBytes += vectorSource.length;
+    }
     var reserved = 0;
     ui.Image? image;
     var animated = false;
@@ -81,7 +100,7 @@ class NativeDocumentImagePool {
           onFrameCount: (frames) => animated = frames > 1,
         );
     try {
-      image = await decodeImage(bytes, mimeType, (width, height) async {
+      image = await decodeImage(decodeBytes, mimeType, (width, height) async {
         if (_disposed) throw StateError('Image document is closed.');
         if (width <= 0 ||
             height <= 0 ||
@@ -115,9 +134,10 @@ class NativeDocumentImagePool {
         image,
         reserved,
         animated: animated,
-        vector:
-            mimeType.split(';').first.trim().toLowerCase() == 'image/svg+xml',
+        vector: vector,
+        vectorSource: vectorSource,
       );
+      vectorSource = null; // Ownership and accounting transfer to the version.
       _undelivered.add(id);
       _refresh();
       final result = <String, dynamic>{
@@ -133,6 +153,7 @@ class NativeDocumentImagePool {
       return result;
     } finally {
       _decoding--;
+      _allocatedVectorSourceBytes -= vectorSource?.length ?? 0;
       if (image != null) {
         _retire(_ImageVersion(image, reserved));
       } else {
@@ -174,15 +195,22 @@ class NativeDocumentImagePool {
     if (changed) _refresh();
   }
 
-  void _refresh() => _images = Map.unmodifiable({
-    for (final entry in _entries.entries) entry.key: entry.value.image,
-  });
+  void _refresh() {
+    _images = Map.unmodifiable({
+      for (final entry in _entries.entries) entry.key: entry.value.image,
+    });
+    _vectorSources = Map.unmodifiable({
+      for (final entry in _entries.entries)
+        entry.key: ?entry.value.vectorSource,
+    });
+  }
 
   void _retire(_ImageVersion version) {
     _retiring++;
     late Future<void> future;
     future = Future.sync(() => _release(version.image)).whenComplete(() {
       _allocatedPixels -= version.pixels;
+      _allocatedVectorSourceBytes -= version.vectorSource?.length ?? 0;
       _retiring--;
       _releasing.remove(future);
     });
@@ -265,8 +293,10 @@ class _ImageVersion {
     this.pixels, {
     this.vector = false,
     this.animated = false,
+    this.vectorSource,
   });
   final bool vector, animated;
+  final Uint8List? vectorSource;
   final ui.Image image;
   final int pixels;
 }
