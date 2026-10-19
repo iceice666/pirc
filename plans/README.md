@@ -29,11 +29,15 @@ deletion are not open work.
    limit versus monthly re-pairing (including A7's near-expiry warning),
    sideload-only versus F-Droid/Play distribution and production signing, and
    whether the native Context inspector is later or never.
-4. **Data-driven workspace modes.** [Modes](modes.md) phase 3: build Web and
-   Android from the gateway-owned catalog. Phase 2 (configuration, protocol 12,
-   mode-id stores and agent enforcement) is implemented; full Linux conformance
-   passed 217 tests with reviewed snapshots on 2026-10-19. Phase 3 still needs
-   the user's go-ahead.
+4. **Data-driven workspace modes.** [Modes](modes.md) phase 3, re-scoped
+   2026-10-19: fixed Chat/Work tabs (tab from the `assistant` capability, Work
+   grouped by node), panels by capability, modes chosen only when creating a
+   workspace. Removes `ui.group` as a breaking change (protocol 13; existing
+   mode files must drop `group:`). Adds a scratch-mode guide example and a
+   delegation-into-per-session-workspace scenario. Phase 2 (configuration,
+   protocol 12, mode-id stores and agent enforcement) is implemented; full Linux
+   conformance passed 217 tests with reviewed snapshots on 2026-10-19. Phase 3
+   still needs the user's go-ahead.
 5. **Workspace-memory search quality.** [Memory search](memory-search.md):
    an evaluation set, then FTS5 + BM25 with CJK bigrams replacing `LIKE`, then
    optional hybrid semantic search through a gateway-side embeddings endpoint
