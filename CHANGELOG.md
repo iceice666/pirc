@@ -12,39 +12,6 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 - Android HTML disclosures keep script state, named accordions and keyboard activation synchronized.
 - Android links reveal collapsed content and preserve disclosure state and eligible text drafts across view rebuilds.
 
-## [0.9.1] - 2026-10-19
-
-The first published release with the 0.9.0 changes below (0.9.0 was tagged but its release build failed), now with the signed Android beta APK. Upgrade notes are those of 0.9.0.
-
-### Fixed
-
-- Release builds include the signed Android beta APK again: the release workflow fetches the pinned Flutter SDK with its history, and font-dependent Gantt geometry tests run only where macOS's PingFang font is installed.
-
-## [0.9.0] - 2026-10-19
-
-### Changed
-
-- **Breaking: mode files no longer accept `ui.group`.** The Web and Android clients place a workspace in Chat or Work by its mode's `assistant` capability and show panels, settings, session deletion and the session noun by capability instead of the legacy `kind`, so a per-session mode on a coding node (such as a scratch mode) appears under Work with only the panels it has. Remove `group:` from every `$PIRC_CONFIG_DIR/modes/*.md` before upgrading, or the file is skipped and its workspaces become unavailable. **Node protocol 13: upgrade the gateway and all nodes together.** The gateway database migrates to schema 1005 (delegation audit columns) on start; nodes' schemas are unchanged. See the upgrade notes.
-
-### Added
-
-- **Delegation approval setting** per chat project (and the top-level Chats): `always` (default, today's card), `untrusted` (starts at once unless the chat read outside content since your last message) or `never`. With `untrusted` or `never`, delegation is no longer a human-only operation; read the risk in the chat projects guide before switching. At most 4 delegations started without the card run at once; they use the role's model or the workspace default. `PATCH /api/workspaces/:id/capabilities` accepts `delegation_approval`.
-- The assistant passes your exact words that asked for the work (`quote`, checked against your last three messages); the delegated session's auto mode reads them, never the assistant's task text, as your request for that run.
-- A chat shows the delegations it started while they run, with **Open** and **Stop** (`POST /api/delegations/:id/stop`).
-- A delegated session's confirmations (auto mode, network access, commands outside the sandbox) are relayed to the chat that started it and pushed as "… needs you"; answer them there, from **Needs you** (Allow / Deny) or from the notification, without taking control of either session. Nodes gain the gateway-only `POST /api/sessions/:id/interactions/:interactionId/relayed-answer`; upgrade nodes with the gateway.
-- `scripts/approval-stats.ts`: a read-only count of approval prompts in delegated and ordinary sessions.
-- Adding a workspace lets you pick among the modes its device accepts (`GET /api/nodes` now lists each node's `modes`); the path is asked only for modes that work in a directory.
-- A chat's list of delegation targets names each workspace's mode when the targets differ in mode, so the assistant can send one-off work to a scratch workspace and repository work to a repository.
-
-## [0.8.0] - 2026-10-19
-
-### Added
-
-- Gateway-owned workspace modes load from `$PIRC_CONFIG_DIR/modes/<id>.md` at startup and on SIGHUP. Chat/Work are editable default files, not reserved built-ins; custom modes combine validated capabilities, ordered prompt sections, feature defaults and operation allowlists. Nodes explicitly accept ids with `PIRC_MODES`; agents receive validated `PIRC_MODE` snapshots and role/team tool lists cannot widen the mode ceiling. Missing modes leave history readable but refuse new work; changed modes stop affected agents and terminals. Existing clients retain Chat/Work compatibility; dynamic mode navigation is deferred. **Node protocol 12: upgrade gateway and all nodes together.** Database schemas are unchanged. See the modes guide and upgrade notes.
-- Release CI builds macOS, Web and signed Android beta assets into a reviewed draft, with a separate signing setup check.
-
-### Fixed
-
 - Android interactive content keeps relative positioning and link hits aligned with font and viewport units.
 
 - Android Back/Forward no longer waits for a layout timeout on ready static pages.
@@ -80,6 +47,39 @@ The first published release with the 0.9.0 changes below (0.9.0 was tagged but i
 - Android preserves the order of consecutive scroll commands and correctly stops smooth scrolling with same-position or zero-distance calls.
 
 - Android preserves interactive document scroll positions when views are rebuilt and keeps positions isolated between pages.
+
+## [0.9.1] - 2026-10-19
+
+The first published release with the 0.9.0 changes below (0.9.0 was tagged but its release build failed), now with the signed Android beta APK. Upgrade notes are those of 0.9.0.
+
+### Fixed
+
+- Release builds include the signed Android beta APK again: the release workflow fetches the pinned Flutter SDK with its history, and font-dependent Gantt geometry tests run only where macOS's PingFang font is installed.
+
+## [0.9.0] - 2026-10-19
+
+### Changed
+
+- **Breaking: mode files no longer accept `ui.group`.** The Web and Android clients place a workspace in Chat or Work by its mode's `assistant` capability and show panels, settings, session deletion and the session noun by capability instead of the legacy `kind`, so a per-session mode on a coding node (such as a scratch mode) appears under Work with only the panels it has. Remove `group:` from every `$PIRC_CONFIG_DIR/modes/*.md` before upgrading, or the file is skipped and its workspaces become unavailable. **Node protocol 13: upgrade the gateway and all nodes together.** The gateway database migrates to schema 1005 (delegation audit columns) on start; nodes' schemas are unchanged. See the upgrade notes.
+
+### Added
+
+- **Delegation approval setting** per chat project (and the top-level Chats): `always` (default, today's card), `untrusted` (starts at once unless the chat read outside content since your last message) or `never`. With `untrusted` or `never`, delegation is no longer a human-only operation; read the risk in the chat projects guide before switching. At most 4 delegations started without the card run at once; they use the role's model or the workspace default. `PATCH /api/workspaces/:id/capabilities` accepts `delegation_approval`.
+- The assistant passes your exact words that asked for the work (`quote`, checked against your last three messages); the delegated session's auto mode reads them, never the assistant's task text, as your request for that run.
+- A chat shows the delegations it started while they run, with **Open** and **Stop** (`POST /api/delegations/:id/stop`).
+- A delegated session's confirmations (auto mode, network access, commands outside the sandbox) are relayed to the chat that started it and pushed as "… needs you"; answer them there, from **Needs you** (Allow / Deny) or from the notification, without taking control of either session. Nodes gain the gateway-only `POST /api/sessions/:id/interactions/:interactionId/relayed-answer`; upgrade nodes with the gateway.
+- `scripts/approval-stats.ts`: a read-only count of approval prompts in delegated and ordinary sessions.
+- Adding a workspace lets you pick among the modes its device accepts (`GET /api/nodes` now lists each node's `modes`); the path is asked only for modes that work in a directory.
+- A chat's list of delegation targets names each workspace's mode when the targets differ in mode, so the assistant can send one-off work to a scratch workspace and repository work to a repository.
+
+## [0.8.0] - 2026-10-19
+
+### Added
+
+- Gateway-owned workspace modes load from `$PIRC_CONFIG_DIR/modes/<id>.md` at startup and on SIGHUP. Chat/Work are editable default files, not reserved built-ins; custom modes combine validated capabilities, ordered prompt sections, feature defaults and operation allowlists. Nodes explicitly accept ids with `PIRC_MODES`; agents receive validated `PIRC_MODE` snapshots and role/team tool lists cannot widen the mode ceiling. Missing modes leave history readable but refuse new work; changed modes stop affected agents and terminals. Existing clients retain Chat/Work compatibility; dynamic mode navigation is deferred. **Node protocol 12: upgrade gateway and all nodes together.** Database schemas are unchanged. See the modes guide and upgrade notes.
+- Release CI builds macOS, Web and signed Android beta assets into a reviewed draft, with a separate signing setup check.
+
+### Fixed
 
 - Android full-page HTML improves layout, image/canvas sizing and computed-style reads, keeps text selection stable during image loading, notifies interactive content when native element sizes change, and supports native Canvas text measurement, intrinsic/pixel/percentage-sized chart initialization and container resizing, DOM mutation observation, Promise updates between animation callbacks, bar-chart touch tooltips, outside-tap dismissal, legend toggles, updates and resizing.
 - Android fixes native pie-chart initialization when Canvas path arguments are nonfinite.
