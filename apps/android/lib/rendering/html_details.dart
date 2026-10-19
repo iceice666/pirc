@@ -1,5 +1,26 @@
 import 'package:flutter/widgets.dart';
+import 'package:html/dom.dart' as dom;
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
+
+/// The first direct summary owns a details control's activation and focus.
+dom.Element? nativeHtmlDetailsSummaryFor(dom.Element element) {
+  for (
+    dom.Element? current = element;
+    current != null;
+    current = current.parent
+  ) {
+    if (current.localName != 'summary') continue;
+    final parent = current.parent;
+    if (parent?.localName != 'details') return null;
+    return parent!.children
+                .where((e) => e.localName == 'summary')
+                .firstOrNull ==
+            current
+        ? current
+        : null;
+  }
+  return null;
+}
 
 /// Tracks the open member of each named HTML `<details>` group in one document.
 ///
@@ -87,8 +108,10 @@ class NativeHtmlDetailsGroups {
 bool registerNativeHtmlDetails(
   BuildTree tree,
   WidgetFactory factory,
-  NativeHtmlDetailsGroups groups,
-) {
+  NativeHtmlDetailsGroups groups, {
+  ValueChanged<dom.Element>? onActivate,
+  FocusNode Function(dom.Element)? summaryFocusNode,
+}) {
   final element = tree.element;
   if (element.localName != 'details') return false;
 
@@ -98,11 +121,18 @@ bool registerNativeHtmlDetails(
     BuildOp(
       alwaysRenderBlock: true,
       debugLabel: 'nativeDetails',
-      onRenderedChildren: (detailsTree, children) =>
-          _buildNamedDetails(detailsTree, children, factory, groups, name),
+      onRenderedChildren: (detailsTree, children) => _buildNamedDetails(
+        detailsTree,
+        children,
+        factory,
+        groups,
+        name,
+        onActivate,
+        summaryFocusNode,
+      ),
       onVisitChild: (detailsTree, subTree) {
-        if (subTree.element.parent != detailsTree.element ||
-            subTree.element.localName != 'summary') {
+        if (nativeHtmlDetailsSummaryFor(subTree.element) != subTree.element ||
+            subTree.element.parent != detailsTree.element) {
           return;
         }
 
@@ -131,6 +161,8 @@ WidgetPlaceholder? _buildNamedDetails(
   WidgetFactory factory,
   NativeHtmlDetailsGroups groups,
   String? name,
+  ValueChanged<dom.Element>? onActivate,
+  FocusNode Function(dom.Element)? summaryFocusNode,
 ) {
   WidgetPlaceholder? summary;
   BuildTree? summaryTree;
@@ -162,7 +194,15 @@ WidgetPlaceholder? _buildNamedDetails(
         summaryTree?.inheritanceResolvers.resolve(context).prepareTextStyle() ??
         resolved.prepareTextStyle();
 
+    final summaryElement = summaryTree?.element;
+    final scripted =
+        summaryElement != null &&
+        summaryElement.attributes.containsKey('data-pirc-script-id');
     return _NativeHtmlDetails(
+      onActivate: scripted && onActivate != null
+          ? () => onActivate(summaryElement)
+          : null,
+      focusNode: scripted ? summaryFocusNode?.call(summaryElement) : null,
       groups: groups,
       name: name,
       initiallyOpen: tree.element.attributes.containsKey('open'),
@@ -222,8 +262,12 @@ class _NativeHtmlDetails extends StatefulWidget {
     required this.summaryStyle,
     required this.content,
     required this.textDirection,
+    this.onActivate,
+    this.focusNode,
   });
 
+  final VoidCallback? onActivate;
+  final FocusNode? focusNode;
   final NativeHtmlDetailsGroups groups;
   final String? name;
   final bool initiallyOpen;
@@ -238,9 +282,9 @@ class _NativeHtmlDetails extends StatefulWidget {
 
 class _NativeHtmlDetailsState extends State<_NativeHtmlDetails> {
   late bool _isOpen;
-  var _hasToggled = false;
   var _showFocus = false;
-  late final _focusNode = FocusNode();
+  final _ownedFocusNode = FocusNode();
+  FocusNode get _focusNode => widget.focusNode ?? _ownedFocusNode;
 
   @override
   void initState() {
@@ -253,10 +297,8 @@ class _NativeHtmlDetailsState extends State<_NativeHtmlDetails> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.groups != widget.groups || oldWidget.name != widget.name) {
       oldWidget.groups._detach(this, oldWidget.name);
-      _hasToggled = false;
       _isOpen = widget.groups._attach(this, widget.name, widget.initiallyOpen);
-    } else if (!_hasToggled &&
-        oldWidget.initiallyOpen != widget.initiallyOpen) {
+    } else if (oldWidget.initiallyOpen != widget.initiallyOpen) {
       widget.groups._setOpen(this, widget.name, widget.initiallyOpen);
     }
   }
@@ -264,7 +306,7 @@ class _NativeHtmlDetailsState extends State<_NativeHtmlDetails> {
   @override
   void dispose() {
     widget.groups._detach(this, widget.name);
-    _focusNode.dispose();
+    _ownedFocusNode.dispose();
     super.dispose();
   }
 
@@ -275,8 +317,13 @@ class _NativeHtmlDetailsState extends State<_NativeHtmlDetails> {
 
   void _toggle() {
     _focusNode.requestFocus();
-    _hasToggled = true;
-    widget.groups._setOpen(this, widget.name, !_isOpen);
+    final activate = widget.onActivate;
+    if (activate != null) {
+      // The script runtime owns cancellation, exclusive groups and publication.
+      activate();
+    } else {
+      widget.groups._setOpen(this, widget.name, !_isOpen);
+    }
   }
 
   @override

@@ -130,6 +130,41 @@ void main() {
     semanticsHandle.dispose();
   });
 
+  testWidgets('authored open updates still apply after native interaction', (
+    tester,
+  ) async {
+    final groups = NativeHtmlDetailsGroups();
+    addTearDown(groups.dispose);
+    String source(bool open) =>
+        '<details ${open ? 'open' : ''}><summary>Dynamic section</summary><p>Dynamic body</p></details>';
+    await tester.pumpWidget(_shell(groups, source(false)));
+    await tester.tap(_summary('Dynamic section'));
+    await tester.pumpAndSettle();
+    expect(_content('Dynamic body'), findsOneWidget);
+    await tester.pumpWidget(_shell(groups, source(true)));
+    await tester.pumpAndSettle();
+    expect(_content('Dynamic body'), findsOneWidget);
+    await tester.pumpWidget(_shell(groups, source(false)));
+    await tester.pumpAndSettle();
+    expect(_content('Dynamic body'), findsNothing);
+  });
+
+  testWidgets('only the first direct summary is an activation surface', (
+    tester,
+  ) async {
+    final groups = NativeHtmlDetailsGroups();
+    addTearDown(groups.dispose);
+    await tester.pumpWidget(
+      _shell(
+        groups,
+        '<details open><summary>Primary</summary><summary>Ordinary body summary</summary><p>Still open</p></details>',
+      ),
+    );
+    await tester.tap(_summary('Ordinary body summary'));
+    await tester.pumpAndSettle();
+    expect(_content('Still open'), findsOneWidget);
+  });
+
   testWidgets('a keyed HTML replacement resets the authored open state', (
     tester,
   ) async {

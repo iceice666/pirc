@@ -1133,7 +1133,10 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     final anchor =
         element.localName == 'a' && element.attributes.containsKey('href');
     final tabIndex = int.tryParse(element.attributes['tabindex'] ?? '');
-    if (id == null || (!anchor && tabIndex == null)) return const [];
+    final summary = nativeHtmlDetailsSummaryFor(element) == element;
+    if (id == null || (!anchor && !summary && tabIndex == null)) {
+      return const [];
+    }
     final node = _scriptFocusableNodes[id];
     return node == null ? const [] : [node];
   }
@@ -3021,7 +3024,12 @@ class _NativeHtmlFactory extends WidgetFactory {
     GestureTapCallback? onTap,
   }) {
     final fallback = _linkAction(tree.element) ?? onTap;
-    final focusNode = _scriptFocusNodeForElement(tree.element);
+    final summary = nativeHtmlDetailsSummaryFor(tree.element);
+    final focusNode =
+        _scriptFocusNodeForElement(tree.element) ??
+        (summary?.attributes.containsKey('data-pirc-script-id') == true
+            ? scriptFocusableNode(summary!)
+            : null);
     void focusBeforeTap() {
       if (focusNode == null || !focusNode.canRequestFocus) return;
       focusNode.requestFocus();
@@ -3049,7 +3057,8 @@ class _NativeHtmlFactory extends WidgetFactory {
     final anchor =
         element.localName == 'a' && element.attributes.containsKey('href');
     final tabIndex = int.tryParse(element.attributes['tabindex'] ?? '');
-    if (id == null || (!anchor && tabIndex == null)) return null;
+    final summary = nativeHtmlDetailsSummaryFor(element) == element;
+    if (id == null || (!anchor && !summary && tabIndex == null)) return null;
     if (controls.resolveControl(element) != null ||
         textFields.resolveControl(element) != null ||
         selects.resolveControl(element) != null ||
@@ -3063,6 +3072,8 @@ class _NativeHtmlFactory extends WidgetFactory {
   }
 
   void _registerScriptFocus(BuildTree tree) {
+    // The details replacement attaches this node to its activation surface.
+    if (nativeHtmlDetailsSummaryFor(tree.element) == tree.element) return;
     if (_absoluteSupported(tree.element)) return;
     final focusNode = _scriptFocusNodeForElement(tree.element);
     if (focusNode == null) return;
@@ -5397,7 +5408,17 @@ class _NativeHtmlFactory extends WidgetFactory {
         ),
       );
     }
-    if (registerNativeHtmlDetails(tree, this, detailsGroups)) return;
+    if (registerNativeHtmlDetails(
+      tree,
+      this,
+      detailsGroups,
+      onActivate: onScriptTap == null
+          ? null
+          : (element) => onScriptTap!(element, null),
+      summaryFocusNode: scriptFocusableNode,
+    )) {
+      return;
+    }
     if (registerNativeHtmlFieldset(tree, this)) return;
     if (markdownStyles && tree.element.classes.contains('code-head')) {
       tree.register(

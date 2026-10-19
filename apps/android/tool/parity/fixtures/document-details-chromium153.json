@@ -1,0 +1,2803 @@
+{
+  "browserVersion": "153.0.8010.12",
+  "html": "<!doctype html><html><body>\n<details id=\"first\"><summary id=\"firstSummary\">First <span id=\"label\">section</span><a id=\"link\" href=\"#other\">Link</a><button id=\"insideButton\">Button</button></summary><p>First body</p><details id=\"nested\" open><summary id=\"nestedSummary\">Nested</summary><p>Nested body</p></details><summary id=\"ordinarySummary\">Ordinary body summary</summary><input id=\"draft\" value=\"server\"></details>\n<details id=\"one\" name=\"group\" open><summary id=\"oneSummary\">One</summary><p>One body</p></details>\n<details id=\"two\" name=\"group\" open><summary id=\"twoSummary\">Two</summary><p>Two body</p></details>\n<details id=\"cancelled\"><summary id=\"cancelledSummary\" onclick=\"event.preventDefault()\">Cancelled</summary><p>Cancelled body</p></details>\n<div id=\"slot\"></div>\n<script>window.events=[]; window.captureToggle=function(e){events.push({id:e.target.id,old:e.oldState,new:e.newState,bubbles:e.bubbles,cancelable:e.cancelable,trusted:e.isTrusted,instance:e instanceof ToggleEvent,source:e.source===null});}; document.addEventListener('toggle',captureToggle,true);</script>\n</body></html>",
+  "actions": [
+    {
+      "name": "initial",
+      "script": ""
+    },
+    {
+      "name": "summary-focus",
+      "script": "document.querySelector('#firstSummary').focus();window.summaryFocus=document.activeElement.id"
+    },
+    {
+      "name": "closed-control-focus",
+      "script": "document.querySelector('#draft').focus();document.querySelector('#nestedSummary').focus()"
+    },
+    {
+      "name": "property-open",
+      "script": "document.querySelector('#first').open=true;document.querySelector('#draft').value='retained draft'"
+    },
+    {
+      "name": "property-close",
+      "script": "document.querySelector('#first').open=false"
+    },
+    {
+      "name": "truthy-boolean",
+      "script": "document.querySelector('#first').open='false'"
+    },
+    {
+      "name": "false-attribute-still-open",
+      "script": "document.querySelector('#first').setAttribute('open','false')"
+    },
+    {
+      "name": "attribute-close",
+      "script": "document.querySelector('#first').removeAttribute('open')"
+    },
+    {
+      "name": "descendant-click",
+      "script": "document.querySelector('#label').click()"
+    },
+    {
+      "name": "non-primary-summary",
+      "script": "document.querySelector('#ordinarySummary').click()"
+    },
+    {
+      "name": "interactive-child",
+      "script": "document.querySelector('#insideButton').click()"
+    },
+    {
+      "name": "cancelled-click",
+      "script": "document.querySelector('#cancelledSummary').click()"
+    },
+    {
+      "name": "second-summary",
+      "script": "document.querySelector('#twoSummary').click()"
+    },
+    {
+      "name": "open-peer-by-property",
+      "script": "document.querySelector('#one').open=true"
+    },
+    {
+      "name": "coalesced",
+      "script": "const d=document.querySelector('#first');d.open=false;d.open=true;d.open=false"
+    },
+    {
+      "name": "rename-open-member",
+      "script": "const d=document.querySelector('#first');d.open=true;d.name='group'"
+    },
+    {
+      "name": "empty-group-independent",
+      "script": "const d=document.querySelector('#first');d.name='';d.open=true"
+    },
+    {
+      "name": "insert-open-peer",
+      "script": "const d=document.createElement('details');d.id='inserted';d.name='group';d.open=true;d.innerHTML='<summary>Inserted</summary><p>Inserted body</p>';document.querySelector('#slot').append(d)"
+    },
+    {
+      "name": "toggle-attribute",
+      "script": "document.querySelector('#two').toggleAttribute('open',true)"
+    },
+    {
+      "name": "attribute-node-value",
+      "script": "document.querySelector('#first').getAttributeNode('name').value='group'"
+    },
+    {
+      "name": "attribute-node-insert",
+      "script": "const a=document.createAttribute('open');a.value='';document.querySelector('#inserted').setAttributeNode(a)"
+    },
+    {
+      "name": "fragment-own-group",
+      "script": "const f=document.createDocumentFragment();const a=document.createElement('details'),b=document.createElement('details');a.id='detachedA';b.id='detachedB';a.name=b.name='separate';f.append(a,b);a.open=true;b.open=true;window.detached=[a.open,b.open]"
+    },
+    {
+      "name": "parsed-insertion",
+      "script": "document.querySelector('#slot').innerHTML='<details id=\"parsedA\" name=\"parsed\" open><summary>Parsed A</summary></details><details id=\"parsedB\" name=\"parsed\" open><summary>Parsed B</summary></details>'"
+    },
+    {
+      "name": "property-toggle-handler",
+      "script": "const d=document.querySelector('#first');d.ontoggle=function(e){window.lastProperty=[this.id,e.oldState,e.newState]};d.open=true"
+    },
+    {
+      "name": "replace-inline-handler",
+      "script": "const d=document.querySelector('#first');d.setAttribute('ontoggle',\"window.lastInline=[this.id,event.oldState,event.newState]\");d.open=false"
+    },
+    {
+      "name": "override-inline-handler",
+      "script": "const d=document.querySelector('#first');d.ontoggle=function(e){window.lastOverride=e.newState};d.open=true"
+    },
+    {
+      "name": "remove-inline-handler",
+      "script": "const d=document.querySelector('#first');d.removeAttribute('ontoggle');d.open=false"
+    },
+    {
+      "name": "reentrant-toggle",
+      "script": "const d=document.querySelector('#first');d.addEventListener('toggle',function once(e){d.removeEventListener('toggle',once);d.open=false});d.open=true"
+    }
+  ],
+  "states": [
+    {
+      "name": "initial",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "nested",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          },
+          {
+            "id": "one",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          },
+          {
+            "id": "two",
+            "old": "closed",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "server",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": null,
+        "activeElement": "",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "summary-focus",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [],
+        "draft": "server",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "closed-control-focus",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [],
+        "draft": "server",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "property-open",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "property-close",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "truthy-boolean",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "false-attribute-still-open",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "attribute-close",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "descendant-click",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "non-primary-summary",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "interactive-child",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "cancelled-click",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "second-summary",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "two",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          },
+          {
+            "id": "one",
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "open-peer-by-property",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "one",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          },
+          {
+            "id": "two",
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "coalesced",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "rename-open-member",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "closed",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty-group-independent",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "insert-open-peer",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "inserted",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "inserted",
+            "old": "closed",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "toggle-attribute",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "inserted",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "two",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          },
+          {
+            "id": "one",
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "attribute-node-value",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "inserted",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "attribute-node-insert",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "inserted",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "inserted",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          },
+          {
+            "id": "two",
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": null,
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "fragment-own-group",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "inserted",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          }
+        ],
+        "events": [],
+        "draft": "retained draft",
+        "detached": [
+          false,
+          true
+        ],
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "parsed-insertion",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "parsedA",
+            "open": true,
+            "attribute": true,
+            "name": "parsed",
+            "instance": true
+          },
+          {
+            "id": "parsedB",
+            "open": false,
+            "attribute": false,
+            "name": "parsed",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "parsedA",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          },
+          {
+            "id": "parsedB",
+            "old": "closed",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": [
+          false,
+          true
+        ],
+        "lastProperty": null,
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "property-toggle-handler",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "parsedA",
+            "open": true,
+            "attribute": true,
+            "name": "parsed",
+            "instance": true
+          },
+          {
+            "id": "parsedB",
+            "open": false,
+            "attribute": false,
+            "name": "parsed",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": [
+          false,
+          true
+        ],
+        "lastProperty": [
+          "first",
+          "closed",
+          "open"
+        ],
+        "lastInline": null,
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "replace-inline-handler",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "parsedA",
+            "open": true,
+            "attribute": true,
+            "name": "parsed",
+            "instance": true
+          },
+          {
+            "id": "parsedB",
+            "open": false,
+            "attribute": false,
+            "name": "parsed",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": [
+          false,
+          true
+        ],
+        "lastProperty": [
+          "first",
+          "closed",
+          "open"
+        ],
+        "lastInline": [
+          "first",
+          "open",
+          "closed"
+        ],
+        "lastOverride": null,
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "override-inline-handler",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": true,
+            "attribute": true,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "parsedA",
+            "open": true,
+            "attribute": true,
+            "name": "parsed",
+            "instance": true
+          },
+          {
+            "id": "parsedB",
+            "open": false,
+            "attribute": false,
+            "name": "parsed",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": [
+          false,
+          true
+        ],
+        "lastProperty": [
+          "first",
+          "closed",
+          "open"
+        ],
+        "lastInline": [
+          "first",
+          "open",
+          "closed"
+        ],
+        "lastOverride": "open",
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "remove-inline-handler",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "parsedA",
+            "open": true,
+            "attribute": true,
+            "name": "parsed",
+            "instance": true
+          },
+          {
+            "id": "parsedB",
+            "open": false,
+            "attribute": false,
+            "name": "parsed",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": [
+          false,
+          true
+        ],
+        "lastProperty": [
+          "first",
+          "closed",
+          "open"
+        ],
+        "lastInline": [
+          "first",
+          "open",
+          "closed"
+        ],
+        "lastOverride": "open",
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "reentrant-toggle",
+      "result": {
+        "details": [
+          {
+            "id": "first",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "nested",
+            "open": true,
+            "attribute": true,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "one",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "two",
+            "open": false,
+            "attribute": false,
+            "name": "group",
+            "instance": true
+          },
+          {
+            "id": "cancelled",
+            "open": false,
+            "attribute": false,
+            "name": "",
+            "instance": true
+          },
+          {
+            "id": "parsedA",
+            "open": true,
+            "attribute": true,
+            "name": "parsed",
+            "instance": true
+          },
+          {
+            "id": "parsedB",
+            "open": false,
+            "attribute": false,
+            "name": "parsed",
+            "instance": true
+          }
+        ],
+        "events": [
+          {
+            "id": "first",
+            "old": "closed",
+            "new": "open",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          },
+          {
+            "id": "first",
+            "old": "open",
+            "new": "closed",
+            "bubbles": false,
+            "cancelable": false,
+            "trusted": true,
+            "instance": true,
+            "source": true
+          }
+        ],
+        "draft": "retained draft",
+        "detached": [
+          false,
+          true
+        ],
+        "lastProperty": [
+          "first",
+          "closed",
+          "open"
+        ],
+        "lastInline": [
+          "first",
+          "open",
+          "closed"
+        ],
+        "lastOverride": "open",
+        "summaryFocus": "firstSummary",
+        "activeElement": "firstSummary",
+        "summaries": [
+          {
+            "id": "firstSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "nestedSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "ordinarySummary",
+            "tabIndex": -1
+          },
+          {
+            "id": "oneSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "twoSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "cancelledSummary",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          },
+          {
+            "id": "",
+            "tabIndex": 0
+          }
+        ]
+      }
+    }
+  ]
+}

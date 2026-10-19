@@ -831,17 +831,133 @@
       return;
     }
 
-    const groupName = details.getAttribute('name');
-    if (groupName) {
-      for (const candidate of activeState.document.querySelectorAll('details[name]')) {
-        if (candidate !== details && candidate.getAttribute('name') === groupName &&
-            candidate.hasAttribute('open')) {
-          candidate.removeAttribute('open');
-        }
-      }
-    }
     details.setAttribute('open', '');
   }
+
+  // Low-level Attr/insertion reactions run after mutation records are queued,
+  // including setAttributeNode, Attr.value, fragments and parser insertions.
+  const detailsSeen = new WeakSet();
+  const detailsToggleTasks = new WeakMap();
+  const detailsToggleHandlers = new WeakMap();
+
+  class PircToggleEvent extends GlobalEvent {
+    constructor(type, init) {
+      const options = init == null ? {} : Object(init);
+      super(type, options);
+      for (const key of ['oldState', 'newState']) {
+        if (typeof options[key] === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
+        defineEventMember(this, key, options[key] === undefined ? '' : String(options[key]));
+      }
+      defineEventMember(this, 'source', options.source == null ? null : options.source);
+    }
+    preventDefault() { if (this.cancelable) super.preventDefault(); }
+  }
+
+  function isOwnedDetails(element) {
+    return activeState && activeState.document && !activeState.cloningSnapshot && element &&
+      element.ownerDocument === activeState.document && element.localName === 'details';
+  }
+
+  function queueDetailsToggle(element, oldState, newState) {
+    const state = activeState;
+    const previous = detailsToggleTasks.get(element);
+    if (previous) {
+      oldState = previous.oldState;
+      state.timers.delete(previous.id);
+    }
+    const task = {oldState, newState, id: 0};
+    task.id = scheduleTimer('timeout', function() {
+      if (activeState !== state) return;
+      // Author writes in a toggle handler begin a new notification task.
+      if (detailsToggleTasks.get(element) === task) detailsToggleTasks.delete(element);
+      const event = new PircToggleEvent('toggle', {oldState: task.oldState, newState: task.newState});
+      defineEventMember(event, 'isTrusted', true);
+      element.dispatchEvent(event);
+    }, 0, []);
+    if (task.id) detailsToggleTasks.set(element, task);
+    else detailsToggleTasks.delete(element);
+  }
+
+  function detailsGroupPeers(element) {
+    const name = element.getAttribute('name');
+    if (!name) return [];
+    const root = element.getRootNode();
+    const candidates = Array.from(root.querySelectorAll('details[name]'));
+    if (root.localName === 'details') candidates.unshift(root);
+    return candidates.filter(candidate => candidate !== element &&
+      candidate.getAttribute('name') === name && candidate.hasAttribute('open'));
+  }
+
+  function closeInsertedDetailsIfNeeded(element) {
+    if (element.hasAttribute('open') && detailsGroupPeers(element).length)
+      element.removeAttribute('open');
+  }
+
+  function detailsAttributeChanged(element, name, oldValue, newValue) {
+    if (!isOwnedDetails(element)) return;
+    detailsSeen.add(element);
+    if (name === 'open' && (oldValue === null) !== (newValue === null)) {
+      queueDetailsToggle(element, oldValue === null ? 'closed' : 'open', newValue === null ? 'closed' : 'open');
+      if (newValue !== null) {
+        for (const peer of detailsGroupPeers(element)) peer.removeAttribute('open');
+      }
+    } else if (name === 'name') closeInsertedDetailsIfNeeded(element);
+  }
+
+  function initializeDetails(root, initialDocument) {
+    const nodes = Array.from(root.querySelectorAll?.('details') || []);
+    if (root.localName === 'details') nodes.unshift(root);
+    const initialGroups = new Map();
+    for (const element of nodes) {
+      if (!isOwnedDetails(element)) continue;
+      if (!detailsSeen.has(element)) {
+        detailsSeen.add(element);
+        if (element.hasAttribute('open')) queueDetailsToggle(element, 'closed', 'open');
+      }
+      if (!element.hasAttribute('open')) continue;
+      if (initialDocument) {
+        const name = element.getAttribute('name');
+        if (name && initialGroups.has(name)) element.removeAttribute('open');
+        else if (name) initialGroups.set(name, element);
+      } else closeInsertedDetailsIfNeeded(element);
+    }
+  }
+
+  function setDetailsToggleHandler(element, callback) {
+    const previous = detailsToggleHandlers.get(element);
+    if (previous) element.removeEventListener('toggle', previous.listener);
+    if (typeof callback !== 'function') {
+      detailsToggleHandlers.delete(element);
+      return;
+    }
+    const listener = function(event) {
+      try { callback.call(element, event); }
+      catch (error) { diagnostic('script.toggle_handler_error', 'error', exceptionMessage(error)); }
+    };
+    detailsToggleHandlers.set(element, {callback, listener});
+    element.addEventListener('toggle', listener);
+  }
+
+  Object.defineProperties(HTMLDetailsElement.prototype, {
+    open: {configurable: true, enumerable: true,
+      get() { return this.hasAttribute('open'); },
+      set(value) { this.toggleAttribute('open', Boolean(value)); }},
+    name: {configurable: true, enumerable: true,
+      get() { return this.getAttribute('name') || ''; },
+      set(value) {
+        if (typeof value === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
+        this.setAttribute('name', String(value));
+      }}
+  });
+  Object.defineProperty(HTMLElement.prototype, 'ontoggle', {
+    configurable: true, enumerable: true,
+    get() { return detailsToggleHandlers.get(this)?.callback || null; },
+    set(value) { setDetailsToggleHandler(this, value); }
+  });
+  pircDetailsReactions = {
+    attributeChanged: detailsAttributeChanged,
+    inserted: root => initializeDetails(root, false)
+  };
 
   function registerTree(root) {
     const state = activeState;
@@ -889,6 +1005,8 @@
     const previous = handlers.get(key);
     if (key === 'onformdata')
       setFormDataHandler(element, null);
+    if (key === 'ontoggle')
+      setDetailsToggleHandler(element, null);
     if (previous) {
       if (previous.listener)
         element.removeEventListener(previous.type, previous.listener);
@@ -919,7 +1037,7 @@
     }
     const previous = handlers.get(key);
     if (previous && previous.code === code &&
-        (key !== 'onformdata' || !attributeChanged))
+        (!['onformdata', 'ontoggle'].includes(key) || !attributeChanged))
       return;
     if (previous && previous.listener)
       element.removeEventListener(previous.type, previous.listener);
@@ -937,6 +1055,12 @@
       handlers.delete(key);
       if (key === 'onformdata')
         setFormDataHandler(element, null);
+      return;
+    }
+
+    if (key === 'ontoggle') {
+      setDetailsToggleHandler(element, handler);
+      handlers.set(key, {type: eventType, code: code, listener: null});
       return;
     }
 
@@ -2934,6 +3058,8 @@
     defineGlobal('HTMLBaseElement', HTMLBaseElement, false);
     defineGlobal('HTMLButtonElement', HTMLButtonElement, false);
     defineGlobal('HTMLFormElement', HTMLFormElement, false);
+    defineGlobal('HTMLDetailsElement', HTMLDetailsElement, false);
+    defineGlobal('ToggleEvent', PircToggleEvent, false);
     defineGlobal('SubmitEvent', PircSubmitEvent, false);
     defineGlobal('FormDataEvent', PircFormDataEvent, false);
     defineGlobal('HTMLTextAreaElement', HTMLTextAreaElement, false);
@@ -3574,6 +3700,10 @@
     for (let current = element; current && current.nodeType === 1; current = current.parentElement) {
       if (current.hasAttribute('hidden') || current.hasAttribute('inert'))
         return true;
+      if (current !== element && current.localName === 'details' && !current.hasAttribute('open')) {
+        const summary = Array.from(current.children).find(child => child.localName === 'summary');
+        if (!summary || !isInside(element, summary)) return true;
+      }
       if (inlineStyleValue(current, 'display') === 'none')
         return true;
       const visibility = inlineStyleValue(current, 'visibility');
@@ -3607,7 +3737,7 @@
       return !isDisabledFormControl(element);
     if ((tag === 'a' || tag === 'area') && element.hasAttribute('href'))
       return true;
-    return hasValidTabIndex(element);
+    return defaultSummaryFor(element) === element || hasValidTabIndex(element);
   }
 
   function dispatchTrustedChangeForBlur(element) {
@@ -3647,7 +3777,7 @@
 
   // These events need an explicit Window/Document path because LinkeDOM's
   // generic EventTarget path does not model Window capture for a Document.
-  const focusEventTypes = new Set(['focus', 'blur', 'focusin', 'focusout', 'input', 'change', 'scroll', 'visibilitychange']);
+  const focusEventTypes = new Set(['focus', 'blur', 'focusin', 'focusout', 'input', 'change', 'scroll', 'visibilitychange', 'toggle']);
   const focusEventListeners = new WeakMap();
   const focusEventHandlerProperties = new WeakMap();
   const focusEventPatchedWindows = new WeakSet();
@@ -3740,7 +3870,8 @@
           record.listener.handleEvent.call(record.listener, event);
       } catch (error) {
         diagnostic(type === 'visibilitychange' ? 'script.visibility_listener_error' :
-          type === 'scroll' ? 'script.scroll_listener_error' : 'script.focus_listener_error',
+          type === 'scroll' ? 'script.scroll_listener_error' :
+          type === 'toggle' ? 'script.toggle_listener_error' : 'script.focus_listener_error',
           'error', exceptionMessage(error));
       }
       if (event._stopImmediatePropagationFlag)
@@ -3880,7 +4011,7 @@
     patchFocusWindowHooks(activeState && activeState.window);
 
     for (const type of focusEventTypes) {
-      if (type === 'visibilitychange') continue;
+      if (type === 'visibilitychange' || type === 'toggle') continue;
       const property = 'on' + type;
       Object.defineProperty(HTMLElement.prototype, property, {
         configurable: true,
@@ -4045,6 +4176,8 @@
         if (tag === 'input' && String(this.type || 'text').toLowerCase() !== 'hidden')
           return 0;
         if (['textarea', 'select', 'button'].includes(tag))
+          return 0;
+        if (defaultSummaryFor(this) === this)
           return 0;
         if ((tag === 'a' || tag === 'area') && this.hasAttribute('href'))
           return 0;
@@ -4292,7 +4425,7 @@
           clearOnclickPropertyOverride(this);
         clearPointerPropertyOverride(this, normalized);
         if (hadAttribute) clearImagePropertyOverride(this, normalized);
-        if (normalized !== 'onformdata' || hadAttribute)
+        if (!['onformdata', 'ontoggle'].includes(normalized) || hadAttribute)
           removeInlineHandler(this, normalized);
       }
       return result;
@@ -4341,6 +4474,7 @@
   function markInitialDocument(document) {
     const state = activeState;
     registerTree(document);
+    initializeDetails(document, true);
     decorateTree(document);
     const elements = document.querySelectorAll('*');
     for (const element of elements)
@@ -5404,6 +5538,7 @@
       registerHTMLClass('area', HTMLAreaElement);
       registerHTMLClass('label', HTMLLabelElement);
       registerHTMLClass('fieldset', HTMLFieldSetElement);
+      registerHTMLClass('details', HTMLDetailsElement);
       const view = parseHTML(html);
       const document = view.document;
       activeState.window = view;

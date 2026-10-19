@@ -1,5 +1,5 @@
 {
-  "description": "Applied after verifying the unchanged LinkeDOM 0.18.13 upstream checksum. Corrects native MutationObserver record production.",
+  "description": "Applied after verifying the unchanged LinkeDOM 0.18.13 upstream checksum. Corrects native MutationObserver records and details attribute/insertion reactions.",
   "patches": [
     {
       "name": "mutation-record-targets-and-types",
@@ -35,6 +35,16 @@
       "name": "style-property-mutation-records",
       "before": "      let attr = updateKeys(style);\n      if (value == null)\n        style.delete(uhyphen(name));\n      else\n        style.set(uhyphen(name), value);\n      if (!attr) {\n        const element = refs.get(style);\n        attr = element.ownerDocument.createAttribute('style');\n        element.setAttributeNode(attr);\n        style.set(PRIVATE, attr);\n      }\n      attr[CHANGED] = false;\n      attr[VALUE] = style.toString();",
       "after": "      let attr = updateKeys(style);\n      if (typeof value === 'symbol') throw new TypeError('Cannot convert a Symbol to CSS text');\n      const property = uhyphen(name);\n      const cssValue = value == null ? '' : String(value);\n      if (cssValue === '') {\n        if (!style.has(property)) return true;\n        style.delete(property);\n      } else {\n        if (style.get(property) === cssValue) return true;\n        style.set(property, cssValue);\n      }\n      // Serialize the already-updated map before touching its backing Attr.\n      // Updating Attr.value reports the original value to private/public DOM\n      // observers. A newly-created style Attr is attached with its final value\n      // so one authored property write produces one real attribute record.\n      const declarations = [];\n      style.forEach(push, declarations);\n      const serialized = declarations.join(';');\n      if (!attr) {\n        const element = refs.get(style);\n        attr = element.ownerDocument.createAttribute('style');\n        attr[VALUE] = serialized;\n        element.setAttributeNode(attr);\n        style.set(PRIVATE, attr);\n      } else {\n        attr.value = serialized;\n      }\n      attr[CHANGED] = false;"
+    },
+    {
+      "name": "details-attribute-reactions",
+      "before": "const attributeChangedCallback$1 = (element, attributeName, oldValue, newValue) => {",
+      "after": "let pircDetailsReactions = null;\nconst attributeChangedCallback$1 = (element, attributeName, oldValue, newValue) => {\n  if (pircDetailsReactions) pircDetailsReactions.attributeChanged(element, attributeName, oldValue, newValue);"
+    },
+    {
+      "name": "details-insertion-reactions",
+      "before": "const moCallback = (element, parentNode, oldPreviousSibling, oldNextSibling) => {",
+      "after": "const moCallback = (...args) => {\n  moCallbackWithRecords(...args);\n  if (!args[1] && pircDetailsReactions) pircDetailsReactions.inserted(args[0]);\n};\nconst moCallbackWithRecords = (element, parentNode, oldPreviousSibling, oldNextSibling) => {"
     }
   ]
 }
