@@ -307,7 +307,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
           final workspace = c.workspaces.firstWhere(
             (w) => w['id'] == selection.workspaceId,
           );
-          c.mode = workspace['kind'] == 'chat' ? 'chat' : 'work';
+          c.mode = c.catalog.assistant(workspace) ? 'chat' : 'work';
         }
       });
       _update();
@@ -458,7 +458,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
         section == null &&
         (MediaQuery.sizeOf(context).width > 650 || !listOpen);
     if (c.sessionVisible) unawaited(c.markVisibleRead());
-    if (c.chat && (panelKind == 'git' || panelKind == 'terminals')) {
+    if (panelKind != null && !c.sessionPanel(panelKind!)) {
       panelKind = 'files';
       pane = null;
     }
@@ -850,7 +850,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
 
   void _panel(String kind, {String? path, bool remember = true}) {
     if (c.sessionId == null) return;
-    if (c.chat && (kind == 'git' || kind == 'terminals')) kind = 'files';
+    if (!c.sessionPanel(kind)) kind = 'files';
     panelOpen = true;
     if (remember) _rememberPanel();
     unawaited(_panelCounts());
@@ -925,9 +925,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
         final showList = phone && listOpen;
         final showTabs = phone && (listOpen || section != null);
         final canLeave = !panelOpen && (!phone || listOpen) && section == null;
-        final hasChats = c.workspaces.any(
-          (w) => w['kind'] == 'chat' && w['id'] == "${w['hostId']}:chats",
-        );
+        final hasChats = c.workspaces.any(c.catalog.topChats);
         final mobileMode = hasChats ? c.mode : 'work';
         return ListenableBuilder(
           listenable: _documents,
@@ -1390,7 +1388,8 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       return NativeSidePanel(
         key: paneKey,
         tab: panelKind!,
-        chat: c.chat,
+        git: c.sessionPanel('git'),
+        terminal: c.sessionPanel('terminals'),
         open: panelOpen,
         overlay: overlay,
         width: width,
@@ -1439,7 +1438,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     final w = c.workspaces.where((w) => w['id'] == id).firstOrNull;
     c.sessionVisible = false;
     setState(() {
-      if (w != null) c.mode = w['kind'] == 'chat' ? 'chat' : 'work';
+      if (w != null) c.mode = c.catalog.assistant(w) ? 'chat' : 'work';
       section = 'workspace:$id';
       listOpen = false;
       panelOpen = false;

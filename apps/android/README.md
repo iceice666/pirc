@@ -42,6 +42,19 @@ Upgrade the gateway and every node together. The 0.6.x server uses node protocol
 management grants and cross-device interaction synchronization need the matching
 gateway/web update from this change.
 
+## Workspace modes
+
+The app loads the gateway's mode catalog (`GET /api/modes`) with the workspace
+index and asks capabilities, never mode ids, as described in the
+[modes guide](../../docs/guides/modes.md); `lib/live/modes.dart` holds the
+lookups. A workspace is in the Chat tab iff its mode is `assistant: full`; every
+other workspace, including per-session ones such as a scratch mode, is under Work,
+grouped by device. Side panels, settings sections, per-session deletion and
+nouns follow the mode's capabilities. Add workspace offers the node's accepted,
+non-assistant modes and asks for a path only for `workdir: workspace`. A
+workspace whose mode is missing from the catalog is read-only under Work. An
+older gateway without the catalog (404) falls back to the legacy `kind`.
+
 ## Project files and deletion
 
 Project files use scoped native document tokens and stream one file at a time within the node's reported upload limit, not the session-attachment picker's older 8 MiB cap. Partial batches keep successful uploads; account, project, host or online-state changes discard stale results and stop the remaining batch. Temporary tokens are released on completion or cancellation.

@@ -46,7 +46,6 @@ Future<void> mountPanel(
                 width: panelWidth,
                 child: NativeSidePanel(
                   tab: tab,
-                  chat: false,
                   open: true,
                   overlay: true,
                   width: panelWidth,

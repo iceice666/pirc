@@ -7,6 +7,7 @@ import 'project_deletion_dialog.dart';
 import 'common.dart';
 import 'gateway.dart';
 import 'work_index.dart';
+import 'modes.dart';
 import 'web_controls.dart';
 import 'workspace_instructions_editor.dart';
 import 'workspace_project_files.dart';
@@ -42,7 +43,7 @@ class _WorkspaceSettingsScope {
     required this.clientId,
     required this.pairingStamp,
     required this.workspaceId,
-    required this.workspaceKind,
+    required this.mode,
     required this.hostId,
     required this.deleting,
   });
@@ -57,7 +58,7 @@ class _WorkspaceSettingsScope {
       clientId: controller.clientId,
       pairingStamp: controller.pairingStamp,
       workspaceId: workspace['id']?.toString() ?? '',
-      workspaceKind: workspace['kind']?.toString() ?? '',
+      mode: controller.catalog.of(workspace),
       hostId: workspace['hostId']?.toString() ?? '',
       deleting: workspace['deleting'] == true,
     );
@@ -66,8 +67,18 @@ class _WorkspaceSettingsScope {
   final LiveController controller;
   final int accountRevision;
   final String? origin, clientId, pairingStamp;
-  final String workspaceId, workspaceKind, hostId;
+  final String workspaceId, hostId;
+
+  /// Capabilities decide which resources load; a mode change resets them.
+  final ModeInfo mode;
   final bool deleting;
+
+  /// The node-backed resource that follows the node's online state.
+  String? get nodeResource => mode.projectInstructions
+      ? 'instructions'
+      : mode.projectConfig
+      ? 'project-config'
+      : null;
 
   @override
   bool operator ==(Object other) =>
@@ -78,7 +89,7 @@ class _WorkspaceSettingsScope {
       clientId == other.clientId &&
       pairingStamp == other.pairingStamp &&
       workspaceId == other.workspaceId &&
-      workspaceKind == other.workspaceKind &&
+      mode.signature == other.mode.signature &&
       hostId == other.hostId &&
       deleting == other.deleting;
 
@@ -90,7 +101,7 @@ class _WorkspaceSettingsScope {
     clientId,
     pairingStamp,
     workspaceId,
-    workspaceKind,
+    mode.signature,
     hostId,
     deleting,
   );
@@ -122,12 +133,9 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
   void _initScope() {
     final scope = _scope;
     if (scope.deleting) return;
-    if (scope.workspaceKind == 'chat') {
-      unawaited(_load('capabilities', scope));
-      if (_wasOnline) unawaited(_load('instructions', scope));
-    } else if (_wasOnline) {
-      unawaited(_load('project-config', scope));
-    }
+    if (scope.mode.assistant) unawaited(_load('capabilities', scope));
+    final resource = scope.nodeResource;
+    if (resource != null && _wasOnline) unawaited(_load(resource, scope));
   }
 
   bool _scopeIsCurrent(_WorkspaceSettingsScope scope) =>
@@ -196,9 +204,8 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
 
     final wasOnline = _wasOnline;
     _wasOnline = nextOnline;
-    final resource = nextScope.workspaceKind == 'chat'
-        ? 'instructions'
-        : 'project-config';
+    final resource = nextScope.nodeResource;
+    if (resource == null) return;
     if (wasOnline && !nextOnline) {
       // The web page unmounts node-backed instructions/trust while offline.
       // Invalidate in-flight work and force a fresh read when it returns.
@@ -593,10 +600,132 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
     );
   }
 
+  /// Project instructions/files, links and deletion, each by capability.
+  List<Widget> projectSections(Json w, ModeInfo mode, bool top) {
+    final noun = mode.noun;
+    return [
+      if (mode.projectInstructions || mode.projectFiles)
+        if (!online)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              "The project's node is offline: its ${mode.projectInstructions && mode.projectFiles
+                  ? 'instructions and files'
+                  : mode.projectInstructions
+                  ? 'instructions'
+                  : 'files'} can be changed once it is back.",
+              style: webText(
+                context,
+                size: 13,
+                color: 'text.muted',
+              ).copyWith(height: kTextHeightNone),
+            ),
+          )
+        else if (mode.projectInstructions) ...[
+          heading('Project instructions'),
+          paragraph(
+            "Instructions for every $noun in this project. Only you can change them: the assistant cannot edit them. They are kept on the project's node, and each $noun keeps the instructions it started with, so a change reaches new ${noun}s only.",
+          ),
+          if (loading.contains('instructions'))
+            paragraph('Loading project instructions…', status: true),
+          if (data.containsKey('instructions')) ...[
+            WorkspaceInstructionsEditor(
+              controller: instructions,
+              enabled: !saving.contains('instructions'),
+              tooLong: instructions.text.length > maxChars,
+              count: '${instructions.text.length} / $maxChars characters',
+              onChanged: (_) {
+                _instructionEditRevision++;
+                setState(() {});
+              },
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${instructions.text.length} / $maxChars characters',
+                    style:
+                        webText(
+                          context,
+                          size: 13,
+                          color: instructions.text.length > maxChars
+                              ? 'status.danger'
+                              : 'text.secondary',
+                        ).copyWith(
+                          height: kTextHeightNone,
+                          // ProjectInstructions.svelte sets this row to 13px;
+                          // it inherits the page's CSS font-optical-sizing:auto.
+                          fontVariations: [
+                            FontVariation(
+                              'opsz',
+                              MediaQuery.textScalerOf(context).scale(13),
+                            ),
+                          ],
+                        ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                WebButton(
+                  saving.contains('instructions') ? 'Saving…' : 'Save',
+                  key: const ValueKey('workspace-instructions-save'),
+                  backgroundColor: palette(context)['web.bg-hover'],
+                  disabledOpacity: .5,
+                  onPressed:
+                      saving.contains('instructions') ||
+                          instructions.text.length > maxChars ||
+                          instructions.text.trim() == saved
+                      ? null
+                      : () => mutate(
+                          'instructions',
+                          {'text': instructions.text},
+                          'Project instructions saved. New ${noun}s in this project will use them.',
+                        ),
+                ),
+              ],
+            ),
+          ],
+          ...feedback('instructions'),
+        ],
+      if (mode.projectFiles && online && w['deleting'] != true) ...[
+        sectionDivider(),
+        WorkspaceProjectFiles(controller: widget.controller, workspace: w),
+      ],
+      if (mode.projects && !top) ...[
+        sectionDivider(),
+        WorkspaceProjectLinks(
+          controller: widget.controller,
+          workspaceId: '${w['id']}',
+        ),
+        sectionDivider(),
+        heading('Delete project'),
+        paragraph(
+          'Deletes the project, its ${noun}s and what they wrote to memory. You see what goes and what stays before anything is deleted.',
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: WebButton(
+            'Delete project…',
+            key: const ValueKey('project-delete-open'),
+            danger: true,
+            icon: LucideIcons.trash2,
+            disabledOpacity: .5,
+            onPressed: online
+                ? () => deleteProjectDialog(context, widget.controller, w)
+                : null,
+          ),
+        ),
+        if (!online) paragraph('Connect the chat node to delete this project.'),
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final w = widget.workspace;
-    if (isChat(w) && w['deleting'] == true) {
+    final mode = widget.controller.catalog.of(w);
+    final top = widget.controller.catalog.topChats(w);
+    if ((mode.assistant || mode.projects) && w['deleting'] == true) {
       return paragraph("Settings are gone with the project's deletion.");
     }
     final sessions = widget.controller.sessions
@@ -607,124 +736,17 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
     final lease = sessions
         .where((s) => s['writeLease'] != null && s['writeLease'] != false)
         .firstOrNull;
+    final projectWidgets = projectSections(w, mode, top);
     return Column(
       key: const ValueKey('workspace-settings-content'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (isChat(w)) ...[
-          if (!online)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                "The project's node is offline: its instructions and files can be changed once it is back.",
-                style: webText(
-                  context,
-                  size: 13,
-                  color: 'text.muted',
-                ).copyWith(height: kTextHeightNone),
-              ),
-            )
-          else ...[
-            heading('Project instructions'),
-            paragraph(
-              "Instructions for every chat in this project. Only you can change them: the assistant cannot edit them. They are kept on the project's node, and each chat keeps the instructions it started with, so a change reaches new chats only.",
-            ),
-            if (loading.contains('instructions'))
-              paragraph('Loading project instructions…', status: true),
-            if (data.containsKey('instructions')) ...[
-              WorkspaceInstructionsEditor(
-                controller: instructions,
-                enabled: !saving.contains('instructions'),
-                tooLong: instructions.text.length > maxChars,
-                count: '${instructions.text.length} / $maxChars characters',
-                onChanged: (_) {
-                  _instructionEditRevision++;
-                  setState(() {});
-                },
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${instructions.text.length} / $maxChars characters',
-                      style:
-                          webText(
-                            context,
-                            size: 13,
-                            color: instructions.text.length > maxChars
-                                ? 'status.danger'
-                                : 'text.secondary',
-                          ).copyWith(
-                            height: kTextHeightNone,
-                            // ProjectInstructions.svelte sets this row to 13px;
-                            // it inherits the page's CSS font-optical-sizing:auto.
-                            fontVariations: [
-                              FontVariation(
-                                'opsz',
-                                MediaQuery.textScalerOf(context).scale(13),
-                              ),
-                            ],
-                          ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  WebButton(
-                    saving.contains('instructions') ? 'Saving…' : 'Save',
-                    key: const ValueKey('workspace-instructions-save'),
-                    backgroundColor: palette(context)['web.bg-hover'],
-                    disabledOpacity: .5,
-                    onPressed:
-                        saving.contains('instructions') ||
-                            instructions.text.length > maxChars ||
-                            instructions.text.trim() == saved
-                        ? null
-                        : () => mutate(
-                            'instructions',
-                            {'text': instructions.text},
-                            'Project instructions saved. New chats in this project will use them.',
-                          ),
-                  ),
-                ],
-              ),
-            ],
-            ...feedback('instructions'),
-          ],
-          if (online && w['deleting'] != true) ...[
-            sectionDivider(),
-            WorkspaceProjectFiles(controller: widget.controller, workspace: w),
-          ],
-          if (!isTopChats(w)) ...[
-            sectionDivider(),
-            WorkspaceProjectLinks(
-              controller: widget.controller,
-              workspaceId: '${w['id']}',
-            ),
-            sectionDivider(),
-            heading('Delete project'),
-            paragraph(
-              'Deletes the project, its chats and what they wrote to memory. You see what goes and what stays before anything is deleted.',
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: WebButton(
-                'Delete project…',
-                key: const ValueKey('project-delete-open'),
-                danger: true,
-                icon: LucideIcons.trash2,
-                disabledOpacity: .5,
-                onPressed: online
-                    ? () => deleteProjectDialog(context, widget.controller, w)
-                    : null,
-              ),
-            ),
-            if (!online)
-              paragraph('Connect the chat node to delete this project.'),
-          ],
-          if (online) sectionDivider(),
+        if (mode.assistant) ...[
+          ...projectWidgets,
+          if (online && projectWidgets.isNotEmpty) sectionDivider(),
           heading('Project capabilities'),
           paragraph(
-            'Choose which assistant features this chat workspace may use. All capabilities are allowed by default. Changes are saved to and enforced by the gateway, not just hidden in this browser.',
+            'Choose which assistant features this ${mode.noun} workspace may use. All capabilities are allowed by default. Changes are saved to and enforced by the gateway, not just hidden in this browser.',
           ),
           paragraph(
             'This is not a sandbox: these settings do not isolate files, shell commands, or network access. They do not revoke data already in a conversation or stop work already running.',
@@ -736,177 +758,184 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
         ] else ...[
           heading('Workspace'),
           facts(w, sessions, lease),
-          if (online) sectionDivider(),
-          if (!online)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                "The workspace's node is offline: its project config can be reviewed once it is back.",
-                style: webText(
-                  context,
-                  size: 13,
-                  color: 'text.muted',
-                ).copyWith(height: kTextHeightNone),
-              ),
-            )
-          else ...[
-            heading('Project config'),
-            paragraph(
-              "A repository's .pirc/config.json can run hook commands, set environment variables for every command the agent runs, add writable paths, and choose the model new sessions use. The workspace ignores these values until you trust them. If the repository changes them later, they are ignored again until you trust the new values.",
-            ),
-            if (loading.contains('project-config'))
-              paragraph('Loading project config…', status: true),
-            if (project != null) ...[
-              if (project['error'] != null)
-                paragraph(
-                  'The project config is invalid and is not used: ${project['error']}',
-                )
-              else if (project['empty'] == true)
-                paragraph(
-                  "This workspace's project config sets no hooks, environment, allowed paths or default model.",
-                )
-              else ...[
-                paragraph(
-                  project['trusted'] == true
-                      ? 'Trusted'
-                      : project['trustedHash'] != null
-                      ? 'Changed since trusted: ignored until you trust it again'
-                      : 'Not trusted: ignored',
-                  weight: FontWeight.w600,
+          if (projectWidgets.isNotEmpty) ...[
+            if (online) sectionDivider(),
+            ...projectWidgets,
+          ],
+          if (mode.projectConfig) ...[
+            if (online) sectionDivider(),
+            if (!online)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  "The workspace's node is offline: its project config can be reviewed once it is back.",
+                  style: webText(
+                    context,
+                    size: 13,
+                    color: 'text.muted',
+                  ).copyWith(height: kTextHeightNone),
                 ),
-                if (obj(
-                  project['hooks'],
-                ).values.any((v) => rows(v).isNotEmpty)) ...[
-                  subheading('Hooks'),
-                  for (final (index, e) in obj(
+              )
+            else ...[
+              heading('Project config'),
+              paragraph(
+                "A repository's .pirc/config.json can run hook commands, set environment variables for every command the agent runs, add writable paths, and choose the model new sessions use. The workspace ignores these values until you trust them. If the repository changes them later, they are ignored again until you trust the new values.",
+              ),
+              if (loading.contains('project-config'))
+                paragraph('Loading project config…', status: true),
+              if (project != null) ...[
+                if (project['error'] != null)
+                  paragraph(
+                    'The project config is invalid and is not used: ${project['error']}',
+                  )
+                else if (project['empty'] == true)
+                  paragraph(
+                    "This workspace's project config sets no hooks, environment, allowed paths or default model.",
+                  )
+                else ...[
+                  paragraph(
+                    project['trusted'] == true
+                        ? 'Trusted'
+                        : project['trustedHash'] != null
+                        ? 'Changed since trusted: ignored until you trust it again'
+                        : 'Not trusted: ignored',
+                    weight: FontWeight.w600,
+                  ),
+                  if (obj(
                     project['hooks'],
-                  ).entries.where((e) => rows(e.value).isNotEmpty).indexed) ...[
-                    if (index > 0) const SizedBox(height: 10),
-                    RichText(
-                      textScaler: MediaQuery.textScalerOf(context),
-                      text: TextSpan(
-                        style: webText(
-                          context,
-                          size: 16,
-                        ).copyWith(height: kTextHeightNone),
-                        children: [
-                          TextSpan(
-                            text:
-                                const {
-                                  'sessionStart': 'When a session starts',
-                                  'beforePrompt': 'Before each prompt',
-                                  'beforeTool': 'Before a tool runs',
-                                  'afterTool': 'After a tool runs',
-                                  'agentSettled': 'When the agent settles',
-                                }[e.key] ??
-                                e.key,
-                            style: webText(
-                              context,
-                              size: 12,
-                              color: 'text.muted',
-                            ).copyWith(height: kTextHeightNone),
-                          ),
-                        ],
-                      ),
-                      strutStyle: StrutStyle(
-                        fontFamily: Theme.of(
-                          context,
-                        ).textTheme.bodyMedium?.fontFamily,
-                        fontSize: 16,
-                        forceStrutHeight: true,
-                      ),
-                    ),
-                    for (final hook in rows(e.value)) ...[
-                      code('${hook['command']}'),
-                      if ('${hook['matcher'] ?? ''}'.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text.rich(
+                  ).values.any((v) => rows(v).isNotEmpty)) ...[
+                    subheading('Hooks'),
+                    for (final (index, e)
+                        in obj(project['hooks']).entries
+                            .where((e) => rows(e.value).isNotEmpty)
+                            .indexed) ...[
+                      if (index > 0) const SizedBox(height: 10),
+                      RichText(
+                        textScaler: MediaQuery.textScalerOf(context),
+                        text: TextSpan(
+                          style: webText(
+                            context,
+                            size: 16,
+                          ).copyWith(height: kTextHeightNone),
+                          children: [
                             TextSpan(
+                              text:
+                                  const {
+                                    'sessionStart': 'When a session starts',
+                                    'beforePrompt': 'Before each prompt',
+                                    'beforeTool': 'Before a tool runs',
+                                    'afterTool': 'After a tool runs',
+                                    'agentSettled': 'When the agent settles',
+                                  }[e.key] ??
+                                  e.key,
                               style: webText(
                                 context,
                                 size: 12,
                                 color: 'text.muted',
                               ).copyWith(height: kTextHeightNone),
-                              children: [
-                                const TextSpan(
-                                  text: 'Only for tools matching ',
-                                ),
-                                TextSpan(
-                                  text: '${hook['matcher']}',
-                                  style: const TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontSize: 12,
+                            ),
+                          ],
+                        ),
+                        strutStyle: StrutStyle(
+                          fontFamily: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.fontFamily,
+                          fontSize: 16,
+                          forceStrutHeight: true,
+                        ),
+                      ),
+                      for (final hook in rows(e.value)) ...[
+                        code('${hook['command']}'),
+                        if ('${hook['matcher'] ?? ''}'.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text.rich(
+                              TextSpan(
+                                style: webText(
+                                  context,
+                                  size: 12,
+                                  color: 'text.muted',
+                                ).copyWith(height: kTextHeightNone),
+                                children: [
+                                  const TextSpan(
+                                    text: 'Only for tools matching ',
                                   ),
-                                ),
-                              ],
+                                  TextSpan(
+                                    text: '${hook['matcher']}',
+                                    style: const TextStyle(
+                                      fontFamily: 'monospace',
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
+                      ],
                     ],
                   ],
-                ],
-                if (obj(project['env']).isNotEmpty) ...[
-                  subheading('Environment'),
-                  code(
-                    obj(
-                      project['env'],
-                    ).entries.map((e) => '${e.key}=${e.value}').join('\n'),
-                  ),
-                ],
-                if (project['allowedPaths'] is List &&
-                    (project['allowedPaths'] as List).isNotEmpty) ...[
-                  subheading('Allowed paths'),
-                  code((project['allowedPaths'] as List).join('\n')),
-                ],
-                if ('${defaultModel['provider'] ?? ''}'.isNotEmpty &&
-                    '${defaultModel['id'] ?? ''}'.isNotEmpty) ...[
-                  subheading('Default model'),
-                  code(
-                    '${defaultModel['provider']}/${defaultModel['id']}'
-                    '${defaultModel['thinking'] == null ? '' : ' (thinking ${defaultModel['thinking']})'}',
-                  ),
-                ],
-              ],
-              // The pinned Svelte output retains a whitespace text node in
-              // .actions, so :empty does not remove its 12px top margin.
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Wrap(
-                  spacing: 8,
-                  children: [
-                    if (project['trusted'] != true &&
-                        '${project['hash'] ?? ''}'.isNotEmpty &&
-                        project['empty'] != true)
-                      WebButton(
-                        'Trust',
-                        primary: true,
-                        disabledOpacity: .5,
-                        onPressed: saving.contains('project-config')
-                            ? null
-                            : () => mutate(
-                                'project-config',
-                                {'trusted': true, 'hash': project['hash']},
-                                'Trusted. New sessions in this workspace use these hooks, environment, paths and default model.',
-                              ),
-                      ),
-                    if (project['trustedHash'] != null)
-                      WebButton(
-                        'Revoke trust',
-                        disabledOpacity: .5,
-                        onPressed: saving.contains('project-config')
-                            ? null
-                            : () => mutate(
-                                'project-config',
-                                {'trusted': false},
-                                'Trust revoked. New sessions ignore them.',
-                              ),
-                      ),
+                  if (obj(project['env']).isNotEmpty) ...[
+                    subheading('Environment'),
+                    code(
+                      obj(
+                        project['env'],
+                      ).entries.map((e) => '${e.key}=${e.value}').join('\n'),
+                    ),
                   ],
+                  if (project['allowedPaths'] is List &&
+                      (project['allowedPaths'] as List).isNotEmpty) ...[
+                    subheading('Allowed paths'),
+                    code((project['allowedPaths'] as List).join('\n')),
+                  ],
+                  if ('${defaultModel['provider'] ?? ''}'.isNotEmpty &&
+                      '${defaultModel['id'] ?? ''}'.isNotEmpty) ...[
+                    subheading('Default model'),
+                    code(
+                      '${defaultModel['provider']}/${defaultModel['id']}'
+                      '${defaultModel['thinking'] == null ? '' : ' (thinking ${defaultModel['thinking']})'}',
+                    ),
+                  ],
+                ],
+                // The pinned Svelte output retains a whitespace text node in
+                // .actions, so :empty does not remove its 12px top margin.
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Wrap(
+                    spacing: 8,
+                    children: [
+                      if (project['trusted'] != true &&
+                          '${project['hash'] ?? ''}'.isNotEmpty &&
+                          project['empty'] != true)
+                        WebButton(
+                          'Trust',
+                          primary: true,
+                          disabledOpacity: .5,
+                          onPressed: saving.contains('project-config')
+                              ? null
+                              : () => mutate(
+                                  'project-config',
+                                  {'trusted': true, 'hash': project['hash']},
+                                  'Trusted. New sessions in this workspace use these hooks, environment, paths and default model.',
+                                ),
+                        ),
+                      if (project['trustedHash'] != null)
+                        WebButton(
+                          'Revoke trust',
+                          disabledOpacity: .5,
+                          onPressed: saving.contains('project-config')
+                              ? null
+                              : () => mutate(
+                                  'project-config',
+                                  {'trusted': false},
+                                  'Trust revoked. New sessions ignore them.',
+                                ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
+              ...feedback('project-config'),
             ],
-            ...feedback('project-config'),
           ],
         ],
       ],

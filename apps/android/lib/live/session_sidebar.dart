@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'common.dart';
 import 'gateway.dart';
 import 'work_index.dart';
+import 'modes.dart';
 import 'web_controls.dart';
 import 'session_row.dart';
 import 'workspace_dialogs.dart';
@@ -400,9 +401,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
               ),
               WebIconButton(
                 LucideIcons.plus,
-                'New ${work ? 'session' : 'chat'} in ${w['displayName']}',
+                'New ${c.catalog.of(w).noun} in ${w['displayName']}',
                 size: phone ? 32 : 24,
-                onPressed: online && !deleting
+                onPressed: online && !deleting && !isReadOnly(w)
                     ? () => guarded(context, () => c.create('${w['id']}'))
                     : null,
               ),
@@ -570,21 +571,31 @@ class _SessionSidebarState extends State<SessionSidebar> {
   @override
   Widget build(BuildContext context) {
     final phone = MediaQuery.sizeOf(context).width <= 650;
-    final chats = c.workspaces.where(isTopChats).firstOrNull;
+    final catalog = c.catalog;
+    final chats = c.workspaces.where(catalog.topChats).firstOrNull;
     final chatMode = c.mode == 'chat' && chats != null;
     final projects = c.workspaces
-        .where((w) => isChat(w) && !isTopChats(w))
+        .where((w) => catalog.assistant(w) && !catalog.topChats(w))
         .toList();
     final page = c.workspaces
-        .where((w) => w['id'] == widget.workspaceId && !isChat(w))
+        .where((w) => w['id'] == widget.workspaceId && !catalog.assistant(w))
         .firstOrNull;
+    final hosts = workHosts(c.workspaces, c.nodes, catalog);
+    // The primary action creates in the Chats workspace or the open Work page.
+    final newNoun = chatMode
+        ? catalog.of(chats).noun
+        : page == null
+        ? 'session'
+        : catalog.of(page).noun;
     final inbox = c.sessions.where(isWaiting).toList();
     final count = c.attentionCount;
     final result = c.sessions
         .where(
           (s) =>
               c.workspaces.any(
-                (w) => w['id'] == s['workspaceId'] && isChat(w) == chatMode,
+                (w) =>
+                    w['id'] == s['workspaceId'] &&
+                    catalog.assistant(w) == chatMode,
               ) &&
               '${s['name']}'.toLowerCase().contains(search.text.toLowerCase()),
         )
@@ -699,7 +710,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   borderRadius: BorderRadius.circular(12),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    onTap: chatMode && !workspaceOnline(chats, c.nodes)
+                    onTap:
+                        (chatMode && !workspaceOnline(chats, c.nodes)) ||
+                            (!chatMode && page != null && isReadOnly(page))
                         ? null
                         : () {
                             final target = chatMode ? chats : page;
@@ -726,7 +739,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                chatMode ? 'New chat' : 'New session',
+                                'New $newNoun',
                                 style: webText(
                                   context,
                                   weight: FontWeight.w500,
@@ -747,7 +760,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   fixedHeight: 36,
                   fontSize: 16,
                   controller: search,
-                  label: chatMode ? 'Search chats' : 'Search sessions',
+                  label: chatMode ? 'Search ${newNoun}s' : 'Search sessions',
                   onChanged: (_) => setState(() {}),
                 ),
               ),
@@ -927,10 +940,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                     ),
                                   fixedListItem(const SizedBox(height: 14)),
                                 ],
-                                for (final host in workHosts(
-                                  c.workspaces,
-                                  c.nodes,
-                                )) ...[
+                                for (final host in hosts) ...[
                                   fixedListItem(
                                     heading(
                                       '${host['id']}',
@@ -979,7 +989,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                     fixedListItem(workspace(w, true)),
                                   fixedListItem(const SizedBox(height: 14)),
                                 ],
-                                if (workHosts(c.workspaces, c.nodes).isEmpty)
+                                if (hosts.isEmpty)
                                   fixedListItem(
                                     note(
                                       'Connect a device to add a workspace.',

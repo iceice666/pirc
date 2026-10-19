@@ -112,7 +112,8 @@ void main() {
                     height: 600,
                     child: NativeSidePanel(
                       tab: tab,
-                      chat: chat,
+                      git: !chat,
+                      terminal: !chat,
                       open: true,
                       overlay: false,
                       width: width,

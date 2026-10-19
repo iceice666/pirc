@@ -31,7 +31,7 @@ class _ProjectFilesScope {
     required this.clientId,
     required this.pairingStamp,
     required this.workspaceId,
-    required this.workspaceKind,
+    required this.available,
     required this.hostId,
   });
 
@@ -45,7 +45,7 @@ class _ProjectFilesScope {
       clientId: controller.clientId,
       pairingStamp: controller.pairingStamp,
       workspaceId: '${widget.workspace['id'] ?? ''}',
-      workspaceKind: '${workspace['kind'] ?? ''}',
+      available: controller.catalog.of(workspace).projectFiles,
       hostId: '${workspace['hostId'] ?? ''}',
     );
   }
@@ -53,7 +53,10 @@ class _ProjectFilesScope {
   final LiveController controller;
   final int accountRevision;
   final String? origin, clientId, pairingStamp;
-  final String workspaceId, workspaceKind, hostId;
+  final String workspaceId, hostId;
+
+  /// The workspace's mode offers shared project files.
+  final bool available;
 
   @override
   bool operator ==(Object other) =>
@@ -64,7 +67,7 @@ class _ProjectFilesScope {
       clientId == other.clientId &&
       pairingStamp == other.pairingStamp &&
       workspaceId == other.workspaceId &&
-      workspaceKind == other.workspaceKind &&
+      available == other.available &&
       hostId == other.hostId;
 
   @override
@@ -75,7 +78,7 @@ class _ProjectFilesScope {
     clientId,
     pairingStamp,
     workspaceId,
-    workspaceKind,
+    available,
     hostId,
   );
 }
@@ -100,7 +103,10 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
   Json get _workspace => _liveWorkspace(widget);
   bool get _online => workspaceOnline(_workspace, widget.controller.nodes);
   bool get _deleting => _workspace['deleting'] == true;
-  bool get _available => isChat(_workspace) && _online && !_deleting;
+  bool get _available =>
+      widget.controller.catalog.of(_workspace).projectFiles &&
+      _online &&
+      !_deleting;
 
   @override
   void initState() {

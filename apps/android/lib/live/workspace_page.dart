@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'common.dart';
 import 'gateway.dart';
 import 'work_index.dart';
+import 'modes.dart';
 import 'session_row.dart';
 import 'web_controls.dart';
 import 'workspace_settings.dart';
@@ -122,11 +123,10 @@ class _WorkspacePageState extends State<WorkspacePage> {
     int unread,
     double availableWidth,
   ) {
-    final isChatWorkspace = isChat(workspace);
     final labelStyle = webText(context, size: 13, weight: FontWeight.w500);
     final firstLabelWidth = _textWidth(
       context,
-      isChatWorkspace ? 'Chats' : 'Sessions',
+      widget.controller.catalog.of(workspace).nounPlural,
       labelStyle,
     );
     final countStyle = webText(context, size: 11, weight: FontWeight.w600);
@@ -173,7 +173,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
       );
     }
     final phone = MediaQuery.sizeOf(context).width <= 650;
-    final noun = isChat(w) ? 'chat' : 'session';
+    final mode = c.catalog.of(w);
+    final noun = mode.noun;
+    final readOnly = isReadOnly(w);
     final all = c.sessions.where((s) => s['workspaceId'] == w['id']).toList();
     final done = all.where(isDone).length,
         unread = all.where((s) => s['unread'] == true).length;
@@ -219,7 +221,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
                     onPressed: widget.onExpand,
                   ),
                 Icon(
-                  isChat(w) ? LucideIcons.messageSquare : LucideIcons.folder,
+                  mode.assistant
+                      ? LucideIcons.messageSquare
+                      : LucideIcons.folder,
                   size: 18,
                   color: palette(context)['text.secondary'],
                 ),
@@ -246,11 +250,11 @@ class _WorkspacePageState extends State<WorkspacePage> {
                         Flexible(
                           fit: FlexFit.loose,
                           child: Text(
-                            '${isChat(w)
-                                ? isTopChats(w)
+                            '${mode.assistant
+                                ? c.catalog.topChats(w)
                                       ? 'Chats'
                                       : 'Project'
-                                : 'Workspace · ${w['hostId']}'}${online ? '' : ' · offline'}',
+                                : '${mode.repository ? 'Workspace' : mode.label} · ${w['hostId']}'}${online ? '' : ' · offline'}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: webText(
@@ -271,7 +275,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                     'New $noun',
                     primary: true,
                     icon: LucideIcons.squarePen,
-                    onPressed: online && !deleting
+                    onPressed: online && !deleting && !readOnly
                         ? () => guarded(context, () => c.create('${w['id']}'))
                         : null,
                   ),
@@ -279,6 +283,11 @@ class _WorkspacePageState extends State<WorkspacePage> {
               ],
             ),
           ),
+          if (readOnly)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: WebNotice(workspaceUnavailableNotice),
+            ),
           if (deleting)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -311,11 +320,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
               );
 
               Widget tabButton(bool tab) {
-                final tabLabel = tab
-                    ? 'Settings'
-                    : isChat(w)
-                    ? 'Chats'
-                    : 'Sessions';
+                final tabLabel = tab ? 'Settings' : mode.nounPlural;
                 final tabWidget = Semantics(
                   key: Key(
                     tab ? 'workspace-tab-settings' : 'workspace-tab-sessions',
@@ -323,7 +328,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                   role: SemanticsRole.tab,
                   label: tab
                       ? 'Settings'
-                      : '${isChat(w) ? 'Chats' : 'Sessions'}${unread > 0 ? ', $unread unread' : ''}',
+                      : '${mode.nounPlural}${unread > 0 ? ', $unread unread' : ''}',
                   selected: settings == tab,
                   child: InkWell(
                     focusNode: tab ? _settingsTabFocus : _sessionsTabFocus,

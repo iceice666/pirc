@@ -78,9 +78,9 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
   late List<Json> _observedWorkspaces, _observedNodes;
   int _generation = 0;
 
-  List<Json> get directoryWorkspaces => widget.controller.workspaces
-      .where((workspace) => !isChat(workspace))
-      .toList(growable: false);
+  /// Link targets: workspaces whose mode accepts delegated work.
+  List<Json> get directoryWorkspaces =>
+      widget.controller.catalog.delegateTargets(widget.controller.workspaces);
 
   @override
   void initState() {

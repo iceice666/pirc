@@ -839,7 +839,6 @@ void main() {
                                 builder: (context, _) => NativeSidePanel(
                                   key: const ValueKey('native-side-panel'),
                                   tab: nativeTab,
-                                  chat: false,
                                   open: true,
                                   overlay: overlay,
                                   width: panelWidth,

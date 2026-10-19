@@ -25,7 +25,8 @@ class NativeSidePanel extends StatefulWidget {
   const NativeSidePanel({
     super.key,
     required this.tab,
-    required this.chat,
+    this.git = true,
+    this.terminal = true,
     required this.open,
     required this.overlay,
     required this.width,
@@ -37,7 +38,10 @@ class NativeSidePanel extends StatefulWidget {
     this.touch,
   });
   final String tab;
-  final bool chat, open, overlay;
+
+  /// Capability-driven tabs: Git for repositories, Terminal for workspaces
+  /// whose sessions share one directory.
+  final bool git, terminal, open, overlay;
   final bool? touch;
   final double width, maxWidth;
   final ValueChanged<String> onSelect;
@@ -54,7 +58,11 @@ class _NativeSidePanelState extends State<NativeSidePanel> {
   bool dragging = false, hover = false;
   double startX = 0, startWidth = 0;
   List<(String, String, IconData)> get tabs => panelTabs
-      .where((t) => !widget.chat || (t.$1 != 'git' && t.$1 != 'terminals'))
+      .where(
+        (t) =>
+            (t.$1 != 'git' || widget.git) &&
+            (t.$1 != 'terminals' || widget.terminal),
+      )
       .toList();
   @override
   void initState() {

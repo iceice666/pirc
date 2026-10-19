@@ -14,7 +14,10 @@ Future<bool?> deleteProjectDialog(
   LiveController controller,
   Json workspace,
 ) {
-  if (!isChat(workspace) || isTopChats(workspace)) return Future.value(false);
+  final catalog = controller.catalog;
+  if (!catalog.of(workspace).projects || catalog.topChats(workspace)) {
+    return Future.value(false);
+  }
   return showDialog<bool>(
     context: context,
     useRootNavigator: false,
@@ -64,8 +67,8 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
       identityValid &&
       workspace != null &&
       '${workspace!['hostId']}' == host &&
-      isChat(workspace!) &&
-      !isTopChats(workspace!);
+      widget.controller.catalog.of(workspace!).projects &&
+      !widget.controller.catalog.topChats(workspace!);
   bool current(int ticket) => !closing && scopeValid && ticket == generation;
   List<Json> items(String action) => rows(
     preview?['memory'],

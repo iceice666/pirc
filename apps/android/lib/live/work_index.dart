@@ -1,7 +1,6 @@
 import 'gateway.dart';
+import 'modes.dart';
 
-bool isChat(Json w) => w['kind'] == 'chat';
-bool isTopChats(Json w) => isChat(w) && w['id'] == "${w['hostId']}:chats";
 bool isWorking(Json s) =>
     const ['running', 'queued', 'stopping'].contains(s['runStatus']);
 bool isWaiting(Json s) => s['runStatus'] == 'waiting_input';
@@ -28,12 +27,18 @@ List<Json> sidebarSessions(
             (s['unread'] == true && !(skipWaiting && isWaiting(s)))),
   ),
 );
-List<Json> workHosts(List<Json> workspaces, List<Json> nodes) {
-  final chats = workspaces.where(isTopChats).map((w) => w['hostId']).toSet();
-  final directories = workspaces.where((w) => !isChat(w)).toList();
+
+/// The Work tab: every non-assistant workspace (including per-session and
+/// unavailable ones) grouped by host, plus nodes that can host Work workspaces.
+List<Json> workHosts(
+  List<Json> workspaces,
+  List<Json> nodes,
+  ModeCatalog catalog,
+) {
+  final directories = workspaces.where((w) => !catalog.assistant(w)).toList();
   final ids = <String>{
     ...directories.map((w) => '${w['hostId']}'),
-    ...nodes.where((n) => !chats.contains(n['id'])).map((n) => '${n['id']}'),
+    ...catalog.workNodes(nodes, workspaces).map((n) => '${n['id']}'),
   }.toList();
   bool online(String id) => nodes.any((n) => n['id'] == id);
   ids.sort(

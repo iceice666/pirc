@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/work_index.dart';
+import 'package:pirc_mobile/live/modes.dart';
 import 'package:pirc_mobile/live/workspace_page.dart';
 import 'package:pirc_mobile/live/workspace_settings.dart';
 import 'package:pirc_mobile/live/session_sidebar.dart';
@@ -117,6 +118,7 @@ void main() {
         {'id': 'device'},
         {'id': 'empty'},
       ],
+      ModeCatalog(),
     );
     expect(list.map((h) => h['id']), ['device', 'empty', 'offline']);
     expect(list.last['online'], false);

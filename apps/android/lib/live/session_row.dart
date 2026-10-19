@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'common.dart';
 import 'gateway.dart';
 import 'work_index.dart';
+import 'modes.dart';
 import 'web_controls.dart';
 import 'web_length_formatter.dart';
 
@@ -119,6 +120,8 @@ class _SessionRowState extends State<SessionRow> {
             .where((w) => w['id'] == s['workspaceId'])
             .firstOrNull ??
         {};
+    // An unavailable mode leaves history readable but accepts no mutations.
+    final locked = saving || isReadOnly(w);
     final phone = MediaQuery.sizeOf(context).width <= 650;
     final hoverCapable = _canHover();
     final actions = widget.page
@@ -147,7 +150,7 @@ class _SessionRowState extends State<SessionRow> {
           },
           onKeyEvent: (_, e) {
             if (e is KeyDownEvent && e.logicalKey == LogicalKeyboardKey.f2) {
-              rename();
+              if (!isReadOnly(w)) rename();
               return KeyEventResult.handled;
             }
             if (renaming &&
@@ -206,7 +209,7 @@ class _SessionRowState extends State<SessionRow> {
                           Expanded(
                             child: InkWell(
                               onTap: widget.onOpen,
-                              onDoubleTap: rename,
+                              onDoubleTap: isReadOnly(w) ? null : rename,
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
                                 padding: EdgeInsets.fromLTRB(
@@ -362,7 +365,7 @@ class _SessionRowState extends State<SessionRow> {
                                   ? 32
                                   : 24,
                               iconSize: 14,
-                              onPressed: saving
+                              onPressed: locked
                                   ? null
                                   : () => patch({'pinned': !isPinned(s)}),
                             ),
@@ -378,11 +381,13 @@ class _SessionRowState extends State<SessionRow> {
                                   ? 32
                                   : 24,
                               iconSize: 14,
-                              onPressed: saving
+                              onPressed: locked
                                   ? null
                                   : () => patch({'settled': !isDone(s)}),
                             ),
-                            if (isChat(w)) ...[
+                            if (widget.controller.catalog
+                                .of(w)
+                                .deleteSessions) ...[
                               const SizedBox(width: 2),
                               WebIconButton(
                                 LucideIcons.trash2,
@@ -423,7 +428,7 @@ class _SessionRowState extends State<SessionRow> {
                                   ? 32
                                   : 24,
                               iconSize: 14,
-                              onPressed: saving ? null : rename,
+                              onPressed: locked ? null : rename,
                             ),
                           ] else if (showMore)
                             WebIconButton(

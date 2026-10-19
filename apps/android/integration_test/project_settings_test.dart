@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:pirc_mobile/live/gateway.dart';
-import 'package:pirc_mobile/live/work_index.dart';
+import 'package:pirc_mobile/live/modes.dart';
 import 'package:pirc_mobile/live/workspace_settings.dart';
 import 'package:pirc_mobile/live/web_controls.dart';
 import 'package:pirc_mobile/theme.dart';
@@ -23,8 +23,11 @@ void main() {
       final workspaces = rows(
         (await gateway.request('/api/workspaces'))['workspaces'],
       );
+      final catalog = ModeCatalog(
+        rows((await gateway.request('/api/modes'))['modes']),
+      );
       final workspace = workspaces.singleWhere(
-        (row) => row['id'] == 'chat:chats' && isChat(row),
+        (row) => row['id'] == 'chat:chats' && catalog.assistant(row),
       );
       final root = '/api/workspaces/${enc('${workspace['id']}')}';
       final originalInstructions = obj(

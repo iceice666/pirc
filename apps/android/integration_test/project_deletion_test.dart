@@ -10,7 +10,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/project_deletion_dialog.dart';
-import 'package:pirc_mobile/live/work_index.dart';
 import 'package:pirc_mobile/theme.dart';
 
 void main() {
@@ -140,8 +139,9 @@ void main() {
         pairingStamp = stamp;
 
         final workspaces = List<Json>.of(c.workspaces);
-        final chats = workspaces.firstWhere(isTopChats);
-        final chatHost = workspaces.firstWhere(isChat)['hostId'] as String;
+        final chats = workspaces.firstWhere(c.catalog.topChats);
+        final chatHost =
+            workspaces.firstWhere(c.catalog.assistant)['hostId'] as String;
         final created = await gateway.request(
           '/api/workspaces',
           method: 'POST',
@@ -156,8 +156,8 @@ void main() {
         final currentProjectId = '${project['id']}';
         projectId = currentProjectId;
         expect(currentProjectId, isNotEmpty);
-        expect(isChat(project), isTrue);
-        expect(isTopChats(project), isFalse);
+        expect(c.catalog.assistant(project), isTrue);
+        expect(c.catalog.topChats(project), isFalse);
 
         await gateway.request(
           '/api/workspaces/${enc(currentProjectId)}/instructions',
@@ -415,7 +415,7 @@ void main() {
           ),
           isFalse,
         );
-        expect(remainingWorkspaces.any(isTopChats), isTrue);
+        expect(remainingWorkspaces.any(c.catalog.topChats), isTrue);
         final remainingSessions = rows(
           (await gateway.request('/api/sessions'))['sessions'],
         );

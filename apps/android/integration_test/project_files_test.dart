@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:pirc_mobile/live/gateway.dart';
-import 'package:pirc_mobile/live/work_index.dart';
+import 'package:pirc_mobile/live/modes.dart';
 import 'package:pirc_mobile/live/workspace_project_files.dart';
 import 'package:pirc_mobile/theme.dart';
 
@@ -61,12 +61,15 @@ void main() {
         final workspaces = rows(
           (await gateway.request('/api/workspaces'))['workspaces'],
         );
+        final catalog = ModeCatalog(
+          rows((await gateway.request('/api/modes'))['modes']),
+        );
         final created = await gateway.request(
           '/api/workspaces',
           method: 'POST',
           body: {
             'kind': 'chat',
-            'nodeId': '${workspaces.firstWhere(isChat)['hostId']}',
+            'nodeId': '${workspaces.firstWhere(catalog.assistant)['hostId']}',
             'displayName':
                 'Native project files ${DateTime.now().microsecondsSinceEpoch}',
           },
@@ -74,7 +77,7 @@ void main() {
         final workspace = obj(created['workspace']);
         workspaceId = '${workspace['id']}';
         expect(workspaceId, isNotEmpty);
-        expect(isChat(workspace), isTrue);
+        expect(catalog.assistant(workspace), isTrue);
 
         final empty = await listing(workspaceId);
         expect(rows(empty['files']), isEmpty);

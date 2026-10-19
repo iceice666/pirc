@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'work_index.dart';
+import 'modes.dart';
 import 'attention.dart';
 import 'panel_resource.dart';
 
@@ -12,6 +13,8 @@ Json obj(dynamic value) =>
 List<Json> rows(dynamic value) => value is List ? value.map(obj).toList() : [];
 String enc(String value) => Uri.encodeComponent(value);
 String sessionPath(String id) => '/api/sessions/${enc(id)}';
+const workspaceUnavailableNotice =
+    "This workspace's mode is unavailable on the gateway: its history is read-only and it takes no new sessions.";
 const workspaceDeletionNotice =
     "This project's deletion did not finish: its chats accept no more work. Finish deleting it once the chat node is connected.";
 
@@ -72,6 +75,9 @@ class LiveController extends ChangeNotifier {
       nodes = [],
       models = [],
       attachments = [];
+
+  /// The gateway's mode catalog; empty with an older gateway (legacy `kind`).
+  ModeCatalog catalog = ModeCatalog();
   bool uploading = false;
   Json? get selectedModel {
     final id = state['modelId'];
@@ -247,10 +253,32 @@ class LiveController extends ChangeNotifier {
       !_historyNeedsSnapshot &&
       state['runnerStatus'] != 'starting' &&
       !messages.any((message) => message['partial'] == true);
-  bool get chat => workspaces.any(
-    (w) =>
-        w['id'] == obj(state['session'])['workspaceId'] && w['kind'] == 'chat',
-  );
+
+  /// The open session's workspace, when the index has it.
+  Json? get sessionWorkspace {
+    final id = obj(state['session'])['workspaceId'];
+    return workspaces.where((w) => w['id'] == id).firstOrNull;
+  }
+
+  /// The open session's mode capabilities, when its workspace is known.
+  ModeInfo? get sessionMode {
+    final workspace = sessionWorkspace;
+    return workspace == null ? null : catalog.of(workspace);
+  }
+
+  /// Assistant chrome (no Work jobs/control) for the open session.
+  bool get chat => sessionMode?.assistant ?? false;
+
+  /// Side panels by capability: Git needs a repository, terminals a shared
+  /// workspace directory. Unknown workspaces keep every panel, as before.
+  bool sessionPanel(String kind) {
+    final mode = sessionMode;
+    if (mode == null) return true;
+    if (kind == 'git') return mode.repository;
+    if (kind == 'terminals') return mode.sharedDirectory;
+    return true;
+  }
+
   static const messagePageSize = 60;
   int hiddenMessages = 0;
   bool _historyInitialized = false;
@@ -503,12 +531,15 @@ class LiveController extends ChangeNotifier {
     _listRefreshAccount = revision;
     final initialLoad = initializing;
     try {
+      final modes = _requestModes();
       final result = await Future.wait([
         gateway.request('/api/sessions'),
         gateway.request('/api/workspaces'),
         gateway.request('/api/nodes'),
       ]);
+      final catalogRows = await modes;
       if (revision != _accountRevision) return;
+      if (catalogRows != null) catalog = ModeCatalog(catalogRows);
       sessions = rows(result[0]['sessions'])
           .where(
             (s) =>
@@ -520,7 +551,7 @@ class LiveController extends ChangeNotifier {
         result[1]['workspaces'],
       ).where((w) => !_deletedWorkspaces.contains(w['id'])).toList();
       nodes = rows(result[2]['nodes']);
-      if (!workspaces.any(isTopChats)) mode = 'work';
+      if (!workspaces.any(catalog.topChats)) mode = 'work';
       if (!workspaces.any((w) => w['id'] == workspaceFilter)) {
         workspaceFilter = null;
       }
@@ -557,6 +588,19 @@ class LiveController extends ChangeNotifier {
     }
   }
 
+  /// The catalog loads with the index. An older gateway answers 404: no
+  /// catalog, so workspaces fall back to their legacy `kind`. Other failures
+  /// keep the last catalog (null), like the rest of a failed refresh.
+  Future<List<Json>?> _requestModes() async {
+    try {
+      return rows((await gateway.request('/api/modes'))['modes']);
+    } on PlatformException catch (e) {
+      return e.code == 'HTTP_404' ? const [] : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> open(String id, {bool reveal = true}) async {
     _selectFirstSessionOnRefresh = false;
     final navigation = ++_navigationIntent;
@@ -587,7 +631,9 @@ class LiveController extends ChangeNotifier {
     final workspace = workspaces
         .where((w) => w['id'] == target?['workspaceId'])
         .firstOrNull;
-    if (workspace != null) mode = isChat(workspace) ? 'chat' : 'work';
+    if (workspace != null) {
+      mode = catalog.assistant(workspace) ? 'chat' : 'work';
+    }
     revealSelectedSession = reveal;
     sessionNavigationRevision++;
     sessionVisible = reveal;
@@ -672,6 +718,9 @@ class LiveController extends ChangeNotifier {
     if (_deletedWorkspaces.contains(workspaceId)) {
       throw StateError('This project is no longer available.');
     }
+    if (isReadOnly(workspace)) {
+      throw StateError(workspaceUnavailableNotice);
+    }
     final account = _accountRevision, stamp = pairingStamp;
     final data = await gateway.request(
       '/api/sessions',
@@ -740,7 +789,9 @@ class LiveController extends ChangeNotifier {
   /// Acknowledged project deletion is terminal, even if an older index arrives later.
   Future<void> deleteProject(String id, List<Json> decisions) async {
     final workspace = workspaces.where((w) => w['id'] == id).firstOrNull;
-    if (workspace == null || !isChat(workspace) || isTopChats(workspace)) {
+    if (workspace == null ||
+        !catalog.of(workspace).projects ||
+        catalog.topChats(workspace)) {
       throw StateError('Only chat projects can be deleted.');
     }
     if (!workspaceOnline(workspace, nodes)) {
@@ -779,7 +830,7 @@ class LiveController extends ChangeNotifier {
           .firstOrNull;
       if (currentWorkspace != null &&
           (currentWorkspace['hostId'] != workspace['hostId'] ||
-              !isChat(currentWorkspace))) {
+              !catalog.of(currentWorkspace).projects)) {
         return;
       }
       _deletedWorkspaces.add(id);
@@ -812,9 +863,10 @@ class LiveController extends ChangeNotifier {
     final session = sessions.where((s) => s['id'] == id).firstOrNull;
     if (session == null ||
         !workspaces.any(
-          (w) => w['id'] == session['workspaceId'] && isChat(w),
+          (w) =>
+              w['id'] == session['workspaceId'] && catalog.of(w).deleteSessions,
         )) {
-      throw StateError('Only chats can be deleted.');
+      throw StateError("This workspace's sessions cannot be deleted.");
     }
     if (!_deleting.add(id)) {
       throw StateError('Deletion is already in progress.');
@@ -929,6 +981,7 @@ class LiveController extends ChangeNotifier {
       sessions = [];
       workspaces = [];
       nodes = [];
+      catalog = ModeCatalog();
       readers.clear();
       panelState.clear();
       _resetHistory();

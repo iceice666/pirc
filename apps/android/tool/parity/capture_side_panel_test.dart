@@ -80,7 +80,6 @@ void main() {
                             ),
                             child: NativeSidePanel(
                               tab: view,
-                              chat: false,
                               open: true,
                               overlay: overlay,
                               width: panelWidth,
