@@ -1179,6 +1179,25 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
           retainedTarget = const NativeDocumentFragmentTarget.native(null);
         }
       }
+      if (savedOffset != null &&
+          window.historyChangeKind == 'traverse' &&
+          !document.fragmentTarget.revealHandled &&
+          document.content.isHtml) {
+        final scripts = document.scripts;
+        if (scripts != null) {
+          await scripts.updateHistory(window.scriptHistorySnapshot);
+        }
+        if (!isCurrent()) return;
+        if (scripts?.fragmentAncestorsRevealed ??
+            document.fragmentTarget.ancestorsRevealed) {
+          // Reveal changed the destination layout; traverse to the fragment
+          // instead of a reading position from its previously closed layout.
+          savedOffset = null;
+          retainedTarget = scripts == null
+              ? null
+              : NativeDocumentFragmentTarget.native(scripts.fragmentTargetId);
+        }
+      }
       if (!isCurrent()) return;
       if (savedOffset != null) {
         await document.viewport.restoreScrollOffset(
@@ -1199,6 +1218,9 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
           identical(widget.windows.active, window) &&
           window.current == current &&
           window.fragmentRevealRevision == revision) {
+        document.fragmentTarget.markRevealHandled(
+          document.fragmentTarget.revision,
+        );
         document.initialFragmentRevealPending = false;
         current.scrollOffsetBeforeInitialFragment = false;
         current.scrollOffset =
@@ -2299,10 +2321,14 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
             'native-static-${sequence++}';
       }
     }
+    if (_scripts == null) document.disclosures.apply(styled);
     _renderedTargetRevision = document.fragmentTarget.revision;
     final targetId = _scripts?.fragmentTargetId;
     final fragmentTarget = _scripts == null
-        ? document.fragmentTarget.resolve(styled)
+        ? document.fragmentTarget.resolve(
+            styled,
+            reveal: document.disclosures.reveal,
+          )
         : targetId == null
         ? null
         : styled
@@ -2489,8 +2515,19 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       viewport: document.viewport,
       fragmentIndex: fragments,
       historyController: document.historyControls,
+      preserveControlValues: _scripts == null,
       onNavigate: widget.onLink,
       onFormSubmit: widget.onSubmit,
+      onDetailsActivate: _scripts != null
+          ? null
+          : (id) {
+              if (!mounted ||
+                  !identical(widget.document, document) ||
+                  _scripts != null) {
+                return;
+              }
+              if (document.disclosures.toggle(id)) setState(() {});
+            },
       onScriptEvent: _scripts?.dispatch,
       onScriptDetailedEvent: _scripts == null
           ? null

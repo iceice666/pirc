@@ -351,7 +351,12 @@ class NativeHtmlTextFieldState extends ChangeNotifier {
 
   /// Adopts live editor objects from the previous document when a unique
   /// script-marked control of the same kind survives a DOM snapshot update.
-  void adoptEditingState(NativeHtmlTextFieldState previous) {
+  /// [preserveValues] is for presentation changes of an unchanged static DOM;
+  /// script publications keep fresh DOM values and authored reset defaults.
+  void adoptEditingState(
+    NativeHtmlTextFieldState previous, {
+    bool preserveValues = false,
+  }) {
     if (identical(this, previous) || _disposed || previous._disposed) return;
     final previousById = previous._uniqueScriptFields();
     final nextById = _uniqueScriptFields();
@@ -386,7 +391,8 @@ class NativeHtmlTextFieldState extends ChangeNotifier {
             !newRecord.descriptor.disabled && newRecord.descriptor.visible
         ..skipTraversal =
             newRecord.descriptor.disabled || !newRecord.descriptor.visible;
-      if (oldRecord.controller.text != newRecord.descriptor.initialValue) {
+      if (!preserveValues &&
+          oldRecord.controller.text != newRecord.descriptor.initialValue) {
         final value = newRecord.descriptor.initialValue;
         oldRecord.controller.value = TextEditingValue(
           text: value,

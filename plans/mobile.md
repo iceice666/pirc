@@ -14,6 +14,12 @@ are available from Git through Historical records, not repeated here.
       broader DOM APIs, Canvas font/ink coverage, inline-fragment measurements
       and common-library coverage. Broader image/framework flows remain
       unverified; preserve explicit unsupported errors.
+- [ ] **Document control lifetime:** retain file selections, password and
+      autocomplete-off values after a full same-document workspace teardown and
+      remount. Presentation reparses and retained views now keep these live;
+      full remount currently restores only eligible history snapshots. Preserve
+      account/document disposal and authored Reset behavior; verify CJK composing
+      input and focus through these lifecycle transitions.
 - [ ] **Fragment scrolling and target state:** complete CSS scroll margin/padding,
       nested-container alignment, remaining focus state, late-loaded targets and
       nodes discarded from rendered markup. Target lookup, initial URLs and
@@ -212,10 +218,34 @@ changes still apply after native interaction. An independent Chromium 153 corpus
 light/dark, DPR 1/3 widget profiles gate native activation and focus. These are
 functional gates, not a new pixel-parity claim. Details without an authored
 summary still use a local native fallback (script synchronization is unverified).
-Ancestor revealing, script key-event cancellation, arbitrary shadow-tree details
-and separate browser task-source ordering remain open. DOM notifications use
+Script key-event cancellation, arbitrary shadow-tree details and separate
+browser task-source ordering remain open. DOM notifications use
 the bounded host-pumped callback scheduler; physical Sandbox/device acceptance
 is not established by the Node/widget tests.
+
+Fragment links now reveal containing details bodies from inner to outer before
+native layout/focus/scrolling. Initial URLs, repeat activation and history
+traversal preserve the selected node; links to a details element or its first
+summary do not open that element itself. Named peers close consistently. Static
+fetched documents retain live disclosure attributes across native reparses,
+resize and remount; eligible declarative form drafts follow the existing
+history-control policy. Live file selections, passwords and autocomplete-off
+values survive presentation reparses and retained views; a full workspace
+teardown/remount currently carries only eligible snapshots, so those excluded
+values still need document-owned lifetime support. A completed traversal is not
+replayed on remount.
+The independent Chromium 153 corpus covers 96 phone/tablet, DPR 1/3, theme and
+initial/click profiles and 432 states. Native widgets compare 288 visible target
+rectangles/root positions within 1/32 CSS px, exact focus/open state, nested
+scroll offsets, repeat/history operations and subsequent reading-position
+retention. Node tests independently compare DOM target/open state and toggle
+ordering. There is no new screenshot/pixel or Android Sandbox/physical proof.
+`hidden=until-found`/`beforematch`, broader flat/shadow-tree revealing and late
+loading/reparenting remain open. Closed-details descendants still use the native
+no-box geometry contract; Chromium can expose retained/forced layout rectangles
+for these descendants. This difference is explicit rather than inferred from
+visible-target success. Custom disclosure markers and general content-visibility
+layout are not certified by this corpus.
 
 Native Canvas supports matched text measurement, intrinsic/pixel/percentage
 sizing, container resizing, the eight stock Chart.js chart types and their default
@@ -510,7 +540,7 @@ filled/oversized control caret and selection variants, focus restoration across
 remount/background transitions, broader keyboard traversal, focus pseudo styling,
 additional toggle box-model combinations and exact toggle appearance/accent
 styling are not newly certified. A redirected focus is recorded as a difference.
-Ancestor revealing, streamed HTML/parser exposure, image intrinsic-size/load
+Hidden-until-found/beforematch revealing, streamed HTML/parser exposure, image intrinsic-size/load
 restoration, arbitrary late-DOM retry and targets without a measured box,
 inline/text/non-HTML fragments, RTL/vertical writing, sticky/SVG geometry, scroll snap,
 root horizontal scrolling and unresolved inset math remain open. Unsupported

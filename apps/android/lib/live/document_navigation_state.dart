@@ -14,6 +14,7 @@ import '../rendering/html_file.dart';
 import '../rendering/native_html.dart';
 import '../rendering/document_scroll_anchor.dart';
 import '../rendering/document_fragment.dart';
+import '../rendering/document_disclosures.dart';
 import '../rendering/document_element_scroll.dart';
 import 'gateway.dart';
 import 'document_scripts.dart';
@@ -209,6 +210,7 @@ class NativeFetchedDocument {
   NativeDocumentScripts? scripts;
   final scriptFileSelections = NativeHtmlScriptFileSelections();
   final historyControls = NativeHtmlHistoryController();
+  final disclosures = NativeDocumentDisclosures();
   final viewport = NativeHtmlViewportController();
   late final fragmentTarget = NativeDocumentTargetState(url);
   late bool initialFragmentRevealPending = content.isHtml || url.contains('#');

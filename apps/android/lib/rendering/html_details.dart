@@ -54,7 +54,16 @@ class NativeHtmlDetailsGroups {
     // When the document initially contains multiple open members, keep the
     // first one in tree order, matching the browser's exclusive-group behavior.
     final currentOpen = _openMembers[name];
-    if (currentOpen != null && currentOpen != state) return false;
+    if (currentOpen != null && currentOpen != state) {
+      final nativeId = state.widget.nativeId;
+      if (nativeId == null || nativeId != currentOpen.widget.nativeId) {
+        return false;
+      }
+      // A reparse can mount the replacement before retiring the previous
+      // renderer of this same DOM node. It is not a competing group member.
+      members.remove(currentOpen);
+      if (!initiallyOpen) _openMembers.remove(name);
+    }
     if (initiallyOpen) _openMembers[name] = state;
     return initiallyOpen;
   }
@@ -110,6 +119,7 @@ bool registerNativeHtmlDetails(
   WidgetFactory factory,
   NativeHtmlDetailsGroups groups, {
   ValueChanged<dom.Element>? onActivate,
+  ValueChanged<dom.Element>? onStaticActivate,
   FocusNode Function(dom.Element)? summaryFocusNode,
 }) {
   final element = tree.element;
@@ -128,6 +138,7 @@ bool registerNativeHtmlDetails(
         groups,
         name,
         onActivate,
+        onStaticActivate,
         summaryFocusNode,
       ),
       onVisitChild: (detailsTree, subTree) {
@@ -162,6 +173,7 @@ WidgetPlaceholder? _buildNamedDetails(
   NativeHtmlDetailsGroups groups,
   String? name,
   ValueChanged<dom.Element>? onActivate,
+  ValueChanged<dom.Element>? onStaticActivate,
   FocusNode Function(dom.Element)? summaryFocusNode,
 ) {
   WidgetPlaceholder? summary;
@@ -199,8 +211,13 @@ WidgetPlaceholder? _buildNamedDetails(
         summaryElement != null &&
         summaryElement.attributes.containsKey('data-pirc-script-id');
     return _NativeHtmlDetails(
+      nativeId: tree.element.attributes['data-pirc-script-id'],
       onActivate: scripted && onActivate != null
           ? () => onActivate(summaryElement)
+          : onStaticActivate != null &&
+                tree.element.attributes['data-pirc-script-id']?.isNotEmpty ==
+                    true
+          ? () => onStaticActivate(tree.element)
           : null,
       focusNode: scripted ? summaryFocusNode?.call(summaryElement) : null,
       groups: groups,
@@ -263,9 +280,11 @@ class _NativeHtmlDetails extends StatefulWidget {
     required this.content,
     required this.textDirection,
     this.onActivate,
+    this.nativeId,
     this.focusNode,
   });
 
+  final String? nativeId;
   final VoidCallback? onActivate;
   final FocusNode? focusNode;
   final NativeHtmlDetailsGroups groups;

@@ -411,7 +411,12 @@ class NativeHtmlSelectState extends ChangeNotifier {
 
   /// Transfers focus and widget identity for uniquely identified selects.
   /// The new state retains its freshly parsed selectedness and descriptor.
-  void adoptInteractionState(NativeHtmlSelectState previous) {
+  /// [preserveValues] is for presentation changes of an unchanged static DOM;
+  /// script publications keep fresh DOM values and authored reset defaults.
+  void adoptInteractionState(
+    NativeHtmlSelectState previous, {
+    bool preserveValues = false,
+  }) {
     if (identical(this, previous) || _disposed || previous._disposed) return;
     final oldById = _uniqueRecordsByScriptId(previous._records);
     final newById = _uniqueRecordsByScriptId(_records);
@@ -420,6 +425,16 @@ class NativeHtmlSelectState extends ChangeNotifier {
       if (old == null) continue;
       final oldRecord = old.value;
       final newRecord = entry.value.value;
+      if (preserveValues) {
+        newRecord.selected
+          ..clear()
+          ..addAll(
+            oldRecord.selected.where(
+              (index) =>
+                  index >= 0 && index < newRecord.descriptor.options.length,
+            ),
+          );
+      }
       previous._detachFocusListener(oldRecord);
       _detachFocusListener(newRecord);
       newRecord.focusNode.dispose();

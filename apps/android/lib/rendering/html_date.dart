@@ -389,7 +389,12 @@ class NativeHtmlDateState extends ChangeNotifier {
 
   /// Transfers segmented-editor resources for controls with unique script IDs.
   /// The fresh state keeps its parsed descriptor and canonical value.
-  void adoptInteractionState(NativeHtmlDateState previous) {
+  /// [preserveValues] is for presentation changes of an unchanged static DOM;
+  /// script publications keep fresh DOM values and authored reset defaults.
+  void adoptInteractionState(
+    NativeHtmlDateState previous, {
+    bool preserveValues = false,
+  }) {
     if (identical(this, previous)) return;
     final oldById = _uniqueRecordsByScriptId(previous._records);
     final newById = _uniqueRecordsByScriptId(_records);
@@ -398,6 +403,7 @@ class NativeHtmlDateState extends ChangeNotifier {
       if (old == null) continue;
       final oldRecord = old.value;
       final newRecord = entry.value.value;
+      if (preserveValues) newRecord.value = oldRecord.value;
       final sameValue = oldRecord.value == newRecord.value;
       final desiredSegments = {
         for (final segment in NativeHtmlDateSegment.values)

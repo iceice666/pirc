@@ -7,6 +7,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 ### Fixed
 
 - Android HTML disclosures keep script state, named accordions and keyboard activation synchronized.
+- Android links reveal collapsed content and preserve disclosure state and eligible text drafts across view rebuilds.
 
 ## [0.9.1] - 2026-10-19
 

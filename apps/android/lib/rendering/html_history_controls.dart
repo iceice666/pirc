@@ -144,9 +144,16 @@ class NativeHtmlHistoryController {
     if (pending != null) binding.restoreNativeHtmlHistory(pending);
   }
 
-  /// Detaches only the renderer that currently owns this controller.
-  void detach(NativeHtmlHistoryBinding binding) {
-    if (identical(_binding, binding)) _binding = null;
+  /// Detaches only the renderer that currently owns this controller. A static
+  /// owner may queue eligible controls for remount; script publications use
+  /// their current DOM state instead.
+  void detach(
+    NativeHtmlHistoryBinding binding, {
+    NativeHtmlControlSnapshot? snapshot,
+  }) {
+    if (!identical(_binding, binding)) return;
+    _binding = null;
+    if (snapshot != null) _pending = snapshot;
   }
 
   /// Clears queued and live state when its fetched document is discarded.

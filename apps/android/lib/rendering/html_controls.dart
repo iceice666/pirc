@@ -289,7 +289,12 @@ class NativeHtmlControlState extends ChangeNotifier {
 
   /// Transfers widget-owned focus and stable keys for uniquely identified
   /// controls. The new state keeps its freshly parsed checkedness and metadata.
-  void adoptInteractionState(NativeHtmlControlState previous) {
+  /// [preserveValues] is for presentation changes of an unchanged static DOM;
+  /// script publications keep fresh DOM values and authored reset defaults.
+  void adoptInteractionState(
+    NativeHtmlControlState previous, {
+    bool preserveValues = false,
+  }) {
     if (identical(this, previous)) return;
     final oldById = _uniqueRecordsByScriptId(previous._records);
     final newById = _uniqueRecordsByScriptId(_records);
@@ -298,6 +303,20 @@ class NativeHtmlControlState extends ChangeNotifier {
       if (old == null) continue;
       final oldKey = old.key;
       final newKey = entry.value.key;
+      if (preserveValues) {
+        final record = entry.value.value;
+        final checked = previous.isChecked(oldKey);
+        if (record.descriptor.type == NativeHtmlControlType.checkbox) {
+          _checkboxSelection[newKey] = checked;
+        } else {
+          final group = record.radioGroup ?? newKey;
+          if (checked) {
+            _radioSelection[group] = newKey;
+          } else if (_radioSelection[group] == newKey) {
+            _radioSelection[group] = null;
+          }
+        }
+      }
       final focusNode = previous._focusNodes.remove(oldKey);
       if (focusNode != null) _focusNodes[newKey] = focusNode;
       final widgetKey = previous._widgetKeys.remove(oldKey);

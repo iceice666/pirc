@@ -2337,7 +2337,7 @@
     return String(Object.is(current, -0) ? 0 : current);
   }
 
-  function selectFragmentTarget(url) {
+  function selectFragmentTarget(url, deferReveal) {
     const state = activeState;
     const marker = String(url).indexOf('#');
     const raw = marker < 0 ? '' : String(url).slice(marker + 1);
@@ -2361,6 +2361,32 @@
       state.fragmentTarget = target;
       state.layout?.invalidate();
     }
+    if (state.fragmentAncestorTask) state.timers.delete(state.fragmentAncestorTask);
+    state.fragmentAncestorTask = null;
+    state.fragmentAncestorsRevealed = false;
+    function closedAncestors() {
+      const result = [];
+      for (let child = target, parent = target?.parentElement; parent; child = parent, parent = parent.parentElement) {
+        if (parent.localName !== 'details' || parent.hasAttribute('open')) continue;
+        const summary = Array.from(parent.children).find(e => e.localName === 'summary');
+        if (child !== summary) result.push(parent);
+      }
+      return result;
+    }
+    function reveal() {
+      if (activeState !== state || state.fragmentTarget !== target || !target?.isConnected) return;
+      for (const parent of closedAncestors()) {
+        state.fragmentAncestorsRevealed = true;
+        parent.setAttribute('open', '');
+      }
+    }
+    if (deferReveal && closedAncestors().length) {
+      // Initial parser notifications precede the browser's fragment reveal.
+      state.fragmentAncestorTask = scheduleTimer('timeout', () => {
+        state.fragmentAncestorTask = null;
+        reveal();
+      }, 0, []);
+    } else reveal();
   }
 
   function installFormProperties() {
@@ -4720,7 +4746,8 @@
       }) : null,
       documentBaseURL: activeState && activeState.document ? currentDocumentBaseUrl() : null,
       fragmentTargetId: activeState?.fragmentTarget ? ensureElementId(activeState.fragmentTarget) : null,
-      fragmentTargetReady: activeState?.domContentLoaded === true,
+      fragmentTargetReady: activeState?.domContentLoaded === true && !activeState.fragmentAncestorTask,
+      fragmentAncestorsRevealed: activeState?.fragmentAncestorsRevealed === true,
       initialRootScrollOverride: activeState?.initialRootScrollOverride === true,
       stylesheets: activeState ? activeState.stylesheetSnapshot : null,
       environment: activeState && activeState.media ? activeState.media.snapshot() : null,
@@ -5208,7 +5235,7 @@
         { event: 'DOMContentLoaded' }
       );
     }
-    selectFragmentTarget(state.url);
+    selectFragmentTarget(state.url, true);
     state.initialFragmentSelected = true;
     dispatchDocumentLoadIfReady();
   }
@@ -5416,6 +5443,8 @@
       url: url,
       sourceDocumentUrl: url,
       fragmentTarget: null,
+      fragmentAncestorTask: null,
+      fragmentAncestorsRevealed: false,
       initialFragmentSelected: false,
       initialRootScrollOverride: false,
       initialFragmentObservationPending: input.history?.initialFragmentRevealPending === true,
