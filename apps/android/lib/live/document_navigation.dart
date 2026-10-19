@@ -13,6 +13,7 @@ import '../rendering/html_document_styles.dart';
 import '../rendering/native_html.dart';
 import '../rendering/document_absolute_position.dart';
 import '../rendering/document_layout.dart';
+import '../rendering/document_fragment.dart';
 import '../rendering/document_reveal.dart';
 import '../rendering/document_scroll_anchor.dart';
 import '../rendering/document_touch_boundary.dart';
@@ -581,6 +582,17 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
   final Map<int, Widget> _appViews = {};
   Future<void>? _uncover;
   bool _returningToApp = false;
+  final _fragmentWaits = <VoidCallback>{};
+
+  @override
+  void didUpdateWidget(covariant NativeDocumentWorkspace oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.windows, widget.windows)) {
+      for (final cancel in List<VoidCallback>.of(_fragmentWaits)) {
+        cancel();
+      }
+    }
+  }
 
   Future<void> _uncoverSource() =>
       _uncover ??= widget.windows.owner?.uncoverDocument() ?? Future.value();
@@ -623,6 +635,9 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
 
   @override
   void dispose() {
+    for (final cancel in List<VoidCallback>.of(_fragmentWaits)) {
+      cancel();
+    }
     final window = widget.windows.active;
     window?.rememberCurrentDocumentState();
     if (!widget.managed &&
@@ -1027,6 +1042,47 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
     }
   }
 
+  /// Wait for the parser/deferred scripts which own initial target selection.
+  /// This is event driven: external I/O does not consume the layout retry budget.
+  Future<bool> _waitForInitialFragmentDocument(
+    NativeDocumentWindow window,
+    NativeFetchedDocument document,
+    bool Function() isCurrent,
+  ) async {
+    final scripts = document.scripts;
+    if (scripts == null) return isCurrent();
+    final windows = widget.windows;
+    final done = Completer<bool>();
+    void cancel() {
+      if (!done.isCompleted) done.complete(false);
+    }
+
+    void wake() {
+      if (done.isCompleted) return;
+      if (!mounted || !identical(widget.windows, windows) || !isCurrent()) {
+        cancel();
+        return;
+      }
+      if (!scripts.initialTargetSelectionPending) {
+        done.complete(true);
+      }
+    }
+
+    _fragmentWaits.add(cancel);
+    scripts.addListener(wake);
+    window.addListener(wake);
+    windows.addListener(wake);
+    try {
+      wake();
+      return await done.future;
+    } finally {
+      _fragmentWaits.remove(cancel);
+      scripts.removeListener(wake);
+      window.removeListener(wake);
+      windows.removeListener(wake);
+    }
+  }
+
   NativeDocumentHistoryItem? _revealed;
   int _revealedFragmentRevision = -1;
   void _revealFragment(NativeDocumentWindow? window) {
@@ -1047,7 +1103,10 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
                 current.scrollRestoration == 'manual')) {
       return;
     }
-    final savedOffset = explicit ? null : current.scrollOffset;
+    final savedOffset =
+        explicit || current.document!.initialFragmentRevealPending
+        ? null
+        : current.scrollOffset;
     final hash = current.url.indexOf('#');
     if (savedOffset == null && hash < 0) return;
     final revealUrl = current.url;
@@ -1061,6 +1120,37 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
         return;
       }
       final document = current.document!;
+      bool isCurrent() =>
+          mounted &&
+          !window.disposed &&
+          identical(widget.windows.active, window) &&
+          window.current == current &&
+          current.url == revealUrl &&
+          window.fragmentRevealRevision == revision &&
+          (!explicit || window.hasPendingFragmentReveal);
+      NativeDocumentFragmentTarget? retainedTarget;
+      if (!explicit && savedOffset == null && document.content.isHtml) {
+        if (!await _waitForInitialFragmentDocument(
+          window,
+          document,
+          isCurrent,
+        )) {
+          return;
+        }
+        final scripts = document.scripts;
+        if (scripts?.fragmentTargetReady == true) {
+          final id = scripts!.fragmentTargetId;
+          final top =
+              id == null &&
+              (fragment.isEmpty ||
+                  decodeNativeDocumentFragment(fragment).toLowerCase() ==
+                      'top');
+          retainedTarget = top
+              ? const NativeDocumentFragmentTarget.top()
+              : NativeDocumentFragmentTarget.native(id);
+        }
+      }
+      if (!isCurrent()) return;
       if (savedOffset != null) {
         if (document.scroll.hasClients) {
           document.scroll.jumpTo(
@@ -1071,20 +1161,15 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
         await document.viewport.scrollToFragment(
           fragment,
           allowUnindexedTop: !document.content.isHtml,
-          isCurrent: () =>
-              mounted &&
-              !window.disposed &&
-              identical(widget.windows.active, window) &&
-              window.current == current &&
-              current.url == revealUrl &&
-              window.fragmentRevealRevision == revision &&
-              (!explicit || window.hasPendingFragmentReveal),
+          isCurrent: isCurrent,
+          retainedTarget: retainedTarget,
         );
       }
       if (mounted &&
           identical(widget.windows.active, window) &&
           window.current == current &&
           window.fragmentRevealRevision == revision) {
+        document.initialFragmentRevealPending = false;
         window.acknowledgeFragmentReveal(current, revision);
       }
     });

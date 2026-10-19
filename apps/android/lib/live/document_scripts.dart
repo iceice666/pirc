@@ -164,6 +164,13 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   final _startupFinished = Completer<void>();
   int _pendingEvents = 0;
 
+  /// Includes the frame before start() runs, not just active VM evaluation.
+  bool get initialTargetSelectionPending =>
+      !_disposed &&
+      (!_startupFinished.isCompleted ||
+          loading ||
+          ready && fragmentTargetReady == false);
+
   /// Native defaults must wait until prior DOM/history publications have drained.
   bool get hasPendingPublication =>
       loading || _pendingEvents != 0 || _layoutRefreshQueued;
@@ -182,6 +189,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   Set<String> _currentStyleRequests = {};
   String? documentBaseUrl;
   String? fragmentTargetId;
+  bool? fragmentTargetReady;
   List<NativeDocumentStylesheet>? get stylesheets =>
       _hasStylesSnapshot ? _documentStyles?.stylesheets : null;
 
@@ -1915,6 +1923,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       'imageReferences',
       'documentBaseURL',
       'fragmentTargetId',
+      'fragmentTargetReady',
       'now',
       'scheduler',
       'classicScript',
@@ -2872,6 +2881,11 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       throw const FormatException('Invalid native fragment target identity.');
     }
     fragmentTargetId = target as String?;
+    final targetReady = decoded['fragmentTargetReady'];
+    if (targetReady != null && targetReady is! bool) {
+      throw const FormatException('Invalid fragment target readiness.');
+    }
+    fragmentTargetReady = targetReady as bool?;
     final markup = decoded['html'];
     if (markup is! String) {
       throw const FormatException('Missing document HTML.');

@@ -145,6 +145,11 @@ const server = createServer((request, response) => {
     response.end(interactions);
     return;
   }
+  if (pathname === '/late-fragment.json') {
+    response.writeHead(200, {'cache-control':'no-store','content-type':'application/json; charset=utf-8'});
+    response.end(readFileSync(path.join(scriptDirectory, 'fixtures/document-late-fragment-chromium153.json')));
+    return;
+  }
   if (pathname === '/target-state.json') {
     response.writeHead(200, {'cache-control':'no-store','content-type':'application/json; charset=utf-8'});
     response.end(targetState);

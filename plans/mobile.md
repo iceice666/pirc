@@ -405,16 +405,41 @@ root scroll and Sandbox selector reports; the non-script widget gate covers
 80 states. Scripted profiles also remount the workspace after pushState and keep
 the same VM. Existing selector syntax limits still apply (`:is`/`:where`/`:has`,
 pseudo-elements and shadow DOM are not established by this gate). Late target
-selection, image-driven retries, reentrant navigation and browser lifecycle
-variants remain open. Unit checks also cover target marker collision avoidance,
+selection outside the initial parser/defer boundary, image-driven retries,
+reentrant navigation and broader browser lifecycle variants remain open. Unit checks also cover target marker collision avoidance,
 malformed UTF-8/BOM decoding and detached-node identity.
+
+**Initial generated targets:** the workspace now waits for VM startup and the
+parser/deferred-script target-selection boundary using listeners, without burning
+128 layout frames while external resources are pending. This includes the first
+frame before `start()` has begun. Successful initial selection retains the VM's
+node identity for native reveal; load handlers can rename it or insert an earlier
+duplicate without changing the node being revealed. A null selected target stays
+missing even if a load handler or a later async script inserts a matching ID.
+Pending initial requests survive workspace remounts; document replacement,
+selection changes and history/URL changes cancel stale waits and release listeners.
+A script startup failure releases the wait for the existing fallback/error UI.
+
+The additional Chromium 153 corpus covers 88 phone/tablet, DPR 1/3 and theme
+profiles, with 264 before/load/reflow states. Android uses the real Sandbox while
+only page/script HTTP is synthesized. It controls parser/defer/module/async
+resource completion, exercises initial inline and DOMContentLoaded insertion,
+load-time rename/duplicates, user wheel scrolling while the parser is blocked,
+and reflow after initial selection. The remount case holds the resource beyond
+128 frames and then reveals the same retained document. Native selector/style/
+rectangle reports and root scrolling are compared with the shared browser source;
+geometry allows 1/32 CSS px. This does not establish exact loading timing or
+pixel-perfect output. History API writes before initial selection, the
+initial focus/load event order and removal of a selected node before its first
+native frame remain uncertified.
 
 **Remaining fragment differences:** reentrant focus redirection/navigation,
 filled/oversized control caret and selection variants, focus restoration across
 remount/background transitions, broader keyboard traversal, focus pseudo styling,
 additional toggle box-model combinations and exact toggle appearance/accent
 styling are not newly certified. A redirected focus is recorded as a difference.
-Ancestor revealing, late DOM/image retry, targets without a measured box,
+Ancestor revealing, streamed HTML/parser exposure, image intrinsic-size/load
+restoration, arbitrary late-DOM retry and targets without a measured box,
 inline/text/non-HTML fragments, RTL/vertical writing, sticky/SVG geometry, scroll snap,
 root horizontal scrolling and unresolved inset math remain open. Unsupported
 geometry retains the native anchor fallback and an explicit difference; matching

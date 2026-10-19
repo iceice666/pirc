@@ -211,6 +211,7 @@ class NativeFetchedDocument {
   final historyControls = NativeHtmlHistoryController();
   final viewport = NativeHtmlViewportController();
   late final fragmentTarget = NativeDocumentTargetState(url);
+  late bool initialFragmentRevealPending = url.contains('#');
   final scroll = NativeDocumentScrollController();
   // A view can unmount while the document/VM remains in history or another
   // browsing context. Only retiring that document discards its element offsets.
@@ -965,6 +966,7 @@ class NativeDocumentWindow extends ChangeNotifier {
     bool cancelFragmentReveal = true,
   }) {
     if (cancelFragmentReveal) {
+      currentDocument?.initialFragmentRevealPending = false;
       _pendingFragmentReveal = null;
       _fragmentRevealRevision++;
     }

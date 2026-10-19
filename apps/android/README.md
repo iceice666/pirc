@@ -655,6 +655,18 @@ The non-script widget gate covers 80 states. Actual styles and selector reports
 compare exactly; rectangles/scroll use 1/32 CSS px tolerance. Broader selector,
 shadow DOM, reentrant/late-load and lifecycle differences remain in the plan.
 
+Initial scripted fragments wait for VM startup and parser/deferred target
+selection without frame polling during resource I/O. The VM-selected native ID
+survives load-time renames/duplicates; targets inserted only by load or later async
+callbacks do not trigger an invented retry. Pending requests survive a workspace
+remount and cancel on newer navigation or selection. Recreate the additional
+88-profile / 264-state reference with
+`node apps/android/tool/parity/capture_document_late_fragment_chromium153.mjs`;
+`integration_test/document_late_fragment_test.dart` uses `/late-fragment.json`.
+It covers parser/defer/module delays, inline/DCL targets, late-load negatives,
+wheel scrolling, remounts beyond 128 frames and subsequent reflow. Loading timing,
+streaming HTML, wider image/lifecycle behavior and pixel parity remain open.
+
 `document.scrollingElement` uses the initial HTML parser mode and native
 box/overflow measurements to select the standards root, quirks body, or null.
 `document.compatMode` is read-only. Root/body viewport metrics use the actual
