@@ -135,6 +135,11 @@ expression: r.t.into_value()
               {
                 "id": "work:repo",
                 "linked": "workspace",
+                "mode": {
+                  "description": "Coding sessions in a repository.",
+                  "id": "directory",
+                  "label": "Work"
+                },
                 "name": "Repo",
                 "node": "work",
                 "online": true,
@@ -142,6 +147,11 @@ expression: r.t.into_value()
               },
               {
                 "id": "work:site",
+                "mode": {
+                  "description": "Coding sessions in a repository.",
+                  "id": "directory",
+                  "label": "Work"
+                },
                 "name": "Atlas",
                 "node": "work",
                 "online": true
@@ -323,6 +333,11 @@ expression: r.t.into_value()
             {
               "id": "work:site",
               "linked": "workspace",
+              "mode": {
+                "description": "Coding sessions in a repository.",
+                "id": "directory",
+                "label": "Work"
+              },
               "name": "Atlas",
               "node": "work",
               "online": false
@@ -330,6 +345,11 @@ expression: r.t.into_value()
             {
               "id": "work:repo",
               "linked": "workspace",
+              "mode": {
+                "description": "Coding sessions in a repository.",
+                "id": "directory",
+                "label": "Work"
+              },
               "name": "Repo",
               "node": "work",
               "online": false,

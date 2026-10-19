@@ -226,6 +226,35 @@ fn labels_notes_from_fetched_content() {
 }
 
 #[test]
+fn names_workspace_modes_only_when_they_differ() {
+    let work = json!({ "id": "directory", "label": "Work", "description": "Coding sessions in a repository." });
+    let scratch = json!({ "id": "scratch", "label": "Scratch", "description": " One-off sessions in a fresh directory. " });
+    let same = render_workspaces(&[
+        json!({ "id": "work:a", "name": "A", "node": "work", "online": true, "mode": work }),
+        json!({ "id": "lab:b", "name": "B", "node": "lab", "online": true, "mode": work }),
+    ]);
+    assert!(!same.contains("mode"), "{same}");
+    assert!(
+        same.ends_with("\n[work:a] A on work\n[lab:b] B on lab"),
+        "{same}"
+    );
+    let mixed = render_workspaces(&[
+        json!({ "id": "work:a", "name": "A", "node": "work", "online": true,
+            "repo": "github.com/me/a", "mode": work }),
+        json!({ "id": "gpu:scratch", "name": "Scratch", "node": "gpu", "online": false,
+            "mode": scratch }),
+    ]);
+    assert!(
+        mixed.contains("\n\nWorkspaces differ in mode: Work (Coding sessions in a repository.); Scratch (One-off sessions in a fresh directory.). Pick the mode that fits the task.\n"),
+        "{mixed}"
+    );
+    assert!(
+        mixed.ends_with("\n[work:a] A on work, mode Work, repository github.com/me/a\n[gpu:scratch] Scratch on gpu, mode Scratch (offline)"),
+        "{mixed}"
+    );
+}
+
+#[test]
 fn renders_memory_and_workspaces() {
     let context = json!({
         "enabled": true,

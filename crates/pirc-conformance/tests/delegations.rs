@@ -957,3 +957,141 @@ async fn project_links() {
     home.close();
     insta::assert_json_snapshot!("project_links", r.t.into_value());
 }
+
+/// A per-session (scratch) mode on a directory node can receive
+/// delegations: the assistant sees both targets with their modes, and the
+/// gateway starts the delegated session in the scratch workspace.
+/// Assertion-based, so it does not depend on the recorded snapshots.
+#[tokio::test(flavor = "multi_thread")]
+async fn delegation_to_a_per_session_workspace() {
+    let Some(cluster) = start(None).await else {
+        return;
+    };
+    let api = cluster.api();
+    let browser = browser_headers();
+    let modes = cluster.dir.path().join("gateway-config/modes");
+    std::fs::write(
+        modes.join("scratch.md"),
+        "---\nlabel: Scratch\ndescription: One-off sessions in a fresh directory.\n\
+         ui:\n  noun: session\nworkdir: per-session\nprompt: [base, body]\n\
+         assistant: user\ndelegate_target: true\nschedule_scope: own\n---\n\
+         Work in this session's own directory.\n",
+    )
+    .unwrap();
+    cluster.reload_gateway();
+    tokio::time::timeout(WAIT, async {
+        loop {
+            let listed = api.send("GET", "/api/modes", &browser, None).await;
+            if listed.body["modes"]
+                .as_array()
+                .is_some_and(|modes| modes.iter().any(|mode| mode["id"] == "scratch"))
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("scratch mode loaded");
+
+    let mut home = FakeNode::connect(
+        &api,
+        "home",
+        HOME_TOKEN,
+        home_registration(),
+        home_answers(),
+    )
+    .await;
+    let mut work = FakeNode::connect(
+        &api,
+        "work",
+        WORK_TOKEN,
+        json!({ "type": "register", "role": "node",
+            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory", "scratch"],
+            "workspaces": [
+                { "id": "repo", "displayName": "Repo", "mode": "directory" },
+                { "id": "scratch", "displayName": "Scratch", "mode": "scratch" },
+            ] }),
+        work_answers(Arc::new(Mutex::new(json!({})))),
+    )
+    .await;
+    wait_for_nodes(&api, 2).await;
+
+    // The node lists what it accepts; the scratch workspace is a Work one.
+    let nodes = api.send("GET", "/api/nodes", &browser, None).await;
+    let work_node = nodes.body["nodes"]
+        .as_array()
+        .and_then(|nodes| nodes.iter().find(|node| node["id"] == "work"))
+        .cloned()
+        .unwrap_or_else(|| panic!("work node listed: {}", nodes.body));
+    assert_eq!(work_node["modes"], json!(["directory", "scratch"]));
+    let workspaces = api.send("GET", "/api/workspaces", &browser, None).await;
+    let scratch = workspaces.body["workspaces"]
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["id"] == "work:scratch"))
+        .cloned()
+        .unwrap_or_else(|| panic!("scratch workspace listed: {}", workspaces.body));
+    assert_eq!(scratch["mode"], "scratch");
+    assert_eq!(scratch["available"], true);
+
+    let mut r = Recorder {
+        t: Transcript::new(cluster.volatile()),
+        ids: Ids::default(),
+    };
+    let chat = open_chat(&api, &mut home, &mut r).await;
+
+    // Both targets carry their mode, so the assistant can tell them apart.
+    let context = home.op("chat-1", "assistant.context", json!({})).await;
+    assert_eq!(context["status"], 200, "{context}");
+    let listed = context["body"]["result"]["workspaces"]
+        .as_array()
+        .cloned()
+        .unwrap_or_else(|| panic!("workspaces in context: {context}"));
+    let mode_of = |id: &str| {
+        listed
+            .iter()
+            .find(|item| item["id"] == id)
+            .map(|item| item["mode"].clone())
+            .unwrap_or_else(|| panic!("{id} in {listed:?}"))
+    };
+    assert_eq!(
+        mode_of("work:scratch"),
+        json!({ "id": "scratch", "label": "Scratch",
+            "description": "One-off sessions in a fresh directory." })
+    );
+    assert_eq!(mode_of("work:repo")["label"], "Work");
+
+    let created = home
+        .op(
+            "chat-1",
+            "delegation.create",
+            json!({ "workspace": "work:scratch", "task": "Render a test image." }),
+        )
+        .await;
+    assert_eq!(created["status"], 200, "{created}");
+    let id = created["body"]["result"]["id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("a delegation id: {created}"))
+        .to_owned();
+    let approved = answer(&api, &chat, &id, 1, json!({ "confirmed": true })).await;
+    assert_eq!(approved.status, 200, "{}", approved.body);
+    let session = work.request().await;
+    assert_eq!(session["method"], "POST", "{session}");
+    assert_eq!(session["url"], "/api/sessions", "{session}");
+    assert_eq!(session["payload"]["workspaceId"], "scratch", "{session}");
+    let named = work.request().await;
+    assert_eq!(named["method"], "PATCH", "{named}");
+    let delivered = work.request().await;
+    assert_eq!(
+        delivered["url"], "/api/sessions/task-1/deliver",
+        "{delivered}"
+    );
+    assert!(
+        delivered["payload"]
+            .to_string()
+            .contains("Render a test image."),
+        "{delivered}"
+    );
+    work.close();
+    home.close();
+}

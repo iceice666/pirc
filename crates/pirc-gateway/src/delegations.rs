@@ -342,17 +342,22 @@ pub fn workspaces(app: &App, project: Option<&str>) -> ApiResult<Value> {
     };
     let mut listed: Vec<(Option<Linked>, Value)> = all
         .iter()
-        .filter(|workspace| {
+        .filter_map(|workspace| {
             app.mode(&workspace.mode)
-                .is_some_and(|mode| mode.delegate_target)
-                && workspace.id.contains(':')
+                .filter(|mode| mode.delegate_target && workspace.id.contains(':'))
+                .map(|mode| (workspace, mode))
         })
-        .map(|workspace| {
+        .map(|(workspace, mode)| {
             let linked = project_links::linked(&links, &repos, workspace);
             let mut item = Map::new();
             item.insert("id".into(), json!(workspace.id));
             item.insert("name".into(), json!(workspace.display_name));
             item.insert("node".into(), json!(workspace.host_id));
+            // The assistant names modes only when targets differ in mode.
+            item.insert(
+                "mode".into(),
+                json!({ "id": mode.id, "label": mode.label, "description": mode.description }),
+            );
             item.insert("online".into(), json!(workspace_online(app, workspace)));
             if let Some(repo) = &workspace.repo {
                 item.insert("repo".into(), json!(repo));

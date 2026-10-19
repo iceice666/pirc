@@ -234,6 +234,24 @@ fn render_workspaces_with_delegation(workspaces: &[Value], delegation: bool) -> 
         .iter()
         .filter(|workspace| linked_to(workspace) == Some("workspace"))
         .collect();
+    // Modes matter only when the targets differ in mode (e.g. repositories
+    // and per-session scratch workspaces): then each line names its mode and
+    // the modes are described once.
+    let mut modes: Vec<(String, String, String)> = Vec::new();
+    for workspace in workspaces {
+        let Some(mode) = workspace.get("mode") else {
+            continue;
+        };
+        let id = string(mode.get("id"));
+        if !id.is_empty() && !modes.iter().any(|(known, _, _)| *known == id) {
+            modes.push((
+                id,
+                string(mode.get("label")),
+                string(mode.get("description")),
+            ));
+        }
+    }
+    let show_modes = modes.len() > 1;
     let mut lines = vec![
         "## Workspaces".to_owned(),
         String::new(),
@@ -256,6 +274,23 @@ fn render_workspaces_with_delegation(workspaces: &[Value], delegation: bool) -> 
             }
         ),
     ];
+    if show_modes {
+        let described: Vec<String> = modes
+            .iter()
+            .map(|(_, label, description)| {
+                if description.is_empty() {
+                    label.clone()
+                } else {
+                    format!("{label} ({})", js::trim(description))
+                }
+            })
+            .collect();
+        lines.push(String::new());
+        lines.push(format!(
+            "Workspaces differ in mode: {}. Pick the mode that fits the task.",
+            described.join("; ")
+        ));
+    }
     if !linked.is_empty() && delegation {
         lines.push(String::new());
         lines.push(format!(
@@ -269,10 +304,14 @@ fn render_workspaces_with_delegation(workspaces: &[Value], delegation: bool) -> 
     }
     for workspace in workspaces {
         let line = format!(
-            "[{}] {} on {}{}{}{}",
+            "[{}] {} on {}{}{}{}{}",
             string(workspace.get("id")),
             string(workspace.get("name")),
             string(workspace.get("node")),
+            match workspace.get("mode").map(|mode| string(mode.get("label"))) {
+                Some(label) if show_modes && !label.is_empty() => format!(", mode {label}"),
+                _ => String::new(),
+            },
             match workspace.get("repo").and_then(Value::as_str) {
                 Some(repo) => format!(", repository {repo}"),
                 None => String::new(),

@@ -2869,6 +2869,11 @@ expression: t.into_value()
             "workspaces": [
               {
                 "id": "dev:repo",
+                "mode": {
+                  "description": "Coding sessions in a repository.",
+                  "id": "directory",
+                  "label": "Work"
+                },
                 "name": "Repo",
                 "node": "dev",
                 "online": true,
