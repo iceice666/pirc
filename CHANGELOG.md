@@ -4,6 +4,15 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: mode files no longer accept `ui.group`.** The Web and Android clients place a workspace in Chat or Work by its mode's `assistant` capability and show panels, settings, session deletion and the session noun by capability instead of the legacy `kind`, so a per-session mode on a coding node (such as a scratch mode) appears under Work with only the panels it has. Remove `group:` from every `$PIRC_CONFIG_DIR/modes/*.md` before upgrading, or the file is skipped and its workspaces become unavailable. **Node protocol 13: upgrade the gateway and all nodes together.** Database schemas are unchanged. See the upgrade notes.
+
+### Added
+
+- Adding a workspace lets you pick among the modes its device accepts (`GET /api/nodes` now lists each node's `modes`); the path is asked only for modes that work in a directory.
+- A chat's list of delegation targets names each workspace's mode when the targets differ in mode, so the assistant can send one-off work to a scratch workspace and repository work to a repository.
+
 ## [0.8.0] - 2026-10-19
 
 ### Added

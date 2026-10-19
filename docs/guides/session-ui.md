@@ -6,7 +6,7 @@ Shared web/Android behavior from the completed UI redesign of 2026-09-29, implem
 
 ## Chat, Work, and Needs you
 
-Chat contains assistant projects and chats, without engineering run/lease/jobs chips. Work contains other workspaces, grouped as Needs you, Running and Recent. Desktop web has a remembered Chat/Work sidebar switch (only Work without a chat node); phones use bottom tabs Chat / Work / Schedules / Settings. Work shows a Needs-you badge. Android opens on Chat; web phones open the list unless a session URL is selected, and sessions have a back action.
+Chat contains assistant projects and chats (workspaces whose [mode](modes.md) has `assistant: full`), without engineering run/lease/jobs chips. Work contains every other workspace, listed by device, with sessions grouped as Needs you, Running and Recent; panels and settings follow each mode's capabilities. **Add workspace** picks a device, then one of the modes it accepts when there is more than one, and asks for a path only for modes that work in a directory. Desktop web has a remembered Chat/Work sidebar switch (only Work without a chat node); phones use bottom tabs Chat / Work / Schedules / Settings. Work shows a Needs-you badge. Android opens on Chat; web phones open the list unless a session URL is selected, and sessions have a back action.
 
 Needs you collects waiting sessions (Reply), missed schedules (Allow & run / Dismiss), and memory proposals (Approve / Reject, with text opening memory settings). Delegation and schedule proposals appear as sessions waiting for Reply: approving them directly from the inbox would require the control lease. It is not a separate Settings badge inbox.
 

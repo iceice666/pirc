@@ -37,7 +37,8 @@ deletion are not open work.
    delegation-into-per-session-workspace scenario. Phase 2 (configuration,
    protocol 12, mode-id stores and agent enforcement) is implemented; full Linux
    conformance passed 217 tests with reviewed snapshots on 2026-10-19. Phase 3
-   still needs the user's go-ahead.
+   was implemented 2026-10-19; remaining: the Settings Modes page, retiring
+   `kind`, an Android scratch parity capture and guide screenshots.
 5. **Workspace-memory search quality.** [Memory search](memory-search.md):
    an evaluation set, then FTS5 + BM25 with CJK bigrams replacing `LIKE`, then
    optional hybrid semantic search through a gateway-side embeddings endpoint

@@ -4,11 +4,16 @@
 
 Workspace modes are gateway-managed combinations of capabilities, prompt
 sections, features and tools. Chat and Work are default files, not reserved
-built-in kinds. Gateway and nodes must run **protocol 12 together**.
+built-in kinds. Gateway and nodes must run **protocol 13 together**.
 
-Web and Android still show the existing Chat / Work interface; catalog-driven
-client navigation belongs to phase 3. Use the API to create a workspace in a
-custom mode. Existing clients keep their default behavior.
+Web and Android keep two tabs. A workspace appears under **Chat** when its mode
+has `assistant: full` and under **Work** otherwise, grouped by device; a
+workspace whose mode is missing from the catalog appears under Work, read-only.
+Panels and settings follow capabilities: Git with `repository`, terminals with
+`workdir: workspace`, project instructions/files/links and project deletion
+with their capabilities, session deletion with `delete_sessions`; the session
+noun comes from `ui.noun`. **Add workspace** offers the non-assistant modes the
+chosen device accepts and asks for a path only for `workdir: workspace`.
 
 ## Configuration ownership
 
@@ -40,7 +45,8 @@ restart sessions after adding or redirecting configuration symlinks.
 
 Compare shipped defaults after an upgrade with
 `pirc-gateway modes --print-defaults`; this requires no credentials and writes
-no configuration. `GET /api/modes` lists the validated catalog.
+no configuration. `GET /api/modes` lists the validated catalog; `GET /api/nodes`
+lists each connected node's accepted mode ids (`modes`).
 
 ## File format
 
@@ -55,7 +61,6 @@ For example, save this as `research.md` on the gateway:
 label: Research
 description: Research sessions without delegation.
 ui:
-  group: chat
   noun: research session
 workdir: per-session
 prompt: [soul, chat-env, chat-md, body]
@@ -111,24 +116,55 @@ metadata and set `tools: [read, find, grep, ls]`. Add `review` to the node's
 a repository path. Select **read-only** approval separately through the
 node/session settings; a mode never silently changes approvals.
 
+### Example: scratch workspaces on a coding node
+
+A scratch mode gives each session its own empty node-managed directory on a
+coding node, without a repository. It suits one-off jobs a chat delegates, such
+as a throwaway image-generation run on a GPU machine. Save as `scratch.md`:
+
+```yaml
+---
+label: Scratch
+description: One-off sessions in a fresh directory, without a repository.
+ui:
+  noun: session
+workdir: per-session
+prompt: [base, agents:global, body]
+assistant: user
+delegate_target: true
+schedule_scope: own
+---
+Work in this session's own directory. Nothing here is a repository; keep
+results in the directory or report them.
+```
+
+Add `scratch` to the coding node's `PIRC_MODES` (for example
+`PIRC_MODES=directory,scratch`), restart it, reload the gateway, then add a
+workspace in mode **Scratch** on that device. It appears under Work with Files
+but no Git or terminal. Because `delegate_target` is set, chats can delegate to
+it; when delegation targets differ in mode, the assistant's workspace list
+names each target's mode and description. Files a scratch session needs to
+keep across sessions (for example large models) belong in a directory listed in
+the node's sandbox `allowedPaths`.
+
 ### Fields
 
-| Field                                   | Meaning / validation                                                                                                                               |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `label`                                 | Required nonblank display name, at most 100 characters.                                                                                            |
-| `description`                           | Optional description, at most 500 characters.                                                                                                      |
-| `ui`                                    | Required presentation hints: nonblank `group` and `noun`, optional nonblank `icon`; each at most 100 characters. Clients do not consume these yet. |
-| `workdir`                               | Required `per-session` or `workspace`.                                                                                                             |
-| `prompt`                                | Required ordered list of 1–8 unique named sections, listed below. A nonempty Markdown body requires `body` in this list.                           |
-| `features_off`, `features_on`           | Optional lists of known feature configuration keys. A key cannot appear twice or in both lists.                                                    |
-| `tools`                                 | Optional operation allowlist, at most 64 known unique names. Absent or `null` means unrestricted; `[]` means no operations.                        |
-| `assistant`                             | Required `user` (approved USER entries) or `full` (full assistant state).                                                                          |
-| `delegate`, `delegate_target`           | May initiate delegation / receive delegated work. Default false.                                                                                   |
-| `schedule_scope`                        | Required `own` or `any`.                                                                                                                           |
-| `project_instructions`, `project_files` | User-managed project instructions / shared uploaded files. Default false.                                                                          |
-| `project_config`, `workspace_memory`    | Repository configuration / workspace-memory ledger. Default false.                                                                                 |
-| `repository`                            | Repository identity and linking capability. Default false.                                                                                         |
-| `recap`, `delete_sessions`, `projects`  | Session recap / individual session deletion / project workspaces. Default false.                                                                   |
+| Field                                   | Meaning / validation                                                                                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `label`                                 | Required nonblank display name, at most 100 characters.                                                                                                |
+| `description`                           | Optional description, at most 500 characters.                                                                                                          |
+| `ui`                                    | Required presentation hints: nonblank `noun`, optional nonblank `icon`; each at most 100 characters. `group` was removed: the tab follows `assistant`. |
+| `workdir`                               | Required `per-session` or `workspace`.                                                                                                                 |
+| `prompt`                                | Required ordered list of 1–8 unique named sections, listed below. A nonempty Markdown body requires `body` in this list.                               |
+| `features_off`, `features_on`           | Optional lists of known feature configuration keys. A key cannot appear twice or in both lists.                                                        |
+| `tools`                                 | Optional operation allowlist, at most 64 known unique names. Absent or `null` means unrestricted; `[]` means no operations.                            |
+| `assistant`                             | Required `user` (approved USER entries) or `full` (full assistant state).                                                                              |
+| `delegate`, `delegate_target`           | May initiate delegation / receive delegated work. Default false.                                                                                       |
+| `schedule_scope`                        | Required `own` or `any`.                                                                                                                               |
+| `project_instructions`, `project_files` | User-managed project instructions / shared uploaded files. Default false.                                                                              |
+| `project_config`, `workspace_memory`    | Repository configuration / workspace-memory ledger. Default false.                                                                                     |
+| `repository`                            | Repository identity and linking capability. Default false.                                                                                             |
+| `recap`, `delete_sessions`, `projects`  | Session recap / individual session deletion / project workspaces. Default false.                                                                       |
 
 String bounds count UTF-16 code units, matching role instruction limits. The
 Markdown body is limited to 8,000 units. Unknown schema fields, unknown enum

@@ -9,7 +9,7 @@ A chat project is a chat workspace on the chat node (`pirc-node chat`): the top-
 - **Project files** are files every chat in the project can read. The node stores them.
 - **Linked workspaces** (projects only, not the top-level Chats) name the repositories the project is about. The gateway stores them.
 
-Directory workspaces (repositories) have none of these settings.
+Directory workspaces (repositories) have none of these settings. Each one is a capability of the default `chat` [mode](modes.md) (`projects`, `project_instructions`, `project_files`), so a custom mode can enable or omit them; the clients show these settings only where the mode has them.
 
 Both are also available through the gateway API, with the same authentication as the rest of the browser API (forward auth through your proxy, or a device token). Workspace IDs are `<nodeId>:<workspaceId>`, as listed by `GET /api/workspaces`. Encode the `:` as `%3A` in URLs.
 
