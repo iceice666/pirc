@@ -4575,6 +4575,7 @@
       }) : null,
       documentBaseURL: activeState && activeState.document ? currentDocumentBaseUrl() : null,
       fragmentTargetId: activeState?.fragmentTarget ? ensureElementId(activeState.fragmentTarget) : null,
+      fragmentTargetReady: activeState?.domContentLoaded === true,
       stylesheets: activeState ? activeState.stylesheetSnapshot : null,
       environment: activeState && activeState.media ? activeState.media.snapshot() : null,
       canvases: activeState && activeState.canvas ? activeState.canvas.snapshots() : [],

@@ -6362,11 +6362,12 @@ class NativeHtmlViewportController {
     String fragment, {
     bool Function()? isCurrent,
     bool allowUnindexedTop = false,
+    NativeDocumentFragmentTarget? retainedTarget,
   }) async {
     lastFragmentDifference = null;
     var focusPrepared = false, centerFocus = false;
     String? selectedId;
-    NativeDocumentFragmentTarget? selectedTarget;
+    NativeDocumentFragmentTarget? selectedTarget = retainedTarget;
     try {
       for (var attempt = 0; attempt < 128; attempt++) {
         if (isCurrent?.call() == false) return false;
@@ -6382,11 +6383,14 @@ class NativeHtmlViewportController {
                 : null);
         if (_fragments != null && target == null) return false;
         if (target != null) {
+          if (!target.top && target.anchor == null && target.nativeId == null) {
+            return false;
+          }
           final nativeId = focusPrepared
               ? selectedId
               : target.top
               ? null
-              : _fragments?.nativeIdFor(target.anchor!);
+              : target.nativeId ?? _fragments?.nativeIdFor(target.anchor!);
           final handler = _nativeReveal;
           if (handler == null) {
             lastFragmentDifference = 'unmeasured_target';

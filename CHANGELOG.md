@@ -33,6 +33,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
+- Android initial document links wait for generated targets and retain the selected node through loading and remounts.
+
 - Android document targets update native styles and preserve target identity through History API changes.
 
 - Android document links focus native controls and keep their nested scroll position consistent; CSS-sized toggles retain label and keyboard interaction.

@@ -5,9 +5,21 @@ import 'package:html/dom.dart' as dom;
 const nativeFragmentAttribute = 'data-pirc-native-fragment';
 
 class NativeDocumentFragmentTarget {
-  const NativeDocumentFragmentTarget.anchor(this.anchor) : top = false;
-  const NativeDocumentFragmentTarget.top() : anchor = null, top = true;
+  const NativeDocumentFragmentTarget.anchor(this.anchor)
+    : top = false,
+      nativeId = null;
+  const NativeDocumentFragmentTarget.top()
+    : anchor = null,
+      top = true,
+      nativeId = null;
+
+  /// The VM's selected node, including null when the indicated part was missing.
+  /// It is independent of later ID changes or another duplicate in the DOM.
+  const NativeDocumentFragmentTarget.native(this.nativeId)
+    : anchor = null,
+      top = false;
   final String? anchor;
+  final String? nativeId;
   final bool top;
 }
 
