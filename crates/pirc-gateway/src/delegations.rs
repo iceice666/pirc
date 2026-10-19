@@ -342,7 +342,11 @@ pub fn workspaces(app: &App, project: Option<&str>) -> ApiResult<Value> {
     };
     let mut listed: Vec<(Option<Linked>, Value)> = all
         .iter()
-        .filter(|workspace| workspace.kind.mode().delegate_target && workspace.id.contains(':'))
+        .filter(|workspace| {
+            app.mode(&workspace.mode)
+                .is_some_and(|mode| mode.delegate_target)
+                && workspace.id.contains(':')
+        })
         .map(|workspace| {
             let linked = project_links::linked(&links, &repos, workspace);
             let mut item = Map::new();
@@ -504,7 +508,10 @@ fn linked_default(app: &App, project: &str) -> ApiResult<Workspace> {
         [link] => conn
             .get_workspace(&link.workspace_id)
             .ok()
-            .filter(|workspace| workspace.kind.mode().delegate_target)
+            .filter(|workspace| {
+                app.mode(&workspace.mode)
+                    .is_some_and(|mode| mode.delegate_target)
+            })
             .ok_or_else(|| {
                 ApiError::new(
                     404,
@@ -1457,7 +1464,7 @@ pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {
 
 /// `requireChat`: only a mode that delegates may.
 fn require_delegate(context: &OpContext) -> ApiResult<()> {
-    if !context.workspace.kind.mode().delegate {
+    if !context.mode.delegate {
         return Err(ApiError::new(
             403,
             "forbidden",

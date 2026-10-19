@@ -12,7 +12,7 @@ fn agent(dir: &std::path::Path, chat: bool) -> (Rc<Agent>, Rc<RefCell<Vec<Value>
     std::fs::create_dir_all(&workspace).unwrap();
     let mut config = testing::config(&workspace.display().to_string(), json!({}));
     if chat {
-        config.workspace_kind = crate::config::WorkspaceKind::Chat;
+        config.mode = pirc_protocol::mode::default_chat();
     }
     let store = SessionStore::open(dir.join("session"), &config.workspace).unwrap();
     let lines = Rc::new(RefCell::new(Vec::new()));

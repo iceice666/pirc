@@ -6,6 +6,38 @@ use serde_json::json;
 
 use super::*;
 
+#[test]
+fn delegation_and_memory_are_independent_mode_capabilities() {
+    let mut mode = pirc_protocol::mode::default_chat();
+    mode.assistant = pirc_protocol::mode::AssistantAccess::User;
+    mode.validate().unwrap();
+    assert!(permits_tool(&mode, Kind::Delegate));
+    assert!(permits_tool(&mode, Kind::Delegations));
+    for kind in [Kind::Note, Kind::Propose, Kind::Search] {
+        assert!(!permits_tool(&mode, kind));
+    }
+    mode.assistant = pirc_protocol::mode::AssistantAccess::Full;
+    mode.delegate = false;
+    mode.schedule_scope = pirc_protocol::mode::ScheduleScope::Own;
+    mode.validate().unwrap();
+    assert!(!permits_tool(&mode, Kind::Delegate));
+    assert!(!permits_tool(&mode, Kind::Delegations));
+    for kind in [Kind::Note, Kind::Propose, Kind::Search] {
+        assert!(permits_tool(&mode, kind));
+    }
+}
+
+#[test]
+fn restricted_modes_do_not_advertise_delegation_in_workspace_prompt() {
+    let rendered = render_workspaces_with_delegation(
+        &[json!({"id":"w1","name":"repo","node":"node","linked":"workspace"})],
+        false,
+    );
+    assert!(rendered.contains("Delegation is unavailable"));
+    assert!(!rendered.contains("delegate"));
+    assert!(!rendered.contains("hand tasks"));
+}
+
 fn entry(id: &str, message: Message) -> SessionEntry {
     SessionEntry {
         id: id.to_owned(),

@@ -7,11 +7,13 @@ expression: t.into_value()
     "body": {
       "workspaces": [
         {
+          "available": true,
           "defaults": {},
           "displayName": "Test",
           "hostId": "test",
           "id": "test:test",
-          "kind": "directory"
+          "kind": "directory",
+          "mode": "directory"
         }
       ]
     },

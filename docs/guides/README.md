@@ -12,4 +12,8 @@
 | [Browser](browser.md)                          | Fetching, interaction, takeover, recording and browser settings                                                                           |
 | [Schedules and notifications](schedules.md)    | Scheduled runs, approvals, missed runs, time zones and push notifications                                                                 |
 
+[Workspace modes](modes.md) covers gateway-owned mode files, accepted node ids,
+prompt sections, feature/tool restrictions and reload behavior. Dynamic client
+navigation remains a phase-3 follow-up.
+
 For environment variables and host prerequisites, use the [gateway](../deploy/gateway.md), [node](../deploy/node.md), and [sandbox/browser deployment](../deploy/sandbox-and-browser.md) references. For pending UI work, see the [mobile follow-ups](../../plans/mobile.md), not the completed design history.

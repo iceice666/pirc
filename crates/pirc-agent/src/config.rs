@@ -9,7 +9,7 @@ use std::path::Path;
 
 use indexmap::IndexMap;
 use pirc_policy::PathPolicy;
-use pirc_protocol::mode::PromptStyle;
+use pirc_protocol::mode::PromptSection as ModePromptSection;
 use pirc_protocol::{Mode, ModelRef, Models, ThinkingLevel};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -122,24 +122,6 @@ impl Default for Limits {
     }
 }
 
-/// `WorkspaceKind`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum WorkspaceKind {
-    #[default]
-    Directory,
-    Chat,
-}
-
-impl WorkspaceKind {
-    /// What this kind allows (`pirc_protocol::mode`).
-    pub fn mode(self) -> &'static Mode {
-        match self {
-            Self::Directory => pirc_protocol::WorkspaceKind::Directory.mode(),
-            Self::Chat => pirc_protocol::WorkspaceKind::Chat.mode(),
-        }
-    }
-}
-
 /// `AgentConfig`.
 #[derive(Clone, Debug)]
 pub struct AgentConfig {
@@ -162,11 +144,12 @@ pub struct AgentConfig {
     pub env: Vec<(String, String)>,
     pub hooks: HooksConfig,
     pub limits: Limits,
-    /// `features`: per-feature settings, as written.
+    /// Per-feature node settings with mode defaults applied.
     pub features: Map<String, Value>,
     pub role_dirs: Vec<RoleDir>,
     pub system_prompt: Vec<PromptSection>,
-    pub workspace_kind: WorkspaceKind,
+    /// The validated capability snapshot supplied by the node, never read from disk.
+    pub mode: Mode,
     /// A chat project's files directory, read-only (`PIRC_PROJECT_FILES`,
     /// set by the node when the sandbox opened it).
     pub project_files: Option<String>,
@@ -597,6 +580,13 @@ pub fn load_agent_config(
     models: Models,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<AgentConfig, String> {
+    if env("PIRC_WORKSPACE_KIND").is_some() {
+        return Err("PIRC_WORKSPACE_KIND is retired; the node must supply PIRC_MODE".into());
+    }
+    let mode: Mode = serde_json::from_str(
+        &env("PIRC_MODE").ok_or("PIRC_MODE is required; the node must supply a validated mode")?,
+    )
+    .map_err(|error| format!("Invalid PIRC_MODE: {error}"))?;
     let config_dir = default_config_dir(env);
     let global = parse_global(&read_json(&js::path_join(&[&config_dir, "config.json"]))?)?;
     // Project config comes from the session's workspace only: a team child
@@ -607,7 +597,11 @@ pub fn load_agent_config(
         _ => workspace.to_owned(),
     };
     let project_dir = js::path_join(&[&project_root, ".pirc"]);
-    let parsed = read_project_config(&project_root)?;
+    let parsed = if mode.project_config {
+        read_project_config(&project_root)?
+    } else {
+        ProjectConfig::default()
+    };
     // hooks / env / allowedPaths / defaultModel only when the user trusted
     // exactly these values (H3, L12).
     let fields = project_trust_fields(&parsed);
@@ -648,11 +642,6 @@ pub fn load_agent_config(
             .list_mut(event)
             .extend(project.hooks.list(event).iter().cloned());
     }
-    let workspace_kind = if env("PIRC_WORKSPACE_KIND").as_deref() == Some("chat") {
-        WorkspaceKind::Chat
-    } else {
-        WorkspaceKind::Directory
-    };
     let writable: Vec<String> = allowed_paths
         .into_iter()
         .collect::<indexmap::IndexSet<_>>()
@@ -680,52 +669,7 @@ pub fn load_agent_config(
         },
         None => pirc_policy::default_path_policy(&writable, &js::home_dir()),
     };
-    let mode = workspace_kind.mode();
-    let prompts = if mode.prompt == PromptStyle::Assistant {
-        let soul_file = js::path_join(&[&config_dir, "SOUL.md"]);
-        let chat_file = js::path_join(&[&config_dir, "CHAT.md"]);
-        let soul = read_assistant_prompt(&soul_file)?;
-        vec![
-            if soul.is_empty() {
-                PromptSection::new("soul", "Persona", "built-in", CHAT_IDENTITY)
-            } else {
-                PromptSection::new("soul", "Persona", &soul_file, soul)
-            },
-            PromptSection::new("chat-env", "Chat environment", "built-in", CHAT_ENVIRONMENT),
-            PromptSection::new(
-                "chat-md",
-                "Chat rules",
-                &chat_file,
-                read_assistant_prompt(&chat_file)?,
-            ),
-        ]
-    } else {
-        let mut sections = vec![PromptSection::new(
-            "base",
-            "Coding instructions",
-            "built-in",
-            BASE_PROMPT,
-        )];
-        for (dir, kind) in [
-            (config_dir.as_str(), "global"),
-            (workspace, "workspace"),
-            (project_dir.as_str(), "project"),
-        ] {
-            let file = js::path_join(&[dir, "AGENTS.md"]);
-            let text = read_text(&file)?;
-            sections.push(PromptSection::new(
-                &format!("agents:{kind}"),
-                &format!("AGENTS.md ({kind})"),
-                &file,
-                text,
-            ));
-        }
-        sections
-    };
-    let system_prompt: Vec<PromptSection> = prompts
-        .into_iter()
-        .filter(|section| !section.text.is_empty())
-        .collect();
+    let system_prompt = mode_prompt_sections(&mode, &config_dir, workspace, &project_dir)?;
     let default_model = project
         .default_model
         .clone()
@@ -739,6 +683,8 @@ pub fn load_agent_config(
     protected_paths.extend(skill_paths);
     // The node's role files and chat prompts: only the user writes them.
     protected_paths.push(js::path_join(&[&config_dir, "roles"]));
+    // On a shared gateway/node host these files define capability grants.
+    protected_paths.extend(pirc_policy::session::mode_write_paths(&config_dir)?);
     protected_paths.push(js::path_join(&[&config_dir, "SOUL.md"]));
     protected_paths.push(js::path_join(&[&config_dir, "CHAT.md"]));
     // A chat project's instructions: only the user edits them, from the web.
@@ -751,6 +697,8 @@ pub fn load_agent_config(
         .project_files
         .then(|| truthy_env(env, "PIRC_PROJECT_FILES"))
         .flatten();
+    let mut features = global.features;
+    apply_mode_features(&mut features, &mode);
     Ok(AgentConfig {
         project_files,
         role_dirs: crate::roles::role_dirs(&config_dir, &project_root),
@@ -767,16 +715,131 @@ pub fn load_agent_config(
         env: merge_env(&global.env, &project.env),
         hooks,
         limits: global.limits,
-        features: global.features,
+        features,
         system_prompt,
-        workspace_kind,
+        mode,
     })
+}
+
+/// Render only the selected sources, preserving mode order and the legacy
+/// section ids/titles. An unselected file is not read (or allowed to fail startup).
+fn mode_prompt_sections(
+    mode: &Mode,
+    config_dir: &str,
+    workspace: &str,
+    project_dir: &str,
+) -> Result<Vec<PromptSection>, String> {
+    let mut sections = Vec::new();
+    for source in &mode.prompt {
+        let section = match source {
+            ModePromptSection::Base => {
+                PromptSection::new("base", "Coding instructions", "built-in", BASE_PROMPT)
+            }
+            ModePromptSection::Soul => {
+                let file = js::path_join(&[config_dir, "SOUL.md"]);
+                let soul = read_assistant_prompt(&file)?;
+                if soul.is_empty() {
+                    PromptSection::new("soul", "Persona", "built-in", CHAT_IDENTITY)
+                } else {
+                    PromptSection::new("soul", "Persona", &file, soul)
+                }
+            }
+            ModePromptSection::ChatEnv => {
+                PromptSection::new("chat-env", "Chat environment", "built-in", CHAT_ENVIRONMENT)
+            }
+            ModePromptSection::ChatMd => {
+                let file = js::path_join(&[config_dir, "CHAT.md"]);
+                PromptSection::new(
+                    "chat-md",
+                    "Chat rules",
+                    &file,
+                    read_assistant_prompt(&file)?,
+                )
+            }
+            ModePromptSection::Body => PromptSection::new(
+                "mode:body",
+                "Mode instructions",
+                &format!("mode:{}", mode.id),
+                &mode.body,
+            ),
+            ModePromptSection::AgentsGlobal
+            | ModePromptSection::AgentsWorkspace
+            | ModePromptSection::AgentsProject => {
+                let (dir, kind) = match source {
+                    ModePromptSection::AgentsGlobal => (config_dir, "global"),
+                    ModePromptSection::AgentsWorkspace => (workspace, "workspace"),
+                    ModePromptSection::AgentsProject => (project_dir, "project"),
+                    _ => unreachable!(),
+                };
+                let file = js::path_join(&[dir, "AGENTS.md"]);
+                PromptSection::new(
+                    &format!("agents:{kind}"),
+                    &format!("AGENTS.md ({kind})"),
+                    &file,
+                    read_text(&file)?,
+                )
+            }
+        };
+        if !section.text.is_empty() {
+            sections.push(section);
+        }
+    }
+    Ok(sections)
+}
+
+/// Apply mode defaults without overriding an explicit node switch. Feature
+/// implementations still decide runtime readiness (gateway, browser, child, etc.).
+pub(crate) fn apply_mode_features(features: &mut Map<String, Value>, mode: &Mode) {
+    for key in pirc_protocol::mode::FEATURE_NAMES {
+        let explicit = features
+            .get(*key)
+            .and_then(|settings| settings.get("enabled"))
+            .and_then(Value::as_bool);
+        if explicit.is_some() {
+            continue;
+        }
+        let enabled = if mode.features_on.iter().any(|name| name == key) {
+            true
+        } else if mode.feature_off(key) {
+            false
+        } else {
+            continue;
+        };
+        let settings = features
+            .entry((*key).to_owned())
+            .or_insert_with(|| Value::Object(Map::new()));
+        // Keep malformed node settings intact so their feature's validator can
+        // report them rather than silently replacing them with defaults.
+        if let Some(settings) = settings.as_object_mut() {
+            settings.insert("enabled".into(), Value::Bool(enabled));
+        }
+    }
 }
 
 impl AgentConfig {
     /// What this session's workspace allows.
-    pub fn mode(&self) -> &'static Mode {
-        self.workspace_kind.mode()
+    pub fn mode(&self) -> &Mode {
+        &self.mode
+    }
+
+    /// Preserve a mode's default-off switch even when a feature's settings
+    /// validator falls back to its schema defaults. An explicit node opt-in
+    /// still takes precedence; legacy malformed settings outside a default-off
+    /// mode keep their existing fallback behavior.
+    pub(crate) fn feature_disabled_by_mode(&self, key: &str) -> bool {
+        self.mode.feature_off(key) && self.feature_disabled(key)
+    }
+
+    pub(crate) fn feature_disabled(&self, key: &str) -> bool {
+        match self
+            .features
+            .get(key)
+            .and_then(|settings| settings.get("enabled"))
+            .and_then(Value::as_bool)
+        {
+            Some(enabled) => !enabled,
+            None => self.mode.feature_off(key),
+        }
     }
 }
 

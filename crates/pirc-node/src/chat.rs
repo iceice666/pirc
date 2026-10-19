@@ -17,7 +17,7 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 use pirc_config::{CHAT_WORKSPACE_ID, NodeConfig};
-use pirc_protocol::mode::Workdir;
+use pirc_protocol::mode::{Mode, Workdir};
 use rusqlite::Connection;
 
 use crate::error::{ApiError, ApiResult};
@@ -71,9 +71,9 @@ fn basename(text: &str) -> &str {
 }
 
 /// `sessionRoot`: where the session's agent, terminals and panels work.
-pub fn session_root(workspace: &Workspace, session_id: &str) -> ApiResult<PathBuf> {
+pub fn session_root(workspace: &Workspace, session_id: &str, mode: &Mode) -> ApiResult<PathBuf> {
     let root = PathBuf::from(&workspace.canonical_path);
-    if workspace.kind.mode().workdir != Workdir::PerSession {
+    if mode.workdir != Workdir::PerSession {
         return Ok(root);
     }
     let dir = root.join("sessions").join(basename(session_id));
@@ -82,11 +82,8 @@ pub fn session_root(workspace: &Workspace, session_id: &str) -> ApiResult<PathBu
 }
 
 /// `projectInstructionsPath`: a chat workspace's instructions file.
-pub fn project_instructions_path(workspace: &Workspace) -> Option<PathBuf> {
-    workspace
-        .kind
-        .mode()
-        .project_instructions
+pub fn project_instructions_path(workspace: &Workspace, mode: &Mode) -> Option<PathBuf> {
+    mode.project_instructions
         .then(|| Path::new(&workspace.canonical_path).join(INSTRUCTIONS_FILE))
 }
 
@@ -96,8 +93,8 @@ pub fn js_trim(text: &str) -> &str {
 }
 
 /// `readProjectInstructions`: trimmed and cut to the limit; `""` for none.
-pub fn read_project_instructions(workspace: &Workspace) -> String {
-    let Some(file) = project_instructions_path(workspace) else {
+pub fn read_project_instructions(workspace: &Workspace, mode: &Mode) -> String {
+    let Some(file) = project_instructions_path(workspace, mode) else {
         return String::new();
     };
     match std::fs::read(&file) {
@@ -112,8 +109,12 @@ pub fn read_project_instructions(workspace: &Workspace) -> String {
 
 /// `writeProjectInstructions`: the stored text (413 `payload_too_large`
 /// "Instructions are limited to 8000 characters").
-pub fn write_project_instructions(workspace: &Workspace, text: &str) -> ApiResult<String> {
-    let Some(file) = project_instructions_path(workspace) else {
+pub fn write_project_instructions(
+    workspace: &Workspace,
+    text: &str,
+    mode: &Mode,
+) -> ApiResult<String> {
+    let Some(file) = project_instructions_path(workspace, mode) else {
         return Err(ApiError::bad_request(
             "Only chat projects have instructions",
         ));
@@ -159,7 +160,7 @@ mod tests {
     use serde_json::Map;
 
     use super::*;
-    use crate::store::WorkspaceKind;
+    use pirc_protocol::mode::{default_chat, default_work};
 
     fn chat(dir: &Path) -> Workspace {
         Workspace {
@@ -168,35 +169,59 @@ mod tests {
             display_name: "P".into(),
             canonical_path: dir.to_string_lossy().into_owned(),
             defaults: Map::new(),
-            kind: WorkspaceKind::Chat,
+            mode: default_chat().id,
         }
+    }
+
+    #[test]
+    fn helpers_use_passed_capabilities_not_mode_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut mode = default_chat();
+        mode.id = pirc_protocol::mode::ModeId::new("research").unwrap();
+        let workspace = Workspace {
+            mode: mode.id.clone(),
+            ..chat(dir.path())
+        };
+        assert_eq!(
+            session_root(&workspace, "s", &mode).unwrap(),
+            dir.path().join("sessions/s")
+        );
+        assert!(project_instructions_path(&workspace, &mode).is_some());
+        mode.project_instructions = false;
+        assert_eq!(project_instructions_path(&workspace, &mode), None);
+        mode.workdir = Workdir::Workspace;
+        assert_eq!(session_root(&workspace, "s", &mode).unwrap(), dir.path());
     }
 
     #[test]
     fn session_roots_and_instructions() {
         let dir = tempfile::tempdir().unwrap();
         let workspace = chat(dir.path());
-        let root = session_root(&workspace, "session_1").unwrap();
+        let root = session_root(&workspace, "session_1", &default_chat()).unwrap();
         assert_eq!(root, dir.path().join("sessions/session_1"));
         assert!(root.is_dir());
         assert_eq!(basename("a/b/"), "b");
         let directory = Workspace {
-            kind: WorkspaceKind::Directory,
+            mode: default_work().id,
             ..workspace.clone()
         };
-        assert_eq!(session_root(&directory, "s").unwrap(), dir.path());
-        assert_eq!(project_instructions_path(&directory), None);
-        assert_eq!(read_project_instructions(&directory), "");
         assert_eq!(
-            write_project_instructions(&directory, "x")
+            session_root(&directory, "s", &default_work()).unwrap(),
+            dir.path()
+        );
+        assert_eq!(project_instructions_path(&directory, &default_work()), None);
+        assert_eq!(read_project_instructions(&directory, &default_work()), "");
+        assert_eq!(
+            write_project_instructions(&directory, "x", &default_work())
                 .unwrap_err()
                 .status,
             400
         );
 
-        assert_eq!(read_project_instructions(&workspace), "");
+        assert_eq!(read_project_instructions(&workspace, &default_chat()), "");
         assert_eq!(
-            write_project_instructions(&workspace, "  Be brief.\r\nAlways.  ").unwrap(),
+            write_project_instructions(&workspace, "  Be brief.\r\nAlways.  ", &default_chat())
+                .unwrap(),
             "Be brief.\nAlways."
         );
         let file = dir.path().join(INSTRUCTIONS_FILE);
@@ -209,14 +234,20 @@ mod tests {
             std::fs::metadata(&file).unwrap().permissions().mode() & 0o777,
             0o600
         );
-        assert_eq!(read_project_instructions(&workspace), "Be brief.\nAlways.");
+        assert_eq!(
+            read_project_instructions(&workspace, &default_chat()),
+            "Be brief.\nAlways."
+        );
         let long = "x".repeat(INSTRUCTIONS_MAX_CHARS + 1);
-        let error = write_project_instructions(&workspace, &long).unwrap_err();
+        let error = write_project_instructions(&workspace, &long, &default_chat()).unwrap_err();
         assert_eq!(
             (error.status, error.message.as_str()),
             (413, "Instructions are limited to 8000 characters")
         );
-        assert_eq!(write_project_instructions(&workspace, " \n ").unwrap(), "");
+        assert_eq!(
+            write_project_instructions(&workspace, " \n ", &default_chat()).unwrap(),
+            ""
+        );
         assert!(!file.exists());
     }
 }

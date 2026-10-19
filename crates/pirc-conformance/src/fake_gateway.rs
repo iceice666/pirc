@@ -121,6 +121,18 @@ impl NodeLink {
             .send(Message::text(frame.to_string()))
             .await
             .expect("send to node");
+        if frame["type"] == "registered" {
+            // These fixtures play a configured gateway, not a node-local
+            // fallback. Real gateways always send the catalog next.
+            let catalog = serde_json::json!({"type":"modes", "modes":[
+                pirc_protocol::mode::default_chat(), pirc_protocol::mode::default_work()
+            ]});
+            assert_gateway_frame(&catalog);
+            self.socket
+                .send(Message::text(catalog.to_string()))
+                .await
+                .expect("send modes to node");
+        }
     }
 
     /// Send `text` as is, unchecked: a frame the node should refuse or ignore.

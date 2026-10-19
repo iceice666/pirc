@@ -37,11 +37,15 @@ async fn relayed_streams() {
     let mut node = api.connect("/node/connect", &node_headers()).await.open();
     send(
         &mut node,
-        json!({ "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
-            "workspaces": [{ "id": "ws", "displayName": "W", "kind": "directory" }] }),
+        json!({ "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
+            "workspaces": [{ "id": "ws", "displayName": "W", "mode": "directory" }] }),
     )
     .await;
-    node.next_json().await.expect("registered");
+    assert_eq!(
+        node.next_json().await.expect("registered")["type"],
+        "registered"
+    );
+    assert_eq!(node.next_json().await.expect("modes")["type"], "modes");
     let create = {
         let api = api.clone();
         let browser = browser.clone();

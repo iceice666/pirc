@@ -1677,7 +1677,12 @@ impl Ctx<'_> {
             Ok(workspace) => json!({
                 "id": workspace.id,
                 "name": workspace.display_name,
-                "kind": workspace.kind,
+                "mode": workspace.mode,
+                "kind": self.app.mode(&workspace.mode).map(|mode| match mode.workdir {
+                    pirc_protocol::mode::Workdir::PerSession => "chat",
+                    _ => "directory",
+                }),
+                "available": self.app.mode(&workspace.mode).is_some(),
                 "node": workspace.host_id,
                 "online": workspace_online(self.app, &workspace),
             }),

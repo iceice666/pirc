@@ -6,6 +6,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Added
 
+- Gateway-owned workspace modes load from `$PIRC_CONFIG_DIR/modes/<id>.md` at startup and on SIGHUP. Chat/Work are editable default files, not reserved built-ins; custom modes combine validated capabilities, ordered prompt sections, feature defaults and operation allowlists. Nodes explicitly accept ids with `PIRC_MODES`; agents receive validated `PIRC_MODE` snapshots and role/team tool lists cannot widen the mode ceiling. Missing modes leave history readable but refuse new work; changed modes stop affected agents and terminals. Existing clients retain Chat/Work compatibility; dynamic mode navigation is deferred. **Node protocol 12: upgrade gateway and all nodes together.** Database schemas are unchanged. See the modes guide and upgrade notes.
 - Release CI builds macOS, Web and signed Android beta assets into a reviewed draft, with a separate signing setup check.
 
 ### Fixed

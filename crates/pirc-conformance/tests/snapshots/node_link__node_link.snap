@@ -13,14 +13,14 @@ expression: t.into_value()
   {
     "observed": {
       "closed": 4426,
-      "reason": "node protocol 9 != daemon 11"
+      "reason": "node protocol 9 != daemon 12"
     },
     "step": "older protocol"
   },
   {
     "observed": {
       "closed": 4426,
-      "reason": "node protocol 1 != daemon 11"
+      "reason": "node protocol 1 != daemon 12"
     },
     "step": "no protocol"
   },
@@ -82,9 +82,11 @@ expression: t.into_value()
           "role": "node",
           "workspaces": [
             {
+              "available": true,
               "displayName": "Fake workspace",
               "id": "ws",
-              "kind": "directory"
+              "kind": "directory",
+              "mode": "directory"
             }
           ]
         }
@@ -101,11 +103,13 @@ expression: t.into_value()
     "body": {
       "workspaces": [
         {
+          "available": true,
           "defaults": {},
           "displayName": "Fake workspace",
           "hostId": "test",
           "id": "test:ws",
-          "kind": "directory"
+          "kind": "directory",
+          "mode": "directory"
         }
       ]
     },

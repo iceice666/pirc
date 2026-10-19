@@ -217,6 +217,10 @@ fn role_brief(value: &Value) -> RoleBrief {
 /// workspaces it is linked to first (`linked`: `workspace`, or
 /// `repository` for another clone of a linked one's repository).
 pub fn render_workspaces(workspaces: &[Value]) -> String {
+    render_workspaces_with_delegation(workspaces, true)
+}
+
+fn render_workspaces_with_delegation(workspaces: &[Value], delegation: bool) -> String {
     if workspaces.is_empty() {
         return String::new();
     }
@@ -234,7 +238,12 @@ pub fn render_workspaces(workspaces: &[Value]) -> String {
         "## Workspaces".to_owned(),
         String::new(),
         format!(
-            "The user's repositories you can hand tasks to with {DELEGATE_TOOL}. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with {SEARCH_TOOL}, and open a note's sources with recall.{}{}",
+            "{} Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with {SEARCH_TOOL}, and open a note's sources with recall.{}{}",
+            if delegation {
+                format!("The user's repositories you can hand tasks to with {DELEGATE_TOOL}.")
+            } else {
+                "The user's repositories. Delegation is unavailable in this session.".to_owned()
+            },
             if repos {
                 " Workspaces showing the same repository are clones of it: a search in one also finds the others' notes."
             } else {
@@ -247,7 +256,7 @@ pub fn render_workspaces(workspaces: &[Value]) -> String {
             }
         ),
     ];
-    if !linked.is_empty() {
+    if !linked.is_empty() && delegation {
         lines.push(String::new());
         lines.push(format!(
             "The user linked this project to the workspaces marked “linked to this project”: it is about them. {} You can still hand tasks to any workspace, and the user approves every delegation.",
@@ -650,7 +659,10 @@ async fn memory_section(
     let section = if enabled {
         [
             render_memory(&context),
-            render_workspaces(array(context.get("workspaces"))),
+            render_workspaces_with_delegation(
+                array(context.get("workspaces")),
+                agent.config().mode().delegate && agent.get_tool(DELEGATE_TOOL).is_some(),
+            ),
         ]
         .into_iter()
         .filter(|part| !part.is_empty())
@@ -1472,8 +1484,10 @@ impl Tool for AssistantTool {
         let (recall, delegation) = self.agent.upgrade().map_or((true, true), |agent| {
             let capabilities = agent.capabilities();
             (
-                capabilities.allows("remote_recall"),
-                capabilities.allows("delegation"),
+                capabilities.allows("remote_recall") && agent.get_tool("recall").is_some(),
+                capabilities.allows("delegation")
+                    && agent.config().mode().delegate
+                    && agent.get_tool(DELEGATE_TOOL).is_some(),
             )
         });
         &self.descriptions[usize::from(recall) + 2 * usize::from(delegation)]
@@ -1511,13 +1525,21 @@ struct AssistantFeature {
     state: Shared,
 }
 
+fn permits_tool(mode: &pirc_protocol::Mode, kind: Kind) -> bool {
+    if matches!(kind, Kind::Delegate | Kind::Delegations) {
+        mode.delegate
+    } else {
+        mode.full_assistant()
+    }
+}
+
 impl Feature for AssistantFeature {
     fn name(&self) -> &'static str {
         "assistant"
     }
 
     fn tools(&self, agent: &Rc<Agent>) -> Vec<Rc<dyn Tool>> {
-        let Some(gateway) = gateway_of(agent) else {
+        let Some(gateway) = process_gateway() else {
             return Vec::new();
         };
         [
@@ -1528,6 +1550,7 @@ impl Feature for AssistantFeature {
             Kind::Search,
         ]
         .into_iter()
+        .filter(|kind| permits_tool(agent.config().mode(), *kind))
         .map(|kind| {
             Rc::new(AssistantTool::new(
                 kind,
@@ -1586,6 +1609,26 @@ impl Feature for AssistantFeature {
             }))
         })
     }
+}
+
+#[cfg(test)]
+pub(crate) fn registered_tool_names(agent: &Rc<Agent>) -> Vec<String> {
+    let gateway = crate::channels::node_channels();
+    let state = Rc::new(State::default());
+    [
+        Kind::Note,
+        Kind::Propose,
+        Kind::Delegate,
+        Kind::Delegations,
+        Kind::Search,
+    ]
+    .into_iter()
+    .map(|kind| {
+        AssistantTool::new(kind, agent, state.clone(), gateway.clone())
+            .name()
+            .to_owned()
+    })
+    .collect()
 }
 
 #[cfg(test)]

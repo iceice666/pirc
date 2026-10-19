@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::inference::{AssistantDelta, InferenceErrorCode, InferenceRequest, Message};
+use crate::mode::{Mode, ModeId};
 use crate::models::Models;
 
 /// Node → gateway. `Register` must be the first frame and only the first:
@@ -86,6 +87,9 @@ pub struct Registration {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub protocol: Option<i64>,
     pub workspaces: Vec<RegisteredWorkspace>,
+    /// Mode ids this node is configured to accept; definitions come only
+    /// from the gateway, never from this advertisement.
+    pub modes: Vec<ModeId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,9 +104,7 @@ pub enum NodeRole {
 pub struct RegisteredWorkspace {
     pub id: String,
     pub display_name: String,
-    /// Absent from older nodes: directory.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub kind: Option<WorkspaceKind>,
+    pub mode: ModeId,
     /// The roles its agents can start in; absent when unknown.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub roles: Option<Vec<WorkspaceRole>>,
@@ -110,13 +112,6 @@ pub struct RegisteredWorkspace {
     /// absent without one and from older nodes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repo: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum WorkspaceKind {
-    Directory,
-    Chat,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -189,6 +184,10 @@ pub enum GatewayMessage {
         /// Acknowledged workspace-memory ledger offsets, by ledger key.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         mirrors: Option<IndexMap<String, u64>>,
+    },
+    /// The gateway-owned, validated catalog, after registration and on reload.
+    Modes {
+        modes: Vec<Mode>,
     },
     MemoryMirrorAck {
         ledger_key: String,
@@ -309,8 +308,8 @@ mod tests {
     #[test]
     fn round_trips_node_frames() {
         for frame in [
-            json!({ "type": "register", "role": "node", "protocol": 9,
-                "workspaces": [{ "id": "w", "displayName": "W", "kind": "directory",
+            json!({ "type": "register", "role": "node", "protocol": 12, "modes": ["directory"],
+                "workspaces": [{ "id": "w", "displayName": "W", "mode": "directory",
                     "roles": [{ "name": "default", "source": "workspace" }] }] }),
             json!({ "type": "heartbeat" }),
             json!({ "type": "response", "requestId": "r", "data": { "status": 204 } }),
@@ -327,6 +326,7 @@ mod tests {
     fn round_trips_gateway_frames() {
         for frame in [
             json!({ "type": "heartbeat_ack" }),
+            json!({ "type": "modes", "modes": [crate::mode::default_work()] }),
             json!({ "type": "model_delta", "requestId": "r",
                 "delta": { "type": "toolcall_end", "contentIndex": 0,
                     "toolCall": { "type": "toolCall", "id": "c", "name": "n", "arguments": {} } } }),

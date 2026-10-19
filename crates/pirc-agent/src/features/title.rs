@@ -242,7 +242,11 @@ impl TitleSettings {
 /// `titleSettings`: the configured settings, or the defaults when they do
 /// not fit the schema.
 pub fn title_settings(agent: &Agent) -> TitleSettings {
-    TitleSettings::parse(agent.config().features.get("sessionTitle")).unwrap_or_default()
+    let config = agent.config();
+    let mut settings =
+        TitleSettings::parse(config.features.get("sessionTitle")).unwrap_or_default();
+    settings.enabled &= !config.feature_disabled_by_mode("sessionTitle");
+    settings
 }
 
 /// `generateTitle`: one title request; `None` on any failure.

@@ -629,6 +629,9 @@ impl State {
             })
             .collect();
         env.extend(config.env.iter().cloned());
+        // Freeze the parent's validated mode snapshot. Project env and live
+        // mode-file edits must never widen a team member or subagent.
+        freeze_child_mode(&mut env, config.mode());
         let options = TeamOptions {
             directory,
             command: self.command.clone(),
@@ -1000,6 +1003,14 @@ impl Tool for TeamTool {
     ) -> LocalBoxFuture<'a, Result<ToolResult, String>> {
         Box::pin(self.run(args, ctx))
     }
+}
+
+fn freeze_child_mode(env: &mut IndexMap<String, String>, mode: &pirc_protocol::Mode) {
+    env.shift_remove("PIRC_WORKSPACE_KIND");
+    env.insert(
+        "PIRC_MODE".into(),
+        serde_json::to_string(mode).expect("validated mode serializes"),
+    );
 }
 
 /// `teamFeature()`.

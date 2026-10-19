@@ -9,7 +9,7 @@ use serde_json::{Map, Value, json};
 
 use super::{AcquireWrite, Tool, ToolContext, ToolResult};
 use crate::LocalBoxFuture;
-use crate::config::{AgentConfig, HooksConfig, Limits, WorkspaceKind};
+use crate::config::{AgentConfig, HooksConfig, Limits};
 use crate::host::AgentHost;
 use crate::signal::AbortSignal;
 use crate::ui::{Choice, DialogOptions, NotifyLevel, Ui};
@@ -37,7 +37,7 @@ pub fn config(workspace: &str, features: Value) -> AgentConfig {
         features: features.as_object().cloned().unwrap_or_default(),
         role_dirs: Vec::new(),
         system_prompt: Vec::new(),
-        workspace_kind: WorkspaceKind::Directory,
+        mode: pirc_protocol::mode::default_work(),
         project_files: None,
     }
 }

@@ -52,7 +52,12 @@ fn offline() -> ApiError {
 }
 
 /// The project, if `user` may delete it; `Ok(None)` once it is deleted.
-fn project(conn: &Connection, workspace_id: &str, user: &str) -> ApiResult<Option<Workspace>> {
+fn project(
+    app: &App,
+    conn: &Connection,
+    workspace_id: &str,
+    user: &str,
+) -> ApiResult<Option<Workspace>> {
     if let Some(deletion) = conn.workspace_deletion(workspace_id)? {
         if deletion.owner_user != user {
             return Err(ApiError::new(
@@ -68,7 +73,7 @@ fn project(conn: &Connection, workspace_id: &str, user: &str) -> ApiResult<Optio
     let workspace = conn
         .find_workspace(workspace_id)?
         .ok_or_else(|| ApiError::not_found("Workspace not found"))?;
-    if !crate::project_links::is_project(&workspace) {
+    if !crate::project_links::is_project(&app.catalog(), &workspace) {
         return Err(ApiError::new(
             400,
             "invalid_input",
@@ -120,7 +125,7 @@ async fn preview(
 ) -> Handled {
     let user = identity.user.as_str();
     let conn = app.db.lock();
-    let Some(workspace) = project(&conn, &workspace_id, user)? else {
+    let Some(workspace) = project(&app, &conn, &workspace_id, user)? else {
         return Err(ApiError::not_found("Workspace not found").into());
     };
     let chats = sessions(&conn, &workspace_id)?;
@@ -239,7 +244,7 @@ async fn delete(
     let decisions = decisions(body.parse()?)?;
     let workspace = {
         let conn = app.db.lock();
-        match project(&conn, &workspace_id, user)? {
+        match project(&app, &conn, &workspace_id, user)? {
             Some(workspace) => workspace,
             None => return Ok(no_content()),
         }

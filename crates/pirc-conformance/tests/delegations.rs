@@ -177,14 +177,14 @@ fn work_answers(snapshot: Arc<Mutex<Value>>) -> Answerer {
 }
 
 fn home_registration() -> Value {
-    json!({ "type": "register", "role": "chat", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
-        "workspaces": [{ "id": "chats", "displayName": "Chats", "kind": "chat" }] })
+    json!({ "type": "register", "role": "chat", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["chat"],
+        "workspaces": [{ "id": "chats", "displayName": "Chats", "mode": "chat" }] })
 }
 
 fn work_registration() -> Value {
-    json!({ "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
+    json!({ "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
         "workspaces": [
-            { "id": "repo", "displayName": "Repo", "kind": "directory",
+            { "id": "repo", "displayName": "Repo", "mode": "directory",
                 "roles": [{ "name": "general", "description": "General work" }] },
         ] })
 }
@@ -812,10 +812,10 @@ async fn project_links() {
         "home",
         HOME_TOKEN,
         json!({ "type": "register", "role": "chat",
-            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
+            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["chat"],
             "workspaces": [
-                { "id": "chats", "displayName": "Chats", "kind": "chat" },
-                { "id": "trip", "displayName": "Trip", "kind": "chat" },
+                { "id": "chats", "displayName": "Chats", "mode": "chat" },
+                { "id": "trip", "displayName": "Trip", "mode": "chat" },
             ] }),
         home_answers(),
     )
@@ -825,12 +825,12 @@ async fn project_links() {
         "work",
         WORK_TOKEN,
         json!({ "type": "register", "role": "node",
-            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
+            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
             "workspaces": [
-                { "id": "repo", "displayName": "Repo", "kind": "directory",
+                { "id": "repo", "displayName": "Repo", "mode": "directory",
                     "repo": "github.com/me/repo" },
                 // Before Repo by name: the link puts Repo first.
-                { "id": "site", "displayName": "Atlas", "kind": "directory" },
+                { "id": "site", "displayName": "Atlas", "mode": "directory" },
             ] }),
         work_answers(Arc::new(Mutex::new(json!({})))),
     )
@@ -931,9 +931,9 @@ async fn project_links() {
         "work",
         WORK_TOKEN,
         json!({ "type": "register", "role": "node",
-            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
+            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
             "workspaces": [
-                { "id": "site", "displayName": "Atlas", "kind": "directory" },
+                { "id": "site", "displayName": "Atlas", "mode": "directory" },
             ] }),
         work_answers(Arc::new(Mutex::new(json!({})))),
     )

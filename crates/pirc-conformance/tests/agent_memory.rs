@@ -473,9 +473,10 @@ async fn agent_workspace_memory_in_chat() {
         prepare: Some(seed_workspace_note),
         ..options(json!({ "showWorkerNotifications": false }))
     };
-    options
-        .env
-        .push(("PIRC_WORKSPACE_KIND".to_owned(), "chat".to_owned()));
+    options.env.push((
+        "PIRC_MODE".to_owned(),
+        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+    ));
     let Some(mut agent) = AgentRun::start(options).await else {
         return;
     };

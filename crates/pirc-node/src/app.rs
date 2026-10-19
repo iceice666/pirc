@@ -36,7 +36,7 @@ use std::sync::{Arc, Mutex};
 use futures_util::FutureExt;
 use futures_util::future::{BoxFuture, Shared};
 use pirc_config::NodeConfig;
-use pirc_protocol::WorkspaceKind;
+use pirc_protocol::mode::{ModeId, Workdir};
 use serde_json::{Map, Value, json};
 
 use crate::assistant_prompts::{self, PromptName};
@@ -195,6 +195,14 @@ fn claim(node: &Node, request: &Request) -> ApiResult<SessionRow> {
         .claim_session(param(request, "id"), &request.user, false)
 }
 
+/// Mutations require the workspace's current, accepted catalog definition.
+/// Plain `claim` remains available to history and control-state reads.
+fn claim_mutable(node: &Node, request: &Request) -> ApiResult<SessionRow> {
+    let session = claim(node, request)?;
+    node.session_mode(&session.id)?;
+    Ok(session)
+}
+
 /// A file-system failure: logged, answered 500 (TS threw a plain error).
 fn io_failure(what: &str, path: &Path, error: impl std::fmt::Display) -> ApiError {
     crate::log::error(&format!("{what} {}: {error}", path.display()));
@@ -207,28 +215,35 @@ fn created(body: Value) -> ApiResult<Response> {
 
 // ---------- workspaces ----------
 
-/// `z.union([chat, directory])`: the chat project, or `(path, displayName)`.
-enum NewWorkspace {
-    Chat { display_name: String },
-    Directory { path: String, display_name: String },
+/// A requested catalog mode. Legacy `kind` is only an input alias, never
+/// a source of capabilities; omitted ids use the node role's default id.
+struct NewWorkspace {
+    mode: ModeId,
+    path: Option<String>,
+    display_name: String,
 }
 
-fn new_workspace(body: &Value) -> ApiResult<NewWorkspace> {
+fn new_workspace(body: &Value, _chat_node: bool) -> ApiResult<NewWorkspace> {
     let map = object(body)?;
-    let display_name = || string(map, "displayName", true, 1, 200);
-    if map.get("kind").and_then(Value::as_str) == Some("chat")
-        && let Ok(display_name) = display_name()
+    let mode = optional_string(map, "mode", false, 1, 40)?;
+    let kind = optional_string(map, "kind", false, 1, 40)?;
+    if mode
+        .as_ref()
+        .zip(kind.as_ref())
+        .is_some_and(|(mode, kind)| mode != kind)
     {
-        return Ok(NewWorkspace::Chat { display_name });
+        return Err(ApiError::invalid_input());
     }
-    match map.get("kind") {
-        None => {}
-        Some(kind) if kind == "directory" => {}
-        Some(_) => return Err(ApiError::invalid_input()),
+    if mode.is_none() && kind.is_none() && !map.contains_key("path") {
+        return Err(ApiError::invalid_input());
     }
-    Ok(NewWorkspace::Directory {
-        path: string(map, "path", true, 1, 4096)?,
-        display_name: display_name()?,
+    // Legacy path-only callers request a directory, regardless of node role.
+    let mode = ModeId::new(mode.or(kind).unwrap_or_else(|| "directory".to_owned()))
+        .map_err(|_| ApiError::invalid_input())?;
+    Ok(NewWorkspace {
+        mode,
+        path: optional_string(map, "path", true, 1, 4096)?,
+        display_name: string(map, "displayName", true, 1, 200)?,
     })
 }
 
@@ -251,31 +266,25 @@ fn workspace_id() -> String {
 
 async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
     let config = &node.config;
-    let (path, display_name) = match new_workspace(request.json())? {
-        NewWorkspace::Chat { display_name } => {
-            if !config.chat() {
-                return Err(ApiError::forbidden(
-                    "This node does not host chats (pirc-chat)",
-                ));
-            }
-            let id = workspace_id();
-            let dir = chat::chat_workspace_dir(config, &id)?;
-            let workspace = node.db.lock().add_workspace(
-                &id,
-                &config.node_id,
-                &display_name,
-                &dir.to_string_lossy(),
-                WorkspaceKind::Chat,
-            )?;
-            return created(json!({ "workspace": workspace }));
-        }
-        NewWorkspace::Directory { path, display_name } => (path, display_name),
-    };
-    if config.chat() {
-        return Err(ApiError::forbidden(
-            "The chat node hosts chat workspaces only (pirc-chat)",
-        ));
+    let NewWorkspace {
+        mode: mode_id,
+        path,
+        display_name,
+    } = new_workspace(request.json(), config.chat())?;
+    let mode = node.mode(&mode_id)?;
+    if mode.workdir == Workdir::PerSession {
+        let id = workspace_id();
+        let dir = chat::chat_workspace_dir(config, &id)?;
+        let workspace = node.db.lock().add_workspace(
+            &id,
+            &config.node_id,
+            &display_name,
+            &dir.to_string_lossy(),
+            mode_id,
+        )?;
+        return created(json!({ "workspace": workspace }));
     }
+    let path = path.ok_or_else(ApiError::invalid_input)?;
     let home_dir = node
         .env
         .get("HOME")
@@ -356,7 +365,7 @@ async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
         &config.node_id,
         &display_name,
         &canonical,
-        WorkspaceKind::Directory,
+        mode_id,
     )?;
     // Its roles, as registration reports them, for delegations.
     let mut body = serde_json::to_value(&workspace).unwrap_or_default();
@@ -375,7 +384,7 @@ async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
 /// `chatProject`: the workspace, which must be a chat project.
 fn chat_project(node: &Node, request: &Request) -> ApiResult<Workspace> {
     let workspace = node.db.lock().get_workspace(param(request, "id"))?;
-    if !workspace.kind.mode().project_instructions {
+    if !node.workspace_mode(&workspace)?.project_instructions {
         return Err(ApiError::bad_request(
             "Only chat projects have instructions",
         ));
@@ -391,7 +400,8 @@ fn instructions(text: String) -> ApiResult<Response> {
 
 async fn read_instructions(node: Node, request: Request) -> ApiResult<Response> {
     let workspace = chat_project(&node, &request)?;
-    instructions(chat::read_project_instructions(&workspace))
+    let mode = node.workspace_mode(&workspace)?;
+    instructions(chat::read_project_instructions(&workspace, &mode))
 }
 
 /// `{text: string}`, strict.
@@ -407,11 +417,13 @@ fn text_body(body: &Value) -> ApiResult<String> {
 async fn write_instructions(node: Node, request: Request) -> ApiResult<Response> {
     let workspace = chat_project(&node, &request)?;
     let text = text_body(request.json())?;
-    instructions(chat::write_project_instructions(&workspace, &text)?)
+    let mode = node.workspace_mode(&workspace)?;
+    instructions(chat::write_project_instructions(&workspace, &text, &mode)?)
 }
 
 fn project_files_body(node: &Node, workspace: &Workspace) -> ApiResult<Value> {
-    let files: Vec<Value> = project_files::list(workspace)?
+    let mode = node.workspace_mode(workspace)?;
+    let files: Vec<Value> = project_files::list(workspace, &mode)?
         .iter()
         .map(project_files::ProjectFile::json)
         .collect();
@@ -444,11 +456,12 @@ async fn upload_project_file(node: Node, request: Request) -> ApiResult<Response
     }
     let query = request.query_object();
     let filename = string(object(&query)?, "filename", false, 1, 1000)?;
-    let file = project_files::write(&workspace, &filename, bytes)?;
+    let mode = node.workspace_mode(&workspace)?;
+    let file = project_files::write(&workspace, &filename, bytes, &mode)?;
     // The project may have been fenced for deletion while the bytes were
     // written: keep nothing then (its deletion removes the directory too).
     if let Err(error) = node.db.lock().get_workspace(&workspace.id) {
-        if let Some(dir) = project_files::files_dir(&workspace) {
+        if let Some(dir) = project_files::files_dir(&workspace, &mode) {
             let _ = std::fs::remove_dir_all(dir);
         }
         return Err(error);
@@ -461,14 +474,15 @@ async fn remove_project_file(node: Node, request: Request) -> ApiResult<Response
     let workspace = node.db.lock().get_workspace(param(&request, "id"))?;
     let query = request.query_object();
     let name = string(object(&query)?, "name", false, 1, 1000)?;
-    project_files::remove(&workspace, &name)?;
+    let mode = node.workspace_mode(&workspace)?;
+    project_files::remove(&workspace, &name, &mode)?;
     Ok(Response::empty(204))
 }
 
 /// `directoryWorkspace`: the workspace, which must be a directory.
 fn directory_workspace(node: &Node, request: &Request) -> ApiResult<Workspace> {
     let workspace = node.db.lock().get_workspace(param(request, "id"))?;
-    if !workspace.kind.mode().project_config {
+    if !node.workspace_mode(&workspace)?.project_config {
         return Err(ApiError::bad_request(
             "Only directory workspaces have a project config",
         ));
@@ -613,6 +627,7 @@ async fn create_session(node: Node, request: Request) -> ApiResult<Response> {
     let map = object(request.json())?;
     let workspace_id = string(map, "workspaceId", false, 1, usize::MAX)?;
     let workspace = node.db.lock().get_workspace(&workspace_id)?;
+    node.workspace_mode(&workspace)?;
     let storage = node.config.sessions_dir.join(prefix_uuid("pi"));
     DirBuilder::new()
         .recursive(true)
@@ -652,7 +667,7 @@ async fn delete_session(
         }
         let session = db.claim_session(&session_id, &user, true)?;
         let workspace = db.get_workspace(&session.workspace_id)?;
-        if !workspace.kind.mode().delete_sessions {
+        if !node.workspace_mode(&workspace)?.delete_sessions {
             return Err(ApiError::bad_request("Only chats can be deleted"));
         }
         db.begin_session_deletion(&session_id, &user)?;
@@ -715,6 +730,7 @@ impl Drop for DeletionEntry {
 }
 
 async fn remove_session(node: &Node, session: &SessionRow, workspace: &Workspace) -> ApiResult<()> {
+    let mode = node.workspace_mode(workspace)?;
     node.runners.stop_session(&session.id).await?;
     node.terminals.dispose_session(&session.id).await;
     node.browser.close_session(&session.id).await;
@@ -736,11 +752,13 @@ async fn remove_session(node: &Node, session: &SessionRow, workspace: &Workspace
         .split('/')
         .rfind(|part| !part.is_empty())
         .unwrap_or_default();
-    remove_tree(
-        &Path::new(&workspace.canonical_path)
-            .join("sessions")
-            .join(base),
-    )?;
+    if mode.workdir == Workdir::PerSession {
+        remove_tree(
+            &Path::new(&workspace.canonical_path)
+                .join("sessions")
+                .join(base),
+        )?;
+    }
     node.branches
         .forget(Path::new(&session.private_session_path));
     node.db.lock().finish_session_deletion(&session.id)?;
@@ -788,7 +806,9 @@ async fn delete_workspace(
         let workspace = db
             .find_workspace(&workspace_id)?
             .ok_or_else(|| ApiError::not_found("Workspace not found"))?;
-        if !workspace.kind.mode().projects || workspace.id == pirc_config::CHAT_WORKSPACE_ID {
+        if !node.workspace_mode(&workspace)?.projects
+            || workspace.id == pirc_config::CHAT_WORKSPACE_ID
+        {
             return Err(ApiError::bad_request("Only chat projects can be deleted"));
         }
         db.begin_workspace_deletion(&workspace_id, &user)?;
@@ -880,7 +900,7 @@ async fn remove_project(node: &Node, workspace: &Workspace) -> ApiResult<()> {
 }
 
 async fn rename_session(node: Node, request: Request) -> ApiResult<Response> {
-    let session = claim(&node, &request)?;
+    let session = claim_mutable(&node, &request)?;
     let name = string(object(request.json())?, "name", true, 1, 200)?;
     if let Some(active) = node.runners.get(&session.id) {
         let mut command = Map::new();
@@ -1019,8 +1039,16 @@ fn next_agent_settings(
     branch: &[pirc_agent::session_store::SessionEntry],
 ) -> Option<Value> {
     let workspace = node.db.lock().get_workspace(&session.workspace_id).ok()?;
-    let root = chat::session_root(&workspace, &session.id).ok()?;
-    let env = |name: &str| node.env.get(name).map(str::to_owned);
+    let mode = node.workspace_mode(&workspace).ok()?;
+    let root = chat::session_root(&workspace, &session.id, &mode).ok()?;
+    let mode_json = serde_json::to_string(&mode).ok()?;
+    let env = |name: &str| {
+        if name == "PIRC_MODE" {
+            Some(mode_json.clone())
+        } else {
+            node.env.get(name).map(str::to_owned)
+        }
+    };
     let config =
         pirc_agent::config::load_agent_config(&root.to_string_lossy(), node.models.current(), &env)
             .ok()?;
@@ -1078,7 +1106,7 @@ fn delivery(body: &Value) -> ApiResult<Delivery> {
 /// The gateway pushes a message into a session: a delegated task, or news
 /// of one. No control lease is needed or taken.
 async fn deliver(node: Node, request: Request) -> ApiResult<Response> {
-    let session = claim(&node, &request)?;
+    let session = claim_mutable(&node, &request)?;
     let body = delivery(request.json())?;
     node.runners.deliver(&session.id, &body).await?;
     Ok(Response::status(202, json!({ "delivered": true })))
@@ -1225,6 +1253,10 @@ async fn command(node: Node, request: Request) -> ApiResult<Response> {
     let command_id = string(map, "commandId", false, 1, 200)?;
     let (client_id, generation) = held_lease(map)?;
     let payload = command_payload(map.get("payload").unwrap_or(&Value::Null))?;
+    // Stopping is the only action allowed after a mode is removed.
+    if !matches!(payload, CommandPayload::Stop) {
+        node.session_mode(&session.id)?;
+    }
     let stored = serde_json::to_value(&payload).unwrap_or_default();
     let (row, duplicate) = {
         let db = node.db.lock();
@@ -1262,7 +1294,7 @@ async fn control(node: Node, request: Request) -> ApiResult<Response> {
 }
 
 async fn acquire(node: Node, request: Request) -> ApiResult<Response> {
-    let session = claim(&node, &request)?;
+    let session = claim_mutable(&node, &request)?;
     let map = object(request.json())?;
     let client_id = string(map, "clientId", false, 1, 200)?;
     if map.contains_key("generation") {
@@ -1286,7 +1318,7 @@ fn held_lease_body(body: &Value) -> ApiResult<(String, i64)> {
 }
 
 async fn heartbeat(node: Node, request: Request) -> ApiResult<Response> {
-    let session = claim(&node, &request)?;
+    let session = claim_mutable(&node, &request)?;
     let (client_id, generation) = held_lease_body(request.json())?;
     let lease = node.db.lock().heartbeat_lease(
         &session.id,
@@ -1298,7 +1330,7 @@ async fn heartbeat(node: Node, request: Request) -> ApiResult<Response> {
 }
 
 async fn release(node: Node, request: Request) -> ApiResult<Response> {
-    let session = claim(&node, &request)?;
+    let session = claim_mutable(&node, &request)?;
     let (client_id, generation) = held_lease_body(request.json())?;
     node.db
         .lock()
@@ -1342,7 +1374,7 @@ fn interaction_answer(value: &Value) -> ApiResult<Map<String, Value>> {
 }
 
 async fn answer(node: Node, request: Request) -> ApiResult<Response> {
-    let session = claim(&node, &request)?;
+    let session = claim_mutable(&node, &request)?;
     let interaction_id = param(&request, "interactionId").to_owned();
     let map = object(request.json())?;
     let (client_id, generation) = held_lease(map)?;
@@ -1401,7 +1433,7 @@ fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
 /// Images and generic files are stored on the node that runs the
 /// session's agent.
 async fn upload(node: Node, request: Request) -> ApiResult<Response> {
-    let session = claim(&node, &request)?;
+    let session = claim_mutable(&node, &request)?;
     let Body::Raw {
         bytes,
         content_type,
@@ -1544,24 +1576,272 @@ mod tests {
 
     #[test]
     fn workspace_bodies() {
-        let parsed = |value: Value| new_workspace(&value);
-        assert!(matches!(
-            parsed(json!({ "kind": "chat", "displayName": " Trip " })),
-            Ok(NewWorkspace::Chat { display_name }) if display_name == "Trip"
-        ));
-        assert!(matches!(
-            parsed(json!({ "path": " ~/p ", "displayName": "P", "extra": 1 })),
-            Ok(NewWorkspace::Directory { path, .. }) if path == "~/p"
-        ));
+        let parsed = |value: Value| new_workspace(&value, false);
+        let chat = parsed(json!({ "kind": "chat", "displayName": " Trip " })).unwrap();
+        assert_eq!(chat.mode.as_str(), "chat");
+        assert_eq!(chat.display_name, "Trip");
+        let directory = parsed(json!({ "path": " ~/p ", "displayName": "P", "extra": 1 })).unwrap();
+        assert_eq!(directory.mode.as_str(), "directory");
+        assert_eq!(directory.path.as_deref(), Some("~/p"));
+        assert_eq!(
+            parsed(json!({ "mode": "research", "displayName": "P" }))
+                .unwrap()
+                .mode
+                .as_str(),
+            "research"
+        );
+        assert!(new_workspace(&json!({ "displayName": "P" }), true).is_err());
+        assert_eq!(
+            new_workspace(&json!({ "displayName":"P", "path":"~/repo" }), true)
+                .unwrap()
+                .mode
+                .as_str(),
+            "directory"
+        );
         for bad in [
             json!({ "kind": "chat", "displayName": "  " }),
-            json!({ "kind": "other", "path": "/p", "displayName": "P" }),
-            json!({ "displayName": "P" }),
+            json!({ "mode": "research", "kind": "chat", "displayName": "P" }),
+            json!({ "mode": "INVALID", "displayName": "P" }),
+            json!({ "mode": null, "displayName": "P" }),
             json!({ "path": "/p", "displayName": "x".repeat(201) }),
             json!([]),
         ] {
             assert!(parsed(bad).is_err());
         }
+    }
+
+    fn request(id: Option<&str>, body: Value) -> Request {
+        Request {
+            method: pirc_protocol::HttpMethod::Post,
+            path: String::new(),
+            query: Vec::new(),
+            params: id
+                .map(|id| vec![("id".into(), id.into())])
+                .unwrap_or_default(),
+            user: "test-user".into(),
+            body: Body::Json(body),
+        }
+    }
+
+    #[tokio::test]
+    async fn chat_role_accepting_only_custom_or_no_modes_does_not_seed_chat() {
+        use pirc_config::Env;
+        use pirc_protocol::NodeRole;
+        for accepted in ["research", ""] {
+            let dir = tempfile::tempdir_in("/tmp").unwrap();
+            let root = dir.path().canonicalize().unwrap();
+            let state = root.join("state").display().to_string();
+            let config_dir = root.join("config").display().to_string();
+            let home = root.display().to_string();
+            let env = Env::new(
+                [
+                    ("PIRC_NODE_ID", "test-node"),
+                    ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
+                    ("PIRC_DAEMON_URL", "ws://127.0.0.1:8787"),
+                    ("PIRC_ALLOWED_USERS", "test-user"),
+                    ("PIRC_STATE_DIR", state.as_str()),
+                    ("PIRC_CONFIG_DIR", config_dir.as_str()),
+                    ("PIRC_MODES", accepted),
+                    ("PIRC_BROWSER", "false"),
+                    ("HOME", home.as_str()),
+                ],
+                &root,
+            );
+            let config = NodeConfig::load(&env, NodeRole::Chat).unwrap();
+            let node = crate::services::Services::start(config, env).await.unwrap();
+            assert!(node.db.lock().list_workspaces().unwrap().is_empty());
+            node.close().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn custom_modes_create_by_workdir_and_unavailable_sessions_are_read_only() {
+        use pirc_config::Env;
+        use pirc_protocol::NodeRole;
+        use pirc_protocol::mode::{default_chat, default_work};
+
+        // Keep the inference Unix-socket pathname below macOS SUN_LEN.
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let real_state = root.join("state");
+        std::fs::create_dir(&real_state).unwrap();
+        let state_link = root.join("state-link");
+        std::os::unix::fs::symlink(&real_state, &state_link).unwrap();
+        let state = state_link.display().to_string();
+        let config_dir = root.join("config").display().to_string();
+        let home = root.display().to_string();
+        let env = Env::new(
+            [
+                ("PIRC_NODE_ID", "test-node"),
+                ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
+                ("PIRC_DAEMON_URL", "ws://127.0.0.1:8787"),
+                ("PIRC_ALLOWED_USERS", "test-user"),
+                ("PIRC_STATE_DIR", state.as_str()),
+                ("PIRC_CONFIG_DIR", config_dir.as_str()),
+                ("PIRC_MODES", "research"),
+                ("PIRC_BROWSER", "false"),
+                ("HOME", home.as_str()),
+            ],
+            &root,
+        );
+        let config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+        let node = crate::services::Services::start(config, env).await.unwrap();
+        let create = || {
+            request(
+                None,
+                json!({ "mode": "research", "displayName": "Research" }),
+            )
+        };
+        assert_eq!(
+            create_workspace(node.clone(), create())
+                .await
+                .unwrap_err()
+                .code,
+            "mode_unavailable"
+        );
+        let mut mode = default_chat();
+        mode.id = ModeId::new("research").unwrap();
+        node.replace_modes(vec![mode]).await;
+        // A per-session mode works on a normal node, not only the chat role.
+        let response = create_workspace(node.clone(), create()).await.unwrap();
+        let workspace = response.body.unwrap()["workspace"].clone();
+        assert_eq!(workspace["mode"], "research");
+        let workspace_id = workspace["id"].as_str().unwrap();
+        assert!(
+            Path::new(workspace["canonicalPath"].as_str().unwrap())
+                .starts_with(root.join("state/chat"))
+        );
+        let response = create_session(
+            node.clone(),
+            request(None, json!({ "workspaceId": workspace_id })),
+        )
+        .await
+        .unwrap();
+        let session_id = response.body.unwrap()["session"]["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        // Editing a definition cannot reinterpret a managed assistant root
+        // as a repository, or make its saved session writable there.
+        let mut changed = default_work();
+        changed.id = ModeId::new("research").unwrap();
+        node.replace_modes(vec![changed]).await;
+        let repository = root.join("repository");
+        std::fs::create_dir(&repository).unwrap();
+        let response = create_workspace(
+            node.clone(),
+            request(
+                None,
+                json!({
+                    "mode": "research", "displayName": "Repo", "path": repository,
+                }),
+            ),
+        )
+        .await
+        .unwrap();
+        let repository_id = response.body.unwrap()["workspace"]["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert_eq!(
+            create_session(
+                node.clone(),
+                request(None, json!({ "workspaceId": workspace_id }))
+            )
+            .await
+            .unwrap_err()
+            .code,
+            "mode_unavailable"
+        );
+        assert_eq!(
+            snapshot(node.clone(), request(Some(&session_id), json!({})))
+                .await
+                .unwrap()
+                .status,
+            200
+        );
+        let mut restored = default_chat();
+        restored.id = ModeId::new("research").unwrap();
+        node.replace_modes(vec![restored]).await;
+        // Conversely a saved repository must never become a full assistant
+        // root merely because its mode file now uses per-session workdirs.
+        assert_eq!(
+            create_session(
+                node.clone(),
+                request(None, json!({ "workspaceId": repository_id }))
+            )
+            .await
+            .unwrap_err()
+            .code,
+            "mode_unavailable"
+        );
+        assert_eq!(
+            read_instructions(node.clone(), request(Some(&repository_id), json!({})))
+                .await
+                .unwrap_err()
+                .code,
+            "mode_unavailable"
+        );
+        node.replace_modes(Vec::new()).await;
+        assert_eq!(
+            create_session(
+                node.clone(),
+                request(None, json!({ "workspaceId": workspace_id }))
+            )
+            .await
+            .unwrap_err()
+            .code,
+            "mode_unavailable"
+        );
+        let empty = || request(Some(&session_id), json!({}));
+        assert_eq!(snapshot(node.clone(), empty()).await.unwrap().status, 200);
+        assert_eq!(control(node.clone(), empty()).await.unwrap().status, 200);
+        assert_eq!(
+            rename_session(node.clone(), empty())
+                .await
+                .unwrap_err()
+                .code,
+            "mode_unavailable"
+        );
+        assert_eq!(
+            acquire(node.clone(), empty()).await.unwrap_err().code,
+            "mode_unavailable"
+        );
+        assert_eq!(
+            heartbeat(node.clone(), empty()).await.unwrap_err().code,
+            "mode_unavailable"
+        );
+        assert_eq!(
+            release(node.clone(), empty()).await.unwrap_err().code,
+            "mode_unavailable"
+        );
+        assert_eq!(
+            answer(node.clone(), empty()).await.unwrap_err().code,
+            "mode_unavailable"
+        );
+        assert_eq!(
+            upload(node.clone(), empty()).await.unwrap_err().code,
+            "mode_unavailable"
+        );
+        assert_eq!(
+            deliver(node.clone(), empty()).await.unwrap_err().code,
+            "mode_unavailable"
+        );
+        let command_request = request(
+            Some(&session_id),
+            json!({
+                "commandId": "test-command", "clientId": "client", "generation": 1,
+                "payload": { "type": "prompt", "message": "hello" }
+            }),
+        );
+        assert_eq!(
+            command(node.clone(), command_request)
+                .await
+                .unwrap_err()
+                .code,
+            "mode_unavailable"
+        );
+        node.close().await;
     }
 
     #[test]

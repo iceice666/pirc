@@ -1603,6 +1603,10 @@ async fn a_real_agent_starts_and_answers() {
         .env("PATH", "/usr/bin:/bin")
         .env("PIRC_CONFIG_DIR", path(&f.root, "config"))
         .env("PIRC_AGENT_FEATURES", "none")
+        .env(
+            "PIRC_MODE",
+            serde_json::to_string(&pirc_protocol::mode::default_work()).unwrap(),
+        )
         .envs(prepared.env.iter().map(|(k, v)| (k, v)))
         .current_dir(&f.workspace)
         .stdin(Stdio::piped())

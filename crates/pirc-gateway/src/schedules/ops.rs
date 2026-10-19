@@ -100,7 +100,7 @@ pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {
 
 /// Whether the session may schedule in other workspaces.
 fn schedules_anywhere(context: &OpContext) -> bool {
-    context.workspace.kind.mode().schedule_scope == ScheduleScope::Any
+    context.mode.schedule_scope == ScheduleScope::Any
 }
 
 /// `scheduleScope(...).allows`.

@@ -45,43 +45,8 @@ pub fn skill_roots(config_dir: &str, workspace: &str) -> Vec<String> {
     ]
 }
 
-/// Front matter and body of a `SKILL.md` (or role file).
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct SkillFile {
-    /// The front matter's keys (an array's indices, as `Object.keys` gives
-    /// them; nothing for a scalar).
-    pub meta: IndexMap<String, Yaml>,
-    pub body: String,
-}
-
-/// `parseSkillFile(text)`.
-pub fn parse_skill_file(text: &str) -> Result<SkillFile, String> {
-    static FRONT_MATTER: std::sync::OnceLock<regex_lite::Regex> = std::sync::OnceLock::new();
-    let pattern = FRONT_MATTER.get_or_init(|| {
-        regex_lite::Regex::new(r"^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)")
-            .expect("front matter pattern")
-    });
-    let Some(found) = pattern.captures(text) else {
-        return Ok(SkillFile {
-            meta: IndexMap::new(),
-            body: js::trim(text).to_owned(),
-        });
-    };
-    let whole = found.get(0).map_or(0, |m| m.end());
-    let meta = match yaml::parse(found.get(1).map_or("", |m| m.as_str()))? {
-        Yaml::Map(map) => map,
-        Yaml::Seq(items) => items
-            .into_iter()
-            .enumerate()
-            .map(|(index, item)| (index.to_string(), item))
-            .collect(),
-        _ => IndexMap::new(),
-    };
-    Ok(SkillFile {
-        meta,
-        body: js::trim(&text[whole..]).to_owned(),
-    })
-}
+/// Shared Markdown front matter, under the original skill API names.
+pub use pirc_config::frontmatter::{MarkdownFile as SkillFile, parse as parse_skill_file};
 
 fn valid_name(name: &str) -> bool {
     !name.is_empty()

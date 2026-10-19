@@ -55,6 +55,16 @@ impl WriteBroker {
     /// Lease `canonical_path` for `session_id`.
     pub fn acquire(&self, session_id: &str, canonical_path: &Path) -> WriteGrant {
         let path = canonical_path.to_string_lossy().into_owned();
+        if self
+            .node
+            .upgrade()
+            .is_some_and(|node| node.session_mode(session_id).is_err())
+        {
+            return WriteGrant::Refused {
+                holder: "mode_unavailable".into(),
+                path,
+            };
+        }
         let first = {
             let mut held = self.lock();
             for (owner, paths) in held.iter() {

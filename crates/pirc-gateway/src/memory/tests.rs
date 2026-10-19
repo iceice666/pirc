@@ -40,7 +40,15 @@ pub fn app() -> (Arc<App>, tempfile::TempDir) {
     );
     let config = pirc_config::GatewayConfig::load(&env).unwrap();
     let backends = BackendService::open(&state, empty_models()).unwrap();
-    (App::new(config, Arc::new(Db::memory()), backends), dir)
+    (
+        App::new(
+            config,
+            Arc::new(Db::memory()),
+            backends,
+            crate::app::test_modes(),
+        ),
+        dir,
+    )
 }
 
 fn store(conn: &Connection) -> Store<'_> {
@@ -668,7 +676,7 @@ fn chat_session(app: &App) -> String {
         &[(
             "chat".into(),
             "Chat".into(),
-            Some(crate::db::WorkspaceKind::Chat),
+            crate::db::ModeId::new("chat").unwrap(),
         )],
     )
     .unwrap();

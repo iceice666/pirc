@@ -385,8 +385,10 @@ expression: s.t.into_value()
         "title": "Nightly check",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -438,8 +440,10 @@ expression: s.t.into_value()
         "title": "Once.",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -479,8 +483,10 @@ expression: s.t.into_value()
           "title": "Nightly check",
           "updatedAt": "<epoch-ms>",
           "workspace": {
+            "available": true,
             "id": "test:ws",
             "kind": "directory",
+            "mode": "directory",
             "name": "Fake workspace",
             "node": "test",
             "online": true
@@ -506,8 +512,10 @@ expression: s.t.into_value()
           "title": "Once.",
           "updatedAt": "<epoch-ms>",
           "workspace": {
+            "available": true,
             "id": "test:ws",
             "kind": "directory",
+            "mode": "directory",
             "name": "Fake workspace",
             "node": "test",
             "online": true
@@ -549,8 +557,10 @@ expression: s.t.into_value()
         "title": "Nightly check",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -617,8 +627,10 @@ expression: s.t.into_value()
         "title": "Nightly check",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -671,8 +683,10 @@ expression: s.t.into_value()
         "title": "Nightly check",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -711,8 +725,10 @@ expression: s.t.into_value()
         "title": "Nightly check",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -751,8 +767,10 @@ expression: s.t.into_value()
         "title": "Nightly check",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -802,8 +820,10 @@ expression: s.t.into_value()
         "title": "Far away",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -1050,8 +1070,10 @@ expression: s.t.into_value()
         "title": "Nightly check",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -1127,8 +1149,10 @@ expression: s.t.into_value()
         "title": "Nightly check",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -1203,8 +1227,10 @@ expression: s.t.into_value()
           "title": "Nightly check",
           "updatedAt": "<epoch-ms>",
           "workspace": {
+            "available": true,
             "id": "test:ws",
             "kind": "directory",
+            "mode": "directory",
             "name": "Fake workspace",
             "node": "test",
             "online": true
@@ -1299,8 +1325,10 @@ expression: s.t.into_value()
         "title": "Nightly check",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -1336,8 +1364,10 @@ expression: s.t.into_value()
         "title": "Broken",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -1423,8 +1453,10 @@ expression: s.t.into_value()
         "title": "Broken",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -1460,8 +1492,10 @@ expression: s.t.into_value()
         "title": "Soon",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -1524,8 +1558,10 @@ expression: s.t.into_value()
         "title": "Soon",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -1561,8 +1597,10 @@ expression: s.t.into_value()
         "title": "Offline",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": false
@@ -1614,8 +1652,10 @@ expression: s.t.into_value()
           "title": "Nightly check",
           "updatedAt": "<epoch-ms>",
           "workspace": {
+            "available": true,
             "id": "test:ws",
             "kind": "directory",
+            "mode": "directory",
             "name": "Fake workspace",
             "node": "test",
             "online": false
@@ -1653,8 +1693,10 @@ expression: s.t.into_value()
           "title": "Broken",
           "updatedAt": "<epoch-ms>",
           "workspace": {
+            "available": true,
             "id": "test:ws",
             "kind": "directory",
+            "mode": "directory",
             "name": "Fake workspace",
             "node": "test",
             "online": false
@@ -1692,8 +1734,10 @@ expression: s.t.into_value()
           "title": "Soon",
           "updatedAt": "<epoch-ms>",
           "workspace": {
+            "available": true,
             "id": "test:ws",
             "kind": "directory",
+            "mode": "directory",
             "name": "Fake workspace",
             "node": "test",
             "online": false
@@ -1731,8 +1775,10 @@ expression: s.t.into_value()
           "title": "Offline",
           "updatedAt": "<epoch-ms>",
           "workspace": {
+            "available": true,
             "id": "test:ws",
             "kind": "directory",
+            "mode": "directory",
             "name": "Fake workspace",
             "node": "test",
             "online": false
@@ -2128,8 +2174,10 @@ expression: s.t.into_value()
         "title": "Lint",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -2531,8 +2579,10 @@ expression: s.t.into_value()
         "title": "Lint",
         "updatedAt": "<epoch-ms>",
         "workspace": {
+          "available": true,
           "id": "test:ws",
           "kind": "directory",
+          "mode": "directory",
           "name": "Fake workspace",
           "node": "test",
           "online": true
@@ -2601,8 +2651,10 @@ expression: s.t.into_value()
           "title": "Broken",
           "updatedAt": "<epoch-ms>",
           "workspace": {
+            "available": true,
             "id": "test:ws",
             "kind": "directory",
+            "mode": "directory",
             "name": "Fake workspace",
             "node": "test",
             "online": true
@@ -2640,8 +2692,10 @@ expression: s.t.into_value()
           "title": "Soon",
           "updatedAt": "<epoch-ms>",
           "workspace": {
+            "available": true,
             "id": "test:ws",
             "kind": "directory",
+            "mode": "directory",
             "name": "Fake workspace",
             "node": "test",
             "online": true
@@ -2679,8 +2733,10 @@ expression: s.t.into_value()
           "title": "Offline",
           "updatedAt": "<epoch-ms>",
           "workspace": {
+            "available": true,
             "id": "test:ws",
             "kind": "directory",
+            "mode": "directory",
             "name": "Fake workspace",
             "node": "test",
             "online": true

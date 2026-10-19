@@ -168,7 +168,11 @@ pub fn routes() -> Vec<Route> {
                 .lock()
                 .validate_lease(&session.id, &client_id, generation)?;
             let workspace = node.db.lock().get_workspace(&session.workspace_id)?;
-            let cwd = crate::chat::session_root(&workspace, &session.id)?;
+            let cwd = crate::chat::session_root(
+                &workspace,
+                &session.id,
+                &node.workspace_mode(&workspace)?,
+            )?;
             let terminal = node.terminals.create(
                 &session.id,
                 &cwd,
@@ -234,7 +238,8 @@ fn claim(node: &Node, request: &Request) -> ApiResult<SessionRow> {
 fn local(node: &Node, request: &Request) -> ApiResult<Local> {
     let session = claim(node, request)?;
     let workspace = node.db.lock().get_workspace(&session.workspace_id)?;
-    let root = crate::chat::session_root(&workspace, &session.id)?;
+    let root =
+        crate::chat::session_root(&workspace, &session.id, &node.workspace_mode(&workspace)?)?;
     Ok(Local { session, root })
 }
 

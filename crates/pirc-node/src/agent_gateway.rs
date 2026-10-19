@@ -70,8 +70,14 @@ impl AgentGateway {
     pub fn new(node: WeakNode) -> Self {
         Self::with_sender(
             Arc::new(move |message| {
-                node.upgrade()
-                    .is_some_and(|node| node.link.send_agent_frame(message))
+                node.upgrade().is_some_and(|node| {
+                    if let NodeMessage::AgentRequest { session_id, .. } = message
+                        && node.session_mode(session_id).is_err()
+                    {
+                        return false;
+                    }
+                    node.link.send_agent_frame(message)
+                })
             }),
             Duration::from_millis(AGENT_REQUEST_TIMEOUT_MS),
         )

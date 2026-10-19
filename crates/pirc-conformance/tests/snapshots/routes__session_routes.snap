@@ -6,11 +6,13 @@ expression: t.into_value()
   {
     "body": {
       "workspace": {
+        "available": true,
         "defaults": {},
         "displayName": "Project",
         "hostId": "test",
         "id": "test:added",
-        "kind": "directory"
+        "kind": "directory",
+        "mode": "directory"
       }
     },
     "headers": {
@@ -26,6 +28,7 @@ expression: t.into_value()
         "method": "POST",
         "payload": {
           "displayName": "Project",
+          "mode": "directory",
           "path": "/srv/project"
         },
         "url": "/api/workspaces",
@@ -66,18 +69,22 @@ expression: t.into_value()
     "body": {
       "workspaces": [
         {
+          "available": true,
           "defaults": {},
           "displayName": "Fake workspace",
           "hostId": "test",
           "id": "test:ws",
-          "kind": "directory"
+          "kind": "directory",
+          "mode": "directory"
         },
         {
+          "available": true,
           "defaults": {},
           "displayName": "Project",
           "hostId": "test",
           "id": "test:added",
-          "kind": "directory"
+          "kind": "directory",
+          "mode": "directory"
         }
       ]
     },
@@ -110,7 +117,7 @@ expression: t.into_value()
     "body": {
       "error": {
         "code": "invalid_input",
-        "message": "Capabilities can only be changed for chat workspaces"
+        "message": "Invalid request"
       }
     },
     "headers": {
@@ -956,14 +963,18 @@ expression: t.into_value()
           "role": "node",
           "workspaces": [
             {
+              "available": true,
               "displayName": "Fake workspace",
               "id": "ws",
-              "kind": "directory"
+              "kind": "directory",
+              "mode": "directory"
             },
             {
+              "available": true,
               "displayName": "Project",
               "id": "added",
-              "kind": "directory"
+              "kind": "directory",
+              "mode": "directory"
             }
           ]
         }

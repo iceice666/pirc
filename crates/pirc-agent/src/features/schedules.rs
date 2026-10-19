@@ -747,6 +747,11 @@ impl Feature for SchedulesFeature {
 }
 
 #[cfg(test)]
+pub(crate) fn registered_tool_names() -> Vec<String> {
+    vec![ScheduleTool::new().name().to_owned()]
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

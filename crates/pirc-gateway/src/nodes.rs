@@ -100,6 +100,7 @@ impl Link {
 pub struct ConnectedNode {
     pub id: String,
     pub role: NodeRole,
+    pub modes: Vec<pirc_protocol::ModeId>,
     pub workspaces: Vec<RegisteredWorkspace>,
     pub connected_at: i64,
     pub last_seen_at: i64,
@@ -796,17 +797,20 @@ impl LinkSession {
         // browsers either; the workspace itself is still registered.
         for workspace in &mut parsed.workspaces {
             sanitize_repo(workspace);
+            if !self
+                .app
+                .mode(&workspace.mode)
+                .is_some_and(|mode| mode.repository)
+            {
+                workspace.repo = None;
+            }
         }
-        // Absent from older nodes: directory.
-        if parsed.workspaces.iter().any(|workspace| {
-            workspace
-                .kind
-                .unwrap_or(pirc_protocol::WorkspaceKind::Directory)
-                .mode()
-                .node_role
-                != parsed.role
-        }) {
-            return self.close(1008, "workspace kind does not match node role");
+        if parsed
+            .workspaces
+            .iter()
+            .any(|workspace| !parsed.modes.contains(&workspace.mode))
+        {
+            return self.close(1008, "workspace mode is not accepted by node");
         }
         if !self.app.accept_node_role(&self.node_id, parsed.role) {
             self.send(json!({
@@ -844,6 +848,7 @@ impl LinkSession {
         let node = ConnectedNode {
             id: self.node_id.clone(),
             role: parsed.role,
+            modes: parsed.modes,
             workspaces: parsed.workspaces,
             connected_at: stamp,
             last_seen_at: stamp,
@@ -859,6 +864,7 @@ impl LinkSession {
             "mirrors": self.app.mirror_watermarks(&self.node_id),
         });
         self.send(frame);
+        self.send(json!({"type":"modes", "modes":self.app.public_modes()}));
         registry.lock().connections.insert(
             self.node_id.clone(),
             Connection {

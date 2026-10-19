@@ -33,7 +33,8 @@ fn register(protocol: Value) -> Value {
         "type": "register",
         "role": "node",
         "protocol": protocol,
-        "workspaces": [{ "id": "ws", "displayName": "Fake workspace", "kind": "directory" }],
+        "modes": ["directory"],
+        "workspaces": [{ "id": "ws", "displayName": "Fake workspace", "mode": "directory" }],
     })
 }
 
@@ -115,6 +116,7 @@ async fn node_link() {
     .await;
     let registered = receive(&mut node, "registered").await;
     t.note("register", registered);
+    assert_eq!(receive(&mut node, "modes").await["type"], "modes");
 
     send(&mut node, &json!({ "type": "heartbeat" })).await;
     t.note("heartbeat", receive(&mut node, "heartbeat_ack").await);

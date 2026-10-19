@@ -281,6 +281,11 @@ impl Runner {
         browser: &Arc<dyn BrowserService>,
         message: &Map<String, Value>,
     ) -> Result<(), String> {
+        if let Some(node) = self.node()
+            && node.workspace_mode(&self.workspace).ok().as_ref() != Some(&self.mode)
+        {
+            return Err("Mode is unavailable or changed".into());
+        }
         let Some(id) = request_id(message) else {
             return Ok(());
         };
@@ -323,8 +328,8 @@ impl Runner {
             );
             return Ok(());
         }
-        let root =
-            session_root(&self.workspace, &self.session_id).map_err(|error| error.message)?;
+        let root = session_root(&self.workspace, &self.session_id, &self.mode)
+            .map_err(|error| error.message)?;
         let target = BrowserTarget {
             session_id: self.session_id.clone(),
             workspace_id: self.workspace.id.clone(),
@@ -489,6 +494,11 @@ impl Runner {
         self: &Arc<Self>,
         message: &Map<String, Value>,
     ) -> Result<(), String> {
+        if let Some(node) = self.node()
+            && node.workspace_mode(&self.workspace).ok().as_ref() != Some(&self.mode)
+        {
+            return Err("Mode is unavailable or changed".into());
+        }
         let Some(id) = request_id(message) else {
             return Ok(());
         };
@@ -609,7 +619,7 @@ impl Runner {
                     );
                     return Ok(());
                 }
-                let root = session_root(&self.workspace, &self.session_id)
+                let root = session_root(&self.workspace, &self.session_id, &self.mode)
                     .map_err(|error| error.message)?;
                 let root = pirc_policy::real_resolve(&root.to_string_lossy());
                 let relative = match args.get("cwd") {
@@ -734,7 +744,7 @@ mod tests {
     use crate::browser::{BoxFuture, Detach, FrameSink};
     use crate::error::{ApiError, ApiResult};
     use crate::sandbox::Prepared;
-    use crate::store::{Workspace, WorkspaceKind};
+    use crate::store::{ModeId, Workspace};
 
     /// A browser whose operations (named by `args.tag`) settle only when the
     /// test releases them, whether or not they were aborted (as the
@@ -820,7 +830,7 @@ mod tests {
                 display_name: "w".into(),
                 canonical_path: "/".into(),
                 defaults: Map::new(),
-                kind: WorkspaceKind::Directory,
+                mode: ModeId::new("directory").unwrap(),
             };
             let prepared = Prepared::new(
                 "/bin/false".into(),

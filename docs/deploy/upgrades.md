@@ -1,5 +1,39 @@
 # Upgrades
 
+## Unreleased: gateway-owned workspace modes, node protocol 12
+
+Upgrade the gateway and every node together. Protocol 11 nodes are refused by
+the new gateway and protocol 12 nodes by an older gateway; the close reason
+explicitly asks for a coordinated upgrade. Database schemas remain gateway
+1004 / node 2001: the existing `workspaces.kind` text column now stores mode
+ids without a data migration.
+
+On first start the gateway creates `$PIRC_CONFIG_DIR/modes/chat.md` and
+`directory.md` **only if the modes directory does not exist**. Existing
+installs keep the same default behavior. If you provision a read-only config
+directory (for example with Nix), provide the modes directory and both default
+files yourself, or make its parent writable for initial creation. An existing
+empty directory deliberately disables all modes; invalid files are skipped,
+not replaced with defaults. Use `pirc-gateway modes --print-defaults` to inspect
+the shipped files before upgrading.
+
+Nodes default to accepting `chat` on `pirc-node chat`, `directory` otherwise.
+Custom modes require `PIRC_MODES` on each intended node and a gateway mode file.
+Nodes receive definitions only from the gateway; agents receive validated
+`PIRC_MODE` JSON. Retired `PIRC_WORKSPACE_KIND` is refused by agents. SIGHUP
+reloads modes as well as models; changed/removed modes stop affected agents,
+close their terminals and cancel inference. Missing modes keep existing
+session history readable but refuse new work. Changing workdir strategy does
+not migrate data; incompatible existing layouts are refused.
+
+Back up configuration as well as state before upgrading. Older executables
+cannot understand custom mode ids safely: restore reviewed default mode ids
+and matching configuration/state before downgrading. Do not run old binaries
+against a store containing custom ids; old parsers silently treated unknown
+ids as directory workspaces. No deployment or data rewrite is automatic.
+
+See [Workspace modes](../guides/modes.md) for format, permissions and examples.
+
 ## 0.6.0: gateway schema 1004, node schema 2001, node protocol 11
 
 Upgrade the gateway and every node together: the node protocol moves to 11, and
@@ -109,7 +143,9 @@ require the gateway; web changes require only the static bundle. Read each
 release's migration notes before assuming a forward schema migration is supported.
 
 - `models.json`: SIGHUP / `systemctl reload pirc`; invalid content keeps the last
-  valid settings. Environment changes require a process restart.
+  valid settings. Modes reload independently: invalid mode files are omitted,
+  a directory-level failure keeps the previous catalog. Environment changes
+  require a process restart.
 - Agent config/prompts/skills: next agent start.
 - Web-managed providers: apply immediately; affected in-flight inference cancels.
 - While a node restarts, agents get `PIRC_SHUTDOWN_GRACE_MS`, then are killed;

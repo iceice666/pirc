@@ -42,10 +42,16 @@ use pirc_config::{Env, GatewayConfig};
 
 use crate::db::{Db, Store};
 
-const USAGE: &str = "Usage: pirc-gateway [--help | --version]\n\nStarts the gateway with no arguments. Configuration is read from the environment.\n";
+const USAGE: &str = "Usage: pirc-gateway [--help | --version | modes --print-defaults]\n\nStarts the gateway with no arguments. Configuration is read from the environment.\n";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.as_slice() == ["modes", "--print-defaults"] {
+        for (name, text) in pirc_config::modes::DEFAULT_MODE_FILES {
+            println!("# {name}\n{text}");
+        }
+        return ExitCode::SUCCESS;
+    }
     if args.len() > 1 {
         eprint!("Unknown argument: {}\n\n{USAGE}", args[1]);
         return ExitCode::from(2);
@@ -122,7 +128,12 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
     .unwrap_or_else(app::empty_models);
     let backends = pirc_providers::backends::BackendService::open(&config.state_dir, models)?;
     let (host, port) = (config.host.clone(), config.port);
-    let app = app::App::new(config, db, backends);
+    pirc_config::modes::initialize_modes(&config.modes_dir).map_err(|e| e.to_string())?;
+    let catalog = pirc_config::modes::load_modes(&config.modes_dir).map_err(|e| e.to_string())?;
+    for warning in &catalog.warnings {
+        log::warn(&warning.to_string());
+    }
+    let app = app::App::new(config, db, backends, catalog);
     // Everything that can refuse to start does so before the port is bound.
     features::start(&app)?;
     app.devices.start_sweeper();
@@ -151,15 +162,16 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
     .map_err(|error| format!("server failed: {error}"))
 }
 
-/// SIGHUP re-reads the models file.
+/// SIGHUP reloads model and mode catalogs independently.
 async fn reload_on_hangup(app: app::AppState) {
     use tokio::signal::unix::{SignalKind, signal};
     let Ok(mut hangup) = signal(SignalKind::hangup()) else {
         return;
     };
     while hangup.recv().await.is_some() {
-        log::info("SIGHUP: reloading models");
+        log::info("SIGHUP: reloading models and modes");
         app.reload_models();
+        app.reload_modes();
     }
 }
 

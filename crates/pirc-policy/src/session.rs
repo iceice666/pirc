@@ -874,6 +874,61 @@ pub fn walk_links(path: &str) -> LinkWalk {
     }
 }
 
+const MODE_PATHS_ERROR: &str = "Cannot safely inspect mode configuration paths";
+
+/// Protect the mode catalog and the targets of its top-level `.md` files,
+/// including dangling symlinks. Only directory entries and path metadata are
+/// inspected: mode sources are never opened or parsed by policy/agent loading.
+/// A missing catalog is allowed, but unreadable paths and link cycles fail
+/// closed. `walk_links` preserves kernel ordering for symlink targets with `..`.
+/// The sandbox must also pin the links of these paths via `linked_denies`.
+pub fn mode_write_paths(config_dir: &str) -> Result<Vec<String>, String> {
+    let dir = join(config_dir, "modes");
+    let protect = |path: &str| -> Result<Vec<String>, String> {
+        let walk = walk_links(path);
+        let target = walk
+            .target
+            .map_err(|error| format!("{MODE_PATHS_ERROR}: {error:?}"))?;
+        let mut paths = vec![absolute(path), target];
+        // A dangling chain cannot be canonicalized by PathGuard: retain each
+        // link spelling too, so replacing an intermediate link is denied.
+        // `links` also records directories left by `..`; do not make those
+        // whole trees read-only (one may be the writable workspace itself).
+        for link in walk.links {
+            let metadata = std::fs::symlink_metadata(&link)
+                .map_err(|error| format!("{MODE_PATHS_ERROR}: {link}: {error}"))?;
+            if metadata.file_type().is_symlink() {
+                paths.push(link);
+            }
+        }
+        Ok(paths)
+    };
+    let mut paths = protect(&dir)?;
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(unique(paths));
+        }
+        Err(error) => return Err(format!("{MODE_PATHS_ERROR}: {dir}: {error}")),
+    };
+    let mut files = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("{MODE_PATHS_ERROR}: {dir}: {error}"))?;
+        let path = entry.path();
+        if path.extension().is_some_and(|extension| extension == "md") {
+            let path = path
+                .to_str()
+                .ok_or_else(|| format!("{MODE_PATHS_ERROR}: mode path is not UTF-8"))?;
+            files.push(path.to_owned());
+        }
+    }
+    files.sort();
+    for file in files {
+        paths.extend(protect(&file)?);
+    }
+    Ok(unique(paths))
+}
+
 /// [`LinkedPath`] for `spelled` when resolving it crosses a link.
 pub fn linked_path(spelled: &str) -> Option<LinkedPath> {
     let walk = walk_links(spelled);
@@ -904,10 +959,12 @@ fn exists(path: &str) -> bool {
 ///
 /// `Err` where TS threw: a prompt configuration file behind too many (or
 /// looping) symlinks, or a component of its path that cannot be examined.
+/// Mode catalog metadata likewise fails closed when it cannot be inspected.
 ///
 /// [`SessionPolicy::linked_denies`] (not TS's) covers every deny entry the
 /// policy resolves: the sensitive home paths, the private dirs, the
-/// read-only dirs, the protected paths, the agent config dir and the
+/// read-only dirs, the protected paths, the mode catalog and its sources,
+/// the agent config dir and the
 /// configured `denyRead` / `denyWrite` entries.
 pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, String> {
     let home = input.home.as_str();
@@ -1001,6 +1058,7 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
             &mut Vec::new(),
         )?);
     }
+    let mode_paths = mode_write_paths(&input.config_dir)?;
     let paths = PathPolicy {
         deny_read: unique(
             private_dirs
@@ -1048,6 +1106,7 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
             // an allowed root.
             .chain([real_resolve(&input.config_dir)])
             .chain(prompt_paths)
+            .chain(mode_paths.iter().cloned())
             .chain(resolve_all(&input.protected_paths))
             .chain(sensitive)
             .chain(read_only_dirs)
@@ -1073,6 +1132,7 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
             .chain(input.private_dirs.iter().map(|dir| absolute(dir)))
             .chain(input.read_only_dirs.iter().map(|dir| absolute(dir)))
             .chain(input.protected_paths.iter().map(|path| absolute(path)))
+            .chain(mode_paths)
             .chain([config_dir.clone()])
             .chain(configured_spelled(&filesystem.deny_read))
             .chain(configured_spelled(&filesystem.deny_write)),
@@ -1373,6 +1433,112 @@ mod tests {
         for name in ["SOUL.md", "CHAT.md"] {
             assert!(!write_allowed(&paths, &p(&d.workspace, name)));
         }
+    }
+
+    #[test]
+    fn protects_mode_sources_and_dangling_targets_without_reading_contents() {
+        let d = layout();
+        let input = input(&d, &d.workspace, json!({}));
+        let modes = p(&input.config_dir, "modes");
+        fs::create_dir_all(&modes).unwrap();
+        let source = p(&d.workspace, "source.txt");
+        // Invalid UTF-8 and invalid mode syntax must not affect policy creation.
+        fs::write(&source, [0xff, 0xfe]).unwrap();
+        let hop = p(&d.workspace, "hop");
+        symlink(&source, &hop).unwrap();
+        let mode = p(&modes, "chat.md");
+        symlink(&hop, &mode).unwrap();
+        let dangling = p(&d.workspace, "missing/source.md");
+        let dangling_hop = p(&d.workspace, "dangling-hop");
+        symlink(&dangling, &dangling_hop).unwrap();
+        symlink(&dangling_hop, p(&modes, "future.md")).unwrap();
+        // The catalog loader ignores non-Markdown entries, even link cycles.
+        symlink("ignored.txt", p(&modes, "ignored.txt")).unwrap();
+        let policy = session_policy(&input).unwrap();
+        let guard = crate::PathGuard::new(&d.workspace, &policy.paths, &[]);
+        for path in [&source, &hop, &mode, &dangling, &dangling_hop] {
+            assert!(guard.resolve(path, true).is_err(), "{path}");
+        }
+        for path in [&source, &dangling] {
+            assert!(!write_allowed(&policy.paths, path), "{path}");
+            assert!(policy.paths.deny_write.contains(path), "{path}");
+        }
+        let linked = policy
+            .linked_denies
+            .iter()
+            .find(|entry| entry.spelled == mode)
+            .unwrap();
+        assert_eq!(linked.links, [mode, hop]);
+        assert!(write_allowed(&policy.paths, &p(&d.workspace, "notes.md")));
+    }
+
+    #[test]
+    fn protects_symlinked_mode_directories_including_dangling_ones() {
+        for present in [false, true] {
+            let d = layout();
+            let input = input(&d, &d.workspace, json!({}));
+            fs::create_dir_all(&input.config_dir).unwrap();
+            let catalog = p(&d.workspace, "catalog");
+            let modes = p(&input.config_dir, "modes");
+            symlink(&catalog, &modes).unwrap();
+            let source = p(&d.workspace, "external-source.md");
+            if present {
+                fs::create_dir(&catalog).unwrap();
+                fs::write(&source, "invalid mode").unwrap();
+                symlink(&source, p(&catalog, "chat.md")).unwrap();
+            }
+            let policy = session_policy(&input).unwrap();
+            assert!(!write_allowed(&policy.paths, &p(&catalog, "new.md")));
+            assert!(policy.paths.deny_write.contains(&catalog));
+            assert!(
+                policy
+                    .linked_denies
+                    .iter()
+                    .any(|entry| { entry.spelled == modes && entry.links.contains(&modes) })
+            );
+            if present {
+                assert!(!write_allowed(&policy.paths, &source));
+            }
+        }
+    }
+
+    #[test]
+    fn mode_source_targets_follow_kernel_symlink_parent_order() {
+        let d = layout();
+        let input = input(&d, &d.workspace, json!({}));
+        let modes = p(&input.config_dir, "modes");
+        fs::create_dir_all(&modes).unwrap();
+        fs::create_dir_all(p(&d.workspace, "real/sub")).unwrap();
+        symlink("real/sub", p(&d.workspace, "alias")).unwrap();
+        symlink(p(&d.workspace, "alias/../source.md"), p(&modes, "chat.md")).unwrap();
+        let target = p(&d.workspace, "real/source.md");
+        let paths = session_policy(&input).unwrap().paths;
+        assert!(!write_allowed(&paths, &target));
+        assert!(paths.deny_write.contains(&target));
+        assert!(write_allowed(&paths, &p(&d.workspace, "source.md")));
+    }
+
+    #[test]
+    fn mode_configuration_cycles_and_non_directory_catalogs_fail_closed() {
+        for directory in [false, true] {
+            let d = layout();
+            let input = input(&d, &d.workspace, json!({}));
+            fs::create_dir_all(&input.config_dir).unwrap();
+            let modes = p(&input.config_dir, "modes");
+            if directory {
+                symlink("modes", &modes).unwrap();
+            } else {
+                fs::create_dir(&modes).unwrap();
+                symlink("chat.md", p(&modes, "chat.md")).unwrap();
+            }
+            let error = session_policy(&input).unwrap_err();
+            assert!(error.starts_with(MODE_PATHS_ERROR), "{error}");
+        }
+        let d = layout();
+        fs::create_dir_all(p(&d.root, "config")).unwrap();
+        fs::write(p(&d.root, "config/modes"), "not a directory").unwrap();
+        let error = session_policy(&input(&d, &d.workspace, json!({}))).unwrap_err();
+        assert!(error.starts_with(MODE_PATHS_ERROR), "{error}");
     }
 
     #[test]

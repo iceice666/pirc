@@ -13,7 +13,7 @@ use super::fields::object;
 use super::{Ctx, Input, Spec, with};
 use crate::agent_ops::OpContext;
 use crate::app::{App, AppState};
-use crate::db::{Db, Store, WorkspaceKind};
+use crate::db::{Db, ModeId, Store};
 use crate::error::{ApiError, ApiResult};
 use crate::util::now_ms;
 
@@ -38,6 +38,7 @@ fn fixture() -> Fixture {
             ("PIRC_ALLOWED_HOSTS", "a.example"),
             ("PIRC_ALLOWED_USERS", USER),
             ("PIRC_STATE_DIR", state.to_str().unwrap()),
+            ("PIRC_CONFIG_DIR", dir.path().to_str().unwrap()),
             ("PIRC_TIMEZONE", "UTC"),
             ("PIRC_DELEGATION_TTL_MS", "60000"),
             ("HOME", "/home/test"),
@@ -50,19 +51,94 @@ fn fixture() -> Fixture {
         "models": [{ "id": "model-a" }] } } }))
     .unwrap();
     let backends = BackendService::open(&state, models).unwrap();
-    let app = App::new(config, Arc::new(Db::memory()), backends);
+    let app = App::new(
+        config,
+        Arc::new(Db::memory()),
+        backends,
+        crate::app::test_modes(),
+    );
     {
         let conn = app.db.lock();
         for (node, id, name, kind) in [
-            ("work", "test", "Test", WorkspaceKind::Directory),
-            ("lab", "test", "Lab", WorkspaceKind::Directory),
-            ("home", "chats", "Chats", WorkspaceKind::Chat),
+            ("work", "test", "Test", ModeId::new("directory").unwrap()),
+            ("lab", "test", "Lab", ModeId::new("directory").unwrap()),
+            ("home", "chats", "Chats", ModeId::new("chat").unwrap()),
         ] {
-            conn.sync_remote_workspaces(node, &[(id.into(), name.into(), Some(kind))])
+            conn.sync_remote_workspaces(node, &[(id.into(), name.into(), kind)])
                 .unwrap();
         }
     }
     Fixture { app, _dir: dir }
+}
+
+#[test]
+fn reload_keeps_valid_edits_and_skips_invalid_files() {
+    let f = fixture();
+    std::fs::create_dir_all(&f.app.config.modes_dir).unwrap();
+    for (name, text) in pirc_config::modes::DEFAULT_MODE_FILES {
+        std::fs::write(f.app.config.modes_dir.join(name), text).unwrap();
+    }
+    let chat_file = f.app.config.modes_dir.join("chat.md");
+    let text = std::fs::read_to_string(&chat_file).unwrap();
+    std::fs::write(
+        &chat_file,
+        text.replace("delegate: true", "delegate: false")
+            .replace("schedule_scope: any", "schedule_scope: own"),
+    )
+    .unwrap();
+    std::fs::write(
+        f.app.config.modes_dir.join("broken.md"),
+        "---\nunknown: true\n---\n",
+    )
+    .unwrap();
+    f.app.reload_modes();
+    let catalog = f.app.catalog();
+    assert_eq!(catalog.warnings.len(), 1);
+    assert!(!catalog.modes[&ModeId::new("chat").unwrap()].delegate);
+    assert_eq!(catalog.modes.len(), 2);
+    std::fs::remove_file(chat_file).unwrap();
+    f.app.reload_modes();
+    assert!(f.app.mode(&ModeId::new("chat").unwrap()).is_none());
+}
+
+#[test]
+fn missing_and_custom_modes_never_fall_back() {
+    let f = fixture();
+    let mode_id = ModeId::new("research").unwrap();
+    f.app
+        .db
+        .lock()
+        .sync_remote_workspaces(
+            "work",
+            &[("custom".into(), "Custom".into(), mode_id.clone())],
+        )
+        .unwrap();
+    let workspace = f.app.db.lock().get_workspace("work:custom").unwrap();
+    assert_eq!(workspace.mode, mode_id);
+    assert_eq!(
+        f.app.require_mode(&workspace).unwrap_err().code,
+        "mode_unavailable"
+    );
+    let mut catalog = crate::app::test_modes();
+    let mut mode = pirc_protocol::mode::default_chat();
+    mode.id = mode_id.clone();
+    mode.delegate = false;
+    catalog.modes.insert(mode_id.clone(), mode);
+    *f.app.modes.write().unwrap() = Arc::new(catalog);
+    assert!(!f.app.require_mode(&workspace).unwrap().delegate);
+    let session = f
+        .app
+        .db
+        .lock()
+        .create_session(&workspace.id, "node://work/custom", "work", "custom", USER)
+        .unwrap();
+    assert!(f.app.require_writable(&session).is_ok());
+    *f.app.modes.write().unwrap() = Arc::new(crate::app::test_modes());
+    assert_eq!(
+        f.app.require_writable(&session).unwrap_err().code,
+        "mode_unavailable"
+    );
+    assert!(f.app.db.lock().get_session(&session.id).is_ok());
 }
 
 fn route(conn: &rusqlite::Connection, reference: &str) -> ApiResult<crate::db::Workspace> {
@@ -386,6 +462,7 @@ fn context(app: &App, workspace: &str, remote: &str) -> OpContext {
     let session = session(app, workspace, remote);
     let workspace = app.db.lock().get_workspace(workspace).unwrap();
     OpContext {
+        mode: app.require_mode(&workspace).unwrap(),
         session,
         workspace,
         user: USER.into(),

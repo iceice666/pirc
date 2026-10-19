@@ -179,7 +179,7 @@ pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {
 
 /// Memory belongs to the assistant: a mode with full assistant access.
 fn require_assistant(context: &OpContext) -> ApiResult<()> {
-    if !context.workspace.kind.mode().full_assistant() {
+    if !context.mode.full_assistant() {
         return Err(ApiError::new(
             403,
             "forbidden",
@@ -198,7 +198,7 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
         // coding session reads the approved USER entries and nothing else:
         // no notes, no workspaces, and its memory operations stay refused.
         Op::Context => {
-            if !context.workspace.kind.mode().full_assistant() {
+            if !context.mode.full_assistant() {
                 let user = {
                     let conn = app.db.lock();
                     super::store(app, &conn).user_context(user)?

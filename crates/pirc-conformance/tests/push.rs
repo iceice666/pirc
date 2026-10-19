@@ -43,13 +43,14 @@ async fn register(cluster: &Cluster) -> WebSocket {
         json!({
             "type": "register",
             "role": "node",
-            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
-            "workspaces": [{ "id": "ws", "displayName": "Fake workspace", "kind": "directory" }],
+            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
+            "workspaces": [{ "id": "ws", "displayName": "Fake workspace", "mode": "directory" }],
         }),
     )
     .await;
     let registered = node.next_json().await.expect("registered");
     assert_eq!(registered["type"], "registered");
+    assert_eq!(node.next_json().await.expect("modes")["type"], "modes");
     node
 }
 

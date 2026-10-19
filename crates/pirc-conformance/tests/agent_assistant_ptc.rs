@@ -20,7 +20,10 @@ fn chat(features: &str) -> AgentOptions {
     .features(features);
     options.env.extend([
         ("PIRC_GATEWAY".to_owned(), "1".to_owned()),
-        ("PIRC_WORKSPACE_KIND".to_owned(), "chat".to_owned()),
+        (
+            "PIRC_MODE".to_owned(),
+            serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+        ),
     ]);
     options
 }

@@ -671,7 +671,7 @@ fn registered_workspaces(register: &Value) -> Value {
         .as_array()
         .unwrap()
         .iter()
-        .map(|w| json!({ "id": w["id"], "kind": w["kind"], "displayName": w["displayName"] }))
+        .map(|w| json!({ "id": w["id"], "mode": w["mode"], "displayName": w["displayName"] }))
         .collect()
 }
 
@@ -774,7 +774,7 @@ async fn node_chat_startup() {
             "node-on-chat-state",
             &coding,
             &root.env(gateway.port(), &[("PIRC_WORKSPACES", root.workspaces())]),
-            "State contains workspaces incompatible with pirc-node",
+            "State contains workspaces incompatible with configured accepted modes",
         ),
     );
     let (mut again, _link, register) = registered(&root, &gateway, "chat-2", true, &chat).await;
@@ -801,7 +801,7 @@ async fn node_chat_startup() {
             "chat-on-node-state",
             &chat,
             &coding_root.env(gateway.port(), &[]),
-            "State contains workspaces incompatible with pirc-chat",
+            "State contains workspaces incompatible with configured accepted modes",
         ),
     );
     let (mut node, _link, register) =

@@ -1965,6 +1965,7 @@ dependencies = [
  "icu_normalizer",
  "indexmap",
  "nix",
+ "pirc-config",
  "pirc-policy",
  "pirc-protocol",
  "pirc-ptc",
@@ -1977,7 +1978,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "tz-rs",
- "yaml-rust2",
 ]
 
 [[package]]
@@ -1992,6 +1992,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "url",
+ "yaml-rust2",
 ]
 
 [[package]]

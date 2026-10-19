@@ -52,13 +52,21 @@ impl Linked {
 }
 
 /// A chat project: a chat workspace other than a node's top-level chats.
-pub fn is_project(workspace: &Workspace) -> bool {
-    workspace.kind.mode().projects && workspace.local_id().is_some_and(|id| id != "chats")
+pub fn is_project(catalog: &pirc_config::modes::ModeCatalog, workspace: &Workspace) -> bool {
+    catalog
+        .modes
+        .get(&workspace.mode)
+        .is_some_and(|mode| mode.projects)
+        && workspace.local_id().is_some_and(|id| id != "chats")
 }
 
-fn require_project(conn: &Connection, project_id: &str) -> ApiResult<Workspace> {
+fn require_project(
+    conn: &Connection,
+    catalog: &pirc_config::modes::ModeCatalog,
+    project_id: &str,
+) -> ApiResult<Workspace> {
     let project = conn.get_workspace(project_id)?;
-    if !is_project(&project) {
+    if !is_project(catalog, &project) {
         return Err(ApiError::new(
             400,
             "invalid_input",
@@ -87,10 +95,11 @@ pub fn links(conn: &Connection, project_id: &str) -> ApiResult<Vec<Link>> {
 /// Links kept keep their creation time; the repository is the one known now.
 pub fn set_links(
     conn: &Connection,
+    catalog: &pirc_config::modes::ModeCatalog,
     project_id: &str,
     workspace_ids: &[String],
 ) -> ApiResult<Vec<Link>> {
-    require_project(conn, project_id)?;
+    require_project(conn, catalog, project_id)?;
     let mut wanted: Vec<Workspace> = Vec::new();
     for id in workspace_ids {
         if wanted.iter().any(|workspace| &workspace.id == id) {
@@ -103,7 +112,13 @@ pub fn set_links(
                 Workspace::from_row,
             )
             .optional()?
-            .filter(|workspace| workspace.kind.mode().repository && workspace.local_id().is_some())
+            .filter(|workspace| {
+                catalog
+                    .modes
+                    .get(&workspace.mode)
+                    .is_some_and(|mode| mode.repository)
+                    && workspace.local_id().is_some()
+            })
             .ok_or_else(|| {
                 ApiError::new(
                     400,
@@ -225,15 +240,25 @@ pub fn view(app: &App, links: &[Link]) -> ApiResult<Value> {
 }
 
 /// Read a project's links, refusing anything that is not a project.
-pub fn project_links(conn: &Connection, project_id: &str) -> ApiResult<Vec<Link>> {
-    require_project(conn, project_id)?;
+pub fn project_links(
+    conn: &Connection,
+    catalog: &pirc_config::modes::ModeCatalog,
+    project_id: &str,
+) -> ApiResult<Vec<Link>> {
+    require_project(conn, catalog, project_id)?;
     links(conn, project_id)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{Db, WorkspaceKind};
+    use crate::db::{Db, ModeId};
+    fn set_links(conn: &Connection, project: &str, ids: &[String]) -> ApiResult<Vec<Link>> {
+        super::set_links(conn, &crate::app::test_modes(), project, ids)
+    }
+    fn project_links(conn: &Connection, project: &str) -> ApiResult<Vec<Link>> {
+        super::project_links(conn, &crate::app::test_modes(), project)
+    }
 
     fn db() -> Db {
         let db = Db::memory();
@@ -242,21 +267,36 @@ mod tests {
             conn.sync_remote_workspaces(
                 "home",
                 &[
-                    ("chats".into(), "Chats".into(), Some(WorkspaceKind::Chat)),
-                    ("trip".into(), "Trip".into(), Some(WorkspaceKind::Chat)),
+                    ("chats".into(), "Chats".into(), ModeId::new("chat").unwrap()),
+                    ("trip".into(), "Trip".into(), ModeId::new("chat").unwrap()),
                 ],
             )
             .unwrap();
             conn.sync_remote_workspaces(
                 "work",
                 &[
-                    ("pirc".into(), "pirc".into(), None),
-                    ("site".into(), "site".into(), None),
+                    (
+                        "pirc".into(),
+                        "pirc".into(),
+                        ModeId::new("directory").unwrap(),
+                    ),
+                    (
+                        "site".into(),
+                        "site".into(),
+                        ModeId::new("directory").unwrap(),
+                    ),
                 ],
             )
             .unwrap();
-            conn.sync_remote_workspaces("lab", &[("clone".into(), "pirc".into(), None)])
-                .unwrap();
+            conn.sync_remote_workspaces(
+                "lab",
+                &[(
+                    "clone".into(),
+                    "pirc".into(),
+                    ModeId::new("directory").unwrap(),
+                )],
+            )
+            .unwrap();
         }
         db
     }
@@ -302,8 +342,15 @@ mod tests {
 
         let many: Vec<String> = (0..=MAX_LINKS).map(|n| format!("work:w{n}")).collect();
         for id in &many {
-            conn.sync_remote_workspaces("work", &[(id[5..].to_owned(), id.clone(), None)])
-                .unwrap();
+            conn.sync_remote_workspaces(
+                "work",
+                &[(
+                    id[5..].to_owned(),
+                    id.clone(),
+                    ModeId::new("directory").unwrap(),
+                )],
+            )
+            .unwrap();
         }
         assert_eq!(
             set_links(&conn, "home:trip", &many).unwrap_err().status,
@@ -361,7 +408,14 @@ mod tests {
             &[("trip".into(), Some("github.com/me/pirc".into()))],
         )
         .unwrap();
-        assert_eq!(conn.get_workspace("home:trip").unwrap().repo, None);
-        assert_eq!(links(&conn, "home:chats").unwrap()[0].repo, None);
+        // Capability filtering belongs to node registration; the store preserves supplied data.
+        assert_eq!(
+            conn.get_workspace("home:trip").unwrap().repo.as_deref(),
+            Some("github.com/me/pirc")
+        );
+        assert_eq!(
+            links(&conn, "home:chats").unwrap()[0].repo.as_deref(),
+            Some("github.com/me/pirc")
+        );
     }
 }

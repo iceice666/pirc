@@ -538,6 +538,10 @@ impl AgentRun {
             .env("HOME", &home)
             .env("PIRC_CONFIG_DIR", &config_dir)
             .env("PIRC_AGENT_FEATURES", "none")
+            .env(
+                "PIRC_MODE",
+                serde_json::to_string(&pirc_protocol::mode::default_work()).unwrap(),
+            )
             .envs(options.env.iter().map(|(k, v)| (k, v)))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

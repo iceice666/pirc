@@ -17,7 +17,7 @@
 //!   `pi_session_id`), `cwd = chat::session_root`, its own process group,
 //!   the environment `without_secrets(node.env)` plus the node's variables
 //!   (`PI_CODING_AGENT_SESSION_DIR`, `PIRC_WRITE_BROKER=1`, `PIRC_GATEWAY=1`,
-//!   `PIRC_WORKSPACE_KIND`, `PIRC_PROJECT_TRUST` or `PIRC_PROJECT_INSTRUCTIONS`,
+//!   `PIRC_MODE`, `PIRC_PROJECT_TRUST` or `PIRC_PROJECT_INSTRUCTIONS`,
 //!   `PIRC_WORKSPACE_MEMORY_DIR`, `PIRC_BROWSER=1|0` from
 //!   `node.browser.enabled()`, `PIRC_SANDBOX=srt`, `PIRC_SANDBOX_POLICY`)
 //!   and `prepared.env`; epoch from `increment_epoch`, older epochs'
@@ -303,6 +303,7 @@ impl RunnerManager {
     async fn ensure(&self, session_id: &str) -> ApiResult<Arc<Runner>> {
         let node = self.node()?;
         node.db.lock().require_session_available(session_id)?;
+        node.session_mode(session_id)?;
         let mut starting = loop {
             let exiting = {
                 let mut state = self.lock();
@@ -312,7 +313,14 @@ impl RunnerManager {
                     return Err(ApiError::runner_unavailable("Runner is not available"));
                 }
                 match state.runners.get(session_id).cloned() {
-                    Some(runner) if runner.alive() => return Ok(runner),
+                    Some(runner) if runner.alive() => {
+                        if node.workspace_mode(&runner.workspace)? != runner.mode {
+                            return Err(ApiError::runner_unavailable(
+                                "Mode changed; runner is stopping",
+                            ));
+                        }
+                        return Ok(runner);
+                    }
                     // Its exit is under way (TS's was one synchronous step):
                     // the new agent starts after the old teardown (state,
                     // `runner_exit`, leases), which would otherwise hit it.
@@ -389,7 +397,13 @@ impl RunnerManager {
         node.db
             .lock()
             .validate_lease(session_id, lease.0, lease.1)?;
-        let runner = self.ensure(session_id).await?;
+        let runner = if matches!(payload, CommandPayload::Stop) {
+            self.get(session_id)
+                .filter(|runner| runner.alive())
+                .ok_or_else(|| ApiError::runner_unavailable("No live runner to stop"))?
+        } else {
+            self.ensure(session_id).await?
+        };
         node.db.lock().require_session_available(session_id)?;
         let runner = match payload {
             CommandPayload::EditMessage { entry_id, message } => self
@@ -682,6 +696,7 @@ impl RunnerManager {
         interaction_id: &str,
         answer: &Map<String, Value>,
     ) -> ApiResult<()> {
+        self.node()?.session_mode(session_id)?;
         let runner = self.get(session_id);
         let Some(runner) = runner.filter(|runner| runner.alive() && runner.epoch() == epoch) else {
             return Err(ApiError::new(
@@ -776,7 +791,8 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
     };
     let started = async {
         let workspace = node.db.lock().get_workspace(&session.workspace_id)?;
-        let root = crate::chat::session_root(&workspace, session_id)?;
+        let mode = node.workspace_mode(&workspace)?;
+        let root = crate::chat::session_root(&workspace, session_id, &mode)?;
         let ledger = workspace_ledger(node, &workspace, &root).await;
         let prepared = node
             .sandbox
@@ -789,18 +805,25 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
                     .inference()
                     .map(|inference| inference.socket_path.into()),
                 // The user's project instructions: never writable from the session.
-                protected_paths: crate::chat::project_instructions_path(&workspace)
+                protected_paths: crate::chat::project_instructions_path(&workspace, &mode)
                     .into_iter()
                     .collect(),
                 workspace_memory_file: ledger.as_ref().map(|ledger| ledger.file.clone()),
                 // Read-only and shared: uploads reach the running session.
-                project_files_dir: crate::project_files::existing_files_dir(&workspace),
+                project_files_dir: crate::project_files::existing_files_dir(&workspace, &mode),
             })
             .await?;
+        if node.workspace_mode(&workspace)? != mode {
+            prepared.cleanup();
+            return Err(ApiError::runner_unavailable(
+                "Mode changed while starting runner",
+            ));
+        }
         process::spawn(
             node,
             process::Spawn {
                 session: session.clone(),
+                mode,
                 workspace,
                 prepared,
                 ledger,
@@ -826,7 +849,11 @@ async fn workspace_ledger(
     workspace: &crate::store::Workspace,
     root: &std::path::Path,
 ) -> Option<pirc_agent::features::memory::workspace::WorkspaceLedger> {
-    if !workspace.kind.mode().workspace_memory {
+    if !node
+        .workspace_mode(workspace)
+        .ok()
+        .is_some_and(|mode| mode.workspace_memory)
+    {
         return None;
     }
     let dir = node
@@ -1012,7 +1039,8 @@ fn file_attachments(
     };
     // Written from outside the sandbox: no symlink below the session root
     // is followed (a cloned repository may track one).
-    let root = crate::chat::session_root(&workspace, session_id)?;
+    let mode = node.workspace_mode(&workspace)?;
+    let root = crate::chat::session_root(&workspace, session_id, &mode)?;
     let dest_dir = crate::private_dir::open_dir(&root, &[".pirc", "uploads"]).map_err(|error| {
         Failure::Other(format!("{}: {error}", root.join(".pirc/uploads").display()))
     })?;

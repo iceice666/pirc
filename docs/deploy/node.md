@@ -29,9 +29,9 @@ The state directory is also the natural `HOME` of the node account (build caches
 
 ## Workspaces
 
-| Variable          | Default | Meaning                                                                                                                                                        |
-| ----------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PIRC_WORKSPACES` | `[]`    | JSON array of `{ "id"?, "path", "displayName"?, "defaults"? }`. `path` may start with `~/`. IDs default to `workspace-<n>`, names to the directory's basename. |
+| Variable          | Default | Meaning                                                                                                                                                                                                 |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PIRC_WORKSPACES` | `[]`    | JSON array of `{ "id"?, "mode"?, "path", "displayName"?, "defaults"? }`; `mode` defaults to `directory`. `path` may start with `~/`. IDs default to `workspace-<n>`, names to the directory's basename. |
 
 An empty list is fine: the web's **Add workspace** (`POST /api/workspaces` with `{ nodeId, path, displayName }`) adds one to an online node. The node persists it in its database and advertises it again after every reconnect. Web-added paths must already exist and resolve (symlinks followed) **inside the node account's home**; `PIRC_WORKSPACES` has no such restriction, so use it for `/srv`-style paths.
 
@@ -39,7 +39,7 @@ Workspaces are an execution allowlist: sessions only ever run in a listed direct
 
 ## The chat node
 
-Run `pirc-node chat` for assistant chats/projects, or `pirc-node` for coding workspaces. Both use the same executable; the explicit `chat` subcommand selects the role, not an environment switch. `pirc-node chat` requires an empty `PIRC_WORKSPACES` and refuses web-added directory workspaces. Run at most one chat node, on an always-on host. On NixOS, `services.pirc.chat = true` selects `pirc-node chat` for the local runner.
+Run `pirc-node chat` for assistant chats/projects, or `pirc-node` for coding workspaces. Both use the same executable; the explicit `chat` subcommand selects the role, not an environment switch. `pirc-node chat` requires an empty `PIRC_WORKSPACES`. By default it accepts only the `chat` mode; coding nodes accept only `directory`. Set comma-separated `PIRC_MODES` to accept additional gateway-defined ids, for example `directory,review` or `chat,research`. Workspace creation follows the mode's workdir capability, not the node role. An explicitly empty list accepts no modes; a fresh chat node then does not seed top-level Chats. Run at most one chat node, on an always-on host. On NixOS, `services.pirc.chat = true` selects `pirc-node chat` for the local runner.
 
 The chat node keeps every chat workspace under `$STATE/chat/<workspaceId>/` (the top-level `chats`, and each project), including each project's `instructions.md`. See [`docs/guides/chat-projects.md`](../guides/chat-projects.md).
 
@@ -67,7 +67,11 @@ To give agents a credential on purpose (a `GITHUB_TOKEN` for the agent's own `gh
 
 ## The agent config directory
 
-`$PIRC_CONFIG_DIR` holds node-wide agent settings. Nothing in it is synced from the gateway; copy it to each node.
+`$PIRC_CONFIG_DIR` holds node-wide agent settings; copy those settings to each node.
+Mode definitions are the exception: they belong only to the gateway and are
+distributed over the node link, never loaded from node-local mode files. Agents
+receive validated `PIRC_MODE` JSON; `PIRC_WORKSPACE_KIND` is retired. See
+[workspace modes](../guides/modes.md) and the [protocol-12 upgrade](upgrades.md).
 
 ```
 ~/.config/.pirc/

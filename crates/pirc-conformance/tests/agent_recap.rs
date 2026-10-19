@@ -177,7 +177,15 @@ async fn agent_recap_unavailable() {
             ("PIRC_GATEWAY".to_owned(), "1".to_owned()),
         ];
         if let Some(kind) = kind {
-            env.push(("PIRC_WORKSPACE_KIND".to_owned(), kind.to_owned()));
+            let mode = if kind == "chat" {
+                pirc_protocol::mode::default_chat()
+            } else {
+                pirc_protocol::mode::default_work()
+            };
+            env.push((
+                "PIRC_MODE".to_owned(),
+                serde_json::to_string(&mode).unwrap(),
+            ));
         }
         env
     };

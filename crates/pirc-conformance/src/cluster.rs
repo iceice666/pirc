@@ -189,6 +189,7 @@ impl Cluster {
             ("PIRC_ALLOWED_HOSTS", HOST.to_owned()),
             ("PIRC_NODE_TOKENS", node_tokens),
             ("PIRC_MODELS_FILE", models.display().to_string()),
+            ("PIRC_CONFIG_DIR", dir_in(&root, "gateway-config")),
             ("PIRC_TIMEZONE", "UTC".to_owned()),
         ];
         override_env(&mut env, options.env.clone());

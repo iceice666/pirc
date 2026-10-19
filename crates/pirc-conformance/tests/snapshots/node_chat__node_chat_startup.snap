@@ -31,7 +31,7 @@ expression: t.into_value()
         {
           "displayName": "Chats",
           "id": "chats",
-          "kind": "chat"
+          "mode": "chat"
         }
       ]
     },
@@ -46,7 +46,7 @@ expression: t.into_value()
           "displayName": "Trip",
           "hostId": "test",
           "id": "<workspace:1>",
-          "kind": "chat"
+          "mode": "chat"
         }
       },
       "status": 201
@@ -65,12 +65,12 @@ expression: t.into_value()
       {
         "displayName": "Chats",
         "id": "chats",
-        "kind": "chat"
+        "mode": "chat"
       },
       {
         "displayName": "Trip",
         "id": "<workspace:1>",
-        "kind": "chat"
+        "mode": "chat"
       }
     ],
     "step": "the chat node starts again on its state, unchanged: its project is still there"
@@ -82,7 +82,7 @@ expression: t.into_value()
         {
           "displayName": "Test",
           "id": "test",
-          "kind": "directory"
+          "mode": "directory"
         }
       ]
     },
@@ -100,7 +100,7 @@ expression: t.into_value()
       {
         "displayName": "Test",
         "id": "test",
-        "kind": "directory"
+        "mode": "directory"
       }
     ],
     "step": "the coding node starts again on its state, unchanged"

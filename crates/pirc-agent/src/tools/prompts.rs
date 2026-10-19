@@ -75,6 +75,21 @@ prompts!(
     write,
 );
 
+#[cfg(test)]
+mod mode_vocabulary_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn mode_tool_vocabulary_covers_described_operations_without_ptc_wrappers() {
+        let operations: BTreeSet<_> = tool_prompt_names()
+            .filter(|name| !matches!(*name, "ptc" | "ptc_docs"))
+            .collect();
+        let mode_names: BTreeSet<_> = pirc_protocol::mode::TOOL_NAMES.iter().copied().collect();
+        assert_eq!(mode_names, operations);
+    }
+}
+
 /// A placeholder's value (`PromptVars`).
 #[derive(Clone, Copy, Debug)]
 pub enum PromptVar<'a> {

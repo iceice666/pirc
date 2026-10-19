@@ -15,6 +15,7 @@ use serde_json::{Value, json};
 
 use crate::app::{AppState, query_map};
 use crate::auth::{self, Identity};
+use crate::db::Store;
 use crate::devices::Tracked;
 use crate::error::{ApiError, ApiResult};
 use crate::events::{Cursor, GatewayEvent, Subscription};
@@ -409,6 +410,7 @@ async fn relay(
     let opened = (|| -> ApiResult<(RelayedStream, Option<Tracked>)> {
         let identity = app.validate(&peer, &headers, &uri, &axum::http::Method::GET, true)?;
         let claimed = app.claim(&identity, &target.session_id)?;
+        app.require_writable(&claimed.session)?;
         let terminal_id = match &target.terminal_id {
             None => "browser".to_owned(),
             Some(id) if (1..=100).contains(&id.chars().count()) => id.clone(),
@@ -448,6 +450,11 @@ async fn relay(
             Received::Text(text) => text,
             Received::Binary(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
         };
+        let session = { app.db.lock().get_session(&target.session_id) };
+        let writable = session.and_then(|session| app.require_writable(&session));
+        if let Err(error) = writable {
+            return relay.close(close_code(&error), &error.message);
+        }
         // Malformed JSON has always been ignored on these routes.
         // Sent outside the lock: a failed send ends the stream, which locks it.
         let stream = relay

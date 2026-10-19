@@ -585,7 +585,7 @@ mod tests {
         std::fs::create_dir_all(&workspace).unwrap();
         let mut config = testing::config(&workspace.display().to_string(), json!({}));
         if chat {
-            config.workspace_kind = crate::config::WorkspaceKind::Chat;
+            config.mode = pirc_protocol::mode::default_chat();
         }
         let store = SessionStore::open(dir.join("session"), &config.workspace).unwrap();
         Agent::new(AgentOptions {

@@ -25,14 +25,13 @@ sha2 = "0.10"
 tz-rs = "0.7"
 serde.workspace = true
 serde_json.workspace = true
-# Role and skill front matter (Bun.YAML).
-yaml-rust2 = { version = "0.13", default-features = false }
 tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "process", "rt", "signal", "sync", "time"] }
 # Background tasks with `tty: true` run on a pseudo-terminal they control
 # (setsid and TIOCSCTTY before exec need code this crate cannot write without
 # `unsafe`).
 pty-process = { version = "0.5", features = ["async"] }
 
+pirc-config = { path = "../pirc-config" }
 pirc-policy = { path = "../pirc-policy" }
 pirc-protocol = { path = "../pirc-protocol" }
 # The preflight and shared contracts only: QuickJS lives in the guest.

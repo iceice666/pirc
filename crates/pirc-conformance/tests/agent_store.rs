@@ -79,7 +79,10 @@ async fn agent_chat_prompts() {
     let Some(mut agent) = AgentRun::start(AgentOptions {
         env: vec![
             ("PIRC_WRITE_BROKER".to_owned(), "1".to_owned()),
-            ("PIRC_WORKSPACE_KIND".to_owned(), "chat".to_owned()),
+            (
+                "PIRC_MODE".to_owned(),
+                serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+            ),
         ],
         files: vec![
             file("AGENTS.md", "Coding rules that a chat ignores."),

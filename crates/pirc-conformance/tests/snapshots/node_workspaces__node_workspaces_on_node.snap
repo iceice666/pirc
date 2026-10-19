@@ -14,7 +14,7 @@ expression: t.into_value()
             "displayName": "Project",
             "hostId": "test",
             "id": "<workspace:1>",
-            "kind": "directory",
+            "mode": "directory",
             "roles": [
               {
                 "description": "General-purpose agent with the default model and all tools.",
@@ -39,7 +39,7 @@ expression: t.into_value()
             "displayName": "Roled",
             "hostId": "test",
             "id": "<workspace:2>",
-            "kind": "directory",
+            "mode": "directory",
             "roles": [
               {
                 "description": "General-purpose agent with the default model and all tools.",
@@ -80,7 +80,7 @@ expression: t.into_value()
         "body": {
           "error": {
             "code": "forbidden",
-            "message": "This node does not host chats (pirc-chat)"
+            "message": "Node does not accept this mode"
           }
         },
         "status": 403

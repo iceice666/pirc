@@ -236,6 +236,10 @@ async fn a_real_agent_is_confined() {
         .env("HOME", root.join("home"))
         .env("PIRC_CONFIG_DIR", root.join("config"))
         .env("PIRC_AGENT_FEATURES", "none")
+        .env(
+            "PIRC_MODE",
+            serde_json::to_string(&pirc_protocol::mode::default_work()).unwrap(),
+        )
         .env("PIRC_SANDBOX", "srt")
         .env(
             "PIRC_SANDBOX_POLICY",

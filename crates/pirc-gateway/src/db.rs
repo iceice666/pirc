@@ -288,35 +288,7 @@ impl From<rusqlite::Error> for ApiError {
     }
 }
 
-/// `directory`: a real directory on the node. `chat`: the assistant's chats.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum WorkspaceKind {
-    Directory,
-    Chat,
-}
-
-impl WorkspaceKind {
-    fn from_column(value: &str) -> Self {
-        if value == "chat" {
-            Self::Chat
-        } else {
-            Self::Directory
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        self.mode().id
-    }
-
-    /// What this kind allows (`pirc_protocol::mode`).
-    pub fn mode(self) -> &'static pirc_protocol::Mode {
-        match self {
-            Self::Directory => pirc_protocol::WorkspaceKind::Directory.mode(),
-            Self::Chat => pirc_protocol::WorkspaceKind::Chat.mode(),
-        }
-    }
-}
+pub use pirc_protocol::mode::ModeId;
 
 /// A workspace as clients see it (its stored `canonical_path` is a
 /// gateway-internal unique key and is not read).
@@ -327,7 +299,7 @@ pub struct Workspace {
     pub host_id: String,
     pub display_name: String,
     pub defaults: Value,
-    pub kind: WorkspaceKind,
+    pub mode: ModeId,
     /// Its repository's normalized `origin`, as its node last reported it.
     #[serde(skip)]
     pub repo: Option<String>,
@@ -340,7 +312,13 @@ impl Workspace {
             host_id: row.get("host_id")?,
             display_name: row.get("display_name")?,
             defaults: safe_json(&row.get::<_, String>("defaults_json")?, json!({})),
-            kind: WorkspaceKind::from_column(&row.get::<_, String>("kind")?),
+            mode: ModeId::new(row.get::<_, String>("kind")?).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    rusqlite::types::Type::Text,
+                    std::io::Error::new(std::io::ErrorKind::InvalidData, error).into(),
+                )
+            })?,
             repo: row.get("repo")?,
         })
     }
@@ -612,7 +590,7 @@ pub trait Store {
     fn sync_remote_workspaces(
         &self,
         node_id: &str,
-        workspaces: &[(String, String, Option<WorkspaceKind>)],
+        workspaces: &[(String, String, ModeId)],
     ) -> ApiResult<()>;
     /// Record the repositories a node reported for its workspaces (local
     /// ids), and give their mirrored notes that had none the same.
@@ -808,7 +786,7 @@ impl Store for Connection {
     fn sync_remote_workspaces(
         &self,
         node_id: &str,
-        workspaces: &[(String, String, Option<WorkspaceKind>)],
+        workspaces: &[(String, String, ModeId)],
     ) -> ApiResult<()> {
         atomic(self, |tx| {
             // A deleted project announced again (an old process, a restored
@@ -824,7 +802,7 @@ impl Store for Connection {
                     format!("node://{node_id}/{id}"),
                     "{}",
                     now_ms(),
-                    kind.unwrap_or(WorkspaceKind::Directory).as_str(),
+                    kind.as_str(),
                 ])?;
             }
             Ok(())
@@ -842,10 +820,8 @@ impl Store for Connection {
                 let repo = repo
                     .as_deref()
                     .filter(|repo| pirc_protocol::valid_repo(repo));
-                let changed = tx.execute(
-                    "UPDATE workspaces SET repo=? WHERE id=? AND kind='directory'",
-                    params![repo, id],
-                )?;
+                let changed =
+                    tx.execute("UPDATE workspaces SET repo=? WHERE id=?", params![repo, id])?;
                 // Only a directory workspace has a repository: a key reported for a chat
                 // workspace must not tag its notes or links either.
                 if changed == 0 {
@@ -987,18 +963,7 @@ impl Store for Connection {
         workspace_id: &str,
         patch: &CapabilitiesPatch,
     ) -> ApiResult<Capabilities> {
-        if !self
-            .get_workspace(workspace_id)?
-            .kind
-            .mode()
-            .full_assistant()
-        {
-            return Err(ApiError::new(
-                400,
-                "invalid_input",
-                "Capabilities can only be changed for chat workspaces",
-            ));
-        }
+        self.get_workspace(workspace_id)?;
         let mut policy = self.get_workspace_capabilities(workspace_id)?;
         let set = |field: &mut bool, value: Option<bool>| {
             if let Some(value) = value {
@@ -1462,7 +1427,10 @@ mod tests {
 
     fn with_workspace(db: &Db) {
         db.lock()
-            .sync_remote_workspaces("n1", &[("w".into(), "W".into(), Some(WorkspaceKind::Chat))])
+            .sync_remote_workspaces(
+                "n1",
+                &[("w".into(), "W".into(), ModeId::new("chat").unwrap())],
+            )
             .unwrap();
     }
 
@@ -1869,12 +1837,18 @@ mod tests {
         );
         conn.execute("DELETE FROM workspaces WHERE id='n1:w'", [])
             .unwrap();
-        conn.sync_remote_workspaces("n1", &[("w".into(), "W".into(), Some(WorkspaceKind::Chat))])
-            .unwrap();
+        conn.sync_remote_workspaces(
+            "n1",
+            &[("w".into(), "W".into(), ModeId::new("chat").unwrap())],
+        )
+        .unwrap();
         assert!(conn.find_workspace("n1:w").unwrap().is_none());
         // Others still sync.
-        conn.sync_remote_workspaces("n1", &[("x".into(), "X".into(), Some(WorkspaceKind::Chat))])
-            .unwrap();
+        conn.sync_remote_workspaces(
+            "n1",
+            &[("x".into(), "X".into(), ModeId::new("chat").unwrap())],
+        )
+        .unwrap();
         assert!(conn.find_workspace("n1:x").unwrap().is_some());
     }
 

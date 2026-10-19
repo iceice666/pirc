@@ -23,6 +23,25 @@ pub mod title;
 pub mod todo;
 pub mod web_search;
 
+/// Map hook names to their stable node-config / mode keys. Non-selectable
+/// infrastructure (especially approval policy) is deliberately not included.
+#[cfg(test)]
+pub(crate) fn config_key(name: &str) -> Option<&'static str> {
+    match name {
+        "session-title" => Some("sessionTitle"),
+        "todo" => Some("todo"),
+        "observational-memory" => Some("observationalMemory"),
+        "skills" => Some("skills"),
+        "browser" => Some("browser"),
+        "web-search" => Some("webSearch"),
+        "schedules" => Some("schedules"),
+        "background-task" => Some("background"),
+        "agent-team" => Some("agentTeam"),
+        "goal" => Some("goal"),
+        _ => None,
+    }
+}
+
 /// `builtinFeatures`.
 pub fn builtin_features() -> Vec<Rc<dyn Feature>> {
     vec![
@@ -98,6 +117,19 @@ mod tests {
 
     fn names(features: &[Rc<dyn Feature>]) -> Vec<&'static str> {
         features.iter().map(|feature| feature.name()).collect()
+    }
+
+    #[test]
+    fn mode_feature_registry_matches_actual_features() {
+        let features = builtin_features();
+        let mut keys: Vec<_> = features
+            .iter()
+            .filter_map(|feature| config_key(feature.name()))
+            .collect();
+        keys.sort_unstable();
+        let mut declared = pirc_protocol::mode::FEATURE_NAMES.to_vec();
+        declared.sort_unstable();
+        assert_eq!(keys, declared);
     }
 
     #[test]

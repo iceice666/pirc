@@ -333,6 +333,11 @@ impl WebSearchTool {
 spec_tool!(WebSearchTool, ptc: true);
 
 #[cfg(test)]
+pub(crate) fn registered_tool_names() -> Vec<String> {
+    vec![WebSearchTool::new().name().to_owned()]
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

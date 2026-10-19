@@ -7,11 +7,13 @@ expression: t.into_value()
     "body": {
       "workspaces": [
         {
+          "available": true,
           "defaults": {},
           "displayName": "Chats",
           "hostId": "test",
           "id": "test:chats",
-          "kind": "chat"
+          "kind": "chat",
+          "mode": "chat"
         }
       ]
     },
@@ -37,11 +39,13 @@ expression: t.into_value()
   {
     "body": {
       "workspace": {
+        "available": true,
         "defaults": {},
         "displayName": "Trip",
         "hostId": "test",
         "id": "test:<workspace:1>",
-        "kind": "chat"
+        "kind": "chat",
+        "mode": "chat"
       }
     },
     "headers": {
@@ -54,11 +58,13 @@ expression: t.into_value()
   {
     "body": {
       "workspace": {
+        "available": true,
         "defaults": {},
         "displayName": "Trip",
         "hostId": "test",
         "id": "test:<workspace:2>",
-        "kind": "chat"
+        "kind": "chat",
+        "mode": "chat"
       }
     },
     "headers": {
@@ -99,11 +105,13 @@ expression: t.into_value()
   {
     "body": {
       "workspace": {
+        "available": true,
         "defaults": {},
         "displayName": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
         "hostId": "test",
         "id": "test:<workspace:3>",
-        "kind": "chat"
+        "kind": "chat",
+        "mode": "chat"
       }
     },
     "headers": {
@@ -131,7 +139,7 @@ expression: t.into_value()
     "body": {
       "error": {
         "code": "forbidden",
-        "message": "The chat node hosts chat workspaces only (pirc-chat)"
+        "message": "Mode is not accepted by this node"
       }
     },
     "headers": {
@@ -145,7 +153,7 @@ expression: t.into_value()
     "body": {
       "error": {
         "code": "forbidden",
-        "message": "The chat node hosts chat workspaces only (pirc-chat)"
+        "message": "Mode is not accepted by this node"
       }
     },
     "headers": {
@@ -159,32 +167,40 @@ expression: t.into_value()
     "body": {
       "workspaces": [
         {
+          "available": true,
           "defaults": {},
           "displayName": "Chats",
           "hostId": "test",
           "id": "test:chats",
-          "kind": "chat"
+          "kind": "chat",
+          "mode": "chat"
         },
         {
+          "available": true,
           "defaults": {},
           "displayName": "Trip",
           "hostId": "test",
           "id": "test:<workspace:1>",
-          "kind": "chat"
+          "kind": "chat",
+          "mode": "chat"
         },
         {
+          "available": true,
           "defaults": {},
           "displayName": "Trip",
           "hostId": "test",
           "id": "test:<workspace:2>",
-          "kind": "chat"
+          "kind": "chat",
+          "mode": "chat"
         },
         {
+          "available": true,
           "defaults": {},
           "displayName": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
           "hostId": "test",
           "id": "test:<workspace:3>",
-          "kind": "chat"
+          "kind": "chat",
+          "mode": "chat"
         }
       ]
     },
@@ -200,33 +216,47 @@ expression: t.into_value()
       "role": "chat",
       "workspaces": [
         {
+          "available": true,
           "displayName": "Chats",
           "id": "chats",
-          "kind": "chat"
+          "kind": "chat",
+          "mode": "chat",
+          "roles": [
+            {
+              "description": "General-purpose agent with the default model and all tools.",
+              "name": "general"
+            }
+          ]
         },
         {
+          "available": true,
           "canonicalPath": "<tmp>/node-state/chat/<workspace:1>",
           "defaults": {},
           "displayName": "Trip",
           "hostId": "test",
           "id": "<workspace:1>",
-          "kind": "chat"
+          "kind": "chat",
+          "mode": "chat"
         },
         {
+          "available": true,
           "canonicalPath": "<tmp>/node-state/chat/<workspace:2>",
           "defaults": {},
           "displayName": "Trip",
           "hostId": "test",
           "id": "<workspace:2>",
-          "kind": "chat"
+          "kind": "chat",
+          "mode": "chat"
         },
         {
+          "available": true,
           "canonicalPath": "<tmp>/node-state/chat/<workspace:3>",
           "defaults": {},
           "displayName": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
           "hostId": "test",
           "id": "<workspace:3>",
-          "kind": "chat"
+          "kind": "chat",
+          "mode": "chat"
         }
       ]
     },

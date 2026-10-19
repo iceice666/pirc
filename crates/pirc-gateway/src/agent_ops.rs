@@ -21,6 +21,7 @@ use crate::{delegations, memory, schedules, web_search};
 pub struct OpContext {
     pub session: Session,
     pub workspace: Workspace,
+    pub mode: pirc_protocol::Mode,
     pub user: String,
 }
 
@@ -114,7 +115,9 @@ pub async fn run(
                 .lock()
                 .require_workspace_capability(&workspace.id, capability)?;
         }
+        let mode = app.require_mode(&workspace)?;
         let context = OpContext {
+            mode,
             session,
             workspace,
             user,

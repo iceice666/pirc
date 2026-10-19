@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use pirc_protocol::NodeRole;
+use pirc_protocol::{ModeId, NodeRole};
 use serde_json::{Map, Value};
 
 use crate::{
@@ -29,6 +29,8 @@ const LOOPBACK_HOSTS: [&str; 3] = ["127.0.0.1", "[::1]", "localhost"];
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConfigWorkspace {
     pub id: String,
+    /// Gateway-owned mode id; no capability definitions are stored here.
+    pub mode: ModeId,
     /// Canonical: absolute, symlinks resolved (`realpathSync`).
     pub path: PathBuf,
     pub display_name: String,
@@ -81,6 +83,8 @@ pub struct SandboxSettings {
 #[derive(Clone, Debug)]
 pub struct NodeConfig {
     pub role: NodeRole,
+    /// Mode ids this node accepts (`PIRC_MODES`, comma separated).
+    pub modes: Vec<ModeId>,
     pub node_id: String,
     pub node_token: String,
     /// `ws://` or `wss://` (`PIRC_DAEMON_URL`); plain `ws://` only to loopback
@@ -182,6 +186,15 @@ impl NodeConfig {
                 "PIRC_WORKSPACES must be empty on the chat node (pirc-node chat): it hosts chat workspaces only",
             );
         }
+        let modes = accepted_modes(env.get("PIRC_MODES"), role)?;
+        for workspace in &workspaces {
+            if !modes.contains(&workspace.mode) {
+                return error(format!(
+                    "workspace {} uses mode {} not accepted by PIRC_MODES",
+                    workspace.id, workspace.mode
+                ));
+            }
+        }
         let allowed_users = allowed_users(env)?;
         let (agent_command, agent_args) = agent_command(env)?;
         let upload_max_bytes = upload_limit(env)?;
@@ -201,6 +214,7 @@ impl NodeConfig {
         };
         Ok(Self {
             role,
+            modes,
             node_id,
             node_token,
             daemon_url,
@@ -234,7 +248,34 @@ impl NodeConfig {
     }
 }
 
-/// `PIRC_WORKSPACES`: a JSON array of `{id?, path, displayName?, defaults?}`
+/// Accepted ids, not definitions. An explicitly empty list grants no modes.
+fn accepted_modes(value: Option<&str>, role: NodeRole) -> Result<Vec<ModeId>, ConfigError> {
+    let Some(value) = value else {
+        return Ok(vec![
+            ModeId::new(if role == NodeRole::Chat {
+                "chat"
+            } else {
+                "directory"
+            })
+            .expect("default mode id"),
+        ]);
+    };
+    if value.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut modes = Vec::new();
+    for value in value.split(',').map(str::trim) {
+        let mode =
+            ModeId::new(value).map_err(|error| ConfigError(format!("PIRC_MODES: {error}")))?;
+        if modes.contains(&mode) {
+            return error(format!("PIRC_MODES: duplicate mode id {mode}"));
+        }
+        modes.push(mode);
+    }
+    Ok(modes)
+}
+
+/// `PIRC_WORKSPACES`: a JSON array of `{id?, mode?, path, displayName?, defaults?}`
 /// (unknown keys ignored). Paths are made canonical, so each must exist.
 pub fn parse_workspaces(env: &Env) -> Result<Vec<ConfigWorkspace>, ConfigError> {
     let parsed: Value = serde_json::from_str(env.get("PIRC_WORKSPACES").unwrap_or("[]"))
@@ -257,6 +298,8 @@ pub fn parse_workspaces(env: &Env) -> Result<Vec<ConfigWorkspace>, ConfigError> 
         if id.is_some_and(|id| !valid_node_id(id)) {
             return Err(invalid("id must match ^[a-zA-Z0-9_-]{1,100}$"));
         }
+        let mode = ModeId::new(optional_string("mode")?.unwrap_or("directory"))
+            .map_err(|error| invalid(&error))?;
         let path = optional_string("path")?.ok_or_else(|| invalid("path is required"))?;
         let display_name = optional_string("displayName")?;
         let defaults = match item.get("defaults") {
@@ -267,6 +310,7 @@ pub fn parse_workspaces(env: &Env) -> Result<Vec<ConfigWorkspace>, ConfigError> 
         let resolved = std::fs::canonicalize(env.resolve(path))
             .map_err(|error| invalid(&format!("{path}: {error}")))?;
         workspaces.push(ConfigWorkspace {
+            mode,
             id: id.map_or_else(|| format!("workspace-{}", index + 1), str::to_owned),
             display_name: display_name.map_or_else(
                 || {
@@ -594,17 +638,68 @@ mod tests {
             [
                 ConfigWorkspace {
                     id: "workspace-1".into(),
+                    mode: ModeId::new("directory").unwrap(),
                     path: canonical.clone(),
                     display_name: "project".into(),
                     defaults: Map::new(),
                 },
                 ConfigWorkspace {
                     id: "named".into(),
+                    mode: ModeId::new("directory").unwrap(),
                     path: canonical,
                     display_name: "Named".into(),
                     defaults: serde_json::json!({ "a": 1 }).as_object().unwrap().clone(),
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn mode_acceptance_is_explicit_and_validated() {
+        assert_eq!(
+            accepted_modes(None, NodeRole::Chat).unwrap()[0].as_str(),
+            "chat"
+        );
+        assert_eq!(
+            accepted_modes(None, NodeRole::Node).unwrap()[0].as_str(),
+            "directory"
+        );
+        assert!(accepted_modes(Some(""), NodeRole::Node).unwrap().is_empty());
+        let ids = accepted_modes(Some("directory, review"), NodeRole::Node).unwrap();
+        assert_eq!(
+            ids.iter().map(ModeId::as_str).collect::<Vec<_>>(),
+            ["directory", "review"]
+        );
+        for invalid in ["review,review", "UPPER", "../review", "review,"] {
+            assert!(
+                accepted_modes(Some(invalid), NodeRole::Node).is_err(),
+                "{invalid}"
+            );
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("project");
+        std::fs::create_dir(&project).unwrap();
+        let workspaces = serde_json::json!([{"path":project,"mode":"review"}]).to_string();
+        let state = dir.path().join("state");
+        let env = node_env(state.to_str().unwrap(), &[("PIRC_WORKSPACES", &workspaces)]);
+        assert!(
+            NodeConfig::load(&env, NodeRole::Node)
+                .unwrap_err()
+                .to_string()
+                .contains("not accepted")
+        );
+        let env = node_env(
+            state.to_str().unwrap(),
+            &[
+                ("PIRC_WORKSPACES", &workspaces),
+                ("PIRC_MODES", "directory,review"),
+            ],
+        );
+        assert_eq!(
+            NodeConfig::load(&env, NodeRole::Node).unwrap().workspaces[0]
+                .mode
+                .as_str(),
+            "review"
         );
     }
 

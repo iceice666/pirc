@@ -949,6 +949,14 @@ impl Tool for BrowserTool {
 }
 
 #[cfg(test)]
+pub(crate) fn registered_tool_names() -> Vec<String> {
+    browser_tools()
+        .into_iter()
+        .map(|(spec, _)| spec.name.to_owned())
+        .collect()
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

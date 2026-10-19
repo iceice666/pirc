@@ -25,7 +25,7 @@ fn answer(request: &Value) -> Value {
     let ok = |body: Value| json!({ "status": 200, "body": body });
     match (method, url) {
         ("POST", "/api/workspaces") => json!({ "status": 201, "body": { "workspace": {
-            "id": "added", "displayName": request["payload"]["displayName"], "kind": "directory" } } }),
+            "id": "added", "displayName": request["payload"]["displayName"], "mode": "directory", "kind": "directory" } } }),
         ("POST", "/api/sessions") => {
             json!({ "status": 201, "body": { "session": { "id": "remote-1" } } })
         }
@@ -73,8 +73,8 @@ fn answer(request: &Value) -> Value {
 async fn serve_node(api: &Api) -> (Arc<Mutex<Vec<Value>>>, tokio::task::JoinHandle<()>) {
     let mut node: WebSocket = api.connect("/node/connect", &node_headers()).await.open();
     let register = json!({
-        "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
-        "workspaces": [{ "id": "ws", "displayName": "Fake workspace", "kind": "directory" }],
+        "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
+        "workspaces": [{ "id": "ws", "displayName": "Fake workspace", "mode": "directory" }],
     });
     assert_node_frame(&register);
     node.send_json(&register).await;

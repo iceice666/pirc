@@ -7,11 +7,13 @@ expression: t.into_value()
     "body": {
       "workspaces": [
         {
+          "available": true,
           "defaults": {},
           "displayName": "Test",
           "hostId": "test",
           "id": "test:test",
-          "kind": "directory"
+          "kind": "directory",
+          "mode": "directory"
         }
       ]
     },
@@ -25,11 +27,13 @@ expression: t.into_value()
   {
     "body": {
       "workspace": {
+        "available": true,
         "defaults": {},
         "displayName": "Project",
         "hostId": "test",
         "id": "test:<workspace:1>",
-        "kind": "directory"
+        "kind": "directory",
+        "mode": "directory"
       }
     },
     "headers": {
@@ -42,11 +46,13 @@ expression: t.into_value()
   {
     "body": {
       "workspace": {
+        "available": true,
         "defaults": {},
         "displayName": "Plain",
         "hostId": "test",
         "id": "test:<workspace:2>",
-        "kind": "directory"
+        "kind": "directory",
+        "mode": "directory"
       }
     },
     "headers": {
@@ -59,11 +65,13 @@ expression: t.into_value()
   {
     "body": {
       "workspace": {
+        "available": true,
         "defaults": {},
         "displayName": "Roled",
         "hostId": "test",
         "id": "test:<workspace:3>",
-        "kind": "directory"
+        "kind": "directory",
+        "mode": "directory"
       }
     },
     "headers": {
@@ -259,7 +267,7 @@ expression: t.into_value()
     "body": {
       "error": {
         "code": "forbidden",
-        "message": "This node does not host chats (pirc-chat)"
+        "message": "Mode is not accepted by this node"
       }
     },
     "headers": {
@@ -273,32 +281,40 @@ expression: t.into_value()
     "body": {
       "workspaces": [
         {
+          "available": true,
           "defaults": {},
           "displayName": "Plain",
           "hostId": "test",
           "id": "test:<workspace:2>",
-          "kind": "directory"
+          "kind": "directory",
+          "mode": "directory"
         },
         {
+          "available": true,
           "defaults": {},
           "displayName": "Project",
           "hostId": "test",
           "id": "test:<workspace:1>",
-          "kind": "directory"
+          "kind": "directory",
+          "mode": "directory"
         },
         {
+          "available": true,
           "defaults": {},
           "displayName": "Roled",
           "hostId": "test",
           "id": "test:<workspace:3>",
-          "kind": "directory"
+          "kind": "directory",
+          "mode": "directory"
         },
         {
+          "available": true,
           "defaults": {},
           "displayName": "Test",
           "hostId": "test",
           "id": "test:test",
-          "kind": "directory"
+          "kind": "directory",
+          "mode": "directory"
         }
       ]
     },
@@ -312,9 +328,11 @@ expression: t.into_value()
   {
     "observed": [
       {
+        "available": true,
         "displayName": "Test",
         "id": "test",
         "kind": "directory",
+        "mode": "directory",
         "roles": [
           {
             "description": "General-purpose agent with the default model and all tools.",
@@ -323,12 +341,14 @@ expression: t.into_value()
         ]
       },
       {
+        "available": true,
         "canonicalPath": "<tmp>/node-home/proj",
         "defaults": {},
         "displayName": "Project",
         "hostId": "test",
         "id": "<workspace:1>",
         "kind": "directory",
+        "mode": "directory",
         "roles": [
           {
             "description": "General-purpose agent with the default model and all tools.",
@@ -337,12 +357,14 @@ expression: t.into_value()
         ]
       },
       {
+        "available": true,
         "canonicalPath": "<tmp>/node-home/plain",
         "defaults": {},
         "displayName": "Plain",
         "hostId": "test",
         "id": "<workspace:2>",
         "kind": "directory",
+        "mode": "directory",
         "roles": [
           {
             "description": "General-purpose agent with the default model and all tools.",
@@ -351,12 +373,14 @@ expression: t.into_value()
         ]
       },
       {
+        "available": true,
         "canonicalPath": "<tmp>/node-home/roled",
         "defaults": {},
         "displayName": "Roled",
         "hostId": "test",
         "id": "<workspace:3>",
         "kind": "directory",
+        "mode": "directory",
         "roles": [
           {
             "description": "General-purpose agent with the default model and all tools.",

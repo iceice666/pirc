@@ -17,7 +17,7 @@ use serde_json::{Map, Value, json};
 
 use crate::app::{AppState, Claimed, ReqBody, forward, query_map};
 use crate::auth::Identity;
-use crate::db::{CapabilitiesPatch, Lease, Store, WorkspaceKind, atomic};
+use crate::db::{CapabilitiesPatch, Lease, Store, atomic};
 use crate::error::{ApiError, json_response};
 use crate::http::{Body, no_content, ok};
 use crate::node_events::run_name;
@@ -121,7 +121,27 @@ pub async fn health(State(app): State<AppState>) -> Response {
 }
 
 pub async fn list_nodes(State(app): State<AppState>) -> Response {
-    ok(json!({ "nodes": app.nodes.list() }))
+    let mut nodes = json!(app.nodes.list());
+    if let Some(nodes) = nodes.as_array_mut() {
+        for node in nodes {
+            if let Some(workspaces) = node["workspaces"].as_array_mut() {
+                for workspace in workspaces {
+                    let mode = workspace["mode"]
+                        .as_str()
+                        .and_then(|id| pirc_protocol::ModeId::new(id).ok())
+                        .and_then(|id| app.mode(&id));
+                    workspace["available"] = json!(mode.is_some());
+                    if let Some(mode) = mode {
+                        workspace["kind"] = json!(match mode.workdir {
+                            pirc_protocol::mode::Workdir::PerSession => "chat",
+                            _ => "directory",
+                        });
+                    }
+                }
+            }
+        }
+    }
+    ok(json!({ "nodes": nodes }))
 }
 
 fn assistant_node_id(app: &AppState) -> Result<String, ApiError> {
@@ -240,6 +260,23 @@ pub async fn save_assistant_prompt(
 
 // ---- workspaces ---------------------------------------------------------------
 
+pub async fn list_modes(State(app): State<AppState>) -> Response {
+    json_response(200, &json!({"modes":app.public_modes()}))
+}
+
+fn public_workspace(app: &AppState, workspace: &crate::db::Workspace) -> Value {
+    let mode = app.mode(&workspace.mode);
+    let mut value = json!(workspace);
+    value["available"] = json!(mode.is_some());
+    if let Some(mode) = mode {
+        value["kind"] = json!(match mode.workdir {
+            pirc_protocol::mode::Workdir::PerSession => "chat",
+            _ => "directory",
+        });
+    }
+    value
+}
+
 pub async fn list_workspaces(
     State(app): State<AppState>,
     Extension(identity): Extension<Identity>,
@@ -249,7 +286,7 @@ pub async fn list_workspaces(
         .list_workspaces()?
         .into_iter()
         .filter(|workspace| workspace.id.contains(':'))
-        .map(|workspace| json!(workspace))
+        .map(|workspace| public_workspace(&app, &workspace))
         .collect();
     // A project whose deletion did not finish stays listed, for its owner to finish it.
     for workspace in conn.deleting_workspaces()? {
@@ -257,7 +294,7 @@ pub async fn list_workspaces(
             .workspace_deletion(&workspace.id)?
             .map(|d| d.owner_user);
         if owner.as_deref() == Some(identity.user.as_str()) {
-            let mut item = json!(workspace);
+            let mut item = public_workspace(&app, &workspace);
             item["deleting"] = json!(true);
             workspaces.push(item);
         }
@@ -285,6 +322,10 @@ pub async fn patch_capabilities(
     ReqBody(body): ReqBody,
 ) -> Handled {
     let CapabilitiesBody { capabilities } = body.parse()?;
+    let workspace = app.db.lock().get_workspace(&workspace_id)?;
+    if !app.require_mode(&workspace)?.full_assistant() {
+        return Err(ApiError::invalid_input().into());
+    }
     let capabilities = app
         .db
         .lock()
@@ -295,7 +336,7 @@ pub async fn patch_capabilities(
 
 /// The workspaces a chat project is linked to (docs/architecture/assistant-memory.md).
 pub async fn get_links(State(app): State<AppState>, Path(workspace_id): Path<String>) -> Handled {
-    let links = crate::project_links::project_links(&app.db.lock(), &workspace_id)?;
+    let links = crate::project_links::project_links(&app.db.lock(), &app.catalog(), &workspace_id)?;
     Ok(ok(crate::project_links::view(&app, &links)?))
 }
 
@@ -319,7 +360,12 @@ pub async fn put_links(
     for id in &workspace_ids {
         length_within(id, 1, 300)?;
     }
-    let links = crate::project_links::set_links(&app.db.lock(), &workspace_id, &workspace_ids)?;
+    let links = crate::project_links::set_links(
+        &app.db.lock(),
+        &app.catalog(),
+        &workspace_id,
+        &workspace_ids,
+    )?;
     Ok(ok(crate::project_links::view(&app, &links)?))
 }
 
@@ -359,7 +405,13 @@ fn workspace_on_node(
 ) -> Result<(String, String), ApiError> {
     let workspace = app.db.lock().get_workspace(workspace_id)?;
     let local = match workspace.local_id() {
-        Some(local) if resource.allowed(workspace.kind.mode()) => local.to_owned(),
+        Some(local)
+            if app
+                .mode(&workspace.mode)
+                .is_some_and(|mode| resource.allowed(&mode)) =>
+        {
+            local.to_owned()
+        }
         _ => {
             return Err(ApiError::new(400, "invalid_input", resource.refusal()));
         }
@@ -582,6 +634,8 @@ struct CreateWorkspace {
     node_id: String,
     #[serde(default, deserialize_with = "present")]
     kind: Option<String>,
+    #[serde(default)]
+    mode: Option<pirc_protocol::mode::ModeId>,
     #[serde(default, deserialize_with = "present")]
     path: Option<String>,
     display_name: String,
@@ -597,14 +651,40 @@ pub async fn create_workspace(
         return Err(ApiError::invalid_input().into());
     }
     let display_name = trimmed(&input.display_name, 200)?;
-    // A chat project on a chat node, which picks and hides its directory;
-    // otherwise a directory on the node.
-    let payload = match (input.kind.as_deref(), input.path.as_deref()) {
-        (Some("chat"), _) => json!({ "kind": "chat", "displayName": display_name }),
-        (None | Some("directory"), Some(path)) => {
-            json!({ "path": trimmed(path, 4096)?, "displayName": display_name })
+    let node = app
+        .nodes
+        .get(&input.node_id)
+        .ok_or_else(|| ApiError::new(503, "node_offline", "Node is offline"))?;
+    if let (Some(mode), Some(kind)) = (&input.mode, &input.kind)
+        && mode.as_str() != kind
+    {
+        return Err(ApiError::invalid_input().into());
+    }
+    if input.mode.is_none() && input.kind.is_none() && input.path.is_none() {
+        return Err(ApiError::invalid_input().into());
+    }
+    // Legacy path-only creation remains a directory request on either role.
+    let mode_id = input.mode.unwrap_or(
+        pirc_protocol::mode::ModeId::new(input.kind.as_deref().unwrap_or("directory"))
+            .map_err(|_| ApiError::invalid_input())?,
+    );
+    if !node.modes.contains(&mode_id) {
+        return Err(ApiError::new(403, "forbidden", "Mode is not accepted by this node").into());
+    }
+    let mode = app.mode(&mode_id).ok_or_else(|| {
+        ApiError::new(
+            409,
+            "mode_unavailable",
+            "Requested workspace mode is unavailable",
+        )
+    })?;
+    let payload = match mode.workdir {
+        pirc_protocol::mode::Workdir::PerSession => {
+            json!({"mode":mode_id, "displayName":display_name})
         }
-        _ => return Err(ApiError::invalid_input().into()),
+        _ => {
+            json!({"mode":mode_id, "path":trimmed(input.path.as_deref().ok_or_else(ApiError::invalid_input)?,4096)?, "displayName":display_name})
+        }
     };
     let node_id = input.node_id;
     if app.nodes.get(&node_id).is_none() {
@@ -621,7 +701,15 @@ pub async fn create_workspace(
     .await?;
     let mut workspace: RegisteredWorkspace = serde_json::from_value(remote["workspace"].clone())
         .map_err(|_| ApiError::new(502, "node_error", "Node answered an invalid workspace"))?;
+    if !mode.repository {
+        workspace.repo = None;
+    }
     let mut raw = remote["workspace"].clone();
+    if !mode.repository
+        && let Some(object) = raw.as_object_mut()
+    {
+        object.remove("repo");
+    }
     if workspace.repo.is_some() {
         crate::nodes::sanitize_repo(&mut workspace);
         if workspace.repo.is_none()
@@ -631,15 +719,20 @@ pub async fn create_workspace(
         }
     }
     // A lost acknowledgement is reconciled when the node registers again.
-    let kind = workspace.kind.map(|kind| match kind {
-        pirc_protocol::WorkspaceKind::Chat => WorkspaceKind::Chat,
-        pirc_protocol::WorkspaceKind::Directory => WorkspaceKind::Directory,
-    });
+    if workspace.mode != mode_id {
+        return Err(ApiError::new(
+            502,
+            "node_error",
+            "Node answered a different workspace mode",
+        )
+        .into());
+    }
+    let mode = workspace.mode.clone();
     {
         let conn = app.db.lock();
         conn.sync_remote_workspaces(
             &node_id,
-            &[(workspace.id.clone(), workspace.display_name.clone(), kind)],
+            &[(workspace.id.clone(), workspace.display_name.clone(), mode)],
         )?;
         conn.set_workspace_repos(&node_id, &[(workspace.id.clone(), workspace.repo.clone())])?;
     }
@@ -650,7 +743,9 @@ pub async fn create_workspace(
         .db
         .lock()
         .get_workspace(&format!("{node_id}:{local_id}"))?;
-    Ok(created(json!({ "workspace": stored })))
+    Ok(created(
+        json!({ "workspace": public_workspace(&app, &stored) }),
+    ))
 }
 
 // ---- sessions -------------------------------------------------------------------
@@ -702,6 +797,7 @@ pub async fn create_session(
     let CreateSession { workspace_id } = body.parse()?;
     length_within(&workspace_id, 1, usize::MAX)?;
     let workspace = app.db.lock().get_workspace(&workspace_id)?;
+    app.require_mode(&workspace)?;
     let node_id = workspace.host_id.clone();
     let online = app.nodes.get(&node_id).is_some_and(|node| {
         node.workspaces
@@ -757,10 +853,8 @@ pub async fn delete_session(
             }
         }
         let session = conn.claim_session(&session_id, user, true)?;
-        if !conn
-            .get_workspace(&session.workspace_id)?
-            .kind
-            .mode()
+        if !app
+            .require_mode(&conn.get_workspace(&session.workspace_id)?)?
             .delete_sessions
         {
             return Err(ApiError::new(400, "invalid_input", "Only chats can be deleted").into());
@@ -840,6 +934,7 @@ pub async fn update_session(
     ReqBody(body): ReqBody,
 ) -> Handled {
     let claimed = app.claim(&identity, &session_id)?;
+    app.require_writable(&claimed.session)?;
     let update: UpdateSession = body.parse()?;
     let name = update
         .name
@@ -1010,6 +1105,9 @@ pub async fn command(
     }
     let session_id = claimed.session.id.as_str();
     let payload = Value::Object(command_payload(input.payload)?);
+    if payload["type"] != "stop" {
+        app.require_writable(&claimed.session)?;
+    }
     let (command, duplicate) = {
         let conn = app.db.lock();
         conn.validate_lease(session_id, &input.client_id, input.generation as i64)?;
@@ -1169,6 +1267,7 @@ pub async fn acquire(
     ReqBody(body): ReqBody,
 ) -> Handled {
     let claimed = app.claim(&identity, &session_id)?;
+    app.require_writable(&claimed.session)?;
     let lease = LeaseBody::parse(&body, false)?;
     let force = lease.force.unwrap_or(false);
     app.db
@@ -1256,6 +1355,7 @@ pub async fn answer(
     ReqBody(body): ReqBody,
 ) -> Handled {
     let claimed = app.claim(&identity, &session_id)?;
+    app.require_writable(&claimed.session)?;
     // `answerBody`: a client and a held generation; the rest passes through.
     let (client_id, generation) = match body.json() {
         Some(Value::Object(answer)) => match (&answer.get("clientId"), &answer.get("generation")) {
@@ -1312,6 +1412,7 @@ pub async fn upload(
     ReqBody(body): ReqBody,
 ) -> Handled {
     let claimed = app.claim(&identity, &session_id)?;
+    app.require_writable(&claimed.session)?;
     let Body::Raw {
         bytes,
         content_type,
@@ -1422,6 +1523,9 @@ async fn relay_panel(
     body: Option<Body>,
 ) -> Handled {
     let claimed = app.claim(&identity, &session_id)?;
+    if method != HttpMethod::Get {
+        app.require_writable(&claimed.session)?;
+    }
     let rest = rest_of(&uri);
     let allowed = if method == HttpMethod::Get {
         relayed_get(&rest)

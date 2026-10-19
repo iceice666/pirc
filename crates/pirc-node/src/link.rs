@@ -467,7 +467,7 @@ async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<b
                 let Some(message) = gateway_message(value) else {
                     continue;
                 };
-                handle(node, id, &mut registered, message);
+                handle(node, id, &mut registered, message).await;
             }
         }
     }
@@ -480,6 +480,7 @@ async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<b
     if !node.link.close(id) {
         return ended;
     }
+    node.replace_modes(Vec::new()).await;
     node.agent_gateway.disconnect();
     node.mirror.disconnect();
     node.inference.disconnect();
@@ -494,7 +495,19 @@ async fn connect(node: &Node, endpoint: &Url, terminated: &mut watch::Receiver<b
 
 /// A frame the link schema accepts, else `None` (ignored).
 fn gateway_message(value: Value) -> Option<GatewayMessage> {
-    let message = serde_json::from_value::<GatewayMessage>(value).ok()?;
+    let is_modes = value.get("type").and_then(Value::as_str) == Some("modes");
+    let message = match serde_json::from_value::<GatewayMessage>(value) {
+        Ok(message) => message,
+        Err(error) if is_modes => {
+            // An invalid catalog revokes old grants; ignoring it would keep
+            // capabilities the gateway may have intended to remove.
+            crate::log::warn(&format!(
+                "invalid gateway modes catalog; revoking modes: {error}"
+            ));
+            return Some(GatewayMessage::Modes { modes: Vec::new() });
+        }
+        Err(_) => return None,
+    };
     within_limits(&message).then_some(message)
 }
 
@@ -547,6 +560,7 @@ fn within_limits(message: &GatewayMessage) -> bool {
         }
         GatewayMessage::RegistrationError { .. }
         | GatewayMessage::Registered { .. }
+        | GatewayMessage::Modes { .. }
         | GatewayMessage::Models { .. }
         | GatewayMessage::HeartbeatAck
         | GatewayMessage::TerminalInput { .. }
@@ -555,7 +569,7 @@ fn within_limits(message: &GatewayMessage) -> bool {
 }
 
 /// One frame from the gateway on socket `id`.
-fn handle(node: &Node, id: u64, registered: &mut bool, message: GatewayMessage) {
+async fn handle(node: &Node, id: u64, registered: &mut bool, message: GatewayMessage) {
     match message {
         GatewayMessage::RegistrationError {
             status,
@@ -591,6 +605,14 @@ fn handle(node: &Node, id: u64, registered: &mut bool, message: GatewayMessage) 
         frame @ (GatewayMessage::ModelDelta { .. }
         | GatewayMessage::ModelEnd { .. }
         | GatewayMessage::ModelError { .. }) => node.inference.receive(frame),
+        GatewayMessage::Modes { modes } => {
+            let unique: std::collections::BTreeSet<_> = modes.iter().map(|mode| &mode.id).collect();
+            if unique.len() != modes.len() || modes.iter().any(|mode| mode.validate().is_err()) {
+                node.replace_modes(Vec::new()).await;
+            } else {
+                node.replace_modes(modes).await;
+            }
+        }
         GatewayMessage::Models { models } => {
             let providers: Vec<String> = models.providers.keys().cloned().collect();
             node.models.set(models, node.models.inference());
@@ -651,17 +673,12 @@ async fn registration(node: &Node) -> Registration {
         .collect();
     let roots = workspaces
         .iter()
-        .map(|workspace| {
-            workspace
-                .kind
-                .mode()
-                .repository
-                .then(|| workspace.canonical_path.clone())
-        })
+        .map(|workspace| Some(workspace.canonical_path.clone()))
         .collect();
     let details = workspace_details(node, roots).await;
     Registration {
         role: node.config.role,
+        modes: node.config.modes.clone(),
         protocol: Some(i64::from(NODE_PROTOCOL_VERSION)),
         workspaces: workspaces
             .into_iter()
@@ -669,7 +686,7 @@ async fn registration(node: &Node) -> Registration {
             .map(|(workspace, (roles, repo))| RegisteredWorkspace {
                 id: workspace.id,
                 display_name: workspace.display_name,
-                kind: Some(workspace.kind),
+                mode: workspace.mode,
                 roles,
                 repo,
             })
@@ -806,6 +823,7 @@ mod tests {
     fn register() -> NodeMessage {
         NodeMessage::Register(Registration {
             role: NodeRole::Node,
+            modes: Vec::new(),
             protocol: Some(9),
             workspaces: Vec::new(),
         })
@@ -822,7 +840,7 @@ mod tests {
         link.set_registered(first.id);
         assert!(link.is_registered());
         assert!(link.send_agent_frame(&NodeMessage::Heartbeat));
-        assert_eq!(link.buffered_amount(), 82);
+        assert_eq!(link.buffered_amount(), 93);
         let frame = first.recv().await.unwrap();
         assert!(frame.starts_with(r#"{"type":"register""#));
         first.written(&frame);
@@ -836,6 +854,24 @@ mod tests {
         assert!(!link.close(first.id));
         assert!(link.close(second.id));
         assert!(!link.send(&NodeMessage::Heartbeat));
+    }
+
+    #[test]
+    fn invalid_mode_frames_revoke_instead_of_retaining_old_grants() {
+        for frame in [
+            serde_json::json!({"type":"modes", "modes":[{"id":"bad"}]}),
+            serde_json::json!({"type":"modes", "modes":"not-a-catalog"}),
+            serde_json::json!({"type":"modes"}),
+        ] {
+            assert!(
+                matches!(gateway_message(frame), Some(GatewayMessage::Modes { modes }) if modes.is_empty())
+            );
+        }
+        assert!(gateway_message(serde_json::json!({"type":"unknown"})).is_none());
+        let mode = pirc_protocol::mode::default_work();
+        assert!(
+            matches!(gateway_message(serde_json::json!({"type":"modes","modes":[mode]})), Some(GatewayMessage::Modes { modes }) if modes.len() == 1)
+        );
     }
 
     #[test]

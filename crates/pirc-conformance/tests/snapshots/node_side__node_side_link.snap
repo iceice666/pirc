@@ -12,14 +12,17 @@ expression: t.into_value()
   },
   {
     "observed": {
-      "protocol": 11,
+      "modes": [
+        "directory"
+      ],
+      "protocol": 12,
       "role": "node",
       "type": "register",
       "workspaces": [
         {
           "displayName": "Test",
           "id": "test",
-          "kind": "directory",
+          "mode": "directory",
           "roles": [
             {
               "description": "General-purpose agent with the default model and all tools.",

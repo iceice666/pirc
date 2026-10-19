@@ -23,8 +23,16 @@ fn setup() -> (std::sync::Arc<App>, tempfile::TempDir) {
         conn.sync_remote_workspaces(
             "n1",
             &[
-                ("repo".into(), "pirc".into(), None),
-                ("wt".into(), "pirc-worktree".into(), None),
+                (
+                    "repo".into(),
+                    "pirc".into(),
+                    crate::db::ModeId::new("directory").unwrap(),
+                ),
+                (
+                    "wt".into(),
+                    "pirc-worktree".into(),
+                    crate::db::ModeId::new("directory").unwrap(),
+                ),
             ],
         )
         .unwrap();
@@ -321,8 +329,16 @@ fn clones_of_a_repository_find_each_others_notes() {
         conn.sync_remote_workspaces(
             "n2",
             &[
-                ("clone".into(), "pirc-clone".into(), None),
-                ("else".into(), "other".into(), None),
+                (
+                    "clone".into(),
+                    "pirc-clone".into(),
+                    crate::db::ModeId::new("directory").unwrap(),
+                ),
+                (
+                    "else".into(),
+                    "other".into(),
+                    crate::db::ModeId::new("directory").unwrap(),
+                ),
             ],
         )
         .unwrap();
@@ -489,24 +505,32 @@ fn notes_are_recalled_for_their_owner_only_never_forgotten() {
 
 #[test]
 fn a_project_searches_its_linked_workspaces_first() {
-    use crate::db::{Store as _, WorkspaceKind};
+    use crate::db::{ModeId, Store as _};
     let (app, _dir) = setup();
     {
         let conn = app.db.lock();
         conn.sync_remote_workspaces(
             "home",
             &[
-                ("chats".into(), "Chats".into(), Some(WorkspaceKind::Chat)),
-                ("trip".into(), "Trip".into(), Some(WorkspaceKind::Chat)),
-                ("blog".into(), "Blog".into(), Some(WorkspaceKind::Chat)),
+                ("chats".into(), "Chats".into(), ModeId::new("chat").unwrap()),
+                ("trip".into(), "Trip".into(), ModeId::new("chat").unwrap()),
+                ("blog".into(), "Blog".into(), ModeId::new("chat").unwrap()),
             ],
         )
         .unwrap();
         conn.sync_remote_workspaces(
             "n2",
             &[
-                ("clone".into(), "pirc-clone".into(), None),
-                ("else".into(), "other".into(), None),
+                (
+                    "clone".into(),
+                    "pirc-clone".into(),
+                    ModeId::new("directory").unwrap(),
+                ),
+                (
+                    "else".into(),
+                    "other".into(),
+                    ModeId::new("directory").unwrap(),
+                ),
             ],
         )
         .unwrap();
@@ -518,7 +542,13 @@ fn a_project_searches_its_linked_workspaces_first() {
             .unwrap();
         conn.set_workspace_repos("n2", &[("clone".into(), Some("github.com/me/pirc".into()))])
             .unwrap();
-        crate::project_links::set_links(&conn, "home:trip", &["n1:repo".to_owned()]).unwrap();
+        crate::project_links::set_links(
+            &conn,
+            &crate::app::test_modes(),
+            "home:trip",
+            &["n1:repo".to_owned()],
+        )
+        .unwrap();
     }
     let feed = |node: &str, key: &str, items: Vec<Value>| {
         ingest(

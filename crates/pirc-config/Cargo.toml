@@ -11,6 +11,8 @@ chrono-tz.workspace = true
 iana-time-zone = "0.1"
 indexmap.workspace = true
 serde_json.workspace = true
+# Shared role, skill and mode Markdown front matter (Bun.YAML semantics).
+yaml-rust2 = { version = "0.13", default-features = false }
 # `new URL(PIRC_DAEMON_URL).hostname` (WHATWG parsing, as Bun's).
 url = "2"
 # The environment allowlist's name patterns (env_allowlist.rs).

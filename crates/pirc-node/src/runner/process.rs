@@ -73,6 +73,7 @@ pub struct Runner {
     pub(super) node: WeakNode,
     pub(super) session_id: String,
     pub(super) workspace: Workspace,
+    pub(super) mode: pirc_protocol::Mode,
     pub(super) epoch: i64,
     pid: Option<u32>,
     pub(super) prepared: Prepared,
@@ -109,6 +110,10 @@ fn thrown(error: ApiError) -> String {
 }
 
 impl Runner {
+    pub(crate) fn mode_snapshot(&self) -> &pirc_protocol::Mode {
+        &self.mode
+    }
+
     pub fn epoch(&self) -> i64 {
         self.epoch
     }
@@ -226,6 +231,7 @@ impl Runner {
             node: WeakNode::new(),
             session_id: session_id.to_owned(),
             workspace,
+            mode: pirc_protocol::mode::default_work(),
             epoch: 1,
             pid: None,
             prepared,
@@ -703,14 +709,19 @@ impl Runner {
 }
 
 /// `sessionRoot` with a reason for the agent.
-pub(super) fn session_root(workspace: &Workspace, session_id: &str) -> ApiResult<PathBuf> {
-    crate::chat::session_root(workspace, session_id)
+pub(super) fn session_root(
+    workspace: &Workspace,
+    session_id: &str,
+    mode: &pirc_protocol::Mode,
+) -> ApiResult<PathBuf> {
+    crate::chat::session_root(workspace, session_id, mode)
 }
 
 /// Everything a runner is spawned from.
 pub(super) struct Spawn {
     pub session: SessionRow,
     pub workspace: Workspace,
+    pub mode: pirc_protocol::Mode,
     pub prepared: Prepared,
     /// The workspace-memory ledger the node chose (directory workspaces):
     /// the agent is told its key, and its sandbox opens only that file.
@@ -724,6 +735,7 @@ fn spawn_child(
     node: &Node,
     session: &SessionRow,
     workspace: &Workspace,
+    mode: &pirc_protocol::Mode,
     prepared: &Prepared,
     ledger: Option<&WorkspaceLedger>,
 ) -> ApiResult<(tokio::process::Child, i64)> {
@@ -731,14 +743,14 @@ fn spawn_child(
         let db = node.db.lock();
         let epoch = db.increment_epoch(&session.id)?;
         db.stale_epoch_interactions(&session.id, epoch)?;
-        let trust = if workspace.kind.mode().project_config {
+        let trust = if mode.project_config {
             db.get_workspace_trust(&workspace.id)?
         } else {
             None
         };
         (epoch, trust.unwrap_or_default())
     };
-    let root = session_root(workspace, &session.id)?;
+    let root = session_root(workspace, &session.id, mode)?;
     let mut command = prepared.command().map_err(|error| {
         ApiError::runner_unavailable(format!("Runner is not available: {error}"))
     })?;
@@ -754,6 +766,9 @@ fn spawn_child(
     // The node token must not reach the agent: its tools and shells run
     // whatever the model asks.
     let mut env = without_secrets(&node.env, &[]);
+    env.remove("PIRC_WORKSPACE_KIND");
+    env.remove("PIRC_PROJECT_FILES");
+    env.remove("PIRC_PROJECT_INSTRUCTIONS");
     let mut set = |name: &str, value: String| {
         env.insert(name.to_owned(), value);
     };
@@ -766,19 +781,22 @@ fn spawn_child(
     // Allowlisted operations on the gateway go through this node.
     set("PIRC_GATEWAY", "1".into());
     // `chat` makes the agent a personal assistant (see chat.rs).
-    set("PIRC_WORKSPACE_KIND", workspace.kind.mode().id.into());
+    set(
+        "PIRC_MODE",
+        serde_json::to_string(mode).map_err(|_| ApiError::internal())?,
+    );
     // The project config hash the user trusted; the agent ignores
     // .pirc/config.json hooks, env and allowedPaths unless they still match.
     set("PIRC_PROJECT_TRUST", trust);
     // Only for protecting it: the agent gets the text on its configure line.
-    if let Some(instructions) = crate::chat::project_instructions_path(workspace) {
+    if let Some(instructions) = crate::chat::project_instructions_path(workspace, mode) {
         set(
             "PIRC_PROJECT_INSTRUCTIONS",
             instructions.to_string_lossy().into_owned(),
         );
     }
     // The project's files, when the sandbox opened them (read-only).
-    if let Some(dir) = crate::project_files::existing_files_dir(workspace) {
+    if let Some(dir) = crate::project_files::existing_files_dir(workspace, mode) {
         let real = pirc_policy::real_resolve(&dir.to_string_lossy());
         if prepared.policy.paths.allow_read.contains(&real) {
             set("PIRC_PROJECT_FILES", real);
@@ -814,6 +832,11 @@ fn spawn_child(
     for (name, value) in &prepared.env {
         set(name, value.clone());
     }
+    // Repository env must never override the gateway's mode policy.
+    set(
+        "PIRC_MODE",
+        serde_json::to_string(mode).map_err(|_| ApiError::internal())?,
+    );
     command
         .current_dir(&root)
         .env_clear()
@@ -834,17 +857,24 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
     let Spawn {
         session,
         workspace,
+        mode,
         prepared,
         ledger,
     } = spawn;
-    let (mut child, epoch) =
-        match spawn_child(node, &session, &workspace, &prepared, ledger.as_ref()) {
-            Ok(spawned) => spawned,
-            Err(error) => {
-                prepared.cleanup();
-                return Err(error);
-            }
-        };
+    let (mut child, epoch) = match spawn_child(
+        node,
+        &session,
+        &workspace,
+        &mode,
+        &prepared,
+        ledger.as_ref(),
+    ) {
+        Ok(spawned) => spawned,
+        Err(error) => {
+            prepared.cleanup();
+            return Err(error);
+        }
+    };
     let pid = child.id();
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
     let (exited, _) = watch::channel(false);
@@ -852,6 +882,7 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         node: Arc::downgrade(node),
         session_id: session.id.clone(),
         workspace: workspace.clone(),
+        mode: mode.clone(),
         epoch,
         pid,
         prepared,
@@ -871,7 +902,7 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         "models".into(),
         serde_json::to_value(node.models.current()).unwrap_or_default(),
     );
-    let instructions = crate::chat::read_project_instructions(&workspace);
+    let instructions = crate::chat::read_project_instructions(&workspace, &mode);
     if !instructions.is_empty() {
         configure.insert("instructions".into(), json!(instructions));
     }

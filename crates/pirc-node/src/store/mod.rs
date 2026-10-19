@@ -21,8 +21,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use pirc_protocol::NodeRole;
-pub use pirc_protocol::WorkspaceKind;
+pub use pirc_protocol::ModeId;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -330,7 +329,7 @@ pub struct Workspace {
     pub display_name: String,
     pub canonical_path: String,
     pub defaults: Map<String, Value>,
-    pub kind: WorkspaceKind,
+    pub mode: ModeId,
 }
 
 /// `SessionRow`. Serializing it gives `publicSession(row)`, the session as
@@ -491,7 +490,7 @@ pub trait Store {
         host_id: &str,
         display_name: &str,
         canonical_path: &str,
-        kind: WorkspaceKind,
+        mode: ModeId,
     ) -> ApiResult<Workspace>;
     /// By display name; a chat project being deleted is left out.
     fn list_workspaces(&self) -> ApiResult<Vec<Workspace>>;
@@ -666,18 +665,6 @@ const SESSION_SELECT: &str = "SELECT s.id, s.workspace_id, s.node_id, s.owner_us
 const INTERACTION_COLUMNS: &str =
     "id, rpc_id, session_id, runner_epoch, kind, status, request_json, expires_at";
 
-fn workspace_kind(value: &str) -> WorkspaceKind {
-    if value == "chat" {
-        WorkspaceKind::Chat
-    } else {
-        WorkspaceKind::Directory
-    }
-}
-
-fn kind_text(kind: WorkspaceKind) -> &'static str {
-    kind.mode().id
-}
-
 /// A stored enum (`snake_case` text) as its Rust value; an unknown text is
 /// a corrupt row.
 fn parse_enum<T: serde::de::DeserializeOwned>(text: String) -> rusqlite::Result<T> {
@@ -711,7 +698,7 @@ fn workspace_row(row: &Row<'_>) -> rusqlite::Result<Workspace> {
         display_name: row.get("display_name")?,
         canonical_path: row.get("canonical_path")?,
         defaults: object(&row.get::<_, String>("defaults_json")?),
-        kind: workspace_kind(&row.get::<_, String>("kind")?),
+        mode: parse_enum(row.get("kind")?)?,
     })
 }
 
@@ -819,19 +806,14 @@ fn stale_interaction(message: &str) -> ApiError {
 /// The store's role pin: a chat node's state holds chat workspaces only, a
 /// coding node's directory workspaces only (`buildNodeApp`). An operator
 /// pointing the other role at the state must not expose its workspaces.
-pub fn check_role(workspaces: &[Workspace], chat: bool) -> Result<(), String> {
-    let role = if chat { NodeRole::Chat } else { NodeRole::Node };
+pub fn check_role(workspaces: &[Workspace], modes: &[ModeId]) -> Result<(), String> {
     if workspaces
         .iter()
-        .any(|workspace| workspace.kind.mode().node_role != role)
+        .any(|workspace| !modes.contains(&workspace.mode))
     {
         // TS named its executables; `pirc-chat` is `pirc-node chat` now,
         // and the text keeps the old name as well, for logs and scripts.
-        let role = if chat {
-            "pirc-chat (pirc-node chat)"
-        } else {
-            "pirc-node"
-        };
+        let role = "configured accepted modes";
         return Err(format!(
             "State contains workspaces incompatible with {role}; use the matching executable or a separate state directory"
         ));
@@ -880,10 +862,10 @@ impl Store for Connection {
     ) -> ApiResult<()> {
         atomic(self, |db| {
             let mut insert = db.prepare(
-                "INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at) \
-                 VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(id) DO UPDATE SET host_id=excluded.host_id, \
+                "INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at,kind) \
+                 VALUES (?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(id) DO UPDATE SET host_id=excluded.host_id, \
                  display_name=excluded.display_name, canonical_path=excluded.canonical_path, \
-                 defaults_json=excluded.defaults_json, kind='directory'",
+                 defaults_json=excluded.defaults_json, kind=excluded.kind",
             )?;
             for workspace in workspaces {
                 insert.execute(params![
@@ -893,6 +875,7 @@ impl Store for Connection {
                     workspace.path.to_string_lossy(),
                     Value::Object(workspace.defaults.clone()).to_string(),
                     now_ms(),
+                    workspace.mode.as_str(),
                 ])?;
             }
             Ok(())
@@ -921,7 +904,7 @@ impl Store for Connection {
         host_id: &str,
         display_name: &str,
         canonical_path: &str,
-        kind: WorkspaceKind,
+        mode: ModeId,
     ) -> ApiResult<Workspace> {
         let inserted = self.execute(
             "INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at,kind) \
@@ -932,7 +915,7 @@ impl Store for Connection {
                 display_name,
                 canonical_path,
                 now_ms(),
-                kind_text(kind)
+                mode.as_str()
             ],
         );
         match inserted {
@@ -1080,11 +1063,7 @@ impl Store for Connection {
         hash: Option<&str>,
         user: &str,
     ) -> ApiResult<()> {
-        if !self.get_workspace(workspace_id)?.kind.mode().project_config {
-            return Err(ApiError::bad_request(
-                "Only directory workspaces have a project config",
-            ));
-        }
+        self.get_workspace(workspace_id)?;
         match hash {
             None => {
                 self.execute(
@@ -1903,7 +1882,13 @@ mod tests {
         let db = Db::memory();
         let connection = db.lock();
         connection
-            .add_workspace("p", "node", "P", "/state/chat/p", WorkspaceKind::Chat)
+            .add_workspace(
+                "p",
+                "node",
+                "P",
+                "/state/chat/p",
+                ModeId::new("chat").unwrap(),
+            )
             .unwrap();
         let session = connection.create_session("p", "/private/1", "u").unwrap();
         let upload = UploadRow {
@@ -1967,7 +1952,7 @@ mod tests {
         let db = Db::memory();
         let connection = db.lock();
         connection
-            .add_workspace("w", "node", "W", "/w", WorkspaceKind::Directory)
+            .add_workspace("w", "node", "W", "/w", ModeId::new("directory").unwrap())
             .unwrap();
         let session = connection.create_session("w", "/private/1", "u").unwrap();
         drop(connection);
@@ -1975,19 +1960,46 @@ mod tests {
     }
 
     #[test]
+    fn stored_mode_ids_never_widen_to_directory() {
+        let db = Db::memory();
+        let db = db.lock();
+        let custom = ModeId::new("research").unwrap();
+        db.add_workspace("custom", "node", "Custom", "/custom", custom.clone())
+            .unwrap();
+        assert_eq!(db.list_workspaces().unwrap()[0].mode, custom);
+        check_role(&db.list_workspaces().unwrap(), &[custom]).unwrap();
+        assert!(
+            check_role(
+                &db.list_workspaces().unwrap(),
+                &[ModeId::new("directory").unwrap()]
+            )
+            .is_err()
+        );
+        db.execute("UPDATE workspaces SET kind='INVALID' WHERE id='custom'", [])
+            .unwrap();
+        assert!(db.get_workspace("custom").is_err());
+    }
+
+    #[test]
     fn workspaces_and_role_pin() {
         let db = Db::memory();
         let db = db.lock();
-        db.add_workspace("b", "node", "B", "/b", WorkspaceKind::Directory)
+        db.add_workspace("b", "node", "B", "/b", ModeId::new("directory").unwrap())
             .unwrap();
         assert_eq!(
-            db.add_workspace("b", "node", "Other", "/c", WorkspaceKind::Directory)
-                .unwrap_err()
-                .message,
+            db.add_workspace(
+                "b",
+                "node",
+                "Other",
+                "/c",
+                ModeId::new("directory").unwrap()
+            )
+            .unwrap_err()
+            .message,
             "Workspace ID or path is already registered"
         );
         assert_eq!(
-            db.add_workspace("c", "node", "C", "/b", WorkspaceKind::Directory)
+            db.add_workspace("c", "node", "C", "/b", ModeId::new("directory").unwrap())
                 .unwrap_err()
                 .status,
             409
@@ -1995,6 +2007,7 @@ mod tests {
         db.sync_workspaces(
             "node",
             &[pirc_config::ConfigWorkspace {
+                mode: ModeId::new("directory").unwrap(),
                 id: "a".into(),
                 path: "/a".into(),
                 display_name: "A".into(),
@@ -2008,26 +2021,22 @@ mod tests {
             ["a", "b"]
         );
         assert_eq!(listed[0].defaults["x"], 1);
-        check_role(&listed, false).unwrap();
+        check_role(&listed, &[ModeId::new("directory").unwrap()]).unwrap();
         assert!(
-            check_role(&listed, true)
+            check_role(&listed, &[ModeId::new("chat").unwrap()])
                 .unwrap_err()
-                .contains("incompatible with pirc-chat")
+                .contains("incompatible with configured accepted modes")
         );
         let chat = db
             .ensure_chat_workspace("chats", "node", "Chats", "/s/chat/chats")
             .unwrap();
-        assert_eq!(chat.kind, WorkspaceKind::Chat);
+        assert_eq!(chat.mode, ModeId::new("chat").unwrap());
         assert_eq!(
             db.get_workspace("nope").unwrap_err().message,
             "Workspace not found"
         );
-        assert_eq!(
-            db.set_workspace_trust("chats", Some("h"), "u")
-                .unwrap_err()
-                .status,
-            400
-        );
+        // Capability authorization belongs to the catalog-aware route, not SQL storage.
+        db.set_workspace_trust("chats", Some("h"), "u").unwrap();
         db.set_workspace_trust("a", Some("h"), "u").unwrap();
         assert_eq!(db.get_workspace_trust("a").unwrap().as_deref(), Some("h"));
         db.set_workspace_trust("a", None, "u").unwrap();

@@ -259,9 +259,10 @@ async fn agent_todo_headless() {
 #[tokio::test(flavor = "multi_thread")]
 async fn agent_todo_in_chat() {
     let mut options = AgentOptions::default().features("todo");
-    options
-        .env
-        .push(("PIRC_WORKSPACE_KIND".to_owned(), "chat".to_owned()));
+    options.env.push((
+        "PIRC_MODE".to_owned(),
+        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+    ));
     let Some(mut agent) = AgentRun::start(options).await else {
         return;
     };
@@ -282,9 +283,10 @@ async fn agent_todo_in_chat_enabled() {
         ..AgentOptions::default()
     }
     .features("todo");
-    options
-        .env
-        .push(("PIRC_WORKSPACE_KIND".to_owned(), "chat".to_owned()));
+    options.env.push((
+        "PIRC_MODE".to_owned(),
+        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+    ));
     let Some(mut agent) = AgentRun::start(options).await else {
         return;
     };

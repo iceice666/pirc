@@ -83,7 +83,14 @@ The gateway runs every model request; nodes never see keys or endpoints. Backend
 - A file provider wins over a web backend with the same ID; a web-set default model wins over the file's.
 - The file is validated at startup (invalid → the gateway does not start) and reloaded on `SIGHUP` (invalid → logged and ignored, the previous file stays in force). Running sessions use the new settings on their next request.
 
-`PIRC_CONFIG_DIR` only matters on the gateway for locating `models.json`.
+`PIRC_CONFIG_DIR` also holds gateway-owned [workspace modes](../guides/modes.md)
+in `modes/<id>.md`. The gateway seeds a missing directory with the Chat/Work
+default files, loads valid files at startup and on SIGHUP, and distributes the
+catalog to nodes. Existing directories are authoritative, even when empty;
+invalid files are warned about and omitted rather than restored. For a
+read-only provisioned config, supply the modes directory and its files before
+startup. `pirc-gateway modes --print-defaults` prints the shipped files without
+starting the daemon.
 
 ## Assistant, schedules and notifications
 

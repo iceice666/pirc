@@ -10,9 +10,10 @@ use serde_json::{Value, json};
 
 fn chat(instructions: Option<&str>) -> AgentOptions {
     let mut options = AgentOptions::default();
-    options
-        .env
-        .push(("PIRC_WORKSPACE_KIND".to_owned(), "chat".to_owned()));
+    options.env.push((
+        "PIRC_MODE".to_owned(),
+        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+    ));
     if let Some(text) = instructions {
         options.configure = json!({ "instructions": text });
     }

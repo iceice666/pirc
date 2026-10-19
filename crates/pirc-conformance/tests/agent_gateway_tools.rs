@@ -19,7 +19,10 @@ fn gateway_env(chat: bool) -> Vec<(String, String)> {
         ("PIRC_GATEWAY".to_owned(), "1".to_owned()),
     ];
     if chat {
-        env.push(("PIRC_WORKSPACE_KIND".to_owned(), "chat".to_owned()));
+        env.push((
+            "PIRC_MODE".to_owned(),
+            serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+        ));
     }
     env
 }

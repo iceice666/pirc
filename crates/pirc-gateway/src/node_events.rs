@@ -8,7 +8,7 @@ use pirc_protocol::{NodeRole, SessionActivity, SessionRun};
 use serde_json::{Map, Value, json};
 
 use crate::app::App;
-use crate::db::{Store, WorkspaceKind};
+use crate::db::Store;
 use crate::nodes::ConnectedNode;
 
 /// A session's open run and write lease, as its node reported them.
@@ -71,17 +71,22 @@ impl App {
                 (
                     workspace.id.clone(),
                     workspace.display_name.clone(),
-                    workspace.kind.map(|kind| match kind {
-                        pirc_protocol::WorkspaceKind::Chat => WorkspaceKind::Chat,
-                        pirc_protocol::WorkspaceKind::Directory => WorkspaceKind::Directory,
-                    }),
+                    workspace.mode.clone(),
                 )
             })
             .collect();
         let repos: Vec<_> = node
             .workspaces
             .iter()
-            .map(|workspace| (workspace.id.clone(), workspace.repo.clone()))
+            .map(|workspace| {
+                (
+                    workspace.id.clone(),
+                    workspace.repo.clone().filter(|_| {
+                        self.mode(&workspace.mode)
+                            .is_some_and(|mode| mode.repository)
+                    }),
+                )
+            })
             .collect();
         let synced = {
             let conn = self.db.lock();

@@ -15,6 +15,8 @@ use indexmap::{IndexMap, IndexSet};
 use serde_json::Value;
 
 pub mod env_allowlist;
+pub mod frontmatter;
+pub mod modes;
 pub mod node;
 
 pub use node::{
@@ -239,6 +241,8 @@ pub struct GatewayConfig {
     pub device_token_max_age_ms: u64,
     /// Providers and default model pushed to every node (PIRC_MODELS_FILE).
     pub models_file: PathBuf,
+    /// Gateway-owned mode definitions (`$PIRC_CONFIG_DIR/modes`).
+    pub modes_dir: PathBuf,
     /// Characters of the assistant's memory per user (USER entries, MEMORY notes).
     pub memory_budget_user: usize,
     pub memory_budget_note: usize,
@@ -321,6 +325,7 @@ impl GatewayConfig {
             device_token_idle_ms,
             device_token_max_age_ms,
             models_file: env.resolve(default_models_file(env)),
+            modes_dir: env.resolve(modes::default_modes_dir(env)),
             memory_budget_user: integer(env.get("PIRC_MEMORY_USER_CHARS"), 2000) as usize,
             memory_budget_note: integer(env.get("PIRC_MEMORY_NOTE_CHARS"), 8000) as usize,
             delegation_ttl_ms: integer(env.get("PIRC_DELEGATION_TTL_MS"), 3_600_000),

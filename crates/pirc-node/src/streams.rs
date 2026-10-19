@@ -111,6 +111,11 @@ fn close_code(status: u16) -> i64 {
 /// checked against the lease; a generation that is not an integer never
 /// matches.
 fn lease_holds(node: &Node, session_id: &str, message: &Map<String, Value>) -> bool {
+    // A stream may outlive a catalog reload. Never let an existing lease
+    // keep terminal/browser mutations alive after its mode is removed.
+    if node.session_mode(session_id).is_err() {
+        return false;
+    }
     let client_id = match message.get("clientId") {
         None | Some(Value::Null) => String::new(),
         Some(value) => string_of(value),
@@ -263,10 +268,11 @@ impl Streams {
             let workspace = db.get_workspace(&session.workspace_id)?;
             (session, workspace)
         };
+        let mode = node.workspace_mode(&workspace)?;
         let target = BrowserTarget {
             session_id: session.id.clone(),
             workspace_id: workspace.id.clone(),
-            root: crate::chat::session_root(&workspace, &session.id)?,
+            root: crate::chat::session_root(&workspace, &session.id, &mode)?,
         };
         let link = node.link.clone();
         let id = stream_id.to_owned();

@@ -345,6 +345,14 @@ impl UnsandboxedBashTool {
 spec_tool!(UnsandboxedBashTool, ptc: false);
 
 #[cfg(test)]
+pub(crate) fn registered_tool_names() -> Vec<String> {
+    vec![
+        AllowDomainsTool::new().name().to_owned(),
+        UnsandboxedBashTool::new().name().to_owned(),
+    ]
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

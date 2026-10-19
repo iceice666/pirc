@@ -470,7 +470,7 @@ expression: t.into_value()
         {
           "displayName": "Test",
           "id": "test",
-          "kind": "directory",
+          "mode": "directory",
           "roles": [
             {
               "description": "General-purpose agent with the default model and all tools.",

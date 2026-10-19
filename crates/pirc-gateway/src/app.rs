@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use axum::Router;
 use axum::extract::{ConnectInfo, FromRequest, Request, State};
@@ -31,6 +31,7 @@ use crate::{routes, sockets};
 /// Everything the routes share.
 pub struct App {
     pub config: GatewayConfig,
+    pub modes: RwLock<Arc<pirc_config::modes::ModeCatalog>>,
     pub db: Arc<Db>,
     pub devices: Arc<DeviceTokens>,
     pub management: Arc<NativeManagementGrants>,
@@ -59,7 +60,12 @@ pub struct Claimed {
 impl App {
     /// The app around its backend settings. Backend changes cancel
     /// inference in flight and send nodes the new catalog.
-    pub fn new(config: GatewayConfig, db: Arc<Db>, backends: Arc<BackendService>) -> Arc<Self> {
+    pub fn new(
+        config: GatewayConfig,
+        db: Arc<Db>,
+        backends: Arc<BackendService>,
+        catalog: pirc_config::modes::ModeCatalog,
+    ) -> Arc<Self> {
         let devices = DeviceTokens::new(
             db.clone(),
             config.device_token_idle_ms,
@@ -68,6 +74,7 @@ impl App {
         let management = Arc::new(NativeManagementGrants::new(devices.clone()));
         let app = Arc::new(Self {
             events: EventHub::new(config.event_buffer_size),
+            modes: RwLock::new(Arc::new(catalog)),
             config,
             db,
             devices,
@@ -89,6 +96,53 @@ impl App {
             }
         });
         app
+    }
+
+    pub fn catalog(&self) -> Arc<pirc_config::modes::ModeCatalog> {
+        self.modes.read().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    pub fn mode(&self, id: &pirc_protocol::mode::ModeId) -> Option<pirc_protocol::Mode> {
+        self.catalog().modes.get(id).cloned()
+    }
+
+    pub fn require_mode(&self, workspace: &crate::db::Workspace) -> ApiResult<pirc_protocol::Mode> {
+        self.mode(&workspace.mode).ok_or_else(|| {
+            ApiError::new(
+                409,
+                "mode_unavailable",
+                format!(
+                    "Workspace mode {} is unavailable; existing sessions are read-only",
+                    workspace.mode
+                ),
+            )
+        })
+    }
+
+    pub fn require_writable(&self, session: &Session) -> ApiResult<()> {
+        let workspace = self.db.lock().get_workspace(&session.workspace_id)?;
+        self.require_mode(&workspace).map(|_| ())
+    }
+
+    pub fn public_modes(&self) -> Vec<pirc_protocol::Mode> {
+        self.catalog().modes.values().cloned().collect()
+    }
+
+    pub fn reload_modes(&self) {
+        match pirc_config::modes::load_modes(&self.config.modes_dir) {
+            Ok(catalog) => {
+                for warning in &catalog.warnings {
+                    crate::log::warn(&warning.to_string());
+                }
+                *self.modes.write().unwrap_or_else(|p| p.into_inner()) = Arc::new(catalog);
+                self.nodes
+                    .broadcast(&serde_json::json!({"type":"modes", "modes":self.public_modes()}));
+                self.directory_changed();
+            }
+            Err(error) => crate::log::error(&format!(
+                "modes reload failed; keeping previous catalog: {error}"
+            )),
+        }
     }
 
     /// Authenticate a request's parts (`validateRequest`).
@@ -186,6 +240,18 @@ impl App {
     }
 }
 
+#[cfg(test)]
+pub fn test_modes() -> pirc_config::modes::ModeCatalog {
+    let mut catalog = pirc_config::modes::ModeCatalog::default();
+    for mode in [
+        pirc_protocol::mode::default_chat(),
+        pirc_protocol::mode::default_work(),
+    ] {
+        catalog.modes.insert(mode.id.clone(), mode);
+    }
+    catalog
+}
+
 pub fn empty_models() -> Models {
     Models {
         providers: Default::default(),
@@ -270,6 +336,7 @@ pub fn router(app: AppState) -> Router {
             "/api/workspaces",
             get(routes::list_workspaces).post(routes::create_workspace),
         )
+        .route("/api/modes", get(routes::list_modes))
         .route(
             "/api/workspaces/{workspace_id}/capabilities",
             get(routes::get_capabilities).patch(routes::patch_capabilities),

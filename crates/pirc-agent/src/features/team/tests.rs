@@ -15,6 +15,25 @@ use super::broker::{
 use super::full_events;
 use crate::features::ask_question::{QuestionResult, QuestionStatus};
 
+#[test]
+fn children_inherit_the_frozen_mode_not_project_or_process_overrides() {
+    let mut mode = pirc_protocol::mode::default_work();
+    mode.tools = Some(vec!["read".into()]);
+    let mut env = indexmap::IndexMap::from([
+        (
+            "PIRC_MODE".into(),
+            serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+        ),
+        ("PIRC_WORKSPACE_KIND".into(), "chat".into()),
+    ]);
+    super::freeze_child_mode(&mut env, &mode);
+    assert!(!env.contains_key("PIRC_WORKSPACE_KIND"));
+    assert_eq!(
+        serde_json::from_str::<pirc_protocol::Mode>(&env["PIRC_MODE"]).unwrap(),
+        mode
+    );
+}
+
 fn map(value: Value) -> Json {
     value.as_object().cloned().unwrap()
 }

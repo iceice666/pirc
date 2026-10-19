@@ -6,11 +6,13 @@ expression: t.into_value()
   {
     "body": {
       "workspace": {
+        "available": true,
         "defaults": {},
         "displayName": "Trip",
         "hostId": "test",
         "id": "test:<workspace:1>",
-        "kind": "chat"
+        "kind": "chat",
+        "mode": "chat"
       }
     },
     "headers": {

@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
+use pirc_protocol::mode::Mode;
 use rustix::fs::{AtFlags, renameat, unlinkat};
 use serde_json::{Value, json};
 
@@ -58,24 +59,21 @@ impl ProjectFile {
 }
 
 /// A chat workspace's files directory (`None` for a directory workspace).
-pub fn files_dir(workspace: &Workspace) -> Option<PathBuf> {
-    workspace
-        .kind
-        .mode()
-        .project_files
+pub fn files_dir(workspace: &Workspace, mode: &Mode) -> Option<PathBuf> {
+    mode.project_files
         .then(|| Path::new(&workspace.canonical_path).join(FILES_DIR))
 }
 
 /// The directory when it exists as a real directory: what a starting
 /// session is given.
-pub fn existing_files_dir(workspace: &Workspace) -> Option<PathBuf> {
-    files_dir(workspace).filter(|dir| {
+pub fn existing_files_dir(workspace: &Workspace, mode: &Mode) -> Option<PathBuf> {
+    files_dir(workspace, mode).filter(|dir| {
         std::fs::symlink_metadata(dir).is_ok_and(|metadata| metadata.file_type().is_dir())
     })
 }
 
-fn only_chat(workspace: &Workspace) -> ApiResult<PathBuf> {
-    files_dir(workspace)
+fn only_chat(workspace: &Workspace, mode: &Mode) -> ApiResult<PathBuf> {
+    files_dir(workspace, mode)
         .ok_or_else(|| ApiError::bad_request("Only chat projects have project files"))
 }
 
@@ -107,8 +105,8 @@ fn listed(name: &str) -> bool {
 }
 
 /// The project's files, by name (none when the directory does not exist).
-pub fn list(workspace: &Workspace) -> ApiResult<Vec<ProjectFile>> {
-    let dir = only_chat(workspace)?;
+pub fn list(workspace: &Workspace, mode: &Mode) -> ApiResult<Vec<ProjectFile>> {
+    let dir = only_chat(workspace, mode)?;
     match std::fs::symlink_metadata(&dir) {
         Ok(metadata) if metadata.file_type().is_dir() => {}
         // Not one the node made: nothing is listed, and writing refuses it.
@@ -154,11 +152,16 @@ pub fn list(workspace: &Workspace) -> ApiResult<Vec<ProjectFile>> {
 
 /// Store `bytes` as `requested` (replacing a file of that name); 409 when
 /// the project already holds [`MAX_FILES`] others.
-pub fn write(workspace: &Workspace, requested: &str, bytes: &[u8]) -> ApiResult<ProjectFile> {
-    let dir_path = only_chat(workspace)?;
+pub fn write(
+    workspace: &Workspace,
+    requested: &str,
+    bytes: &[u8],
+    mode: &Mode,
+) -> ApiResult<ProjectFile> {
+    let dir_path = only_chat(workspace, mode)?;
     let name = file_name(requested)?;
     let _guard = WRITES.lock().unwrap_or_else(|p| p.into_inner());
-    let others = list(workspace)?
+    let others = list(workspace, mode)?
         .iter()
         .filter(|file| file.name != name)
         .count();
@@ -178,15 +181,15 @@ pub fn write(workspace: &Workspace, requested: &str, bytes: &[u8]) -> ApiResult<
         crate::private_dir::remove(&dir, &temp);
         return Err(io_failure("writing", &dir_path.join(&name), error));
     }
-    list(workspace)?
+    list(workspace, mode)?
         .into_iter()
         .find(|file| file.name == name)
         .ok_or_else(ApiError::internal)
 }
 
 /// Remove the file `requested`; 404 "File not found" when there is none.
-pub fn remove(workspace: &Workspace, requested: &str) -> ApiResult<()> {
-    let dir_path = only_chat(workspace)?;
+pub fn remove(workspace: &Workspace, requested: &str, mode: &Mode) -> ApiResult<()> {
+    let dir_path = only_chat(workspace, mode)?;
     let name = file_name(requested)?;
     let _guard = WRITES.lock().unwrap_or_else(|p| p.into_inner());
     let path = dir_path.join(&name);
@@ -212,17 +215,47 @@ mod tests {
     use serde_json::Map;
 
     use super::*;
-    use crate::store::WorkspaceKind;
+    use pirc_protocol::mode::{ModeId, default_chat, default_work};
 
-    fn workspace(dir: &Path, kind: WorkspaceKind) -> Workspace {
+    fn workspace(dir: &Path, mode: ModeId) -> Workspace {
         Workspace {
             id: "p".into(),
             host_id: "n".into(),
             display_name: "P".into(),
             canonical_path: dir.to_string_lossy().into_owned(),
             defaults: Map::new(),
-            kind,
+            mode,
         }
+    }
+
+    // Explicit fixture resolution belongs only in tests: production helpers
+    // receive definitions from the gateway catalog.
+    fn fixture(workspace: &Workspace) -> Mode {
+        if workspace.mode == default_chat().id {
+            default_chat()
+        } else {
+            default_work()
+        }
+    }
+
+    fn list(workspace: &Workspace) -> ApiResult<Vec<ProjectFile>> {
+        super::list(workspace, &fixture(workspace))
+    }
+
+    fn write(workspace: &Workspace, requested: &str, bytes: &[u8]) -> ApiResult<ProjectFile> {
+        super::write(workspace, requested, bytes, &fixture(workspace))
+    }
+
+    fn remove(workspace: &Workspace, requested: &str) -> ApiResult<()> {
+        super::remove(workspace, requested, &fixture(workspace))
+    }
+
+    fn files_dir(workspace: &Workspace) -> Option<PathBuf> {
+        super::files_dir(workspace, &fixture(workspace))
+    }
+
+    fn existing_files_dir(workspace: &Workspace) -> Option<PathBuf> {
+        super::existing_files_dir(workspace, &fixture(workspace))
     }
 
     #[test]
@@ -240,7 +273,7 @@ mod tests {
     #[test]
     fn upload_replace_list_and_remove() {
         let dir = tempfile::tempdir().unwrap();
-        let project = workspace(dir.path(), WorkspaceKind::Chat);
+        let project = workspace(dir.path(), default_chat().id);
         assert_eq!(list(&project).unwrap(), Vec::new());
         assert_eq!(existing_files_dir(&project), None);
 
@@ -284,7 +317,7 @@ mod tests {
     #[test]
     fn a_full_project_still_replaces() {
         let dir = tempfile::tempdir().unwrap();
-        let project = workspace(dir.path(), WorkspaceKind::Chat);
+        let project = workspace(dir.path(), default_chat().id);
         for index in 0..MAX_FILES {
             write(&project, &format!("f{index}"), b"x").unwrap();
         }
@@ -300,7 +333,7 @@ mod tests {
     fn symlinks_are_neither_listed_nor_written_through() {
         let dir = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();
-        let project = workspace(dir.path(), WorkspaceKind::Chat);
+        let project = workspace(dir.path(), default_chat().id);
         std::os::unix::fs::symlink(outside.path(), dir.path().join(FILES_DIR)).unwrap();
         assert_eq!(existing_files_dir(&project), None);
         assert_eq!(write(&project, "a", b"x").unwrap_err().status, 500);
@@ -310,7 +343,7 @@ mod tests {
     #[test]
     fn directory_workspaces_have_none() {
         let dir = tempfile::tempdir().unwrap();
-        let directory = workspace(dir.path(), WorkspaceKind::Directory);
+        let directory = workspace(dir.path(), default_work().id);
         assert_eq!(files_dir(&directory), None);
         assert_eq!(list(&directory).unwrap_err().status, 400);
         assert_eq!(write(&directory, "a", b"x").unwrap_err().status, 400);

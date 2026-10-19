@@ -25,15 +25,7 @@ use crate::tools::Tool;
 /// whose tools cost context a personal assistant rarely needs).
 /// `features.<key>.enabled: true` in the node's config brings one back.
 pub fn off_in_mode(agent: &Agent, key: &str) -> bool {
-    let config = agent.config();
-    if !config.mode().feature_off(key) {
-        return false;
-    }
-    config
-        .features
-        .get(key)
-        .and_then(|settings| settings.get("enabled"))
-        != Some(&Value::Bool(true))
+    agent.config().feature_disabled(key)
 }
 
 /// What a feature adds to the system prompt before a run.

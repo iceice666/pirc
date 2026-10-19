@@ -29,10 +29,11 @@ deletion are not open work.
    limit versus monthly re-pairing (including A7's near-expiry warning),
    sideload-only versus F-Droid/Play distribution and production signing, and
    whether the native Context inspector is later or never.
-4. **Data-driven workspace modes.** [Modes](modes.md) phases 2–3: load the mode
-   catalog from gateway configuration and send it to nodes (protocol 12), then
-   build web and Android from that catalog. Capability-based branches (phase 1)
-   are already implemented; their conformance suite was not run.
+4. **Data-driven workspace modes.** [Modes](modes.md) phase 3: build Web and
+   Android from the gateway-owned catalog. Phase 2 (configuration, protocol 12,
+   mode-id stores and agent enforcement) is implemented; full Linux conformance
+   passed 217 tests with reviewed snapshots on 2026-10-19. Phase 3 still needs
+   the user's go-ahead.
 
 ## Shelved: project-only memory (B)
 

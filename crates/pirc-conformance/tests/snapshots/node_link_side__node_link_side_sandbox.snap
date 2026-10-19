@@ -119,6 +119,7 @@ expression: t.into_value()
             "<tmp>/node-config",
             "<tmp>/node-config/SOUL.md",
             "<tmp>/node-config/CHAT.md",
+            "<tmp>/node-config/modes",
             "<tmp>/node-state/sandbox/bin"
           ]
         },

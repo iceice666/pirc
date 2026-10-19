@@ -135,6 +135,8 @@ pub async fn start_session(
     user: &str,
     title: &str,
 ) -> Result<Session, NodeFailure> {
+    app.require_mode(workspace)
+        .map_err(|e| NodeFailure(e.message))?;
     let node_id = workspace.host_id.clone();
     let local = workspace.local_id().unwrap_or_default().to_owned();
     let created = node_request(
@@ -192,6 +194,8 @@ pub async fn deliver(
     user: &str,
     message: Value,
 ) -> Result<(), NodeFailure> {
+    app.require_writable(session)
+        .map_err(|e| NodeFailure(e.message))?;
     let (Some(node_id), Some(remote)) = (&session.node_id, &session.pi_session_id) else {
         return Err(NodeFailure("Session not found".into()));
     };
@@ -306,7 +310,11 @@ pub fn resolve_directory_workspace(app: &App, reference: &str) -> ApiResult<Work
         .lock()
         .list_workspaces()?
         .into_iter()
-        .filter(|workspace| workspace.kind.mode().delegate_target && workspace.id.contains(':'))
+        .filter(|workspace| {
+            app.mode(&workspace.mode)
+                .is_some_and(|mode| mode.delegate_target)
+                && workspace.id.contains(':')
+        })
         .collect();
     if let Some(exact) = all.iter().find(|workspace| workspace.id == reference) {
         return Ok(exact.clone());

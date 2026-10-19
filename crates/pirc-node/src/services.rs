@@ -11,8 +11,10 @@
 //! task: `main` holds it until [`Services::close`] returns). Route handlers
 //! and link hooks get the [`Node`] itself.
 
+use pirc_protocol::{Mode, ModeId};
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, RwLock, Weak};
 
 use pirc_config::{Env, NodeConfig};
 use tokio::sync::{Notify, watch};
@@ -48,6 +50,7 @@ pub struct Services {
     pub events: Arc<EventHub>,
     /// The gateway's catalog with the node's inference socket.
     pub models: ModelStore,
+    pub modes: RwLock<BTreeMap<ModeId, Mode>>,
     /// Frames to the gateway (layout; the client is core's).
     pub link: LinkSender,
     /// Open runs or write leases changed: the link sends `activity` (TS
@@ -82,6 +85,104 @@ const _: fn() = || {
 };
 
 impl Services {
+    pub fn mode(&self, id: &ModeId) -> crate::error::ApiResult<Mode> {
+        if !self.config.modes.contains(id) {
+            return Err(crate::error::ApiError::forbidden(
+                "Node does not accept this mode",
+            ));
+        }
+        self.modes
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(id)
+            .cloned()
+            .ok_or_else(|| {
+                crate::error::ApiError::new(
+                    409,
+                    "mode_unavailable",
+                    format!("Mode {id} is unavailable"),
+                )
+            })
+    }
+
+    pub fn workspace_mode(
+        &self,
+        workspace: &crate::store::Workspace,
+    ) -> crate::error::ApiResult<Mode> {
+        let mode = self.mode(&workspace.mode)?;
+        let state = self.config.state_dir.canonicalize().map_err(|_| {
+            crate::error::ApiError::new(
+                409,
+                "mode_unavailable",
+                "Node state directory is unavailable",
+            )
+        })?;
+        let expected = state.join("chat").join(&workspace.id);
+        let actual = std::path::Path::new(&workspace.canonical_path);
+        let expected = expected.canonicalize().unwrap_or(expected);
+        let managed = actual == expected;
+        let compatible = match mode.workdir {
+            pirc_protocol::mode::Workdir::PerSession => managed,
+            pirc_protocol::mode::Workdir::Workspace => !actual.starts_with(&state),
+        };
+        if !compatible {
+            return Err(crate::error::ApiError::new(
+                409,
+                "mode_unavailable",
+                "Mode workdir is incompatible with stored workspace layout",
+            ));
+        }
+        Ok(mode)
+    }
+
+    pub fn session_mode(&self, session_id: &str) -> crate::error::ApiResult<Mode> {
+        let db = self.db.lock();
+        let session = db.get_session(session_id)?;
+        let workspace = db.get_workspace(&session.workspace_id)?;
+        let mode = self.workspace_mode(&workspace)?;
+        drop(db);
+        if self
+            .runners
+            .get(session_id)
+            .is_some_and(|runner| runner.mode_snapshot() != &mode)
+        {
+            return Err(crate::error::ApiError::new(
+                409,
+                "mode_unavailable",
+                "Mode changed; runner is stopping",
+            ));
+        }
+        Ok(mode)
+    }
+
+    pub async fn replace_modes(&self, modes: Vec<Mode>) {
+        let next: BTreeMap<_, _> = modes
+            .into_iter()
+            .map(|mode| (mode.id.clone(), mode))
+            .collect();
+        let old = std::mem::replace(
+            &mut *self.modes.write().unwrap_or_else(|e| e.into_inner()),
+            next.clone(),
+        );
+        if old != next {
+            self.inference.disconnect();
+        }
+        let sessions = {
+            let db = self.db.lock();
+            db.list_workspaces()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|workspace| old.get(&workspace.mode) != next.get(&workspace.mode))
+                .flat_map(|workspace| db.workspace_sessions(&workspace.id).unwrap_or_default())
+                .map(|session| session.id)
+                .collect::<Vec<_>>()
+        };
+        for id in sessions {
+            let _ = self.runners.stop_session(&id).await;
+            self.terminals.dispose_session(&id).await;
+        }
+    }
+
     /// `buildNodeApp` and the start of `startNode` (owner: **core**):
     ///
     /// 1. Refuse a TS-era `gateway.sqlite` and open the store
@@ -110,12 +211,12 @@ impl Services {
             // role's persisted workspaces.
             crate::store::check_role(
                 &connection.list_workspaces().map_err(failed)?,
-                config.chat(),
+                &config.modes,
             )?;
             connection
                 .sync_workspaces(&config.node_id, &config.workspaces)
                 .map_err(failed)?;
-            if config.chat() {
+            if config.chat() && config.modes.iter().any(|mode| mode.as_str() == "chat") {
                 crate::chat::ensure_top_level_chats(&config, &connection).map_err(failed)?;
             }
             let recovery = connection.recover_startup().map_err(failed)?;
@@ -141,6 +242,7 @@ impl Services {
             db,
             events,
             models: ModelStore::new(),
+            modes: RwLock::new(BTreeMap::new()),
             link: LinkSender::new(),
             activity: Notify::new(),
             router,

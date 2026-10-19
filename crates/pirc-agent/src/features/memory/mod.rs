@@ -69,7 +69,10 @@ use crate::ui::NotifyLevel;
 
 /// `memoryConfig(agent)`.
 pub fn memory_config(agent: &Agent) -> MemoryConfig {
-    memory_config_from(&agent.config().features)
+    let config = agent.config();
+    let mut settings = memory_config_from(&config.features);
+    settings.enabled &= !config.feature_disabled_by_mode("observationalMemory");
+    settings
 }
 
 /// `poolTarget`.

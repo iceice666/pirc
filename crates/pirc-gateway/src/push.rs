@@ -1708,8 +1708,15 @@ mod tests {
         .unwrap();
         let session = {
             let conn = push.db.lock();
-            conn.sync_remote_workspaces("work", &[("pirc".into(), "pirc".into(), None)])
-                .unwrap();
+            conn.sync_remote_workspaces(
+                "work",
+                &[(
+                    "pirc".into(),
+                    "pirc".into(),
+                    crate::db::ModeId::new("directory").unwrap(),
+                )],
+            )
+            .unwrap();
             conn.create_session("work:pirc", "node://work/r1", "work", "r1", "me")
                 .unwrap()
         };
