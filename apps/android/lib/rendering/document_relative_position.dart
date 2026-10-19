@@ -87,6 +87,7 @@ const _nativeRelativeAuto = _NativeRelativeInset.auto();
 ///
 /// Only the literal forms implemented by the native renderer are accepted:
 /// signed px and percentage values, auto, and zero values in CSS length units.
+/// Nonzero em/rem/vw/vh values require canonical lengths from the native cascade.
 /// Percentages remain unresolved until the containing block's actual content
 /// dimensions are available.
 class NativeDocumentRelativePositionSpec {
@@ -108,11 +109,13 @@ class NativeDocumentRelativePositionSpec {
   ///
   /// A null result means the element is not relatively positioned or one of
   /// its effective insets is outside the supported physical px/percentage
-  /// subset. Zero logical insets are harmless and accepted; nonzero logical
+  /// subset or lacks a reliable computed em/rem/vw/vh length. Zero logical
+  /// insets are harmless and accepted; nonzero logical
   /// insets are rejected because their mapping depends on writing mode.
   static NativeDocumentRelativePositionSpec? parse(
     Map<String, String> styles, {
     TextDirection direction = TextDirection.ltr,
+    Map<String, String> computedLengths = const {},
   }) {
     final declarations = <String, String>{
       for (final entry in styles.entries)
@@ -122,27 +125,21 @@ class NativeDocumentRelativePositionSpec {
       return null;
     }
 
-    final sides = <String, _NativeRelativeInset>{
-      'top': _nativeRelativeAuto,
-      'right': _nativeRelativeAuto,
-      'bottom': _nativeRelativeAuto,
-      'left': _nativeRelativeAuto,
+    final sides = <String, String>{
+      'top': 'auto',
+      'right': 'auto',
+      'bottom': 'auto',
+      'left': 'auto',
     };
 
     final shorthand = declarations['inset'];
     if (shorthand != null) {
       final tokens = _tokens(shorthand);
       if (tokens.isEmpty || tokens.length > 4) return null;
-      final values = <_NativeRelativeInset>[];
-      for (final token in tokens) {
-        final parsed = _parseInset(token);
-        if (parsed == null) return null;
-        values.add(parsed);
-      }
-      final top = values[0];
-      final right = values.length > 1 ? values[1] : top;
-      final bottom = values.length > 2 ? values[2] : top;
-      final left = values.length > 3 ? values[3] : right;
+      final top = tokens[0];
+      final right = tokens.length > 1 ? tokens[1] : top;
+      final bottom = tokens.length > 2 ? tokens[2] : top;
+      final left = tokens.length > 3 ? tokens[3] : right;
       sides
         ..['top'] = top
         ..['right'] = right
@@ -153,9 +150,16 @@ class NativeDocumentRelativePositionSpec {
     for (final side in const ['top', 'right', 'bottom', 'left']) {
       final raw = declarations[side];
       if (raw == null) continue;
-      final parsed = _parseInset(raw);
+      sides[side] = raw;
+    }
+    final insets = <String, _NativeRelativeInset>{};
+    for (final entry in sides.entries) {
+      final parsed = _parseInset(
+        entry.value,
+        computedValue: computedLengths[entry.key],
+      );
       if (parsed == null) return null;
-      sides[side] = parsed;
+      insets[entry.key] = parsed;
     }
 
     const logicalInsets = {
@@ -176,10 +180,10 @@ class NativeDocumentRelativePositionSpec {
     }
 
     return NativeDocumentRelativePositionSpec._(
-      top: sides['top']!,
-      right: sides['right']!,
-      bottom: sides['bottom']!,
-      left: sides['left']!,
+      top: insets['top']!,
+      right: insets['right']!,
+      bottom: insets['bottom']!,
+      left: insets['left']!,
       direction: direction,
     );
   }
@@ -229,7 +233,10 @@ class NativeDocumentRelativePositionSpec {
     });
   }
 
-  static _NativeRelativeInset? _parseInset(String value) {
+  static _NativeRelativeInset? _parseInset(
+    String value, {
+    String? computedValue,
+  }) {
     final normalized = value.trim().toLowerCase();
     if (normalized == 'auto') return _nativeRelativeAuto;
     final match = RegExp(
@@ -245,6 +252,20 @@ class NativeDocumentRelativePositionSpec {
     if (number == 0 &&
         (unit == null || _relativeZeroLengthUnits.contains(unit))) {
       return const _NativeRelativeInset.pixels(0);
+    }
+    if (const {'em', 'rem', 'vw', 'vh'}.contains(unit) &&
+        computedValue != null) {
+      // Use the cascade's reliable font/root-font/viewport result. Missing
+      // bases must stay unsupported, never become guessed 16px/viewport values.
+      final pixels = RegExp(
+        r'^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)px$',
+        caseSensitive: false,
+      ).firstMatch(computedValue.trim());
+      final resolved = pixels == null
+          ? null
+          : double.tryParse(pixels.group(1)!);
+      if (resolved == null || !resolved.isFinite) return null;
+      return _NativeRelativeInset.pixels(resolved);
     }
     return null;
   }

@@ -33,6 +33,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
+- Android interactive content keeps relative positioning and link hits aligned with font and viewport units.
+
 - Android Back/Forward no longer waits for a layout timeout on ready static pages.
 
 - Android initial page routing preserves document targets and history reading positions.
