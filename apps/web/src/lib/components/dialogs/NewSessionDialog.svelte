@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { app } from '../../app.svelte';
+  import { isReadOnly } from '../../modes';
   import Modal from './Modal.svelte';
   import { watch } from '../../watch.svelte';
 
@@ -13,18 +14,18 @@
   let workspaceId = $state('');
   let creating = $state(false);
 
-  // Preselect the first workspace whose device is online.
+  // Preselect the first workspace that takes new sessions (online, mode available).
   watch(
     () => open,
     (isOpen) => {
       if (isOpen)
-        workspaceId = app.workspaces.find((workspace) => app.workspaceOnline(workspace))?.id ?? '';
+        workspaceId = app.workspaces.find((workspace) => app.acceptsSessions(workspace))?.id ?? '';
     },
     { immediate: true },
   );
 
   const chosenOnline = $derived(
-    app.workspaceOnline(app.workspaces.find((workspace) => workspace.id === workspaceId)),
+    app.acceptsSessions(app.workspaces.find((workspace) => workspace.id === workspaceId)),
   );
 
   async function create() {
@@ -52,10 +53,12 @@
     ><span>Workspace</span><select bind:value={workspaceId}
       >{#each app.workspaces as workspace (workspace.id)}<option
           value={workspace.id}
-          disabled={!app.workspaceOnline(workspace)}
-          >{workspace.displayName} · {workspace.hostId}{app.workspaceOnline(workspace)
-            ? ''
-            : ' (offline)'}</option
+          disabled={!app.acceptsSessions(workspace)}
+          >{workspace.displayName} · {workspace.hostId}{!app.workspaceOnline(workspace)
+            ? ' (offline)'
+            : isReadOnly(workspace)
+              ? ' (read-only)'
+              : ''}</option
         >{/each}</select
     ></label
   >

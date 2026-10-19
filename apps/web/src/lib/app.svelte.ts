@@ -4,7 +4,8 @@
  * the UI sends. Components read it directly instead of receiving it as props.
  */
 import { api, connectEvents, ApiError, type EventConnection } from './api';
-import { isChatWorkspace, type NewWorkspace } from './chats';
+import type { NewWorkspace } from './chats';
+import { isReadOnly, modeOf, tabOf } from './modes';
 import { memoryApi, type MemoryProposal } from './memory';
 import { projectDeletionApi, type ProjectMemoryDecision } from './project-deletion';
 import { schedulesApi, type Schedule, type ScheduleRun } from './schedules';
@@ -39,6 +40,7 @@ import type {
   CommandKind,
   ConnectionState,
   InteractionAnswer,
+  ModeInfo,
   ModelOption,
   NodeSummary,
   QueueItem,
@@ -51,7 +53,10 @@ import { modelKey } from './types';
 
 export type Upload = Attachment & { preview?: string; uploading?: boolean };
 
-/** The sidebar's two lists: the assistant's chats, or the agents' work. */
+/**
+ * The sidebar's two lists: the assistant's chats, or the agents' work. A
+ * workspace's mode decides its list (`tabOf`).
+ */
 export type SidebarMode = 'chat' | 'work';
 /** What the main column shows: a session, the schedules, or a project's or workspace's page. */
 export type MainView = 'session' | 'schedules' | 'workspace';
@@ -92,6 +97,8 @@ const SHOWN_ELSEWHERE = new Set(['background-task', 'agent-team']);
 class AppState {
   workspaces = $state.raw<Workspace[]>([]);
   nodes = $state.raw<NodeSummary[]>([]);
+  /** The gateway's workspace modes (empty from older gateways: the legacy `kind` decides). */
+  modeCatalog = $state.raw<ModeInfo[]>([]);
   /** USER changes the assistant proposed that wait for your approval. */
   memoryPending = $state(0);
   /** Bumped whenever the gateway says your memory changed; open memory views reload. */
@@ -265,7 +272,7 @@ class AppState {
     const workspace = this.workspaces.find((item) => item.id === workspaceId);
     if (!workspace) return;
     // The sidebar shows the list the page belongs to.
-    this.setMode(isChatWorkspace(workspace) ? 'chat' : 'work');
+    this.setMode(tabOf(workspace, this.modeCatalog));
     this.workspaceViewId = workspaceId;
     this.view = 'workspace';
     this.#address(`?workspace=${encodeURIComponent(workspaceId)}`);
@@ -312,12 +319,14 @@ class AppState {
     let linkedTarget: PushTarget | undefined;
     let linkedInteraction: PushInteraction | undefined;
     try {
-      [this.workspaces, this.sessions, this.models, this.nodes] = await Promise.all([
-        api.workspaces(),
-        api.sessions(),
-        api.models(),
-        api.nodes(),
-      ]);
+      [this.workspaces, this.sessions, this.models, this.nodes, this.modeCatalog] =
+        await Promise.all([
+          api.workspaces(),
+          api.sessions(),
+          api.models(),
+          api.nodes(),
+          this.#loadModes(),
+        ]);
       this.#sessionsVersion++;
       this.activeSessionId = this.sessions[0]?.id;
       // A notification or a shared link names what to open.
@@ -339,6 +348,7 @@ class AppState {
         this.connection = navigator.onLine ? 'connected' : 'offline';
         this.workspaces = demo.demoWorkspaces;
         this.nodes = demo.demoNodes;
+        this.modeCatalog = demo.demoModes;
         this.sessions = demo.demoSessions;
         this.#sessionsVersion++;
         this.models = demo.demoModels;
@@ -352,7 +362,7 @@ class AppState {
     const page = new URL(location.href).searchParams.get('workspace');
     const pageWorkspace = page ? this.workspaces.find((item) => item.id === page) : undefined;
     if (pageWorkspace) {
-      this.setMode(isChatWorkspace(pageWorkspace) ? 'chat' : 'work');
+      this.setMode(tabOf(pageWorkspace, this.modeCatalog));
       this.workspaceViewId = pageWorkspace.id;
       this.view = 'workspace';
     }
@@ -374,9 +384,14 @@ class AppState {
   async refreshNodes() {
     if (this.demo) return;
     try {
-      const [online, available] = await Promise.all([api.nodes(), api.workspaces()]);
+      const [online, available, modes] = await Promise.all([
+        api.nodes(),
+        api.workspaces(),
+        this.#loadModes(),
+      ]);
       this.nodes = online;
       this.workspaces = available;
+      this.modeCatalog = modes;
     } catch {
       /* keep the last lists */
     }
@@ -1277,12 +1292,29 @@ class AppState {
     }
   }
 
+  /** The catalog without a failed refresh's gap: an error keeps the last one. */
+  #loadModes() {
+    return api.modes().catch(() => this.modeCatalog);
+  }
+
+  /** What a workspace can do: its mode's capabilities (or its legacy kind's). */
+  modeOf(workspace: Workspace): ModeInfo;
+  modeOf(workspace: Workspace | undefined): ModeInfo | undefined;
+  modeOf(workspace: Workspace | undefined) {
+    return modeOf(workspace, this.modeCatalog);
+  }
+
   /** Whether a workspace's device is reachable (local workspaces always are). */
   workspaceOnline(workspace: Workspace | undefined) {
     return (
       !!workspace &&
       (!workspace.id.includes(':') || this.nodes.some((node) => node.id === workspace.hostId))
     );
+  }
+
+  /** Whether a new session can start there: online, and its mode still in the catalog. */
+  acceptsSessions(workspace: Workspace | undefined) {
+    return this.workspaceOnline(workspace) && !isReadOnly(workspace);
   }
 
   /** Add a workspace on a device. Throws with a displayable message on failure. */
@@ -1298,6 +1330,10 @@ class AppState {
     const workspace = this.workspaces.find((item) => item.id === workspaceId);
     if (workspace && !this.workspaceOnline(workspace)) {
       this.pageError = `${workspace.displayName} is offline.`;
+      return false;
+    }
+    if (isReadOnly(workspace)) {
+      this.pageError = `${workspace!.displayName} is read-only: its mode is no longer available.`;
       return false;
     }
     this.pageError = '';

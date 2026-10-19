@@ -21,7 +21,8 @@
   import { tick } from 'svelte';
   import { rovingFocus } from '../a11y';
   import { app } from '../app.svelte';
-  import { isChatWorkspace, isTopLevelChats } from '../chats';
+  import { isTopLevelChats } from '../chats';
+  import { capitalized, isAssistant, isReadOnly } from '../modes';
   import { shortAgo } from '../time';
   import type { SessionSummary, Workspace } from '../types';
   import { watch } from '../watch.svelte';
@@ -52,19 +53,25 @@
     showSettled = false,
   }: Props = $props();
 
-  const chat = $derived(isChatWorkspace(workspace));
-  const topLevel = $derived(isTopLevelChats(workspace));
+  /** What this workspace can do; the page shows only that. */
+  const mode = $derived(app.modeOf(workspace));
+  /** The assistant's chats or one of its projects. */
+  const chat = $derived(isAssistant(mode));
+  const topLevel = $derived(isTopLevelChats(workspace, app.modeCatalog));
   const online = $derived(app.workspaceOnline(workspace));
+  /** Its mode left the catalog: the history stays readable, nothing new starts. */
+  const readOnly = $derived(isReadOnly(workspace));
   /** An unfinished deletion: nothing but finishing it works. */
   const deleting = $derived(!!workspace.deleting);
-  /** What a project can be linked to. */
-  const directories = $derived(app.workspaces.filter((item) => !isChatWorkspace(item)));
-  const noun = $derived(chat ? 'chat' : 'session');
+  /** What a project can be linked to: workspaces taking delegated work. */
+  const directories = $derived(app.workspaces.filter((item) => app.modeOf(item).delegate_target));
+  const noun = $derived(mode.ui.noun);
   const subtitle = $derived(
     [
-      chat ? (topLevel ? 'Chats' : 'Project') : 'Workspace',
+      chat ? (topLevel ? 'Chats' : 'Project') : mode.repository ? 'Workspace' : mode.label,
       chat ? '' : workspace.hostId,
       online ? '' : 'offline',
+      readOnly ? 'read-only' : '',
     ]
       .filter(Boolean)
       .join(' · '),
@@ -154,7 +161,7 @@
     <button
       class="button dark new-in"
       type="button"
-      disabled={!online || deleting}
+      disabled={!online || deleting || readOnly}
       onclick={() => onnew(workspace.id)}><SquarePen size={15} /> New {noun}</button
     >
   </header>
@@ -165,7 +172,7 @@
     aria-label="{workspace.displayName} sections"
     use:rovingFocus={{ selector: '[role="tab"]', orientation: 'horizontal', activate: true }}
   >
-    {#each [{ id: 'sessions' as Tab, label: chat ? 'Chats' : 'Sessions' }, { id: 'settings' as Tab, label: 'Settings' }] as item (item.id)}
+    {#each [{ id: 'sessions' as Tab, label: `${capitalized(noun)}s` }, { id: 'settings' as Tab, label: 'Settings' }] as item (item.id)}
       <button
         type="button"
         role="tab"
@@ -198,6 +205,11 @@
             onclick={() => (deletingProject = workspace)}>Finish deleting…</button
           >
         </div>
+      {/if}
+      {#if readOnly}
+        <p class="note" role="status">
+          This workspace's mode is no longer available on the gateway: its {noun}s are read-only.
+        </p>
       {/if}
       {#if tab === 'sessions'}
         <div id="workspace-panel-sessions" role="tabpanel" aria-labelledby="workspace-tab-sessions">
@@ -256,19 +268,23 @@
         <div id="workspace-panel-settings" role="tabpanel" aria-labelledby="workspace-tab-settings">
           {#if deleting}
             <p class="note">Settings are gone with the project's deletion.</p>
-          {:else if chat}
-            {#if app.usingDemo}
-              <p class="note">Project instructions and files are unavailable in demo mode.</p>
-            {:else if !online}
-              <p class="note">
-                The project's node is offline: its instructions and files can be changed once it is
-                back.
-              </p>
-            {:else}
-              <ProjectInstructions workspaceId={workspace.id} />
-              <ProjectFiles workspaceId={workspace.id} />
+          {:else}
+            {#if mode.project_instructions || mode.project_files}
+              {#if app.usingDemo}
+                <p class="note">Project instructions and files are unavailable in demo mode.</p>
+              {:else if !online}
+                <p class="note">
+                  The project's node is offline: its instructions and files can be changed once it
+                  is back.
+                </p>
+              {:else}
+                {#if mode.project_instructions}<ProjectInstructions
+                    workspaceId={workspace.id}
+                  />{/if}
+                {#if mode.project_files}<ProjectFiles workspaceId={workspace.id} />{/if}
+              {/if}
             {/if}
-            {#if !topLevel}
+            {#if mode.projects && !topLevel}
               <ProjectLinks
                 workspaceId={workspace.id}
                 workspaces={directories}
@@ -276,8 +292,58 @@
                 disabled={app.usingDemo}
               />
             {/if}
-            <ProjectSettings workspaceId={workspace.id} disabled={app.usingDemo} />
-            {#if !topLevel}
+            {#if chat}
+              <ProjectSettings workspaceId={workspace.id} disabled={app.usingDemo} />
+            {:else}
+              <section class="settings-section">
+                <h3>Workspace</h3>
+                <dl class="facts">
+                  <div>
+                    <dt>Device</dt>
+                    <dd>{workspace.hostId} · {online ? 'online' : 'offline'}</dd>
+                  </div>
+                  <div>
+                    <dt>Sessions</dt>
+                    <dd>
+                      {all.length}{#if running}
+                        · {running} running{/if}{#if unread}
+                        · {unread} unread{/if}
+                    </dd>
+                  </div>
+                  {#if mode.workdir === 'workspace'}
+                    <div>
+                      <dt>Write lease</dt>
+                      <dd>{leaseHolder ? `Held by “${leaseHolder.name}”` : 'Free'}</dd>
+                    </div>
+                  {/if}
+                  {#if workspace.defaults.modelId}
+                    <div>
+                      <dt>Default model</dt>
+                      <dd>{workspace.defaults.modelId}</dd>
+                    </div>
+                  {/if}
+                  {#if workspace.defaults.thinkingLevel}
+                    <div>
+                      <dt>Default thinking</dt>
+                      <dd>{workspace.defaults.thinkingLevel}</dd>
+                    </div>
+                  {/if}
+                </dl>
+              </section>
+            {/if}
+            {#if mode.project_config}
+              {#if app.usingDemo}
+                <p class="note">The project config is unavailable in demo mode.</p>
+              {:else if !online}
+                <p class="note">
+                  The workspace's node is offline: its project config can be reviewed once it is
+                  back.
+                </p>
+              {:else}
+                <ProjectTrust workspaceId={workspace.id} />
+              {/if}
+            {/if}
+            {#if mode.projects && !topLevel}
               <section class="settings-section">
                 <h3>Delete project</h3>
                 <p class="note">
@@ -296,49 +362,6 @@
                 {/if}
               </section>
             {/if}
-          {:else}
-            <section class="settings-section">
-              <h3>Workspace</h3>
-              <dl class="facts">
-                <div>
-                  <dt>Device</dt>
-                  <dd>{workspace.hostId} · {online ? 'online' : 'offline'}</dd>
-                </div>
-                <div>
-                  <dt>Sessions</dt>
-                  <dd>
-                    {all.length}{#if running}
-                      · {running} running{/if}{#if unread}
-                      · {unread} unread{/if}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Write lease</dt>
-                  <dd>{leaseHolder ? `Held by “${leaseHolder.name}”` : 'Free'}</dd>
-                </div>
-                {#if workspace.defaults.modelId}
-                  <div>
-                    <dt>Default model</dt>
-                    <dd>{workspace.defaults.modelId}</dd>
-                  </div>
-                {/if}
-                {#if workspace.defaults.thinkingLevel}
-                  <div>
-                    <dt>Default thinking</dt>
-                    <dd>{workspace.defaults.thinkingLevel}</dd>
-                  </div>
-                {/if}
-              </dl>
-            </section>
-            {#if app.usingDemo}
-              <p class="note">The project config is unavailable in demo mode.</p>
-            {:else if !online}
-              <p class="note">
-                The workspace's node is offline: its project config can be reviewed once it is back.
-              </p>
-            {:else}
-              <ProjectTrust workspaceId={workspace.id} />
-            {/if}
           {/if}
         </div>
       {/if}
@@ -349,7 +372,7 @@
 {#snippet row(session: SessionSummary, nested: boolean)}
   <li
     class="session-row"
-    style:--action-count={isChatWorkspace(workspace) ? 4 : 3}
+    style:--action-count={mode.delete_sessions ? 4 : 3}
     class:nested
     class:settled={session.settled}
     class:unread={session.unread}
@@ -429,11 +452,11 @@
               size={14}
             />{/if}</button
         >
-        {#if isChatWorkspace(workspace)}
+        {#if mode.delete_sessions}
           <button
             type="button"
             aria-label="Delete {session.name}"
-            title="Delete chat"
+            title="Delete {noun}"
             onclick={() => (deletingChat = session)}><Trash2 size={14} /></button
           >
         {/if}

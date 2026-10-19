@@ -29,7 +29,8 @@
   import SchedulesPage from './lib/components/SchedulesPage.svelte';
   import WorkspacePage from './lib/components/WorkspacePage.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
-  import { isChatWorkspace, topLevelChats } from './lib/chats';
+  import { topLevelChats } from './lib/chats';
+  import { isAssistant } from './lib/modes';
   import { timelineItems } from './lib/work';
   import NewProjectDialog from './lib/components/dialogs/NewProjectDialog.svelte';
   import NewSessionDialog from './lib/components/dialogs/NewSessionDialog.svelte';
@@ -101,9 +102,9 @@
   $effect(() => {
     if (onPage) sidebarOpen = false;
   });
-  const hasChats = $derived(!!topLevelChats(app.workspaces));
+  const hasChats = $derived(!!topLevelChats(app.workspaces, app.modeCatalog));
   /** The open session is one of the assistant's chats: no engineering chrome. */
-  const chatSession = $derived(isChatWorkspace(app.activeWorkspace));
+  const chatSession = $derived(isAssistant(app.modeOf(app.activeWorkspace)));
   const origin = $derived(
     app.sessions.find((item) => item.id === sessionState?.session.id)?.origin,
   );

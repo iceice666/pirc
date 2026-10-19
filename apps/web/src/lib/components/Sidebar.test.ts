@@ -2,6 +2,7 @@
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../app.svelte';
+import { demoModes } from '../mock';
 import { reactiveProps } from '../testing/props.svelte';
 import type { SessionSummary } from '../types';
 import Sidebar from './Sidebar.svelte';
@@ -52,6 +53,7 @@ afterEach(async () => {
   component = undefined;
   target.remove();
   vi.restoreAllMocks();
+  app.modeCatalog = [];
   Object.values(handlers).forEach((handler) => handler.mockReset());
 });
 
@@ -270,5 +272,75 @@ describe('Sidebar', () => {
     expect(app.mode).toBe('work');
     expect(target.querySelector('[aria-label="home"]')).toBeNull();
     expect(names()).toEqual(['Alpha']);
+  });
+
+  describe('with the mode catalog', () => {
+    beforeEach(() => {
+      app.modeCatalog = demoModes;
+      app.nodes = [
+        { id: 'home', modes: ['chat'] } as never,
+        { id: 'node', modes: ['directory', 'scratch'] } as never,
+        // Accepts only the assistant's mode: no Work workspaces there.
+        { id: 'lab', modes: ['chat'] } as never,
+      ];
+      app.workspaces = [
+        { id: 'home:chats', hostId: 'home', displayName: 'Chats', kind: 'chat', mode: 'chat' },
+        { id: 'home:trip', hostId: 'home', displayName: 'Trip', kind: 'chat', mode: 'chat' },
+        { id: 'node:ws', hostId: 'node', displayName: 'Project', mode: 'directory' },
+        // The gateway derives `kind: chat` from scratch's per-session workdir.
+        { id: 'node:gpu', hostId: 'node', displayName: 'GPU jobs', kind: 'chat', mode: 'scratch' },
+        // Its mode left the catalog.
+        { id: 'node:old', hostId: 'node', displayName: 'Old', mode: 'review', available: false },
+      ].map((workspace) => ({ defaults: {}, ...workspace })) as never;
+      app.sessions = [
+        session('t', 'Top chat', { workspaceId: 'home:chats' }),
+        session('p', 'Planning chat', { workspaceId: 'home:trip', unread: true }),
+        session('g', 'Render image', { workspaceId: 'node:gpu', unread: true }),
+        session('o', 'Old review', { workspaceId: 'node:old', unread: true }),
+      ];
+    });
+
+    it("places workspaces by their mode's assistant access, not the legacy kind", () => {
+      render();
+      expect(text('[aria-label="Projects"]')).toContain('Trip');
+      expect(text('[aria-label="Projects"]')).not.toContain('GPU jobs');
+      app.setMode('work');
+      flushSync();
+      const node = text('[aria-label="node"]');
+      expect(node).toContain('Project');
+      expect(node).toContain('GPU jobs');
+      expect(node).toContain('Old');
+      expect(node).toContain('read-only');
+      // Nodes accepting only the assistant's mode host no Work workspaces.
+      expect(target.querySelector('[aria-label="home"]')).toBeNull();
+      expect(target.querySelector('[aria-label="lab"]')).toBeNull();
+      const gpu = target.querySelector<HTMLButtonElement>(
+        '[aria-label="New session in GPU jobs"]',
+      )!;
+      expect(gpu.disabled).toBe(false);
+      gpu.click();
+      expect(handlers.onnew).toHaveBeenCalledWith('node:gpu');
+      // An unavailable mode takes no new sessions.
+      expect(
+        target.querySelector<HTMLButtonElement>('[aria-label="New session in Old"]')!.disabled,
+      ).toBe(true);
+      // Scratch sessions are settled, not deleted.
+      expect(namesIn('node')).toContain('Render image');
+      expect(target.querySelector('[aria-label="Delete Render image"]')).toBeNull();
+    });
+
+    it('searches the sessions of the tab the mode puts them in', async () => {
+      app.mode = 'work';
+      render();
+      const input = target.querySelector<HTMLInputElement>('.search input')!;
+      // Every name has a space.
+      input.value = ' ';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      flushSync();
+      expect(namesIn('Search results')).toEqual(['Render image', 'Old review']);
+      app.setMode('chat');
+      flushSync();
+      expect(namesIn('Search results')).toEqual(['Top chat', 'Planning chat']);
+    });
   });
 });

@@ -19,7 +19,6 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { rovingFocus } from '../../a11y';
   import { app } from '../../app.svelte';
-  import { isChatWorkspace } from '../../chats';
   import { onFilePreviewRequest, type FileTarget } from '../../file-links';
   import type { PanelTab } from '../../panel-api';
   import FilesTab from './FilesTab.svelte';
@@ -71,14 +70,23 @@
   ];
 
   const sessionId = $derived(app.sessionState?.session.id ?? '');
-  /** Chats keep Files (their own directory, where uploads and outputs land) but have no Git or terminal. */
-  const chat = $derived(
-    isChatWorkspace(
+  /**
+   * Every session keeps Files (its directory, where uploads and outputs land);
+   * Git needs a repository, the terminal a workspace directory (not one per session).
+   */
+  const mode = $derived(
+    app.modeOf(
       app.workspaces.find((workspace) => workspace.id === app.sessionState?.session.workspaceId),
     ),
   );
   const shownTabs = $derived(
-    chat ? tabs.filter((item) => item.id !== 'git' && item.id !== 'terminal') : tabs,
+    mode
+      ? tabs.filter(
+          (item) =>
+            (item.id !== 'git' || mode.repository) &&
+            (item.id !== 'terminal' || mode.workdir === 'workspace'),
+        )
+      : tabs,
   );
   $effect.pre(() => {
     if (!shownTabs.some((item) => item.id === tab)) tab = 'files';

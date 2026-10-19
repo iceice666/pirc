@@ -34,12 +34,51 @@ export interface WorkspaceDefaults {
   thinkingLevel?: ThinkingLevel;
 }
 
+/**
+ * A workspace mode from the gateway's catalog (`GET /api/modes`): what a
+ * workspace in it can do. Clients ask these capabilities, never mode ids.
+ */
+export interface ModeInfo {
+  id: string;
+  label: string;
+  description: string;
+  ui: { noun: string; icon?: string };
+  /** `workspace`: one existing directory; `per-session`: a node-managed directory per session. */
+  workdir: 'workspace' | 'per-session';
+  prompt?: unknown[];
+  body?: string;
+  features_off: string[];
+  features_on: string[];
+  /** `null`: the node's normal tools. */
+  tools: string[] | null;
+  /** `full`: the personal assistant (Chat tab); `user`: the user's own work (Work tab). */
+  assistant: 'user' | 'full';
+  delegate: boolean;
+  delegate_target: boolean;
+  schedule_scope: 'own' | 'any';
+  project_instructions: boolean;
+  project_files: boolean;
+  project_config: boolean;
+  workspace_memory: boolean;
+  repository: boolean;
+  recap: boolean;
+  delete_sessions: boolean;
+  projects: boolean;
+}
+
 export interface Workspace {
   id: string;
   hostId: string;
   displayName: string;
-  /** `chat`: the assistant's chats or a chat project (absent from older gateways: `directory`). */
+  /**
+   * Legacy, derived from the mode's workdir (`per-session` → `chat`). Read only
+   * as a fallback when the catalog lacks the workspace's mode (older gateways).
+   */
   kind?: 'directory' | 'chat';
+  /** The workspace's mode id (absent from older gateways). */
+  mode?: string;
+  /** False when its mode is missing from the catalog: history is read-only, no new sessions. */
+  available?: boolean;
   canonicalPath?: string;
   color?: string;
   defaults: WorkspaceDefaults;
@@ -53,6 +92,8 @@ export interface NodeSummary {
   connectedAt: number;
   lastSeenAt: number;
   workspaces: Array<{ id: string; displayName: string }>;
+  /** Mode ids the node accepts (absent from older gateways). */
+  modes?: string[];
 }
 
 export interface SessionSummary {

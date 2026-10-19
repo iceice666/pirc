@@ -34,11 +34,17 @@
     busy = true;
     error = '';
     try {
-      const workspace = await app.createWorkspace({
-        nodeId,
-        kind: 'chat',
-        displayName: name.trim(),
-      });
+      // A project takes the mode of the node's top-level chats when the
+      // catalog knows it; older gateways get the legacy `kind`.
+      const chats = app.workspaces.find((item) => item.id === `${nodeId}:chats`);
+      const mode = chats?.mode
+        ? app.modeCatalog.find((item) => item.id === chats.mode)?.id
+        : undefined;
+      const workspace = await app.createWorkspace(
+        mode
+          ? { nodeId, mode, displayName: name.trim() }
+          : { nodeId, kind: 'chat', displayName: name.trim() },
+      );
       open = false;
       oncreated(workspace.id);
     } catch (cause) {

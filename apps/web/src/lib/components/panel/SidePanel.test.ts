@@ -2,6 +2,8 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, it } from 'vitest';
 import { app } from '../../app.svelte';
+import { demoModes } from '../../mock';
+import type { ModeInfo } from '../../types';
 import SidePanel from './SidePanel.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
@@ -12,12 +14,16 @@ afterEach(async () => {
   target?.remove();
   app.sessionState = undefined;
   app.workspaces = [];
+  app.modeCatalog = [];
 });
 
 function render(workspaceId: string) {
   app.workspaces = [
     { id: 'home:chats', hostId: 'home', displayName: 'Chats', kind: 'chat' } as never,
     { id: 'node:ws', hostId: 'node', displayName: 'Project' } as never,
+    // `kind` is the legacy derivation from the per-session workdir.
+    { id: 'node:gpu', hostId: 'node', displayName: 'GPU', kind: 'chat', mode: 'scratch' } as never,
+    { id: 'node:checkout', hostId: 'node', displayName: 'Checkout', mode: 'plain' } as never,
   ];
   app.sessionState = { session: { id: 's', workspaceId } } as never;
   target = document.createElement('div');
@@ -50,4 +56,22 @@ it('keeps every tab for directory workspaces', () => {
     'Browser',
   ]);
   expect(directory.active).toBe('Terminal');
+});
+
+it('shows Git only with a repository and the terminal only in a workspace directory', () => {
+  const plain: ModeInfo = { ...demoModes[1]!, id: 'plain', repository: false };
+  app.modeCatalog = [...demoModes, plain];
+  // Scratch: one directory per session, no repository.
+  expect(render('node:gpu').labels).toEqual(['Files', 'Memory', 'Context', 'Tasks', 'Browser']);
+  unmount(component!);
+  target!.remove();
+  // A workspace directory that is not a repository keeps its terminal.
+  expect(render('node:checkout').labels).toEqual([
+    'Files',
+    'Memory',
+    'Context',
+    'Tasks',
+    'Terminal',
+    'Browser',
+  ]);
 });

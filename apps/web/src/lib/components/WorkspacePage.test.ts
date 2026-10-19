@@ -2,6 +2,7 @@
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../app.svelte';
+import { demoModes } from '../mock';
 import { reactiveProps } from '../testing/props.svelte';
 import type { SessionSummary, Workspace } from '../types';
 import WorkspacePage from './WorkspacePage.svelte';
@@ -25,6 +26,16 @@ const project: Workspace = {
   hostId: 'home',
   displayName: 'Trip',
   kind: 'chat',
+  defaults: {},
+};
+
+/** Scratch: one directory per session, no repository; legacy `kind` says chat. */
+const scratch: Workspace = {
+  id: 'node:gpu',
+  hostId: 'node',
+  displayName: 'GPU jobs',
+  kind: 'chat',
+  mode: 'scratch',
   defaults: {},
 };
 
@@ -89,6 +100,7 @@ afterEach(async () => {
   target.remove();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  app.modeCatalog = [];
   onselect.mockReset();
   onnew.mockReset();
 });
@@ -252,5 +264,60 @@ describe('WorkspacePage', () => {
     tab('Settings').click();
     flushSync();
     expect(deleteButton()).toBeUndefined();
+  });
+
+  it("shows a scratch workspace's capabilities only, whatever its legacy kind", async () => {
+    app.modeCatalog = demoModes;
+    app.workspaces = [directory, project, scratch];
+    app.sessions = [session('g', 'Render', { workspaceId: scratch.id })];
+    render(scratch);
+    expect(target.querySelector('.page-title small')!.textContent).toBe('Scratch · node');
+    expect(tab('Sessions')).toBeDefined();
+    expect(
+      [...target.querySelectorAll('button')].some((item) =>
+        item.textContent?.includes('New session'),
+      ),
+    ).toBe(true);
+    // Its sessions are not deleted from the list.
+    expect(target.querySelector('[aria-label="Delete Render"]')).toBeNull();
+    tab('Settings').click();
+    flushSync();
+    await flush();
+    const facts = target.querySelector('.facts')!.textContent!;
+    expect(facts).toContain('node · online');
+    // No shared directory: no write lease.
+    expect(facts).not.toContain('Write lease');
+    expect(target.querySelector('textarea')).toBeNull();
+    expect(target.textContent).not.toContain('Delete project');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('links a project to every workspace that takes delegated work', async () => {
+    app.modeCatalog = demoModes;
+    app.workspaces = [{ ...directory, mode: 'directory' }, { ...project, mode: 'chat' }, scratch];
+    render({ ...project, mode: 'chat' });
+    tab('Settings').click();
+    flushSync();
+    await flush();
+    const choices = [...target.querySelectorAll('.link-choice')].map((item) => item.textContent);
+    expect(choices).toHaveLength(2);
+    expect(choices.join()).toContain('GPU jobs');
+  });
+
+  it('keeps a workspace whose mode is gone read-only', async () => {
+    app.modeCatalog = demoModes;
+    const gone: Workspace = { ...directory, mode: 'review', available: false };
+    render(gone);
+    expect(target.querySelector('.page-title small')!.textContent).toContain('read-only');
+    expect(target.textContent).toContain('no longer available');
+    const create = [...target.querySelectorAll('button')].find((item) =>
+      item.textContent?.includes('New session'),
+    );
+    expect(create?.disabled).toBe(true);
+    tab('Settings').click();
+    flushSync();
+    await flush();
+    expect(target.querySelector('.facts')).not.toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

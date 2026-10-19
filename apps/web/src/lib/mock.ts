@@ -1,5 +1,13 @@
 import type { PanelState } from './panel-api';
-import type { ModelOption, NodeSummary, SessionSnapshot, SessionSummary, Workspace } from './types';
+import { LEGACY_CHAT, LEGACY_DIRECTORY } from './modes';
+import type {
+  ModeInfo,
+  ModelOption,
+  NodeSummary,
+  SessionSnapshot,
+  SessionSummary,
+  Workspace,
+} from './types';
 
 /** Background work shown by the top-bar jobs menu in the offline demo. */
 export const demoPanelState: PanelState = {
@@ -30,11 +38,37 @@ export const demoPanelState: PanelState = {
   },
 };
 
+/**
+ * The gateway's mode catalog: the two defaults and the guide's scratch
+ * example (one-off jobs on a coding node, each session in its own directory).
+ */
+export const demoModes: ModeInfo[] = [
+  {
+    ...LEGACY_CHAT,
+    description: "The personal assistant's chats and projects.",
+    features_off: ['goal', 'todo', 'agentTeam', 'background'],
+  },
+  { ...LEGACY_DIRECTORY, description: 'Coding sessions in a repository.' },
+  {
+    ...LEGACY_DIRECTORY,
+    id: 'scratch',
+    label: 'Scratch',
+    description: 'One-off jobs, each session in its own directory.',
+    workdir: 'per-session',
+    project_config: false,
+    workspace_memory: false,
+    repository: false,
+    recap: false,
+  },
+];
+
 export const demoWorkspaces: Workspace[] = [
   {
     id: 'ws-pirc',
     hostId: 'homolab',
     displayName: 'pirc',
+    kind: 'directory',
+    mode: 'directory',
     canonicalPath: '~/code/pirc',
     defaults: { modelId: 'claude-sonnet', thinkingLevel: 'high' },
     activeSessionCount: 1,
@@ -43,14 +77,26 @@ export const demoWorkspaces: Workspace[] = [
     id: 'ws-dotfiles',
     hostId: 'homolab',
     displayName: 'Dotfiles',
+    kind: 'directory',
+    mode: 'directory',
     canonicalPath: '~/dotfiles',
     defaults: { modelId: 'claude-sonnet', thinkingLevel: 'medium' },
+  },
+  {
+    // The gateway derives `kind: chat` from the per-session workdir; it is still Work.
+    id: 'ws-gpu',
+    hostId: 'homolab',
+    displayName: 'GPU jobs',
+    kind: 'chat',
+    mode: 'scratch',
+    defaults: {},
   },
   {
     id: 'home:chats',
     hostId: 'home',
     displayName: 'Chats',
     kind: 'chat',
+    mode: 'chat',
     defaults: {},
   },
   {
@@ -58,13 +104,26 @@ export const demoWorkspaces: Workspace[] = [
     hostId: 'home',
     displayName: 'Home server notes',
     kind: 'chat',
+    mode: 'chat',
     defaults: {},
   },
 ];
 
 export const demoNodes: NodeSummary[] = [
-  { id: 'homolab', connectedAt: Date.now(), lastSeenAt: Date.now(), workspaces: [] },
-  { id: 'home', connectedAt: Date.now(), lastSeenAt: Date.now(), workspaces: [] },
+  {
+    id: 'homolab',
+    connectedAt: Date.now(),
+    lastSeenAt: Date.now(),
+    workspaces: [],
+    modes: ['directory', 'scratch'],
+  },
+  {
+    id: 'home',
+    connectedAt: Date.now(),
+    lastSeenAt: Date.now(),
+    workspaces: [],
+    modes: ['chat'],
+  },
 ];
 
 export const demoSessions: SessionSummary[] = [
@@ -126,6 +185,15 @@ export const demoSessions: SessionSummary[] = [
       dueAt: Date.now() - day * 86_400_000,
     },
   })),
+  {
+    id: 'session-render',
+    workspaceId: 'ws-gpu',
+    name: 'Render the cover image',
+    lastActivityAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    runStatus: 'succeeded',
+    runnerStatus: 'stopped',
+    preview: 'Saved cover.png.',
+  },
   {
     id: 'chat-auth',
     workspaceId: 'home:chats',

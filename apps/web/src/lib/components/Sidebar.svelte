@@ -26,7 +26,8 @@
   import DeleteChatDialog from './dialogs/DeleteChatDialog.svelte';
   import { tick } from 'svelte';
   import { app, type InboxItem } from '../app.svelte';
-  import { chatNodeIds, isChatWorkspace, topLevelChats } from '../chats';
+  import { chatNodeIds, topLevelChats } from '../chats';
+  import { isReadOnly, tabOf, workNodes } from '../modes';
   import { formatWall, until } from '../schedules';
   import { shortAgo } from '../time';
   import type { DelegationStatus, SessionSummary, Workspace } from '../types';
@@ -75,11 +76,9 @@
     failed: 'failed',
   };
   const nodes = $derived(app.nodes);
-  /** Nodes that can host directory workspaces (not the chat node). */
-  const deviceNodes = $derived.by(() => {
-    const chatNodes = chatNodeIds(app.workspaces);
-    return nodes.filter((node) => !chatNodes.has(node.id));
-  });
+  const catalog = $derived(app.modeCatalog);
+  /** Nodes that can host Work workspaces (those accepting a non-assistant mode). */
+  const deviceNodes = $derived(workNodes(nodes, catalog, chatNodeIds(app.workspaces, catalog)));
   const sessions = $derived(app.sessions);
   /** The open session, unless a page covers it. */
   const activeSessionId = $derived(app.view === 'session' ? app.activeSessionId : undefined);
@@ -90,9 +89,11 @@
   const onsettle = (id: string, settled: boolean) => app.updateSession(id, { settled });
 
   /** Chats: the assistant's chats and projects, like the ChatGPT and Claude web apps. */
-  const chats = $derived(topLevelChats(app.workspaces));
+  const chats = $derived(topLevelChats(app.workspaces, catalog));
   const projects = $derived(
-    app.workspaces.filter((workspace) => isChatWorkspace(workspace) && workspace !== chats),
+    app.workspaces.filter(
+      (workspace) => tabOf(workspace, catalog) === 'chat' && workspace !== chats,
+    ),
   );
   const workspaceById = $derived(new Map(app.workspaces.map((item) => [item.id, item])));
   /** Without a chat node there are no chats: only Work. */
@@ -115,7 +116,8 @@
   );
 
   // ── Work mode ──
-  const directoryWorkspaces = $derived(app.workspaces.filter((w) => !isChatWorkspace(w)));
+  /** Every workspace not the assistant's: repositories, scratch, unavailable ones. */
+  const directoryWorkspaces = $derived(app.workspaces.filter((w) => tabOf(w, catalog) === 'work'));
   /** Devices with their workspaces (connected devices without any too), online first. */
   const hosts = $derived.by(() => {
     const ids = [
@@ -140,7 +142,7 @@
       const workspace = workspaceById.get(session.workspaceId);
       return (
         !!workspace &&
-        isChatWorkspace(workspace) === (mode === 'chat') &&
+        tabOf(workspace, catalog) === mode &&
         session.name.toLowerCase().includes(needle)
       );
     });
@@ -148,7 +150,9 @@
   /** New session: straight into the workspace whose page is open, else a dialog to pick one. */
   const pageWorkspace = $derived(pageId ? workspaceById.get(pageId) : undefined);
   const newSessionTarget = $derived(
-    pageWorkspace && !isChatWorkspace(pageWorkspace) ? pageWorkspace : undefined,
+    pageWorkspace && tabOf(pageWorkspace, catalog) === 'work' && !isReadOnly(pageWorkspace)
+      ? pageWorkspace
+      : undefined,
   );
 
   const unreadIn = (workspaceId: string) =>
@@ -262,14 +266,17 @@
       class="new-session"
       type="button"
       onclick={() => onnew(chats.id)}
-      disabled={!app.workspaceOnline(chats)}><SquarePen size={16} /> New chat</button
+      disabled={!app.acceptsSessions(chats)}
+      ><SquarePen size={16} /> New {app.modeOf(chats).ui.noun}</button
     >
   {:else}
     <button
       class="new-session"
       type="button"
       onclick={() => (newSessionTarget ? onnew(newSessionTarget.id) : onnew())}
-      ><SquarePen size={16} /> New session</button
+      ><SquarePen size={16} /> New {newSessionTarget
+        ? app.modeOf(newSessionTarget).ui.noun
+        : 'session'}</button
     >
   {/if}
   <label class="search">
@@ -402,6 +409,7 @@
   {@const unread = unreadIn(workspace.id)}
   {@const running = work ? runningIn(workspace.id) : 0}
   {@const online = app.workspaceOnline(workspace)}
+  {@const noun = app.modeOf(workspace).ui.noun}
   <section class="workspace-group">
     <div class="workspace-heading" class:current={pageId === workspace.id}>
       <button
@@ -412,6 +420,7 @@
         <Folder size={15} />
         <strong>{workspace.displayName}</strong>
         {#if !online && !work}<small>· offline</small>{/if}
+        {#if isReadOnly(workspace)}<small>· read-only</small>{/if}
         <span class="workspace-meta">
           {#if work && sessions.some((s) => s.writeLease && s.workspaceId === workspace.id)}<span
               class="lease-lock"
@@ -428,8 +437,8 @@
       <button
         class="mini-action"
         type="button"
-        aria-label="New {work ? 'session' : 'chat'} in {workspace.displayName}"
-        disabled={!online}
+        aria-label="New {noun} in {workspace.displayName}"
+        disabled={!app.acceptsSessions(workspace)}
         onclick={() => onnew(workspace.id)}><Plus size={15} /></button
       >
     </div>
@@ -516,9 +525,10 @@
 
 {#snippet sessionRow(session: SessionSummary, showWorkspace: boolean)}
   {@const workspace = workspaceById.get(session.workspaceId)}
+  {@const deletable = !!app.modeOf(workspace)?.delete_sessions}
   <div
     class="session-item"
-    style:--action-count={isChatWorkspace(workspace) ? 4 : 3}
+    style:--action-count={deletable ? 4 : 3}
     class:active={session.id === activeSessionId}
     class:settled={session.settled}
     class:unread={session.unread}
@@ -624,11 +634,11 @@
               size={14}
             />{/if}</button
         >
-        {#if isChatWorkspace(workspaceById.get(session.workspaceId))}
+        {#if deletable}
           <button
             type="button"
             aria-label="Delete {session.name}"
-            title="Delete chat"
+            title="Delete {app.modeOf(workspace)?.ui.noun ?? 'chat'}"
             onclick={() => (deletingChat = session)}><Trash2 size={14} /></button
           >
         {/if}

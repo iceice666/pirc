@@ -7,7 +7,7 @@ import {
   toolResultFields,
 } from './pi-messages';
 import type { NewWorkspace } from './chats';
-import { request } from './http';
+import { ApiError, request } from './http';
 import { uuid } from './id';
 import { getClientId } from './storage';
 import type {
@@ -27,6 +27,7 @@ import type {
   EventEnvelope,
   GatewayEvent,
   InteractionAnswer,
+  ModeInfo,
   ModelOption,
   NodeSummary,
   PendingInteraction,
@@ -323,6 +324,15 @@ export const backendApi = {
 export const api = {
   nodes: async () => (await request<{ nodes: NodeSummary[] }>('/api/nodes')).nodes,
   workspaces: async () => (await request<any>('/api/workspaces')).workspaces as Workspace[],
+  /** The gateway's workspace mode catalog; empty from older gateways (404). */
+  modes: async (): Promise<ModeInfo[]> => {
+    try {
+      return (await request<{ modes?: ModeInfo[] }>('/api/modes')).modes ?? [];
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return [];
+      throw error;
+    }
+  },
   createWorkspace: async (input: NewWorkspace) =>
     (
       await request<{ workspace: Workspace }>('/api/workspaces', {
