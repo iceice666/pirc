@@ -10,6 +10,19 @@ you approve in the authenticated web UI. HTML, JavaScript-backed documents,
 Markdown, code, math and supported diagrams render through Flutter; browser
 compatibility is incomplete. See the [remaining mobile work](../../plans/mobile.md).
 
+## HTML disclosures
+
+Native `<details>` supports script-controlled open state and named accordions.
+Summary pointer, keyboard and accessibility activation follow the script click
+pipeline, including `preventDefault()`. The DOM reflects `open`/`name` and sends
+coalesced `toggle` notifications. Reproduce the independent browser reference
+with `node apps/android/tool/parity/capture_document_details_chromium153.mjs`
+from the repository root; `tool/parity/document_details_test.mjs` compares the
+runtime to it, while `test/native_html_details_script_test.dart` checks native
+activation across phone/tablet sizes, themes and DPRs. Pixel appearance, default
+summaries without authored markup, ancestor revealing and physical-device
+acceptance remain separate boundaries in the mobile plan.
+
 ## Build and run
 
 Use Flutter 3.44.4 / Dart 3.12.2 or a compatible SDK, Android SDK and JDK 17.

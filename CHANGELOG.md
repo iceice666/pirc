@@ -4,6 +4,10 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Fixed
+
+- Android HTML disclosures keep script state, named accordions and keyboard activation synchronized.
+
 ## [0.9.1] - 2026-10-19
 
 The first published release with the 0.9.0 changes below (0.9.0 was tagged but its release build failed), now with the signed Android beta APK. Upgrade notes are those of 0.9.0.

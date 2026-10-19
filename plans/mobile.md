@@ -202,6 +202,21 @@ are at `git show 7677d24:plans/mobile-audit.md`.
 
 ### Implemented interactive content
 
+Native details disclosures now synchronize reflected `open`/`name`, attribute
+writes (including Attr nodes), same-tree named groups, dynamic insertion and
+coalesced trusted `toggle` events with old/new state. Inline/property handlers,
+cancellation and nested interactive children use the script event pipeline.
+Flutter summary padding, text, Enter/Space and accessibility activation share
+that pipeline; summary focus survives same-document updates and authored open
+changes still apply after native interaction. An independent Chromium 153 corpus checks 28 states; eight phone/tablet,
+light/dark, DPR 1/3 widget profiles gate native activation and focus. These are
+functional gates, not a new pixel-parity claim. Details without an authored
+summary still use a local native fallback (script synchronization is unverified).
+Ancestor revealing, script key-event cancellation, arbitrary shadow-tree details
+and separate browser task-source ordering remain open. DOM notifications use
+the bounded host-pumped callback scheduler; physical Sandbox/device acceptance
+is not established by the Node/widget tests.
+
 Native Canvas supports matched text measurement, intrinsic/pixel/percentage
 sizing, container resizing, the eight stock Chart.js chart types and their default
 animations. Covered bar interactions include touch tooltips, outside dismissal,
