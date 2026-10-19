@@ -1,6 +1,6 @@
 # Upgrades
 
-## Unreleased: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
+## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13
 because the mode catalog the gateway sends no longer has `ui.group`. Protocol 12

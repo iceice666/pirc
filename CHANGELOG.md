@@ -4,6 +4,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-19
+
 ### Changed
 
 - **Breaking: mode files no longer accept `ui.group`.** The Web and Android clients place a workspace in Chat or Work by its mode's `assistant` capability and show panels, settings, session deletion and the session noun by capability instead of the legacy `kind`, so a per-session mode on a coding node (such as a scratch mode) appears under Work with only the panels it has. Remove `group:` from every `$PIRC_CONFIG_DIR/modes/*.md` before upgrading, or the file is skipped and its workspaces become unavailable. **Node protocol 13: upgrade the gateway and all nodes together.** The gateway database migrates to schema 1005 (delegation audit columns) on start; nodes' schemas are unchanged. See the upgrade notes.
