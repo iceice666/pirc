@@ -2,6 +2,36 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
 
+/// macOS's PingFang, a downloadable mobile asset: `null` where it is not
+/// installed (GitHub's macOS runners). The asset directory's version suffix
+/// changes with macOS releases (`com_apple_MobileAsset_Font7`, `Font8`, …),
+/// so look in all of them, newest first.
+File? pingFangFont() {
+  final assets = Directory('/System/Library/AssetsV2');
+  if (!assets.existsSync()) return null;
+  final directories =
+      assets
+          .listSync()
+          .whereType<Directory>()
+          .where(
+            (dir) =>
+                RegExp(r'/com_apple_MobileAsset_Font\d+$').hasMatch(dir.path),
+          )
+          .toList()
+        ..sort((a, b) => b.path.compareTo(a.path));
+  for (final directory in directories) {
+    for (final file in directory.listSync(recursive: true).whereType<File>()) {
+      if (file.path.endsWith('/PingFang.ttc')) return file;
+    }
+  }
+  return null;
+}
+
+/// PingFang-dependent geometry tests are skipped where it is not installed
+/// (`testWidgets(..., skip: noPingFang)`); run them on a Mac that has it to
+/// compare against the browser reference.
+final bool noPingFang = pingFangFont() == null;
+
 // Comparison-only host fonts. No font files are copied into the app.
 Future<void> loadParityFonts() async {
   final manifest =
