@@ -4,6 +4,14 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-19
+
+The first published release with the 0.9.0 changes below (0.9.0 was tagged but its release build failed), now with the signed Android beta APK. Upgrade notes are those of 0.9.0.
+
+### Fixed
+
+- Release builds include the signed Android beta APK again: the release workflow fetches the pinned Flutter SDK with its history, and font-dependent Gantt geometry tests run only where macOS's PingFang font is installed.
+
 ## [0.9.0] - 2026-10-19
 
 ### Changed

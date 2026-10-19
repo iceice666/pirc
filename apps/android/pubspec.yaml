@@ -1,7 +1,7 @@
 name: pirc_mobile
 description: pirc Flutter Android testing client.
 publish_to: none
-version: 0.9.0+71
+version: 0.9.1+72
 environment:
   sdk: ^3.12.2
 dependencies:
