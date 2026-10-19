@@ -29,8 +29,17 @@ including nested accordions, named groups, initial URLs, repeated activation
 and history traversal. Static fetched documents retain open state and eligible
 text drafts across resize/remount. Presentation reparses retain live file,
 password, autocomplete-off and other control values while Reset still uses the
-authored defaults. Full workspace teardown still needs lifetime support for
-values excluded from history snapshots. Recreate the 96-profile reference with
+authored defaults. Static fetched documents also own these controls through
+complete workspace removal/remount and same-frame replacement. Pending file
+selection can finish for the same live document; close, account change, Reset
+and fresh responses invalidate retired selections. Sensitive/off values remain
+in memory only and are excluded from history snapshots. Recreate the independent
+eight-profile value reference with
+`node apps/android/tool/parity/capture_document_control_lifetime_chromium153.mjs`;
+`test/document_control_lifetime_test.dart` covers native ownership, Reset,
+reparenting and delayed picker boundaries. Scripted resource/picker lifetimes
+and real IME/focus transitions remain unverified.
+Recreate the 96-profile disclosure reference with
 `node apps/android/tool/parity/capture_document_details_fragment_chromium153.mjs`;
 `test/document_details_fragment_test.dart` checks native visible geometry,
 focus, scrolling and retained reading position. Hidden-until-found/beforematch,

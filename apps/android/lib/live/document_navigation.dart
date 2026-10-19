@@ -2516,6 +2516,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       fragmentIndex: fragments,
       historyController: document.historyControls,
       preserveControlValues: _scripts == null,
+      retainedControls: _scripts == null ? document.liveControls : null,
       onNavigate: widget.onLink,
       onFormSubmit: widget.onSubmit,
       onDetailsActivate: _scripts != null

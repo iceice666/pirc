@@ -192,7 +192,7 @@ class NativeHtmlFileInputState extends ChangeNotifier {
 
   final String _source;
   final String _nonce;
-  final NativeHtmlFilePicker picker;
+  NativeHtmlFilePicker picker;
   final Map<String, _FileInputRecord> _records = {};
   final Map<String, dom.Element> _elementsByKey = {};
   late final String _annotatedHtml;
