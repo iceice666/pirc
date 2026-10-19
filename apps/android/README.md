@@ -62,9 +62,28 @@ runtime against it; `test/native_html_script_picker_lifetime_test.dart` and
 controlled bridge boundaries. System chooser, Android engine IPC, real IME and
 broader resource lifecycle acceptance remain separate in the mobile plan.
 
+## Shipped runtime and native host integration
+
+`test/document_live_runtime_resources_test.dart` executes the shipped JS bundle
+through `NativeDocumentScripts`, the real native layout producer and Flutter
+workspace. It compares independent browser states for fetch/JSON, dynamic
+external classic scripts, AbortController cancellation and view replacement,
+including live styles, editor values and panel geometry.
+`test/document_live_runtime_picker_test.dart` checks chooser bytes, FormData,
+trusted events and Reset through the same chain. A test-only Node VM protocol
+peer supplies engine IPC; transport responses are synthetic. Android Sandbox,
+real HTTP policy and system picker acceptance remain separate. Fully detached
+views buffer resource callbacks until reattachment; CSS-hidden browser pages
+can continue those callbacks.
+Recreate the resource reference with
+`node apps/android/tool/parity/capture_document_live_resources_chromium153.mjs`.
+
 ## Build and run
 
 Use Flutter 3.44.4 / Dart 3.12.2 or a compatible SDK, Android SDK and JDK 17.
+Native document integration widget tests also require Node.js 22 or newer on
+PATH; `PIRC_TEST_NODE` can select an explicit Node executable. The Nix development
+shell includes Node.js 22, and Release CI installs it before running the tests.
 Android 10 (API 29) or later is required. From the repository root, `nix develop`
 provides Flutter, its matching Dart SDK, and JDK 17 alongside the Rust and web tools.
 The Android SDK must be installed separately for native builds; point

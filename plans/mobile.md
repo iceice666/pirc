@@ -17,9 +17,11 @@ are available from Git through Historical records, not repeated here.
 - [ ] **Scripted resource lifecycle and device input:** static fetched documents
       retain native controls through complete workspace removal/remount,
       same-frame replacement and reparenting. Already-authorized script file
-      choosers now survive temporary view removal/replacement; broader resource
-      and UI lifetimes remain unverified. Check real CJK IME, focus and keyboard
-      behavior across workspace/background/low-memory transitions on devices.
+      choosers survive temporary view removal/replacement. The shipped runtime
+      and Flutter host now have a combined gate for fetch/abort, external classic
+      scripts and choosers. Image, stylesheet, module and wider UI lifetimes
+      remain unverified. Check real CJK IME, focus and keyboard behavior across
+      workspace/background/low-memory transitions on devices.
 - [ ] **Fragment scrolling and target state:** complete CSS scroll margin/padding,
       nested-container alignment, remaining focus state, late-loaded targets and
       nodes discarded from rendered markup. Target lookup, initial URLs and
@@ -276,6 +278,25 @@ The fetched-host tests use controlled bridge responses; they do not certify
 Android engine IPC, actual system chooser/IME behavior, pixels or wider resource
 lifetimes. Existing file-count, native byte retention and script byte limits
 still apply.
+
+An additional local integration gate now executes the shipped JavaScript bundle
+through the production Dart task/layout/resource host and actual Flutter
+workspace. A test-only Node VM supplies engine IPC; HTTP/chooser responses use
+synthetic transport fixtures. No DOM snapshots or native geometry are fabricated.
+Sixteen phone/tablet, DPR 1/3 and theme/replacement cases compare five states
+against an independent eight-profile Chromium 153 resource corpus. They check
+fetch/JSON completion after remount, external classic-script execution once,
+AbortController cancellation, native editor values, live computed background
+colors and actual panel rectangles within 1/32 CSS px. Eight additional chooser
+cases run the previous browser fixture through this full chain, comparing exact
+bytes, FormData names, trusted input/change events, Reset and one initialization.
+Resource callbacks wait while the document view is fully detached and resume on
+reattachment; the browser reference can run callbacks while merely CSS-hidden.
+That scheduling difference is explicit; the resource gate compares resumed
+outcomes. This gate adds no screenshot/pixel claim and does not replace actual
+Android Sandbox IPC, native transport/CORS/cookie policy or system picker/device
+acceptance. Image, stylesheet and module remounts and broader framework flows
+remain separate work. Release CI now prepares Node.js 22 for these widget tests.
 
 Native Canvas supports matched text measurement, intrinsic/pixel/percentage
 sizing, container resizing, the eight stock Chart.js chart types and their default
