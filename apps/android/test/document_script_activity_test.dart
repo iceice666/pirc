@@ -18,7 +18,12 @@ class _RecordingScripts extends NativeDocumentScripts {
   final activities = <_Activity>[];
 
   @override
-  void setActivity({required bool attached, required bool visible}) {
+  void setActivity({
+    required bool attached,
+    required bool visible,
+    Object? owner,
+    bool preserveFilePicker = false,
+  }) {
     activities.add((attached: attached, visible: visible));
   }
 

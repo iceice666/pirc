@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:html/dom.dart' as dom;
@@ -115,6 +116,7 @@ class NativeHtmlScriptFileSelections {
   }
 
   void reconcile(NativeHtmlFileInputState state) {
+    var changed = false;
     for (final record in state._records.values) {
       final id = record.descriptor.scriptId;
       if (id == null) continue;
@@ -124,10 +126,13 @@ class NativeHtmlScriptFileSelections {
         _values.remove(id);
         continue;
       }
+      if (listEquals(record.files, saved.$2)) continue;
       record.files
         ..clear()
         ..addAll(saved.$2);
+      changed = true;
     }
+    if (changed) state._scriptSelectionChanged();
   }
 
   void clear() => _values.clear();
@@ -189,6 +194,10 @@ class NativeHtmlFileInputState extends ChangeNotifier {
   static const _controlAttribute = 'data-pirc-native-file-input-id';
   static const _labelAttribute = 'data-pirc-native-file-input-for';
   static const _markerPrefix = 'data-pirc-native-file-input-';
+
+  void _scriptSelectionChanged() {
+    if (!_disposed) notifyListeners();
+  }
 
   final String _source;
   final String _nonce;

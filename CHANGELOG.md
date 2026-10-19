@@ -6,6 +6,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
+- Android script file selection survives document view replacement and updates the active file controls.
 - Android static documents retain form inputs and selected files when reopening the same live document view.
 - Android HTML disclosures keep script state, named accordions and keyboard activation synchronized.
 - Android links reveal collapsed content and preserve disclosure state and eligible text drafts across view rebuilds.

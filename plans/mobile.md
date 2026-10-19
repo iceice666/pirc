@@ -14,11 +14,12 @@ are available from Git through Historical records, not repeated here.
       broader DOM APIs, Canvas font/ink coverage, inline-fragment measurements
       and common-library coverage. Broader image/framework flows remain
       unverified; preserve explicit unsupported errors.
-- [ ] **Scripted document lifecycle and device input:** static fetched documents
-      now retain native controls through complete workspace removal/remount,
-      same-frame replacement and reparenting. Broader scripted picker/resource
-      lifetimes remain unverified. Check real CJK IME, focus and keyboard behavior
-      across workspace/background/low-memory transitions on physical devices.
+- [ ] **Scripted resource lifecycle and device input:** static fetched documents
+      retain native controls through complete workspace removal/remount,
+      same-frame replacement and reparenting. Already-authorized script file
+      choosers now survive temporary view removal/replacement; broader resource
+      and UI lifetimes remain unverified. Check real CJK IME, focus and keyboard
+      behavior across workspace/background/low-memory transitions on devices.
 - [ ] **Fragment scrolling and target state:** complete CSS scroll margin/padding,
       nested-container alignment, remaining focus state, late-loaded targets and
       nodes discarded from rendered markup. Target lookup, initial URLs and
@@ -255,6 +256,26 @@ no-box geometry contract; Chromium can expose retained/forced layout rectangles
 for these descendants. This difference is explicit rather than inferred from
 visible-target success. Custom disclosure markers and general content-visibility
 layout are not certified by this corpus.
+
+Script-initiated file choosers now keep their already-authorized lease when
+only the current document's Flutter view is removed or replaced. Queued chooser
+requests still expire while hidden; document/account retirement or a window
+selection change discards late bytes/errors. A discarded result releases its
+lease so it cannot block a later chooser. Current renderers reconcile retained
+file bytes even when the returned HTML is unchanged. Layout/activity ownership
+prevents the previous renderer's cleanup from freezing its same-frame successor.
+An independent Chromium 153 chooser corpus covers eight phone/tablet, DPR 1/3
+and theme profiles across 40 states, using temporary synthetic file paths and the
+browser chooser protocol (buffer injection does not prove trusted events).
+Nine Node checks compare the production runtime's exact bytes, FormData names,
+script initialization count, trusted input/change order, duplicate completion,
+Reset and fresh-document state. Sixteen native widget profiles, ten fetched-host
+lifecycle scenarios and two lease/ownership tests cover restoration, cancelled
+or failed selection, Reset, document/account retirement and window changes.
+The fetched-host tests use controlled bridge responses; they do not certify
+Android engine IPC, actual system chooser/IME behavior, pixels or wider resource
+lifetimes. Existing file-count, native byte retention and script byte limits
+still apply.
 
 Native Canvas supports matched text measurement, intrinsic/pixel/percentage
 sizing, container resizing, the eight stock Chart.js chart types and their default

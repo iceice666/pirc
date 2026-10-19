@@ -92,6 +92,18 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     _schedule();
   }
 
+  /// Only the renderer that still owns the document may detach its activity.
+  /// Replacing a view can overlap its successor within the same Flutter frame.
+  void detachView(Object owner, {bool preserveFilePicker = false}) {
+    if (!identical(_layoutOwner, owner)) return;
+    bindLayout(owner, null);
+    setActivity(
+      attached: false,
+      visible: false,
+      preserveFilePicker: preserveFilePicker,
+    );
+  }
+
   void _cancelLayoutWaits() {
     for (final waiter in _layoutWaits.toList()) {
       if (!waiter.isCompleted) waiter.complete();
@@ -720,6 +732,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     _scrollActions = List.unmodifiable([..._scrollActions, ...received]);
   }
 
+  int _filePickerGeneration = 0;
   int _filePickerActionSerial = 0;
   int _lastFilePickerActionId = 0;
   List<Json> _filePickerActions = const [];
@@ -1058,7 +1071,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     final id = action['id'] as int;
     final lease = _PendingFilePickerAction(
       scriptId: _id!,
-      generation: _formActionGeneration,
+      generation: _filePickerGeneration,
     );
     _filePickerInFlight[id] = lease;
     _filePickerActions = List.unmodifiable([
@@ -1083,7 +1096,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         _disposed ||
         !ready ||
         _id != lease.scriptId ||
-        _formActionGeneration != lease.generation) {
+        _filePickerGeneration != lease.generation) {
       return Future<void>.value();
     }
     if (id <= 0 ||
@@ -1114,12 +1127,12 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         if (_disposed ||
             !ready ||
             _id != lease.scriptId ||
-            _formActionGeneration != generation) {
+            _filePickerGeneration != generation) {
           return;
         }
         await _run(
           '__pircDocument.filePickerResult(${jsonEncode(payload)})',
-          expectedActionGeneration: generation,
+          expectedActionGeneration: _formActionGeneration,
         );
       } catch (failure) {
         await _failInteraction(failure);
@@ -1408,8 +1421,14 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Retained history documents freeze; current background windows throttle
   /// timers and suspend animation frames. Closing a document disposes its VM.
-  void setActivity({required bool attached, required bool visible}) {
-    if (_disposed || (_attached == attached && _visible == visible)) return;
+  void setActivity({
+    required bool attached,
+    required bool visible,
+    Object? owner,
+    bool preserveFilePicker = false,
+  }) {
+    if (_disposed || owner != null && !identical(_layoutOwner, owner)) return;
+    if (_attached == attached && _visible == visible) return;
     if ((_visible && !visible) || (_attached && !attached)) {
       _pointerInputGeneration++;
       _clearFocusActions();
@@ -1417,7 +1436,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     if (_visible && !visible) {
       _navigationActions = const [];
       _formActionGeneration++;
-      _clearFilePickerActions();
+      _clearFilePickerActions(preserveInFlight: preserveFilePicker);
     }
     _attached = attached;
     if (!attached) {
@@ -1425,7 +1444,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       _formActions = const [];
       _navigationActions = const [];
       _formActionGeneration++;
-      _clearFilePickerActions();
+      _clearFilePickerActions(preserveInFlight: preserveFilePicker);
     }
     _visible = visible;
     _serviceVisibility();
@@ -1565,9 +1584,12 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     if (id != null) await _close(id);
   }
 
-  void _clearFilePickerActions() {
+  void _clearFilePickerActions({bool preserveInFlight = false}) {
     _filePickerActions = const [];
-    _filePickerInFlight.clear();
+    if (!preserveInFlight) {
+      _filePickerGeneration++;
+      _filePickerInFlight.clear();
+    }
     _filePickerActivationGeneration = -1;
     _filePickerActivationExpiresAt = double.negativeInfinity;
   }
