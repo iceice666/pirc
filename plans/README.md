@@ -34,6 +34,12 @@ deletion are not open work.
    mode-id stores and agent enforcement) is implemented; full Linux conformance
    passed 217 tests with reviewed snapshots on 2026-10-19. Phase 3 still needs
    the user's go-ahead.
+5. **Workspace-memory search quality.** [Memory search](memory-search.md):
+   an evaluation set, then FTS5 + BM25 with CJK bigrams replacing `LIKE`, then
+   optional hybrid semantic search through a gateway-side embeddings endpoint
+   (brute-force cosine in Rust, no SQLite extension). Stays on SQLite; Postgres
+   and sqlite-vec are rejected there. Each phase needs the user's go-ahead;
+   phase 2 also needs the embeddings source decided.
 
 ## Shelved: project-only memory (B)
 
@@ -136,8 +142,9 @@ Synthetic/emulator coverage does not close physical-device or real-account gaps.
 - **Moving chats between projects and shared project files:** revisit remaining
   workflow friction only when painful with more than a handful of chats; shared
   project files themselves are already implemented.
-- **Vector search:** `LIKE` over a few thousand notes is sufficient; revisit when
-  searches miss.
+- **Vector index (sqlite-vec / ANN):** brute-force cosine is planned in
+  [memory search](memory-search.md) phase 2; revisit an index only at the
+  thresholds listed there.
 - **A second chat node:** needs its own `chats` workspace and a New chat rule.
 - **`workspace.read`:** reading a linked repository without delegating, only if
   chats keep delegating just to look at a file.
