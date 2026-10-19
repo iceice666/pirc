@@ -314,6 +314,85 @@ void main() {
   );
 
   test(
+    'view detach retains only the already-authorized picker lease',
+    () async {
+      final gateway = _FilePickerGateway();
+      final scripts = await _start(gateway);
+      addTearDown(() async {
+        scripts.dispose();
+        await scripts.closed;
+      });
+      final owner = Object();
+      scripts.bindLayout(owner, (revision, generation) async => null);
+      gateway.dispatchActions = [_fileAction(60)];
+      await scripts.dispatch('host-button', 'click', const []);
+      final action = scripts.filePickerActions.single;
+      expect(
+        scripts.takeFilePickerActions([action['sequence'] as int]),
+        hasLength(1),
+      );
+      scripts.detachView(owner, preserveFilePicker: true);
+      expect(scripts.filePickerActions, isEmpty);
+      expect(
+        scripts.takeFilePickerActions([action['sequence'] as int]),
+        isEmpty,
+      );
+      await scripts.completeFilePicker(
+        60,
+        files: [
+          {
+            'name': 'fixture.txt',
+            'type': 'text/plain',
+            'size': 1,
+            'lastModified': 1,
+            'bytesBase64': 'YQ==',
+          },
+        ],
+      );
+      expect(gateway.completionSources, hasLength(1));
+      expect(gateway.completionSources.single, contains('fixture.txt'));
+      await scripts.completeFilePicker(60, cancelled: true);
+      expect(gateway.completionSources, hasLength(1));
+      scripts.bindLayout(owner, (revision, generation) async => null);
+      scripts.setActivity(owner: owner, attached: true, visible: true);
+      gateway.dispatchActions = [_fileAction(61)];
+      await scripts.dispatch('host-button', 'click', const []);
+      expect(
+        scripts.takeFilePickerActions([
+          scripts.filePickerActions.single['sequence'] as int,
+        ]),
+        hasLength(1),
+      );
+    },
+  );
+
+  test('retired view cannot detach or hide its replacement owner', () async {
+    final gateway = _FilePickerGateway();
+    final scripts = await _start(gateway);
+    addTearDown(() async {
+      scripts.dispose();
+      await scripts.closed;
+    });
+    final previous = Object(), next = Object();
+    scripts.bindLayout(previous, (revision, generation) async => null);
+    scripts.bindLayout(next, (revision, generation) async => null);
+    scripts.detachView(previous);
+    scripts.setActivity(owner: previous, attached: false, visible: false);
+    gateway.dispatchActions = [_fileAction(62)];
+    await scripts.dispatch('host-button', 'click', const []);
+    expect(
+      scripts.takeFilePickerActions([
+        scripts.filePickerActions.single['sequence'] as int,
+      ]),
+      hasLength(1),
+    );
+    scripts.detachView(next, preserveFilePicker: true);
+    scripts.dispose();
+    await scripts.completeFilePicker(62, cancelled: true);
+    expect(gateway.completionSources, isEmpty);
+  });
+
+  test(
     'native picker lifecycle interruption still completes its selection',
     () async {
       final gateway = _FilePickerGateway();

@@ -36,6 +36,29 @@ import 'document_window_manager.dart';
 import 'markdown_image.dart';
 import 'web_controls.dart';
 
+/// A chooser belongs to its live document/account, including a temporary view
+/// removal. Switching windows or replacing/retiring the response ends that lease.
+bool Function() _scriptPickerScope(
+  NativeFetchedDocument document,
+  NativeDocumentScope? scope,
+) {
+  final windows = scope?.windows;
+  final window = scope?.window;
+  final identity = scope?.accountIdentity;
+  final selection = windows?.selectionRevision;
+  return () =>
+      !document.liveControls.isDisposed &&
+      (windows == null ||
+          !windows.disposed &&
+              identity == windows.accountIdentity &&
+              selection == windows.selectionRevision &&
+              window?.disposed != true &&
+              window?.closing != true &&
+              (window == null ||
+                  identical(window.currentDocument, document) &&
+                      identical(windows.active, window)));
+}
+
 /// Saves supported HTML download links without replacing their source page.
 /// Returns false when browser download-attribute rules require ordinary navigation.
 Future<bool> saveNativeDocumentLink(
@@ -1770,6 +1793,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
                 identical(window.currentDocument, widget.document));
     if (!attached || !_tickerVisible) _clearTouchBoundary();
     scripts.setActivity(
+      owner: this,
       attached: attached,
       visible: attached && _tickerVisible,
     );
@@ -2096,8 +2120,10 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       _elementScroll.addListener(_nativeLayoutChanged);
       oldWidget.document.scroll.removeListener(_nativeScrollChanged);
       widget.document.scroll.addListener(_nativeScrollChanged);
-      _scripts?.bindLayout(this, null);
-      _scripts?.setActivity(attached: false, visible: false);
+      _scripts?.detachView(
+        this,
+        preserveFilePicker: _scriptPickerScope(oldWidget.document, _scope)(),
+      );
       _scripts?.removeListener(_scriptChanged);
       _scripts = null;
       _objectUrls = null;
@@ -2112,11 +2138,13 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
     widget.document.viewport.bindNativeReveal(this, null);
     _clearTouchBoundary();
     widget.document.scroll.removeListener(_nativeScrollChanged);
-    _scripts?.bindLayout(this, null);
+    _scripts?.detachView(
+      this,
+      preserveFilePicker: _scriptPickerScope(widget.document, _scope)(),
+    );
     _layout.removeListener(_nativeLayoutChanged);
     _layout.dispose();
     _elementScroll.removeListener(_nativeLayoutChanged);
-    _scripts?.setActivity(attached: false, visible: false);
     _scripts?.removeListener(_scriptChanged);
     _window?.removeListener(_syncScriptActivity);
     _windows?.removeListener(_syncScriptActivity);
@@ -2542,6 +2570,9 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       scriptFilePickerActions: _scripts?.filePickerActions ?? const [],
       takeScriptFilePickerActions: _scripts?.takeFilePickerActions,
       onScriptFilePickerResult: _scripts?.completeFilePicker,
+      scriptFilePickerIsCurrent: _scripts == null
+          ? null
+          : _scriptPickerScope(document, _scope),
       scriptFileSelections: document.scriptFileSelections,
       scriptFormActions: _scripts?.formActions ?? const [],
       onScriptFormActionsConsumed: _scripts?.acknowledgeFormActions,

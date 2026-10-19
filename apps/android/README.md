@@ -37,7 +37,7 @@ in memory only and are excluded from history snapshots. Recreate the independent
 eight-profile value reference with
 `node apps/android/tool/parity/capture_document_control_lifetime_chromium153.mjs`;
 `test/document_control_lifetime_test.dart` covers native ownership, Reset,
-reparenting and delayed picker boundaries. Scripted resource/picker lifetimes
+reparenting and delayed picker boundaries. Wider scripted resource lifetimes
 and real IME/focus transitions remain unverified.
 Recreate the 96-profile disclosure reference with
 `node apps/android/tool/parity/capture_document_details_fragment_chromium153.mjs`;
@@ -46,6 +46,22 @@ focus, scrolling and retained reading position. Hidden-until-found/beforematch,
 shadow-tree revealing, custom marker appearance and closed-descendant CSSOM
 geometry remain documented differences. These gates do not establish full
 browser compatibility or new pixel parity.
+
+## Scripted file selection
+
+Already-authorized script choosers survive temporary removal or replacement of
+the same live document view. Selected bytes, names and subsequent form submission
+stay document-owned; current file controls update even if the script returns
+unchanged HTML. Closing/replacing the document, changing account or switching
+windows discards late results and cannot leave a stale chooser lease blocking
+the next selection. Old renderer cleanup cannot pause its same-frame successor.
+Recreate the independent browser reference with
+`node apps/android/tool/parity/capture_document_script_picker_lifetime_chromium153.mjs`.
+`tool/parity/document_script_picker_lifetime_test.mjs` checks the production JS
+runtime against it; `test/native_html_script_picker_lifetime_test.dart` and
+`test/document_script_picker_lifetime_test.dart` exercise native restoration and
+controlled bridge boundaries. System chooser, Android engine IPC, real IME and
+broader resource lifecycle acceptance remain separate in the mobile plan.
 
 ## Build and run
 

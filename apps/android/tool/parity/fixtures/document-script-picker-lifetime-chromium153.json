@@ -1,0 +1,1014 @@
+{
+  "browserVersion": "153.0.8010.12",
+  "html": "<!doctype html><html><head><meta charset=\"utf-8\"><style>body{margin:0;font:16px/24px Arial}</style></head><body><form id=\"form\"><input type=\"file\" id=\"upload\" name=\"upload\" multiple><button type=\"button\" id=\"choose\">Choose files</button><button type=\"reset\">Reset</button></form><script>\nwindow.boots=(window.boots||0)+1; window.events=[];\nconst upload=document.getElementById('upload');\ndocument.getElementById('choose').addEventListener('click',()=>upload.click());\nfor(const type of ['input','change','cancel']) upload.addEventListener(type,e=>events.push({type:e.type,trusted:e.isTrusted}));\n</script></body></html>",
+  "pickedFiles": [
+    {
+      "name": "picked-雪.txt",
+      "type": "text/plain",
+      "bytes": [
+        80,
+        73,
+        67,
+        75,
+        69,
+        68
+      ]
+    },
+    {
+      "name": "binary.png",
+      "type": "image/png",
+      "bytes": [
+        0,
+        127,
+        128,
+        255
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 1,
+      "theme": "light",
+      "initial": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "hidden": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "resumed": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "reset": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "fresh": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 1,
+      "theme": "dark",
+      "initial": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "hidden": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "resumed": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "reset": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "fresh": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 3,
+      "theme": "light",
+      "initial": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "hidden": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "resumed": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "reset": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "fresh": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 3,
+      "theme": "dark",
+      "initial": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "hidden": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "resumed": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "reset": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "fresh": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 1,
+      "theme": "light",
+      "initial": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "hidden": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "resumed": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "reset": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "fresh": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 1,
+      "theme": "dark",
+      "initial": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "hidden": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "resumed": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "reset": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "fresh": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 3,
+      "theme": "light",
+      "initial": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "hidden": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "resumed": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "reset": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "fresh": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 3,
+      "theme": "dark",
+      "initial": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "hidden": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "resumed": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [
+          {
+            "name": "picked-雪.txt",
+            "type": "text/plain",
+            "bytes": [
+              80,
+              73,
+              67,
+              75,
+              69,
+              68
+            ]
+          },
+          {
+            "name": "binary.png",
+            "type": "image/png",
+            "bytes": [
+              0,
+              127,
+              128,
+              255
+            ]
+          }
+        ],
+        "formNames": [
+          "picked-雪.txt",
+          "binary.png"
+        ]
+      },
+      "reset": {
+        "boots": 1,
+        "events": [
+          {
+            "type": "input",
+            "trusted": true
+          },
+          {
+            "type": "change",
+            "trusted": true
+          }
+        ],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      },
+      "fresh": {
+        "boots": 1,
+        "events": [],
+        "files": [],
+        "formNames": [
+          ""
+        ]
+      }
+    }
+  ]
+}

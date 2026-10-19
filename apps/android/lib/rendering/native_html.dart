@@ -208,6 +208,7 @@ class NativeHtmlDocument extends StatefulWidget {
     this.scriptFocusActions = const [],
     this.takeScriptFocusActions,
     this.onScriptFilePickerResult,
+    this.scriptFilePickerIsCurrent,
     this.scriptFileSelections,
     this.scriptFormActions = const [],
     this.onScriptFormActionsConsumed,
@@ -276,6 +277,10 @@ class NativeHtmlDocument extends StatefulWidget {
   final Future<void> Function(List<Map<String, dynamic>>)?
   onScriptRestoreControls;
   final Object? scriptDocument;
+
+  /// Captures document/account ownership independently of this renderer's life.
+  /// Used only for an already-authorized chooser, never to start a hidden one.
+  final bool Function()? scriptFilePickerIsCurrent;
   final ValueChanged<String>? onDetailsActivate;
 
   /// Static presentation updates retain live values; script snapshots stay authoritative.
@@ -794,7 +799,6 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
         files!.adoptInteractionState(previousFiles);
       }
       previousFiles?.dispose();
-      _scriptFileSelections.reconcile(files!);
       final buttonSource = files!.annotateHtml(dateSource);
       buttons = NativeHtmlButtonState.fromHtml(
         buttonSource,
@@ -826,6 +830,9 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       );
       sanitizedContent = sanitized;
     }
+    // A chooser may finish in a renderer that was replaced while awaiting it.
+    // File bytes can change without any corresponding serialized HTML change.
+    _scriptFileSelections.reconcile(files!);
     content = buttons!.annotateHtml(
       files!.annotateHtml(
         dates!.annotateHtml(
@@ -877,8 +884,11 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     _scriptFilePickerScheduled = true;
     final owner = widget.scriptDocument;
     final sourceGeneration = _scriptSourceGeneration;
+    final documentCurrent = widget.scriptFilePickerIsCurrent;
+    final selections = _scriptFileSelections;
     bool current() =>
-        mounted &&
+        (mounted || documentCurrent != null) &&
+        (documentCurrent?.call() ?? true) &&
         owner == widget.scriptDocument &&
         (owner != null || sourceGeneration == _scriptSourceGeneration);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -913,7 +923,12 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
                 multiple: action['multiple'] as bool,
               ),
             );
-            if (!current()) break;
+            if (!current()) {
+              // Release a retained VM lease after scope retirement without ever
+              // publishing selected bytes into a different document/account.
+              if (documentCurrent != null) await complete(id, cancelled: true);
+              break;
+            }
             if (picked == null) {
               await complete(id, cancelled: true);
               continue;
@@ -924,12 +939,8 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             if (limited.length > 256) {
               throw StateError('一次最多選取 256 個檔案。');
             }
-            final selected = _scriptFileSelections.store(
-              controlId,
-              version,
-              limited,
-            );
-            if (files != null) _scriptFileSelections.reconcile(files!);
+            final selected = selections.store(controlId, version, limited);
+            if (mounted && files != null) selections.reconcile(files!);
             var remaining = 2 * 1024 * 1024;
             final wire = <Map<String, dynamic>>[];
             for (final file in selected) {
@@ -956,6 +967,8 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
                     ? message.substring(0, 2048)
                     : message,
               );
+            } else if (documentCurrent != null) {
+              await complete(id, cancelled: true);
             }
           }
         }
@@ -1881,10 +1894,13 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     final document = window?.currentDocument;
     final selection = windows.selectionRevision;
     final retained = widget.retainedControls;
+    final scriptCurrent = widget.scriptFilePickerIsCurrent;
     return createNativeHtmlFilePicker(
       windows.gateway,
       isCurrent: () =>
-          (retained == null ? mounted : !retained.isDisposed) &&
+          (retained == null
+              ? (scriptCurrent?.call() ?? mounted)
+              : !retained.isDisposed) &&
           !windows.disposed &&
           identity == windows.accountIdentity &&
           selection == windows.selectionRevision &&
