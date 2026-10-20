@@ -32,7 +32,7 @@
 - [x] `link.rs::NodeRole::Chat`；`Registration.role` 改成只剩 node。（2026-10-20）
 - [x] `mode.rs`：移除 `assistant`、`delegate`、`schedule_scope`、`project_instructions`、`project_files`、`projects`、`delete_sessions`、prompt sections `soul`/`chat-env`/`chat-md`、`default_chat`；forbidden combinations 相應縮減（[existing-plans §2](existing-plans.md)）。（2026-10-20）
 - [x] `pirc-config`：`modes/chat.md`、`NodeConfig.role`/`chat()`/`CHAT_WORKSPACE_ID`、`directory.md` 的 `assistant: user` 與 schedule scope。（2026-10-20）
-- [ ] `policy/session.rs`：chat 專用假設。 **未做**：`SessionPolicyInput.protected_paths`（原本給專案 instructions 用，現在所有 caller 都傳空）、`SOUL.md`/`CHAT.md` 的寫入保護與 chat session 目錄的測試還在。盤點把這檔標「改」，又是 sandbox 安全面，待使用者決定在這裡拿掉還是留給 08。
+- `policy/session.rs`：chat 專用假設。**移到 [08](08-nodes.md)**（2026-10-20 使用者決定）：盤點標「改」，又是 sandbox 安全面，跟 08 的唯讀 policy 一起動。
 
 ### Node
 

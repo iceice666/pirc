@@ -39,6 +39,7 @@
 - [ ] gateway：registry、`/api/nodes`、`pick_node`、`workspace_read` 工具。
 - [ ] scratch：預設檔、目錄、保留期、00 的 `session_root`。
 - [ ] `policy/session.rs`：`read_only` task policy → 唯讀 path policy + 無網路寫；`runner/process.rs` 接收（06 的 `task_context`/`read_only`）。
+- [ ] `policy/session.rs`：拿掉 chat 專用假設（從 [00](00-demolition.md) 移來）：`SessionPolicyInput.protected_paths`（原本保護專案 instructions，現在所有 caller 都傳空；連帶 `pirc-node` `sandbox/{mod,common,macos}.rs` 的同名欄位）、`config_dir` 下 `SOUL.md`/`CHAT.md` 的寫入保護（02 把 SOUL/CHAT 移到 gateway 後才拿，在那之前留著無害）、`workspace_root`/`workspace_memory_file` 註解裡的 chat session、以及 `lets_a_chat_session_work_in_its_directory_inside_the_nodes_state`、`never_lets_a_chat_session_touch_its_projects_instructions` 等 chat 測試與 `Layout.chat`。
 - [ ] Web 引擎蓋：node 卡片顯示能力與 load。
 - [ ] conformance：`node_link` 加能力註冊與 load 更新；`node_workspaces` 加 `WorkspaceRead` 的 confined 讀取與越界拒絕；`modes` 改寫；scratch delegation scenario 沿用。
 
