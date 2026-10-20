@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:pirc_mobile/live/document_navigation.dart';
@@ -121,6 +122,7 @@ document.getElementById('second').showModal();
     t.view.physicalSize = const Size(390, 844);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
+    final semantics = t.ensureSemantics();
     try {
       await t.pumpWidget(
         RepaintBoundary(
@@ -143,6 +145,58 @@ document.getElementById('second').showModal();
             'diagnostics=${doc.scripts!.diagnostics}',
       );
       await expectState('initial');
+      String semanticTree() {
+        // Widget tests attach their view to the legacy child pipeline owner.
+        // ignore: deprecated_member_use
+        return t.binding.pipelineOwner.semanticsOwner?.rootSemanticsNode
+                ?.toStringDeep() ??
+            '';
+      }
+
+      expect(semanticTree(), contains('label: "Two"'));
+      expect(semanticTree(), isNot(contains('label: "One"')));
+      expect(semanticTree(), isNot(contains('label: "Outside"')));
+      for (final id in ['one', 'outside']) {
+        expect(
+          await t.runAsync(
+            () => g.inspect(
+              "(document.getElementById('$id').focus(), document.activeElement.id)",
+            ),
+          ),
+          (fixture['blockedScriptFocus'] as Map)[id == 'one'
+              ? 'afterLower'
+              : 'afterOutside'],
+          reason: 'script focus must not leave the top modal',
+        );
+      }
+      for (var i = 0; i < 2; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.tab);
+        await t.pump();
+        final upper = t.widget<NativeHtmlButtonWidget>(button('Two'));
+        expect(
+          upper.state.focusNodeFor(upper.button.key).hasPrimaryFocus,
+          isTrue,
+          reason: 'Tab must stay in the top modal',
+        );
+        for (final label in ['One', 'Outside']) {
+          final lower = t.widget<NativeHtmlButtonWidget>(button(label));
+          expect(
+            lower.state.focusNodeFor(lower.button.key).hasFocus,
+            isFalse,
+            reason: '$label must remain inert while the top modal is open',
+          );
+        }
+      }
+      await t.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await t.sendKeyEvent(LogicalKeyboardKey.tab);
+      await t.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await t.pump();
+      final topControl = t.widget<NativeHtmlButtonWidget>(button('Two'));
+      expect(
+        topControl.state.focusNodeFor(topControl.button.key).hasPrimaryFocus,
+        isTrue,
+        reason: 'Shift+Tab must stay in the top modal',
+      );
       final bitmap = (await t.runAsync(
         () => t
             .renderObject<RenderRepaintBoundary>(find.byKey(paintKey))
@@ -171,10 +225,40 @@ document.getElementById('second').showModal();
       await expectState('afterTopBackdrop');
       expect(dialog('first'), findsOneWidget);
       expect(dialog('second'), findsNothing);
+      expect(semanticTree(), contains('label: "One"'));
+      expect(semanticTree(), isNot(contains('label: "Two"')));
+      expect(semanticTree(), isNot(contains('label: "Outside"')));
+      final lowerControl = t.widget<NativeHtmlButtonWidget>(button('One'));
+      await driveDocumentVm(
+        t,
+        () => lowerControl.state
+            .focusNodeFor(lowerControl.button.key)
+            .hasPrimaryFocus,
+        reason: 'restore lower native focus',
+        diagnostic: () =>
+            'primary=${FocusManager.instance.primaryFocus} lower=${lowerControl.state.focusNodeFor(lowerControl.button.key)}',
+      );
+      expect(
+        lowerControl.state
+            .focusNodeFor(lowerControl.button.key)
+            .hasPrimaryFocus,
+        isTrue,
+        reason: 'closing the upper modal restores native focus below',
+      );
+      await t.sendKeyEvent(LogicalKeyboardKey.tab);
+      await t.pump();
+      expect(
+        lowerControl.state
+            .focusNodeFor(lowerControl.button.key)
+            .hasPrimaryFocus,
+        isTrue,
+        reason: 'Tab must stay in the remaining modal',
+      );
       await t.tap(button('One'));
       await expectState('afterFirstClick');
       await t.tapAt(const Offset(20, 200));
       await expectState('afterBothBackdrops');
+      expect(semanticTree(), contains('label: "Outside"'));
       await t.tap(button('Outside'));
       for (var i = 0; i < 30; i++) {
         if (await t.runAsync(() => g.inspect('window.clicks.outside')) == 1) {
@@ -185,6 +269,7 @@ document.getElementById('second').showModal();
       expect(await t.runAsync(() => g.inspect('window.clicks.outside')), 1);
       expect(t.takeException(), isNull);
     } finally {
+      semantics.dispose();
       await t.pumpWidget(const SizedBox.shrink());
       final scripts = doc.scripts;
       windows.dispose();

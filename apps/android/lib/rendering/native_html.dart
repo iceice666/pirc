@@ -4076,7 +4076,10 @@ class _NativeHtmlFactory extends WidgetFactory {
             'data-pirc-dialog-modal',
           ),
         )!,
-        child: item.child,
+        child:
+            item.tree.element.attributes.containsKey('data-pirc-dialog-modal')
+            ? FocusScope(child: item.child)
+            : item.child,
         staticMarker: item.marker,
         overflowHitTest: nativeDocumentRestorePointerHit,
       ),

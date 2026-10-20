@@ -23,6 +23,16 @@
       "two": 0
     }
   },
+  "blockedScriptFocus": {
+    "afterLower": "two",
+    "afterOutside": "two"
+  },
+  "tabFocusSequence": [
+    "",
+    "two",
+    "",
+    "two"
+  ],
   "blockedFirstClick": {
     "modalIds": [
       "first",

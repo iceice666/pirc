@@ -318,20 +318,34 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
     this.boxSurface,
     this.useScrollportBasis = false,
   }) : hasFixedEntries = positioned.any((item) => item.spec.fixedToViewport),
-       super(
-         children: [
-           flow,
-           for (final item in positioned)
-             _AbsoluteItem(
-               spec: item.spec,
-               isModal: item.isModal,
-               modalOrder: item.modalOrder,
-               staticMarker: item.staticMarker,
-               overflowHitTest: item.overflowHitTest,
-               child: item.child,
-             ),
-         ],
-       );
+       super(children: _children(flow, positioned));
+
+  static List<Widget> _children(
+    Widget flow,
+    List<NativeAbsoluteEntry> positioned,
+  ) {
+    final topModalOrder = _topModalOrder(positioned);
+    return [
+      topModalOrder > 0 ? ExcludeSemantics(child: flow) : flow,
+      for (final item in positioned)
+        _AbsoluteItem(
+          spec: item.spec,
+          isModal: item.isModal,
+          modalOrder: item.modalOrder,
+          staticMarker: item.staticMarker,
+          overflowHitTest: item.overflowHitTest,
+          child: topModalOrder > 0 && item.modalOrder != topModalOrder
+              ? ExcludeSemantics(child: item.child)
+              : item.child,
+        ),
+    ];
+  }
+
+  static int _topModalOrder(List<NativeAbsoluteEntry> entries) => entries.fold(
+    0,
+    (highest, item) =>
+        item.isModal && item.modalOrder > highest ? item.modalOrder : highest,
+  );
   final bool hasFixedEntries;
   final bool useScrollportBasis;
   final EdgeInsets border;

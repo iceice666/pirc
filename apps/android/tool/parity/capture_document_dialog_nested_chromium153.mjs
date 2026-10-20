@@ -32,6 +32,16 @@ try {
     clicks:{...window.clicks},
   }));
   const initial=await snapshot();
+  const blockedScriptFocus=await page.evaluate(()=>{
+    one.focus();const afterLower=document.activeElement.id;
+    outside.focus();const afterOutside=document.activeElement.id;
+    return {afterLower,afterOutside};
+  });
+  const tabFocusSequence=[];
+  for(const key of ['Tab','Tab','Shift+Tab','Shift+Tab']) {
+    await page.keyboard.press(key);
+    tabFocusSequence.push(await page.evaluate(()=>document.activeElement.id));
+  }
   const png=await page.screenshot();
   const backdropPixel=await page.evaluate(async base64=>{
     const image=new Image();
@@ -54,7 +64,8 @@ try {
   const fixture={
     oracle:'Dedicated Playwright-pinned Chromium Headless Shell; no external requests or daily Chrome profile.',
     browserVersion:browser.version(),viewport:{width:390,height:796},
-    backdropPixel,initial,blockedFirstClick,afterTopBackdrop,
+    backdropPixel,initial,blockedScriptFocus,tabFocusSequence,
+    blockedFirstClick,afterTopBackdrop,
     afterFirstClick,afterBothBackdrops,
   };
   const output=new URL('./fixtures/document-dialog-nested-chromium153.json',import.meta.url);

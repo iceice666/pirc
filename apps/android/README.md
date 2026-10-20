@@ -135,8 +135,9 @@ It covers relative/static/sticky coercion, explicit offsets and top-layer
 containing blocks outside positioned or transformed DOM parents.
 `test/document_live_runtime_dialog_nested_test.dart` compares two stacked
 modals with `document-dialog-nested-chromium153.json`: the doubled backdrop,
-negative authored z-index, blocked lower-dialog input and staged light-dismiss.
-Regenerate that fixture with
+negative authored z-index, blocked lower-dialog input, top-only Tab focus
+and accessibility semantics, and staged light-dismiss. Script attempts to focus
+lower/background controls are rejected. Regenerate that fixture with
 `node apps/android/tool/parity/capture_document_dialog_nested_chromium153.mjs`.
 The final dialog's focus after backdrop dismissal still differs from Chromium;
 see the mobile plan.
