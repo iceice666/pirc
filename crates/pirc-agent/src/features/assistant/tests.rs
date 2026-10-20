@@ -5,6 +5,7 @@ use pirc_protocol::{UserBlock, UserContent};
 use serde_json::json;
 
 use super::*;
+use crate::session_store::SessionEntry;
 
 fn entry(id: &str, message: Message) -> SessionEntry {
     SessionEntry {
@@ -50,6 +51,11 @@ fn tool(id: &str, name: &str, details: Option<Value>) -> SessionEntry {
             timestamp: 0,
         },
     )
+}
+
+/// [`current_origins`] as the assistant counts them.
+fn origins_of(branch: &[SessionEntry], running: &[String]) -> Vec<String> {
+    current_origins(branch, running, &MEMORY_TOOLS)
 }
 
 #[test]
@@ -112,10 +118,10 @@ fn taints_a_note_with_everything_since_the_users_message() {
         custom("e5", "background-task", "done"),
     ];
     assert_eq!(
-        current_origins(&branch, &[]),
+        origins_of(&branch, &[]),
         ["assistant", "custom:background-task", "tool:read"]
     );
-    assert_eq!(current_origins(&[user("e1", "hi")], &[]), ["assistant"]);
+    assert_eq!(origins_of(&[user("e1", "hi")], &[]), ["assistant"]);
     // A ptc result is judged by the operations it started.
     let ptc = tool(
         "e6",
@@ -128,7 +134,7 @@ fn taints_a_note_with_everything_since_the_users_message() {
     );
     let empty = tool("e7", "ptc", Some(json!({ "operations": [] })));
     assert_eq!(
-        current_origins(
+        origins_of(
             &[user("e1", "go"), ptc, empty],
             &["grep".to_owned(), "memory_note".to_owned()]
         ),
@@ -176,10 +182,10 @@ fn bash(id: &str, command: &str) -> [SessionEntry; 2] {
 fn a_bash_command_that_fetches_is_its_own_origin() {
     let mut branch = vec![user("e1", "check the release notes")];
     branch.extend(bash("c1", "ls -la"));
-    assert_eq!(current_origins(&branch, &[]), ["assistant", "tool:bash"]);
+    assert_eq!(origins_of(&branch, &[]), ["assistant", "tool:bash"]);
     branch.extend(bash("c2", "curl -s https://example.com/notes | head"));
     assert_eq!(
-        current_origins(&branch, &[]),
+        origins_of(&branch, &[]),
         ["assistant", "tool:bash", "tool:bash:network"]
     );
     // A ptc script whose bash operation fetched, finished or still running.
@@ -192,11 +198,11 @@ fn a_bash_command_that_fetches_is_its_own_origin() {
         ),
     );
     assert_eq!(
-        current_origins(&[user("e1", "go"), ptc], &[]),
+        origins_of(&[user("e1", "go"), ptc], &[]),
         ["assistant", "tool:bash", "tool:bash:network"]
     );
     assert_eq!(
-        current_origins(&[user("e1", "go")], &["bash:network".to_owned()]),
+        origins_of(&[user("e1", "go")], &["bash:network".to_owned()]),
         ["assistant", "tool:bash:network"]
     );
 }

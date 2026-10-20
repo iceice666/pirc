@@ -20,6 +20,7 @@ pub mod features;
 pub mod hooks;
 pub mod host;
 pub mod messages;
+pub mod origins;
 pub mod ptc;
 pub mod redact;
 pub mod remote;

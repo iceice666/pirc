@@ -295,6 +295,19 @@ struct State {
     /// A background job is running its first, synchronous part inside its
     /// caller's segment: the caller flushes when that segment ends.
     eager: Cell<bool>,
+    /// Where observations go before the dropper lets them go.
+    promoter: Option<Rc<dyn Promoter>>,
+}
+
+/// The host's keeper of what observational memory lets go
+/// (plans/rewrite/03-memory.md): the dropper takes observations out of the
+/// active pool, out of the prompt; the brain's host makes them searchable
+/// facts first, so forgetting from the prompt is not forgetting. Workers
+/// have none: their durable memory goes to the workspace ledger.
+pub trait Promoter {
+    /// Keep `observations` before they are dropped. `Err` keeps them in the
+    /// pool, for a later dropper run to try again.
+    fn promote(&self, observations: &[Observation]) -> Result<(), String>;
 }
 
 /// Start `job` at once (`spawn_eager`) as part of the caller's segment.
@@ -615,6 +628,18 @@ async fn consolidate(state: &State, agent: &Agent, signal: &AbortSignal) -> Resu
     );
     if drops.is_empty() {
         return Ok(());
+    }
+    if let Some(promoter) = &state.promoter {
+        let dropped: Vec<Observation> = folded
+            .active_observations
+            .iter()
+            .filter(|observation| drops.contains(&observation.id))
+            .cloned()
+            .collect();
+        if let Err(error) = promoter.promote(&dropped) {
+            set_error(state, "promotion", error);
+            return Ok(());
+        }
     }
     let obs_index = latest_coverage_index(&branch, LedgerType::Observations);
     let ref_index = latest_coverage_index(&branch, LedgerType::Reflections);
@@ -985,6 +1010,17 @@ impl Tool for RecallTool {
 pub fn feature() -> Rc<dyn Feature> {
     Rc::new(MemoryFeature {
         state: Rc::new(State::default()),
+    })
+}
+
+/// [`feature`] whose dropped observations go to `promoter` first (the
+/// brain's host).
+pub fn feature_with(promoter: Rc<dyn Promoter>) -> Rc<dyn Feature> {
+    Rc::new(MemoryFeature {
+        state: Rc::new(State {
+            promoter: Some(promoter),
+            ..State::default()
+        }),
     })
 }
 

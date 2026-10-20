@@ -3087,7 +3087,14 @@ impl Agent {
         // A direct core capability: the same policy chain as a ptc
         // operation, in an operation scope so the dialogs it opens name its
         // call; typed data stays here.
-        let direct = self.direct_tools().iter().any(|tool| tool.name() == name);
+        // The brain has no scripts: every tool it lists is direct.
+        let direct = if matches!(self.host, HostProfile::Brain) {
+            self.available_tools()
+                .iter()
+                .any(|tool| tool.name() == name)
+        } else {
+            self.direct_tools().iter().any(|tool| tool.name() == name)
+        };
         if direct {
             let args = lenient_args(self.get_tool(name).as_ref(), &arguments);
             self.active_operations.borrow_mut().insert(id.to_owned());
