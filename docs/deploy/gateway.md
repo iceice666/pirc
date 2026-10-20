@@ -6,13 +6,13 @@ The gateway refuses to start when a required value is missing or when it sees a 
 
 ## Listening and state
 
-| Variable             | Required | Default                 | Meaning                                                                            |
-| -------------------- | -------- | ----------------------- | ---------------------------------------------------------------------------------- |
-| `PIRC_HOST`          | no       | `127.0.0.1`             | Listen address. Keep it on loopback or a private interface only the proxy reaches. |
-| `PIRC_PORT`          | no       | `8787`                  | Listen port.                                                                       |
-| `PIRC_STATE_DIR`     | no       | `./.state`              | State directory (created `0700`). Set it explicitly in production.                 |
-| `PIRC_DATABASE_PATH` | no       | `$STATE/gateway.sqlite` | SQLite file.                                                                       |
-| `PIRC_UPLOADS_DIR`   | no       | `$STATE/uploads`        | Created but uploads are stored on nodes; leave the default.                        |
+| Variable             | Required | Default              | Meaning                                                                            |
+| -------------------- | -------- | -------------------- | ---------------------------------------------------------------------------------- |
+| `PIRC_HOST`          | no       | `127.0.0.1`          | Listen address. Keep it on loopback or a private interface only the proxy reaches. |
+| `PIRC_PORT`          | no       | `8787`               | Listen port.                                                                       |
+| `PIRC_STATE_DIR`     | no       | `./.state`           | State directory (created `0700`). Set it explicitly in production.                 |
+| `PIRC_DATABASE_PATH` | no       | `$STATE/pirc.sqlite` | SQLite file. A file that is not pirc's (an old `gateway.sqlite`) is refused.       |
+| `PIRC_UPLOADS_DIR`   | no       | `$STATE/uploads`     | Created but uploads are stored on nodes; leave the default.                        |
 
 ## Browser authentication
 

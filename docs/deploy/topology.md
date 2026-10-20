@@ -55,18 +55,18 @@ The gateway host has no workspaces (`services.pirc.localNode.enable = false`, or
 
 ## Where state lives
 
-| Data                                                                       | Process | Location                                                                    |
-| -------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------- |
-| Session index, control leases, command outcomes, device tokens             | gateway | `$PIRC_STATE_DIR/gateway.sqlite`                                            |
-| Assistant memory, delegations, push subscriptions                          | gateway | same database                                                               |
-| Web-managed model backends and subscription logins                         | gateway | `$PIRC_STATE_DIR/backends/settings.json` (0600)                             |
-| VAPID key pair for push (unless given by environment)                      | gateway | `$PIRC_STATE_DIR/vapid.json`                                                |
-| Session transcripts (the conversation source of truth), runs, interactions | node    | `$PIRC_STATE_DIR/sessions/<id>/`, `gateway.sqlite`                          |
-| Uploads                                                                    | node    | `$PIRC_STATE_DIR/uploads/`, and `<workspace>/.pirc/uploads/` for non-images |
-| Workspace memory ledgers (mirrored to the gateway without paths)           | node    | `$PIRC_STATE_DIR/workspace-memory/`                                         |
-| Browser profiles (logins)                                                  | node    | `$PIRC_STATE_DIR/browser/`                                                  |
-| Agent config, global `AGENTS.md`, skills                                   | node    | `$PIRC_CONFIG_DIR` (default `~/.config/.pirc`)                              |
-| Node ↔ agent inference socket (random per start)                          | node    | `$PIRC_STATE_DIR/i-*/socket` (0600)                                         |
+| Data                                                                                     | Process | Location                                                                    |
+| ---------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------- |
+| Rooms and their messages, session index, control leases, command outcomes, device tokens | gateway | `$PIRC_STATE_DIR/pirc.sqlite`, room uploads in `PIRC_UPLOADS_DIR`           |
+| Assistant memory, delegations, push subscriptions                                        | gateway | same database                                                               |
+| Web-managed model backends and subscription logins                                       | gateway | `$PIRC_STATE_DIR/backends/settings.json` (0600)                             |
+| VAPID key pair for push (unless given by environment)                                    | gateway | `$PIRC_STATE_DIR/vapid.json`                                                |
+| Session transcripts (the conversation source of truth), runs, interactions               | node    | `$PIRC_STATE_DIR/sessions/<id>/`, `gateway.sqlite`                          |
+| Uploads                                                                                  | node    | `$PIRC_STATE_DIR/uploads/`, and `<workspace>/.pirc/uploads/` for non-images |
+| Workspace memory ledgers (mirrored to the gateway without paths)                         | node    | `$PIRC_STATE_DIR/workspace-memory/`                                         |
+| Browser profiles (logins)                                                                | node    | `$PIRC_STATE_DIR/browser/`                                                  |
+| Agent config, global `AGENTS.md`, skills                                                 | node    | `$PIRC_CONFIG_DIR` (default `~/.config/.pirc`)                              |
+| Node ↔ agent inference socket (random per start)                                        | node    | `$PIRC_STATE_DIR/i-*/socket` (0600)                                         |
 
 Both state directories are created with mode `0700`. See [Backup and recovery](backup-and-recovery.md) for what to copy.
 

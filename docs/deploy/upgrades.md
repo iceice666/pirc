@@ -1,5 +1,21 @@
 # Upgrades
 
+## Next release (the rewrite): rooms and a new gateway database
+
+The gateway starts a new database, `$PIRC_STATE_DIR/pirc.sqlite`, from nothing
+(plans/rewrite/decisions.md #14). An existing `gateway.sqlite` is left exactly
+as it is, never read or changed, and the gateway logs one line saying so; back
+it up or delete it when you choose. Nothing moves over: pair devices again,
+enable notifications again, and nodes re-register their workspaces (sessions
+already on a node stay on its disk and are not re-imported). A
+`PIRC_DATABASE_PATH` that points at the old file is refused; unset it or point
+it at a new path. Nodes keep their own databases.
+
+The web opens on the rooms at `/` (`?room=<id>`); workspaces and sessions moved
+to `/engine` (`/engine?session=<id>`, `/engine?open=memory`). Reverse proxies
+need the SPA fallback for `/engine` too (docs/deploy/reverse-proxy.md already
+falls back to `index.html` for every path).
+
 ## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13

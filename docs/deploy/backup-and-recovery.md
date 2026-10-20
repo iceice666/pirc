@@ -8,12 +8,14 @@ Two kinds of state exist, and they are not interchangeable.
 
 ### Gateway (`$PIRC_STATE_DIR` of `pirc-gateway`)
 
-| Path                                | Holds                                                                                                                                                                                          | Loss means                                                                                                                    |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `gateway.sqlite` (+ `-wal`, `-shm`) | Session index and ownership, pins/settled flags, leases, command outcomes, device tokens, assistant memory (USER/MEMORY, tombstones), delegations, push subscriptions, workspace-memory mirror | Sessions vanish from every client until nodes re-register them (see below); memory, pairings and push subscriptions are gone. |
-| `backends/settings.json`            | Web-managed backends and subscription OAuth tokens                                                                                                                                             | Log in / re-enter keys.                                                                                                       |
-| `vapid.json`                        | Push signing key                                                                                                                                                                               | Every device must re-enable notifications.                                                                                    |
-| `local-node-token` (NixOS)          | The local node's secret                                                                                                                                                                        | Regenerated on next start; nothing else to do.                                                                                |
+| Path                                | Holds                                                                                                                                                                                                                                          | Loss means                                                                                                                                                       |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pirc.sqlite` (+ `-wal`, `-shm`)    | Rooms, their messages, reads and pending input; session index and ownership, pins/settled flags, leases, command outcomes, device tokens, assistant memory (USER/MEMORY, tombstones), delegations, push subscriptions, workspace-memory mirror | The rooms' conversations are gone; sessions vanish from every client until nodes re-register them (see below); memory, pairings and push subscriptions are gone. |
+| `uploads/` (`room-*.bin`)           | Files sent into rooms                                                                                                                                                                                                                          | Attachments in room messages no longer load.                                                                                                                     |
+| `gateway.sqlite` (+ `-wal`, `-shm`) | Only on gateways that ran before the rewrite: the old database, left in place and never read (decision #14)                                                                                                                                    | Nothing the running gateway uses; delete it yourself once you no longer want it.                                                                                 |
+| `backends/settings.json`            | Web-managed backends and subscription OAuth tokens                                                                                                                                                                                             | Log in / re-enter keys.                                                                                                                                          |
+| `vapid.json`                        | Push signing key                                                                                                                                                                                                                               | Every device must re-enable notifications.                                                                                                                       |
+| `local-node-token` (NixOS)          | The local node's secret                                                                                                                                                                                                                        | Regenerated on next start; nothing else to do.                                                                                                                   |
 
 ### Node (`$PIRC_STATE_DIR` of each `pirc-node`)
 
@@ -38,7 +40,7 @@ tar -C /var/lib/pirc -czf pirc-daemon-$(date +%F).tgz daemon
 systemctl start pirc
 
 # online alternative for the database alone
-sqlite3 /var/lib/pirc/daemon/gateway.sqlite ".backup '/backup/gateway-$(date +%F).sqlite'"
+sqlite3 /var/lib/pirc/daemon/pirc.sqlite ".backup '/backup/pirc-$(date +%F).sqlite'"
 
 # a node
 launchctl bootout gui/$(id -u)/dev.pirc.node-agent      # macOS
@@ -70,7 +72,7 @@ Copy the node's state directory and `PIRC_CONFIG_DIR`, keep the same `PIRC_NODE_
 
 Stop the process and take a backup first. The gateway and each node have their own database; a session exists in both and both must be fixed.
 
-- Gateway tables of interest: `workspaces`, `sessions`, `runs`, `commands`, `interactions`, `leases`, `uploads`, `device_tokens`, `memory_*`, `delegations`, `push_subscriptions` (`crates/pirc-gateway/src/schema.sql` is authoritative).
+- Gateway tables of interest: `rooms`, `room_messages`, `room_reads`, `room_pending`, `room_uploads`, `workspaces`, `sessions`, `commands`, `leases`, `device_tokens`, `memory_*`, `delegations`, `push_subscriptions` (`crates/pirc-gateway/src/db/schema.sql` is authoritative).
 - Foreign keys are on. Delete a session's `leases`, `interactions`, `commands`, `runs` before the `sessions` row.
 - Gateway workspace IDs are `<nodeId>:<workspaceId>`; node ones are the bare `<workspaceId>`.
 - Deleting a `device_tokens` row revokes that phone.
@@ -78,7 +80,7 @@ Stop the process and take a backup first. The gateway and each node have their o
 - Restore ownership and mode afterwards (`chown`, `0600`) and start the service.
 
 ```sh
-sqlite3 /var/lib/pirc/daemon/gateway.sqlite    # or: nix shell nixpkgs#sqlite -c sqlite3 …
+sqlite3 /var/lib/pirc/daemon/pirc.sqlite    # or: nix shell nixpkgs#sqlite -c sqlite3 …
 ```
 
 ## Retention limits to know

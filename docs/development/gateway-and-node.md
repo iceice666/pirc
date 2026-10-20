@@ -107,7 +107,20 @@ A disconnected node makes its sessions answer `503` and stops new commands. A co
 
 ## API
 
-Every session route is answered by the node that owns the session; the gateway checks ownership and the control lease first.
+Every session route is answered by the node that owns the session; the gateway checks ownership and the control lease first. Room routes are the gateway's own.
+
+### Rooms
+
+Rooms (plans/rewrite/01-rooms.md) belong to the household: every allowed user reads and writes every room; reads, unread counts and "waiting for you" are per user. `#general` (id `general`) always exists and cannot be archived. Messages are numbered per room (`seq` from 1); `speaker` is `user` (with `user` naming who) or `face:<id>` (`face:host` for now); `kind` is `text`, `line` (a small note such as a move), `progress` or `question`.
+
+- `GET /api/rooms[?archived=1]` lists rooms by latest activity with `readSeq`, `unread` and `waiting`, plus the asking `user`. `POST /api/rooms` with `{name}` (1–80 characters, a leading `#` dropped) creates one. `GET /api/rooms/:id` returns a room (archived ones too) and its pinned messages. `PATCH /api/rooms/:id` takes any of `{name, archived, sourceScope}`; archiving hides a room from the list and deletes nothing, and an archived room takes no messages until it is unarchived (`409`).
+- `POST /api/rooms/:id/move` with `{toRoomId}` continues the conversation elsewhere: a line "Continued in #to" in the old room, "Continued from #from" in the new one.
+- `GET /api/rooms/:id/messages?before=<seq>&limit=<1-200>` pages backwards (oldest first in each page, `hasMore`). `POST /api/rooms/:id/messages` with `{text, attachments?, immediate?}` stores and broadcasts the message at once and adds it to the sender's pending input, which the brain takes as one turn after the typing debounce (plan 02); `immediate` (Cmd+Enter) skips the debounce. Your own message counts as read.
+- `POST /api/rooms/:id/messages/:mid/pin` with `{pinned?}` (default `true`); `POST /api/rooms/:id/read` with `{seq}` (never moves back); `POST /api/rooms/:id/typing`, at most every 3 seconds while typing (a signal lasts 6 seconds and is never stored).
+- `POST /api/rooms/:id/uploads?filename=` with raw bytes follows the session upload rules (images sniffed, other files need a name, `PIRC_UPLOAD_MAX_BYTES`) and stores the file on the gateway under `PIRC_UPLOADS_DIR`; an upload goes with one message (`attachments`). `GET /api/rooms/:id/uploads/:uploadId` serves it, images inline and other files as downloads.
+- WebSocket `GET /api/events?rooms=1&cursor=<epoch>:<sequence>` follows every room in one sequence: `room_message`, `room_message_updated` (`{message}`), `room_changed` (`{room}`), `room_read` (`{user, readSeq}`, only to that user) and `room_typing` (`{user, device, expiresAt}`, sequence 0, never replayed). The socket starts with `{type: "ready", watermark}`. The epoch is the gateway's start time, so a cursor from before a restart, or older than the bounded replay, is answered with a `reset`: reload what is shown. A socket follows either a session or the rooms, not both.
+
+### Engine
 
 - `GET /api/health`
 - `GET /api/workspaces`
@@ -150,4 +163,4 @@ At startup (of the gateway or a node) unfinished runs become `interrupted`, pend
 
 ## Data
 
-Each process keeps its own SQLite below its `PIRC_STATE_DIR`. The gateway's holds the session index, leases, and command outcomes; a node's also holds runs, interactions, and uploads, and its state directory contains the agent session JSONL files (the conversation source of truth) and uploaded files. Non-image uploads are also copied into the workspace at `.pirc/uploads/` so the agent's read/bash tools can reach them (that directory is writable by the uploader but protected from the agent's own writes).
+Each process keeps its own SQLite below its `PIRC_STATE_DIR`. The gateway's (`pirc.sqlite`, schema in `crates/pirc-gateway/src/db/schema.sql`) holds the rooms and their messages, reads and pending input, the session index, leases, and command outcomes; an old `gateway.sqlite` from before the rewrite is left where it is and not read; a node's also holds runs, interactions, and uploads, and its state directory contains the agent session JSONL files (the conversation source of truth) and uploaded files. Non-image uploads are also copied into the workspace at `.pirc/uploads/` so the agent's read/bash tools can reach them (that directory is writable by the uploader but protected from the agent's own writes).
