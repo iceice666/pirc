@@ -1200,6 +1200,9 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
           ),
         );
       });
+      // Script focus actions may run in a post-frame callback. Request another
+      // frame so the deferred reveal executes even when nothing else repaints.
+      WidgetsBinding.instance.scheduleFrame();
     }
   }
 

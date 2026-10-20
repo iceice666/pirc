@@ -4,6 +4,10 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Fixed
+
+- Android native HTML documents handle modal dialogs, backdrop dismissal, authored dialog positions and partial document roots; scripted focus reveals off-screen controls again.
+
 ## [0.9.2] - 2026-10-20
 
 ### Added
