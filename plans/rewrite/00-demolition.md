@@ -69,7 +69,7 @@
 ### 結果（2026-10-20，HEAD `64ce7b9`）
 
 - `bun run check` 各步全綠，Rust 測試 1427 passed / 0 failed。在 pirc sandbox 裡跑有兩處偏離：`format:check` 改對 `git ls-files` 跑（`prettier --check .` 會讀到 sandbox 在 workspace 根目錄以 `/dev/null` 遮住的未追蹤點檔而 EACCES）；`TMPDIR` 改到 `/tmp/plan00-check-tmp`（session 自己的 `TMPDIR` 在 `/tmp/pirc-n-*` 下，`sandbox::linux::plan` 的兩個 host-socket 測試會被 `in_node_tmp` 排除而失敗）。
-- Android（Flutter）測試沒跑：這台沒有 Flutter，`91e425a` 的 Dart 變更未經編譯。
+- Android（Flutter 3.44.4 / Dart 3.12.2，Linux）：`flutter analyze` 乾淨；`flutter test` 5090 passed、361 failed，失敗的與 `c483379` 在同一環境下逐一相同（抽查的都是載入 macOS 字型 `/System/Library/Fonts/Supplemental/Arial*.ttf` 失敗）。`91e425a` 帶進的 2 個 analyzer warning、2 個測試失敗（route-actions 從 schedules 頁出發、breadcrumb 測試用 chat header）與 14 個未格式化檔在 `ed04b0b` 修好。Kotlin（`./gradlew testDebugUnitTest`）與 `node --test tool/parity/*_test.mjs` 沒跑：這台沒有 JDK、Android SDK 與 node；`91e425a` 刪 `Schedules.kt` 等 Kotlin 變更仍未編譯。
 - 手動驗證（gateway + coding node、directory workspace、session、bash、terminal、git panel、delegation stop）未做。
 - grep 剩下的命中都是刻意保留：gateway `db.rs` 的舊 schema migration 與 `RETIRED` 清單、`memory/store.rs` 對舊 DB `memory_proposals` 的 forget-scrub 與其測試、`testdata/schema-1000.sql`、`mode.rs` 確認退場欄位被拒的測試。
 
