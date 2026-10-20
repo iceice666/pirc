@@ -60,6 +60,15 @@ Residual risk, accepted:
 - **Quote matching.** A short quote must be all the person wrote, but a longer one may be a fragment of a longer message, read out of context ("not keep it short" contains "keep it short").
 - **Owners.** In a room where several people speak, a fact without a quote belongs to the turn's first speaker.
 
+## Nothing writes unasked
+
+Decision (direction §2.5–2.6, [plans/rewrite/05-self-wake.md](../../plans/rewrite/05-self-wake.md)): the brain wakes on its own (an open loop's time, its own "I'll come back", later a source change), at most `PIRC_WAKES_PER_DAY` (24) a day, behind every person's turn. A wake only reads and remembers: the tools that act for people (workers, a source's actions) are not in its tool list at all, rather than refused. It can speak in the room (`speak`, with a push), keep facts, and open, change or close loops; everything else needs a person's turn.
+
+Residual risk, accepted:
+
+- **Injection while awake.** A wake that reads a prompt injection (a page it searched, later an email) can change only memory and loops, and speak. What it writes carries a `tool:*` origin, is shown in the room with an undo, and a `tool:*` loop never authorizes an action.
+- **What it says.** A wake's message and its push may be misleading or unwanted; they are shown as the host's words. A wake the brain schedules for itself is said in the room with **Cancel**, and at most 20 wait at once; the daily quota bounds the rest.
+
 ## Other accepted limits
 
 - **Filesystem planning:** Linux binds resolve paths at startup. Retargeted symlinks between planning and mounting, or pre-existing hard links in otherwise writable locations, can defeat path-based assumptions. The session's own agent cannot create a cross-mount hard link to an already protected file, but another actor may prepare one. Missing protected paths use placeholders visible on the host; nested repository scanning has a depth limit of three.

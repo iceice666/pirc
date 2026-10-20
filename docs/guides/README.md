@@ -4,7 +4,7 @@
 
 | Guide                                               | Covers                                                                            |
 | --------------------------------------------------- | --------------------------------------------------------------------------------- |
-| [Rooms, memory and open loops](rooms-and-memory.md) | What pirc keeps between conversations, and how to undo it                         |
+| [Rooms, memory and open loops](rooms-and-memory.md) | What pirc keeps between conversations, when it speaks up, and how to undo it      |
 | [Agent configuration](agent.md)                     | Node/project configuration, sandbox boundaries, skills, recap and hooks           |
 | [Tools and workflows](tools.md)                     | Direct tools and PTC, goals, background jobs, teams, roles and auto mode          |
 | [Model backends and logins](model-backends.md)      | Gateway backend sources, precedence, reloads, subscription logins and credentials |

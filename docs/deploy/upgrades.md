@@ -43,6 +43,12 @@ The brain keeps open loops (plans/rewrite/04-open-loops.md). On first start
 gateway refuses schema 4. The routes are `/api/loops` and
 `/api/loops/:id`; the rooms' stream gains `loop_changed`.
 
+The brain wakes up on its own (plans/rewrite/05-self-wake.md). On first start
+`pirc.sqlite` migrates to schema 5: the `wakes` table, and
+`open_loops.notice_at` for the day before a deadline. An older gateway refuses
+schema 5. `PIRC_WAKES_PER_DAY` (default 24, `0` off) limits it. The routes are
+`/api/wakes` and `/api/wakes/:id`; the rooms' stream gains `wake_changed`.
+
 ## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13

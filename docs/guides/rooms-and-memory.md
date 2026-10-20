@@ -35,7 +35,8 @@ can come back to them.
   loop and the room shows "Holding on to: …". Loops with a time show when it comes next.
 - **Closing.** pirc closes a loop when it is resolved ("it works now") or when you say it no
   longer matters ("that one is not needed"), and says so: "Closed: … (reason)". A meeting or
-  deadline closes itself once its time passes; a repeating one ends at its last date.
+  deadline closes itself once its time passes and pirc has said so; a repeating one ends at
+  its last date.
 - **Undo.** **Don't keep** on "Holding on to: …" closes it; **Not done yet** on a closing
   line opens it again. Saying it works too.
 - **Too many.** pirc keeps at most 40 open. Past that, the ones without a time that nobody
@@ -46,5 +47,21 @@ Settings → Open loops lists what is open, with the next time of each, and what
 recently. A loop pirc opened from something it read (a search, later an email) is marked as
 such, and never counts as your word for anything it does.
 
-pirc does not yet speak up by itself when a time comes (that is the self-wake still to
-come): for now a time closes its loop, waits for you, or moves on to the next one quietly.
+## When pirc speaks up by itself
+
+pirc wakes up on its own when an open loop's time comes, the day before a deadline, and
+when it said it would come back to something ("I'll look at your dotfiles tonight"). Awake,
+it only reads and remembers: it never does anything for you that you did not ask for. It
+says something in the room, with a notification, only when it is worth saying: a loop's
+time always, the day before a deadline too, a look it took only when it found something.
+Otherwise nothing shows in the room. Your house rules (`CHAT.md`) and preferences can
+change when it speaks up.
+
+- **"I'll come back … to look at: …"** in a room means it scheduled a look; **Cancel**
+  calls it off.
+- If you write while it is awake, you come first: it stops, answers you, and comes back
+  once afterwards.
+- It wakes at most 24 times a day (your gateway may set another number). Past that, a
+  loop's time is still said, as "Reminder: …", without pirc thinking about it.
+
+Settings → Wakes lists what is coming and how recent wakes went.
