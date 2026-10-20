@@ -1,7 +1,7 @@
 //! The assistant's memory, held by the gateway for each user
 //! (`MemoryStore` in `apps/gateway/src/daemon/memory.ts`). USER entries say
 //! who the user is and what they want; they change only when the user
-//! approves a proposal. MEMORY notes are the assistant's own, written
+//! changes them (restore, forget). MEMORY notes are the assistant's own, written
 //! directly. Every change is logged as a revision. Forgetting erases an
 //! entry's content and history and keeps only hashes, so the same text
 //! cannot be saved again.
@@ -18,8 +18,6 @@ use crate::error::{ApiError, ApiResult};
 use crate::util::{hex, now_ms, random_bytes, safe_json};
 
 pub const ENTRY_MAX_CHARS: usize = 1000;
-pub const QUOTE_MAX_CHARS: usize = 1000;
-pub const PENDING_PROPOSALS_MAX: usize = 20;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -57,14 +55,6 @@ impl Action {
             "replace" => Some(Self::Replace),
             "remove" => Some(Self::Remove),
             _ => None,
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Add => "add",
-            Self::Replace => "replace",
-            Self::Remove => "remove",
         }
     }
 }
@@ -148,40 +138,6 @@ pub struct Version {
     pub at: i64,
 }
 
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Proposal {
-    pub id: String,
-    pub action: String,
-    pub target_id: Option<String>,
-    pub target_revision: Option<i64>,
-    pub content: Option<String>,
-    pub quote: String,
-    pub sources: Value,
-    pub session_id: String,
-    pub status: String,
-    pub created_at: i64,
-    pub decided_at: Option<i64>,
-}
-
-impl Proposal {
-    fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
-        Ok(Self {
-            id: row.get("id")?,
-            action: row.get("action")?,
-            target_id: row.get("target_id")?,
-            target_revision: row.get("target_revision")?,
-            content: row.get("content")?,
-            quote: row.get("quote")?,
-            sources: safe_json(&row.get::<_, String>("sources_json")?, json!({})),
-            session_id: row.get("session_id")?,
-            status: row.get("status")?,
-            created_at: row.get("created_at")?,
-            decided_at: row.get("decided_at")?,
-        })
-    }
-}
-
 /// Who is changing memory, and what backs the change.
 #[derive(Clone, Debug)]
 pub struct Change {
@@ -198,16 +154,6 @@ pub struct NoteInput {
     pub content: Option<String>,
     /// The revision it last saw; `None` when absent or `null`.
     pub base_revision: Option<i64>,
-}
-
-/// A USER change the assistant proposes (`memory.proposeUser`).
-#[derive(Clone, Debug)]
-pub struct ProposeInput {
-    pub action: Action,
-    pub id: Option<String>,
-    pub content: Option<String>,
-    pub base_revision: Option<i64>,
-    pub quote: String,
 }
 
 /// Entries are single lines; secrets are removed before anything is stored.
@@ -326,33 +272,6 @@ impl<'a> Store<'a> {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
-    pub fn proposals(&self, user: &str, status: Option<&str>) -> ApiResult<Vec<Proposal>> {
-        let mut statement = self
-            .conn
-            .prepare("SELECT * FROM memory_proposals WHERE owner_user=? ORDER BY created_at, id")?;
-        let rows = statement.query_map([user], Proposal::from_row)?;
-        let mut proposals = Vec::new();
-        for proposal in rows {
-            let proposal = proposal?;
-            if status.is_none_or(|status| proposal.status == status) {
-                proposals.push(proposal);
-            }
-        }
-        Ok(proposals)
-    }
-
-    pub fn proposal(&self, user: &str, id: &str) -> ApiResult<Proposal> {
-        self.conn
-            .query_row(
-                "SELECT * FROM memory_proposals WHERE id=? AND owner_user=?",
-                [id, user],
-                Proposal::from_row,
-            )
-            .optional()?
-            .ok_or_else(|| ApiError::not_found(format!("No memory proposal {id}")))
-    }
-
-    /// The active entries of `kind`, as a session's context shows them.
     fn briefs(active: &[Entry], kind: Kind) -> Vec<Value> {
         active
             .iter()
@@ -375,38 +294,13 @@ impl<'a> Store<'a> {
     }
 
     /// What an assistant session starts with.
-    pub fn context(&self, user: &str, session_id: Option<&str>) -> ApiResult<Map<String, Value>> {
+    pub fn context(&self, user: &str) -> ApiResult<Map<String, Value>> {
         let active = self.entries(user, None, Some("active"))?;
         let brief = |kind: Kind| Self::briefs(&active, kind);
-        let decisions: Vec<Value> = match session_id {
-            Some(session_id) => {
-                let mut decided: Vec<Proposal> = self
-                    .proposals(user, None)?
-                    .into_iter()
-                    .filter(|p| p.session_id == session_id && p.status != "pending")
-                    .collect();
-                decided.sort_by_key(|p| p.decided_at.unwrap_or(0));
-                let skip = decided.len().saturating_sub(20);
-                decided
-                    .into_iter()
-                    .skip(skip)
-                    .map(|p| {
-                        json!({ "id": p.id, "action": p.action, "status": p.status,
-                            "targetId": p.target_id, "decidedAt": p.decided_at })
-                    })
-                    .collect()
-            }
-            None => Vec::new(),
-        };
         let mut context = Map::new();
         context.insert("user".into(), Value::Array(brief(Kind::User)));
         context.insert("notes".into(), Value::Array(brief(Kind::Note)));
         context.insert("usage".into(), self.usage(user)?);
-        context.insert(
-            "pendingProposals".into(),
-            json!(self.proposals(user, Some("pending"))?.len()),
-        );
-        context.insert("proposalDecisions".into(), Value::Array(decisions));
         Ok(context)
     }
 
@@ -439,7 +333,7 @@ impl<'a> Store<'a> {
                     403,
                     "forbidden",
                     format!(
-                        "{} is a USER entry; USER changes only when the user approves a proposal",
+                        "{} is a USER entry; only the user changes USER",
                         entry.id
                     ),
                 ));
@@ -503,128 +397,6 @@ impl<'a> Store<'a> {
         })
     }
 
-    /// The assistant proposes a USER change resting on the user's exact
-    /// words. Nothing changes until the user approves it. Proposing the same
-    /// change again returns the pending proposal.
-    pub fn propose(
-        &self,
-        user: &str,
-        session_id: &str,
-        input: &ProposeInput,
-        sources: &Value,
-    ) -> ApiResult<(Proposal, bool)> {
-        self.tx(|| {
-            let quote = clean(&input.quote);
-            if quote.is_empty() {
-                return Err(ApiError::new(
-                    400,
-                    "invalid_input",
-                    "A USER change needs the user's exact words",
-                ));
-            }
-            if len(&quote) > QUOTE_MAX_CHARS as i64 {
-                return Err(ApiError::new(
-                    413,
-                    "payload_too_large",
-                    format!("Quote at most {QUOTE_MAX_CHARS} characters of the user's words"),
-                ));
-            }
-            let target = match input.action {
-                Action::Add => None,
-                _ => {
-                    let target = self.entry(user, input.id.as_deref().unwrap_or_default())?;
-                    if !target.is(Kind::User) || target.status != "active" {
-                        return Err(ApiError::not_found(format!(
-                            "No USER entry {}",
-                            input.id.as_deref().unwrap_or("undefined")
-                        )));
-                    }
-                    Some(target)
-                }
-            };
-            let content = match input.action {
-                Action::Remove => None,
-                _ => Some(entry_text(input.content.as_deref())?),
-            };
-            if let Some(content) = &content {
-                self.refuse_forgotten(user, content)?;
-                if let Some(target) = &target
-                    && content_hash(content) == content_hash(&target.content)
-                {
-                    return Err(ApiError::new(
-                        409,
-                        "conflict",
-                        format!("USER entry {} already says this", target.id),
-                    ));
-                }
-                if target.is_none()
-                    && let Some(same) = self.active_with(user, Kind::User, content)?
-                {
-                    return Err(ApiError::new(
-                        409,
-                        "conflict",
-                        format!("USER already says this ({})", same.id),
-                    ));
-                }
-            }
-            let hash = content.as_deref().map(content_hash);
-            let target_id = target.as_ref().map(|target| target.id.clone());
-            let matching: Vec<Proposal> = {
-                let mut statement = self.conn.prepare(
-                    "SELECT * FROM memory_proposals WHERE owner_user=? AND action=? AND target_id IS ? AND content_hash IS ? ORDER BY created_at DESC",
-                )?;
-                let rows = statement.query_map(
-                    params![user, input.action.as_str(), target_id, hash],
-                    Proposal::from_row,
-                )?;
-                rows.collect::<Result<_, _>>()?
-            };
-            if let Some(pending) = matching.iter().find(|row| row.status == "pending") {
-                return Ok((pending.clone(), true));
-            }
-            if matching.iter().any(|row| row.status == "rejected") {
-                return Err(ApiError::new(
-                    409,
-                    "rejected_before",
-                    "The user already rejected this exact change; do not propose it again",
-                ));
-            }
-            let waiting = self.proposals(user, Some("pending"))?.len();
-            if waiting >= PENDING_PROPOSALS_MAX {
-                return Err(ApiError::new(
-                    429,
-                    "too_many_requests",
-                    format!(
-                        "{waiting} proposals are already waiting; ask the user to review them in Settings → Memory"
-                    ),
-                ));
-            }
-            if let Some(content) = &content {
-                let before = target.as_ref().map_or(0, |target| len(&target.content));
-                self.make_room(user, Kind::User, len(content) - before)?;
-            }
-            let id = self.new_id("memory_proposals", "p")?;
-            self.conn.execute(
-                "INSERT INTO memory_proposals (id,owner_user,action,target_id,target_revision,content,content_hash,quote,sources_json,session_id,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                params![
-                    id,
-                    user,
-                    input.action.as_str(),
-                    target_id,
-                    target.as_ref().and(input.base_revision),
-                    content,
-                    hash,
-                    quote,
-                    sources.to_string(),
-                    session_id,
-                    "pending",
-                    now_ms(),
-                ],
-            )?;
-            Ok((self.proposal(user, &id)?, false))
-        })
-    }
-
     /// Erase entries created here, not entries merely recalled or edited here.
     pub fn forget_session(&self, user: &str, session_id: &str) -> ApiResult<()> {
         self.tx(|| {
@@ -638,117 +410,13 @@ impl<'a> Store<'a> {
             for id in ids {
                 self.forget(user, &id)?;
             }
-            self.conn.execute(
-                "DELETE FROM memory_proposals WHERE owner_user=? AND session_id=?",
-                [user, session_id],
-            )?;
             Ok(())
         })
     }
 
     // ---------- the user ----------
 
-    /// Apply a pending proposal. `target_revision` is the version of the
-    /// target the user was shown; if it changed since, nothing is applied.
-    pub fn approve(
-        &self,
-        user: &str,
-        proposal_id: &str,
-        target_revision: Option<i64>,
-    ) -> ApiResult<(Proposal, Entry)> {
-        self.tx(|| {
-            let proposal = self.pending(user, proposal_id)?;
-            let actor = format!("user:{user}");
-            let mut sources = match &proposal.sources {
-                Value::Object(sources) => sources.clone(),
-                _ => Map::new(),
-            };
-            sources.insert("quote".into(), json!(proposal.quote));
-            sources.insert("proposalId".into(), json!(proposal.id));
-            let change = Change {
-                actor: actor.clone(),
-                origins: json!(["user"]),
-                sources: Value::Object(sources),
-            };
-            let entry = if proposal.action == "add" {
-                let content = proposal.content.clone().unwrap_or_default();
-                self.refuse_forgotten(user, &content)?;
-                match self.active_with(user, Kind::User, &content)? {
-                    Some(same) => same,
-                    None => {
-                        self.make_room(user, Kind::User, len(&content))?;
-                        self.insert(user, Kind::User, &content, &change)?
-                    }
-                }
-            } else {
-                let target = self.entry(user, proposal.target_id.as_deref().unwrap_or_default())?;
-                if target.status != "active" {
-                    return Err(ApiError::new(
-                        409,
-                        "conflict",
-                        format!(
-                            "USER entry {} was removed or forgotten since this was proposed; reject the proposal",
-                            target.id
-                        ),
-                    ));
-                }
-                if target_revision.is_some_and(|revision| revision != target.revision) {
-                    return Err(ApiError::new(
-                        409,
-                        "conflict",
-                        format!("USER entry {} changed; review it again", target.id),
-                    )
-                    .with_details(json!({ "id": target.id, "revision": target.revision })));
-                }
-                if proposal.action == "remove" {
-                    self.update(
-                        user,
-                        &target,
-                        Next {
-                            status: Some("removed"),
-                            ..Next::default()
-                        },
-                        "remove",
-                        &actor,
-                    )?
-                } else {
-                    let content = proposal.content.clone().unwrap_or_default();
-                    self.refuse_forgotten(user, &content)?;
-                    self.make_room(user, Kind::User, len(&content) - len(&target.content))?;
-                    self.update(
-                        user,
-                        &target,
-                        Next {
-                            content: Some(&content),
-                            origins: Some(&change.origins),
-                            sources: Some(&change.sources),
-                            ..Next::default()
-                        },
-                        "replace",
-                        &actor,
-                    )?
-                }
-            };
-            self.conn.execute(
-                "UPDATE memory_proposals SET status='approved', decided_at=?, target_id=? WHERE id=?",
-                params![now_ms(), entry.id, proposal.id],
-            )?;
-            Ok((self.proposal(user, &proposal.id)?, entry))
-        })
-    }
-
-    pub fn reject(&self, user: &str, proposal_id: &str) -> ApiResult<Proposal> {
-        self.tx(|| {
-            self.pending(user, proposal_id)?;
-            self.conn.execute(
-                "UPDATE memory_proposals SET status='rejected', decided_at=? WHERE id=?",
-                params![now_ms(), proposal_id],
-            )?;
-            self.proposal(user, proposal_id)
-        })
-    }
-
-    /// Erase an entry: its text, every earlier version and the proposals
+    /// Erase an entry: its text, every earlier version and the old proposals
     /// that carry them. Hashes of all its versions stay as tombstones, which
     /// refuse the same text (ignoring case and spacing) from then on.
     /// Rewordings are not caught. Session transcripts on the nodes are not
@@ -799,6 +467,16 @@ impl<'a> Store<'a> {
             )?;
             let forgotten = self.entry(user, entry_id)?;
             self.log(user, &forgotten, "forget", &format!("user:{user}"))?;
+            // Databases from before the rewrite keep their retired USER
+            // proposals (plans/rewrite/00-demolition.md): erase the text they carry too.
+            let proposals: bool = self.conn.query_row(
+                "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_proposals')",
+                [],
+                |row| row.get(0),
+            )?;
+            if !proposals {
+                return Ok(());
+            }
             let hashed = if hashes.is_empty() {
                 String::new()
             } else {
@@ -824,7 +502,7 @@ impl<'a> Store<'a> {
     }
 
     /// Bring back a removed entry, or an earlier version (`revision`) of an
-    /// active or removed one. The user acts directly: USER needs no proposal.
+    /// active or removed one.
     pub fn restore(&self, user: &str, entry_id: &str, revision: Option<i64>) -> ApiResult<Entry> {
         self.tx(|| {
             let entry = self.entry(user, entry_id)?;
@@ -896,18 +574,6 @@ impl<'a> Store<'a> {
 
     // ---------- internals ----------
 
-    fn pending(&self, user: &str, proposal_id: &str) -> ApiResult<Proposal> {
-        let proposal = self.proposal(user, proposal_id)?;
-        if proposal.status != "pending" {
-            return Err(ApiError::new(
-                409,
-                "conflict",
-                format!("Proposal {proposal_id} was already {}", proposal.status),
-            ));
-        }
-        Ok(proposal)
-    }
-
     fn active_with(&self, user: &str, kind: Kind, content: &str) -> ApiResult<Option<Entry>> {
         let hash = content_hash(content);
         Ok(self
@@ -974,6 +640,17 @@ impl<'a> Store<'a> {
                 return Ok(id);
             }
         }
+    }
+
+    /// A USER entry, as no route writes them any more (tests only).
+    #[cfg(test)]
+    pub fn insert_user(&self, user: &str, content: &str, session: &str) -> ApiResult<Entry> {
+        let change = Change {
+            actor: format!("user:{user}"),
+            origins: json!(["user"]),
+            sources: json!({ "sessionId": session }),
+        };
+        self.tx(|| self.insert(user, Kind::User, &clean(content), &change))
     }
 
     fn insert(&self, user: &str, kind: Kind, content: &str, change: &Change) -> ApiResult<Entry> {

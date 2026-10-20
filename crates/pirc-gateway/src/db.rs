@@ -1539,6 +1539,8 @@ mod tests {
         "schedule_proposals.",
         "index.schedules_",
         "index.schedule_",
+        "memory_proposals.",
+        "index.memory_proposals_",
     ];
 
     #[test]

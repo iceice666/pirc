@@ -65,13 +65,6 @@ CREATE TABLE memory_log (
   sources_json TEXT NOT NULL, actor TEXT NOT NULL, at INTEGER NOT NULL
 );
 CREATE INDEX memory_log_entry ON memory_log(entry_id, revision);
-CREATE TABLE memory_proposals (
-  id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, action TEXT NOT NULL, target_id TEXT,
-  target_revision INTEGER, content TEXT, content_hash TEXT, quote TEXT NOT NULL,
-  sources_json TEXT NOT NULL, session_id TEXT NOT NULL, status TEXT NOT NULL,
-  created_at INTEGER NOT NULL, decided_at INTEGER
-);
-CREATE INDEX memory_proposals_owner ON memory_proposals(owner_user, status);
 CREATE TABLE memory_tombstones (
   -- 'global' (Forget, chat deletion) refuses the text from then on.
   owner_user TEXT NOT NULL, scope_id TEXT NOT NULL DEFAULT 'global', content_hash TEXT NOT NULL,

@@ -1,7 +1,6 @@
 //! The assistant's memory in the web app (Settings → Memory;
 //! `apps/gateway/src/daemon/memory-routes.ts`): the user reviews USER
-//! entries and MEMORY notes, approves or rejects the assistant's USER
-//! proposals, restores earlier versions and forgets entries. Device tokens
+//! entries and MEMORY notes, restores earlier versions and forgets entries. Device tokens
 //! may use these routes too. Every change answers with the whole view, and
 //! no reply is cached.
 
@@ -28,8 +27,6 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/memory", get(view_route))
         .route("/api/memory/entries/{id}/history", get(history))
-        .route("/api/memory/proposals/{id}/approve", post(approve))
-        .route("/api/memory/proposals/{id}/reject", post(reject))
         .route("/api/memory/entries/{id}/forget", post(forget))
         .route("/api/memory/entries/{id}/restore", post(restore))
         .route_layer(middleware::from_fn(scope))
@@ -40,7 +37,7 @@ pub fn routes() -> Router<AppState> {
 /// says `no-store`.
 async fn scope(request: Request, next: Next) -> Response {
     let path = request.uri().path().to_owned();
-    // `/api/memory/<entries|proposals>/<id>/...`
+    // `/api/memory/entries/<id>/...`
     if path.split('/').nth(4).is_some_and(|id| id.len() > 100) {
         return json_response(
             414,
@@ -89,28 +86,11 @@ fn view(app: &App, user: &str) -> ApiResult<Value> {
     let conn = app.db.lock();
     let store = super::store(app, &conn);
     let entries = store.entries(user, None, None)?;
-    let proposals: Vec<Value> = store
-        .proposals(user, Some("pending"))?
-        .into_iter()
-        .map(|proposal| {
-            let target = proposal
-                .target_id
-                .as_ref()
-                .and_then(|id| entries.iter().find(|entry| &entry.id == id))
-                .map_or(Value::Null, |target| {
-                    json!({ "id": target.id, "content": target.content, "revision": target.revision })
-                });
-            let mut value = serde_json::to_value(&proposal).unwrap_or_default();
-            value["target"] = target;
-            value
-        })
-        .collect();
     let mut seen = HashSet::new();
     let mut sessions = Map::new();
     let ids = entries
         .iter()
         .filter_map(|entry| entry.source_session())
-        .chain(proposals.iter().filter_map(|p| p["sessionId"].as_str()))
         .filter(|id| !id.is_empty());
     for session_id in ids {
         if !seen.insert(session_id.to_owned()) {
@@ -135,7 +115,6 @@ fn view(app: &App, user: &str) -> ApiResult<Value> {
         "user": pick(&|entry| entry.kind == "user" && entry.status == "active"),
         "notes": pick(&|entry| entry.kind == "note" && entry.status == "active"),
         "removed": pick(&|entry| entry.status == "removed"),
-        "proposals": proposals,
         "sessions": sessions,
     }))
 }
@@ -144,7 +123,6 @@ fn view(app: &App, user: &str) -> ApiResult<Value> {
 fn change(app: &App, user: &str, apply: impl FnOnce(&Store<'_>) -> ApiResult<()>) -> Handled {
     {
         let conn = app.db.lock();
-        super::interactions::ensure_known(app, &conn);
         apply(&super::store(app, &conn))?;
     }
     app.memory_changed(user);
@@ -169,31 +147,6 @@ async fn history(
         super::store(&app, &conn).history(&identity.user, id)?
     };
     Ok(ok(json!({ "versions": versions })))
-}
-
-async fn approve(
-    State(app): State<AppState>,
-    Extension(identity): Extension<Identity>,
-    Path(id): Path<String>,
-    ReqBody(body): ReqBody,
-) -> Handled {
-    let id = id_param(&id)?;
-    let target_revision = revision_body(&body, "targetRevision")?;
-    change(&app, &identity.user, |store| {
-        store.approve(&identity.user, id, target_revision).map(drop)
-    })
-}
-
-async fn reject(
-    State(app): State<AppState>,
-    Extension(identity): Extension<Identity>,
-    Path(id): Path<String>,
-    ReqBody(_): ReqBody,
-) -> Handled {
-    let id = id_param(&id)?;
-    change(&app, &identity.user, |store| {
-        store.reject(&identity.user, id).map(drop)
-    })
 }
 
 async fn forget(

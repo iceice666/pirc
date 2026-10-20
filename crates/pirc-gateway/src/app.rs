@@ -474,8 +474,6 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("DELETE", "/api/provider-auth/sessions/{id}"),
     ("POST", "/api/provider-auth/sessions/{id}/input"),
     ("GET", "/api/memory/entries/{id}/history"),
-    ("POST", "/api/memory/proposals/{id}/approve"),
-    ("POST", "/api/memory/proposals/{id}/reject"),
     ("POST", "/api/memory/entries/{id}/forget"),
     ("POST", "/api/memory/entries/{id}/restore"),
 ];

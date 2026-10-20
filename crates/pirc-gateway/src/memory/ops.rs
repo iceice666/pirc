@@ -1,12 +1,11 @@
 //! The memory and assistant operations of `apps/gateway/src/daemon/agent-ops.ts`:
-//! `assistant.context`, `memory.note`, `memory.proposeUser`,
-//! `memory.search` and `recall.remote`.
+//! `assistant.context`, `memory.note`, `memory.search` and `recall.remote`.
 
 use pirc_protocol::{HttpMethod, NodeHttpRequest};
 use serde_json::{Map, Value, json};
 
 use super::schema::{array, hex12, int, optional, required, strict, string};
-use super::store::{Action, Change, NoteInput, ProposeInput};
+use super::store::{Action, Change, NoteInput};
 use crate::agent_ops::OpContext;
 use crate::app::AppState;
 use crate::db::Store as _;
@@ -17,7 +16,6 @@ use crate::memory_records;
 pub enum Op {
     Context,
     Note(NoteArgs),
-    ProposeUser(ProposeArgs),
     Search {
         query: String,
         workspace: Option<String>,
@@ -34,11 +32,6 @@ pub struct NoteArgs {
     origins: Vec<String>,
     entry_ids: Vec<String>,
     quote: Option<String>,
-}
-
-pub struct ProposeArgs {
-    input: ProposeInput,
-    entry_ids: Vec<String>,
 }
 
 type Fields<'a> = &'a Map<String, Value>;
@@ -113,39 +106,6 @@ fn parse_note(args: &Value) -> Result<NoteArgs, ()> {
     })
 }
 
-fn parse_propose(args: &Value) -> Result<ProposeArgs, ()> {
-    let object = strict(
-        args,
-        &[
-            "action",
-            "id",
-            "content",
-            "baseRevision",
-            "quote",
-            "entryIds",
-        ],
-    )
-    .ok_or(())?;
-    let action = action(object)?;
-    let id = entry_id(object)?;
-    let content = text(object, "content", 4000)?;
-    let base_revision = base_revision(object)?;
-    let quote = required(object, "quote", |value| {
-        string(value, 0, 4000).map(str::to_owned)
-    })?;
-    let entry_ids = required(object, "entryIds", |value| entry_ids(value, 1))?;
-    Ok(ProposeArgs {
-        input: ProposeInput {
-            action,
-            id,
-            content,
-            base_revision,
-            quote,
-        },
-        entry_ids,
-    })
-}
-
 fn parse_search(args: &Value) -> Result<Op, ()> {
     let object = strict(args, &["query", "workspace", "limit", "everywhere"]).ok_or(())?;
     Ok(Op::Search {
@@ -166,7 +126,6 @@ pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {
     Some(match op {
         "assistant.context" => strict(args, &[]).map(|_| Op::Context).ok_or(()),
         "memory.note" => parse_note(args).map(Op::Note),
-        "memory.proposeUser" => parse_propose(args).map(Op::ProposeUser),
         "memory.search" => parse_search(args),
         "recall.remote" => strict(args, &["id"])
             .and_then(|object| object.get("id"))
@@ -211,7 +170,7 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
                 let conn = app.db.lock();
                 (
                     conn.get_workspace_capabilities(&context.workspace.id)?,
-                    super::store(app, &conn).context(user, Some(session_id))?,
+                    super::store(app, &conn).context(user)?,
                 )
             };
             let mut result = Map::new();
@@ -244,7 +203,6 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
                 // Checked under the lock that writes: a chat fenced for
                 // deletion since the operation arrived writes nothing.
                 conn.require_session_available(session_id)?;
-                super::interactions::ensure_known(app, &conn);
                 let store = super::store(app, &conn);
                 let (entry, unchanged) = store.write_note(user, &args.input, &change)?;
                 (entry, unchanged, store.usage(user)?)
@@ -259,20 +217,6 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
                 "unchanged": unchanged,
                 "usage": usage["note"],
             }))
-        }
-        Op::ProposeUser(args) => {
-            require_assistant(context)?;
-            let sources = json!({ "sessionId": session_id, "entryIds": args.entry_ids });
-            let (proposal, duplicate) = {
-                let conn = app.db.lock();
-                conn.require_session_available(session_id)?;
-                super::interactions::ensure_known(app, &conn);
-                super::store(app, &conn).propose(user, session_id, &args.input, &sources)?
-            };
-            if !duplicate {
-                app.memory_changed(user);
-            }
-            Ok(json!({ "proposalId": proposal.id, "duplicate": duplicate }))
         }
         Op::Search {
             query,

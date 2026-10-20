@@ -156,13 +156,6 @@ pub fn capability_meta(name: &str) -> Meta {
         "recall" => read("memory", &["read"]),
         "memory_search" => agent_data(read("memory", &["read", "external"])),
         "memory_note" => write("memory", &["write"]),
-        "memory_propose_user" => meta(
-            "memory",
-            &["write", "interaction"],
-            "exclusive-write",
-            "always-confirm",
-            &["approval"],
-        ),
         "delegate" => meta(
             "delegation",
             &["external", "write"],

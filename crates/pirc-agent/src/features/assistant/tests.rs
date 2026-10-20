@@ -13,7 +13,7 @@ fn delegation_and_memory_are_independent_mode_capabilities() {
     mode.validate().unwrap();
     assert!(permits_tool(&mode, Kind::Delegate));
     assert!(permits_tool(&mode, Kind::Delegations));
-    for kind in [Kind::Note, Kind::Propose, Kind::Search] {
+    for kind in [Kind::Note, Kind::Search] {
         assert!(!permits_tool(&mode, kind));
     }
     mode.assistant = pirc_protocol::mode::AssistantAccess::Full;
@@ -21,7 +21,7 @@ fn delegation_and_memory_are_independent_mode_capabilities() {
     mode.validate().unwrap();
     assert!(!permits_tool(&mode, Kind::Delegate));
     assert!(!permits_tool(&mode, Kind::Delegations));
-    for kind in [Kind::Note, Kind::Propose, Kind::Search] {
+    for kind in [Kind::Note, Kind::Search] {
         assert!(permits_tool(&mode, kind));
     }
 }
@@ -161,7 +161,7 @@ fn taints_a_note_with_everything_since_the_users_message() {
     assert_eq!(
         current_origins(
             &[user("e1", "go"), ptc, empty],
-            &["grep".to_owned(), "memory_propose_user".to_owned()]
+            &["grep".to_owned(), "memory_note".to_owned()]
         ),
         ["assistant", "tool:grep", "tool:ptc", "tool:web_fetch"]
     );
@@ -288,12 +288,10 @@ fn renders_memory_and_workspaces() {
         "user": [{ "id": "u11111111", "content": "Prefers short answers.", "revision": 2 }],
         "notes": [],
         "usage": { "user": { "used": 22, "max": 2000 }, "note": { "used": 0, "max": 8000 } },
-        "pendingProposals": 2,
     });
     let text = render_memory(&context);
     assert!(text.contains("### USER (22/2,000 characters)\n[u11111111] Prefers short answers."));
     assert!(text.contains("### MEMORY (0/8,000 characters)\n(none yet)"));
-    assert!(text.contains("2 proposed USER changes are waiting for the user's approval."));
     let workspaces = render_workspaces(&[
         json!({ "id": "work:test", "name": "Test", "node": "work", "online": true }),
         json!({ "id": "lab:x", "name": "X", "node": "lab", "online": false,

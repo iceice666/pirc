@@ -144,7 +144,6 @@ pub const TOOL_NAMES: &[&str] = &[
     "grep",
     "ls",
     "memory_note",
-    "memory_propose_user",
     "memory_search",
     "read",
     "recall",

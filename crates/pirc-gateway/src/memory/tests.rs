@@ -1,16 +1,15 @@
-//! `apps/gateway/test/memory-store.test.ts`, and the interactions projected
-//! from proposals.
+//! `apps/gateway/test/memory-store.test.ts`.
 
 use std::sync::Arc;
 
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
-use super::store::{Action, Budgets, Change, Entry, NoteInput, Proposal, ProposeInput, Store};
+use super::store::{Action, Budgets, Change, Entry, NoteInput, Store};
 use pirc_providers::backends::BackendService;
 
 use crate::app::{App, empty_models};
-use crate::db::{Db, Store as _};
+use crate::db::Db;
 use crate::error::ApiResult;
 
 const ME: &str = "me@example.com";
@@ -94,32 +93,6 @@ fn note(store: &Store<'_>, content: &str, user: &str) -> ApiResult<Entry> {
         .map(|(entry, _)| entry)
 }
 
-fn propose_in(
-    store: &Store<'_>,
-    action: Action,
-    id: Option<&str>,
-    content: Option<&str>,
-    base: Option<i64>,
-    quote: &str,
-) -> ApiResult<(Proposal, bool)> {
-    store.propose(
-        ME,
-        "s1",
-        &ProposeInput {
-            action,
-            id: id.map(str::to_owned),
-            content: content.map(str::to_owned),
-            base_revision: base,
-            quote: quote.into(),
-        },
-        &json!({ "sessionId": "s1" }),
-    )
-}
-
-fn propose(store: &Store<'_>, content: &str, quote: &str) -> ApiResult<(Proposal, bool)> {
-    propose_in(store, Action::Add, None, Some(content), None, quote)
-}
-
 #[test]
 fn notes_are_added_replaced_and_removed_with_every_revision_logged() {
     let db = Db::memory();
@@ -192,7 +165,7 @@ fn notes_are_added_replaced_and_removed_with_every_revision_logged() {
             (1, "add".into(), Some("m5pro holds the pirc repo".into())),
         ]
     );
-    assert_eq!(store.context(ME, None).unwrap()["notes"], json!([]));
+    assert_eq!(store.context(ME).unwrap()["notes"], json!([]));
 }
 
 #[test]
@@ -221,7 +194,7 @@ fn notes_from_fetched_content_are_marked_in_the_context() {
     write("local", json!(["assistant", "tool:bash"]));
     // The user's own words count more than a page they asked about.
     write("quoted", json!(["assistant", "tool:web_fetch", "user"]));
-    let context = store.context(ME, None).unwrap();
+    let context = store.context(ME).unwrap();
     let mut fetched: Vec<(&str, bool)> = context["notes"]
         .as_array()
         .unwrap()
@@ -283,8 +256,7 @@ fn the_assistant_never_touches_user_entries_directly() {
     let db = Db::memory();
     let conn = db.lock();
     let store = store(&conn);
-    let (proposal, _) = propose(&store, "Prefers short answers.", "I said so").unwrap();
-    let entry = store.approve(ME, &proposal.id, None).unwrap().1;
+    let entry = store.insert_user(ME, "Prefers short answers.", "s1").unwrap();
     assert_eq!(
         code(store.write_note(
             ME,
@@ -302,175 +274,7 @@ fn users_are_kept_apart() {
     let store = store(&conn);
     let mine = note(&store, "mine", ME).unwrap();
     assert_eq!(code(store.entry(OTHER, &mine.id)), "not_found");
-    assert_eq!(store.context(OTHER, None).unwrap()["notes"], json!([]));
-}
-
-#[test]
-fn user_changes_only_when_the_user_approves() {
-    let db = Db::memory();
-    let conn = db.lock();
-    let store = store(&conn);
-    let (proposal, duplicate) = propose(
-        &store,
-        "Prefers answers in Traditional Chinese.",
-        "請用繁中",
-    )
-    .unwrap();
-    assert_eq!(
-        (
-            proposal.status.as_str(),
-            duplicate,
-            proposal.id.starts_with('p')
-        ),
-        ("pending", false, true)
-    );
-    let context = store.context(ME, None).unwrap();
-    assert_eq!(
-        (&context["user"], &context["pendingProposals"]),
-        (&json!([]), &json!(1))
-    );
-    // The same proposal again is the same pending proposal.
-    let (again, duplicate) = propose(
-        &store,
-        "Prefers answers in Traditional Chinese.",
-        "請用繁中",
-    )
-    .unwrap();
-    assert!(duplicate);
-    assert_eq!(again.id, proposal.id);
-    let entry = store.approve(ME, &proposal.id, None).unwrap().1;
-    assert_eq!(
-        (entry.kind.as_str(), entry.content.as_str()),
-        ("user", "Prefers answers in Traditional Chinese.")
-    );
-    assert_eq!(entry.origins, json!(["user"]));
-    assert_eq!(
-        entry.sources,
-        json!({ "sessionId": "s1", "quote": "請用繁中", "proposalId": proposal.id })
-    );
-    assert_eq!(
-        store.history(ME, &entry.id).unwrap()[0].actor,
-        format!("user:{ME}")
-    );
-    let approved = store.proposal(ME, &proposal.id).unwrap();
-    assert_eq!(approved.status, "approved");
-    assert_eq!(approved.target_id.as_deref(), Some(entry.id.as_str()));
-    assert_eq!(code(store.approve(ME, &proposal.id, None)), "conflict");
-    // Already in USER: nothing to propose.
-    assert_eq!(
-        code(propose(
-            &store,
-            "prefers answers in traditional chinese.",
-            "I said so"
-        )),
-        "conflict"
-    );
-}
-
-#[test]
-fn user_entries_are_replaced_and_removed_at_the_version_seen() {
-    let db = Db::memory();
-    let conn = db.lock();
-    let store = store(&conn);
-    let first = store
-        .approve(
-            ME,
-            &propose(&store, "Lives in Taipei.", "I said so")
-                .unwrap()
-                .0
-                .id,
-            None,
-        )
-        .unwrap()
-        .1;
-    let (moved, _) = propose_in(
-        &store,
-        Action::Replace,
-        Some(&first.id),
-        Some("Lives in Tokyo."),
-        Some(1),
-        "moved to Tokyo",
-    )
-    .unwrap();
-    assert_eq!(
-        (moved.target_id.as_deref(), moved.target_revision),
-        (Some(first.id.as_str()), Some(1))
-    );
-    assert_eq!(code(store.approve(ME, &moved.id, Some(7))), "conflict");
-    let entry = store.approve(ME, &moved.id, Some(1)).unwrap().1;
-    assert_eq!(
-        (entry.content.as_str(), entry.revision),
-        ("Lives in Tokyo.", 2)
-    );
-    let (drop, _) = propose_in(
-        &store,
-        Action::Remove,
-        Some(&first.id),
-        None,
-        None,
-        "forget where I live",
-    )
-    .unwrap();
-    let entry = store.approve(ME, &drop.id, None).unwrap().1;
-    assert_eq!((entry.status.as_str(), entry.revision), ("removed", 3));
-    assert_eq!(store.context(ME, None).unwrap()["user"], json!([]));
-}
-
-#[test]
-fn rejections_are_remembered_and_waiting_proposals_capped() {
-    let db = Db::memory();
-    let conn = db.lock();
-    let store = store(&conn);
-    let (proposal, _) = propose(&store, "Likes jazz.", "I said so").unwrap();
-    assert_eq!(store.reject(ME, &proposal.id).unwrap().status, "rejected");
-    assert_eq!(
-        code(propose(&store, "Likes jazz.", "I said so")),
-        "rejected_before"
-    );
-    for i in 0..20 {
-        propose(&store, &format!("Fact {i}."), "I said so").unwrap();
-    }
-    let error = propose(&store, "One too many.", "I said so").unwrap_err();
-    assert_eq!(error.code, "too_many_requests");
-    assert_eq!(
-        error.message,
-        "20 proposals are already waiting; ask the user to review them in Settings → Memory"
-    );
-}
-
-#[test]
-fn the_user_budget_counts_when_proposing_and_approving() {
-    let db = Db::memory();
-    let conn = db.lock();
-    let store = store(&conn);
-    let big = store
-        .approve(
-            ME,
-            &propose(&store, &"x".repeat(40), "I said so").unwrap().0.id,
-            None,
-        )
-        .unwrap()
-        .1;
-    assert_eq!(
-        code(propose(&store, &"y".repeat(30), "I said so")),
-        "memory_full"
-    );
-    let fits = propose(&store, &"z".repeat(15), "I said so").unwrap().0;
-    // 10 more characters: fits now (50/60), not after `fits` is approved (55 + 10).
-    let grows = propose_in(
-        &store,
-        Action::Replace,
-        Some(&big.id),
-        Some(&"w".repeat(50)),
-        Some(1),
-        "q",
-    )
-    .unwrap()
-    .0;
-    store.approve(ME, &fits.id, None).unwrap();
-    assert_eq!(code(store.approve(ME, &grows.id, None)), "memory_full");
-    assert_eq!(store.proposal(ME, &grows.id).unwrap().status, "pending");
-    assert_eq!(code(propose(&store, "No words.", "  ")), "invalid_input");
+    assert_eq!(store.context(OTHER).unwrap()["notes"], json!([]));
 }
 
 #[test]
@@ -478,27 +282,45 @@ fn forgetting_erases_every_version_and_refuses_the_text_again() {
     let db = Db::memory();
     let conn = db.lock();
     let store = store(&conn);
-    let (proposal, _) = propose(&store, "Has two cats.", "I have two cats").unwrap();
-    let entry = store.approve(ME, &proposal.id, None).unwrap().1;
-    let (again, _) = propose_in(
-        &store,
-        Action::Replace,
-        Some(&entry.id),
-        Some("Has three cats."),
-        Some(1),
-        "3",
+    let entry = store.insert_user(ME, "Has two cats.", "s1").unwrap();
+    conn.execute(
+        "UPDATE memory_entries SET content='Has three cats.', revision=2 WHERE id=?",
+        [&entry.id],
     )
     .unwrap();
-    store.approve(ME, &again.id, None).unwrap();
-    let (pending_remove, _) = propose_in(
-        &store,
-        Action::Remove,
-        Some(&entry.id),
-        None,
-        None,
-        "no more cats",
+    conn.execute(
+        "INSERT INTO memory_log (owner_user,entry_id,revision,op,content,origins_json,sources_json,actor,at) VALUES (?,?,2,'replace','Has three cats.','[\"user\"]','{}','user',0)",
+        [ME, &entry.id],
     )
     .unwrap();
+    // A database from before the rewrite still has USER proposals, which
+    // carry the text too.
+    conn.execute_batch(
+        "CREATE TABLE memory_proposals (
+           id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, action TEXT NOT NULL, target_id TEXT,
+           target_revision INTEGER, content TEXT, content_hash TEXT, quote TEXT NOT NULL,
+           sources_json TEXT NOT NULL, session_id TEXT NOT NULL, status TEXT NOT NULL,
+           created_at INTEGER NOT NULL, decided_at INTEGER
+         );",
+    )
+    .unwrap();
+    for (id, target, content, status) in [
+        ("p1", None, Some("Has two cats."), "approved"),
+        ("p2", Some(entry.id.as_str()), None, "pending"),
+    ] {
+        conn.execute(
+            "INSERT INTO memory_proposals VALUES (?,?,'add',?,NULL,?,?,'I have two cats','{}','s1',?,0,NULL)",
+            rusqlite::params![
+                id,
+                ME,
+                target,
+                content,
+                content.map(super::text::content_hash),
+                status
+            ],
+        )
+        .unwrap();
+    }
 
     store.forget(ME, &entry.id).unwrap();
     let forgotten = store.entry(ME, &entry.id).unwrap();
@@ -518,19 +340,22 @@ fn forgetting_erases_every_version_and_refuses_the_text_again() {
         .map(|v| (v.op, v.content))
         .collect();
     assert_eq!(history, [("forget".to_owned(), None)]);
-    for id in [&proposal.id, &again.id, &pending_remove.id] {
-        let proposal = store.proposal(ME, id).unwrap();
-        assert_eq!((proposal.content, proposal.quote.as_str()), (None, ""));
-    }
+    let proposals: Vec<(Option<String>, String, String)> = conn
+        .prepare("SELECT content, quote, status FROM memory_proposals ORDER BY id")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
     assert_eq!(
-        store.proposal(ME, &pending_remove.id).unwrap().status,
-        "rejected"
+        proposals,
+        [
+            (None, String::new(), "approved".to_owned()),
+            (None, String::new(), "rejected".to_owned())
+        ]
     );
     // Neither version can come back, whatever the case or spacing.
-    assert_eq!(
-        code(propose(&store, "has  TWO cats.", "I said so")),
-        "forgotten"
-    );
+    assert_eq!(code(note(&store, "has  TWO cats.", ME)), "forgotten");
     assert_eq!(code(note(&store, "Has three cats.", ME)), "forgotten");
     assert_eq!(code(store.restore(ME, &entry.id, Some(1))), "forgotten");
     // Another user's identical text is unaffected.
@@ -628,15 +453,7 @@ fn deleting_the_source_chat_forgets_what_it_created() {
     store
         .write_note(ME, &add("Edited here"), &from_chat())
         .unwrap();
-    let user = store
-        .approve(
-            ME,
-            &propose(&store, "Prefers tea", "I said so").unwrap().0.id,
-            None,
-        )
-        .unwrap()
-        .1;
-    let pending = propose(&store, "Prefers coffee", "I said so").unwrap().0;
+    let user = store.insert_user(ME, "Prefers tea", "s1").unwrap();
     let other = note(&store, "Other owner", OTHER).unwrap();
     store.forget_session(ME, "s1").unwrap();
     for id in [&created.id, &user.id] {
@@ -659,7 +476,6 @@ fn deleting_the_source_chat_forgets_what_it_created() {
         ("active", "Edited here")
     );
     assert_eq!(store.entry(OTHER, &other.id).unwrap().status, "active");
-    assert_eq!(code(store.proposal(ME, &pending.id)), "not_found");
     for content in ["Originally here", "Edited elsewhere"] {
         assert_eq!(code(note(&store, content, ME)), "forgotten");
     }
@@ -668,158 +484,24 @@ fn deleting_the_source_chat_forgets_what_it_created() {
     store.forget_session(ME, "s1").unwrap();
 }
 
-/// A chat workspace on node `n1` with one session of mine (`remote-1`).
-fn chat_session(app: &App) -> String {
-    let conn = app.db.lock();
-    conn.sync_remote_workspaces(
-        "n1",
-        &[(
-            "chat".into(),
-            "Chat".into(),
-            crate::db::ModeId::new("chat").unwrap(),
-        )],
-    )
-    .unwrap();
-    conn.create_session("n1:chat", "node://n1/remote-1", "n1", "remote-1", ME)
-        .unwrap()
-        .id
-}
-
-#[test]
-fn proposals_are_interactions_of_their_chat() {
-    let (app, _dir) = app();
-    let session = chat_session(&app);
-    let events = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
-    let seen = events.clone();
-    let _subscription = app.events.subscribe_all(Arc::new(move |event| {
-        seen.lock()
-            .unwrap()
-            .push(json!({ "type": event.kind, "data": event.data }));
-    }));
-    let proposal = {
-        let conn = app.db.lock();
-        super::interactions::ensure_known(&app, &conn);
-        let store = super::store(&app, &conn);
-        let entry = store
-            .approve(
-                ME,
-                &store
-                    .propose(
-                        ME,
-                        &session,
-                        &ProposeInput {
-                            action: Action::Add,
-                            id: None,
-                            content: Some("Lives in Taipei.".into()),
-                            base_revision: None,
-                            quote: "I live in Taipei".into(),
-                        },
-                        &json!({}),
-                    )
-                    .unwrap()
-                    .0
-                    .id,
-                None,
-            )
-            .unwrap()
-            .1;
-        store
-            .propose(
-                ME,
-                &session,
-                &ProposeInput {
-                    action: Action::Replace,
-                    id: Some(entry.id.clone()),
-                    content: Some("Lives in Tokyo.".into()),
-                    base_revision: Some(1),
-                    quote: "moved to Tokyo".into(),
-                },
-                &json!({}),
-            )
-            .unwrap()
-            .0
-    };
-    super::changed(&app, ME);
-    let cards = super::pending_interactions(&app, &session, ME);
-    assert_eq!(cards.len(), 1);
-    let card = &cards[0];
-    let id = format!("memory:{}:1", proposal.id);
-    assert_eq!(card["id"], id.as_str());
-    assert_eq!(card["request"]["title"], "Replace USER memory?");
-    assert!(
-        card["request"]["message"]
-            .as_str()
-            .unwrap()
-            .starts_with("Current memory (u")
-    );
-    assert!(super::pending_interactions(&app, "other", ME).is_empty());
-    assert_eq!(
-        events.lock().unwrap().as_slice(),
-        [json!({ "type": "interaction_created", "data": card })]
-    );
-
-    let answer = |answer: Value| super::answer(&app, &session, &id, ME, Some(&answer));
-    assert_eq!(
-        super::answer(&app, &session, "node-1", ME, None).unwrap(),
-        None
-    );
-    assert_eq!(code(answer(json!({ "confirmed": "yes" }))), "invalid_input");
-    assert_eq!(
-        answer(json!({ "confirmed": false })).unwrap(),
-        Some(json!({ "interactionId": id, "status": "answered" }))
-    );
-    assert_eq!(
-        code(answer(json!({ "confirmed": true }))),
-        "stale_interaction"
-    );
-    super::changed(&app, ME);
-    assert_eq!(
-        events.lock().unwrap().last(),
-        Some(
-            &json!({ "type": "interaction_answered", "data": { "interactionId": id, "interactionEpoch": 0 } })
-        )
-    );
-}
-
 /// What a coding session gets (`assistant.context` outside a chat): the
-/// approved, active USER entries of its own user, never another user's,
+/// active USER entries of its own user, never another user's,
 /// and none that were removed or forgotten.
 #[test]
 fn coding_sessions_get_only_their_users_active_user_entries() {
     let db = Db::memory();
     let conn = db.lock();
     let store = store(&conn);
-    let approve_for = |user: &str, content: &str| {
-        let (proposal, _) = store
-            .propose(
-                user,
-                "s1",
-                &ProposeInput {
-                    action: Action::Add,
-                    id: None,
-                    content: Some(content.into()),
-                    base_revision: None,
-                    quote: "I said so".into(),
-                },
-                &json!({ "sessionId": "s1" }),
-            )
-            .unwrap();
-        store.approve(user, &proposal.id, None).unwrap().1
-    };
-    approve_for(ME, "Kept.");
-    let removed = approve_for(ME, "Removed.");
-    let forgotten = approve_for(ME, "Forgotten.");
-    approve_for(OTHER, "Someone else.");
-    let (drop, _) = propose_in(
-        &store,
-        Action::Remove,
-        Some(&removed.id),
-        None,
-        None,
-        "drop it",
+    let add = |user: &str, content: &str| store.insert_user(user, content, "s1").unwrap();
+    add(ME, "Kept.");
+    let removed = add(ME, "Removed.");
+    let forgotten = add(ME, "Forgotten.");
+    add(OTHER, "Someone else.");
+    conn.execute(
+        "UPDATE memory_entries SET status='removed' WHERE id=?",
+        [&removed.id],
     )
     .unwrap();
-    store.approve(ME, &drop.id, None).unwrap();
     store.forget(ME, &forgotten.id).unwrap();
     let contents = |user: &str| -> Vec<Value> {
         store

@@ -44,10 +44,7 @@ fn no_store_route(method: &Method, path: &str) -> bool {
         ("POST", ["api", "provider-auth", "sessions", id, "input"]) => one(id),
         ("GET", ["api", "memory"]) => true,
         ("GET", ["api", "memory", "entries", id, "history"]) => one(id),
-        ("POST", ["api", "memory", "proposals", id, "approve" | "reject"]) => one(id),
         ("POST", ["api", "memory", "entries", id, "forget" | "restore"]) => one(id),
-        // A project deletion's preview lists memory entries.
-        ("GET" | "POST", ["api", "workspaces", id, "deletion"]) => one(id),
         _ => false,
     }
 }
@@ -139,7 +136,6 @@ async fn stop_delegation(
 impl App {
     /// Memory hints (`memory=1`) for `user`, after memory's own update.
     pub fn memory_changed(&self, user: &str) {
-        crate::memory::changed(self, user);
         self.hints.memory.notify(&user.to_owned());
     }
 
@@ -154,12 +150,10 @@ impl App {
         crate::memory::forget_session(self, conn, user, session_id)
     }
 
-    /// Confirmations the gateway asks for itself (delegations, memory),
-    /// shown with the node's interactions.
-    pub fn pending_gateway_interactions(&self, session_id: &str, user: &str) -> Vec<Value> {
-        let mut pending = crate::delegations::pending_interactions(self, session_id);
-        pending.extend(crate::memory::pending_interactions(self, session_id, user));
-        pending
+    /// Confirmations the gateway asks for itself (delegations), shown with
+    /// the node's interactions.
+    pub fn pending_gateway_interactions(&self, session_id: &str) -> Vec<Value> {
+        crate::delegations::pending_interactions(self, session_id)
     }
 
     /// Byte offsets of a node's mirrored workspace-memory ledgers.
@@ -181,8 +175,8 @@ impl App {
     }
 }
 
-/// Answer one of the gateway's own confirmations (memory, then
-/// delegations); `None` when the interaction is the node's.
+/// Answer one of the gateway's own confirmations (delegations); `None`
+/// when the interaction is the node's.
 pub fn answer_gateway_interaction(
     app: &AppState,
     session_id: &str,
@@ -190,12 +184,6 @@ pub fn answer_gateway_interaction(
     user: &str,
     answer: Option<Value>,
 ) -> ApiResult<Option<Value>> {
-    if let Some(answered) =
-        crate::memory::answer(app, session_id, interaction_id, user, answer.as_ref())?
-    {
-        app.memory_changed(user);
-        return Ok(Some(answered));
-    }
     crate::delegations::answer(app, session_id, interaction_id, user, answer.as_ref())
 }
 

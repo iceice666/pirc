@@ -54,7 +54,6 @@ prompts!(
     grep,
     ls,
     memory_note,
-    memory_propose_user,
     memory_search,
     ptc_docs,
     ptc,

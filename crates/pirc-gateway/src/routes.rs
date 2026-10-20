@@ -1014,7 +1014,7 @@ pub async fn snapshot(
         Some(Value::Array(items)) => items.clone(),
         _ => Vec::new(),
     };
-    interactions.extend(app.pending_gateway_interactions(&claimed.session.id, &identity.user));
+    interactions.extend(app.pending_gateway_interactions(&claimed.session.id));
     body.insert("interactions".into(), Value::Array(interactions));
     // The delegations it started that still run (with Stop).
     body.insert(
