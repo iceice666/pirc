@@ -48,6 +48,8 @@ export interface RoomMessage {
     text?: string;
     attachments?: RoomAttachment[];
     move?: { direction: 'to' | 'from'; roomId: string; roomName: string };
+    /** A face's reply still coming in (plan 02). */
+    streaming?: boolean;
   };
   threadId: string | null;
   createdAt: number;
@@ -109,9 +111,18 @@ export const roomsApi = {
     path(roomId, `/uploads/${encodeURIComponent(uploadId)}`),
 };
 
-/** One numbered event of the room stream (sequence 0: ephemeral typing). */
+/**
+ * One event of the room stream; sequence 0 is ephemeral (typing, a face's
+ * presence) and never replayed.
+ */
 export interface RoomEvent {
-  type: 'room_message' | 'room_message_updated' | 'room_changed' | 'room_read' | 'room_typing';
+  type:
+    | 'room_message'
+    | 'room_message_updated'
+    | 'room_changed'
+    | 'room_read'
+    | 'room_typing'
+    | 'brain_presence';
   roomId: string;
   epoch: number;
   sequence: number;
@@ -120,6 +131,14 @@ export interface RoomEvent {
 }
 
 export type RoomsConnection = 'connecting' | 'connected' | 'reconnecting' | 'offline';
+
+/** A face thinking in a room now (a room socket's `ready`). */
+export interface FacePresence {
+  face: string;
+  roomId: string;
+  state: 'thinking';
+  since: number;
+}
 
 export interface RoomStream {
   close(): void;
@@ -135,6 +154,8 @@ export function connectRooms(options: {
   onEvent: (event: RoomEvent) => void;
   onReset: () => void;
   onState: (state: RoomsConnection) => void;
+  /** Where faces are thinking as the socket starts (presence is not replayed). */
+  onPresence?: (presence: FacePresence[]) => void;
   socket?: (url: string) => WebSocket;
 }): RoomStream {
   let socket: WebSocket | undefined;
@@ -168,10 +189,14 @@ export function connectRooms(options: {
       const at = (watermark: any) => `${watermark.epoch}:${watermark.sequence}`;
       if (frame?.type === 'ready') {
         cursor = at(frame.watermark);
+        options.onPresence?.(Array.isArray(frame.presence) ? frame.presence : []);
       } else if (frame?.type === 'reset') {
         cursor = at(frame.watermark);
         options.onReset();
-      } else if (typeof frame?.type === 'string' && frame.type.startsWith('room_')) {
+      } else if (
+        typeof frame?.type === 'string' &&
+        (frame.type.startsWith('room_') || frame.type === 'brain_presence')
+      ) {
         if (frame.sequence > 0) cursor = `${frame.epoch}:${frame.sequence}`;
         options.onEvent(frame as RoomEvent);
       }

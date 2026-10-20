@@ -165,6 +165,27 @@ describe('room state', () => {
     rooms.stop();
   });
 
+  it('knows where the host thinks, from the socket start and its events', async () => {
+    const rooms = new RoomsState();
+    await rooms.start();
+    const socket = FakeSocket.all[0]!;
+    socket.frame({
+      type: 'ready',
+      watermark: { epoch: 5, sequence: 3 },
+      presence: [{ face: 'host', roomId: 'topic', state: 'thinking', since: 1 }],
+    });
+    expect(rooms.thinkingIn('topic')).toEqual(['host']);
+    expect(rooms.thinkingIn('general')).toEqual([]);
+    socket.frame({ ...event('brain_presence', 'general', { face: 'host', state: 'thinking' }, 0) });
+    socket.frame({ ...event('brain_presence', 'topic', { face: 'host', state: 'idle' }, 0) });
+    expect(rooms.thinkingIn('general')).toEqual(['host']);
+    expect(rooms.thinkingIn('topic')).toEqual([]);
+    // A new socket's start replaces what was known.
+    socket.frame({ type: 'ready', watermark: { epoch: 5, sequence: 3 }, presence: [] });
+    expect(rooms.thinkingIn('general')).toEqual([]);
+    rooms.stop();
+  });
+
   it('keeps the cursor of the last numbered event for the next socket', async () => {
     const rooms = new RoomsState();
     await rooms.start();
@@ -256,6 +277,45 @@ describe('rooms page', () => {
       ).toEqual(['SlimeOS', 'PR#123', '怎樣了？']),
     );
     await vi.waitFor(() => expect(target.querySelectorAll('article .text')).toHaveLength(4));
+  });
+
+  it('shows the host thinking, its reply streaming in, and its questions', async () => {
+    const store = await show();
+    store.apply(event('brain_presence', 'general', { face: 'host', state: 'thinking' }, 0));
+    await tick();
+    expect(target.querySelector('.presence.thinking')).not.toBeNull();
+    expect(target.querySelector('.typing')!.textContent).toContain('pirc is thinking…');
+    const reply: RoomMessage = {
+      ...message('general', 2, ME, 'Let me'),
+      id: 'reply',
+      speaker: 'face:host',
+      user: null,
+      body: { text: 'Let me', streaming: true },
+    };
+    store.apply(event('room_message', 'general', { message: reply }));
+    await tick();
+    const article = () => target.querySelector('article[aria-busy="true"]');
+    expect(article()?.textContent).toContain('Let me');
+    expect(target.querySelector('.caret')).not.toBeNull();
+    store.apply(
+      event('room_message_updated', 'general', {
+        message: { ...reply, body: { text: 'Let me check.' } },
+      }),
+    );
+    store.apply(event('brain_presence', 'general', { face: 'host', state: 'idle' }, 0));
+    await tick();
+    expect(article()).toBeNull();
+    expect(target.querySelector('.caret')).toBeNull();
+    expect(target.textContent).toContain('Let me check.');
+    expect(target.querySelector('.presence.thinking')).toBeNull();
+    store.apply(
+      event('room_message', 'general', {
+        message: { ...reply, id: 'q', seq: 3, kind: 'question', body: { text: 'Which one?' } },
+      }),
+    );
+    await tick();
+    const question = target.querySelector('article.question')!;
+    expect(question.getAttribute('aria-label')).toMatch(/^pirc asks/);
   });
 
   it('reads an archived room from its URL but takes nothing new', async () => {

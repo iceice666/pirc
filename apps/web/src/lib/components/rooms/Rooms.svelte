@@ -38,6 +38,11 @@
 
   const current = $derived(rooms.current);
   const typingNow = $derived(rooms.typingIn(rooms.currentId, now));
+  /** Faces by id until plan 10 lists them: only the host exists. */
+  const FACES: Record<string, string> = { host: 'pirc' };
+  const thinkingNow = $derived(
+    rooms.thinkingIn(rooms.currentId).map((face) => FACES[face] ?? face),
+  );
   const otherRooms = $derived(rooms.rooms.filter((room) => room.id !== rooms.currentId));
 
   onMount(() => {
@@ -217,6 +222,15 @@
       <h1><Hash size={18} />{current?.name ?? rooms.currentId}</h1>
       {#if current?.archivedAt}<span class="badge">Archived</span>{/if}
       <span class="spacer"></span>
+      <span
+        class="presence"
+        class:thinking={thinkingNow.length > 0}
+        role="status"
+        title={thinkingNow.length ? 'pirc is thinking' : 'pirc is here'}
+        ><span class="presence-dot" aria-hidden="true"></span>pirc<span class="sr-only"
+          >{thinkingNow.length ? ' is thinking' : ' is here'}</span
+        ></span
+      >
       {#if rooms.connection !== 'connected' && !rooms.loading}
         <span class="badge" role="status">{rooms.connection}</span>
       {/if}
@@ -267,6 +281,7 @@
     </div>
 
     <div class="typing" aria-live="polite">
+      {#if thinkingNow.length}{thinkingNow.join(', ')} is thinking…{/if}
       {#if typingNow.length}{typingNow.join(', ')}
         {typingNow.length === 1 ? 'is' : 'are'} typing…{/if}
     </div>
@@ -492,6 +507,33 @@
   .error {
     margin: 4px 20px;
     color: var(--danger);
+  }
+  .presence {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .presence-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+  }
+  .presence.thinking .presence-dot {
+    background: var(--accent);
+    animation: thinking 1.2s ease-in-out infinite;
+  }
+  @keyframes thinking {
+    50% {
+      opacity: 0.3;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .presence.thinking .presence-dot {
+      animation: none;
+    }
   }
   .typing {
     min-height: 20px;

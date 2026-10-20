@@ -7,6 +7,7 @@ import { ApiError } from './http';
 import {
   connectRooms,
   roomsApi,
+  type FacePresence,
   type Room,
   type RoomEvent,
   type RoomMessage,
@@ -38,6 +39,8 @@ export class RoomsState {
   connection = $state<RoomsConnection>('connecting');
   /** Others typing in each room: user → when their signal lapses. */
   typing = $state<Record<string, Record<string, number>>>({});
+  /** Faces thinking in each room now: room → face ids (plan 02: the host). */
+  thinking = $state<Record<string, string[]>>({});
 
   #stream: RoomStream | undefined;
   #lastTyping = 0;
@@ -55,6 +58,7 @@ export class RoomsState {
       onEvent: (event) => this.apply(event),
       onReset: () => void this.reload(),
       onState: (state) => (this.connection = state),
+      onPresence: (presence) => this.setPresence(presence),
     });
   }
 
@@ -184,9 +188,30 @@ export class RoomsState {
       .map(([user]) => user);
   }
 
+  /** Which faces think in a room right now. */
+  thinkingIn(roomId: string): string[] {
+    return this.thinking[roomId] ?? [];
+  }
+
+  /** Where faces think as the stream (re)starts. */
+  setPresence(presence: FacePresence[]) {
+    const thinking: Record<string, string[]> = {};
+    for (const { face, roomId } of presence) thinking[roomId] = [...(thinking[roomId] ?? []), face];
+    this.thinking = thinking;
+  }
+
   /** One event of the stream. */
   apply(event: RoomEvent) {
     switch (event.type) {
+      case 'brain_presence': {
+        const { face, state } = event.data;
+        const others = this.thinkingIn(event.roomId).filter((item) => item !== face);
+        this.thinking = {
+          ...this.thinking,
+          [event.roomId]: state === 'thinking' ? [...others, face] : others,
+        };
+        break;
+      }
       case 'room_message': {
         const message: RoomMessage = event.data.message;
         if (message.roomId === this.currentId) this.#append(message);

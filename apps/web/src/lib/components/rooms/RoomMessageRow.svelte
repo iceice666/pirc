@@ -24,6 +24,7 @@
   const sameRun = $derived(
     !!previous &&
       previous.kind !== 'line' &&
+      message.kind !== 'question' &&
       previous.speaker === message.speaker &&
       previous.user === message.user &&
       message.createdAt - previous.createdAt < 5 * 60_000,
@@ -51,7 +52,13 @@
     <time datetime={new Date(message.createdAt).toISOString()} title={fullTime}>{time}</time>
   </div>
 {:else}
-  <article class="message" class:continued={sameRun} aria-label="{name}, {fullTime}">
+  <article
+    class="message"
+    class:continued={sameRun}
+    class:question={message.kind === 'question'}
+    aria-label="{name}{message.kind === 'question' ? ' asks' : ''}, {fullTime}"
+    aria-busy={message.body.streaming ? 'true' : undefined}
+  >
     <div class="gutter">
       {#if sameRun}
         <time
@@ -70,11 +77,17 @@
         <header>
           <span class="name">{name}</span>
           <time datetime={new Date(message.createdAt).toISOString()} title={fullTime}>{time}</time>
+          {#if message.kind === 'question'}<span class="asks">asks you</span>{/if}
           {#if message.pinnedAt}<Pin size={12} aria-label="Pinned" />{/if}
         </header>
       {/if}
-      {#if message.body.text}
-        <p class="text">{message.body.text}</p>
+      {#if message.body.text || message.body.streaming}
+        <p class="text">
+          {message.body.text ?? ''}{#if message.body.streaming}<span
+              class="caret"
+              aria-hidden="true">▍</span
+            >{/if}
+        </p>
       {/if}
       {#each message.body.attachments ?? [] as attachment (attachment.id)}
         {#if attachment.kind === 'image'}
@@ -119,6 +132,30 @@
   }
   .message.continued {
     padding-top: 0;
+  }
+  .message.question .content {
+    padding: 6px 10px;
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--bg-layer);
+  }
+  .asks {
+    font-size: 12px;
+    color: var(--accent);
+  }
+  .caret {
+    color: var(--muted);
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .caret {
+      animation: none;
+    }
   }
   .message:hover {
     background: var(--bg-hover);
