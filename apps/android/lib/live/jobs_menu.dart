@@ -322,9 +322,9 @@ class JobsList extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: webText(context, size: 12.5),
                               ),
-                              if ('${agent['task'] ?? ''}'.isNotEmpty)
+                              if ('${agent['task'] ?? ''}'.trim().isNotEmpty)
                                 Text(
-                                  '${agent['task']}',
+                                  '${agent['task']}'.trim(),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: webText(

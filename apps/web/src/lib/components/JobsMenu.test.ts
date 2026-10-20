@@ -62,6 +62,22 @@ describe('JobsMenu', () => {
     expect(text).toContain('reviewer');
   });
 
+  it.each([undefined, '', ' \n\t ', '\n Inspect files \n'])(
+    'does not reserve a subtitle line for blank agent tasks: %j',
+    async (task) => {
+      app.panel.value = {
+        ...panelState([]),
+        team: { agents: [{ name: 'web', mode: 'subagent', status: 'running', task }] },
+      };
+      await openMenu();
+      const row = target.querySelector('.job-row.static')!;
+      expect(row.querySelector('.job-label')?.textContent).toBe('web');
+      const subtitle = row.querySelector('.job-sub');
+      if (task?.trim()) expect(subtitle?.textContent).toBe('Inspect files');
+      else expect(subtitle).toBeNull();
+    },
+  );
+
   it('stops a running task only on the second press', async () => {
     const stop = vi.spyOn(panelApi, 'stopBackground').mockResolvedValue({
       task: { id: 'dev', command: 'bun run dev', cwd: '.', status: 'stopping', startedAt: started },

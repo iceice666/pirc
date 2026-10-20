@@ -49,6 +49,77 @@ Widget shell(Widget child, {double scale = 1}) => MaterialApp(
   ),
 );
 void main() {
+  for (final width in [390.0, 768.0]) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets(
+        'agent names center without blank task lines $width scale$scale',
+        (t) async {
+          t.view.devicePixelRatio = 1;
+          t.view.physicalSize = Size(width, 900);
+          addTearDown(t.view.reset);
+          final g = FakeGateway(), c = controller(g);
+          final data = <String, dynamic>{
+            'backgroundTasks': <Json>[],
+            'team': {
+              'agents': [
+                {
+                  'name': 'web',
+                  'status': 'running',
+                  'mode': 'subagent',
+                  'task': ' \n\t ',
+                },
+                {'name': 'android', 'status': 'running', 'mode': 'subagent'},
+                {
+                  'name': 'reviewer',
+                  'status': 'running',
+                  'mode': 'subagent',
+                  'task': '\n  Inspect files  \n',
+                },
+              ],
+            },
+          };
+          g.handler = (_, __) async => data;
+          final jobs = JobsState(c)..data = data;
+          try {
+            await t.pumpWidget(shell(JobsList(jobs: jobs), scale: scale));
+            await t.pump();
+            for (final name in ['web', 'android']) {
+              final label = find.text(name);
+              final row = find
+                  .ancestor(of: label, matching: find.byType(Row))
+                  .first;
+              final icon = find.descendant(
+                of: row,
+                matching: find.byType(Icon),
+              );
+              final status = find.descendant(
+                of: row,
+                matching: find.text('running'),
+              );
+              expect(
+                t.getCenter(label).dy,
+                closeTo(t.getCenter(icon).dy, 0.01),
+                reason: '$name icon center',
+              );
+              expect(
+                t.getCenter(label).dy,
+                closeTo(t.getCenter(status).dy, 0.01),
+                reason: '$name status center',
+              );
+            }
+            expect(find.text('Inspect files'), findsOneWidget);
+            expect(find.text(' \n\t '), findsNothing);
+            expect(t.takeException(), isNull);
+          } finally {
+            await t.pumpWidget(const SizedBox.shrink());
+            jobs.dispose();
+            c.dispose();
+            await g.stream.close();
+          }
+        },
+      );
+    }
+  }
   test('task detail and duration follow the web', () {
     expect(jobDetail({'status': 'completed', 'exitCode': 4}), 'exit 4');
     expect(jobDetail({'status': 'failed', 'exitCode': 0}), 'exit 0');

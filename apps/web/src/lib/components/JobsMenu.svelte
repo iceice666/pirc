@@ -258,6 +258,7 @@
           {@render taskRow(task, true)}
         {/each}
         {#each agents as agent (agent.name)}
+          {@const task = agent.task?.trim()}
           <div class="job-row static">
             <span class="state-dot ongoing" aria-hidden="true"></span>
             <span class="job-icon"
@@ -265,7 +266,7 @@
             >
             <span class="job-main">
               <span class="job-label">{agent.name}</span>
-              {#if agent.task}<span class="job-sub">{agent.task}</span>{/if}
+              {#if task}<span class="job-sub">{task}</span>{/if}
             </span>
             <span class="job-meta">{agent.status}</span>
           </div>
