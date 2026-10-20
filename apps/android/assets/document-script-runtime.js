@@ -43938,13 +43938,20 @@ function createPircDocumentLayout(options) {
     const originalInsertBefore = ParentNode.prototype.insertBefore;
     ParentNode.prototype.insertBefore = function(node, before) {
       const state = activeState;
-      if (state && (this === state.document || this.ownerDocument === state.document))
+      const owned = state && (this === state.document || this.ownerDocument === state.document);
+      // Inserting a DocumentFragment moves its children and empties the fragment.
+      // Keep the roots so connected scripts and handlers can be processed after
+      // the move, when isConnected has the same value as in the browser.
+      const roots = node && node.nodeType === 11 ? Array.from(node.childNodes) : [node];
+      if (owned)
         registerTree(node);
       const inserted = originalInsertBefore.call(this, node, before);
-      if (state && (this === state.document || this.ownerDocument === state.document))
-        decorateTree(node);
-      if (state && (this === state.document || this.ownerDocument === state.document))
-        prepareDynamicScripts(node);
+      if (owned) {
+        for (const root of roots) {
+          decorateTree(root);
+          prepareDynamicScripts(root);
+        }
+      }
       return inserted;
     };
   }

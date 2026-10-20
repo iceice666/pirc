@@ -11,6 +11,14 @@ const bundlePath = process.env.PIRC_DOCUMENT_SCRIPT_RUNTIME_BUNDLE || fileURLToP
 );
 const bundle = readFileSync(bundlePath, 'utf8');
 const RUN_TIMEOUT_MS = 3000;
+const fragmentWebFixture = JSON.parse(readFileSync(
+  new URL(
+    './fixtures/document-fragment-scripts-chromium153.json',
+    import.meta.url,
+  ),
+  'utf8',
+));
+assert.equal(fragmentWebFixture.browserVersion, '153.0.8010.12');
 
 function createRuntime() {
   const context = vm.createContext({});
@@ -1179,6 +1187,57 @@ test('dynamically inserted classic external scripts execute after host completio
   assert.equal(vm.runInContext('window.changedCurrentScript', context), true);
   assert.deepEqual(Array.from(vm.runInContext('window.dynamicScriptEvents', context)), ['load']);
   assert.equal(vm.runInContext('document.readyState', context), 'complete');
+});
+
+test('scripts in a connected DocumentFragment execute once after insertion', () => {
+  const context = createRuntime();
+  const initialized = invoke(context, 'init', {
+    hostLayout: true,
+    url: 'https://example.test/page',
+    html: '<div id="host"></div>'
+  });
+  assert.deepEqual(initialized.resourceRequests, []);
+  vm.runInContext([
+    'window.fragmentRuns = 0;',
+    'const fragment = document.createDocumentFragment();',
+    'const script = document.createElement("script");',
+    'script.textContent = "window.fragmentRuns += 1";',
+    'fragment.appendChild(script);',
+    'document.querySelector("#host").appendChild(fragment);'
+  ].join('\n'), context);
+  assert.equal(vm.runInContext('window.fragmentRuns', context),
+    fragmentWebFixture.result.connectedScriptRuns);
+  assert.equal(vm.runInContext('script.isConnected', context), true);
+  assert.equal(vm.runInContext('fragment.childNodes.length === 0', context),
+    fragmentWebFixture.result.fragmentWasEmptied);
+  vm.runInContext('script.remove();document.body.appendChild(script)', context);
+  assert.equal(vm.runInContext('window.fragmentRuns', context),
+    fragmentWebFixture.result.reinsertedScriptRuns);
+});
+
+test('scripts parsed through insertAdjacentHTML remain inert after moving', () => {
+  const context = createRuntime();
+  invoke(context, 'init', {
+    hostLayout: true,
+    url: 'https://example.test/page',
+    html: '<div id="host"></div>'
+  });
+  const markup = '<script id="parsed">' +
+    'window.markupRuns = (window.markupRuns || 0) + 1<' + '/script>';
+  vm.runInContext(
+    'document.querySelector("#host").insertAdjacentHTML(' +
+      '"beforeend", ' + JSON.stringify(markup) + ')',
+    context,
+  );
+  assert.equal(vm.runInContext('window.markupRuns || 0', context),
+    fragmentWebFixture.result.parsedScriptRuns);
+  vm.runInContext(
+    'const parsed = document.querySelector("#parsed");' +
+      'parsed.remove();document.body.appendChild(parsed)',
+    context,
+  );
+  assert.equal(vm.runInContext('window.markupRuns || 0', context),
+    fragmentWebFixture.result.reinsertedMarkupRuns);
 });
 
 test('scripts parsed through innerHTML remain inert', () => {

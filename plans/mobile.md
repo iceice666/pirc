@@ -49,10 +49,14 @@ are available from Git through Historical records, not repeated here.
       and common-library coverage. Broader image/framework flows remain
       unverified; preserve explicit unsupported errors. Host-layout documents
       now create connected `html/head/body` nodes for common rootless sources
-      and incomplete `<html>` markup before parser scripts run. Ten fixed
-      Chromium 153 document-tree cases and four phone/tablet modal geometry
-      cases cover the prior offset-packet crash. Less common HTML5 tree-builder
-      recovery, such as duplicate head/body tags and malformed table nesting,
+      and incomplete `<html>` markup before parser scripts run. Connected
+      `DocumentFragment` insertion now processes moved children so dynamic
+      scripts execute once; scripts parsed via `insertAdjacentHTML()` remain
+      inert even after moving. A pinned Chromium 153 fixture and runtime tests
+      cover this behavior. Ten fixed Chromium 153 document-tree cases and four
+      phone/tablet modal geometry cases cover the prior offset-packet crash.
+      Less common HTML5 tree-builder recovery, such as duplicate head/body
+      tags and malformed table nesting,
       remains unverified.
 - [ ] **Scripted resource lifecycle and device input:** static fetched documents
       retain native controls through complete workspace removal/remount,
