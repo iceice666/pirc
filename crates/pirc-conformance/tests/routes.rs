@@ -145,24 +145,6 @@ async fn session_routes() {
     );
     call!("workspaces", "GET", "/api/workspaces", None);
     call!(
-        "capabilities of a directory workspace",
-        "GET",
-        "/api/workspaces/test:ws/capabilities",
-        None
-    );
-    call!(
-        "change them",
-        "PATCH",
-        "/api/workspaces/test:ws/capabilities",
-        Some(json!({ "capabilities": { "web_search": false } }))
-    );
-    call!(
-        "a directory workspace has no instructions",
-        "GET",
-        "/api/workspaces/test:ws/instructions",
-        None
-    );
-    call!(
         "project config",
         "GET",
         "/api/workspaces/test:ws/project-config",
@@ -354,7 +336,6 @@ async fn session_routes() {
         format!("{path}/control/release"),
         Some(json!({ "clientId": "browser", "generation": 2 }))
     );
-    call!("only chats can be deleted", "DELETE", path.clone(), None);
     call!("models", "GET", "/api/models", None);
     call!(
         "models of a session",
@@ -370,7 +351,6 @@ async fn session_routes() {
     );
     call!("sessions", "GET", "/api/sessions", None);
     call!("nodes", "GET", "/api/nodes", None);
-    call!("assistant node", "GET", "/api/assistant/node", None);
 
     node.abort();
     insta::assert_json_snapshot!("session_routes", t.into_value());

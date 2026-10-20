@@ -243,34 +243,6 @@ expression: t.into_value()
   },
   {
     "body": {
-      "error": {
-        "code": "invalid_input",
-        "message": "Only chats can be deleted"
-      }
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "DELETE /api/sessions/:id",
-    "status": 400,
-    "step": "delete a session of a directory workspace"
-  },
-  {
-    "body": {
-      "error": {
-        "code": "not_found",
-        "message": "Session not found"
-      }
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "DELETE /api/sessions/session_missing",
-    "status": 404,
-    "step": "delete an unknown session"
-  },
-  {
-    "body": {
       "lease": null
     },
     "headers": {

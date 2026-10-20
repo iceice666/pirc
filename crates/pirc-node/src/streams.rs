@@ -272,7 +272,7 @@ impl Streams {
         let target = BrowserTarget {
             session_id: session.id.clone(),
             workspace_id: workspace.id.clone(),
-            root: crate::chat::session_root(&workspace, &session.id, &mode)?,
+            root: crate::util::session_root(&workspace, &session.id, &mode)?,
         };
         let link = node.link.clone();
         let id = stream_id.to_owned();

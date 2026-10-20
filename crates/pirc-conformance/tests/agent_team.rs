@@ -2,7 +2,7 @@
 //! they go without `ptc` scripts, with the test playing the agent's node:
 //! the team capabilities in the system prompt and their `ptc_docs` (roles
 //! in the `role` field), the side panel, the `/team` command without a
-//! team, the settings and chats that leave the feature out, and an agent
+//! team, the settings and modes that leave the feature out, and an agent
 //! started as a team member or one-shot subagent (`PIRC_TEAM_AGENT`),
 //! whose write leases go to its parent as `team_call`s answered by
 //! `team_result` lines. Spawning, messaging and waiting run inside `ptc`
@@ -169,21 +169,18 @@ async fn agent_team_settings() {
         "disabled",
     )
     .await;
-    let mut chat = options();
-    chat.env.push((
-        "PIRC_MODE".to_owned(),
-        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
-    ));
-    offered(chat, &mut r, "in a chat").await;
-    let mut chat = AgentOptions {
+    let mut mode = pirc_protocol::mode::default_work();
+    mode.features_off = vec!["agentTeam".to_owned()];
+    let mode = serde_json::to_string(&mode).unwrap();
+    let mut off = options();
+    off.env.push(("PIRC_MODE".to_owned(), mode.clone()));
+    offered(off, &mut r, "in a mode without it").await;
+    let mut off = AgentOptions {
         config: json!({ "features": { "agentTeam": { "enabled": true } } }),
         ..options()
     };
-    chat.env.push((
-        "PIRC_MODE".to_owned(),
-        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
-    ));
-    offered(chat, &mut r, "in a chat, enabled").await;
+    off.env.push(("PIRC_MODE".to_owned(), mode));
+    offered(off, &mut r, "in a mode without it, enabled").await;
     insta::assert_json_snapshot!("agent_team_settings", r.into_value());
 }
 

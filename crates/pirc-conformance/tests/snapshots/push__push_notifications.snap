@@ -331,7 +331,7 @@ expression: t.into_value()
         },
         "headers": {
           "content-encoding": "aes128gcm",
-          "content-length": "270",
+          "content-length": "235",
           "content-type": "application/octet-stream",
           "topic": "t2487m4",
           "ttl": "86400",
@@ -341,11 +341,9 @@ expression: t.into_value()
         "path": "/broken",
         "payload": {
           "at": "<epoch-ms>",
-          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "body": "Anything waiting for you will show up here.",
           "tag": "test",
-          "target": {
-            "schedules": true
-          },
+          "target": {},
           "title": "pirc notifications work"
         },
         "record": {
@@ -369,7 +367,7 @@ expression: t.into_value()
         },
         "headers": {
           "content-encoding": "aes128gcm",
-          "content-length": "270",
+          "content-length": "235",
           "content-type": "application/octet-stream",
           "topic": "t2487m4",
           "ttl": "86400",
@@ -379,11 +377,9 @@ expression: t.into_value()
         "path": "/gone",
         "payload": {
           "at": "<epoch-ms>",
-          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "body": "Anything waiting for you will show up here.",
           "tag": "test",
-          "target": {
-            "schedules": true
-          },
+          "target": {},
           "title": "pirc notifications work"
         },
         "record": {
@@ -407,7 +403,7 @@ expression: t.into_value()
         },
         "headers": {
           "content-encoding": "aes128gcm",
-          "content-length": "270",
+          "content-length": "235",
           "content-type": "application/octet-stream",
           "topic": "t2487m4",
           "ttl": "86400",
@@ -417,11 +413,9 @@ expression: t.into_value()
         "path": "/laptop",
         "payload": {
           "at": "<epoch-ms>",
-          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "body": "Anything waiting for you will show up here.",
           "tag": "test",
-          "target": {
-            "schedules": true
-          },
+          "target": {},
           "title": "pirc notifications work"
         },
         "record": {
@@ -445,7 +439,7 @@ expression: t.into_value()
         },
         "headers": {
           "content-encoding": "aes128gcm",
-          "content-length": "270",
+          "content-length": "235",
           "content-type": "application/octet-stream",
           "topic": "t2487m4",
           "ttl": "86400",
@@ -455,11 +449,9 @@ expression: t.into_value()
         "path": "/missing",
         "payload": {
           "at": "<epoch-ms>",
-          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "body": "Anything waiting for you will show up here.",
           "tag": "test",
-          "target": {
-            "schedules": true
-          },
+          "target": {},
           "title": "pirc notifications work"
         },
         "record": {
@@ -483,7 +475,7 @@ expression: t.into_value()
         },
         "headers": {
           "content-encoding": "aes128gcm",
-          "content-length": "270",
+          "content-length": "235",
           "content-type": "application/octet-stream",
           "topic": "t2487m4",
           "ttl": "86400",
@@ -493,11 +485,9 @@ expression: t.into_value()
         "path": "/moved",
         "payload": {
           "at": "<epoch-ms>",
-          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "body": "Anything waiting for you will show up here.",
           "tag": "test",
-          "target": {
-            "schedules": true
-          },
+          "target": {},
           "title": "pirc notifications work"
         },
         "record": {
@@ -1069,7 +1059,7 @@ expression: t.into_value()
         },
         "headers": {
           "content-encoding": "aes128gcm",
-          "content-length": "270",
+          "content-length": "235",
           "content-type": "application/octet-stream",
           "topic": "t2487m4",
           "ttl": "86400",
@@ -1079,11 +1069,9 @@ expression: t.into_value()
         "path": "/moved",
         "payload": {
           "at": "<epoch-ms>",
-          "body": "Scheduled runs and anything waiting for you will show up here.",
+          "body": "Anything waiting for you will show up here.",
           "tag": "test",
-          "target": {
-            "schedules": true
-          },
+          "target": {},
           "title": "pirc notifications work"
         },
         "record": {

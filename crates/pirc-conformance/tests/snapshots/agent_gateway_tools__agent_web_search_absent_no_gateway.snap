@@ -21,12 +21,6 @@ expression: r.into_value()
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c2",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Search",
           "role": "user",
@@ -41,6 +35,12 @@ expression: r.into_value()
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
       },
       {
         "type": "turn_start"
@@ -105,7 +105,7 @@ expression: r.into_value()
       {
         "assistantMessageEvent": {
           "contentIndex": 1,
-          "delta": "{\"names\":[\"web_search\",\"schedule\"]}",
+          "delta": "{\"names\":[\"web_search\"]}",
           "type": "toolcall_delta"
         },
         "type": "message_update"
@@ -116,8 +116,7 @@ expression: r.into_value()
           "toolCall": {
             "arguments": {
               "names": [
-                "web_search",
-                "schedule"
+                "web_search"
               ]
             },
             "id": "d1",
@@ -144,8 +143,7 @@ expression: r.into_value()
             {
               "arguments": {
                 "names": [
-                  "web_search",
-                  "schedule"
+                  "web_search"
                 ]
               },
               "id": "d1",
@@ -232,8 +230,7 @@ expression: r.into_value()
       {
         "args": {
           "names": [
-            "web_search",
-            "schedule"
+            "web_search"
           ]
         },
         "toolCallId": "d1",
@@ -245,14 +242,14 @@ expression: r.into_value()
         "result": {
           "content": [
             {
-              "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: web_search, schedule. ptc_docs({}) lists what is.\",\"outcome\":\"not_started\"}}",
+              "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: web_search. ptc_docs({}) lists what is.\",\"outcome\":\"not_started\"}}",
               "type": "text"
             }
           ],
           "details": {
             "error": {
               "code": "CapabilityUnavailable",
-              "message": "Not available in this session: web_search, schedule. ptc_docs({}) lists what is.",
+              "message": "Not available in this session: web_search. ptc_docs({}) lists what is.",
               "outcome": "not_started"
             }
           },
@@ -266,14 +263,14 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: web_search, schedule. ptc_docs({}) lists what is.\",\"outcome\":\"not_started\"}}",
+              "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: web_search. ptc_docs({}) lists what is.\",\"outcome\":\"not_started\"}}",
               "type": "text"
             }
           ],
           "details": {
             "error": {
               "code": "CapabilityUnavailable",
-              "message": "Not available in this session: web_search, schedule. ptc_docs({}) lists what is.",
+              "message": "Not available in this session: web_search. ptc_docs({}) lists what is.",
               "outcome": "not_started"
             }
           },
@@ -289,14 +286,14 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: web_search, schedule. ptc_docs({}) lists what is.\",\"outcome\":\"not_started\"}}",
+              "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: web_search. ptc_docs({}) lists what is.\",\"outcome\":\"not_started\"}}",
               "type": "text"
             }
           ],
           "details": {
             "error": {
               "code": "CapabilityUnavailable",
-              "message": "Not available in this session: web_search, schedule. ptc_docs({}) lists what is.",
+              "message": "Not available in this session: web_search. ptc_docs({}) lists what is.",
               "outcome": "not_started"
             }
           },
@@ -655,8 +652,7 @@ expression: r.into_value()
               {
                 "arguments": {
                   "names": [
-                    "web_search",
-                    "schedule"
+                    "web_search"
                   ]
                 },
                 "id": "d1",
@@ -693,14 +689,14 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: web_search, schedule. ptc_docs({}) lists what is.\",\"outcome\":\"not_started\"}}",
+                "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: web_search. ptc_docs({}) lists what is.\",\"outcome\":\"not_started\"}}",
                 "type": "text"
               }
             ],
             "details": {
               "error": {
                 "code": "CapabilityUnavailable",
-                "message": "Not available in this session: web_search, schedule. ptc_docs({}) lists what is.",
+                "message": "Not available in this session: web_search. ptc_docs({}) lists what is.",
                 "outcome": "not_started"
               }
             },

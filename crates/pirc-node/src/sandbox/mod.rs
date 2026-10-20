@@ -99,20 +99,17 @@ pub enum SandboxStatus {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PrepareInput {
     pub session_id: String,
-    /// `chat::session_root`: the workspace, or the chat session's directory.
+    /// `crate::util::session_root`: the workspace, or the session's own directory.
     pub workspace_root: PathBuf,
     /// The session's private directory (its `session.jsonl`).
     pub session_dir: PathBuf,
     /// The node's inference socket.
     pub inference_socket: Option<PathBuf>,
-    /// Never writable from the session (a chat project's instructions).
+    /// Never writable from the session.
     pub protected_paths: Vec<PathBuf>,
     /// The workspace-memory ledger the session may read and append to
     /// (made here when missing); the rest of the directory stays closed.
     pub workspace_memory_file: Option<PathBuf>,
-    /// A chat project's files, which the session may read but never write
-    /// (the node changes them while the session runs).
-    pub project_files_dir: Option<PathBuf>,
 }
 
 /// A host command to run read-only ([`Sandbox::prepare_readonly`]).

@@ -1,6 +1,6 @@
 ---
-source: crates/pirc-conformance/tests/agent_assistant.rs
-expression: log.into_value()
+source: crates/pirc-conformance/tests/agent_todo_ptc.rs
+expression: r.into_value()
 ---
 [
   {
@@ -10,22 +10,23 @@ expression: log.into_value()
       "success": true,
       "type": "response"
     },
-    "step": "first: response"
+    "step": "not available: response"
   },
   {
     "observed": [
       {
+        "id": "<uuid:1>",
+        "method": "setWidget",
+        "type": "extension_ui_request",
+        "widgetKey": "local-todo",
+        "widgetPlacement": "aboveEditor"
+      },
+      {
         "type": "agent_start"
       },
       {
-        "args": {},
-        "id": "<uuid:1>",
-        "op": "assistant.context",
-        "type": "gateway_request"
-      },
-      {
         "message": {
-          "content": "hello",
+          "content": "list",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -33,11 +34,176 @@ expression: log.into_value()
       },
       {
         "message": {
-          "content": "hello",
+          "content": "list",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "id": "t1",
+          "toolName": "ptc",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"code\":\"const r = await tools.call(\\\"todo\\\", {\\\"action\\\":\\\"list\\\"});\\nif (!r.ok) throw new PtcError(r.error);\\nreturn r.data.text;\"}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "arguments": {
+              "code": "const r = await tools.call(\"todo\", {\"action\":\"list\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
+            },
+            "id": "t1",
+            "name": "ptc",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "code": "const r = await tools.call(\"todo\", {\"action\":\"list\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
+              },
+              "id": "t1",
+              "name": "ptc",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "args": {
+          "code": "const r = await tools.call(\"todo\", {\"action\":\"list\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
+        },
+        "toolCallId": "t1",
+        "toolName": "ptc",
+        "type": "tool_execution_start"
+      },
+      {
+        "isError": true,
+        "result": {
+          "content": [
+            {
+              "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: todo. Nothing ran. ptc_docs({}) lists the capabilities.\",\"outcome\":\"not_started\"}}",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "error": {
+              "code": "CapabilityUnavailable",
+              "message": "Not available in this session: todo. Nothing ran. ptc_docs({}) lists the capabilities.",
+              "outcome": "not_started"
+            }
+          },
+          "isError": true
+        },
+        "toolCallId": "t1",
+        "toolName": "ptc",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: todo. Nothing ran. ptc_docs({}) lists the capabilities.\",\"outcome\":\"not_started\"}}",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "error": {
+              "code": "CapabilityUnavailable",
+              "message": "Not available in this session: todo. Nothing ran. ptc_docs({}) lists the capabilities.",
+              "outcome": "not_started"
+            }
+          },
+          "isError": true,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "t1",
+          "toolName": "ptc"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: todo. Nothing ran. ptc_docs({}) lists the capabilities.\",\"outcome\":\"not_started\"}}",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "error": {
+              "code": "CapabilityUnavailable",
+              "message": "Not available in this session: todo. Nothing ran. ptc_docs({}) lists the capabilities.",
+              "outcome": "not_started"
+            }
+          },
+          "isError": true,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "t1",
+          "toolName": "ptc"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_end"
       },
       {
         "type": "turn_start"
@@ -68,7 +234,7 @@ expression: log.into_value()
       {
         "assistantMessageEvent": {
           "contentIndex": 0,
-          "delta": "Hi",
+          "delta": "o",
           "type": "text_delta"
         },
         "type": "message_update"
@@ -76,14 +242,14 @@ expression: log.into_value()
       {
         "assistantMessageEvent": {
           "contentIndex": 0,
-          "delta": ".",
+          "delta": "k",
           "type": "text_delta"
         },
         "type": "message_update"
       },
       {
         "assistantMessageEvent": {
-          "content": "Hi.",
+          "content": "ok",
           "contentIndex": 0,
           "type": "text_end"
         },
@@ -95,7 +261,7 @@ expression: log.into_value()
           "completedAt": "<epoch-ms>",
           "content": [
             {
-              "text": "Hi.",
+              "text": "ok",
               "type": "text"
             }
           ],
@@ -131,14 +297,14 @@ expression: log.into_value()
         "type": "agent_settled"
       }
     ],
-    "step": "first: events"
+    "step": "not available: events"
   },
   {
     "observed": [
       {
         "messages": [
           {
-            "content": "hello",
+            "content": "list",
             "role": "user",
             "timestamp": "<epoch-ms>"
           }
@@ -146,7 +312,7 @@ expression: log.into_value()
         "modelId": "fake-model",
         "providerName": "fake",
         "sessionId": "<hex16:1>",
-        "systemPrompt": "You are pirc, the user's personal assistant, chatting with them on one of their machines.\nAnswer directly; use tools when they help, and report what you did and any blockers honestly.\n\nThis chat has its own private working directory; file tools write only to it and explicitly allowed paths, and read anywhere except credential stores and pirc's private state.\n\n## Memory\n\nWhat you remember from earlier chats with this user. It was loaded when this chat started; changes reach new chats only.\n\n- USER is what the user told you about themselves, their preferences and standing rules. They approved every entry: follow it unless they say otherwise now. To change it, call memory_propose_user with their exact words; they approve it in this chat or Settings → Memory.\n- MEMORY holds your own notes from earlier chats. They may be stale: check what can change, and prefer what the user says now. Keep them current with memory_note.\n\n1 proposed USER change is waiting for the user's approval.\n\n### USER (22/2,000 characters)\n[u11111111] Prefers short answers.\n\n### MEMORY (26/8,000 characters)\n[n22222222] 2026-09-20 m5pro holds the pirc repo.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- delegation: delegate, delegation_status\n- files: edit, find, grep, ls, read, write\n- memory: memory_note, memory_propose_user, memory_search\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\n### Other capabilities\n\nCall these with the arguments shown. Each result has `text`; `ptc_docs({ names: [...] })` documents its typed fields if a script needs more.\n\n`tools.delegation_status(args?: { id?: string; offset?: number })` — Check on delegations: one with its full result, by id, or the recent ones with their status.\n`tools.memory_note(args: { action: \"add\" | \"replace\" | \"remove\"; id?: string; content?: string; quote?: string })` — Keep a note for your future chats with this user (MEMORY).\n`tools.memory_propose_user(args: { action: \"add\" | \"replace\" | \"remove\"; id?: string; content?: string; quote: string })` — Propose a change to USER: who the user is, their preferences and their standing rules.\n`tools.delegate(args: { workspace?: string; task: string; title?: string; follows?: string; quote?: string; role?: string })` — Hand a task to an agent working in one of the user's workspaces (see ## Workspaces).\n`tools.memory_search(args: { query: string; workspace?: string; limit?: number; everywhere?: boolean })` — Search what the user's coding sessions noted in their repositories (workspace memory, from every machine) and what your…\n\nCurrent working directory: <tmp>/workspace",
+        "systemPrompt": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\nCurrent working directory: <tmp>/workspace",
         "thinking": "low",
         "tools": [
           {
@@ -360,146 +526,11 @@ expression: log.into_value()
             }
           }
         ]
-      }
-    ],
-    "step": "first: model requests"
-  },
-  {
-    "observed": {
-      "command": "prompt",
-      "id": "c2",
-      "success": true,
-      "type": "response"
-    },
-    "step": "second: response"
-  },
-  {
-    "observed": [
-      {
-        "type": "agent_start"
       },
-      {
-        "args": {},
-        "id": "<uuid:2>",
-        "op": "assistant.context",
-        "type": "gateway_request"
-      },
-      {
-        "message": {
-          "content": "more",
-          "role": "user",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_start"
-      },
-      {
-        "message": {
-          "content": "more",
-          "role": "user",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_end"
-      },
-      {
-        "type": "turn_start"
-      },
-      {
-        "message": {
-          "content": [],
-          "model": "fake-model",
-          "provider": "fake",
-          "role": "assistant",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_start"
-      },
-      {
-        "sections": [
-          "context"
-        ],
-        "type": "panel_changed"
-      },
-      {
-        "assistantMessageEvent": {
-          "contentIndex": 0,
-          "type": "text_start"
-        },
-        "type": "message_update"
-      },
-      {
-        "assistantMessageEvent": {
-          "contentIndex": 0,
-          "delta": "Aga",
-          "type": "text_delta"
-        },
-        "type": "message_update"
-      },
-      {
-        "assistantMessageEvent": {
-          "contentIndex": 0,
-          "delta": "in.",
-          "type": "text_delta"
-        },
-        "type": "message_update"
-      },
-      {
-        "assistantMessageEvent": {
-          "content": "Again.",
-          "contentIndex": 0,
-          "type": "text_end"
-        },
-        "type": "message_update"
-      },
-      {
-        "message": {
-          "api": "openai-completions",
-          "completedAt": "<epoch-ms>",
-          "content": [
-            {
-              "text": "Again.",
-              "type": "text"
-            }
-          ],
-          "model": "fake-model",
-          "provider": "fake",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": "<epoch-ms>",
-          "usage": {
-            "cacheRead": 40,
-            "cacheWrite": 0,
-            "input": 100,
-            "output": 10,
-            "totalTokens": 150
-          }
-        },
-        "type": "message_end"
-      },
-      {
-        "sections": [
-          "context"
-        ],
-        "type": "panel_changed"
-      },
-      {
-        "type": "turn_end"
-      },
-      {
-        "type": "agent_end",
-        "willRetry": false
-      },
-      {
-        "type": "agent_settled"
-      }
-    ],
-    "step": "second: events"
-  },
-  {
-    "observed": [
       {
         "messages": [
           {
-            "content": "hello",
+            "content": "list",
             "role": "user",
             "timestamp": "<epoch-ms>"
           },
@@ -508,14 +539,18 @@ expression: log.into_value()
             "completedAt": "<epoch-ms>",
             "content": [
               {
-                "text": "Hi.",
-                "type": "text"
+                "arguments": {
+                  "code": "const r = await tools.call(\"todo\", {\"action\":\"list\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
+                },
+                "id": "t1",
+                "name": "ptc",
+                "type": "toolCall"
               }
             ],
             "model": "fake-model",
             "provider": "fake",
             "role": "assistant",
-            "stopReason": "stop",
+            "stopReason": "toolUse",
             "timestamp": "<epoch-ms>",
             "usage": {
               "cacheRead": 40,
@@ -526,9 +561,24 @@ expression: log.into_value()
             }
           },
           {
-            "content": "more",
-            "role": "user",
-            "timestamp": "<epoch-ms>"
+            "content": [
+              {
+                "text": "{\"error\":{\"code\":\"CapabilityUnavailable\",\"message\":\"Not available in this session: todo. Nothing ran. ptc_docs({}) lists the capabilities.\",\"outcome\":\"not_started\"}}",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "error": {
+                "code": "CapabilityUnavailable",
+                "message": "Not available in this session: todo. Nothing ran. ptc_docs({}) lists the capabilities.",
+                "outcome": "not_started"
+              }
+            },
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "t1",
+            "toolName": "ptc"
           }
         ],
         "modelId": "fake-model",
@@ -539,112 +589,6 @@ expression: log.into_value()
         "tools": "<unchanged>"
       }
     ],
-    "step": "second: model requests"
-  },
-  {
-    "observed": [
-      {
-        "cwd": "<tmp>/workspace",
-        "id": "<entry:1>",
-        "parentId": null,
-        "sessionId": "<hex16:1>",
-        "timestamp": "<epoch-ms>",
-        "type": "session",
-        "version": 1
-      },
-      {
-        "customType": "assistant.snapshot",
-        "data": {
-          "revisions": {
-            "n22222222": 1,
-            "u11111111": 2
-          },
-          "text": "## Memory\n\nWhat you remember from earlier chats with this user. It was loaded when this chat started; changes reach new chats only.\n\n- USER is what the user told you about themselves, their preferences and standing rules. They approved every entry: follow it unless they say otherwise now. To change it, call memory_propose_user with their exact words; they approve it in this chat or Settings → Memory.\n- MEMORY holds your own notes from earlier chats. They may be stale: check what can change, and prefer what the user says now. Keep them current with memory_note.\n\n1 proposed USER change is waiting for the user's approval.\n\n### USER (22/2,000 characters)\n[u11111111] Prefers short answers.\n\n### MEMORY (26/8,000 characters)\n[n22222222] 2026-09-20 m5pro holds the pirc repo."
-        },
-        "id": "<entry:2>",
-        "parentId": "<entry:1>",
-        "timestamp": "<epoch-ms>",
-        "type": "custom"
-      },
-      {
-        "id": "<entry:3>",
-        "message": {
-          "content": "hello",
-          "role": "user",
-          "timestamp": "<epoch-ms>"
-        },
-        "parentId": "<entry:2>",
-        "timestamp": "<epoch-ms>",
-        "type": "message"
-      },
-      {
-        "id": "<entry:4>",
-        "message": {
-          "api": "openai-completions",
-          "completedAt": "<epoch-ms>",
-          "content": [
-            {
-              "text": "Hi.",
-              "type": "text"
-            }
-          ],
-          "model": "fake-model",
-          "provider": "fake",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": "<epoch-ms>",
-          "usage": {
-            "cacheRead": 40,
-            "cacheWrite": 0,
-            "input": 100,
-            "output": 10,
-            "totalTokens": 150
-          }
-        },
-        "parentId": "<entry:3>",
-        "timestamp": "<epoch-ms>",
-        "type": "message"
-      },
-      {
-        "id": "<entry:5>",
-        "message": {
-          "content": "more",
-          "role": "user",
-          "timestamp": "<epoch-ms>"
-        },
-        "parentId": "<entry:4>",
-        "timestamp": "<epoch-ms>",
-        "type": "message"
-      },
-      {
-        "id": "<entry:6>",
-        "message": {
-          "api": "openai-completions",
-          "completedAt": "<epoch-ms>",
-          "content": [
-            {
-              "text": "Again.",
-              "type": "text"
-            }
-          ],
-          "model": "fake-model",
-          "provider": "fake",
-          "role": "assistant",
-          "stopReason": "stop",
-          "timestamp": "<epoch-ms>",
-          "usage": {
-            "cacheRead": 40,
-            "cacheWrite": 0,
-            "input": 100,
-            "output": 10,
-            "totalTokens": 150
-          }
-        },
-        "parentId": "<entry:5>",
-        "timestamp": "<epoch-ms>",
-        "type": "message"
-      }
-    ],
-    "step": "session file"
+    "step": "not available: model requests"
   }
 ]

@@ -43,11 +43,5 @@ pub fn routes() -> Router<AppState> {
     routes::routes()
 }
 
-/// Forget what memory learned from a deleted chat (`MemoryStore.forgetSession`),
-/// inside the deletion's transaction.
-pub fn forget_session(app: &App, conn: &Connection, user: &str, session_id: &str) -> ApiResult<()> {
-    store(app, conn).forget_session(user, session_id)
-}
-
 #[cfg(test)]
 pub(crate) mod tests;

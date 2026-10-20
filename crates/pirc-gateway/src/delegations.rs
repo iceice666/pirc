@@ -1018,8 +1018,7 @@ pub async fn stop(app: &AppState, user: &str, id: &str) -> ApiResult<Value> {
 fn task_message(delegation: &Delegation) -> String {
     format!(
         "Task from the user's assistant, started without a separate approval (delegation {}):\n\n{}\n\nWork on it here. When you are done, end with a short summary of what you did and anything left over: the assistant receives your final message.",
-        delegation.id,
-        delegation.task
+        delegation.id, delegation.task
     )
 }
 
@@ -1619,16 +1618,10 @@ pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {
     }
 }
 
-/// `requireChat`: only a mode that delegates may.
-fn require_delegate(context: &OpContext) -> ApiResult<()> {
-    if !context.mode.delegate {
-        return Err(ApiError::new(
-            403,
-            "forbidden",
-            "Only chat sessions have the assistant memory",
-        ));
-    }
-    Ok(())
+/// `requireChat`: only the assistant delegates, and no session is the
+/// assistant until the gateway hosts it (plans/rewrite/02-brain-host.md).
+fn require_delegate(_context: &OpContext) -> ApiResult<()> {
+    Err(ApiError::new(403, "forbidden", "No session can delegate"))
 }
 
 pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Value> {

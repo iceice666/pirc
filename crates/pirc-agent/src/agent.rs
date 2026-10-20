@@ -46,8 +46,6 @@ const INTERRUPTED_PARTIAL_CHARS: usize = 2000;
 /// `AgentOptions`.
 pub struct AgentOptions {
     pub config: AgentConfig,
-    /// A chat project's instructions from the node.
-    pub project_instructions: Option<String>,
     /// A role from the configure line.
     pub role: Option<AgentRole>,
     pub store: SessionStore,
@@ -142,7 +140,6 @@ pub struct StreamOptions {
 /// `Agent`.
 pub struct Agent {
     weak: Weak<Agent>,
-    project_instructions: Option<String>,
     role: RefCell<Option<AgentRole>>,
     config: Rc<AgentConfig>,
     /// The gateway's live public catalog (`refreshModels` replaces it).
@@ -697,7 +694,6 @@ impl Agent {
             }
             Agent {
                 weak: weak.clone(),
-                project_instructions: options.project_instructions,
                 role: RefCell::new(options.role),
                 models: RefCell::new(config.models.clone()),
                 config: config.clone(),
@@ -3166,11 +3162,6 @@ impl Agent {
         self.role.borrow().clone()
     }
 
-    /// A chat project's instructions (the M5 feature reads them).
-    pub fn project_instructions(&self) -> Option<&str> {
-        self.project_instructions.as_deref()
-    }
-
     /// The current model reference.
     pub fn model_ref(&self) -> Option<(String, String)> {
         self.model_ref.borrow().clone()
@@ -3327,7 +3318,6 @@ mod tests {
         let store = SessionStore::open(dir.join("session"), &config.workspace).unwrap();
         let agent = Agent::new(AgentOptions {
             config,
-            project_instructions: None,
             role: None,
             store,
             emit: Rc::new(|_| {}),
@@ -3476,14 +3466,11 @@ mod tests {
     }
 
     #[test]
-    fn default_chat_keeps_management_commands_while_hiding_default_off_tools() {
+    fn modes_keep_management_commands_while_hiding_tools_they_turn_off() {
         let dir = tempfile::tempdir().unwrap();
-        let agent = mode_agent(
-            dir.path(),
-            pirc_protocol::mode::default_chat(),
-            json!({}),
-            None,
-        );
+        let mut mode = pirc_protocol::mode::default_work();
+        mode.features_off = vec!["todo".into(), "background".into()];
+        let agent = mode_agent(dir.path(), mode, json!({}), None);
         let commands = agent
             .features
             .iter()

@@ -118,16 +118,6 @@ CREATE TABLE workspace_trust (
   trusted_at INTEGER NOT NULL
 );
 
--- A chat project being deleted (fenced: hidden from the gateway, no new
--- sessions, until it is gone). Kept afterwards so a retry answers 204.
-CREATE TABLE workspace_deletions (
-  workspace_id TEXT PRIMARY KEY,
-  owner_user TEXT NOT NULL,
-  -- 'deleting' or 'deleted'
-  status TEXT NOT NULL,
-  created_at INTEGER NOT NULL
-);
-
 -- A chat being deleted (fenced: its routes answer 409 until it is gone).
 CREATE TABLE session_deletions (
   session_id TEXT PRIMARY KEY,

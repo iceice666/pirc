@@ -39,45 +39,36 @@ async fn public_cli() {
     let Some(dir) = bin_dir() else { return };
     for role in ["gateway", "node"] {
         let bin = dir.join(format!("pirc-{role}"));
-        let prefixes: &[&[&str]] = if role == "node" {
-            &[&[], &["chat"]]
-        } else {
-            &[&[]]
-        };
-        for prefix in prefixes {
-            for flag in ["version", "--version"] {
-                let args = [*prefix, &[flag]].concat();
-                let out = run(&bin, &args).await;
-                assert!(out.status.success());
-                assert_eq!(
-                    out.stdout,
-                    format!("{}\n", env!("CARGO_PKG_VERSION")).as_bytes()
-                );
-                assert!(out.stderr.is_empty());
-            }
-            for flag in ["help", "--help", "-h"] {
-                let args = [*prefix, &[flag]].concat();
-                let out = run(&bin, &args).await;
-                assert!(out.status.success());
-                assert!(out.stderr.is_empty());
-                let help = String::from_utf8(out.stdout).unwrap();
-                assert!(help.starts_with(&format!("Usage: pirc-{role} ")));
-                for internal in ["agent", "ptc-guest", "sandbox-bridge", "oauth-worker"] {
-                    assert!(!help.contains(internal));
-                }
-            }
-            for tail in [
-                &["--help", "extra"][..],
-                &["--version", "extra"],
-                &["unknown"],
-            ] {
-                let out = run(&bin, &[*prefix, tail].concat()).await;
-                assert_eq!(out.status.code(), Some(2));
-                assert!(out.stdout.is_empty());
-                assert!(String::from_utf8(out.stderr).unwrap().contains("Usage:"));
+        for flag in ["version", "--version"] {
+            let out = run(&bin, &[flag]).await;
+            assert!(out.status.success());
+            assert_eq!(
+                out.stdout,
+                format!("{}\n", env!("CARGO_PKG_VERSION")).as_bytes()
+            );
+            assert!(out.stderr.is_empty());
+        }
+        for flag in ["help", "--help", "-h"] {
+            let out = run(&bin, &[flag]).await;
+            assert!(out.status.success());
+            assert!(out.stderr.is_empty());
+            let help = String::from_utf8(out.stdout).unwrap();
+            assert!(help.starts_with(&format!("Usage: pirc-{role} ")));
+            for internal in ["agent", "ptc-guest", "sandbox-bridge", "oauth-worker"] {
+                assert!(!help.contains(internal));
             }
         }
-        for retired in ["node", "gateway", "srt", "oauth-worker", "--chat"] {
+        for tail in [
+            &["--help", "extra"][..],
+            &["--version", "extra"],
+            &["unknown"],
+        ] {
+            let out = run(&bin, tail).await;
+            assert_eq!(out.status.code(), Some(2));
+            assert!(out.stdout.is_empty());
+            assert!(String::from_utf8(out.stderr).unwrap().contains("Usage:"));
+        }
+        for retired in ["node", "gateway", "srt", "oauth-worker", "--chat", "chat"] {
             let out = run(&bin, &[retired]).await;
             assert_eq!(out.status.code(), Some(2));
         }
@@ -88,8 +79,6 @@ async fn public_cli() {
         assert!(!String::from_utf8(out.stderr).unwrap().contains("Usage:"));
     }
     let node = dir.join("pirc-node");
-    let out = run(&node, &["chat"]).await;
-    assert_eq!(out.status.code(), Some(1));
     let out = run(&node, &["agent"]).await;
     assert!(
         String::from_utf8(out.stderr)

@@ -287,12 +287,6 @@ impl<'a> Store<'a> {
             .collect()
     }
 
-    /// What a coding session starts with: the approved USER entries only.
-    pub fn user_context(&self, user: &str) -> ApiResult<Vec<Value>> {
-        let active = self.entries(user, None, Some("active"))?;
-        Ok(Self::briefs(&active, Kind::User))
-    }
-
     /// What an assistant session starts with.
     pub fn context(&self, user: &str) -> ApiResult<Map<String, Value>> {
         let active = self.entries(user, None, Some("active"))?;
@@ -332,10 +326,7 @@ impl<'a> Store<'a> {
                 return Err(ApiError::new(
                     403,
                     "forbidden",
-                    format!(
-                        "{} is a USER entry; only the user changes USER",
-                        entry.id
-                    ),
+                    format!("{} is a USER entry; only the user changes USER", entry.id),
                 ));
             }
             if entry.status == "forgotten" {
@@ -394,23 +385,6 @@ impl<'a> Store<'a> {
                 &change.actor,
             )?;
             Ok((replaced, false))
-        })
-    }
-
-    /// Erase entries created here, not entries merely recalled or edited here.
-    pub fn forget_session(&self, user: &str, session_id: &str) -> ApiResult<()> {
-        self.tx(|| {
-            let ids: Vec<String> = {
-                let mut statement = self.conn.prepare(
-                    "SELECT id FROM memory_entries WHERE owner_user=? AND created_by_session=?",
-                )?;
-                let rows = statement.query_map([user, session_id], |row| row.get(0))?;
-                rows.collect::<Result<_, _>>()?
-            };
-            for id in ids {
-                self.forget(user, &id)?;
-            }
-            Ok(())
         })
     }
 

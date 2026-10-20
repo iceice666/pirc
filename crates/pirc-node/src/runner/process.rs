@@ -714,7 +714,7 @@ pub(super) fn session_root(
     session_id: &str,
     mode: &pirc_protocol::Mode,
 ) -> ApiResult<PathBuf> {
-    crate::chat::session_root(workspace, session_id, mode)
+    crate::util::session_root(workspace, session_id, mode)
 }
 
 /// Everything a runner is spawned from.
@@ -767,8 +767,6 @@ fn spawn_child(
     // whatever the model asks.
     let mut env = without_secrets(&node.env, &[]);
     env.remove("PIRC_WORKSPACE_KIND");
-    env.remove("PIRC_PROJECT_FILES");
-    env.remove("PIRC_PROJECT_INSTRUCTIONS");
     let mut set = |name: &str, value: String| {
         env.insert(name.to_owned(), value);
     };
@@ -780,7 +778,6 @@ fn spawn_child(
     set("PIRC_WRITE_BROKER", "1".into());
     // Allowlisted operations on the gateway go through this node.
     set("PIRC_GATEWAY", "1".into());
-    // `chat` makes the agent a personal assistant (see chat.rs).
     set(
         "PIRC_MODE",
         serde_json::to_string(mode).map_err(|_| ApiError::internal())?,
@@ -788,20 +785,6 @@ fn spawn_child(
     // The project config hash the user trusted; the agent ignores
     // .pirc/config.json hooks, env and allowedPaths unless they still match.
     set("PIRC_PROJECT_TRUST", trust);
-    // Only for protecting it: the agent gets the text on its configure line.
-    if let Some(instructions) = crate::chat::project_instructions_path(workspace, mode) {
-        set(
-            "PIRC_PROJECT_INSTRUCTIONS",
-            instructions.to_string_lossy().into_owned(),
-        );
-    }
-    // The project's files, when the sandbox opened them (read-only).
-    if let Some(dir) = crate::project_files::existing_files_dir(workspace, mode) {
-        let real = pirc_policy::real_resolve(&dir.to_string_lossy());
-        if prepared.policy.paths.allow_read.contains(&real) {
-            set("PIRC_PROJECT_FILES", real);
-        }
-    }
     set(
         "PIRC_WORKSPACE_MEMORY_DIR",
         node.config
@@ -902,10 +885,6 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         "models".into(),
         serde_json::to_value(node.models.current()).unwrap_or_default(),
     );
-    let instructions = crate::chat::read_project_instructions(&workspace, &mode);
-    if !instructions.is_empty() {
-        configure.insert("instructions".into(), json!(instructions));
-    }
     runner.write(&Value::Object(configure));
 
     // The agent runs: from here on a store failure is logged, not a failed start.

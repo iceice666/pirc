@@ -134,10 +134,6 @@ impl EventHub {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    pub fn forget(&self, session_id: &str) {
-        self.lock().streams.remove(session_id);
-    }
-
     /// Every event of every session.
     pub fn subscribe_all(self: &Arc<Self>, listener: Listener) -> Subscription {
         let key = self.next_listener.fetch_add(1, Ordering::Relaxed);

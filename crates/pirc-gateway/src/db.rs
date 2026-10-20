@@ -453,13 +453,6 @@ pub struct Lease {
     pub expires_at: i64,
 }
 
-/// A session being deleted: its owner and `deleting`/`deleted`.
-#[derive(Clone, Debug)]
-pub struct Deletion {
-    pub owner_user: String,
-    pub status: String,
-}
-
 /// Run `body` atomically: a savepoint, so it nests inside a caller's
 /// transaction as bun:sqlite's `transaction()` did.
 pub fn atomic<T>(
@@ -489,9 +482,6 @@ fn session_not_found() -> ApiError {
 
 /// The gateway's queries; see the module documentation.
 pub trait Store {
-    fn assistant_node(&self) -> ApiResult<Option<String>>;
-    fn claim_assistant_node(&self, node_id: &str) -> ApiResult<bool>;
-    fn release_assistant_node(&self, node_id: &str) -> ApiResult<bool>;
     fn recover_startup(&self) -> ApiResult<RecoveredStartup>;
 
     fn sync_remote_workspaces(
@@ -506,7 +496,6 @@ pub trait Store {
         node_id: &str,
         repos: &[(String, Option<String>)],
     ) -> ApiResult<()>;
-    /// A chat project being deleted (or deleted) is left out.
     fn list_workspaces(&self) -> ApiResult<Vec<Workspace>>;
     /// 404 "Workspace not found".
     fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace>;
@@ -532,12 +521,11 @@ pub trait Store {
     fn mark_session_activity(&self, session_id: &str) -> ApiResult<()>;
     fn mark_session_read(&self, session_id: &str) -> ApiResult<bool>;
     fn auto_rename_session(&self, session_id: &str, name: &str) -> ApiResult<bool>;
-    fn claim_session(&self, session_id: &str, user: &str, deleting: bool) -> ApiResult<Session>;
+    fn claim_session(&self, session_id: &str, user: &str) -> ApiResult<Session>;
     fn session_origins(&self, owner_user: &str) -> ApiResult<Vec<(String, SessionOrigin)>>;
-    fn session_deletion(&self, session_id: &str) -> ApiResult<Option<Deletion>>;
+    /// 409 for a chat whose deletion did not finish before chat deletion
+    /// was removed: it stays fenced.
     fn require_session_available(&self, session_id: &str) -> ApiResult<()>;
-    fn begin_session_deletion(&self, session_id: &str, user: &str) -> ApiResult<()>;
-    fn finish_session_deletion(&self, session_id: &str) -> ApiResult<()>;
     fn resolve_remote_session(&self, node_id: &str, remote_id: &str) -> ApiResult<Option<String>>;
     fn interrupt_remote_session(&self, session_id: &str) -> ApiResult<()>;
     fn remote_session_ids(&self, node_id: &str) -> ApiResult<Vec<String>>;
@@ -574,29 +562,6 @@ pub trait Store {
     fn validate_lease(&self, session_id: &str, client_id: &str, generation: i64) -> ApiResult<()>;
 }
 
-fn finish_deletion(conn: &Connection, session_id: &str) -> ApiResult<()> {
-    if conn.session_deletion(session_id)?.is_none() {
-        crate::log::error("session deletion must be fenced first");
-        return Err(ApiError::internal());
-    }
-    for table in ["commands", "leases"] {
-        conn.execute(
-            &format!("DELETE FROM {table} WHERE session_id=?"),
-            [session_id],
-        )?;
-    }
-    conn.execute(
-        "DELETE FROM delegations WHERE assistant_session_id=?",
-        [session_id],
-    )?;
-    conn.execute("DELETE FROM sessions WHERE id=?", [session_id])?;
-    conn.execute(
-        "UPDATE session_deletions SET status='deleted' WHERE session_id=?",
-        [session_id],
-    )?;
-    Ok(())
-}
-
 /// What startup recovery found (logged).
 #[derive(Clone, Copy, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -607,31 +572,6 @@ pub struct RecoveredStartup {
 const SESSION_SELECT: &str = "SELECT * FROM sessions";
 
 impl Store for Connection {
-    fn assistant_node(&self) -> ApiResult<Option<String>> {
-        Ok(self
-            .query_row(
-                "SELECT node_id FROM assistant_node WHERE singleton = 1",
-                [],
-                |row| row.get(0),
-            )
-            .optional()?)
-    }
-
-    fn claim_assistant_node(&self, node_id: &str) -> ApiResult<bool> {
-        self.execute(
-            "INSERT OR IGNORE INTO assistant_node(singleton, node_id) VALUES (1, ?)",
-            [node_id],
-        )?;
-        Ok(self.assistant_node()?.as_deref() == Some(node_id))
-    }
-
-    fn release_assistant_node(&self, node_id: &str) -> ApiResult<bool> {
-        Ok(self.execute(
-            "DELETE FROM assistant_node WHERE singleton = 1 AND node_id = ?",
-            [node_id],
-        )? > 0)
-    }
-
     /// Commands in flight when the gateway stopped have an unknown outcome;
     /// runners and leases belong to nodes that reconnect.
     fn recover_startup(&self) -> ApiResult<RecoveredStartup> {
@@ -832,7 +772,7 @@ impl Store for Connection {
     }
 
     /// Every session belongs to the user who created it.
-    fn claim_session(&self, session_id: &str, user: &str, deleting: bool) -> ApiResult<Session> {
+    fn claim_session(&self, session_id: &str, user: &str) -> ApiResult<Session> {
         let session = self.get_session(session_id)?;
         if session.owner_user.as_deref() != Some(user) {
             return Err(ApiError::new(
@@ -841,9 +781,7 @@ impl Store for Connection {
                 "Session belongs to another user",
             ));
         }
-        if !deleting {
-            self.require_session_available(session_id)?;
-        }
+        self.require_session_available(session_id)?;
         Ok(session)
     }
 
@@ -870,44 +808,22 @@ impl Store for Connection {
         Ok(origins)
     }
 
-    fn session_deletion(&self, session_id: &str) -> ApiResult<Option<Deletion>> {
-        Ok(self
-            .query_row(
-                "SELECT owner_user, status FROM session_deletions WHERE session_id=?",
-                [session_id],
-                |row| {
-                    Ok(Deletion {
-                        owner_user: row.get(0)?,
-                        status: row.get(1)?,
-                    })
-                },
-            )
-            .optional()?)
-    }
-
     fn require_session_available(&self, session_id: &str) -> ApiResult<()> {
-        if self.session_deletion(session_id)?.is_some() {
+        let fenced = self
+            .query_row(
+                "SELECT 1 FROM session_deletions WHERE session_id=?",
+                [session_id],
+                |_| Ok(()),
+            )
+            .optional()?;
+        if fenced.is_some() {
             return Err(ApiError::new(
                 409,
                 "conflict",
-                "This chat is being deleted. Retry Delete to finish cleanup.",
+                "This chat was being deleted",
             ));
         }
         Ok(())
-    }
-
-    fn begin_session_deletion(&self, session_id: &str, user: &str) -> ApiResult<()> {
-        self.claim_session(session_id, user, true)?;
-        self.execute(
-            "INSERT OR IGNORE INTO session_deletions (session_id,owner_user,status,created_at) VALUES (?1, ?2, 'deleting', ?3)",
-            params![session_id, user, now_ms()],
-        )?;
-        Ok(())
-    }
-
-    /// Atomic, and nests in the caller's transaction (with forgetting the session's memory).
-    fn finish_session_deletion(&self, session_id: &str) -> ApiResult<()> {
-        atomic(self, |conn| finish_deletion(conn, session_id))
     }
 
     fn resolve_remote_session(&self, node_id: &str, remote_id: &str) -> ApiResult<Option<String>> {
@@ -1340,6 +1256,7 @@ mod tests {
         "memory_proposals.",
         "index.memory_proposals_",
         "workspace_capabilities.",
+        "assistant_node.",
     ];
 
     #[test]
@@ -1423,9 +1340,7 @@ mod tests {
         conn.rename_session(&session.id, "Mine").unwrap();
         assert!(!conn.auto_rename_session(&session.id, "Other").unwrap());
         assert_eq!(
-            conn.claim_session(&session.id, "v", false)
-                .unwrap_err()
-                .code,
+            conn.claim_session(&session.id, "v").unwrap_err().code,
             "forbidden"
         );
         assert!(!conn.mark_session_read(&session.id).unwrap());
@@ -1437,19 +1352,17 @@ mod tests {
             .unwrap();
         assert!(flagged.pinned_at.is_some() && flagged.settled_at.is_none());
         assert_eq!(conn.increment_epoch(&session.id).unwrap(), 1);
-        conn.begin_session_deletion(&session.id, "u").unwrap();
+        // A chat whose deletion did not finish stays fenced.
+        conn.execute(
+            "INSERT INTO session_deletions (session_id,owner_user,status,created_at) VALUES (?,'u','deleting',0)",
+            [&session.id],
+        )
+        .unwrap();
         assert_eq!(
-            conn.claim_session(&session.id, "u", false)
-                .unwrap_err()
-                .code,
+            conn.claim_session(&session.id, "u").unwrap_err().code,
             "conflict"
         );
         assert_eq!(conn.resolve_remote_session("n1", "r1").unwrap(), None);
-        conn.finish_session_deletion(&session.id).unwrap();
-        assert_eq!(
-            conn.session_deletion(&session.id).unwrap().unwrap().status,
-            "deleted"
-        );
     }
 
     #[test]

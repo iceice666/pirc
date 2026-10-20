@@ -145,20 +145,6 @@ async fn node_session_routes() {
         "the listed session after the renames",
         listed.body["sessions"][0].clone(),
     );
-    let deleted = api.send("DELETE", &base, &headers, None).await;
-    t.response(
-        "delete a session of a directory workspace",
-        "DELETE /api/sessions/:id",
-        &deleted,
-    );
-    let missing = api
-        .send("DELETE", "/api/sessions/session_missing", &headers, None)
-        .await;
-    t.response(
-        "delete an unknown session",
-        "DELETE /api/sessions/session_missing",
-        &missing,
-    );
 
     // Control leases.
     t.response(

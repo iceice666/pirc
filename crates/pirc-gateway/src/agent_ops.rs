@@ -20,7 +20,6 @@ use crate::{delegations, memory, web_search};
 pub struct OpContext {
     pub session: Session,
     pub workspace: Workspace,
-    pub mode: pirc_protocol::Mode,
     pub user: String,
 }
 
@@ -90,9 +89,8 @@ pub async fn run(
     };
     let outcome = async {
         let workspace = app.db.lock().get_workspace(&session.workspace_id)?;
-        let mode = app.require_mode(&workspace)?;
+        app.require_mode(&workspace)?;
         let context = OpContext {
-            mode,
             session,
             workspace,
             user,

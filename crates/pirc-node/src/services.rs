@@ -186,11 +186,8 @@ impl Services {
     /// `buildNodeApp` and the start of `startNode` (owner: **core**):
     ///
     /// 1. Refuse a TS-era `gateway.sqlite` and open the store
-    ///    ([`Db::open`]); refuse state whose workspaces belong to the other
-    ///    role ("State contains workspaces incompatible with ..."), without
-    ///    changing them.
-    /// 2. `sync_workspaces`, the chat node's top-level chats
-    ///    (`chat::ensure_top_level_chats`), `recover_startup` (logged).
+    ///    ([`Db::open`]).
+    /// 2. `sync_workspaces`, `recover_startup` (logged).
     /// 3. Build the components (`Arc::new_cyclic`), start the sandbox probe
     ///    in the background (log "agent sandbox ready" or "agent sandbox
     ///    unavailable, no agent can start: <reason>"), warn about legacy
@@ -207,18 +204,9 @@ impl Services {
             let connection = db.lock();
             // A store failure exits with its SQLite text, as TS did.
             let failed = |error: crate::error::ApiError| error.startup_text();
-            // The role is fixed across restarts: never expose the other
-            // role's persisted workspaces.
-            crate::store::check_role(
-                &connection.list_workspaces().map_err(failed)?,
-                &config.modes,
-            )?;
             connection
                 .sync_workspaces(&config.node_id, &config.workspaces)
                 .map_err(failed)?;
-            if config.chat() && config.modes.iter().any(|mode| mode.as_str() == "chat") {
-                crate::chat::ensure_top_level_chats(&config, &connection).map_err(failed)?;
-            }
             let recovery = connection.recover_startup().map_err(failed)?;
             crate::log::info(&format!(
                 "node startup recovery complete: {}",
@@ -231,7 +219,7 @@ impl Services {
             Arc::new(crate::browser::manager::BrowserManager::new(&config, &env));
         let events = EventHub::new(config.event_buffer_size);
         let router = Router::new(
-            crate::app::routes(&config)
+            crate::app::routes()
                 .into_iter()
                 .chain(crate::panels::routes()),
         );

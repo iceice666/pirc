@@ -193,9 +193,10 @@ impl Gateway {
         self.wait(wanted).await
     }
 
-    /// The next `model_start` (of any session).
+    /// The earliest `model_start` (of any session) not handled yet: the node
+    /// may send it before the answer to the prompt that caused it.
     pub async fn model_start(&mut self) -> Value {
-        self.wait(|frame| frame["type"] == "model_start").await
+        self.take(|frame| frame["type"] == "model_start").await
     }
 
     async fn deltas(&mut self, id: &Value, deltas: Vec<Value>) {

@@ -1,22 +1,19 @@
-//! `pirc-node`'s command line (`entry/common.ts`, `entry/node-runtime.ts`):
-//! one executable for both node roles (historical decisions indexed in
-//! docs/development/historical-records.md), specified by conformance tests.
-
-use pirc_protocol::NodeRole;
+//! `pirc-node`'s command line (`entry/common.ts`, `entry/node-runtime.ts`),
+//! specified by conformance tests.
 
 use crate::sandbox::BRIDGE_SUBCOMMAND;
 
 /// The help text; internal subcommands are not listed.
-pub const USAGE: &str = "Usage: pirc-node [chat] [--help | --version]
+pub const USAGE: &str = "Usage: pirc-node [--help | --version]
 
-Starts the coding node with no arguments, or the chat node with `chat`.
+Starts the node with no arguments.
 ";
 
 /// What the arguments ask for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
-    /// No subcommand: the coding node; `chat`: the chat node.
-    Run(NodeRole),
+    /// No subcommand: the node.
+    Run,
     Version,
     Help,
     /// Internal: a session agent, with its arguments.
@@ -33,30 +30,18 @@ pub enum Command {
 pub fn parse(args: Vec<String>) -> Command {
     // Only the agent and bridge accept an argument tail. Never silently
     // ignore typos after public help/version commands or ptc-guest.
-    let public_len = if args.first().is_some_and(|arg| arg == "chat") {
-        2
-    } else {
-        1
-    };
-    if args.len() > public_len
+    if args.len() > 1
         && !args
             .first()
             .is_some_and(|arg| arg == "agent" || arg == BRIDGE_SUBCOMMAND)
     {
-        return Command::Unknown(args[public_len].clone());
+        return Command::Unknown(args[1].clone());
     }
     let mut args = args.into_iter();
     let Some(command) = args.next() else {
-        return Command::Run(NodeRole::Node);
+        return Command::Run;
     };
     match command.as_str() {
-        // `pirc-chat --help` / `--version` worked as the top level's.
-        "chat" => match args.next().as_deref() {
-            None => Command::Run(NodeRole::Chat),
-            Some("version" | "--version") => Command::Version,
-            Some("help" | "--help" | "-h") => Command::Help,
-            Some(extra) => Command::Unknown(extra.to_owned()),
-        },
         "version" | "--version" => Command::Version,
         "help" | "--help" | "-h" => Command::Help,
         "agent" => Command::Agent(args.collect()),
@@ -76,21 +61,9 @@ mod tests {
 
     #[test]
     fn subcommands() {
-        assert_eq!(parse_str(&[]), Command::Run(NodeRole::Node));
-        assert_eq!(parse_str(&["chat"]), Command::Run(NodeRole::Chat));
-        assert_eq!(parse_str(&["chat", "x"]), Command::Unknown("x".into()));
+        assert_eq!(parse_str(&[]), Command::Run);
         assert_eq!(parse_str(&["--version"]), Command::Version);
-        for version in ["version", "--version"] {
-            assert_eq!(parse_str(&["chat", version]), Command::Version);
-        }
-        for help in ["help", "--help", "-h"] {
-            assert_eq!(parse_str(&["chat", help]), Command::Help);
-        }
         assert_eq!(parse_str(&["version", "x"]), Command::Unknown("x".into()));
-        assert_eq!(
-            parse_str(&["chat", "--help", "x"]),
-            Command::Unknown("x".into())
-        );
         assert_eq!(parse_str(&["ptc-guest", "x"]), Command::Unknown("x".into()));
         for help in ["help", "--help", "-h"] {
             assert_eq!(parse_str(&[help]), Command::Help);
@@ -105,6 +78,7 @@ mod tests {
             Command::SandboxBridge(vec!["a".into()])
         );
         for unknown in [
+            "chat",
             "node",
             "gateway",
             "srt",

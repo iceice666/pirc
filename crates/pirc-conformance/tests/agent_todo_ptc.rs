@@ -170,11 +170,13 @@ async fn agent_todo_tool_after_restart() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn agent_todo_tool_in_chat() {
+async fn agent_todo_tool_off_in_mode() {
     let mut options = AgentOptions::default().features("todo");
+    let mut mode = pirc_protocol::mode::default_work();
+    mode.features_off = vec!["todo".to_owned()];
     options.env.push((
         "PIRC_MODE".to_owned(),
-        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+        serde_json::to_string(&mode).unwrap(),
     ));
     let Some(mut agent) = AgentRun::start(options).await else {
         return;
@@ -185,5 +187,5 @@ async fn agent_todo_tool_in_chat() {
         text("ok"),
     ]);
     turn(&mut agent, &mut r, "not available", "list").await;
-    insta::assert_json_snapshot!("agent_todo_tool_in_chat", r.into_value());
+    insta::assert_json_snapshot!("agent_todo_tool_off_in_mode", r.into_value());
 }

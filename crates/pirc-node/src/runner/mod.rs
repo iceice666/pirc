@@ -14,10 +14,10 @@
 //!   `node.sandbox.prepare(...)` (503 `runner_unavailable` when the sandbox
 //!   is unavailable); spawn `prepared.command()` with the agent flags
 //!   (`--mode rpc --session-dir <private path>`, `--continue` with a
-//!   `pi_session_id`), `cwd = chat::session_root`, its own process group,
+//!   `pi_session_id`), `cwd = crate::util::session_root`, its own process group,
 //!   the environment `without_secrets(node.env)` plus the node's variables
 //!   (`PI_CODING_AGENT_SESSION_DIR`, `PIRC_WRITE_BROKER=1`, `PIRC_GATEWAY=1`,
-//!   `PIRC_MODE`, `PIRC_PROJECT_TRUST` or `PIRC_PROJECT_INSTRUCTIONS`,
+//!   `PIRC_MODE`, `PIRC_PROJECT_TRUST`,
 //!   `PIRC_WORKSPACE_MEMORY_DIR`, `PIRC_BROWSER=1|0` from
 //!   `node.browser.enabled()`, `PIRC_SANDBOX=srt`, `PIRC_SANDBOX_POLICY`)
 //!   and `prepared.env`; epoch from `increment_epoch`, older epochs'
@@ -595,7 +595,7 @@ impl RunnerManager {
             .await;
         if runner.alive() {
             return Err(ApiError::runner_unavailable(
-                "The chat process has not stopped yet; retry branch change",
+                "The agent process has not stopped yet; retry branch change",
             ));
         }
         let dir = std::path::Path::new(&session.private_session_path);
@@ -708,10 +708,9 @@ impl RunnerManager {
         runner.answer(rpc_id, interaction_id, answer).await
     }
 
-    /// `stopSession` (chat deletion): wait for a start in flight, stop the
+    /// `stopSession` (a mode change): wait for a start in flight, stop the
     /// runner (grace `config.shutdown_grace_ms`); 503 `runner_unavailable`
-    /// "The chat process has not stopped yet; retry deletion" when it lives
-    /// on; release its write leases.
+    /// when it lives on; release its write leases.
     pub async fn stop_session(&self, session_id: &str) -> ApiResult<()> {
         let lock = self.command_lock(session_id);
         let _command = lock.lock().await;
@@ -728,7 +727,7 @@ impl RunnerManager {
                 .await;
             if runner.alive() {
                 return Err(ApiError::runner_unavailable(
-                    "The chat process has not stopped yet; retry deletion",
+                    "The agent process has not stopped yet",
                 ));
             }
         }
@@ -792,7 +791,7 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
     let started = async {
         let workspace = node.db.lock().get_workspace(&session.workspace_id)?;
         let mode = node.workspace_mode(&workspace)?;
-        let root = crate::chat::session_root(&workspace, session_id, &mode)?;
+        let root = crate::util::session_root(&workspace, session_id, &mode)?;
         let ledger = workspace_ledger(node, &workspace, &root).await;
         let prepared = node
             .sandbox
@@ -804,13 +803,8 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
                     .models
                     .inference()
                     .map(|inference| inference.socket_path.into()),
-                // The user's project instructions: never writable from the session.
-                protected_paths: crate::chat::project_instructions_path(&workspace, &mode)
-                    .into_iter()
-                    .collect(),
+                protected_paths: Vec::new(),
                 workspace_memory_file: ledger.as_ref().map(|ledger| ledger.file.clone()),
-                // Read-only and shared: uploads reach the running session.
-                project_files_dir: crate::project_files::existing_files_dir(&workspace, &mode),
             })
             .await?;
         if node.workspace_mode(&workspace)? != mode {
@@ -1040,7 +1034,7 @@ fn file_attachments(
     // Written from outside the sandbox: no symlink below the session root
     // is followed (a cloned repository may track one).
     let mode = node.workspace_mode(&workspace)?;
-    let root = crate::chat::session_root(&workspace, session_id, &mode)?;
+    let root = crate::util::session_root(&workspace, session_id, &mode)?;
     let dest_dir = crate::private_dir::open_dir(&root, &[".pirc", "uploads"]).map_err(|error| {
         Failure::Other(format!("{}: {error}", root.join(".pirc/uploads").display()))
     })?;

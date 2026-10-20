@@ -580,17 +580,16 @@ mod tests {
     use crate::tools::testing::{self, TestUi};
 
     /// An agent running only the todo feature, in a fresh session.
-    fn agent(dir: &std::path::Path, ui: Rc<TestUi>, chat: bool) -> Rc<Agent> {
+    fn agent(dir: &std::path::Path, ui: Rc<TestUi>, off: bool) -> Rc<Agent> {
         let workspace = dir.join("workspace");
         std::fs::create_dir_all(&workspace).unwrap();
         let mut config = testing::config(&workspace.display().to_string(), json!({}));
-        if chat {
-            config.mode = pirc_protocol::mode::default_chat();
+        if off {
+            config.mode.features_off = vec!["todo".into()];
         }
         let store = SessionStore::open(dir.join("session"), &config.workspace).unwrap();
         Agent::new(AgentOptions {
             config,
-            project_instructions: None,
             role: None,
             store,
             emit: Rc::new(|_| {}),
@@ -711,7 +710,7 @@ mod tests {
     }
 
     #[test]
-    fn chats_leave_the_tool_out() {
+    fn modes_that_turn_it_off_leave_the_tool_out() {
         let dir = tempfile::tempdir().unwrap();
         let agent = agent(dir.path(), Rc::new(TestUi::default()), true);
         assert!(agent.get_tool("todo").is_none());

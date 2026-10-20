@@ -13,7 +13,6 @@ use pirc_config::{Env, NodeConfig};
 use pirc_node::error::ApiError;
 use pirc_node::sandbox::linux::{NativeSandbox, find_bwrap};
 use pirc_node::sandbox::{PrepareInput, Prepared, Sandbox};
-use pirc_protocol::NodeRole;
 
 pub struct Fixture {
     pub root: PathBuf,
@@ -133,7 +132,7 @@ pub fn fixture_env(
         .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
         .collect();
     let env = Env::new(vars.iter().map(|(k, v)| (k.as_str(), v.as_str())), &root);
-    let mut config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+    let mut config = NodeConfig::load(&env).unwrap();
     config.agent_command = "/bin/sh".to_owned();
     config.agent_args = Vec::new();
     let sandbox = NativeSandbox::new(
@@ -186,7 +185,6 @@ impl Fixture {
             inference_socket,
             protected_paths: Vec::new(),
             workspace_memory_file: None,
-            project_files_dir: None,
         }
     }
 

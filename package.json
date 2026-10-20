@@ -10,7 +10,6 @@
   "scripts": {
     "dev": "cargo run -p pirc-gateway --",
     "dev:node": "cargo run -p pirc-node --",
-    "dev:chat": "cargo run -p pirc-node -- chat",
     "dev:web": "bun run --filter @pirc/web dev",
     "build": "bun run --filter @pirc/web build && cargo build --locked --release -p pirc-gateway -p pirc-node",
     "typecheck": "bun run --filter @pirc/web typecheck",

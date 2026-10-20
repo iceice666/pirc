@@ -19,7 +19,6 @@ use std::time::Duration;
 use pirc_config::{Env, NodeConfig};
 use pirc_node::browser::manager::BrowserManager;
 use pirc_node::browser::{BrowserService, BrowserTarget, FrameSink};
-use pirc_protocol::NodeRole;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use tokio::net::TcpListener;
@@ -54,7 +53,7 @@ fn config(root: &Path, extra: &[(&str, &str)]) -> (NodeConfig, Env) {
     ]);
     vars.extend_from_slice(extra);
     let env = Env::new(vars, root);
-    (NodeConfig::load(&env, NodeRole::Node).unwrap(), env)
+    (NodeConfig::load(&env).unwrap(), env)
 }
 
 /// `PIRC_BROWSER_REQUIRED=1` (CI): nothing is skipped. The Chromium must be

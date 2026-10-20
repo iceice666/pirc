@@ -1,6 +1,5 @@
 //! `pirc-node`, rewritten in Rust (docs/development/historical-records.md): the node
-//! process of `apps/gateway/src/node/**` (both roles: `pirc-node` runs a
-//! coding node, `pirc-node chat` the chat node) next to the session agent
+//! process of `apps/gateway/src/node/**` next to the session agent
 //! (`pirc-node agent`, `pirc_agent`) and the PTC guest (`pirc-node
 //! ptc-guest`, `pirc_ptc`).
 //!
@@ -26,7 +25,7 @@
 //! | [`browser`] | `node/browser.ts`, `node/browser-hosts.ts`, `node/browser-extract.ts` (in-page helpers), `node/browser-executable.ts` (in `pirc_config::node`); Playwright 1.63.0 in `browser::engine` | M8 (manager, core, netio, locator) |
 //! | [`store`] | `database.ts` (node half), `schema.sql` | layout (open, rows), core (queries) |
 //! | [`services`], [`node`] | `buildNodeApp`, `startNode`, `node/main.ts` | core |
-//! | [`app`], [`chat`], [`assistant_prompts`] | `node/app.ts`, `node/chat.ts`, `assistant-prompts.ts`, `session-name.ts` | core |
+//! | [`app`] | `node/app.ts`, `session-name.ts` | core |
 //! | [`runner`] (`framing`, `reducer`) | `node/runner.ts`, `rpc-framing.ts`, `reducer.ts` | runner |
 //! | [`inference`] | `node/inference.ts` | runner |
 //! | [`write_broker`], [`agent_gateway`], [`branch_cache`], [`recap`] | the `node/` files of those names | runner |
@@ -44,10 +43,8 @@
 
 pub mod agent_gateway;
 pub mod app;
-pub mod assistant_prompts;
 pub mod branch_cache;
 pub mod browser;
-pub mod chat;
 pub mod cli;
 pub mod error;
 pub mod events;
@@ -59,7 +56,6 @@ pub mod models;
 pub mod node;
 pub mod panels;
 pub mod private_dir;
-pub mod project_files;
 pub mod recap;
 pub mod repo;
 pub mod router;
@@ -77,16 +73,15 @@ pub mod write_broker;
 use std::process::ExitCode;
 
 use pirc_config::{Env, NodeConfig};
-use pirc_protocol::NodeRole;
 
-/// Run the node in `role` until it is told to stop: load the configuration
-/// (a bad one is printed and exits 1), then [`node::run`].
-pub fn run_role(role: NodeRole) -> ExitCode {
+/// Run the node until it is told to stop: load the configuration (a bad
+/// one is printed and exits 1), then [`node::run`].
+pub fn run() -> ExitCode {
     // Before any thread or child: nothing the node was started with (a
     // terminal's PTY, say) reaches what it spawns (`sandbox::fds`).
     sandbox::fds::close_inherited();
     let env = Env::from_process();
-    let config = match NodeConfig::load(&env, role) {
+    let config = match NodeConfig::load(&env) {
         Ok(config) => config,
         Err(error) => {
             eprintln!("pirc-node: {error}");

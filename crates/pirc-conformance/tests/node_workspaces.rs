@@ -1,7 +1,7 @@
 //! Directory workspaces on a coding node (`node/app.ts`), through a real
 //! gateway: adding one from the web (path rules: `~/`, absolute only, an
 //! existing directory inside the node's `HOME`, never the node's state or a
-//! credential store, no duplicates, no chat projects), what registration
+//! credential store, no duplicates, no mode outside the catalog), what registration
 //! then reports (with the workspace's roles), and a workspace's project
 //! config (`.pirc/config.json`) and its trust, which reaches the agent as
 //! `PIRC_PROJECT_TRUST` (seen as the agent's untrusted-config warning).
@@ -9,12 +9,11 @@
 //! routes with the test playing the gateway, where the real gateway's own
 //! checks would hide them.
 
-#[path = "node_chat_support/mod.rs"]
-mod node_chat_support;
+mod node_workspaces_support;
 
 use std::fs;
 
-use node_chat_support::{Ids, canonical_json};
+use node_workspaces_support::{Ids, canonical_json};
 use pirc_conformance::{
     Api, Cluster, FakeGateway, GatewayOptions, LoneNode, NODE_ID, Reply, Transcript, USER,
     WORKSPACE_ID, browser_headers,
@@ -272,7 +271,7 @@ async fn node_workspaces() {
     )
     .await;
     r.send(
-        "a chat project on a coding node: 403",
+        "a mode outside the catalog (the legacy kind alias)",
         "POST",
         "/api/workspaces",
         Some(json!({ "nodeId": NODE_ID, "kind": "chat", "displayName": "Trip" })),
@@ -421,30 +420,6 @@ async fn node_workspaces() {
         None,
     )
     .await;
-    r.send(
-        "instructions of a directory workspace: 400",
-        "GET",
-        &format!("/api/workspaces/{}/instructions", urlencode(WORKSPACE_ID)),
-        None,
-    )
-    .await;
-    r.send(
-        "assistant prompts without a chat node: 503",
-        "GET",
-        "/api/assistant/prompts",
-        None,
-    )
-    .await;
-
-    let (session, _) = run_once(&cluster, WORKSPACE_ID, "Hello").await;
-    let path = format!("/api/sessions/{session}");
-    r.send(
-        "deleting a session of a directory workspace: 400",
-        "DELETE",
-        &path,
-        None,
-    )
-    .await;
 
     insta::assert_json_snapshot!("node_workspaces", t.into_value());
 }
@@ -571,7 +546,7 @@ async fn node_workspaces_on_node() {
     )
     .await;
     n.request(
-        "a chat project on a coding node: 403",
+        "a mode outside the catalog (the legacy kind alias)",
         "POST",
         "/api/workspaces",
         Some(json!({ "kind": "chat", "displayName": "Trip" })),
@@ -623,53 +598,9 @@ async fn node_workspaces_on_node() {
     )
     .await;
     n.request(
-        "instructions of a directory workspace: the node's 400",
-        "GET",
-        "/api/workspaces/test/instructions",
-        None,
-    )
-    .await;
-    n.request(
-        "set instructions of a directory workspace: 400",
-        "PATCH",
-        "/api/workspaces/test/instructions",
-        Some(json!({ "text": "x" })),
-    )
-    .await;
-    n.request(
         "project config of an unknown workspace: 404",
         "GET",
         "/api/workspaces/nope/project-config",
-        None,
-    )
-    .await;
-    n.request(
-        "assistant prompts on a coding node: not a route, 404",
-        "GET",
-        "/api/assistant/prompts",
-        None,
-    )
-    .await;
-    n.request(
-        "set an assistant prompt on a coding node: 404",
-        "PUT",
-        "/api/assistant/prompts/soul",
-        Some(json!({ "text": "" })),
-    )
-    .await;
-    let created = n
-        .request(
-            "a session in the configured workspace",
-            "POST",
-            "/api/sessions",
-            Some(json!({ "workspaceId": "test" })),
-        )
-        .await;
-    let session = created["session"]["id"].as_str().unwrap().to_owned();
-    n.request(
-        "deleting it: only chats can be deleted, 400",
-        "DELETE",
-        &format!("/api/sessions/{session}"),
         None,
     )
     .await;

@@ -256,7 +256,9 @@ fn the_assistant_never_touches_user_entries_directly() {
     let db = Db::memory();
     let conn = db.lock();
     let store = store(&conn);
-    let entry = store.insert_user(ME, "Prefers short answers.", "s1").unwrap();
+    let entry = store
+        .insert_user(ME, "Prefers short answers.", "s1")
+        .unwrap();
     assert_eq!(
         code(store.write_note(
             ME,
@@ -414,104 +416,4 @@ fn removed_notes_and_earlier_versions_are_restored_within_the_budget() {
         .0;
     note(&store, &"g".repeat(10), ME).unwrap();
     assert_eq!(code(store.restore(ME, &removed.id, None)), "memory_full");
-}
-
-#[test]
-fn deleting_the_source_chat_forgets_what_it_created() {
-    let db = Db::memory();
-    let conn = db.lock();
-    let store = store(&conn);
-    let elsewhere_change = || Change {
-        sources: json!({ "sessionId": "s2" }),
-        ..from_chat()
-    };
-    let created = note(&store, "Originally here", ME).unwrap();
-    store
-        .write_note(
-            ME,
-            &edit(
-                Action::Replace,
-                &created.id,
-                Some("Edited elsewhere"),
-                Some(1),
-            ),
-            &elsewhere_change(),
-        )
-        .unwrap();
-    let elsewhere = store
-        .write_note(ME, &add("Originally elsewhere"), &elsewhere_change())
-        .unwrap()
-        .0;
-    store
-        .write_note(
-            ME,
-            &edit(Action::Replace, &elsewhere.id, Some("Edited here"), Some(1)),
-            &from_chat(),
-        )
-        .unwrap();
-    // A deduplicated add must not steal another chat's creation provenance.
-    store
-        .write_note(ME, &add("Edited here"), &from_chat())
-        .unwrap();
-    let user = store.insert_user(ME, "Prefers tea", "s1").unwrap();
-    let other = note(&store, "Other owner", OTHER).unwrap();
-    store.forget_session(ME, "s1").unwrap();
-    for id in [&created.id, &user.id] {
-        let entry = store.entry(ME, id).unwrap();
-        assert_eq!(
-            (entry.status.as_str(), entry.content.as_str()),
-            ("forgotten", "")
-        );
-    }
-    assert!(
-        store
-            .history(ME, &created.id)
-            .unwrap()
-            .iter()
-            .all(|v| v.content.is_none())
-    );
-    let kept = store.entry(ME, &elsewhere.id).unwrap();
-    assert_eq!(
-        (kept.status.as_str(), kept.content.as_str()),
-        ("active", "Edited here")
-    );
-    assert_eq!(store.entry(OTHER, &other.id).unwrap().status, "active");
-    for content in ["Originally here", "Edited elsewhere"] {
-        assert_eq!(code(note(&store, content, ME)), "forgotten");
-    }
-    assert_eq!(code(store.restore(ME, &user.id, None)), "forgotten");
-    // Safe to retry after a lost acknowledgement.
-    store.forget_session(ME, "s1").unwrap();
-}
-
-/// What a coding session gets (`assistant.context` outside a chat): the
-/// active USER entries of its own user, never another user's,
-/// and none that were removed or forgotten.
-#[test]
-fn coding_sessions_get_only_their_users_active_user_entries() {
-    let db = Db::memory();
-    let conn = db.lock();
-    let store = store(&conn);
-    let add = |user: &str, content: &str| store.insert_user(user, content, "s1").unwrap();
-    add(ME, "Kept.");
-    let removed = add(ME, "Removed.");
-    let forgotten = add(ME, "Forgotten.");
-    add(OTHER, "Someone else.");
-    conn.execute(
-        "UPDATE memory_entries SET status='removed' WHERE id=?",
-        [&removed.id],
-    )
-    .unwrap();
-    store.forget(ME, &forgotten.id).unwrap();
-    let contents = |user: &str| -> Vec<Value> {
-        store
-            .user_context(user)
-            .unwrap()
-            .into_iter()
-            .map(|brief| brief["content"].clone())
-            .collect()
-    };
-    assert_eq!(contents(ME), vec![json!("Kept.")]);
-    assert_eq!(contents(OTHER), vec![json!("Someone else.")]);
-    assert_eq!(contents("nobody@example.com"), Vec::<Value>::new());
 }

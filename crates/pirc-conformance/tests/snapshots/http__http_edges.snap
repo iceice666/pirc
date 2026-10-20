@@ -120,20 +120,6 @@ expression: t.into_value()
   },
   {
     "body": {
-      "error": {
-        "code": "unauthenticated",
-        "message": "Trusted identity header is missing"
-      }
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "GET /api/schedules",
-    "status": 401,
-    "step": "schedules, no identity"
-  },
-  {
-    "body": {
       "code": "FST_ERR_MAX_PARAM_LENGTH",
       "error": "Bad Request",
       "message": "'/api/memory/entries/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/forget' is exceeding the max param length",
@@ -173,34 +159,6 @@ expression: t.into_value()
     "request": "DELETE /api/devices/<101 x>",
     "status": 414,
     "step": "long device id"
-  },
-  {
-    "body": {
-      "code": "FST_ERR_MAX_PARAM_LENGTH",
-      "error": "Bad Request",
-      "message": "'/api/schedules/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' is exceeding the max param length",
-      "statusCode": 414
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "GET /api/schedules/<101 x>",
-    "status": 414,
-    "step": "long schedule id"
-  },
-  {
-    "body": {
-      "code": "FST_ERR_MAX_PARAM_LENGTH",
-      "error": "Bad Request",
-      "message": "'/api/schedules/s1/runs/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/dismiss' is exceeding the max param length",
-      "statusCode": 414
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "POST /api/schedules/s1/runs/<101 x>/dismiss",
-    "status": 414,
-    "step": "long run id"
   },
   {
     "body": {

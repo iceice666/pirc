@@ -715,7 +715,6 @@ mod tests {
                 .unwrap();
         Agent::new(crate::agent::AgentOptions {
             config,
-            project_instructions: None,
             role: None,
             store,
             emit: Rc::new(|_| {}),

@@ -415,7 +415,7 @@ impl Terminals {
     }
 
     /// Close a session's terminals and wait for their processes to exit
-    /// (chat deletion, before its files go).
+    /// (a mode change).
     pub async fn dispose_session(&self, session_id: &str) {
         for entry in self.close_session(session_id) {
             let mut exited = entry.exited.clone();

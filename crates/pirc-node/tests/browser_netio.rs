@@ -849,7 +849,7 @@ async fn names_a_refused_redirect_hop_as_ts() {
         ],
         root.path(),
     );
-    let config = pirc_config::NodeConfig::load(&env, pirc_protocol::NodeRole::Node).unwrap();
+    let config = pirc_config::NodeConfig::load(&env).unwrap();
     let manager = BrowserManager::new(&config, &env);
     let target = BrowserTarget {
         session_id: "s1".into(),

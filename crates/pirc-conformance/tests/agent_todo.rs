@@ -2,8 +2,8 @@
 //! goes without `ptc` scripts, with the test playing the agent's node: the
 //! `/todo` slash commands and their errors, the widget, manual updates as
 //! hidden context, the end-of-run reminder, restoring the list in a new
-//! process (and skipping damaged history), headless agents, and chats,
-//! which leave the tool out unless the config brings it back. The tool
+//! process (and skipping damaged history), headless agents, and modes
+//! that turn the feature off, which leave the tool out unless the config brings it back. The tool
 //! itself is in `agent_todo_ptc.rs`. The historical feature baseline
 //! (docs/development/historical-records.md).
 
@@ -257,11 +257,14 @@ async fn agent_todo_headless() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn agent_todo_in_chat() {
+async fn agent_todo_off_in_mode() {
+    // A mode that turns the feature off (`features_off`).
     let mut options = AgentOptions::default().features("todo");
+    let mut mode = pirc_protocol::mode::default_work();
+    mode.features_off = vec!["todo".to_owned()];
     options.env.push((
         "PIRC_MODE".to_owned(),
-        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+        serde_json::to_string(&mode).unwrap(),
     ));
     let Some(mut agent) = AgentRun::start(options).await else {
         return;
@@ -270,22 +273,25 @@ async fn agent_todo_in_chat() {
     // The tool is left out; the command stays.
     let commands = agent.call(json!({ "type": "get_commands" })).await;
     r.note("commands", commands);
-    slash(&mut agent, &mut r, "/todo add in a chat").await;
+    slash(&mut agent, &mut r, "/todo add while off").await;
     agent.push([text("Ok."), text("Ok again.")]);
     turn(&mut agent, &mut r, "a run", "go").await;
-    insta::assert_json_snapshot!("agent_todo_in_chat", r.into_value());
+    insta::assert_json_snapshot!("agent_todo_off_in_mode", r.into_value());
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn agent_todo_in_chat_enabled() {
+async fn agent_todo_off_in_mode_enabled() {
+    // The user's setting brings it back.
     let mut options = AgentOptions {
         config: json!({ "features": { "todo": { "enabled": true } } }),
         ..AgentOptions::default()
     }
     .features("todo");
+    let mut mode = pirc_protocol::mode::default_work();
+    mode.features_off = vec!["todo".to_owned()];
     options.env.push((
         "PIRC_MODE".to_owned(),
-        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+        serde_json::to_string(&mode).unwrap(),
     ));
     let Some(mut agent) = AgentRun::start(options).await else {
         return;
@@ -293,5 +299,5 @@ async fn agent_todo_in_chat_enabled() {
     let mut r = Recorder::new(&agent);
     agent.push([text("Ok.")]);
     turn(&mut agent, &mut r, "a run", "go").await;
-    insta::assert_json_snapshot!("agent_todo_in_chat_enabled", r.into_value());
+    insta::assert_json_snapshot!("agent_todo_off_in_mode_enabled", r.into_value());
 }

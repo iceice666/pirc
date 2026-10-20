@@ -104,11 +104,89 @@ pub fn head16(text: &str, max: usize) -> &str {
     text
 }
 
+/// `String.prototype.trim`: JS whitespace, which includes the BOM.
+pub fn js_trim(text: &str) -> &str {
+    text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
+}
+
+/// `chatWorkspaceDir`: the directory the node allocates for a workspace of
+/// a `per-session` mode, `<state>/chat/<workspace id>` (0700, created if
+/// needed, canonical). The `chat` name is kept: stored workspaces point there.
+pub fn managed_workspace_dir(
+    config: &pirc_config::NodeConfig,
+    workspace_id: &str,
+) -> crate::error::ApiResult<std::path::PathBuf> {
+    let dir = config.state_dir.join("chat").join(workspace_id);
+    make_private_dir(&dir)?;
+    dir.canonicalize().map_err(|error| {
+        crate::log::error(&format!("resolving {}: {error}", dir.display()));
+        crate::error::ApiError::internal()
+    })
+}
+
+/// `mkdirSync(dir, { recursive: true, mode: 0o700 })`.
+fn make_private_dir(dir: &std::path::Path) -> crate::error::ApiResult<()> {
+    use std::os::unix::fs::DirBuilderExt;
+
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)
+        .map_err(|error| {
+            crate::log::error(&format!("creating {}: {error}", dir.display()));
+            crate::error::ApiError::internal()
+        })
+}
+
+/// `path.basename`: the last non-empty `/`-separated part.
+fn basename(text: &str) -> &str {
+    text.split('/')
+        .rfind(|part| !part.is_empty())
+        .unwrap_or_default()
+}
+
+/// `sessionRoot`: where the session's agent, terminals and panels work:
+/// the workspace, or for a `per-session` mode
+/// `<workspace>/sessions/<basename(session id)>` (created 0700 on every call).
+pub fn session_root(
+    workspace: &crate::store::Workspace,
+    session_id: &str,
+    mode: &pirc_protocol::mode::Mode,
+) -> crate::error::ApiResult<std::path::PathBuf> {
+    let root = std::path::PathBuf::from(&workspace.canonical_path);
+    if mode.workdir != pirc_protocol::mode::Workdir::PerSession {
+        return Ok(root);
+    }
+    let dir = root.join("sessions").join(basename(session_id));
+    make_private_dir(&dir)?;
+    Ok(dir)
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn session_roots_follow_the_mode_workdir() {
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = crate::store::Workspace {
+            id: "p".into(),
+            host_id: "n".into(),
+            display_name: "P".into(),
+            canonical_path: dir.path().to_string_lossy().into_owned(),
+            defaults: Map::new(),
+            mode: pirc_protocol::mode::default_work().id,
+        };
+        let mut mode = pirc_protocol::mode::default_work();
+        assert_eq!(session_root(&workspace, "s", &mode).unwrap(), dir.path());
+        mode.workdir = pirc_protocol::mode::Workdir::PerSession;
+        let root = session_root(&workspace, "a/session_1/", &mode).unwrap();
+        assert_eq!(root, dir.path().join("sessions/session_1"));
+        assert!(root.is_dir());
+        assert_eq!(js_trim("\u{feff} x \n"), "x");
+    }
 
     #[test]
     fn ids() {

@@ -255,7 +255,7 @@ fn browser_env(executable: &Path, extra: &[(&'static str, String)]) -> Vec<(&'st
 
 /// Start the site and a node with a browser, and register the node; `None`
 /// (test skipped) without a Chromium or without executables under test.
-pub async fn start(chat_node: bool, extra: &[(&'static str, String)]) -> Option<Browsing> {
+pub async fn start(extra: &[(&'static str, String)]) -> Option<Browsing> {
     let Some(executable) = browser_executable() else {
         eprintln!(
             "no Chromium found (PIRC_BROWSER_EXECUTABLE, chromium on PATH); \
@@ -268,7 +268,6 @@ pub async fn start(chat_node: bool, extra: &[(&'static str, String)]) -> Option<
     let node = LoneNode::start_with(
         server.port(),
         NodeOptions {
-            chat_node,
             env: browser_env(&executable, extra),
             ..NodeOptions::default()
         },

@@ -81,7 +81,7 @@ rustPlatform.buildRustPackage {
       if role == "gateway" then
         "Private forward-authenticated gateway and web UI"
       else
-        "Native coding and chat node with a sandboxed agent";
+        "Native coding node with a sandboxed agent";
     mainProgram = "pirc-${role}";
     platforms = lib.platforms.linux ++ lib.platforms.darwin;
   };

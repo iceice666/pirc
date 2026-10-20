@@ -467,15 +467,20 @@ async fn agent_workspace_memory_in_directory() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn agent_workspace_memory_in_chat() {
-    // Chats have no repository to hand over: the gateway's memory serves them.
+async fn agent_workspace_memory_without_repository() {
+    // A mode without a repository has none to hand over.
     let mut options = AgentOptions {
         prepare: Some(seed_workspace_note),
         ..options(json!({ "showWorkerNotifications": false }))
     };
+    let mut mode = pirc_protocol::mode::default_work();
+    mode.workdir = pirc_protocol::mode::Workdir::PerSession;
+    mode.repository = false;
+    mode.workspace_memory = false;
+    mode.project_config = false;
     options.env.push((
         "PIRC_MODE".to_owned(),
-        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+        serde_json::to_string(&mode).unwrap(),
     ));
     let Some(mut agent) = AgentRun::start(options).await else {
         return;
@@ -485,5 +490,8 @@ async fn agent_workspace_memory_in_chat() {
     log.turn(&mut agent, "prompt", "hello").await;
     log.slash(&mut agent, "/om:workspace").await;
     log.session(&agent);
-    insta::assert_json_snapshot!("agent_workspace_memory_in_chat", log.into_value());
+    insta::assert_json_snapshot!(
+        "agent_workspace_memory_without_repository",
+        log.into_value()
+    );
 }

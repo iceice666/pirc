@@ -4,7 +4,7 @@
 //! errors, completion wake-ups (one per idle period, coalesced while the
 //! agent runs), the status line, the side panel with `background_output`
 //! and `background_stop`, pseudo-terminal tasks, stopping on shutdown,
-//! headless agents and chats. The `background_task` tool itself is in
+//! headless agents and modes that turn the feature off. The `background_task` tool itself is in
 //! `agent_background_ptc.rs`. Tasks wait for a trigger file the test
 //! creates, so they finish at known points. The historical feature
 //! baseline (docs/development/historical-records.md).
@@ -507,11 +507,14 @@ async fn agent_background_headless() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn agent_background_in_chat() {
+async fn agent_background_off_in_mode() {
+    // A mode that turns the feature off (`features_off`).
     let mut options = AgentOptions::default().features(FEATURES);
+    let mut mode = pirc_protocol::mode::default_work();
+    mode.features_off = vec!["background".to_owned()];
     options.env.push((
         "PIRC_MODE".to_owned(),
-        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+        serde_json::to_string(&mode).unwrap(),
     ));
     let Some(mut agent) = AgentRun::start(options).await else {
         return;
@@ -528,19 +531,22 @@ async fn agent_background_in_chat() {
     slash(&mut agent, &mut run, "/bg list").await;
     agent.push([text("Ok.")]);
     turn(&mut agent, &mut run, "a run", "go").await;
-    insta::assert_json_snapshot!("agent_background_in_chat", run.r.into_value());
+    insta::assert_json_snapshot!("agent_background_off_in_mode", run.r.into_value());
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn agent_background_in_chat_enabled() {
+async fn agent_background_off_in_mode_enabled() {
+    // The user's setting brings it back.
     let mut options = AgentOptions {
         config: json!({ "features": { "background": { "enabled": true } } }),
         ..AgentOptions::default()
     }
     .features(FEATURES);
+    let mut mode = pirc_protocol::mode::default_work();
+    mode.features_off = vec!["background".to_owned()];
     options.env.push((
         "PIRC_MODE".to_owned(),
-        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
+        serde_json::to_string(&mode).unwrap(),
     ));
     let Some(mut agent) = AgentRun::start(options).await else {
         return;
@@ -548,5 +554,5 @@ async fn agent_background_in_chat_enabled() {
     let mut run = Run::new(&agent);
     agent.push([text("Ok.")]);
     turn(&mut agent, &mut run, "a run", "go").await;
-    insta::assert_json_snapshot!("agent_background_in_chat_enabled", run.r.into_value());
+    insta::assert_json_snapshot!("agent_background_off_in_mode_enabled", run.r.into_value());
 }

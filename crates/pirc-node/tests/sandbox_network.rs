@@ -19,7 +19,6 @@ use pirc_config::{Env, NodeConfig};
 use pirc_node::sandbox::linux::plan::{RESOLVER_SOCKETS, WSL_INTEROP_DIR};
 use pirc_node::sandbox::linux::{NativeSandbox, find_bwrap};
 use pirc_node::sandbox::{PrepareInput, Prepared, ReadonlyInput, Sandbox, SandboxStatus};
-use pirc_protocol::NodeRole;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
 struct Fixture {
@@ -115,7 +114,7 @@ fn fixture_with(
         ("PATH", path_var.as_str()),
     ];
     let env = Env::new(vars, &root);
-    let mut config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+    let mut config = NodeConfig::load(&env).unwrap();
     config.agent_command = "/bin/sh".to_owned();
     config.agent_args = Vec::new();
     let sandbox = NativeSandbox::new(
@@ -152,7 +151,6 @@ impl Fixture {
                 inference_socket: None,
                 protected_paths: Vec::new(),
                 workspace_memory_file: None,
-                project_files_dir: None,
             })
             .await
             .unwrap()

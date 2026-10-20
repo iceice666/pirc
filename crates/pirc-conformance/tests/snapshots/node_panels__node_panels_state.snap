@@ -490,7 +490,7 @@ expression: p.into_value()
   {
     "observed": {
       "agentRunning": true,
-      "capabilities": "<33 items>",
+      "capabilities": "<32 items>",
       "keys": [
         "agentRunning",
         "snapshot",
@@ -526,10 +526,10 @@ expression: p.into_value()
           "title": "sandbox"
         },
         {
-          "estimatedTokens": 2382,
+          "estimatedTokens": 2284,
           "id": "capabilities",
           "source": "built-in",
-          "text": "<9523 chars>",
+          "text": "<9132 chars>",
           "title": "Capabilities"
         },
         {

@@ -2,7 +2,7 @@
 //! this security scenario does not depend on platform-specific snapshots.
 
 use pirc_conformance::{Cluster, GatewayOptions, Reply, browser_headers};
-use pirc_protocol::mode::{AssistantAccess, ModeId, PromptSection, default_chat};
+use pirc_protocol::mode::{ModeId, PromptSection, Workdir, default_work};
 use serde_json::{Value, json};
 use std::time::Duration;
 
@@ -20,13 +20,15 @@ async fn custom_mode_catalog_prompt_capabilities_and_removal() {
     let api = cluster.api();
     let headers = browser_headers();
     let dir = cluster.dir.path().join("gateway-config/modes");
-    let mut mode = default_chat();
+    let mut mode = default_work();
     mode.id = ModeId::new("research").unwrap();
     mode.label = "Research".into();
-    mode.assistant = AssistantAccess::User;
-    mode.delegate = false;
-    mode.project_files = false;
-    mode.project_instructions = false;
+    mode.workdir = Workdir::PerSession;
+    mode.repository = false;
+    mode.workspace_memory = false;
+    mode.project_config = false;
+    mode.delegate_target = false;
+    mode.recap = false;
     mode.prompt = vec![PromptSection::Body];
     mode.body = "CUSTOM-MODE-PROMPT-SECTION".into();
     mode.tools = Some(vec!["read".into()]);
@@ -124,18 +126,6 @@ async fn custom_mode_catalog_prompt_capabilities_and_removal() {
             );
         }
     }
-    // A browser cannot invoke a capability simply because this mode uses a
-    // per-session working directory like Chat.
-    let files = api
-        .send(
-            "GET",
-            &format!("/api/workspaces/{workspace_id}/files"),
-            &headers,
-            None,
-        )
-        .await;
-    assert!((400..500).contains(&files.status), "{}", files.body);
-
     std::fs::remove_file(dir.join("research.md")).unwrap();
     cluster.reload_gateway();
     tokio::time::timeout(Duration::from_secs(15), async {

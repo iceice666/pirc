@@ -10,7 +10,7 @@ use axum::extract::{ConnectInfo, FromRequest, Request, State};
 use axum::http::{HeaderMap, Method, Uri, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
+use axum::routing::{get, patch, post};
 use pirc_config::GatewayConfig;
 use pirc_protocol::{HttpMethod, Models, NodeHttpRequest, NodeHttpResponse};
 use pirc_providers::backends::BackendService;
@@ -171,10 +171,7 @@ impl App {
 
     /// The session, if the user owns it, together with its node.
     pub fn claim(&self, identity: &Identity, session_id: &str) -> ApiResult<Claimed> {
-        let session = self
-            .db
-            .lock()
-            .claim_session(session_id, &identity.user, false)?;
+        let session = self.db.lock().claim_session(session_id, &identity.user)?;
         match (session.node_id.clone(), session.pi_session_id.clone()) {
             (Some(node_id), Some(pi_session_id)) => Ok(Claimed {
                 session,
@@ -243,12 +240,8 @@ impl App {
 #[cfg(test)]
 pub fn test_modes() -> pirc_config::modes::ModeCatalog {
     let mut catalog = pirc_config::modes::ModeCatalog::default();
-    for mode in [
-        pirc_protocol::mode::default_chat(),
-        pirc_protocol::mode::default_work(),
-    ] {
-        catalog.modes.insert(mode.id.clone(), mode);
-    }
+    let mode = pirc_protocol::mode::default_work();
+    catalog.modes.insert(mode.id.clone(), mode);
     catalog
 }
 
@@ -322,35 +315,11 @@ pub fn router(app: AppState) -> Router {
         )
         .route("/api/health", get(routes::health))
         .route("/api/nodes", get(routes::list_nodes))
-        .route("/api/assistant/node", get(routes::assistant_node))
-        .route(
-            "/api/assistant/node/release",
-            post(routes::release_assistant_node),
-        )
-        .route("/api/assistant/prompts", get(routes::assistant_prompts))
-        .route(
-            "/api/assistant/prompts/{name}",
-            axum::routing::put(routes::save_assistant_prompt),
-        )
         .route(
             "/api/workspaces",
             get(routes::list_workspaces).post(routes::create_workspace),
         )
         .route("/api/modes", get(routes::list_modes))
-        .route(
-            "/api/workspaces/{workspace_id}/links",
-            get(routes::get_links).put(routes::put_links),
-        )
-        .route(
-            "/api/workspaces/{workspace_id}/instructions",
-            get(routes::get_instructions).patch(routes::patch_instructions),
-        )
-        .route(
-            "/api/workspaces/{workspace_id}/files",
-            get(routes::get_project_files)
-                .post(routes::upload_project_file)
-                .delete(routes::delete_project_file),
-        )
         .route(
             "/api/workspaces/{workspace_id}/project-config",
             get(routes::project_config),
@@ -363,10 +332,7 @@ pub fn router(app: AppState) -> Router {
             "/api/sessions",
             get(routes::list_sessions).post(routes::create_session),
         )
-        .route(
-            "/api/sessions/{id}",
-            delete(routes::delete_session).patch(routes::update_session),
-        )
+        .route("/api/sessions/{id}", patch(routes::update_session))
         .route("/api/sessions/{id}/read", post(routes::read_session))
         .route("/api/sessions/{id}/snapshot", get(routes::snapshot))
         .route("/api/sessions/{id}/commands", post(routes::command))
@@ -422,17 +388,8 @@ pub fn router(app: AppState) -> Router {
 const PARAM_ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/sessions/{id}/terminals/{terminal_id}/stream"),
     ("GET", "/api/sessions/{id}/browser/stream"),
-    ("PUT", "/api/assistant/prompts/{name}"),
-    ("GET", "/api/workspaces/{workspace_id}/links"),
-    ("PUT", "/api/workspaces/{workspace_id}/links"),
-    ("GET", "/api/workspaces/{workspace_id}/instructions"),
-    ("PATCH", "/api/workspaces/{workspace_id}/instructions"),
-    ("GET", "/api/workspaces/{workspace_id}/files"),
-    ("POST", "/api/workspaces/{workspace_id}/files"),
-    ("DELETE", "/api/workspaces/{workspace_id}/files"),
     ("GET", "/api/workspaces/{workspace_id}/project-config"),
     ("POST", "/api/workspaces/{workspace_id}/project-trust"),
-    ("DELETE", "/api/sessions/{id}"),
     ("PATCH", "/api/sessions/{id}"),
     ("POST", "/api/sessions/{id}/read"),
     ("GET", "/api/sessions/{id}/snapshot"),

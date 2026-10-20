@@ -542,11 +542,9 @@ fn a_project_searches_its_linked_workspaces_first() {
             .unwrap();
         conn.set_workspace_repos("n2", &[("clone".into(), Some("github.com/me/pirc".into()))])
             .unwrap();
-        crate::project_links::set_links(
-            &conn,
-            &crate::app::test_modes(),
-            "home:trip",
-            &["n1:repo".to_owned()],
+        conn.execute(
+            "INSERT INTO project_links (project_workspace_id,workspace_id,repo,created_at) VALUES ('home:trip','n1:repo',NULL,1)",
+            [],
         )
         .unwrap();
     }

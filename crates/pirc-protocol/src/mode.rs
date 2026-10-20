@@ -66,26 +66,11 @@ pub enum PromptSection {
     AgentsWorkspace,
     #[serde(rename = "agents:project")]
     AgentsProject,
-    #[serde(rename = "soul")]
-    Soul,
-    #[serde(rename = "chat-env")]
-    ChatEnv,
-    #[serde(rename = "chat-md")]
-    ChatMd,
     #[serde(rename = "body")]
     Body,
 }
 
-/// How much of the gateway's assistant state a session reaches.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AssistantAccess {
-    User,
-    Full,
-}
-
-/// Presentation metadata. Clients place a mode's workspaces in the Chat or
-/// Work tab by [`AssistantAccess`] (`full` is Chat), not by any field here.
+/// Presentation metadata.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ModeUi {
@@ -176,17 +161,11 @@ pub struct Mode {
     pub features_off: Vec<String>,
     pub features_on: Vec<String>,
     pub tools: Option<Vec<String>>,
-    pub assistant: AssistantAccess,
-    pub delegate: bool,
     pub delegate_target: bool,
-    pub project_instructions: bool,
-    pub project_files: bool,
     pub project_config: bool,
     pub workspace_memory: bool,
     pub repository: bool,
     pub recap: bool,
-    pub delete_sessions: bool,
-    pub projects: bool,
 }
 
 #[derive(Deserialize)]
@@ -207,15 +186,8 @@ struct ModeFields {
     features_on: Vec<String>,
     #[serde(default)]
     tools: Option<Vec<String>>,
-    assistant: AssistantAccess,
-    #[serde(default)]
-    delegate: bool,
     #[serde(default)]
     delegate_target: bool,
-    #[serde(default)]
-    project_instructions: bool,
-    #[serde(default)]
-    project_files: bool,
     #[serde(default)]
     project_config: bool,
     #[serde(default)]
@@ -224,10 +196,6 @@ struct ModeFields {
     repository: bool,
     #[serde(default)]
     recap: bool,
-    #[serde(default)]
-    delete_sessions: bool,
-    #[serde(default)]
-    projects: bool,
 }
 
 impl<'de> Deserialize<'de> for Mode {
@@ -244,17 +212,11 @@ impl<'de> Deserialize<'de> for Mode {
             features_off: raw.features_off,
             features_on: raw.features_on,
             tools: raw.tools,
-            assistant: raw.assistant,
-            delegate: raw.delegate,
             delegate_target: raw.delegate_target,
-            project_instructions: raw.project_instructions,
-            project_files: raw.project_files,
             project_config: raw.project_config,
             workspace_memory: raw.workspace_memory,
             repository: raw.repository,
             recap: raw.recap,
-            delete_sessions: raw.delete_sessions,
-            projects: raw.projects,
         };
         mode.validate().map_err(serde::de::Error::custom)?;
         Ok(mode)
@@ -264,10 +226,6 @@ impl<'de> Deserialize<'de> for Mode {
 impl Mode {
     pub fn feature_off(&self, feature: &str) -> bool {
         self.features_off.iter().any(|name| name == feature)
-    }
-
-    pub fn full_assistant(&self) -> bool {
-        self.assistant == AssistantAccess::Full
     }
 
     /// Field bounds use UTF-16 code units, like role instructions.
@@ -325,29 +283,17 @@ impl Mode {
         if let Some(tools) = &self.tools {
             names(tools, TOOL_NAMES, "tools")?;
         }
-        if self.full_assistant() && self.workdir == Workdir::Workspace {
-            return Err("assistant: full forbids workdir: workspace".into());
-        }
-        if self.delegate && self.delegate_target {
-            return Err("delegate and delegate_target cannot both be enabled".into());
-        }
         if self.workspace_memory && !self.repository {
             return Err("workspace_memory requires repository".into());
         }
         if self.project_config && !self.repository {
             return Err("project_config requires repository".into());
         }
-        if self.projects && self.workdir == Workdir::Workspace {
-            return Err("projects forbids workdir: workspace".into());
-        }
-        if self.repository && (self.project_files || self.project_instructions) {
-            return Err("project_files and project_instructions forbid repository".into());
-        }
         Ok(())
     }
 }
 
-/// Source for `directory.md`, and a fixture until the catalog cutover.
+/// Source for `directory.md`, and a fixture.
 pub fn default_work() -> Mode {
     Mode {
         id: ModeId::new("directory").expect("default mode id"),
@@ -369,54 +315,11 @@ pub fn default_work() -> Mode {
         features_off: Vec::new(),
         features_on: Vec::new(),
         tools: None,
-        assistant: AssistantAccess::User,
-        delegate: false,
         delegate_target: true,
-        project_instructions: false,
-        project_files: false,
         project_config: true,
         workspace_memory: true,
         repository: true,
         recap: true,
-        delete_sessions: false,
-        projects: false,
-    }
-}
-
-/// Source for `chat.md`, and a fixture until the catalog cutover.
-pub fn default_chat() -> Mode {
-    Mode {
-        id: ModeId::new("chat").expect("default mode id"),
-        label: "Chat".into(),
-        description: "The personal assistant's chats and projects.".into(),
-        ui: ModeUi {
-            icon: None,
-            noun: "chat".into(),
-        },
-        workdir: Workdir::PerSession,
-        prompt: vec![
-            PromptSection::Soul,
-            PromptSection::ChatEnv,
-            PromptSection::ChatMd,
-            PromptSection::Body,
-        ],
-        body: String::new(),
-        features_off: ["goal", "todo", "agentTeam", "background"]
-            .map(str::to_owned)
-            .to_vec(),
-        features_on: Vec::new(),
-        tools: None,
-        assistant: AssistantAccess::Full,
-        delegate: true,
-        delegate_target: false,
-        project_instructions: true,
-        project_files: true,
-        project_config: false,
-        workspace_memory: false,
-        repository: false,
-        recap: false,
-        delete_sessions: true,
-        projects: true,
     }
 }
 
@@ -427,11 +330,10 @@ mod tests {
 
     #[test]
     fn defaults_match_the_legacy_ids_and_validate() {
-        for mode in [default_chat(), default_work()] {
-            mode.validate().unwrap();
-            let wire = serde_json::to_value(&mode).unwrap();
-            assert_eq!(serde_json::from_value::<Mode>(wire).unwrap(), mode);
-        }
+        let mode = default_work();
+        mode.validate().unwrap();
+        let wire = serde_json::to_value(&mode).unwrap();
+        assert_eq!(serde_json::from_value::<Mode>(wire).unwrap(), mode);
     }
 
     #[test]
@@ -475,8 +377,6 @@ mod tests {
 
     #[test]
     fn refuses_all_forbidden_combinations_on_deserialization() {
-        refuses(json!({"assistant":"full"}), "assistant: full");
-        refuses(json!({"delegate":true}), "delegate and delegate_target");
         refuses(
             json!({"repository":false}),
             "workspace_memory requires repository",
@@ -485,18 +385,19 @@ mod tests {
             json!({"repository":false,"workspace_memory":false}),
             "project_config requires repository",
         );
-        refuses(
-            json!({"projects":true}),
-            "projects forbids workdir: workspace",
-        );
-        refuses(
-            json!({"project_files":true}),
-            "project_files and project_instructions forbid repository",
-        );
-        refuses(
-            json!({"project_instructions":true}),
-            "project_files and project_instructions forbid repository",
-        );
+        // Retired by the rewrite (plans/rewrite/00-demolition.md).
+        for field in [
+            "assistant",
+            "delegate",
+            "schedule_scope",
+            "project_instructions",
+            "project_files",
+            "projects",
+            "delete_sessions",
+        ] {
+            refuses(json!({ field: true }), "unknown field");
+        }
+        refuses(json!({"prompt":["soul"]}), "unknown variant");
     }
 
     #[test]
@@ -506,7 +407,7 @@ mod tests {
             json!({"ui":{"noun":"session","unknown":true}}),
             "unknown field",
         );
-        // `ui.group` was removed: the tab follows `assistant`.
+        // `ui.group` was removed.
         refuses(
             json!({"ui":{"group":"work","noun":"session"}}),
             "unknown field",

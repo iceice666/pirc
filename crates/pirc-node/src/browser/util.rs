@@ -5,8 +5,8 @@
 use pirc_agent::tools::js::string_of;
 use serde_json::Value;
 
-use crate::chat::js_trim;
 use crate::error::{ApiError, ApiResult};
+use crate::util::js_trim;
 
 /// What a password's value becomes in a snapshot.
 pub const MASK: &str = "••••••";

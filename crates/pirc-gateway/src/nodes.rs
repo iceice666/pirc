@@ -24,7 +24,7 @@ use subtle::ConstantTimeEq;
 use tokio::sync::oneshot;
 use tokio::task::AbortHandle;
 
-use crate::app::{App, AppState};
+use crate::app::AppState;
 use crate::error::{ApiError, ApiResult};
 use crate::util::{now_ms, uuid};
 use crate::ws::{Outbox, Received, receive};
@@ -497,16 +497,6 @@ impl NodeRegistry {
             running.task.abort();
         }
     }
-
-    /// Release the chat node: the link closes and its sessions go offline.
-    pub fn disconnect(&self, app: &App, node_id: &str) {
-        let Some(connection) = self.lock().connections.remove(node_id) else {
-            return;
-        };
-        self.fail_node(node_id);
-        app.on_node_disconnect(node_id);
-        connection.link.close(4000, "chat node binding released");
-    }
 }
 
 /// The gateway's handle on a relayed stream.
@@ -803,15 +793,6 @@ impl LinkSession {
             .any(|workspace| !parsed.modes.contains(&workspace.mode))
         {
             return self.close(1008, "workspace mode is not accepted by node");
-        }
-        if !self.app.accept_node_role(&self.node_id, parsed.role) {
-            self.send(json!({
-                "type": "registration_error",
-                "status": 409,
-                "code": "chat_node_exists",
-                "message": "A different chat node is bound to this gateway. Release it in Settings → Assistant first.",
-            }));
-            return self.close(4409, "chat_node_exists");
         }
         self.registered = true;
         let registry = &self.app.nodes;

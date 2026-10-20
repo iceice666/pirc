@@ -8,7 +8,7 @@
 //! abandons waits; an operation already running finishes, and the request
 //! keeps its in-flight slot until then); streams call
 //! [`BrowserService::attach`] and [`BrowserService::input`]; core calls
-//! `close_session` on chat deletion and `shutdown` on close.
+//! `shutdown` on close.
 //!
 //! | Module | Ported from |
 //! |---|---|
@@ -44,7 +44,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub struct BrowserTarget {
     pub session_id: String,
     pub workspace_id: String,
-    /// `chat::session_root` of the session (recordings go under it).
+    /// `crate::util::session_root` of the session (recordings go under it).
     pub root: PathBuf,
 }
 

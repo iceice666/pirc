@@ -15,15 +15,9 @@ features_off: []
 features_on: []
 # null allows the node's normal tools; [] allows none.
 tools: null
-assistant: user
-delegate: false
 delegate_target: true
-project_instructions: false
-project_files: false
 project_config: true
 workspace_memory: true
 repository: true
 recap: true
-delete_sessions: false
-projects: false
 ---

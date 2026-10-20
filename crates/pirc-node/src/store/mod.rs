@@ -32,7 +32,9 @@ use crate::util::{now_ms, prefix_uuid, safe_json};
 /// `PRAGMA user_version` of the node's schema. The TS node's database used
 /// the gateway's migrations (1 to 19) and the Rust gateway's schema is 1000;
 /// the node's line starts apart from both, so each is recognized.
-/// 2001: uploads record their workspace and session; `workspace_deletions`.
+/// 2001: uploads record their workspace and session; `workspace_deletions`
+/// (retired with chat projects: a fresh store has none, an old one keeps it
+/// unread).
 pub const SCHEMA_VERSION: i64 = 2001;
 /// Upgrades from each earlier node schema, applied in order.
 const MIGRATIONS: &[(i64, &str)] = &[(
@@ -453,7 +455,7 @@ pub struct Recovery {
     pub unknown_commands: usize,
 }
 
-/// A row of `session_deletions` or `workspace_deletions`.
+/// A row of `session_deletions`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SessionDeletion {
     pub owner_user: String,
@@ -475,14 +477,6 @@ pub trait Store {
         host_id: &str,
         workspaces: &[pirc_config::ConfigWorkspace],
     ) -> ApiResult<()>;
-    /// Create or repair a chat workspace the node manages.
-    fn ensure_chat_workspace(
-        &self,
-        workspace_id: &str,
-        host_id: &str,
-        display_name: &str,
-        canonical_path: &str,
-    ) -> ApiResult<Workspace>;
     /// 409 `conflict` "Workspace ID or path is already registered".
     fn add_workspace(
         &self,
@@ -492,23 +486,12 @@ pub trait Store {
         canonical_path: &str,
         mode: ModeId,
     ) -> ApiResult<Workspace>;
-    /// By display name; a chat project being deleted is left out.
+    /// By display name.
     fn list_workspaces(&self) -> ApiResult<Vec<Workspace>>;
-    /// 404 "Workspace not found"; 409 while it is being deleted.
+    /// 404 "Workspace not found".
     fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace>;
-    /// The workspace even while it is being deleted (the deletion's own lookups).
-    fn find_workspace(&self, workspace_id: &str) -> ApiResult<Option<Workspace>>;
-    fn workspace_deletion(&self, workspace_id: &str) -> ApiResult<Option<SessionDeletion>>;
-    /// Fence the workspace and every session in it (403 if one is another
-    /// user's). Idempotent.
-    fn begin_workspace_deletion(&self, workspace_id: &str, user: &str) -> ApiResult<()>;
     /// Its sessions, deleted ones excluded.
     fn workspace_sessions(&self, workspace_id: &str) -> ApiResult<Vec<SessionRow>>;
-    /// Uploads recorded as made in it.
-    fn workspace_uploads(&self, workspace_id: &str) -> ApiResult<Vec<UploadRow>>;
-    /// Delete its upload rows, trust and row once its sessions are gone
-    /// (fenced first, else an internal error).
-    fn finish_workspace_deletion(&self, workspace_id: &str) -> ApiResult<()>;
     fn get_workspace_trust(&self, workspace_id: &str) -> ApiResult<Option<String>>;
     /// `None` revokes; 400 for a non-directory workspace.
     fn set_workspace_trust(
@@ -803,24 +786,6 @@ fn stale_interaction(message: &str) -> ApiError {
     ApiError::new(409, "stale_interaction", message.to_owned())
 }
 
-/// The store's role pin: a chat node's state holds chat workspaces only, a
-/// coding node's directory workspaces only (`buildNodeApp`). An operator
-/// pointing the other role at the state must not expose its workspaces.
-pub fn check_role(workspaces: &[Workspace], modes: &[ModeId]) -> Result<(), String> {
-    if workspaces
-        .iter()
-        .any(|workspace| !modes.contains(&workspace.mode))
-    {
-        // TS named its executables; `pirc-chat` is `pirc-node chat` now,
-        // and the text keeps the old name as well, for logs and scripts.
-        let role = "configured accepted modes";
-        return Err(format!(
-            "State contains workspaces incompatible with {role}; use the matching executable or a separate state directory"
-        ));
-    }
-    Ok(())
-}
-
 impl Store for Connection {
     fn recover_startup(&self) -> ApiResult<Recovery> {
         atomic(self, |db| {
@@ -882,22 +847,6 @@ impl Store for Connection {
         })
     }
 
-    fn ensure_chat_workspace(
-        &self,
-        workspace_id: &str,
-        host_id: &str,
-        display_name: &str,
-        canonical_path: &str,
-    ) -> ApiResult<Workspace> {
-        self.execute(
-            "INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at,kind) \
-             VALUES (?1,?2,?3,?4,'{}',?5,'chat') ON CONFLICT(id) DO UPDATE SET \
-             host_id=excluded.host_id, canonical_path=excluded.canonical_path, kind='chat'",
-            params![workspace_id, host_id, display_name, canonical_path, now_ms()],
-        )?;
-        self.get_workspace(workspace_id)
-    }
-
     fn add_workspace(
         &self,
         workspace_id: &str,
@@ -935,72 +884,19 @@ impl Store for Connection {
 
     fn list_workspaces(&self) -> ApiResult<Vec<Workspace>> {
         // SQLite's binary collation, as TS's query.
-        let mut statement = self.prepare(
-            "SELECT * FROM workspaces WHERE id NOT IN (SELECT workspace_id FROM workspace_deletions) \
-             ORDER BY display_name",
-        )?;
+        let mut statement = self.prepare("SELECT * FROM workspaces ORDER BY display_name")?;
         let rows = statement.query_map([], workspace_row)?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace> {
-        let workspace = self
-            .find_workspace(workspace_id)?
-            .ok_or_else(workspace_not_found)?;
-        if self.workspace_deletion(workspace_id)?.is_some() {
-            return Err(ApiError::conflict(
-                "This project is being deleted. Retry Delete to finish cleanup.",
-            ));
-        }
-        Ok(workspace)
-    }
-
-    fn find_workspace(&self, workspace_id: &str) -> ApiResult<Option<Workspace>> {
-        Ok(self
-            .query_row(
-                "SELECT * FROM workspaces WHERE id=?1",
-                [workspace_id],
-                workspace_row,
-            )
-            .optional()?)
-    }
-
-    fn workspace_deletion(&self, workspace_id: &str) -> ApiResult<Option<SessionDeletion>> {
-        Ok(self
-            .query_row(
-                "SELECT owner_user, status FROM workspace_deletions WHERE workspace_id=?1",
-                [workspace_id],
-                |row| {
-                    Ok(SessionDeletion {
-                        owner_user: row.get(0)?,
-                        status: row.get(1)?,
-                    })
-                },
-            )
-            .optional()?)
-    }
-
-    fn begin_workspace_deletion(&self, workspace_id: &str, user: &str) -> ApiResult<()> {
-        atomic(self, |db| {
-            if db.find_workspace(workspace_id)?.is_none() {
-                return Err(workspace_not_found());
-            }
-            let sessions = db.workspace_sessions(workspace_id)?;
-            if sessions
-                .iter()
-                .any(|session| session.owner_user.as_deref() != Some(user))
-            {
-                return Err(ApiError::forbidden("The project has another user's chats"));
-            }
-            db.execute(
-                "INSERT OR IGNORE INTO workspace_deletions VALUES (?1, ?2, 'deleting', ?3)",
-                params![workspace_id, user, now_ms()],
-            )?;
-            for session in sessions {
-                db.begin_session_deletion(&session.id, user)?;
-            }
-            Ok(())
-        })
+        self.query_row(
+            "SELECT * FROM workspaces WHERE id=?1",
+            [workspace_id],
+            workspace_row,
+        )
+        .optional()?
+        .ok_or_else(workspace_not_found)
     }
 
     fn workspace_sessions(&self, workspace_id: &str) -> ApiResult<Vec<SessionRow>> {
@@ -1009,42 +905,6 @@ impl Store for Connection {
         ))?;
         let rows = statement.query_map([workspace_id], session_row)?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
-    }
-
-    fn workspace_uploads(&self, workspace_id: &str) -> ApiResult<Vec<UploadRow>> {
-        let mut statement = self.prepare(&format!(
-            "SELECT {UPLOAD_COLUMNS} FROM uploads WHERE workspace_id=?1 ORDER BY created_at, rowid"
-        ))?;
-        let rows = statement.query_map([workspace_id], upload_row)?;
-        Ok(rows.collect::<rusqlite::Result<_>>()?)
-    }
-
-    fn finish_workspace_deletion(&self, workspace_id: &str) -> ApiResult<()> {
-        atomic(self, |db| {
-            if db.workspace_deletion(workspace_id)?.is_none() {
-                crate::log::error(&format!(
-                    "deleting workspace {workspace_id}: deletion must be fenced first"
-                ));
-                return Err(ApiError::internal());
-            }
-            if !db.workspace_sessions(workspace_id)?.is_empty() {
-                crate::log::error(&format!(
-                    "deleting workspace {workspace_id}: sessions remain"
-                ));
-                return Err(ApiError::internal());
-            }
-            db.execute("DELETE FROM uploads WHERE workspace_id=?1", [workspace_id])?;
-            db.execute(
-                "DELETE FROM workspace_trust WHERE workspace_id=?1",
-                [workspace_id],
-            )?;
-            db.execute("DELETE FROM workspaces WHERE id=?1", [workspace_id])?;
-            db.execute(
-                "UPDATE workspace_deletions SET status='deleted' WHERE workspace_id=?1",
-                [workspace_id],
-            )?;
-            Ok(())
-        })
     }
 
     fn get_workspace_trust(&self, workspace_id: &str) -> ApiResult<Option<String>> {
@@ -1837,15 +1697,11 @@ mod tests {
 
     #[test]
     fn migrates_the_first_node_schema() {
-        // Schema 2000: no upload provenance, no project fence.
-        let first = SCHEMA
-            .replace(
-                "  kind TEXT NOT NULL DEFAULT 'image',\n  -- Where it was uploaded; it is usable in that workspace only and is\n  -- deleted with it. NULL for uploads older than schema 2001.\n  workspace_id TEXT,\n  session_id TEXT\n);\nCREATE INDEX uploads_workspace ON uploads(workspace_id);",
-                "  kind TEXT NOT NULL DEFAULT 'image'\n);",
-            );
-        let fence = first.find("-- A chat project being deleted").unwrap();
-        let end = fence + first[fence..].find("\n);\n").unwrap() + "\n);\n".len();
-        let first = format!("{}{}", &first[..fence], &first[end..]);
+        // Schema 2000: no upload provenance.
+        let first = SCHEMA.replace(
+            "  kind TEXT NOT NULL DEFAULT 'image',\n  -- Where it was uploaded; it is usable in that workspace only and is\n  -- deleted with it. NULL for uploads older than schema 2001.\n  workspace_id TEXT,\n  session_id TEXT\n);\nCREATE INDEX uploads_workspace ON uploads(workspace_id);",
+            "  kind TEXT NOT NULL DEFAULT 'image'\n);",
+        );
         assert!(
             !first.contains("workspace_deletions") && !first.contains("uploads_workspace"),
             "schema.sql changed: update this test"
@@ -1874,78 +1730,12 @@ mod tests {
             connection.get_upload("upload_old").unwrap().workspace_id,
             None
         );
-        assert_eq!(columns(&connection), columns(&Db::memory().lock()));
-    }
-
-    #[test]
-    fn a_project_being_deleted_is_fenced() {
-        let db = Db::memory();
-        let connection = db.lock();
-        connection
-            .add_workspace(
-                "p",
-                "node",
-                "P",
-                "/state/chat/p",
-                ModeId::new("chat").unwrap(),
-            )
-            .unwrap();
-        let session = connection.create_session("p", "/private/1", "u").unwrap();
-        let upload = UploadRow {
-            id: "upload_1".into(),
-            owner_user: "u".into(),
-            mime_type: "image/png".into(),
-            byte_size: 1,
-            storage_name: "a.bin".into(),
-            sha256: "s".into(),
-            kind: UploadKind::Image,
-            filename: None,
-            workspace_id: Some("p".into()),
-            session_id: Some(session.id.clone()),
-        };
-        connection.create_upload(&upload).unwrap();
-        assert_eq!(
-            connection
-                .begin_workspace_deletion("p", "v")
-                .unwrap_err()
-                .status,
-            403
-        );
-        connection.begin_workspace_deletion("p", "u").unwrap();
-        connection.begin_workspace_deletion("p", "u").unwrap();
-        assert!(connection.list_workspaces().unwrap().is_empty());
-        assert_eq!(connection.get_workspace("p").unwrap_err().status, 409);
-        assert_eq!(
-            connection
-                .create_session("p", "/private/2", "u")
-                .unwrap_err()
-                .status,
-            409
-        );
-        assert_eq!(
-            connection
-                .claim_session(&session.id, "u", false)
-                .unwrap_err()
-                .status,
-            409
-        );
-        assert_eq!(connection.workspace_uploads("p").unwrap(), [upload]);
-        // Not before its chats are gone.
-        assert_eq!(
-            connection
-                .finish_workspace_deletion("p")
-                .unwrap_err()
-                .status,
-            500
-        );
-        connection.finish_session_deletion(&session.id).unwrap();
-        connection.finish_workspace_deletion("p").unwrap();
-        assert!(connection.find_workspace("p").unwrap().is_none());
-        assert_eq!(connection.get_upload("upload_1").unwrap_err().status, 404);
-        assert_eq!(
-            connection.workspace_deletion("p").unwrap().unwrap().status,
-            "deleted"
-        );
+        // Retired tables an old store keeps, unread.
+        let migrated: Vec<String> = columns(&connection)
+            .into_iter()
+            .filter(|column| !column.starts_with("workspace_deletions."))
+            .collect();
+        assert_eq!(migrated, columns(&Db::memory().lock()));
     }
 
     fn store_with_session() -> (Db, String) {
@@ -1967,21 +1757,13 @@ mod tests {
         db.add_workspace("custom", "node", "Custom", "/custom", custom.clone())
             .unwrap();
         assert_eq!(db.list_workspaces().unwrap()[0].mode, custom);
-        check_role(&db.list_workspaces().unwrap(), &[custom]).unwrap();
-        assert!(
-            check_role(
-                &db.list_workspaces().unwrap(),
-                &[ModeId::new("directory").unwrap()]
-            )
-            .is_err()
-        );
         db.execute("UPDATE workspaces SET kind='INVALID' WHERE id='custom'", [])
             .unwrap();
         assert!(db.get_workspace("custom").is_err());
     }
 
     #[test]
-    fn workspaces_and_role_pin() {
+    fn workspaces() {
         let db = Db::memory();
         let db = db.lock();
         db.add_workspace("b", "node", "B", "/b", ModeId::new("directory").unwrap())
@@ -2021,22 +1803,12 @@ mod tests {
             ["a", "b"]
         );
         assert_eq!(listed[0].defaults["x"], 1);
-        check_role(&listed, &[ModeId::new("directory").unwrap()]).unwrap();
-        assert!(
-            check_role(&listed, &[ModeId::new("chat").unwrap()])
-                .unwrap_err()
-                .contains("incompatible with configured accepted modes")
-        );
-        let chat = db
-            .ensure_chat_workspace("chats", "node", "Chats", "/s/chat/chats")
-            .unwrap();
-        assert_eq!(chat.mode, ModeId::new("chat").unwrap());
         assert_eq!(
             db.get_workspace("nope").unwrap_err().message,
             "Workspace not found"
         );
         // Capability authorization belongs to the catalog-aware route, not SQL storage.
-        db.set_workspace_trust("chats", Some("h"), "u").unwrap();
+        db.set_workspace_trust("b", Some("h"), "u").unwrap();
         db.set_workspace_trust("a", Some("h"), "u").unwrap();
         assert_eq!(db.get_workspace_trust("a").unwrap().as_deref(), Some("h"));
         db.set_workspace_trust("a", None, "u").unwrap();

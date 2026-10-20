@@ -1,24 +1,17 @@
 //! `pirc-node`'s configuration: the node half of `apps/gateway/src/config.ts`
 //! (`loadNodeConfig`, `parseWorkspaces`, `defaultAgentCommand`) and
 //! `node/browser-executable.ts`.
-//!
-//! The role is the executable's subcommand (`pirc-node` or `pirc-node chat`),
-//! never the environment: `PIRC_CHAT` is refused, as in TS.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use pirc_protocol::{ModeId, NodeRole};
+use pirc_protocol::ModeId;
 use serde_json::{Map, Value};
 
 use crate::{
     ConfigError, Env, StateDirs, allowed_users, bool_var, csv, default_config_dir, error, integer,
     make_private_dir, upload_limit, valid_node_id,
 };
-
-/// Local id of the top-level chat workspace a chat node creates for
-/// uncategorized chats.
-pub const CHAT_WORKSPACE_ID: &str = "chats";
 
 /// Hostnames that may use plain `ws://` (`new URL(...).hostname` keeps the
 /// brackets of an IPv6 address).
@@ -82,7 +75,6 @@ pub struct SandboxSettings {
 /// connects out to the gateway. It never listens on a port.
 #[derive(Clone, Debug)]
 pub struct NodeConfig {
-    pub role: NodeRole,
     /// Mode ids this node accepts (`PIRC_MODES`, comma separated).
     pub modes: Vec<ModeId>,
     pub node_id: String,
@@ -127,17 +119,11 @@ pub struct NodeConfig {
 }
 
 impl NodeConfig {
-    pub fn chat(&self) -> bool {
-        self.role == NodeRole::Chat
-    }
-
-    /// Read the configuration for `role` and create the state directories
-    /// (state, uploads and sessions, mode 0700).
-    pub fn load(env: &Env, role: NodeRole) -> Result<Self, ConfigError> {
+    /// Read the configuration and create the state directories (state,
+    /// uploads and sessions, mode 0700).
+    pub fn load(env: &Env) -> Result<Self, ConfigError> {
         if env.get("PIRC_CHAT").is_some() {
-            return error(
-                "PIRC_CHAT was removed; run `pirc-node chat` for the chat role or `pirc-node` for a coding node",
-            );
+            return error("PIRC_CHAT was removed: there is no chat node any more");
         }
         // The node sets PIRC_SANDBOX=srt for its agents; only the old opt-out is refused.
         if env.get("PIRC_SANDBOX") == Some("off") {
@@ -181,12 +167,7 @@ impl NodeConfig {
             .map_or_else(|| dirs.state_dir.join("sessions"), |dir| env.resolve(dir));
         make_private_dir(&sessions_dir)?;
         let workspaces = parse_workspaces(env)?;
-        if role == NodeRole::Chat && !workspaces.is_empty() {
-            return error(
-                "PIRC_WORKSPACES must be empty on the chat node (pirc-node chat): it hosts chat workspaces only",
-            );
-        }
-        let modes = accepted_modes(env.get("PIRC_MODES"), role)?;
+        let modes = accepted_modes(env.get("PIRC_MODES"))?;
         for workspace in &workspaces {
             if !modes.contains(&workspace.mode) {
                 return error(format!(
@@ -213,7 +194,6 @@ impl NodeConfig {
             blocked_hosts: csv(env.get("PIRC_BROWSER_BLOCK_HOSTS")).collect(),
         };
         Ok(Self {
-            role,
             modes,
             node_id,
             node_token,
@@ -249,16 +229,9 @@ impl NodeConfig {
 }
 
 /// Accepted ids, not definitions. An explicitly empty list grants no modes.
-fn accepted_modes(value: Option<&str>, role: NodeRole) -> Result<Vec<ModeId>, ConfigError> {
+fn accepted_modes(value: Option<&str>) -> Result<Vec<ModeId>, ConfigError> {
     let Some(value) = value else {
-        return Ok(vec![
-            ModeId::new(if role == NodeRole::Chat {
-                "chat"
-            } else {
-                "directory"
-            })
-            .expect("default mode id"),
-        ]);
+        return Ok(vec![ModeId::new("directory").expect("default mode id")]);
     };
     if value.trim().is_empty() {
         return Ok(Vec::new());
@@ -436,51 +409,42 @@ mod tests {
         Env::new(vars, "/work")
     }
 
-    fn fails(env: &Env, role: NodeRole, message: &str) {
-        let error = NodeConfig::load(env, role).unwrap_err();
+    fn fails(env: &Env, message: &str) {
+        let error = NodeConfig::load(env).unwrap_err();
         assert!(
             error.0.contains(message),
             "{error} should contain {message}"
         );
     }
 
-    // role-executables.test.ts: "fixes config.chat and the agent command from the <role> executable role"
+    // role-executables.test.ts: "fixes the agent command from the executable"
     #[test]
-    fn role_fixes_chat_and_the_agent_command() {
+    fn the_agent_command_is_this_executable() {
         let dir = tempfile::tempdir().unwrap();
         let exe = std::env::current_exe().unwrap().display().to_string();
-        for role in [NodeRole::Chat, NodeRole::Node] {
-            let config =
-                NodeConfig::load(&node_env(dir.path().to_str().unwrap(), &[]), role).unwrap();
-            assert_eq!(config.chat(), role == NodeRole::Chat);
-            assert_eq!(config.agent_command, exe);
-            assert_eq!(config.agent_args, ["agent"]);
-        }
+        let config = NodeConfig::load(&node_env(dir.path().to_str().unwrap(), &[])).unwrap();
+        assert_eq!(config.agent_command, exe);
+        assert_eq!(config.agent_args, ["agent"]);
     }
 
-    // "rejects legacy PIRC_CHAT=<value> for <role>"
+    // "rejects legacy PIRC_CHAT=<value>"
     #[test]
     fn rejects_legacy_pirc_chat() {
-        for role in [NodeRole::Chat, NodeRole::Node] {
-            for value in ["", "0", "1", "false", "true"] {
-                fails(
-                    &Env::new([("PIRC_CHAT", value)], "/work"),
-                    role,
-                    "PIRC_CHAT was removed",
-                );
-            }
+        for value in ["", "0", "1", "false", "true"] {
+            fails(
+                &Env::new([("PIRC_CHAT", value)], "/work"),
+                "PIRC_CHAT was removed",
+            );
         }
     }
 
-    // "rejects project workspaces for chat but retains them on a project node"
     #[test]
-    fn workspaces_belong_to_coding_nodes() {
+    fn workspaces_come_from_the_configuration() {
         let dir = tempfile::tempdir().unwrap();
         let state = dir.path().to_str().unwrap();
         let workspaces = format!(r#"[{{"id":"project","path":{state:?}}}]"#);
         let env = node_env(state, &[("PIRC_WORKSPACES", &workspaces)]);
-        fails(&env, NodeRole::Chat, "PIRC_WORKSPACES must be empty");
-        let config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+        let config = NodeConfig::load(&env).unwrap();
         assert_eq!(config.workspaces[0].id, "project");
     }
 
@@ -495,25 +459,21 @@ mod tests {
                 ("PIRC_AGENT_ARGS", r#"["rpc"]"#),
             ],
         );
-        let config = NodeConfig::load(&env, NodeRole::Chat).unwrap();
+        let config = NodeConfig::load(&env).unwrap();
         assert_eq!(config.agent_command, "external-agent");
         assert_eq!(config.agent_args, ["rpc"]);
         let env = node_env(
             dir.path().to_str().unwrap(),
             &[("PIRC_AGENT_COMMAND", "external-agent")],
         );
-        assert_eq!(
-            NodeConfig::load(&env, NodeRole::Node).unwrap().agent_args,
-            ["agent"]
-        );
+        assert_eq!(NodeConfig::load(&env).unwrap().agent_args, ["agent"]);
     }
 
     #[test]
     fn defaults_and_directories() {
         let dir = tempfile::tempdir().unwrap();
         let state = dir.path().join("state");
-        let config =
-            NodeConfig::load(&node_env(state.to_str().unwrap(), &[]), NodeRole::Node).unwrap();
+        let config = NodeConfig::load(&node_env(state.to_str().unwrap(), &[])).unwrap();
         assert_eq!(config.database_path, state.join("gateway.sqlite"));
         assert_eq!(config.sessions_dir, state.join("sessions"));
         assert!(config.sessions_dir.is_dir());
@@ -558,7 +518,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let state = dir.path().to_str().unwrap();
         let node = |extra: &[(&str, &str)], message: &str| {
-            fails(&node_env(state, extra), NodeRole::Node, message);
+            fails(&node_env(state, extra), message);
         };
         node(&[("PIRC_SANDBOX", "off")], "PIRC_SANDBOX=off was removed");
         node(&[("PIRC_NODE_ID", "a b")], "Invalid PIRC_NODE_ID");
@@ -601,7 +561,7 @@ mod tests {
             "ws://127.0.0.1",
         ] {
             let env = node_env(state, &[("PIRC_DAEMON_URL", url)]);
-            assert!(NodeConfig::load(&env, NodeRole::Node).is_ok(), "{url}");
+            assert!(NodeConfig::load(&env).is_ok(), "{url}");
         }
         let env = node_env(
             state,
@@ -610,10 +570,10 @@ mod tests {
                 ("PIRC_ALLOW_INSECURE_NODE_TRANSPORT", "yes"),
             ],
         );
-        let config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+        let config = NodeConfig::load(&env).unwrap();
         assert_eq!(config.browser.gateway_host, "gateway.example");
         let env = node_env(state, &[("PIRC_DAEMON_URL", "ws://[::1]:8787")]);
-        let config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+        let config = NodeConfig::load(&env).unwrap();
         assert_eq!(config.browser.gateway_host, "[::1]");
     }
 
@@ -631,7 +591,7 @@ mod tests {
         ])
         .to_string();
         let env = node_env(state.to_str().unwrap(), &[("PIRC_WORKSPACES", &value)]);
-        let config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+        let config = NodeConfig::load(&env).unwrap();
         let canonical = std::fs::canonicalize(&project).unwrap();
         assert_eq!(
             config.workspaces,
@@ -656,25 +616,15 @@ mod tests {
 
     #[test]
     fn mode_acceptance_is_explicit_and_validated() {
-        assert_eq!(
-            accepted_modes(None, NodeRole::Chat).unwrap()[0].as_str(),
-            "chat"
-        );
-        assert_eq!(
-            accepted_modes(None, NodeRole::Node).unwrap()[0].as_str(),
-            "directory"
-        );
-        assert!(accepted_modes(Some(""), NodeRole::Node).unwrap().is_empty());
-        let ids = accepted_modes(Some("directory, review"), NodeRole::Node).unwrap();
+        assert_eq!(accepted_modes(None).unwrap()[0].as_str(), "directory");
+        assert!(accepted_modes(Some("")).unwrap().is_empty());
+        let ids = accepted_modes(Some("directory, review")).unwrap();
         assert_eq!(
             ids.iter().map(ModeId::as_str).collect::<Vec<_>>(),
             ["directory", "review"]
         );
         for invalid in ["review,review", "UPPER", "../review", "review,"] {
-            assert!(
-                accepted_modes(Some(invalid), NodeRole::Node).is_err(),
-                "{invalid}"
-            );
+            assert!(accepted_modes(Some(invalid)).is_err(), "{invalid}");
         }
         let dir = tempfile::tempdir().unwrap();
         let project = dir.path().join("project");
@@ -683,7 +633,7 @@ mod tests {
         let state = dir.path().join("state");
         let env = node_env(state.to_str().unwrap(), &[("PIRC_WORKSPACES", &workspaces)]);
         assert!(
-            NodeConfig::load(&env, NodeRole::Node)
+            NodeConfig::load(&env)
                 .unwrap_err()
                 .to_string()
                 .contains("not accepted")
@@ -696,9 +646,7 @@ mod tests {
             ],
         );
         assert_eq!(
-            NodeConfig::load(&env, NodeRole::Node).unwrap().workspaces[0]
-                .mode
-                .as_str(),
+            NodeConfig::load(&env).unwrap().workspaces[0].mode.as_str(),
             "review"
         );
     }
@@ -723,7 +671,7 @@ mod tests {
                 ("PIRC_FFMPEG", ""),
             ],
         );
-        let config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+        let config = NodeConfig::load(&env).unwrap();
         assert_eq!(config.browser.executable, Some(chromium));
         assert_eq!(config.browser.ffmpeg, "ffmpeg");
         assert_eq!(config.browser.blocked_hosts, ["a.example", "b.example"]);
@@ -735,7 +683,7 @@ mod tests {
             }
         );
         let env = node_env(state, &[("PIRC_BROWSER_EXECUTABLE", "/opt/chrome")]);
-        let config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+        let config = NodeConfig::load(&env).unwrap();
         assert_eq!(
             config.browser.executable,
             Some(PathBuf::from("/opt/chrome"))

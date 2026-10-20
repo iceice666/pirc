@@ -2,8 +2,8 @@
 //! evidence through the gateway (`recap.collect`), asks the model once
 //! without tools and records a redacted report; bad arguments, an empty
 //! history, failures, a second recap while one runs, cancellation, and
-//! the sessions where `/recap` does not exist (no gateway, chats,
-//! headless agents).
+//! the sessions where `/recap` does not exist (no gateway, a mode without
+//! recap, headless agents).
 
 mod feature_support;
 
@@ -177,11 +177,8 @@ async fn agent_recap_unavailable() {
             ("PIRC_GATEWAY".to_owned(), "1".to_owned()),
         ];
         if let Some(kind) = kind {
-            let mode = if kind == "chat" {
-                pirc_protocol::mode::default_chat()
-            } else {
-                pirc_protocol::mode::default_work()
-            };
+            let mut mode = pirc_protocol::mode::default_work();
+            mode.recap = kind != "off";
             env.push((
                 "PIRC_MODE".to_owned(),
                 serde_json::to_string(&mode).unwrap(),
@@ -192,9 +189,9 @@ async fn agent_recap_unavailable() {
     for (name, options) in [
         ("no gateway", AgentOptions::default().features("recap")),
         (
-            "chat",
+            "mode without recap",
             AgentOptions {
-                env: gateway(Some("chat")),
+                env: gateway(Some("off")),
                 ..AgentOptions::default()
             }
             .features("recap"),

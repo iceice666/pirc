@@ -677,7 +677,7 @@ async fn registration(node: &Node) -> Registration {
         .collect();
     let details = workspace_details(node, roots).await;
     Registration {
-        role: node.config.role,
+        role: pirc_protocol::NodeRole::Node,
         modes: node.config.modes.clone(),
         protocol: Some(i64::from(NODE_PROTOCOL_VERSION)),
         workspaces: workspaces

@@ -58,7 +58,7 @@ let
       ;
   }) cfg.workspaces;
 
-  # The gateway only routes; the local chat/node binary runs agents and
+  # The gateway only routes; the local node binary runs agents and
   # shells. They share a token generated on first start, never in the store.
   # The gateway runs as its own account, so nothing the node runs (agents,
   # their shells, side-panel terminals) can read the gateway's state: its
@@ -176,7 +176,7 @@ let
     set -eu
     PIRC_NODE_TOKEN=$(cat "$CREDENTIALS_DIRECTORY/node-token")
     export PIRC_NODE_TOKEN
-    exec ${lib.getExe cfg.nodePackage}${lib.optionalString cfg.chat " chat"}
+    exec ${lib.getExe cfg.nodePackage}
   '';
 
   hardening = {
@@ -239,12 +239,6 @@ let
     + lib.optionalString (cfg.agentPrompt != null) ''
       cp ${pkgs.writeText "AGENTS.md" cfg.agentPrompt} $out/AGENTS.md
     ''
-    + lib.optionalString (cfg.soulPrompt != null) ''
-      cp ${pkgs.writeText "SOUL.md" cfg.soulPrompt} $out/SOUL.md
-    ''
-    + lib.optionalString (cfg.chatPrompt != null) ''
-      cp ${pkgs.writeText "CHAT.md" cfg.chatPrompt} $out/CHAT.md
-    ''
     + lib.optionalString (cfg.skills != { }) (
       ''
         mkdir -p $out/skills
@@ -265,7 +259,22 @@ in
       "services"
       "pirc"
       "chatPackage"
-    ] "The chat role now runs nodePackage's pirc-node chat; set services.pirc.nodePackage instead.")
+    ] "There is no chat node any more (plans/rewrite/README.md).")
+    (mkRemovedOptionModule [
+      "services"
+      "pirc"
+      "chat"
+    ] "There is no chat node any more (plans/rewrite/README.md).")
+    (mkRemovedOptionModule [
+      "services"
+      "pirc"
+      "soulPrompt"
+    ] "Chats and their SOUL.md persona were removed (plans/rewrite/README.md).")
+    (mkRemovedOptionModule [
+      "services"
+      "pirc"
+      "chatPrompt"
+    ] "Chats and their CHAT.md rules were removed (plans/rewrite/README.md).")
     (mkRemovedOptionModule [
       "services"
       "pirc"
@@ -316,7 +325,7 @@ in
         type = types.bool;
         default = true;
         description = ''
-          Run `pirc-node` (or `pirc-node chat` when chat is enabled) on this host
+          Run `pirc-node` on this host
           as service `pirc-node` so its
           workspaces can host sessions. The gateway itself never runs agents;
           disable this for a routing-only gateway that serves remote nodes.
@@ -397,19 +406,7 @@ in
     agentPrompt = mkOption {
       type = types.nullOr types.lines;
       default = null;
-      description = "Optional global AGENTS.md for coding agents only (not chats).";
-    };
-
-    soulPrompt = mkOption {
-      type = types.nullOr types.lines;
-      default = null;
-      description = "Global chat-only SOUL.md persona; replaces the built-in chat identity. Read-only in the web UI.";
-    };
-
-    chatPrompt = mkOption {
-      type = types.nullOr types.lines;
-      default = null;
-      description = "Global chat-only CHAT.md rules. Read-only in the web UI; chats no longer load AGENTS.md.";
+      description = "Optional global AGENTS.md for coding agents.";
     };
 
     skills = mkOption {
@@ -560,16 +557,6 @@ in
         and require holding session control.
       '';
     };
-    chat = mkOption {
-      type = types.bool;
-      default = false;
-      description = ''
-        Run pirc-node chat instead of pirc-node for the local service: it hosts the
-        assistant's chats, a top-level "Chats" plus projects created from
-        the web, in directories it manages under its state directory. Keep a
-        single chat node on an always-on machine.
-      '';
-    };
     workspaces = mkOption {
       type = types.attrsOf workspaceType;
       default = { };
@@ -619,7 +606,7 @@ in
         type = types.bool;
         default = false;
         description = ''
-          Proxy `/node/connect` so remote chat and coding nodes can reach this gateway
+          Proxy `/node/connect` so remote nodes can reach this gateway
           over TLS. It bypasses forward auth: nodes authenticate with their
           PIRC_NODE_TOKENS secret instead.
         '';
@@ -659,10 +646,6 @@ in
         {
           assertion = cfg.allowedHosts != [ ];
           message = "services.pirc.allowedHosts must not be empty";
-        }
-        {
-          assertion = !cfg.chat || cfg.workspaces == { };
-          message = "services.pirc.chat selects pirc-node chat, which hosts chat workspaces only; move services.pirc.workspaces to another node";
         }
         {
           assertion = cfg.localNode.enable || cfg.workspaces == { };
@@ -748,7 +731,7 @@ in
 
     (mkIf cfg.localNode.enable {
       systemd.services.pirc-node = {
-        description = if cfg.chat then "pirc chat host" else "pirc node (agents and shells for this host)";
+        description = "pirc node (agents and shells for this host)";
         wantedBy = [ "multi-user.target" ];
         after = [ "pirc.service" ];
         requires = [ "pirc.service" ];

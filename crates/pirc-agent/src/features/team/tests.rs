@@ -19,12 +19,11 @@ use crate::features::ask_question::{QuestionResult, QuestionStatus};
 fn children_inherit_the_frozen_mode_not_project_or_process_overrides() {
     let mut mode = pirc_protocol::mode::default_work();
     mode.tools = Some(vec!["read".into()]);
+    let mut project = pirc_protocol::mode::default_work();
+    project.id = pirc_protocol::ModeId::new("project").unwrap();
     let mut env = indexmap::IndexMap::from([
-        (
-            "PIRC_MODE".into(),
-            serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
-        ),
-        ("PIRC_WORKSPACE_KIND".into(), "chat".into()),
+        ("PIRC_MODE".into(), serde_json::to_string(&project).unwrap()),
+        ("PIRC_WORKSPACE_KIND".into(), "project".into()),
     ]);
     super::freeze_child_mode(&mut env, &mode);
     assert!(!env.contains_key("PIRC_WORKSPACE_KIND"));
@@ -309,7 +308,6 @@ fn fixture(mode: &str) -> Fixture {
         ],
         models: serde_json::from_value(json!({})).unwrap(),
         approval_mode: Some(Rc::new(|| "read-only".to_owned())),
-        instructions: None,
         acquire_write: None,
         relay_sandbox: None,
         allowed_roots: Some({

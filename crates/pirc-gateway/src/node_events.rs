@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use pirc_protocol::{NodeRole, SessionActivity, SessionRun};
+use pirc_protocol::{SessionActivity, SessionRun};
 use serde_json::{Map, Value, json};
 
 use crate::app::App;
@@ -44,19 +44,6 @@ impl App {
     pub fn activity_of(&self, node_id: Option<&str>, session_id: &str) -> Option<LiveActivity> {
         let activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());
         activity.get(node_id?)?.get(session_id).copied()
-    }
-
-    /// A chat node binds the gateway's assistant; a chat node's id cannot
-    /// come back as a plain node.
-    pub fn accept_node_role(&self, node_id: &str, role: NodeRole) -> bool {
-        let conn = self.db.lock();
-        let accepted = match role {
-            NodeRole::Chat => conn.claim_assistant_node(node_id),
-            NodeRole::Node => conn
-                .assistant_node()
-                .map(|bound| bound.as_deref() != Some(node_id)),
-        };
-        accepted.unwrap_or(false)
     }
 
     pub fn on_node_register(&self, node: &ConnectedNode) {

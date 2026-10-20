@@ -97,53 +97,6 @@ expression: t.into_value()
   },
   {
     "body": {
-      "capabilities": {
-        "delegation": true,
-        "delegation_approval": "always",
-        "memory_search": true,
-        "remote_recall": true,
-        "schedules": true,
-        "version": 1,
-        "web_search": true
-      }
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "GET /api/workspaces/test:ws/capabilities",
-    "status": 200,
-    "step": "capabilities of a directory workspace"
-  },
-  {
-    "body": {
-      "error": {
-        "code": "invalid_input",
-        "message": "Invalid request"
-      }
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "PATCH /api/workspaces/test:ws/capabilities",
-    "status": 400,
-    "step": "change them"
-  },
-  {
-    "body": {
-      "error": {
-        "code": "invalid_input",
-        "message": "Only chat projects have instructions"
-      }
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "GET /api/workspaces/test:ws/instructions",
-    "status": 400,
-    "step": "a directory workspace has no instructions"
-  },
-  {
-    "body": {
       "relayed": true
     },
     "headers": {
@@ -856,20 +809,6 @@ expression: t.into_value()
   },
   {
     "body": {
-      "error": {
-        "code": "invalid_input",
-        "message": "Only chats can be deleted"
-      }
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "DELETE /api/sessions/session_<uuid:1>",
-    "status": 400,
-    "step": "only chats can be deleted"
-  },
-  {
-    "body": {
       "models": [
         {
           "contextWindow": 100000,
@@ -991,17 +930,5 @@ expression: t.into_value()
     "request": "GET /api/nodes",
     "status": 200,
     "step": "nodes"
-  },
-  {
-    "body": {
-      "nodeId": null,
-      "online": false
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "GET /api/assistant/node",
-    "status": 200,
-    "step": "assistant node"
   }
 ]

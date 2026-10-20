@@ -85,7 +85,7 @@ expression: r.into_value()
         ]
       }
     },
-    "step": "in a chat"
+    "step": "in a mode without it"
   },
   {
     "observed": {
@@ -113,6 +113,6 @@ expression: r.into_value()
         ]
       }
     },
-    "step": "in a chat, enabled"
+    "step": "in a mode without it, enabled"
   }
 ]

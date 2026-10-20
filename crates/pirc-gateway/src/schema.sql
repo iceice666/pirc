@@ -130,6 +130,3 @@ CREATE TABLE project_links (
   repo TEXT, created_at INTEGER NOT NULL,
   PRIMARY KEY (project_workspace_id, workspace_id)
 );
-
--- The one chat node this gateway is bound to.
-CREATE TABLE assistant_node (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), node_id TEXT NOT NULL);

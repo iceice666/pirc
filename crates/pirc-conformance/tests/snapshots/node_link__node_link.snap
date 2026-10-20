@@ -13,14 +13,14 @@ expression: t.into_value()
   {
     "observed": {
       "closed": 4426,
-      "reason": "node protocol 9 != daemon 13"
+      "reason": "node protocol 9 != daemon 14"
     },
     "step": "older protocol"
   },
   {
     "observed": {
       "closed": 4426,
-      "reason": "node protocol 1 != daemon 13"
+      "reason": "node protocol 1 != daemon 14"
     },
     "step": "no protocol"
   },

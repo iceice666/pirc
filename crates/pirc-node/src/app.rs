@@ -1,16 +1,12 @@
 //! The node's own routes (`node/app.ts`, all but the panels'). Owner:
 //! **core**.
 //!
-//! - Workspaces: `POST /api/workspaces` (chat projects on the chat node,
-//!   directories under `$HOME` elsewhere, never around the node's state or
-//!   a credential store), `DELETE /api/workspaces/:id` (chat projects only,
-//!   fenced, idempotent), `GET`/`PATCH /api/workspaces/:id/instructions`,
-//!   `GET`/`POST`/`DELETE /api/workspaces/:id/files` (`project_files`),
+//! - Workspaces: `POST /api/workspaces` (a directory the node manages for
+//!   a `per-session` mode; otherwise a directory under `$HOME`, never
+//!   around the node's state or a credential store),
 //!   `GET /api/workspaces/:id/project-config`,
-//!   `POST /api/workspaces/:id/project-trust`; on the chat node
-//!   `GET /api/assistant/prompts`, `PUT /api/assistant/prompts/:name`.
-//! - Sessions: `POST /api/sessions`, `DELETE /api/sessions/:id` (chat
-//!   only, fenced, idempotent), `PATCH /api/sessions/:id` (rename),
+//!   `POST /api/workspaces/:id/project-trust`.
+//! - Sessions: `POST /api/sessions`, `PATCH /api/sessions/:id` (rename),
 //!   `GET /api/sessions/:id/snapshot`, `POST /api/sessions/:id/deliver`,
 //!   `POST /api/sessions/:id/commands`, control (`GET .../control`,
 //!   `POST .../control/acquire|heartbeat|release`),
@@ -22,54 +18,31 @@
 //! length checks, lengths count UTF-16 units, and a failure is 400
 //! `invalid_input` "Invalid request".
 //!
-//! Golden cases: `app.integration.test.ts`, `chat-workspaces`,
-//! `project-instructions`, `project-trust`, `assistant-prompts` and the
+//! Golden cases: `app.integration.test.ts`, `project-trust` and the
 //! node halves of `relay.integration.test.ts`.
 
-use std::collections::HashMap;
 use std::fs::{DirBuilder, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 
-use futures_util::FutureExt;
-use futures_util::future::{BoxFuture, Shared};
-use pirc_config::NodeConfig;
 use pirc_protocol::mode::{ModeId, Workdir};
 use serde_json::{Map, Value, json};
 
-use crate::assistant_prompts::{self, PromptName};
-use crate::chat;
 use crate::error::{ApiError, ApiResult};
-use crate::project_files;
-use crate::router::{Body, Request, Response, Route, delete, get, parse, patch, post, put};
+use crate::router::{Body, Request, Response, Route, get, parse, patch, post};
 use crate::runner::{CommandPayload, Delivery};
 use crate::services::Node;
 use crate::store::{NameSource, SessionRow, Store, UploadKind, UploadRow, Workspace};
 use crate::util::{head16, hex, payload_hash, prefix_uuid, random_bytes, sha256_hex};
 
-/// Core's routes for this node's role (the assistant prompt routes exist on
-/// the chat node only).
-pub fn routes(config: &NodeConfig) -> Vec<Route> {
-    let deletions = Arc::new(Deletions::default());
-    let mut routes = vec![
+/// Core's routes.
+pub fn routes() -> Vec<Route> {
+    vec![
         post("/api/workspaces", create_workspace),
-        delete("/api/workspaces/:id", {
-            let deletions = deletions.clone();
-            move |node, request| delete_workspace(node, request, deletions.clone())
-        }),
-        get("/api/workspaces/:id/instructions", read_instructions),
-        patch("/api/workspaces/:id/instructions", write_instructions),
-        get("/api/workspaces/:id/files", list_project_files),
-        post("/api/workspaces/:id/files", upload_project_file),
-        delete("/api/workspaces/:id/files", remove_project_file),
         get("/api/workspaces/:id/project-config", project_config),
         post("/api/workspaces/:id/project-trust", project_trust),
         post("/api/sessions", create_session),
-        delete("/api/sessions/:id", move |node, request| {
-            delete_session(node, request, deletions.clone())
-        }),
         patch("/api/sessions/:id", rename_session),
         get("/api/sessions/:id/snapshot", snapshot),
         post("/api/sessions/:id/deliver", deliver),
@@ -88,12 +61,7 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
             relayed_answer,
         ),
         post("/api/sessions/:id/uploads", upload),
-    ];
-    if config.chat() {
-        routes.push(get("/api/assistant/prompts", read_prompts));
-        routes.push(put("/api/assistant/prompts/:name", write_prompt));
-    }
-    routes
+    ]
 }
 
 // ---------- request checks (the zod schemas of node/app.ts) ----------
@@ -128,7 +96,11 @@ fn string(
         .get(key)
         .and_then(Value::as_str)
         .ok_or_else(ApiError::invalid_input)?;
-    let text = if trim { chat::js_trim(text) } else { text };
+    let text = if trim {
+        crate::util::js_trim(text)
+    } else {
+        text
+    };
     let units = length(text);
     if units < min || units > max {
         return Err(ApiError::invalid_input());
@@ -227,7 +199,7 @@ struct NewWorkspace {
     display_name: String,
 }
 
-fn new_workspace(body: &Value, _chat_node: bool) -> ApiResult<NewWorkspace> {
+fn new_workspace(body: &Value) -> ApiResult<NewWorkspace> {
     let map = object(body)?;
     let mode = optional_string(map, "mode", false, 1, 40)?;
     let kind = optional_string(map, "kind", false, 1, 40)?;
@@ -274,11 +246,11 @@ async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
         mode: mode_id,
         path,
         display_name,
-    } = new_workspace(request.json(), config.chat())?;
+    } = new_workspace(request.json())?;
     let mode = node.mode(&mode_id)?;
     if mode.workdir == Workdir::PerSession {
         let id = workspace_id();
-        let dir = chat::chat_workspace_dir(config, &id)?;
+        let dir = crate::util::managed_workspace_dir(config, &id)?;
         let workspace = node.db.lock().add_workspace(
             &id,
             &config.node_id,
@@ -383,104 +355,6 @@ async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
         }
     }
     created(json!({ "workspace": body }))
-}
-
-/// `chatProject`: the workspace, which must be a chat project.
-fn chat_project(node: &Node, request: &Request) -> ApiResult<Workspace> {
-    let workspace = node.db.lock().get_workspace(param(request, "id"))?;
-    if !node.workspace_mode(&workspace)?.project_instructions {
-        return Err(ApiError::bad_request(
-            "Only chat projects have instructions",
-        ));
-    }
-    Ok(workspace)
-}
-
-fn instructions(text: String) -> ApiResult<Response> {
-    Ok(Response::json(json!({
-        "instructions": { "text": text, "maxChars": chat::INSTRUCTIONS_MAX_CHARS }
-    })))
-}
-
-async fn read_instructions(node: Node, request: Request) -> ApiResult<Response> {
-    let workspace = chat_project(&node, &request)?;
-    let mode = node.workspace_mode(&workspace)?;
-    instructions(chat::read_project_instructions(&workspace, &mode))
-}
-
-/// `{text: string}`, strict.
-fn text_body(body: &Value) -> ApiResult<String> {
-    let map = object(body)?;
-    strict(map, &["text"])?;
-    map.get("text")
-        .and_then(Value::as_str)
-        .map(str::to_owned)
-        .ok_or_else(ApiError::invalid_input)
-}
-
-async fn write_instructions(node: Node, request: Request) -> ApiResult<Response> {
-    let workspace = chat_project(&node, &request)?;
-    let text = text_body(request.json())?;
-    let mode = node.workspace_mode(&workspace)?;
-    instructions(chat::write_project_instructions(&workspace, &text, &mode)?)
-}
-
-fn project_files_body(node: &Node, workspace: &Workspace) -> ApiResult<Value> {
-    let mode = node.workspace_mode(workspace)?;
-    let files: Vec<Value> = project_files::list(workspace, &mode)?
-        .iter()
-        .map(project_files::ProjectFile::json)
-        .collect();
-    Ok(json!({
-        "files": files,
-        "maxFiles": project_files::MAX_FILES,
-        "maxBytes": node.config.upload_max_bytes,
-    }))
-}
-
-/// `GET /api/workspaces/:id/files`: the project's files, by name.
-async fn list_project_files(node: Node, request: Request) -> ApiResult<Response> {
-    let workspace = node.db.lock().get_workspace(param(&request, "id"))?;
-    Ok(Response::json(project_files_body(&node, &workspace)?))
-}
-
-/// `POST /api/workspaces/:id/files?filename=…`, raw bytes: add or replace
-/// one file.
-async fn upload_project_file(node: Node, request: Request) -> ApiResult<Response> {
-    let workspace = node.db.lock().get_workspace(param(&request, "id"))?;
-    let Body::Raw { bytes, .. } = &request.body else {
-        return Err(ApiError::bad_request("Upload body must be raw bytes"));
-    };
-    if bytes.is_empty() || bytes.len() > node.config.upload_max_bytes {
-        return Err(ApiError::new(
-            413,
-            "payload_too_large",
-            "Upload exceeds configured limit",
-        ));
-    }
-    let query = request.query_object();
-    let filename = string(object(&query)?, "filename", false, 1, 1000)?;
-    let mode = node.workspace_mode(&workspace)?;
-    let file = project_files::write(&workspace, &filename, bytes, &mode)?;
-    // The project may have been fenced for deletion while the bytes were
-    // written: keep nothing then (its deletion removes the directory too).
-    if let Err(error) = node.db.lock().get_workspace(&workspace.id) {
-        if let Some(dir) = project_files::files_dir(&workspace, &mode) {
-            let _ = std::fs::remove_dir_all(dir);
-        }
-        return Err(error);
-    }
-    created(json!({ "file": file.json() }))
-}
-
-/// `DELETE /api/workspaces/:id/files?name=…`.
-async fn remove_project_file(node: Node, request: Request) -> ApiResult<Response> {
-    let workspace = node.db.lock().get_workspace(param(&request, "id"))?;
-    let query = request.query_object();
-    let name = string(object(&query)?, "name", false, 1, 1000)?;
-    let mode = node.workspace_mode(&workspace)?;
-    project_files::remove(&workspace, &name, &mode)?;
-    Ok(Response::empty(204))
 }
 
 /// `directoryWorkspace`: the workspace, which must be a directory.
@@ -606,25 +480,6 @@ async fn project_trust(node: Node, request: Request) -> ApiResult<Response> {
     ))
 }
 
-async fn read_prompts(node: Node, _request: Request) -> ApiResult<Response> {
-    let dir = &node.config.config_dir;
-    Ok(Response::json(json!({
-        "soul": assistant_prompts::inspect(dir, PromptName::Soul),
-        "chat": assistant_prompts::inspect(dir, PromptName::Chat),
-    })))
-}
-
-async fn write_prompt(node: Node, request: Request) -> ApiResult<Response> {
-    let name = match param(&request, "name") {
-        "soul" => PromptName::Soul,
-        "chat" => PromptName::Chat,
-        _ => return Err(ApiError::invalid_input()),
-    };
-    let text = text_body(request.json())?;
-    let prompt = assistant_prompts::write(&node.config.config_dir, name, &text)?;
-    Ok(Response::json(json!({ "prompt": prompt })))
-}
-
 // ---------- sessions ----------
 
 async fn create_session(node: Node, request: Request) -> ApiResult<Response> {
@@ -643,264 +498,6 @@ async fn create_session(node: Node, request: Request) -> ApiResult<Response> {
             .lock()
             .create_session(&workspace.id, &storage.to_string_lossy(), &request.user)?;
     created(json!({ "session": session }))
-}
-
-type Deletion = Shared<BoxFuture<'static, ApiResult<()>>>;
-
-/// Chat deletions in flight: a retried DELETE joins the running one.
-#[derive(Default)]
-struct Deletions(Mutex<HashMap<String, Deletion>>);
-
-async fn delete_session(
-    node: Node,
-    request: Request,
-    deletions: Arc<Deletions>,
-) -> ApiResult<Response> {
-    let session_id = param(&request, "id").to_owned();
-    let user = request.user.clone();
-    let (session, workspace) = {
-        let db = node.db.lock();
-        let deletion = db.session_deletion(&session_id)?;
-        if let Some(deletion) = &deletion {
-            if deletion.owner_user != user {
-                return Err(ApiError::forbidden("Chat belongs to another user"));
-            }
-            if deletion.status == "deleted" {
-                return Ok(Response::empty(204));
-            }
-        }
-        let session = db.claim_session(&session_id, &user, true)?;
-        let workspace = db.get_workspace(&session.workspace_id)?;
-        if !node.workspace_mode(&workspace)?.delete_sessions {
-            return Err(ApiError::bad_request("Only chats can be deleted"));
-        }
-        db.begin_session_deletion(&session_id, &user)?;
-        (session, workspace)
-    };
-    let task = {
-        let mut running = deletions.0.lock().unwrap_or_else(|p| p.into_inner());
-        running
-            .entry(session_id.clone())
-            .or_insert_with(|| {
-                // Its own task: the cleanup finishes even if this request
-                // goes away.
-                let handle = tokio::spawn(finish_deletion(
-                    node.clone(),
-                    session,
-                    workspace,
-                    deletions.clone(),
-                ));
-                async move { handle.await.unwrap_or_else(|_| Err(ApiError::internal())) }
-                    .boxed()
-                    .shared()
-            })
-            .clone()
-    };
-    task.await?;
-    Ok(Response::empty(204))
-}
-
-async fn finish_deletion(
-    node: Node,
-    session: SessionRow,
-    workspace: Workspace,
-    deletions: Arc<Deletions>,
-) -> ApiResult<()> {
-    // Removed on drop, so a panicking cleanup does not leave a finished
-    // deletion that every retry would join (TS: `.finally(...)`).
-    let _entry = DeletionEntry {
-        deletions,
-        session_id: session.id.clone(),
-    };
-    remove_session(&node, &session, &workspace).await
-}
-
-/// Removes a session's [`Deletions`] entry when dropped. The entry is
-/// inserted under the map's lock before the task can take it, so the
-/// removal never precedes the insertion.
-struct DeletionEntry {
-    deletions: Arc<Deletions>,
-    session_id: String,
-}
-
-impl Drop for DeletionEntry {
-    fn drop(&mut self) {
-        self.deletions
-            .0
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .remove(&self.session_id);
-    }
-}
-
-async fn remove_session(node: &Node, session: &SessionRow, workspace: &Workspace) -> ApiResult<()> {
-    let mode = node.workspace_mode(workspace)?;
-    node.runners.stop_session(&session.id).await?;
-    node.terminals.dispose_session(&session.id).await;
-    node.browser.close_session(&session.id).await;
-    // Both paths are allocated by the node, never supplied by the caller.
-    let sessions_dir = node.config.sessions_dir.to_string_lossy().into_owned();
-    let private = pirc_policy::resolve_path("/", &session.private_session_path);
-    if !pirc_policy::is_inside(&private, &sessions_dir)
-        || private == pirc_policy::resolve_path("/", &sessions_dir)
-    {
-        crate::log::error(&format!(
-            "deleting session {}: invalid private session path",
-            session.id
-        ));
-        return Err(ApiError::internal());
-    }
-    remove_tree(Path::new(&session.private_session_path))?;
-    let base = session
-        .id
-        .split('/')
-        .rfind(|part| !part.is_empty())
-        .unwrap_or_default();
-    if mode.workdir == Workdir::PerSession {
-        remove_tree(
-            &Path::new(&workspace.canonical_path)
-                .join("sessions")
-                .join(base),
-        )?;
-    }
-    node.branches
-        .forget(Path::new(&session.private_session_path));
-    node.db.lock().finish_session_deletion(&session.id)?;
-    node.events.forget(&session.id);
-    Ok(())
-}
-
-/// `rmSync(path, { recursive: true, force: true })`.
-fn remove_tree(path: &Path) -> ApiResult<()> {
-    let removed = match std::fs::symlink_metadata(path) {
-        Err(_) => return Ok(()),
-        Ok(meta) if meta.is_dir() => std::fs::remove_dir_all(path),
-        Ok(_) => std::fs::remove_file(path),
-    };
-    match removed {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(io_failure("removing", path, error))
-        }
-        _ => Ok(()),
-    }
-}
-
-/// Delete a chat project: every chat in it (as [`delete_session`] does),
-/// the uploads made in it, its browser profile, its directory
-/// (instructions included) and its row. Fenced first, so a retry after a
-/// failure or a restart finishes the same cleanup; the fenced project is
-/// no longer announced to the gateway.
-async fn delete_workspace(
-    node: Node,
-    request: Request,
-    deletions: Arc<Deletions>,
-) -> ApiResult<Response> {
-    let workspace_id = param(&request, "id").to_owned();
-    let user = request.user.clone();
-    let workspace = {
-        let db = node.db.lock();
-        if let Some(deletion) = db.workspace_deletion(&workspace_id)? {
-            if deletion.owner_user != user {
-                return Err(ApiError::forbidden("Project belongs to another user"));
-            }
-            if deletion.status == "deleted" {
-                return Ok(Response::empty(204));
-            }
-        }
-        let workspace = db
-            .find_workspace(&workspace_id)?
-            .ok_or_else(|| ApiError::not_found("Workspace not found"))?;
-        if !node.workspace_mode(&workspace)?.projects
-            || workspace.id == pirc_config::CHAT_WORKSPACE_ID
-        {
-            return Err(ApiError::bad_request("Only chat projects can be deleted"));
-        }
-        db.begin_workspace_deletion(&workspace_id, &user)?;
-        workspace
-    };
-    let key = format!("workspace:{workspace_id}");
-    let task = {
-        let mut running = deletions.0.lock().unwrap_or_else(|p| p.into_inner());
-        running
-            .entry(key.clone())
-            .or_insert_with(|| {
-                let handle = tokio::spawn({
-                    let node = node.clone();
-                    let deletions = deletions.clone();
-                    async move {
-                        let _entry = DeletionEntry {
-                            deletions,
-                            session_id: key,
-                        };
-                        remove_project(&node, &workspace).await
-                    }
-                });
-                async move { handle.await.unwrap_or_else(|_| Err(ApiError::internal())) }
-                    .boxed()
-                    .shared()
-            })
-            .clone()
-    };
-    task.await?;
-    Ok(Response::empty(204))
-}
-
-/// An upload's storage name as the node makes them: `<48 hex>.bin`.
-fn storage_name(name: &str) -> bool {
-    name.strip_suffix(".bin").is_some_and(|stem| {
-        stem.len() == 48
-            && stem
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-    })
-}
-
-async fn remove_project(node: &Node, workspace: &Workspace) -> ApiResult<()> {
-    // Checked before anything goes: only the directory the node allocated,
-    // `<state>/chat/<id>`, and only a non-empty id.
-    let directory = Path::new(&workspace.canonical_path);
-    let chat_root = node.config.state_dir.join("chat");
-    let chat_root = chat_root.canonicalize().unwrap_or(chat_root);
-    if workspace.id.is_empty()
-        || directory.parent() != Some(chat_root.as_path())
-        || directory.file_name() != Some(std::ffi::OsStr::new(&workspace.id))
-    {
-        crate::log::error(&format!(
-            "deleting workspace {}: unexpected directory {}",
-            workspace.id,
-            directory.display()
-        ));
-        return Err(ApiError::internal());
-    }
-    let user = node
-        .db
-        .lock()
-        .workspace_deletion(&workspace.id)?
-        .map(|deletion| deletion.owner_user)
-        .ok_or_else(ApiError::internal)?;
-    let sessions = node.db.lock().workspace_sessions(&workspace.id)?;
-    for session in sessions {
-        node.db.lock().begin_session_deletion(&session.id, &user)?;
-        remove_session(node, &session, workspace).await?;
-    }
-    let uploads = node.db.lock().workspace_uploads(&workspace.id)?;
-    for upload in uploads {
-        if !storage_name(&upload.storage_name) {
-            crate::log::error(&format!("upload {}: invalid storage name", upload.id));
-            return Err(ApiError::internal());
-        }
-        remove_tree(&node.config.uploads_dir.join(&upload.storage_name))?;
-    }
-    remove_tree(
-        &node
-            .config
-            .browser
-            .profiles_dir
-            .join(crate::browser::manager::profile_name(&workspace.id)),
-    )?;
-    remove_tree(directory)?;
-    node.db.lock().finish_workspace_deletion(&workspace.id)?;
-    Ok(())
 }
 
 async fn rename_session(node: Node, request: Request) -> ApiResult<Response> {
@@ -1044,7 +641,7 @@ fn next_agent_settings(
 ) -> Option<Value> {
     let workspace = node.db.lock().get_workspace(&session.workspace_id).ok()?;
     let mode = node.workspace_mode(&workspace).ok()?;
-    let root = chat::session_root(&workspace, &session.id, &mode).ok()?;
+    let root = crate::util::session_root(&workspace, &session.id, &mode).ok()?;
     let mode_json = serde_json::to_string(&mode).ok()?;
     let env = |name: &str| {
         if name == "PIRC_MODE" {
@@ -1500,7 +1097,7 @@ async fn upload(node: Node, request: Request) -> ApiResult<Response> {
                 .split('/')
                 .rfind(|part| !part.is_empty())
                 .unwrap_or_default();
-            let cleaned = chat::js_trim(base);
+            let cleaned = crate::util::js_trim(base);
             if cleaned.is_empty() {
                 return Err(ApiError::bad_request("filename is invalid"));
             }
@@ -1533,7 +1130,7 @@ async fn upload(node: Node, request: Request) -> ApiResult<Response> {
         .and_then(|mut out| out.write_all(bytes))
         .map_err(|error| io_failure("writing", &file, error))?;
     {
-        // The chat (or its project) may have been fenced for deletion while
+        // The session may have been fenced, or its workspace removed, while
         // the bytes were written: keep nothing then.
         let db = node.db.lock();
         if let Err(error) = db
@@ -1566,7 +1163,7 @@ pub fn apply_session_name(
 ) -> ApiResult<()> {
     let name = data["name"]
         .as_str()
-        .map(|name| head16(chat::js_trim(name), 200))
+        .map(|name| head16(crate::util::js_trim(name), 200))
         .unwrap_or_default();
     if name.is_empty() {
         return Ok(());
@@ -1601,10 +1198,10 @@ mod tests {
 
     #[test]
     fn workspace_bodies() {
-        let parsed = |value: Value| new_workspace(&value, false);
-        let chat = parsed(json!({ "kind": "chat", "displayName": " Trip " })).unwrap();
-        assert_eq!(chat.mode.as_str(), "chat");
-        assert_eq!(chat.display_name, "Trip");
+        let parsed = |value: Value| new_workspace(&value);
+        let scratch = parsed(json!({ "kind": "scratch", "displayName": " Trip " })).unwrap();
+        assert_eq!(scratch.mode.as_str(), "scratch");
+        assert_eq!(scratch.display_name, "Trip");
         let directory = parsed(json!({ "path": " ~/p ", "displayName": "P", "extra": 1 })).unwrap();
         assert_eq!(directory.mode.as_str(), "directory");
         assert_eq!(directory.path.as_deref(), Some("~/p"));
@@ -1615,17 +1212,17 @@ mod tests {
                 .as_str(),
             "research"
         );
-        assert!(new_workspace(&json!({ "displayName": "P" }), true).is_err());
+        assert!(new_workspace(&json!({ "displayName": "P" })).is_err());
         assert_eq!(
-            new_workspace(&json!({ "displayName":"P", "path":"~/repo" }), true)
+            new_workspace(&json!({ "displayName":"P", "path":"~/repo" }))
                 .unwrap()
                 .mode
                 .as_str(),
             "directory"
         );
         for bad in [
-            json!({ "kind": "chat", "displayName": "  " }),
-            json!({ "mode": "research", "kind": "chat", "displayName": "P" }),
+            json!({ "kind": "scratch", "displayName": "  " }),
+            json!({ "mode": "research", "kind": "scratch", "displayName": "P" }),
             json!({ "mode": "INVALID", "displayName": "P" }),
             json!({ "mode": null, "displayName": "P" }),
             json!({ "path": "/p", "displayName": "x".repeat(201) }),
@@ -1649,41 +1246,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn chat_role_accepting_only_custom_or_no_modes_does_not_seed_chat() {
-        use pirc_config::Env;
-        use pirc_protocol::NodeRole;
-        for accepted in ["research", ""] {
-            let dir = tempfile::tempdir_in("/tmp").unwrap();
-            let root = dir.path().canonicalize().unwrap();
-            let state = root.join("state").display().to_string();
-            let config_dir = root.join("config").display().to_string();
-            let home = root.display().to_string();
-            let env = Env::new(
-                [
-                    ("PIRC_NODE_ID", "test-node"),
-                    ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
-                    ("PIRC_DAEMON_URL", "ws://127.0.0.1:8787"),
-                    ("PIRC_ALLOWED_USERS", "test-user"),
-                    ("PIRC_STATE_DIR", state.as_str()),
-                    ("PIRC_CONFIG_DIR", config_dir.as_str()),
-                    ("PIRC_MODES", accepted),
-                    ("PIRC_BROWSER", "false"),
-                    ("HOME", home.as_str()),
-                ],
-                &root,
-            );
-            let config = NodeConfig::load(&env, NodeRole::Chat).unwrap();
-            let node = crate::services::Services::start(config, env).await.unwrap();
-            assert!(node.db.lock().list_workspaces().unwrap().is_empty());
-            node.close().await;
-        }
-    }
-
-    #[tokio::test]
     async fn custom_modes_create_by_workdir_and_unavailable_sessions_are_read_only() {
         use pirc_config::Env;
-        use pirc_protocol::NodeRole;
-        use pirc_protocol::mode::{default_chat, default_work};
+        use pirc_protocol::mode::default_work;
+
+        let per_session = || {
+            let mut mode = default_work();
+            mode.id = ModeId::new("research").unwrap();
+            mode.workdir = Workdir::PerSession;
+            mode.project_config = false;
+            mode.repository = false;
+            mode
+        };
 
         // Keep the inference Unix-socket pathname below macOS SUN_LEN.
         let dir = tempfile::tempdir_in("/tmp").unwrap();
@@ -1709,7 +1283,7 @@ mod tests {
             ],
             &root,
         );
-        let config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+        let config = pirc_config::NodeConfig::load(&env).unwrap();
         let node = crate::services::Services::start(config, env).await.unwrap();
         let create = || {
             request(
@@ -1724,10 +1298,7 @@ mod tests {
                 .code,
             "mode_unavailable"
         );
-        let mut mode = default_chat();
-        mode.id = ModeId::new("research").unwrap();
-        node.replace_modes(vec![mode]).await;
-        // A per-session mode works on a normal node, not only the chat role.
+        node.replace_modes(vec![per_session()]).await;
         let response = create_workspace(node.clone(), create()).await.unwrap();
         let workspace = response.body.unwrap()["workspace"].clone();
         assert_eq!(workspace["mode"], "research");
@@ -1746,7 +1317,7 @@ mod tests {
             .as_str()
             .unwrap()
             .to_owned();
-        // Editing a definition cannot reinterpret a managed assistant root
+        // Editing a definition cannot reinterpret a managed root
         // as a repository, or make its saved session writable there.
         let mut changed = default_work();
         changed.id = ModeId::new("research").unwrap();
@@ -1785,10 +1356,8 @@ mod tests {
                 .status,
             200
         );
-        let mut restored = default_chat();
-        restored.id = ModeId::new("research").unwrap();
-        node.replace_modes(vec![restored]).await;
-        // Conversely a saved repository must never become a full assistant
+        node.replace_modes(vec![per_session()]).await;
+        // Conversely a saved repository must never become a managed
         // root merely because its mode file now uses per-session workdirs.
         assert_eq!(
             create_session(
@@ -1798,13 +1367,6 @@ mod tests {
             .await
             .unwrap_err()
             .code,
-            "mode_unavailable"
-        );
-        assert_eq!(
-            read_instructions(node.clone(), request(Some(&repository_id), json!({})))
-                .await
-                .unwrap_err()
-                .code,
             "mode_unavailable"
         );
         node.replace_modes(Vec::new()).await;
@@ -1886,23 +1448,6 @@ mod tests {
                 "{path}"
             );
         }
-    }
-
-    #[test]
-    fn deletion_entries_go_even_on_panic() {
-        let deletions = Arc::new(Deletions::default());
-        let finished: Deletion = async { Ok(()) }.boxed().shared();
-        deletions.0.lock().unwrap().insert("s".into(), finished);
-        let entry = DeletionEntry {
-            deletions: deletions.clone(),
-            session_id: "s".into(),
-        };
-        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-            let _entry = entry;
-            panic!("cleanup failed");
-        }));
-        assert!(panicked.is_err());
-        assert!(deletions.0.lock().unwrap().is_empty());
     }
 
     #[test]

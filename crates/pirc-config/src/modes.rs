@@ -18,10 +18,8 @@ use crate::{ConfigError, Env, default_config_dir};
 
 /// Human-editable initial files, also suitable for printing for comparison.
 /// The filename supplies the id; Markdown after front matter supplies the body.
-pub const DEFAULT_MODE_FILES: &[(&str, &str)] = &[
-    ("chat.md", include_str!("modes/chat.md")),
-    ("directory.md", include_str!("modes/directory.md")),
-];
+pub const DEFAULT_MODE_FILES: &[(&str, &str)] =
+    &[("directory.md", include_str!("modes/directory.md"))];
 
 /// A skipped file and the validation or I/O rule it failed.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -238,10 +236,9 @@ fn existing_directory(dir: &Path) -> Result<bool, ConfigError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pirc_protocol::mode::{PromptSection, default_chat, default_work};
+    use pirc_protocol::mode::{PromptSection, default_work};
     use std::os::unix::fs::{PermissionsExt, symlink};
 
-    const CHAT_FILE: &str = include_str!("modes/chat.md");
     const WORK_FILE: &str = include_str!("modes/directory.md");
 
     fn ids(catalog: &ModeCatalog) -> Vec<&str> {
@@ -250,19 +247,18 @@ mod tests {
 
     #[test]
     fn default_markdown_matches_protocol_defaults_exactly() {
-        assert_eq!(parse_mode("chat", CHAT_FILE).unwrap(), default_chat());
         assert_eq!(parse_mode("directory", WORK_FILE).unwrap(), default_work());
     }
 
     #[test]
     fn filename_is_authoritative_and_body_is_markdown() {
-        let mode = parse_mode("research", &format!("{CHAT_FILE}\n  Study carefully.\n")).unwrap();
+        let mode = parse_mode("research", &format!("{WORK_FILE}\n  Study carefully.\n")).unwrap();
         assert_eq!(mode.id.as_str(), "research");
         assert_eq!(mode.body, "Study carefully.");
         assert!(mode.prompt.contains(&PromptSection::Body));
         for id in ["", "../chat", "chat.md", "Upper", "1first", "a/b"] {
             assert!(
-                parse_mode(id, CHAT_FILE)
+                parse_mode(id, WORK_FILE)
                     .unwrap_err()
                     .contains("invalid mode id")
             );
@@ -275,8 +271,8 @@ mod tests {
                 "body must come from the Markdown body",
             ),
         ] {
-            let text = CHAT_FILE.replacen("---\n", &format!("---\n{field}\n"), 1);
-            assert!(parse_mode("chat", &text).unwrap_err().contains(rule));
+            let text = WORK_FILE.replacen("---\n", &format!("---\n{field}\n"), 1);
+            assert!(parse_mode("directory", &text).unwrap_err().contains(rule));
         }
     }
 
@@ -292,10 +288,9 @@ mod tests {
             "---\nui: {noun: chat, noun: work}\n---\n",
             "---\n123: wrong-key\n---\n",
         ] {
-            assert!(parse_mode("chat", text).is_err(), "{text:?}");
+            assert!(parse_mode("directory", text).is_err(), "{text:?}");
         }
         for (from, to, rule) in [
-            ("assistant: user", "assistant: full", "assistant: full"),
             (
                 "features_on: []",
                 "features_on: [notAFeature]",
@@ -324,14 +319,14 @@ mod tests {
             let error = parse_mode("directory", &text).unwrap_err();
             assert!(error.contains(rule), "{error} should contain {rule}");
         }
-        let without_body = CHAT_FILE.replace("  - body\n", "");
+        let without_body = WORK_FILE.replace("  - body\n", "");
         assert!(
-            parse_mode("chat", &format!("{without_body}Instructions"))
+            parse_mode("directory", &format!("{without_body}Instructions"))
                 .unwrap_err()
                 .contains("body prompt section")
         );
         assert!(
-            parse_mode("chat", &format!("{CHAT_FILE}{}", "x".repeat(8001)))
+            parse_mode("directory", &format!("{WORK_FILE}{}", "x".repeat(8001)))
                 .unwrap_err()
                 .contains("body")
         );
@@ -341,7 +336,7 @@ mod tests {
     fn catalog_sorts_files_skips_bad_ones_and_reports_source_and_rule() {
         let root = tempfile::tempdir().unwrap();
         let dir = root.path();
-        fs::write(dir.join("zeta.md"), CHAT_FILE).unwrap();
+        fs::write(dir.join("zeta.md"), WORK_FILE).unwrap();
         fs::write(dir.join("alpha.md"), WORK_FILE).unwrap();
         fs::write(dir.join("invalid.md"), "---\nlabel: [\n---\n").unwrap();
         fs::write(
@@ -349,7 +344,7 @@ mod tests {
             WORK_FILE.replace("tools: null", "tools: [not_real]"),
         )
         .unwrap();
-        fs::write(dir.join("Upper.md"), CHAT_FILE).unwrap();
+        fs::write(dir.join("Upper.md"), WORK_FILE).unwrap();
         fs::write(dir.join("bad-utf8.md"), [0xff]).unwrap();
         fs::write(dir.join("ignored.txt"), "ignored").unwrap();
         fs::create_dir(dir.join("not-a-file.md")).unwrap();
@@ -389,8 +384,7 @@ mod tests {
         assert!(initialize_modes(&dir).unwrap());
         let catalog = load_modes(&dir).unwrap();
         assert!(catalog.warnings.is_empty());
-        assert_eq!(ids(&catalog), ["chat", "directory"]);
-        assert_eq!(catalog.modes[&ModeId::new("chat").unwrap()], default_chat());
+        assert_eq!(ids(&catalog), ["directory"]);
         assert_eq!(
             catalog.modes[&ModeId::new("directory").unwrap()],
             default_work()
@@ -415,15 +409,19 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let dir = root.path().join("modes");
         initialize_modes(&dir).unwrap();
-        let changed = CHAT_FILE.replace("label: Chat", "label: Research");
-        fs::write(dir.join("chat.md"), &changed).unwrap();
+        let changed = WORK_FILE.replace("label: Work", "label: Research");
+        fs::write(dir.join("directory.md"), &changed).unwrap();
+        assert!(!initialize_modes(&dir).unwrap());
+        assert_eq!(
+            fs::read_to_string(dir.join("directory.md")).unwrap(),
+            changed
+        );
+        let catalog = load_modes(&dir).unwrap();
+        assert_eq!(catalog.modes.values().next().unwrap().label, "Research");
         fs::remove_file(dir.join("directory.md")).unwrap();
         assert!(!initialize_modes(&dir).unwrap());
-        assert_eq!(fs::read_to_string(dir.join("chat.md")).unwrap(), changed);
         assert!(!dir.join("directory.md").exists());
-        let catalog = load_modes(&dir).unwrap();
-        assert_eq!(ids(&catalog), ["chat"]);
-        assert_eq!(catalog.modes.values().next().unwrap().label, "Research");
+        assert!(load_modes(&dir).unwrap().modes.is_empty());
     }
 
     #[test]
@@ -446,7 +444,7 @@ mod tests {
         let store = root.path().join("store");
         fs::create_dir(&store).unwrap();
         let source = root.path().join("source.md");
-        fs::write(&source, CHAT_FILE).unwrap();
+        fs::write(&source, WORK_FILE).unwrap();
         fs::set_permissions(&source, fs::Permissions::from_mode(0o400)).unwrap();
         symlink(&source, store.join("research.md")).unwrap();
         symlink(root.path().join("missing.md"), store.join("missing.md")).unwrap();
@@ -457,7 +455,7 @@ mod tests {
         assert_eq!(ids(&catalog), ["research"]);
         assert_eq!(catalog.warnings.len(), 1);
         assert_eq!(catalog.warnings[0].source, dir.join("missing.md"));
-        assert!(!store.join("chat.md").exists());
+        assert!(!store.join("directory.md").exists());
     }
 
     #[test]

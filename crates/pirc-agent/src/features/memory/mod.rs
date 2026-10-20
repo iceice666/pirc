@@ -51,7 +51,7 @@ use self::workspace::{
 };
 use crate::LocalBoxFuture;
 use crate::agent::Agent;
-use crate::channels::{ChannelError, process_gateway, team_child_name};
+use crate::channels::team_child_name;
 use crate::compaction::context_tokens;
 use crate::context::PromptSection;
 use crate::feature::{
@@ -929,43 +929,6 @@ impl RecallTool {
             let fold = workspace_ledger(&self.state, &agent).fold()?;
             if let Some(found) = recall_from_workspace(&fold, &id, recall)? {
                 result = found;
-            }
-        }
-        // A chat recalls notes it found with memory_search through the
-        // gateway, which asks the node that holds them (docs/architecture/assistant-memory.md).
-        let gateway = if agent.config().mode().full_assistant() {
-            process_gateway()
-        } else {
-            None
-        };
-        if let Some(gateway) = gateway
-            && result.1 == "not_found"
-        {
-            let mut request = Map::new();
-            request.insert("id".to_owned(), json!(id));
-            let answer = gateway
-                .gateway
-                .request("recall.remote", request, Some(&ctx.signal))
-                .await;
-            match answer {
-                Ok(found) => {
-                    let text = found.get("text").map(js::string_of).unwrap_or_default();
-                    let status = found
-                        .get("status")
-                        .map_or_else(|| "undefined".to_owned(), js::string_of);
-                    result = (text, status);
-                }
-                Err(ChannelError::Coded { code, message, .. }) => {
-                    if code != "not_found" {
-                        result = (
-                            format!(
-                                "Workspace memory could not be read through the gateway: {message}"
-                            ),
-                            "source_unavailable".to_owned(),
-                        );
-                    }
-                }
-                Err(error) => return Err(error.message().to_owned()),
             }
         }
         let (text, status) = result;

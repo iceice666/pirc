@@ -65,7 +65,6 @@ mod tests {
                 inference_socket: None,
                 protected_paths: Vec::new(),
                 workspace_memory_file: None,
-                project_files_dir: None,
             })
             .await
             .err()

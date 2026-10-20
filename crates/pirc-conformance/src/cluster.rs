@@ -33,8 +33,6 @@ pub const WORKSPACE_ID: &str = "test:test";
 const BIN_DIR_VARIABLE: &str = "PIRC_CONFORMANCE_BIN_DIR";
 /// Set by `bun run test:conformance` (and so CI): skipping is then a failure.
 const REQUIRED_VARIABLE: &str = "PIRC_CONFORMANCE_REQUIRED";
-/// The top-level chats workspace of a chat node, as the gateway names it.
-pub const CHATS_WORKSPACE_ID: &str = "test:chats";
 
 /// Creates the executable `path` (which must not exist yet) holding
 /// `contents`.
@@ -94,10 +92,6 @@ pub struct GatewayOptions {
     /// The node's agents run without their built-in features
     /// (`PIRC_AGENT_FEATURES=none`; docs/development/historical-records.md).
     pub agent_core_only: bool,
-    /// The node runs the chat role (`pirc-chat`, or `pirc-node chat`): no
-    /// configured workspaces, the top-level chats workspace
-    /// [`CHATS_WORKSPACE_ID`] instead of [`WORKSPACE_ID`].
-    pub chat_node: bool,
     /// Extra or overriding node environment variables. `{run_dir}` in a
     /// value stands for the run directory ([`Cluster::dir`], [`LoneNode::dir`]).
     pub node_env: Vec<(&'static str, String)>,
@@ -107,7 +101,6 @@ pub struct GatewayOptions {
 #[derive(Clone, Debug, Default)]
 pub struct NodeOptions {
     pub agent_core_only: bool,
-    pub chat_node: bool,
     pub env: Vec<(&'static str, String)>,
 }
 
@@ -115,7 +108,6 @@ impl GatewayOptions {
     fn node(&self) -> NodeOptions {
         NodeOptions {
             agent_core_only: self.agent_core_only,
-            chat_node: self.chat_node,
             env: self.node_env.clone(),
         }
     }
@@ -257,15 +249,12 @@ impl Cluster {
             ("PIRC_BROWSER", "false".to_owned()),
             ("PIRC_SHUTDOWN_GRACE_MS", "200".to_owned()),
         ];
-        // A chat node refuses configured workspaces.
-        if !options.chat_node {
-            env.push((
-                "PIRC_WORKSPACES",
-                json!([{ "id": "test", "path": workspace, "displayName": "Test",
-                    "defaults": {} }])
-                .to_string(),
-            ));
-        }
+        env.push((
+            "PIRC_WORKSPACES",
+            json!([{ "id": "test", "path": workspace, "displayName": "Test",
+                "defaults": {} }])
+            .to_string(),
+        ));
         if options.agent_core_only {
             env.push(("PIRC_AGENT_FEATURES", "none".to_owned()));
         }
@@ -278,11 +267,11 @@ impl Cluster {
                 *value = value.replace("{run_dir}", &run_dir);
             }
         }
-        let (program, args) = node_command(bin_dir, options.chat_node);
+        let program = bin_dir.join("pirc-node");
         Process::spawn(
             "node",
             &program,
-            &args,
+            &[],
             root,
             &dir_in(root, "node-home"),
             &env,
@@ -492,12 +481,6 @@ pub(crate) fn bin_dir() -> Option<PathBuf> {
 /// The gateway under test: the bin dir's.
 fn gateway_bin(bin_dir: &Path) -> PathBuf {
     bin_dir.join("pirc-gateway")
-}
-
-/// The node under test and its arguments (`pirc-node [chat]`).
-fn node_command(bin_dir: &Path, chat: bool) -> (PathBuf, Vec<&'static str>) {
-    let args = if chat { vec!["chat"] } else { Vec::new() };
-    (bin_dir.join("pirc-node"), args)
 }
 
 fn dir_in(root: &Path, name: &str) -> String {

@@ -136,36 +136,22 @@ pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {
     })
 }
 
-/// Memory belongs to the assistant: a mode with full assistant access.
-fn require_assistant(context: &OpContext) -> ApiResult<()> {
-    if !context.mode.full_assistant() {
-        return Err(ApiError::new(
-            403,
-            "forbidden",
-            "Only chat sessions have the assistant memory",
-        ));
-    }
-    Ok(())
+/// Memory belongs to the assistant, which no session is until the gateway
+/// hosts it (plans/rewrite/02-brain-host.md): every operation is refused.
+fn require_assistant(_context: &OpContext) -> ApiResult<()> {
+    Err(ApiError::new(
+        403,
+        "forbidden",
+        "No session has the assistant memory",
+    ))
 }
 
 pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Value> {
     let user = context.user.as_str();
     let session_id = context.session.id.as_str();
     match op {
-        // Every session in a chat workspace is an assistant; directory
-        // workspaces have no policy: every capability stays allowed. A
-        // coding session reads the approved USER entries and nothing else:
-        // no notes, no workspaces, and its memory operations stay refused.
         Op::Context => {
-            if !context.mode.full_assistant() {
-                let user = {
-                    let conn = app.db.lock();
-                    super::store(app, &conn).user_context(user)?
-                };
-                return Ok(json!({
-                    "enabled": true, "user": user, "notes": null, "workspaces": null,
-                }));
-            }
+            require_assistant(context)?;
             let memory = {
                 let conn = app.db.lock();
                 super::store(app, &conn).context(user)?

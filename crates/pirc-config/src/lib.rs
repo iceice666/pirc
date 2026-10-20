@@ -19,9 +19,7 @@ pub mod frontmatter;
 pub mod modes;
 pub mod node;
 
-pub use node::{
-    BrowserSettings, CHAT_WORKSPACE_ID, ConfigWorkspace, NodeConfig, SandboxSettings, Viewport,
-};
+pub use node::{BrowserSettings, ConfigWorkspace, NodeConfig, SandboxSettings, Viewport};
 
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;
 /// Node transport frames are capped at 16 MiB; a base64 upload (4/3 larger) must fit in one.

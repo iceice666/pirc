@@ -444,10 +444,7 @@ pub fn session(
         inference_socket: input.inference_socket.as_deref().map(text),
         tmp_dirs: vec![text(&tmp), "/tmp".to_owned()],
         protected_paths: input.protected_paths.iter().map(|p| text(p)).collect(),
-        read_only_dirs: [text(&sandbox_bin_dir(config))]
-            .into_iter()
-            .chain(input.project_files_dir.as_deref().map(text))
-            .collect(),
+        read_only_dirs: vec![text(&sandbox_bin_dir(config))],
         platform: Platform::current(),
         uid: nix::unistd::getuid().as_raw(),
         ssh_auth_sock: env.get("SSH_AUTH_SOCK").map(str::to_owned),
@@ -616,7 +613,6 @@ pub(super) mod test_support {
     use std::path::Path;
 
     use pirc_config::{Env, NodeConfig};
-    use pirc_protocol::NodeRole;
 
     /// `<root>/workspace` (with a file), `<root>/home`, `<root>/state`,
     /// `<root>/config` and `<root>/tmp` (`TMPDIR`); `extra` adds variables.
@@ -640,7 +636,7 @@ pub(super) mod test_support {
         ];
         vars.extend_from_slice(extra);
         let env = Env::new(vars, root);
-        (NodeConfig::load(&env, NodeRole::Node).unwrap(), env)
+        (NodeConfig::load(&env).unwrap(), env)
     }
 }
 
@@ -719,7 +715,6 @@ mod tests {
             inference_socket: None,
             protected_paths: Vec::new(),
             workspace_memory_file: None,
-            project_files_dir: None,
         };
         let a = session(&config, &env, &node_tmp, &input("pi_a")).unwrap();
         let b = session(&config, &env, &node_tmp, &input("pi_b")).unwrap();
@@ -780,7 +775,6 @@ mod tests {
             inference_socket: None,
             protected_paths: Vec::new(),
             workspace_memory_file: None,
-            project_files_dir: None,
         };
         let temp_warning = |node_tmp: &NodeTmp| {
             let session = session(&config, &env, node_tmp, &input).unwrap();
@@ -817,7 +811,6 @@ mod tests {
             inference_socket: None,
             protected_paths: Vec::new(),
             workspace_memory_file: Some(memory.join(file)),
-            project_files_dir: None,
         };
         // Another repository's ledger (one not yet made would be writable
         // where the directory lies in a write root, such as `/tmp` here

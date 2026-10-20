@@ -1,7 +1,8 @@
 //! The `goal` feature without `ptc` scripts (docs/development/historical-records.md):
 //! `/goal` commands, continuation rounds started when the agent settles,
 //! pauses at the round limit and after an interrupted run, a goal restored
-//! disarmed after a restart, and the feature turned off (config, chats).
+//! disarmed after a restart, and the feature turned off (config, a mode's
+//! `features_off`).
 //! The goal tools themselves are reachable only from `ptc` scripts; those
 //! scenarios are in `agent_goal_ptc.rs`.
 
@@ -255,6 +256,13 @@ async fn agent_goal_restored() {
     insta::assert_json_snapshot!("agent_goal_restored", r.into_value());
 }
 
+/// A mode that turns goals off (`features_off`), as `PIRC_MODE`.
+fn mode_without_goals() -> String {
+    let mut mode = pirc_protocol::mode::default_work();
+    mode.features_off = vec!["goal".to_owned()];
+    serde_json::to_string(&mode).unwrap()
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn agent_goal_off() {
     for (name, options) in [
@@ -263,22 +271,22 @@ async fn agent_goal_off() {
             goal_options(json!({ "features": { "goal": { "enabled": false } } })),
         ),
         (
-            "chat",
+            "mode",
             AgentOptions {
                 env: vec![
                     ("PIRC_WRITE_BROKER".to_owned(), "1".to_owned()),
-                    ("PIRC_MODE".to_owned(), serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap()),
+                    ("PIRC_MODE".to_owned(), mode_without_goals()),
                 ],
                 ..AgentOptions::default()
             }
             .features("goal"),
         ),
         (
-            "chat with goals on",
+            "mode with goals on",
             AgentOptions {
                 env: vec![
                     ("PIRC_WRITE_BROKER".to_owned(), "1".to_owned()),
-                    ("PIRC_MODE".to_owned(), serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap()),
+                    ("PIRC_MODE".to_owned(), mode_without_goals()),
                 ],
                 config: json!({ "features": { "goal": { "enabled": true, "defaultMaxRounds": 1 } } }),
                 ..AgentOptions::default()
@@ -317,7 +325,7 @@ async fn agent_goal_off() {
             })
             .await;
         }
-        if name == "chat with goals on" {
+        if name == "mode with goals on" {
             settle(&mut agent, &mut m, &mut r, "round 1").await;
             then(&mut agent, &mut m, &mut r, "paused at the limit", |line| {
                 notified(line, "Goal paused")

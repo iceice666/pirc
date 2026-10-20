@@ -2,9 +2,8 @@
 
 - `packages.<system>.pirc-gateway`: `rustPlatform.buildRustPackage`, native
   `bin/pirc-gateway` plus the static web bundle at `share/pirc/web` (also default).
-- `packages.<system>.pirc-node`: native `bin/pirc-node`; `pirc-node chat` selects
-  the chat role. No separate chat package, Bun/Node runtime, srt or Playwright
-  package. On Linux its wrapper supplies bubblewrap on PATH.
+- `packages.<system>.pirc-node`: native `bin/pirc-node`. No Bun/Node runtime,
+  srt or Playwright package. On Linux its wrapper supplies bubblewrap on PATH.
 - `overlays.default`: `pkgs.pirc-gateway` and `pkgs.pirc-node`.
 - `nixosModules.pirc` / `.default`: gateway and optional local node service.
 - `devShells.default`: Rust, clippy/rustfmt, Bun and Node for web development;
@@ -16,8 +15,6 @@ nix build .#pirc-gateway -o result-gateway
 nix build .#pirc-node -o result-node
 ./result-gateway/bin/pirc-gateway --version
 ./result-node/bin/pirc-node --help
-# Set separate gateway/node environments before starting services:
-./result-node/bin/pirc-node chat
 ```
 
 The gateway depends on the web build output, not its Bun build tool. Server
@@ -28,8 +25,7 @@ is separately allowlisted in `web.nix`.
 ## Module
 
 See [example.nix](example.nix) and the [NixOS deployment guide](../docs/deploy/nixos.md).
-Set `gatewayPackage` and `nodePackage` as needed. `services.pirc.chat = true` adds
-`chat` to the local node's command; `chatPackage` is removed with a diagnostic.
+Set `gatewayPackage` and `nodePackage` as needed.
 The unit names stay `pirc` and `pirc-node`.
 
 The gateway runs as `pirc-gateway`, separately from the node account (`pirc` by

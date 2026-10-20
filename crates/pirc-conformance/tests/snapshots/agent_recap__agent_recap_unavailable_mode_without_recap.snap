@@ -1,32 +1,28 @@
 ---
-source: crates/pirc-conformance/tests/agent_todo.rs
+source: crates/pirc-conformance/tests/agent_recap.rs
 expression: r.into_value()
 ---
 [
   {
     "observed": {
-      "command": "prompt",
+      "command": "get_commands",
+      "data": {
+        "commands": []
+      },
       "id": "c1",
       "success": true,
       "type": "response"
     },
-    "step": "a run: response"
+    "step": "commands"
   },
   {
     "observed": [
-      {
-        "id": "<uuid:1>",
-        "method": "setWidget",
-        "type": "extension_ui_request",
-        "widgetKey": "local-todo",
-        "widgetPlacement": "aboveEditor"
-      },
       {
         "type": "agent_start"
       },
       {
         "message": {
-          "content": "go",
+          "content": "/recap 7",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
@@ -34,11 +30,17 @@ expression: r.into_value()
       },
       {
         "message": {
-          "content": "go",
+          "content": "/recap 7",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
       },
       {
         "type": "turn_start"
@@ -69,7 +71,7 @@ expression: r.into_value()
       {
         "assistantMessageEvent": {
           "contentIndex": 0,
-          "delta": "Ok",
+          "delta": "No reca",
           "type": "text_delta"
         },
         "type": "message_update"
@@ -77,14 +79,14 @@ expression: r.into_value()
       {
         "assistantMessageEvent": {
           "contentIndex": 0,
-          "delta": ".",
+          "delta": "p here.",
           "type": "text_delta"
         },
         "type": "message_update"
       },
       {
         "assistantMessageEvent": {
-          "content": "Ok.",
+          "content": "No recap here.",
           "contentIndex": 0,
           "type": "text_end"
         },
@@ -96,7 +98,7 @@ expression: r.into_value()
           "completedAt": "<epoch-ms>",
           "content": [
             {
-              "text": "Ok.",
+              "text": "No recap here.",
               "type": "text"
             }
           ],
@@ -132,14 +134,14 @@ expression: r.into_value()
         "type": "agent_settled"
       }
     ],
-    "step": "a run: events"
+    "step": "recap: events"
   },
   {
     "observed": [
       {
         "messages": [
           {
-            "content": "go",
+            "content": "/recap 7",
             "role": "user",
             "timestamp": "<epoch-ms>"
           }
@@ -147,7 +149,7 @@ expression: r.into_value()
         "modelId": "fake-model",
         "providerName": "fake",
         "sessionId": "<hex16:1>",
-        "systemPrompt": "You are pirc, the user's personal assistant, chatting with them on one of their machines.\nAnswer directly; use tools when they help, and report what you did and any blockers honestly.\n\nThis chat has its own private working directory; file tools write only to it and explicitly allowed paths, and read anywhere except credential stores and pirc's private state.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- planning: todo\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\n### Other capabilities\n\nCall these with the arguments shown. Each result has `text`; `ptc_docs({ names: [...] })` documents its typed fields if a script needs more.\n\n`tools.todo(args: { action: \"list\" | \"add\" | \"update\" | \"remove\" | \"prune\" | \"clear\"; items?: { text: string; category?: string; status?: \"pending\" | \"in_progress\" | \"completed\"; activeForm?: string; blockedBy?: number[] }[]; id?: number; text?: string; category?: string; status?: \"pending\" | \"in_progress\" | \"completed\"; activeForm?: string; blockedBy?: number[] })` — Session-local task list.\n\nCurrent working directory: <tmp>/workspace",
+        "systemPrompt": "You are pirc, a coding agent operating inside a user's workspace through tools.\nWork carefully: read before editing, keep changes minimal and verified, and report blockers honestly.\nFile tools can read anywhere except credential stores and pirc's private state, and write only to the workspace and explicitly allowed paths.\n\n## Capabilities\n\nCall `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` directly as tools for a single operation, and for any operation that may need approval. Use one `ptc` script (`tools.<name>(args)`) when several operations can run together, produce output to filter, or follow from each other's results in a way code can work out: for example, run the tests and then read each file the output reports as failing, in one script rather than one call per step. Writing or editing a file and then checking it (running its tests, a build or a linter) is such a sequence too: do both in one script and return the check's output. Every other capability is reachable only from `ptc`.\n\nWhen an operation needs the host's approval, the host asks the user as it runs. To request that approval, run the operation; do not ask for permission separately (for example with `ask_user_question`).\n\nThese are all the capabilities of this session: anything not listed here does not exist, so do not look for it.\n\n- files: edit, find, grep, ls, read, write\n- shell: bash\n\n### Signatures in scripts\n\nComplete, so scripts need no `ptc_docs` lookup for these. Every result also has `text` (the formatted output), and `images` when there are any; a failure throws a `PtcError`.\n\n`tools.read(args: { path: string; offset?: number; limit?: number }): { kind: \"text\"; path: string; content: string; contentTruncated: boolean; offset: number; lines: number; totalLines: number; nextOffset: number | null; truncated: boolean } | { kind: \"image\"; path: string; mimeType: string; bytes: number }`\n  Read a file. (path: File path, relative to the workspace or absolute; offset: 1-based first line; limit: Maximum lines to return)\n`tools.write(args: { path: string; content: string }): { path: string; bytes: number }`\n  Create or overwrite a file with the given content.\n`tools.edit(args: { path: string; oldText: string; newText: string; replaceAll?: boolean }): { path: string; replacements: number; diff: string }`\n  Replace exact text in a file. `oldText` must match exactly once unless `replaceAll` is true.\n`tools.ls(args?: { path?: string }): { entries: { name: string; type: \"file\" | \"directory\" | \"symlink\" | \"other\" }[]; total: number; truncated: boolean }`\n  List a directory (directories end with /). (path: Default: workspace root)\n`tools.grep(args: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; limit?: number }): { matches: { path: string; line: number; text: string }[]; truncated: boolean }`\n  Search file contents with a JavaScript regular expression. (limit: Maximum matches (default 200))\n`tools.find(args: { pattern: string; path?: string }): { paths: string[]; truncated: boolean }`\n  Find files by glob pattern (e.g. `**/*.ts`). (path: Directory to search (default workspace))\n`tools.bash(args: { command: string; timeout?: number }): { output: string; exitCode: number | null; timedOut: boolean; aborted: boolean; truncated: boolean }`\n  Run a bash command in the workspace. stdout and stderr are combined. (timeout: Timeout in seconds) In scripts a non-zero exit resolves normally (check `exitCode`); a timeout or an abort throws a PtcError whose `data` holds these fields.\n\nCurrent working directory: <tmp>/workspace",
         "thinking": "low",
         "tools": [
           {
@@ -363,6 +365,6 @@ expression: r.into_value()
         ]
       }
     ],
-    "step": "a run: model requests"
+    "step": "recap: model requests"
   }
 ]

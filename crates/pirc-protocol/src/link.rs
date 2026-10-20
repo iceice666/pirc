@@ -95,7 +95,6 @@ pub struct Registration {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeRole {
-    Chat,
     Node,
 }
 
@@ -308,7 +307,7 @@ mod tests {
     #[test]
     fn round_trips_node_frames() {
         for frame in [
-            json!({ "type": "register", "role": "node", "protocol": 13, "modes": ["directory"],
+            json!({ "type": "register", "role": "node", "protocol": 14, "modes": ["directory"],
                 "workspaces": [{ "id": "w", "displayName": "W", "mode": "directory",
                     "roles": [{ "name": "default", "source": "workspace" }] }] }),
             json!({ "type": "heartbeat" }),

@@ -86,7 +86,7 @@ expression: t.into_value()
         "status": 403
       }
     },
-    "step": "a chat project on a coding node: 403"
+    "step": "a mode outside the catalog (the legacy kind alias)"
   },
   {
     "observed": {
@@ -222,36 +222,6 @@ expression: t.into_value()
   },
   {
     "observed": {
-      "request": "GET /api/workspaces/test/instructions",
-      "response": {
-        "body": {
-          "error": {
-            "code": "invalid_input",
-            "message": "Only chat projects have instructions"
-          }
-        },
-        "status": 400
-      }
-    },
-    "step": "instructions of a directory workspace: the node's 400"
-  },
-  {
-    "observed": {
-      "request": "PATCH /api/workspaces/test/instructions",
-      "response": {
-        "body": {
-          "error": {
-            "code": "invalid_input",
-            "message": "Only chat projects have instructions"
-          }
-        },
-        "status": 400
-      }
-    },
-    "step": "set instructions of a directory workspace: 400"
-  },
-  {
-    "observed": {
       "request": "GET /api/workspaces/nope/project-config",
       "response": {
         "body": {
@@ -264,66 +234,5 @@ expression: t.into_value()
       }
     },
     "step": "project config of an unknown workspace: 404"
-  },
-  {
-    "observed": {
-      "request": "GET /api/assistant/prompts",
-      "response": {
-        "body": "<no such route>",
-        "status": 404
-      }
-    },
-    "step": "assistant prompts on a coding node: not a route, 404"
-  },
-  {
-    "observed": {
-      "request": "PUT /api/assistant/prompts/soul",
-      "response": {
-        "body": "<no such route>",
-        "status": 404
-      }
-    },
-    "step": "set an assistant prompt on a coding node: 404"
-  },
-  {
-    "observed": {
-      "request": "POST /api/sessions",
-      "response": {
-        "body": {
-          "session": {
-            "createdAt": "<epoch-ms>",
-            "id": "session_<uuid:1>",
-            "name": "New session",
-            "nameSource": "auto",
-            "nodeId": null,
-            "pinnedAt": null,
-            "runStatus": null,
-            "runnerEpoch": 0,
-            "runnerState": "stopped",
-            "settledAt": null,
-            "unread": false,
-            "updatedAt": "<epoch-ms>",
-            "workspaceId": "test"
-          }
-        },
-        "status": 201
-      }
-    },
-    "step": "a session in the configured workspace"
-  },
-  {
-    "observed": {
-      "request": "DELETE /api/sessions/session_<uuid:1>",
-      "response": {
-        "body": {
-          "error": {
-            "code": "invalid_input",
-            "message": "Only chats can be deleted"
-          }
-        },
-        "status": 400
-      }
-    },
-    "step": "deleting it: only chats can be deleted, 400"
   }
 ]

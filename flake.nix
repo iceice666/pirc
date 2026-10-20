@@ -1,5 +1,5 @@
 {
-  description = "pirc: native Rust gateway and coding/chat node with a NixOS service";
+  description = "pirc: native Rust gateway and coding node with a NixOS service";
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";

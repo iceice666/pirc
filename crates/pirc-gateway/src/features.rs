@@ -8,7 +8,6 @@ use axum::http::{HeaderValue, Method, header};
 use axum::middleware::Next;
 use axum::response::Response;
 use axum::routing::{delete, get, post};
-use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -137,17 +136,6 @@ impl App {
     /// Memory hints (`memory=1`) for `user`, after memory's own update.
     pub fn memory_changed(&self, user: &str) {
         self.hints.memory.notify(&user.to_owned());
-    }
-
-    /// Forget what the assistant's memory learned from a deleted chat (in
-    /// the deletion's transaction).
-    pub fn forget_session_memory(
-        &self,
-        conn: &Connection,
-        user: &str,
-        session_id: &str,
-    ) -> ApiResult<()> {
-        crate::memory::forget_session(self, conn, user, session_id)
     }
 
     /// Confirmations the gateway asks for itself (delegations), shown with

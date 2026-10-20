@@ -18,7 +18,7 @@ mod node_browser_support;
 mod node_link_side_support;
 
 use node_browser_support::{
-    Browsing, Viewer, entry, ffmpeg, images, kind, required, start, state, viewport_frame,
+    Browsing, Viewer, entry, ffmpeg, kind, required, start, state, viewport_frame,
 };
 use node_link_side_support::settled_in;
 use serde_json::{Value, json};
@@ -31,7 +31,7 @@ fn js(text: &str) -> String {
 /// Start a node with a browser, open a session in workspace `test`, prompt
 /// it and return the agent's first model request.
 async fn begin(extra: &[(&'static str, String)]) -> Option<(Browsing, String, Value, Value)> {
-    let mut b = start(false, extra).await?;
+    let mut b = start(extra).await?;
     let (session, generation) = b.session("test").await;
     b.gw.prompt(&session, &generation, "browse-1", "Use the browser")
         .await;
@@ -293,7 +293,7 @@ fn lease(generation: &Value, message: Value) -> Value {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn node_browser_viewer() {
-    let Some(mut b) = start(false, &[]).await else {
+    let Some(mut b) = start(&[]).await else {
         return;
     };
     let (session, generation) = b.session("test").await;
@@ -614,7 +614,7 @@ async fn node_browser_record() {
         eprintln!("no ffmpeg (PIRC_FFMPEG, ffmpeg on PATH); skipping the recording scenario");
         return;
     }
-    let Some(mut b) = start(false, &[]).await else {
+    let Some(mut b) = start(&[]).await else {
         return;
     };
     let (session, generation) = b.session("test").await;
@@ -746,44 +746,4 @@ await call('browser_record', {{ action: 'pause' }});"#,
     v.close(&mut b.gw).await;
     finish(&mut b, &start_2, &session).await;
     insta::assert_json_snapshot!("node_browser_record", b.t.into_value());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn node_browser_close() {
-    let Some(mut b) = start(true, &[]).await else {
-        return;
-    };
-    let (session, generation) = b.session("chats").await;
-    let mut v = Viewer::open(&mut b.gw, "close-1", &session).await;
-    v.wait(&mut b.gw, kind("log")).await;
-    b.gw.prompt(&session, &generation, "close-1", "Open a page")
-        .await;
-    let start_1 = b.model_start().await;
-    let body = format!(
-        "await call('browser_navigate', {{ url: {} }});",
-        js(&b.site.a("/form.html"))
-    );
-    v.now(&mut b.gw);
-    let (start_2, _) = b.run(&start_1, "c1", &body).await;
-    v.wait(&mut b.gw, state(|s| s["title"] == "Form")).await;
-    finish(&mut b, &start_2, &session).await;
-    let deleted =
-        b.gw.ask("DELETE", &format!("/api/sessions/{session}"), None)
-            .await;
-    b.t.note("delete the chat", deleted["data"]["status"].clone());
-    let closed = v.wait(&mut b.gw, state(|s| s["active"] == false)).await;
-    b.t.note("the viewer sees the browser closed", closed);
-    v.close(&mut b.gw).await;
-    let mut again = Viewer::open(&mut b.gw, "close-2", &session).await;
-    let mut tries = 0;
-    let reopened = loop {
-        tries += 1;
-        b.gw.link.drain(std::time::Duration::from_millis(200)).await;
-        again.absorb(&mut b.gw);
-        if again.closed.is_some() || again.frames.len() >= 2 || tries == 50 {
-            break json!({ "frames": again.frames, "closed": again.closed });
-        }
-    };
-    b.t.note("a viewer of the deleted chat", images(&reopened));
-    insta::assert_json_snapshot!("node_browser_close", b.t.into_value());
 }

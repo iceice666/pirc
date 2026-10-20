@@ -3,7 +3,7 @@
 //! recording. Owner: **panels**.
 //!
 //! Every route here goes through `local` of TS: claim the session (owner
-//! check, not being deleted), then `chat::session_root` (which creates a
+//! check, not being deleted), then `crate::util::session_root` (which creates a
 //! chat session's directory, even for a GET). Terminal routes check
 //! `config.terminals_enabled` first (403 "Terminals are disabled on this
 //! node"), before the claim. Golden cases: `panel.integration.test.ts`,
@@ -168,7 +168,7 @@ pub fn routes() -> Vec<Route> {
                 .lock()
                 .validate_lease(&session.id, &client_id, generation)?;
             let workspace = node.db.lock().get_workspace(&session.workspace_id)?;
-            let cwd = crate::chat::session_root(
+            let cwd = crate::util::session_root(
                 &workspace,
                 &session.id,
                 &node.workspace_mode(&workspace)?,
@@ -239,7 +239,7 @@ fn local(node: &Node, request: &Request) -> ApiResult<Local> {
     let session = claim(node, request)?;
     let workspace = node.db.lock().get_workspace(&session.workspace_id)?;
     let root =
-        crate::chat::session_root(&workspace, &session.id, &node.workspace_mode(&workspace)?)?;
+        crate::util::session_root(&workspace, &session.id, &node.workspace_mode(&workspace)?)?;
     Ok(Local { session, root })
 }
 

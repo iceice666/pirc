@@ -1,24 +1,9 @@
-//! Instructions features add to the system prompt, with the test playing
-//! the agent's node: a chat project's instructions
-//! (`agent/features/project-instructions.ts`), frozen in the session when
-//! the chat starts and left out of other workspaces, and the role an agent
-//! runs in (`agent/features/role.ts`), from the configure line or
-//! `set_role`. The historical feature baseline (docs/development/historical-records.md).
+//! The role an agent runs in (`agent/features/role.ts`), from the configure
+//! line or `set_role`, with the test playing the agent's node. The historical
+//! feature baseline (docs/development/historical-records.md).
 
 use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder};
-use serde_json::{Value, json};
-
-fn chat(instructions: Option<&str>) -> AgentOptions {
-    let mut options = AgentOptions::default();
-    options.env.push((
-        "PIRC_MODE".to_owned(),
-        serde_json::to_string(&pirc_protocol::mode::default_chat()).unwrap(),
-    ));
-    if let Some(text) = instructions {
-        options.configure = json!({ "instructions": text });
-    }
-    options.features("project-instructions")
-}
+use serde_json::json;
 
 /// A prompt and everything until the run settles.
 async fn turn(agent: &mut AgentRun, r: &mut Recorder, step: &str, message: &str) {
@@ -41,94 +26,6 @@ async fn sections(agent: &mut AgentRun, r: &mut Recorder, step: &str) {
         }
     }
     r.note(step, sections);
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn agent_project_instructions() {
-    let options = |text: &str| chat(Some(text));
-    let Some(mut agent) = AgentRun::start(options("  Always answer in French.\n")).await else {
-        return;
-    };
-    let mut r = Recorder::new(&agent);
-    agent.push([ModelReply::Text("Bonjour.".to_owned())]);
-    turn(&mut agent, &mut r, "first run", "hi").await;
-    sections(&mut agent, &mut r, "prompt sections").await;
-    agent.push([ModelReply::Text("Encore.".to_owned())]);
-    turn(&mut agent, &mut r, "second run", "more").await;
-    // The user edited them since: this chat keeps what it started with.
-    let Some(mut agent) = agent.restart(options("Always answer in German.")).await else {
-        return;
-    };
-    agent.push([ModelReply::Text("Toujours.".to_owned())]);
-    turn(&mut agent, &mut r, "after a restart", "and now?").await;
-    r.session(&agent);
-    insta::assert_json_snapshot!("agent_project_instructions", r.into_value());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn agent_project_instructions_added_later() {
-    // A chat that started without instructions keeps starting without them.
-    let Some(mut agent) = AgentRun::start(chat(None)).await else {
-        return;
-    };
-    let mut r = Recorder::new(&agent);
-    agent.push([ModelReply::Text("Hi.".to_owned())]);
-    turn(&mut agent, &mut r, "first run", "hi").await;
-    let Some(mut agent) = agent.restart(chat(Some("Added later."))).await else {
-        return;
-    };
-    agent.push([ModelReply::Text("Still plain.".to_owned())]);
-    turn(&mut agent, &mut r, "after a restart", "more").await;
-    r.session(&agent);
-    insta::assert_json_snapshot!("agent_project_instructions_added_later", r.into_value());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn agent_project_instructions_older_chat() {
-    // A chat that began before instructions existed: messages, no snapshot.
-    let session = [
-        json!({ "type": "session", "version": 1, "sessionId": "0123456789abcdef",
-            "cwd": "/elsewhere", "id": "a0000001", "parentId": null, "timestamp": 1000 }),
-        json!({ "type": "message", "message": { "role": "user", "content": "Old question",
-            "timestamp": 1001 }, "id": "a0000002", "parentId": "a0000001", "timestamp": 1001 }),
-    ]
-    .iter()
-    .map(Value::to_string)
-    .collect::<Vec<_>>()
-    .join("\n");
-    let mut options = chat(Some("Too late."));
-    options.files.push((
-        "../session/session.jsonl".to_owned(),
-        format!("{session}\n"),
-    ));
-    let Some(mut agent) = AgentRun::start(options).await else {
-        return;
-    };
-    let mut r = Recorder::new(&agent);
-    agent.push([ModelReply::Text("Plain.".to_owned())]);
-    turn(&mut agent, &mut r, "first run", "hi").await;
-    r.session(&agent);
-    insta::assert_json_snapshot!("agent_project_instructions_older_chat", r.into_value());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn agent_project_instructions_outside_chat() {
-    let Some(mut agent) = AgentRun::start(
-        AgentOptions {
-            configure: json!({ "instructions": "Chat only." }),
-            ..AgentOptions::default()
-        }
-        .features("project-instructions"),
-    )
-    .await
-    else {
-        return;
-    };
-    let mut r = Recorder::new(&agent);
-    agent.push([ModelReply::Text("Hi.".to_owned())]);
-    turn(&mut agent, &mut r, "first run", "hi").await;
-    r.session(&agent);
-    insta::assert_json_snapshot!("agent_project_instructions_outside_chat", r.into_value());
 }
 
 #[tokio::test(flavor = "multi_thread")]

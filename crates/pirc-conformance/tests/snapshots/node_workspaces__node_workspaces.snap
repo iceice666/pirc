@@ -275,7 +275,7 @@ expression: t.into_value()
     },
     "request": "POST /api/workspaces",
     "status": 403,
-    "step": "a chat project on a coding node: 403"
+    "step": "a mode outside the catalog (the legacy kind alias)"
   },
   {
     "body": {
@@ -702,47 +702,5 @@ expression: t.into_value()
     "request": "GET /api/workspaces/test%3Anope/project-config",
     "status": 404,
     "step": "project config of an unknown workspace: 404"
-  },
-  {
-    "body": {
-      "error": {
-        "code": "invalid_input",
-        "message": "Only chat projects have instructions"
-      }
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "GET /api/workspaces/test%3Atest/instructions",
-    "status": 400,
-    "step": "instructions of a directory workspace: 400"
-  },
-  {
-    "body": {
-      "error": {
-        "code": "node_offline",
-        "message": "The chat node is offline or not registered"
-      }
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "GET /api/assistant/prompts",
-    "status": 503,
-    "step": "assistant prompts without a chat node: 503"
-  },
-  {
-    "body": {
-      "error": {
-        "code": "invalid_input",
-        "message": "Only chats can be deleted"
-      }
-    },
-    "headers": {
-      "content-type": "application/json"
-    },
-    "request": "DELETE /api/sessions/session_<uuid:1>",
-    "status": 400,
-    "step": "deleting a session of a directory workspace: 400"
   }
 ]

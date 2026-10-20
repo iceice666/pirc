@@ -6,13 +6,15 @@ use std::rc::Rc;
 use crate::feature::Feature;
 
 pub mod ask_question;
+// Seeds of plans/rewrite/06-workers.md: no session runs it until the brain
+// (plans/rewrite/02-brain-host.md) does.
+#[allow(dead_code)]
 pub mod assistant;
 pub mod background;
 pub mod browser;
 pub mod compact;
 pub mod goal;
 pub mod memory;
-pub mod project_instructions;
 pub mod recap;
 pub mod role;
 pub mod sandbox;
@@ -47,13 +49,9 @@ pub fn builtin_features() -> Vec<Rc<dyn Feature>> {
         ask_question::feature(),
         todo::feature(),
         compact::feature(),
-        // Chat sessions only: the project's instructions, before USER/MEMORY.
-        project_instructions::feature(),
         // Agents started in a role: the role's instructions.
         role::feature(),
         memory::feature(),
-        // Chat sessions only: the user's memory, held by the gateway.
-        assistant::feature(),
         skills::feature(),
         recap::feature(),
         // Node agents with a browser only (PIRC_BROWSER=1).
@@ -138,10 +136,8 @@ mod tests {
                 "ask-question",
                 "todo",
                 "compact",
-                "project-instructions",
                 "role",
                 "observational-memory",
-                "assistant",
                 "skills",
                 "recap",
                 "browser",
