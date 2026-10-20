@@ -190,14 +190,12 @@ class _MemorySettingsState extends State<MemorySettings> {
   Widget card(
     List<Widget> content,
     List<Widget> actions, {
-    bool proposal = false,
     List<Widget> history = const [],
   }) => Container(
     margin: EdgeInsets.zero,
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
     decoration: BoxDecoration(
-      color: proposal ? Colors.transparent : palette(context)['surface.subtle'],
-      border: proposal ? Border.all(color: palette(context)['web.line']) : null,
+      color: palette(context)['surface.subtle'],
       borderRadius: BorderRadius.circular(8),
     ),
     child: Column(
@@ -254,40 +252,6 @@ class _MemorySettingsState extends State<MemorySettings> {
         ...history,
       ],
     ),
-  );
-  Widget proposal(Json p) => card(
-    [
-      Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(
-              text:
-                  '${const {'add': 'Remember', 'replace': 'Change', 'remove': 'Forget'}[p['action']]}: ',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            TextSpan(
-              text: '${p['content'] ?? obj(p['target'])['content'] ?? ''}',
-            ),
-          ],
-        ),
-        style: webText(context, size: 13).copyWith(height: 15 / 13),
-      ),
-      if (p['action'] == 'replace' && p['target'] != null) ...[
-        const SizedBox(height: 2),
-        small('Now: ${obj(p['target'])['content']}'),
-      ],
-      const SizedBox(height: 2),
-      sourceLine(
-        'You said “${p['quote']}” · ',
-        p['sessionId'] as String?,
-        ' · ${ago(p['createdAt'])}',
-      ),
-    ],
-    [
-      action('Approve', () => a.decideProposal(p, true), primary: true),
-      action('Reject', () => a.decideProposal(p, false)),
-    ],
-    proposal: true,
   );
   Widget entry(Json e) {
     final id = '${e['id']}', source = obj(e['sources']);
@@ -410,10 +374,7 @@ class _MemorySettingsState extends State<MemorySettings> {
                 text: 'USER',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
-              TextSpan(
-                text:
-                    ' is what you told it about yourself and changes only when you approve. ',
-              ),
+              TextSpan(text: ' is what you told it about yourself. '),
               TextSpan(
                 text: 'MEMORY',
                 style: TextStyle(fontWeight: FontWeight.w600),
@@ -448,18 +409,9 @@ class _MemorySettingsState extends State<MemorySettings> {
             'USER ${number(obj(usage['user'])['used'])}/${number(obj(usage['user'])['max'])} characters · MEMORY ${number(obj(usage['note'])['used'])}/${number(obj(usage['note'])['max'])} characters',
             small: true,
           ),
-          if (a.proposals.isNotEmpty) ...[
-            heading('Waiting for you'),
-            for (final (index, p) in a.proposals.indexed) ...[
-              if (index > 0) const SizedBox(height: 6),
-              proposal(p),
-            ],
-          ],
           heading('About you · USER'),
           if (rows(view['user']).isEmpty)
-            paragraph(
-              'Nothing yet. When you tell the assistant about yourself, it asks you here first.',
-            )
+            paragraph('Nothing yet.')
           else
             for (final (index, e) in rows(view['user']).indexed) ...[
               if (index > 0) const SizedBox(height: 6),

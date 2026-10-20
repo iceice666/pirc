@@ -14,7 +14,6 @@ import 'paired_devices.dart';
 
 const settingsCategories = [
   'General',
-  'Assistant',
   'Memory',
   'Models',
   'Devices',
@@ -71,7 +70,7 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
     settingsCategories.indexOf(widget.initialTab),
   );
   final tabs = List.generate(
-    6,
+    settingsCategories.length,
     (i) => FocusNode(debugLabel: settingsCategories[i]),
   );
   final scroll = ScrollController();
@@ -216,35 +215,7 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
     ],
   );
   Widget navLabel(int i, bool narrow) {
-    final label = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(settingsCategories[i]),
-        if (i == 2 && c.attention.proposals.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(left: 6),
-            child: Semantics(
-              label: '${c.attention.proposals.length} waiting',
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: BoxDecoration(
-                  color: palette(context)['accent.default'],
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '${c.attention.proposals.length}',
-                  style: webText(
-                    context,
-                    size: 11,
-                    weight: FontWeight.w600,
-                    color: 'surface.page',
-                  ).copyWith(height: kTextHeightNone),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
+    final label = Text(settingsCategories[i]);
     if (narrow) return label;
     // The browser keeps the desktop tab width at 148px and allows its inline
     // label/badge to extend into the padding at enlarged font sizes.
@@ -317,7 +288,6 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
         40;
     final panels = [
       general(),
-      if (selected == 1) AssistantSettings(controller: c) else const SizedBox(),
       MemorySettings(
         controller: c,
         clock: widget.memoryClock,

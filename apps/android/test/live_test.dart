@@ -8,7 +8,6 @@ import 'package:pirc_mobile/live/app.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/interaction.dart';
 import 'package:pirc_mobile/live/settings.dart';
-import 'package:pirc_mobile/live/schedules_state.dart';
 import 'package:pirc_mobile/live/common.dart';
 import 'package:pirc_mobile/theme.dart';
 
@@ -65,8 +64,6 @@ class FakeGateway extends Gateway {
         return {'held': true, 'generation': 3};
       case 'command':
         return {'status': 'accepted'};
-      case 'wallInput':
-        return '2026-10-01T09:00';
       case 'request':
         final path = args['path'];
         if (path == '/api/sessions') {
@@ -443,66 +440,6 @@ void main() {
     expect(find.text('此問題已處理'), findsOneWidget);
     expect(find.text('Yes, continue'), findsNothing);
     await tester.pumpWidget(const SizedBox());
-    c.dispose();
-    await g.stream.close();
-  });
-  testWidgets('editing one-off schedule preserves wall time and model', (
-    tester,
-  ) async {
-    final g = FakeGateway();
-    final c = LiveController(g)
-      ..workspaces = [
-        {'id': 'n:w', 'displayName': '目錄', 'hostId': 'n'},
-      ];
-    final schedules = SchedulesState(c);
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: theme.build(Brightness.light),
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: ScheduleForm(
-              state: schedules,
-              onCancel: () {},
-              onSaved: () {},
-              existing: {
-                'id': 'job',
-                'workspaceId': 'n:w',
-                'timezone': 'Asia/Taipei',
-                'title': '工作',
-                'prompt': '執行',
-                'runAt': 1790816400000,
-                'cron': null,
-                'model': {'provider': 'p', 'id': 'm1'},
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.byWidgetPredicate(
-        (w) => w is TextField && w.controller?.text == '2026-10-01T09:00',
-      ),
-      findsOneWidget,
-    );
-    await tester.scrollUntilVisible(
-      find.text('Save'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-    final body = obj(
-      g.calls
-          .lastWhere((x) => x.$1 == 'request' && x.$2['method'] == 'PATCH')
-          .$2['body'],
-    );
-    expect(body['at'], '2026-10-01T09:00');
-    expect(body.containsKey('cron'), isFalse);
-    expect(body['model'], {'provider': 'p', 'id': 'm1'});
-    await tester.pumpWidget(const SizedBox());
-    schedules.dispose();
     c.dispose();
     await g.stream.close();
   });

@@ -24,22 +24,6 @@ const server = Bun.serve({
       requests.push('answer');
       return Response.json({ interactionId: 'review-q', status: 'answered' });
     }
-    if (url.pathname === '/api/schedules/review')
-      return Response.json({
-        schedule: { id: 'review', title: '每天早上檢查測試' },
-        runs: [
-          {
-            id: 'review-run',
-            status: scenario === 'handled' ? 'dismissed' : 'missed',
-            dueAt: Date.now() - 3600000,
-          },
-        ],
-      });
-    if (url.pathname.startsWith('/api/schedules/review/') && request.method === 'POST') {
-      requests.push(url.pathname);
-      scenario = 'handled';
-      return Response.json({ status: 'accepted' });
-    }
     if (url.pathname.includes('/control') && scenario === 'controlled')
       return Response.json({
         lease: {

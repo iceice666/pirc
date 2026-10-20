@@ -4,55 +4,35 @@ import android.content.Intent
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Push notifications (docs/guides/schedules.md). The gateway sends the same
+ * Push notifications. The gateway sends the same
  * encrypted Web Push message to browsers and, through the user's UnifiedPush
  * distributor, to this app: a title, a short line, a tag (same tag, same
  * notification) and what to open.
  */
 sealed interface PushTarget {
     data class OpenSession(val sessionId: String) : PushTarget
-    data class OpenSchedules(val scheduleId: String? = null) : PushTarget
-    data object OpenMemory : PushTarget
 
     companion object {
         private const val SESSION = "dev.pirc.android.target.session"
-        private const val SCHEDULES = "dev.pirc.android.target.schedules"
-        private const val SCHEDULE = "dev.pirc.android.target.schedule"
-        private const val MEMORY = "dev.pirc.android.target.memory"
 
         fun from(json: JsonElement?): PushTarget? {
             val target = json as? JsonObject ?: return null
-            fun text(key: String) = runCatching { target[key]?.jsonPrimitive?.content }.getOrNull()
-            fun flag(key: String) = runCatching { target[key]?.jsonPrimitive?.booleanOrNull }.getOrNull() == true
-            return when {
-                !text("sessionId").isNullOrEmpty() -> OpenSession(text("sessionId")!!)
-                flag("schedules") -> OpenSchedules(text("scheduleId"))
-                flag("memory") -> OpenMemory
-                else -> null
-            }
+            val sessionId = runCatching { target["sessionId"]?.jsonPrimitive?.content }.getOrNull()
+            return if (sessionId.isNullOrEmpty()) null else OpenSession(sessionId)
         }
 
         /** What a notification's intent asks to open. */
         fun from(intent: Intent?): PushTarget? {
             intent ?: return null
-            intent.getStringExtra(SESSION)?.let { return OpenSession(it) }
-            if (intent.getBooleanExtra(SCHEDULES, false)) return OpenSchedules(intent.getStringExtra(SCHEDULE))
-            if (intent.getBooleanExtra(MEMORY, false)) return OpenMemory
-            return null
+            return intent.getStringExtra(SESSION)?.let { OpenSession(it) }
         }
 
         fun Intent.putTarget(target: PushTarget): Intent = apply {
             when (target) {
                 is OpenSession -> putExtra(SESSION, target.sessionId)
-                is OpenSchedules -> {
-                    putExtra(SCHEDULES, true)
-                    target.scheduleId?.let { putExtra(SCHEDULE, it) }
-                }
-                OpenMemory -> putExtra(MEMORY, true)
             }
         }
     }

@@ -38,22 +38,18 @@ void main() {
 
       var sessions = requestCount(gateway, '/api/sessions');
       var memory = requestCount(gateway, '/api/memory');
-      var schedules = requestCount(gateway, '/api/schedules');
       await sendNetworkAvailable(gateway);
       expect(requestCount(gateway, '/api/sessions'), sessions + 1);
       expect(requestCount(gateway, '/api/memory'), memory + 1);
-      expect(requestCount(gateway, '/api/schedules'), schedules + 1);
 
       // The process-level event has no sessionId and still refreshes while a
       // conversation is selected; it must be handled before the session filter.
       controller.sessionId = 'different-session';
       sessions = requestCount(gateway, '/api/sessions');
       memory = requestCount(gateway, '/api/memory');
-      schedules = requestCount(gateway, '/api/schedules');
       await sendNetworkAvailable(gateway);
       expect(requestCount(gateway, '/api/sessions'), sessions + 1);
       expect(requestCount(gateway, '/api/memory'), memory + 1);
-      expect(requestCount(gateway, '/api/schedules'), schedules + 1);
 
       controller.dispose();
       await gateway.stream.close();

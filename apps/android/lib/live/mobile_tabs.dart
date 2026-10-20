@@ -9,21 +9,17 @@ class MobileTabs extends StatelessWidget {
   const MobileTabs({
     super.key,
     required this.current,
-    required this.chats,
     required this.waiting,
     required this.onPick,
   });
   final String current;
-  final bool chats;
   final int waiting;
   final ValueChanged<String> onPick;
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<PircColors>()!;
     final tabs = [
-      if (chats) ('chat', 'Chat', LucideIcons.messageSquare),
       ('work', 'Work', LucideIcons.squareTerminal),
-      ('schedules', 'Schedules', LucideIcons.calendarClock),
       ('settings', 'Settings', LucideIcons.settings),
     ];
     final available = MediaQuery.sizeOf(context).width;

@@ -201,11 +201,6 @@ void main() {
         );
         debugPrint('PUSH_EXTERNAL:disabled-and-server-unsubscribed');
       } finally {
-        if (sessionId != null) {
-          try {
-            await controller.deleteChat(sessionId);
-          } catch (_) {}
-        }
         try {
           await controller.unpair();
         } catch (_) {}

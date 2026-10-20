@@ -31,7 +31,7 @@ sealed interface PushStatus {
 }
 
 /**
- * This phone's UnifiedPush registration (docs/guides/schedules.md): the
+ * This phone's UnifiedPush registration: the
  * distributor (ntfy, ...) gives an endpoint with Web Push keys, which goes to
  * the gateway; the gateway pushes there, encrypted for this app.
  */

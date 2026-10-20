@@ -62,8 +62,7 @@ fun Interaction.wire() = mapOf("id" to id, "epoch" to runnerEpoch, "kind" to kin
     "title" to title, "description" to description, "expiresAt" to expiresAt, "status" to status,
     "toolCallId" to toolCallId,
     "multiple" to multiple, "placeholder" to placeholder, "initialValue" to initialValue,
-    "confirmLabel" to confirmLabel, "cancelLabel" to cancelLabel, "modelChoice" to modelChoice.wire(), "language" to language,
-    "userRequestChoice" to userRequestChoice?.let { mapOf("label" to it.label, "checked" to it.checked) },
+    "confirmLabel" to confirmLabel, "cancelLabel" to cancelLabel, "language" to language,
     "options" to options.map { mapOf("value" to it.value, "label" to it.label, "description" to it.description) },
     "relayed" to relayed?.let { mapOf("sessionId" to it.sessionId, "sessionName" to it.sessionName,
         "workspace" to it.workspace, "delegationId" to it.delegationId) })
@@ -90,22 +89,7 @@ fun checkedAnswer(before: SessionState, interactionId: String, epoch: String, da
         data["cancelled"] == true -> InteractionAnswer.Cancel
         question.kind == "confirm" -> {
             val confirmed = data["confirmed"] as? Boolean ?: throw ApiException(400, "invalid_answer", "請選擇確認或拒絕")
-            val choice = if (confirmed && question.modelChoice != null && (data.containsKey("model") || data.containsKey("thinking"))) {
-                val model = data["model"]
-                if (model != null && (model !is Map<*, *> || model["provider"] !is String || model["id"] !is String))
-                    throw ApiException(400, "invalid_answer", "Invalid model choice")
-                val thinking = data["thinking"]
-                if (thinking != null && thinking !in listOf("off", "minimal", "low", "medium", "high", "xhigh", "max"))
-                    throw ApiException(400, "invalid_answer", "Invalid thinking choice")
-                buildJsonObject { put("model", model.json()); put("thinking", thinking.json()) }
-            } else null
-            val asUserRequest = confirmed && question.userRequestChoice != null && data["asUserRequest"] == true
-            InteractionAnswer.Confirm(
-                confirmed,
-                choice,
-                asUserRequest,
-                hasUserRequestChoice = question.userRequestChoice != null,
-            )
+            InteractionAnswer.Confirm(confirmed)
         }
         question.kind == "select" -> {
             val values = (data["values"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()

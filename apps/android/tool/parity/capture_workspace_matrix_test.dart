@@ -122,7 +122,7 @@ void main() {
               ...fixture,
               'captureTheme': brightness.name,
             });
-            final c = LiveController(g)..mode = 'work';
+            final c = LiveController(g);
             final boundary = GlobalKey();
             await t.pumpWidget(
               RepaintBoundary(

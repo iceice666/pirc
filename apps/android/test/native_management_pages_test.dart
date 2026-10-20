@@ -5,7 +5,7 @@ import 'package:pirc_mobile/live/backend_settings.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/paired_devices.dart';
 
-import 'assistant_settings_test.dart' show shell;
+import 'settings_shell.dart' show shell;
 import 'live_test.dart' show FakeGateway;
 
 Json providersSnapshot() => {

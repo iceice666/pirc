@@ -16,7 +16,7 @@ void main() {
       () {
         expect(
           nativePircReplaceRouteQuery(
-            'https://pirc.example/apps/pirc/index.html?open=schedules#cron-1',
+            'https://pirc.example/apps/pirc/index.html?open=memory#part-1',
             key: 'session',
             value: 'session-1',
           ),
@@ -28,11 +28,11 @@ void main() {
     test('keeps a deep path and explicit origin port', () {
       expect(
         nativePircReplaceRouteQuery(
-          'http://gateway.example:8080/prefix/schedules/nightly?old=1#anchor',
+          'http://gateway.example:8080/prefix/pages/nightly?old=1#anchor',
           key: 'workspace',
           value: 'team-1',
         ),
-        'http://gateway.example:8080/prefix/schedules/nightly?workspace=team-1',
+        'http://gateway.example:8080/prefix/pages/nightly?workspace=team-1',
       );
     });
 
@@ -89,7 +89,7 @@ void main() {
   group('NativeAppDocumentRoute.parse', () {
     test('selects a session before open targets and keeps workspace separate', () {
       final route = _parse(
-        '/apps/pirc/?session=s%2B1&session=second&open=schedules&schedule=cron-1&workspace=project%3Aone&workspace=second&trace=a%2Fb#part%2Fone',
+        '/apps/pirc/?session=s%2B1&session=second&open=memory&workspace=project%3Aone&workspace=second&trace=a%2Fb#part%2Fone',
       )!;
 
       expect(route.target, isA<NativeAppSessionRouteTarget>());
@@ -100,11 +100,11 @@ void main() {
       expect(route.isIndexAlias, isFalse);
       expect(
         route.rawQuery,
-        'session=s%2B1&session=second&open=schedules&schedule=cron-1&workspace=project%3Aone&workspace=second&trace=a%2Fb',
+        'session=s%2B1&session=second&open=memory&workspace=project%3Aone&workspace=second&trace=a%2Fb',
       );
       expect(route.rawFragment, 'part%2Fone');
       expect(route.canonicalUrl, contains('#part%2Fone'));
-      expect(route.queryParameters, hasLength(7));
+      expect(route.queryParameters, hasLength(6));
       expect(
         route.queryParameters
             .where((parameter) => parameter.name == 'session')
@@ -117,46 +117,25 @@ void main() {
       expect(route.unknownQueryParameters.single.rawValue, 'a%2Fb');
     });
 
-    test(
-      'routes open schedules and memory targets from first query values',
-      () {
-        final schedules = _parse(
-          '/apps/pirc/?open=schedules&schedule=s%209&schedule=second',
-        )!;
-        expect(schedules.target, isA<NativeAppSchedulesRouteTarget>());
-        expect(
-          (schedules.target! as NativeAppSchedulesRouteTarget).scheduleId,
-          's 9',
-        );
-        expect(schedules.workspaceId, isNull);
-
-        final memory = _parse(
-          '/apps/pirc/?open=memory&workspace=workspace-1&schedule=ignored',
-        )!;
-        expect(memory.target, isA<NativeAppMemoryRouteTarget>());
-        expect(memory.workspaceId, 'workspace-1');
-        expect(memory.workspaceOverridesTarget, isTrue);
-      },
-    );
+    test('routes the open memory target from the first query value', () {
+      final memory = _parse('/apps/pirc/?open=memory&workspace=workspace-1')!;
+      expect(memory.target, isA<NativeAppMemoryRouteTarget>());
+      expect(memory.workspaceId, 'workspace-1');
+      expect(memory.workspaceOverridesTarget, isTrue);
+    });
 
     test('empty first IDs fall through exactly as the web app does', () {
       final route = _parse(
-        '/apps/pirc/?session=&session=late&open=schedules&schedule=&schedule=late&workspace=&workspace=late',
+        '/apps/pirc/?session=&session=late&open=memory&workspace=&workspace=late',
       )!;
 
-      expect(route.target, isA<NativeAppSchedulesRouteTarget>());
-      expect(
-        (route.target! as NativeAppSchedulesRouteTarget).scheduleId,
-        isNull,
-      );
+      expect(route.target, isA<NativeAppMemoryRouteTarget>());
       expect(route.workspaceId, isNull);
       expect(route.hasSessionParameter, isTrue);
       expect(route.queryParameters.map((parameter) => parameter.value), [
         '',
         'late',
-        'schedules',
-        '',
-        'late',
+        'memory',
         '',
         'late',
       ]);
@@ -214,22 +193,6 @@ void main() {
       expect(missingSession.workspaceId, isNull);
       expect(missingSession.listOpen, isFalse);
 
-      final schedulesBehindWorkspace = _parse(
-        '/apps/pirc/?open=schedules&schedule=cron-1&workspace=workspace-1',
-      )!.resolve(sessions: sessions, workspaces: workspaces, phone: true);
-      expect(schedulesBehindWorkspace.sessionId, 'first');
-      expect(schedulesBehindWorkspace.workspaceId, 'workspace-1');
-      expect(schedulesBehindWorkspace.showSchedules, isFalse);
-      expect(schedulesBehindWorkspace.scheduleId, 'cron-1');
-      expect(schedulesBehindWorkspace.listOpen, isFalse);
-
-      final schedules = _parse(
-        '/apps/pirc/?open=schedules&schedule=cron-2',
-      )!.resolve(sessions: sessions, workspaces: workspaces, phone: true);
-      expect(schedules.showSchedules, isTrue);
-      expect(schedules.scheduleId, 'cron-2');
-      expect(schedules.listOpen, isFalse);
-
       final phoneDefault = _parse(
         '/apps/pirc/',
       )!.resolve(sessions: sessions, workspaces: workspaces, phone: true);
@@ -261,7 +224,6 @@ void main() {
 
       expect(selection.showMemory, isTrue);
       expect(selection.workspaceId, 'workspace-1');
-      expect(selection.showSchedules, isFalse);
       expect(selection.listOpen, isFalse);
 
       final memoryWithoutWorkspace = _parse(
@@ -289,7 +251,7 @@ void main() {
 
     test('deep SPA fallback requires opt-in and excludes API/foreign paths', () {
       const deepUrl =
-          'https://pirc.example/apps/pirc/schedules/weekly?open=schedules#week';
+          'https://pirc.example/apps/pirc/pages/weekly?open=memory#week';
       expect(NativeAppDocumentRoute.parse(deepUrl, appRootUrl: _root), isNull);
 
       final deep = NativeAppDocumentRoute.parse(
@@ -300,9 +262,9 @@ void main() {
       expect(deep.isSpaFallbackPath, isTrue);
       expect(deep.isIndexAlias, isFalse);
       expect(deep.canonicalUrl, deepUrl);
-      expect(deep.rawQuery, 'open=schedules');
+      expect(deep.rawQuery, 'open=memory');
       expect(deep.rawFragment, 'week');
-      expect(deep.target, isA<NativeAppSchedulesRouteTarget>());
+      expect(deep.target, isA<NativeAppMemoryRouteTarget>());
 
       expect(
         NativeAppDocumentRoute.parse(
@@ -338,7 +300,7 @@ void main() {
       );
       expect(
         NativeAppDocumentRoute.parse(
-          'https://other.example/apps/pirc/schedules',
+          'https://other.example/apps/pirc/pages',
           appRootUrl: _root,
           allowSpaFallback: true,
         ),
@@ -346,7 +308,7 @@ void main() {
       );
       expect(
         NativeAppDocumentRoute.parse(
-          'https://pirc.example/apps/pircevil/schedules',
+          'https://pirc.example/apps/pircevil/pages',
           appRootUrl: _root,
           allowSpaFallback: true,
         ),

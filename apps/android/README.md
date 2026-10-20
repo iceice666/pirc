@@ -3,8 +3,8 @@
 Native Flutter Android client for pirc. Its Android transport lives in
 `android/app/src/main/kotlin`; pairing uses Settings → Devices on the web.
 
-The app includes chat and work sessions, streaming and cancellation, approvals,
-memory and schedules, workspace panels, shared project files and project deletion, attachments,
+The app includes work sessions, streaming and cancellation, approvals,
+memory, workspace panels, attachments,
 notifications and native content rendering. Provider and device management uses a short-lived grant that
 you approve in the authenticated web UI. HTML, JavaScript-backed documents,
 Markdown, code, math and supported diagrams render through Flutter; browser
@@ -47,19 +47,12 @@ gateway/web update from this change.
 The app loads the gateway's mode catalog (`GET /api/modes`) with the workspace
 index and asks capabilities, never mode ids, as described in the
 [modes guide](../../docs/guides/modes.md); `lib/live/modes.dart` holds the
-lookups. A workspace is in the Chat tab iff its mode is `assistant: full`; every
-other workspace, including per-session ones such as a scratch mode, is under Work,
-grouped by device. Side panels, settings sections, per-session deletion and
-nouns follow the mode's capabilities. Add workspace offers the node's accepted,
-non-assistant modes and asks for a path only for `workdir: workspace`. A
+lookups. Every workspace, including per-session ones such as a scratch mode, is
+under Work, grouped by device. Side panels, settings sections and
+nouns follow the mode's capabilities. Add workspace offers the node's accepted
+modes and asks for a path only for `workdir: workspace`. A
 workspace whose mode is missing from the catalog is read-only under Work. An
-older gateway without the catalog (404) falls back to the legacy `kind`.
-
-## Project files and deletion
-
-Project files use scoped native document tokens and stream one file at a time within the node's reported upload limit, not the session-attachment picker's older 8 MiB cap. Partial batches keep successful uploads; account, project, host or online-state changes discard stale results and stop the remaining batch. Temporary tokens are released on completion or cancellation.
-
-Project deletion requires explicit Forget/Keep/Edit decisions for mixed-source memory, following the [project deletion contract](../../docs/guides/chat-projects.md#deleting-a-project). Revision conflicts reload the preview and clear prior decisions; other failures reload the remaining deletion plan before retrying. No deletion POST is retried automatically. Preview and confirmation capture the pairing stamp and that account's API before I/O; stale stamps are rejected before destructive requests. Account, host or project changes dismiss stale dialogs. Acknowledged deletion clears only that project's sessions, drafts and navigation, refreshes memory/schedules and fences stale indexes or pending chat creation from restoring it. The top-level Chats workspace cannot be deleted. Submission blocks dismissal and edits; constrained keyboard viewports may scroll the whole dialog.
+older gateway without the catalog (404) falls back to the directory mode.
 
 ## Verification
 
@@ -71,15 +64,9 @@ node --test tool/parity/*_test.mjs
 
 Install the root Bun dependencies for the JavaScript tooling. Android JVM tests
 run with `./gradlew testDebugUnitTest` from `android/`. Device integration tests
-live in `integration_test/`; `real_gateway_test.dart` and related service tests
+live in `integration_test/`; the real-gateway service tests
 require the isolated synthetic Rust environment in `tool/parity/real_gateway.ts`
-and its private Dart define file. `project_files_test.dart` covers raw project
-uploads, replacement, removal and existing session attachments; its optional
-`PIRC_PROJECT_FILES_PICKER=true` mode also exercises the Android document picker
-with a local `pirc-project-file-picker.txt` containing `Native project picker fixture`
-followed by a newline. `project_deletion_test.dart` verifies the native preview,
-mixed-memory conflict/review, pairing guard and project cleanup using synthetic
-`memory_note` histories. Never point those destructive test fixtures at
+and its private Dart define file. Never point those destructive test fixtures at
 your normal gateway or production data.
 
 Some pixel/geometry fixtures use macOS Arial and Menlo through

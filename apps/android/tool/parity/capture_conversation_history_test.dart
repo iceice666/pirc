@@ -125,7 +125,6 @@ class _HistoryGateway extends FakeGateway {
         return {'models': _maps(fixture['models'])};
       }
       if (path == '/api/memory') return <String, dynamic>{};
-      if (path == '/api/schedules') return {'schedules': <Json>[]};
       final sessionId = '${_map(fixture['session'])['id']}';
       if (path == '/api/sessions/$sessionId/read') return <String, dynamic>{};
       throw StateError('Unexpected history-fixture request: $path');

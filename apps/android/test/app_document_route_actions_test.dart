@@ -41,7 +41,7 @@ void main() {
 
       await _openDocumentRoute(
         tester,
-        'https://gateway.example/index.html?open=schedules&schedule=cron-1&trace=old#week',
+        'https://gateway.example/index.html?trace=old#week',
       );
       _sidebar(tester).onOpen('session-second');
       await tester.pumpAndSettle();
@@ -83,7 +83,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(controller.sessionId, 'session-latest');
-      expect(controller.mode, 'work');
       final workspace = tester.widget<WorkspacePage>(
         find.byType(WorkspacePage).first,
       );

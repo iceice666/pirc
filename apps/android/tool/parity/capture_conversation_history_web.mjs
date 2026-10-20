@@ -73,15 +73,10 @@ const server = await createServer({
             const session = fixture.session;
             const model = fixture.models[0];
             app.view = 'session';
-            app.mode = 'chat';
             app.workspaces = fixture.workspaces;
             app.nodes = fixture.nodes;
             app.sessions = [session];
             app.models = fixture.models;
-            app.schedules = [];
-            app.missedRuns = [];
-            app.memoryProposals = [];
-            app.memoryPending = 0;
             app.activeSessionId = session.id;
             app.sessionState = fromSnapshot({
               session,

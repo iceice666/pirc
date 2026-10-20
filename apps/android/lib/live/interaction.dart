@@ -54,13 +54,12 @@ class _QuestionSheetState extends State<QuestionSheet> {
   Json? current;
   Json? uncertainQuestion;
   Json lease = {};
-  List<Json> models = [];
   bool loading = false, posting = false, unknown = false;
   bool handledNotice = false;
   String handledMessage = _handledMessage;
   bool _requiresManualReview = false;
   String? error;
-  int revision = 0, modelRevision = 0;
+  int revision = 0;
   Json? _handledQuestion;
   String? _lastObservedQuestionState;
   bool _waitForFreshSnapshot = false;
@@ -116,7 +115,6 @@ class _QuestionSheetState extends State<QuestionSheet> {
     }
     if (widget.embedded) {
       current = widget.question;
-      loadModels();
       if (!_waitForFreshSnapshot && _hasExactSnapshot(c.state)) {
         final exact = rows(
           c.state['interactions'],
@@ -176,10 +174,8 @@ class _QuestionSheetState extends State<QuestionSheet> {
       error = notificationPairingMismatch
           ? 'This notification belongs to a different connection. Open the current conversation to review its questions.'
           : null;
-      models = [];
       if (widget.embedded && session.isNotEmpty) {
         current = widget.question;
-        loadModels();
       } else {
         current = null;
       }
@@ -204,10 +200,6 @@ class _QuestionSheetState extends State<QuestionSheet> {
           : null;
       if (widget.embedded) {
         current = widget.question;
-        if (jsonEncode(old.question['modelChoice']) !=
-            jsonEncode(widget.question['modelChoice'])) {
-          loadModels();
-        }
       } else if (!posting && !notificationPairingMismatch) {
         refresh();
       }
@@ -288,7 +280,6 @@ class _QuestionSheetState extends State<QuestionSheet> {
   void _resetForControllerChange() {
     _scopeSuspended = true;
     revision++;
-    modelRevision++;
     loading = false;
     posting = false;
     session = c.sessionId ?? '';
@@ -298,7 +289,6 @@ class _QuestionSheetState extends State<QuestionSheet> {
     ownerController = c;
     current = null;
     lease = {};
-    models = [];
     unknown = false;
     uncertainQuestion = null;
     handledNotice = false;
@@ -358,7 +348,6 @@ class _QuestionSheetState extends State<QuestionSheet> {
       return;
     }
     revision++;
-    modelRevision++;
     setState(() {
       current = null;
       loading = false;
@@ -388,29 +377,6 @@ class _QuestionSheetState extends State<QuestionSheet> {
   void dispose() {
     ownerController.removeListener(_controllerChanged);
     super.dispose();
-  }
-
-  Future<void> loadModels() async {
-    final token = ++modelRevision;
-    if (current?['modelChoice'] is! Map) return;
-    try {
-      final result = await c.gateway.request('/api/models');
-      if (mounted && token == modelRevision) {
-        setState(
-          () => models = rows(result['models'])
-              .map(
-                (m) => {
-                  ...m,
-                  'displayName': m['name'] ?? m['id'],
-                  'available': true,
-                },
-              )
-              .toList(),
-        );
-      }
-    } catch (_) {
-      /* The suggestion and defaults remain usable, as on the web. */
-    }
   }
 
   Future<void> refresh() async {
@@ -480,7 +446,6 @@ class _QuestionSheetState extends State<QuestionSheet> {
               );
         if (!mounted || token != revision || !sameConversation) return;
         lease = control;
-        await loadModels();
       }
     } catch (e) {
       if (mounted && token == revision && sameConversation) {
@@ -787,7 +752,6 @@ class _QuestionSheetState extends State<QuestionSheet> {
           NativeInteractionCard(
             key: ValueKey('${q['id']}:${q['epoch']}'),
             question: q,
-            models: models,
             initialChoice: _requiresManualReview ? null : widget.initialChoice,
             disabled:
                 loading ||

@@ -27,7 +27,7 @@ class GatewayOverlayService: Service() {
         ): Boolean {
             val service = activeService ?: return false
             service.scope.launch {
-                if (activeService !== service || service.scheduleId != null || service.sessionId != identity.sessionId) return@launch
+                if (activeService !== service || service.sessionId != identity.sessionId) return@launch
                 if (service.currentQuestionIdentity() != identity || service.activeQuestionPairingStamp() != questionPairingStamp) return@launch
                 val capturedGeneration = ++service.overlayGeneration
                 service.refreshGeneration++
@@ -54,7 +54,7 @@ class GatewayOverlayService: Service() {
             val service = activeService ?: return false
             val capturedGeneration = service.overlayGeneration
             service.scope.launch {
-                if (activeService !== service || service.overlayGeneration != capturedGeneration || service.scheduleId != null) return@launch
+                if (activeService !== service || service.overlayGeneration != capturedGeneration) return@launch
                 service.overlayGeneration++
                 service.refreshGeneration++
                 service.refreshJob?.cancel()
@@ -71,9 +71,6 @@ class GatewayOverlayService: Service() {
     private lateinit var body: LinearLayout
     private lateinit var colors: JSONObject
     private var sessionId = ""
-    private var scheduleId: String? = null
-    private var missedRun: Map<*, *>? = null
-    private var scheduleTitle = "錯過的排程"
     private var questionId: String? = null
     private var questionEpoch: String? = null
     private var entryPairingStamp: String? = null
@@ -118,14 +115,12 @@ class GatewayOverlayService: Service() {
             .getJSONObject("color").getJSONObject(if (dark) "dark" else "light")
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val nextScheduleId = intent?.getStringExtra("scheduleId")
         val nextSessionId = intent?.getStringExtra("sessionId") ?: ""
         val nextQuestionId = intent?.getStringExtra("interactionId")
         val nextQuestionEpoch = intent?.getStringExtra("interactionEpoch")
         val nextPairingStamp = intent?.getStringExtra("questionPairingStamp")
         val incomingIdentity = QuestionNotificationIdentity.from(nextSessionId, nextQuestionId, nextQuestionEpoch)
         if (busy && !ready && (refreshJob?.isActive == true || pending?.isActive == true) &&
-            scheduleId == null && nextScheduleId == null &&
             sameQuestionOverlayRequest(currentQuestionIdentity(), activeQuestionPairingStamp(), incomingIdentity, nextPairingStamp)) {
             return START_NOT_STICKY
         }
@@ -139,11 +134,8 @@ class GatewayOverlayService: Service() {
         val previousQuestion = questionId
         val previousQuestionEpoch = questionEpoch
         val previousPairingStamp = entryPairingStamp
-        val previousSchedule=scheduleId
-        scheduleId=nextScheduleId
-        if(previousSchedule!=scheduleId) {missedRun=null;choice=null;lockedOutcome=false}
         sessionId=nextSessionId
-        if(sessionId.isEmpty() && scheduleId==null) {stopSelf(); return START_NOT_STICKY}
+        if(sessionId.isEmpty()) {stopSelf(); return START_NOT_STICKY}
         val changedQuestion = nextQuestionId != previousQuestion || nextQuestionEpoch != previousQuestionEpoch ||
             nextPairingStamp != previousPairingStamp
         questionId = nextQuestionId
@@ -151,7 +143,7 @@ class GatewayOverlayService: Service() {
         entryPairingStamp = nextPairingStamp
         legacyQuestionEntry = nextQuestionId != null && nextQuestionEpoch == null
         if (sessionId != previousSession || changedQuestion) { question=null; choice=null; lockedOutcome=false }
-        if (scheduleId != null || nextQuestionId == null) GatewayNotifications.setActiveQuestionOverlay(this, null, null)
+        if (nextQuestionId == null) GatewayNotifications.setActiveQuestionOverlay(this, null, null)
         try {
             startForeground(4201, GatewayNotifications.notification(this, "pirc · 快速回應", "確認最新問題後才會送出", sessionId).setOngoing(true).build())
             if (!Settings.canDrawOverlays(this) || getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
@@ -212,17 +204,13 @@ class GatewayOverlayService: Service() {
         val header=LinearLayout(this).apply { gravity=Gravity.CENTER_VERTICAL }
         header.addView(TextView(this).apply { text="π  pirc · $sessionTitle"; textSize=13f; gravity=Gravity.CENTER_VERTICAL; setTextColor(color("text.muted")); maxLines=1; ellipsize=android.text.TextUtils.TruncateAt.END },LinearLayout.LayoutParams(0,dp(48),1f))
         fun icon(label:String,glyph:String,action:()->Unit) { header.addView(TextView(this).apply { text=glyph; textSize=24f; gravity=Gravity.CENTER; contentDescription=label; setTextColor(color("text.secondary")); isClickable=true; isFocusable=true; setOnClickListener { action() } },LinearLayout.LayoutParams(dp(48),dp(48))) }
-        icon("開啟完整對話","↗") { startActivity(GatewayNotifications.intent(this,sessionId.takeIf { it.isNotEmpty() },scheduleId?.let { "schedule:$it" })); stopSelf() }
+        icon("開啟完整對話","↗") { startActivity(GatewayNotifications.intent(this,sessionId.takeIf { it.isNotEmpty() })); stopSelf() }
         icon("關閉","×") { stopSelf() }
         body.addView(header)
-        text(if(handled) "這項已經處理過了" else if(scheduleId!=null) scheduleTitle else question?.title ?: "確認最新狀態…",20f)
+        text(if(handled) "這項已經處理過了" else question?.title ?: "確認最新狀態…",20f)
         question?.description?.takeIf { !handled }?.let { text(it,14f) }
         if(busy) body.addView(ProgressBar(this).apply { isIndeterminate=true },LinearLayout.LayoutParams(dp(24),dp(24)).apply { topMargin=dp(12); bottomMargin=dp(12) })
         val q=question
-        if(scheduleId!=null && ready && !busy && !lockedOutcome) {
-            option("run","執行這次工作"); option("dismiss","略過這次執行")
-            button(if(choice=="dismiss") "確認略過" else "確認執行",true,choice!=null) { submitSchedule() }
-        }
         if(ready && !busy && !lockedOutcome && q!=null) {
             if(q.kind=="confirm") { option("yes","確認"); option("no","拒絕") }
             else for(o in q.options) option(o.value,o.label)
@@ -233,11 +221,10 @@ class GatewayOverlayService: Service() {
         if(handled) button("好",true) { stopSelf() }
         else if(!busy && !ready) {
             if(failed) button("重試") { refresh() }
-            else button("開啟完整對話") { startActivity(GatewayNotifications.intent(this,sessionId.takeIf { it.isNotEmpty() },scheduleId?.let { "schedule:$it" })); stopSelf() }
+            else button("開啟完整對話") { startActivity(GatewayNotifications.intent(this,sessionId.takeIf { it.isNotEmpty() })); stopSelf() }
         }
     }
     private fun refresh() {
-        if(scheduleId!=null) { refreshSchedule(); return }
         refreshJob?.cancel()
         val targetGeneration = overlayGeneration
         val requestGeneration = ++refreshGeneration
@@ -282,8 +269,7 @@ class GatewayOverlayService: Service() {
                     legacyQuestionEntry -> status="這是舊通知，無法確認題目版本；請開啟完整對話重新查看。"
                     (next.expiresAt != null && next.expiresAt!! <= System.currentTimeMillis()) -> status="問題已過期"
                     lockedOutcome -> status="先前送出結果不明，請在完整對話檢查；不會自動重送"
-                    next.kind !in listOf("confirm","select") || next.multiple || next.options.size > 3 ||
-                        next.modelChoice != null || next.userRequestChoice != null -> status="請開啟完整對話輸入答案"
+                    next.kind !in listOf("confirm","select") || next.multiple || next.options.size > 3 -> status="請開啟完整對話輸入答案"
                     else -> {
                         // A relayed delegation approval needs no control lease.
                         val relayed = isRelayedInteraction(next.id)
@@ -301,69 +287,6 @@ class GatewayOverlayService: Service() {
             } catch(e: CancellationException) { throw e }
             catch(e: Exception) { if (isCurrentRefresh()) { failed=true; status="無法確認最新狀態，請重試。" } }
             finally { if (isCurrentRefresh()) { busy=false; render() } }
-        }
-    }
-    private val scheduleUnknown get() = getSharedPreferences("uncertain_schedules",MODE_PRIVATE)
-    private fun schedulePath() = "/api/schedules/"+android.net.Uri.encode(scheduleId!!)
-    private fun refreshSchedule() {
-        refreshJob?.cancel()
-        val targetGeneration = overlayGeneration
-        val requestGeneration = ++refreshGeneration
-        fun isCurrentRefresh() = targetGeneration == overlayGeneration && requestGeneration == refreshGeneration
-        ready=false;busy=true;failed=false;handled=false;status="確認最新狀態…";render()
-        refreshJob=scope.launch {
-            try {
-                val data=runtime.request("GET",schedulePath(),null) as Map<*, *>
-                if (!isCurrentRefresh()) return@launch
-                val schedule=data["schedule"] as? Map<*, *>
-                scheduleTitle=schedule?.get("title")?.toString() ?: "錯過的排程"
-                sessionTitle="排程"
-                val runs=(data["runs"] as? List<*>)?.filterIsInstance<Map<*, *>>().orEmpty()
-                val next=if(missedRun==null) runs.firstOrNull { it["status"]=="missed" } else runs.firstOrNull { it["id"]==missedRun?.get("id") && it["status"]=="missed" }
-                missedRun=next
-                lockedOutcome=next!=null && scheduleUnknown.getBoolean("$scheduleId:${next["id"]}",false)
-                when {
-                    next==null -> {handled=true;status="這次排程已處理，不需要再次操作。"}
-                    lockedOutcome -> status="先前送出結果不明，請開啟排程檢查執行紀錄。"
-                    else -> {ready=true;status="選擇執行或略過，再按確認。"}
-                }
-            } catch(e:CancellationException) {throw e}
-            catch(e:Exception) {if (isCurrentRefresh()) {failed=true;status="無法確認最新狀態，請重試。"}}
-            finally {if (isCurrentRefresh()) {busy=false;render()}}
-        }
-    }
-    private fun submitSchedule() {
-        val run=missedRun ?: return
-        val action=choice ?: return
-        if(!ready || busy || lockedOutcome) return
-        val submitGeneration = overlayGeneration
-        val submitScheduleId = scheduleId ?: return
-        val submitPath = "/api/schedules/" + android.net.Uri.encode(submitScheduleId)
-        ready=false;busy=true;status="送出中…";render()
-        pending=scope.launch {
-            val key="$submitScheduleId:${run["id"]}"
-            var sent=false
-            try {
-                val fresh=runtime.request("GET",submitPath,null) as Map<*, *>
-                if (submitGeneration != overlayGeneration || scheduleId != submitScheduleId) return@launch
-                val valid=(fresh["runs"] as? List<*>)?.filterIsInstance<Map<*, *>>()?.any { it["id"]==run["id"] && it["status"]=="missed" }==true
-                if(!valid) {handled=true;status="這次排程已經處理過了";busy=false;render();return@launch}
-                check(scheduleUnknown.edit().putBoolean(key,true).commit())
-                sent=true
-                runtime.request("POST",submitPath+if(action=="run") "/run" else "/runs/${android.net.Uri.encode(run["id"].toString())}/dismiss",if(action=="run") mapOf("runId" to run["id"]) else emptyMap<String,Any>())
-                scheduleUnknown.edit().remove(key).commit()
-                if (submitGeneration != overlayGeneration || scheduleId != submitScheduleId) return@launch
-                status=if(action=="run") "已提出執行" else "已略過"; render();delay(1200)
-                if (submitGeneration == overlayGeneration && scheduleId == submitScheduleId) stopSelf()
-            } catch(e:CancellationException) {throw e}
-            catch(e:Exception) {
-                val operationLockedOutcome=sent && (e !is ApiException || e.status !in 400..499 || e.code=="outcome_unknown")
-                if(!operationLockedOutcome) scheduleUnknown.edit().remove(key).commit()
-                if (submitGeneration != overlayGeneration || scheduleId != submitScheduleId) return@launch
-                lockedOutcome=operationLockedOutcome
-                status=if(lockedOutcome) "不確定是否已送達，請開啟排程檢查紀錄；不會重送。" else "狀態已改變或連線失敗，請重新確認。"
-                failed=!lockedOutcome;busy=false;render()
-            }
         }
     }
     private fun submit() {

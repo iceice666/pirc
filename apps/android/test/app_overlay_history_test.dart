@@ -79,7 +79,6 @@ Json _memoryFixture({bool changed = false}) => {
       },
   ],
   'removed': <Json>[],
-  'proposals': <Json>[],
   'sessions': {'session-latest': 'Latest session'},
 };
 

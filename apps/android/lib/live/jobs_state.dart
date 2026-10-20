@@ -66,7 +66,7 @@ class JobsState extends ChangeNotifier {
   bool _valid(int scope) => !_disposed && scope == _scope;
   void _observe() {
     final c = controller;
-    final session = c.chat ? null : c.sessionId;
+    final session = c.sessionId;
     final changed =
         session != _session || c.origin != _origin || c.clientId != _client;
     final resumed = c.active && !_active;

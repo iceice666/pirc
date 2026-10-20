@@ -25,7 +25,7 @@ object GatewayNotifications {
     private const val QUESTION_TOMBSTONE_AGE = 30L * 24 * 60 * 60 * 1000
     private const val QUESTION_OVERLAY_STATE = "question_overlay_state"
     private val questionNotificationLock = Any()
-    private val categories = mapOf("q" to "需要你回應", "missed" to "錯過的排程", "deleg" to "委派的工作", "mem" to "記憶提案", "done" to "完成或失敗", "live" to "即時進度")
+    private val categories = mapOf("q" to "需要你回應", "deleg" to "委派的工作", "done" to "完成或失敗", "live" to "即時進度")
     fun intent(context: Context, session: String?, page: String? = null) = Intent(context, MainActivity::class.java)
         .putExtra("gatewaySession", session).putExtra("gatewayRoute", page)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -77,7 +77,7 @@ object GatewayNotifications {
         if(category=="q" && session!=null && allowQuestionActions) {
             val q=question
             val simple=q!=null && q.status=="pending" && (q.expiresAt == null || q.expiresAt > System.currentTimeMillis()) &&
-                !q.multiple && q.modelChoice == null && q.userRequestChoice == null &&
+                !q.multiple &&
                 (q.kind=="confirm" || (q.kind=="select" && q.options.size<=3))
             if(settings.enabled("rich") && simple) {
                 val options=if(q!!.kind=="confirm") listOf("yes" to "確認…", "no" to "拒絕…") else q.options.map { it.value to it.label }
@@ -105,13 +105,6 @@ object GatewayNotifications {
                 if(Build.VERSION.SDK_INT>=31) action.setAuthenticationRequired(true)
                 if(!simple || !settings.enabled("rich") || q!!.options.size<3) notification.addAction(action.build())
             }
-        }
-        if(page?.startsWith("schedule")==true) notification.addAction(Notification.Action.Builder(null,"查看並執行…",open(context,intent(context,null,page),"schedule:$tag")).build())
-        if(page?.startsWith("schedule:")==true && settings.enabled("popup") && Settings.canDrawOverlays(context)) {
-            val reply=PendingIntent.getForegroundService(context,tag.hashCode(),Intent(context,GatewayOverlayService::class.java).putExtra("scheduleId",page.substringAfter(':')),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val action=Notification.Action.Builder(null,"快速處理…",reply)
-            if(Build.VERSION.SDK_INT>=31) action.setAuthenticationRequired(true)
-            notification.addAction(action.build())
         }
         val built = notification.build()
         if (category == "q" && session != null) {
@@ -319,8 +312,7 @@ class GatewayPushService : PushService() {
         }
         val suppressVisible = shouldSuppressVisibleSessionPush(session, runtime::hasVisibleSessionSubscriber)
         if (suppressVisible && pushedInteraction?.isCreated != true) return
-        val page = when(note.target) { is PushTarget.OpenSchedules -> (note.target as PushTarget.OpenSchedules).scheduleId?.let { "schedule:$it" } ?: "schedules"; PushTarget.OpenMemory -> "memory"; else -> null }
-        val category=when { note.tag.startsWith("delegation:") -> "deleg"; page=="memory" -> "mem"; page?.startsWith("schedule")==true -> "missed"; else -> "q" }
+        val category = if (note.tag.startsWith("delegation:")) "deleg" else "q"
         runtime.scope.launch {
             val captured = if (session != null) readPushValueOrNull {
                 withTimeout(8000) { runtime.snapshotForInteraction(session) }
@@ -353,7 +345,7 @@ class GatewayPushService : PushService() {
                     it.status == "pending" && (it.expiresAt == null || it.expiresAt > System.currentTimeMillis())
                 }) return@withCurrentPairingStampForPush
                 val q = if (disposition == CreatedQuestionDisposition.SHOW_ACTIONABLE) current else null
-                GatewayNotifications.show(applicationContext,note.title,note.body,session,page,category,snapshot?.session?.workspaceId,q,note.tag,identity,
+                GatewayNotifications.show(applicationContext,note.title,note.body,session,null,category,snapshot?.session?.workspaceId,q,note.tag,identity,
                     questionPairingStamp = pairingStamp, allowQuestionActions = disposition == CreatedQuestionDisposition.SHOW_ACTIONABLE)
             }
         }

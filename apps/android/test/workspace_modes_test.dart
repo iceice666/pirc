@@ -10,7 +10,6 @@ import 'package:pirc_mobile/live/side_panel.dart';
 import 'package:pirc_mobile/live/web_controls.dart';
 import 'package:pirc_mobile/live/work_index.dart';
 import 'package:pirc_mobile/live/workspace_page.dart';
-import 'package:pirc_mobile/live/workspace_project_links.dart';
 import 'package:pirc_mobile/live/workspace_settings.dart';
 
 import 'live_test.dart' show FakeGateway, theme;
@@ -84,27 +83,17 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final catalog = ModeCatalog(modeCatalogFixture);
 
-  test('the Chat tab follows assistant, not the per-session kind', () {
-    expect(catalog.assistant(chatsWorkspaceFixture), isTrue);
-    expect(catalog.topChats(chatsWorkspaceFixture), isTrue);
-    expect(catalog.assistant(projectWorkspaceFixture), isTrue);
-    expect(catalog.topChats(projectWorkspaceFixture), isFalse);
-    // Scratch is per-session, so the gateway reports kind "chat".
-    expect(scratchWorkspaceFixture['kind'], 'chat');
-    expect(catalog.assistant(scratchWorkspaceFixture), isFalse);
+  test('a workspace reads its capabilities from its mode', () {
     final scratch = catalog.of(scratchWorkspaceFixture);
     expect(scratch.label, 'Scratch');
     expect(scratch.noun, 'session');
     expect(scratch.repository, isFalse);
     expect(scratch.sharedDirectory, isFalse);
-    expect(scratch.deleteSessions, isFalse);
-    expect(scratch.projects, isFalse);
     expect(scratch.delegateTarget, isTrue);
-    // Unavailable: Work, read-only, whatever its kind says.
-    final unavailable = {...projectWorkspaceFixture, 'available': false};
-    expect(catalog.assistant(unavailable), isFalse);
+    // Unavailable: read-only, whatever its mode says.
+    final unavailable = {...scratchWorkspaceFixture, 'available': false};
     expect(isReadOnly(unavailable), isTrue);
-    expect(catalog.of(unavailable).projects, isFalse);
+    expect(catalog.of(unavailable).label, 'Unavailable');
     expect(catalog.of(unavailableWorkspaceFixture).label, 'Unavailable');
 
     final hosts = workHosts(modeWorkspacesFixture, modeNodesFixture, catalog);
@@ -114,37 +103,29 @@ void main() {
       'device:jobs',
       'device:review',
     ]);
-    expect(_ids(catalog.delegateTargets(modeWorkspacesFixture)), [
-      'device:repo',
-      'device:jobs',
-    ]);
   });
 
-  test('without a catalog the legacy kind decides', () {
+  test('without a catalog every workspace is a directory', () {
     final empty = ModeCatalog();
     final legacy = modeWorkspacesFixture.map(_legacy).toList();
-    final scratch = legacy.firstWhere((w) => w['id'] == 'device:jobs');
-    // An older gateway cannot tell scratch from chat: as before this phase.
-    expect(empty.assistant(scratch), isTrue);
-    expect(empty.of(scratch).noun, 'chat');
     final directory = legacy.firstWhere((w) => w['id'] == 'device:repo');
-    expect(empty.assistant(directory), isFalse);
     expect(empty.of(directory).repository, isTrue);
     expect(empty.of(directory).sharedDirectory, isTrue);
+    final scratch = legacy.firstWhere((w) => w['id'] == 'device:jobs');
+    expect(empty.of(scratch).id, 'directory');
     // A catalog that lacks a still-available mode falls back the same way.
     expect(
-      catalog.assistant({...projectWorkspaceFixture, 'mode': 'new'}),
-      true,
+      catalog.of({...scratchWorkspaceFixture, 'mode': 'new'}).id,
+      'directory',
     );
-    // Without node modes, Work hosts exclude the chat node.
+    // Without node modes, every node hosts workspaces.
     final nodes = [
-      {'id': 'assistant'},
       {'id': 'device'},
       {'id': 'empty'},
     ];
-    expect(_ids(empty.workNodes(nodes, legacy)), ['device', 'empty']);
+    expect(_ids(empty.workNodes(nodes)), ['device', 'empty']);
     expect(_ids(workHosts(legacy, nodes, empty)), ['device', 'empty']);
-    expect(empty.creatable(nodes[1]), isEmpty);
+    expect(empty.creatable(nodes[0]), isEmpty);
   });
 
   test('node modes decide Work hosts and creatable modes', () {
@@ -154,37 +135,28 @@ void main() {
         'id': 'gpu',
         'modes': ['scratch'],
       },
+      {
+        'id': 'retired',
+        'modes': ['chat'],
+      },
       {'id': 'legacy'},
     ];
-    // No chats workspace yet: the chat node is still excluded by its modes.
-    final workspaces = [directoryWorkspaceFixture];
-    expect(_ids(catalog.workNodes(nodes, workspaces)), [
-      'device',
-      'gpu',
-      'legacy',
-    ]);
-    expect(catalog.creatable(nodes[0]), isEmpty);
-    expect(catalog.creatable(nodes[1]).map((m) => m.id), [
+    // A node accepting only modes the catalog lacks hosts nothing.
+    expect(_ids(catalog.workNodes(nodes)), ['device', 'gpu', 'legacy']);
+    expect(catalog.creatable(nodes[0]).map((m) => m.id), [
       'directory',
       'scratch',
     ]);
-    expect(catalog.creatable(nodes[2]).map((m) => m.id), ['scratch']);
+    expect(catalog.creatable(nodes[1]).map((m) => m.id), ['scratch']);
+    expect(catalog.creatable(nodes[2]), isEmpty);
   });
 
-  test('the index loads the catalog; a 404 falls back to kind', () async {
-    final g = _gateway(
-      modes: modeCatalogFixture,
-      sessions: [
-        {'id': 'scratch-run', 'workspaceId': 'device:jobs'},
-      ],
-    );
+  test('the index loads the catalog; a 404 falls back to directory', () async {
+    final g = _gateway(modes: modeCatalogFixture);
     final c = _controller(g);
     await c.refreshList();
     expect(_requested(g), contains('/api/modes'));
     expect(c.catalog.byId('scratch')?.label, 'Scratch');
-    expect(c.mode, 'chat');
-    await c.open('scratch-run', reveal: false);
-    expect(c.mode, 'work');
 
     // A transient failure keeps the last catalog.
     g.handler = (method, args) async {
@@ -207,34 +179,28 @@ void main() {
     expect(legacy.catalog.isEmpty, isTrue);
     expect(legacy.error, isNull);
     expect(
-      legacy.catalog.assistant(
-        legacy.workspaces.firstWhere((w) => w['id'] == 'device:repo'),
-      ),
-      isFalse,
+      legacy.catalog
+          .of(legacy.workspaces.firstWhere((w) => w['id'] == 'device:jobs'))
+          .id,
+      'directory',
     );
     legacy.dispose();
     await old.stream.close();
   });
 
-  test('assistant chrome and side panels follow capabilities', () {
+  test('side panels follow capabilities', () {
     final g = FakeGateway();
     final c = _controller(g, modes: modeCatalogFixture);
     void open(String workspace) => c.state = {
       'session': {'id': 's', 'workspaceId': workspace},
     };
     open('device:jobs');
-    expect(c.chat, isFalse);
     expect(c.sessionPanel('git'), isFalse);
     expect(c.sessionPanel('terminals'), isFalse);
     expect(c.sessionPanel('files'), isTrue);
     open('device:repo');
-    expect(c.chat, isFalse);
     expect(c.sessionPanel('git'), isTrue);
     expect(c.sessionPanel('terminals'), isTrue);
-    open('assistant:trip');
-    expect(c.chat, isTrue);
-    expect(c.sessionPanel('git'), isFalse);
-    expect(c.sessionPanel('terminals'), isFalse);
     c.dispose();
   });
 
@@ -274,37 +240,28 @@ void main() {
     t,
   ) async {
     final g = FakeGateway();
-    final c = _controller(g, modes: modeCatalogFixture)..mode = 'work';
-    Widget sidebar() => _host(
-      SessionSidebar(
-        controller: c,
-        onOpen: (_) {},
-        onWorkspace: (_) {},
-        onPage: (_) {},
-        onCollapse: () {},
-        onMode: (_) {},
+    final c = _controller(g, modes: modeCatalogFixture);
+    await t.pumpWidget(
+      _host(
+        SessionSidebar(
+          controller: c,
+          onOpen: (_) {},
+          onWorkspace: (_) {},
+          onPage: (_) {},
+          onCollapse: () {},
+        ),
       ),
     );
-    await t.pumpWidget(sidebar());
     await t.pumpAndSettle();
     expect(find.text('device'), findsOneWidget);
-    expect(find.text('assistant'), findsNothing);
     expect(find.text('Jobs'), findsOneWidget);
     expect(find.text('Old review'), findsOneWidget);
-    expect(find.text('Trip'), findsNothing);
     WebIconButton button(String label) => t.widget<WebIconButton>(
       find.byWidgetPredicate((w) => w is WebIconButton && w.label == label),
     );
     expect(button('New session in Jobs').onPressed, isNotNull);
     expect(button('New session in Old review').onPressed, isNull);
     expect(button('Add workspace on device').onPressed, isNotNull);
-
-    c.mode = 'chat';
-    await t.pumpWidget(sidebar());
-    await t.pumpAndSettle();
-    expect(find.text('Trip'), findsOneWidget);
-    expect(find.text('Jobs'), findsNothing);
-    expect(find.text('New chat'), findsOneWidget);
     await _finish(t, c, g);
   });
 
@@ -334,9 +291,7 @@ void main() {
       find.widgetWithText(WebButton, 'New session'),
     );
     expect(create.onPressed, isNotNull);
-    // Scratch does not delete individual sessions, unlike chats.
     expect(find.byTooltip('Rename Render job'), findsOneWidget);
-    expect(find.byTooltip('Delete Render job'), findsNothing);
     await _finish(t, c, g);
   });
 
@@ -374,33 +329,6 @@ void main() {
     await _finish(t, c, g);
   });
 
-  testWidgets('chat project sessions keep their delete action', (t) async {
-    final g = FakeGateway();
-    final c = _controller(
-      g,
-      modes: modeCatalogFixture,
-      sessions: [
-        {'id': 'plan', 'name': 'Plans', 'workspaceId': 'assistant:trip'},
-      ],
-    );
-    await t.pumpWidget(
-      _host(
-        WorkspacePage(
-          controller: c,
-          workspaceId: 'assistant:trip',
-          onBack: () {},
-          onOpen: (_) {},
-        ),
-      ),
-    );
-    await t.pumpAndSettle();
-    expect(find.text('Project'), findsOneWidget);
-    expect(find.text('Chats'), findsOneWidget);
-    expect(find.text('New chat'), findsOneWidget);
-    expect(find.byTooltip('Delete Plans'), findsOneWidget);
-    await _finish(t, c, g);
-  });
-
   testWidgets('scratch settings show workspace facts only', (t) async {
     final g = _gateway(modes: modeCatalogFixture);
     final c = _controller(g, modes: modeCatalogFixture);
@@ -419,9 +347,6 @@ void main() {
     expect(find.text('Device'), findsOneWidget);
     for (final absent in [
       'PROJECT CONFIG',
-      'PROJECT INSTRUCTIONS',
-      'PROJECT CAPABILITIES',
-      'DELETE PROJECT',
     ]) {
       expect(find.text(absent), findsNothing, reason: absent);
     }
@@ -429,79 +354,6 @@ void main() {
       _requested(g).where((p) => p.startsWith('/api/workspaces/')),
       isEmpty,
     );
-    await _finish(t, c, g);
-  });
-
-  testWidgets('assistant settings follow the mode capabilities', (t) async {
-    // An assistant mode with instructions but no files or projects.
-    final research = {
-      ...chatModeFixture,
-      'id': 'research',
-      'ui': {'noun': 'research session'},
-      'project_files': false,
-      'projects': false,
-    };
-    final workspace = {...projectWorkspaceFixture, 'mode': 'research'};
-    final g = _gateway(
-      request: (args) {
-        final path = '${args['path']}';
-        if (path.endsWith('/instructions')) {
-          return {
-            'instructions': {'text': '', 'maxChars': 100},
-          };
-        }
-        if (path.endsWith('/capabilities')) return {'capabilities': {}};
-        return null;
-      },
-    );
-    final c = _controller(
-      g,
-      modes: [...modeCatalogFixture, research],
-      workspaces: [chatsWorkspaceFixture, workspace],
-    );
-    await t.pumpWidget(
-      _host(
-        SingleChildScrollView(
-          child: WorkspaceSettings(controller: c, workspace: workspace),
-        ),
-      ),
-    );
-    await t.pumpAndSettle();
-    expect(find.text('PROJECT INSTRUCTIONS'), findsOneWidget);
-    expect(find.text('PROJECT CAPABILITIES'), findsOneWidget);
-    expect(find.text('DELETE PROJECT'), findsNothing);
-    expect(find.text('WORKSPACE'), findsNothing);
-    final paths = _requested(g).toList();
-    expect(paths, contains('/api/workspaces/assistant%3Atrip/instructions'));
-    expect(paths, contains('/api/workspaces/assistant%3Atrip/capabilities'));
-    expect(paths.where((p) => p.endsWith('/files')), isEmpty);
-    expect(paths.where((p) => p.endsWith('/links')), isEmpty);
-    await _finish(t, c, g);
-  });
-
-  testWidgets('project links target workspaces whose mode takes delegation', (
-    t,
-  ) async {
-    final g = _gateway(
-      request: (args) =>
-          '${args['path']}'.endsWith('/links') ? {'links': <Json>[]} : null,
-    );
-    final c = _controller(g, modes: modeCatalogFixture);
-    await t.pumpWidget(
-      _host(
-        SingleChildScrollView(
-          child: WorkspaceProjectLinks(
-            controller: c,
-            workspaceId: 'assistant:trip',
-          ),
-        ),
-      ),
-    );
-    await t.pumpAndSettle();
-    expect(find.text('Repository'), findsOneWidget);
-    expect(find.text('Jobs'), findsOneWidget);
-    expect(find.text('Old review'), findsNothing);
-    expect(find.text('Chats'), findsNothing);
     await _finish(t, c, g);
   });
 
@@ -528,8 +380,12 @@ void main() {
         return null;
       },
     );
-    final c = _controller(g, modes: modes, workspaces: workspaces, nodes: nodes)
-      ..mode = 'work';
+    final c = _controller(
+      g,
+      modes: modes,
+      workspaces: workspaces,
+      nodes: nodes,
+    );
     await t.pumpWidget(
       _host(
         SessionSidebar(
@@ -538,7 +394,6 @@ void main() {
           onWorkspace: (_) {},
           onPage: (_) {},
           onCollapse: () {},
-          onMode: (_) {},
         ),
       ),
     );
@@ -593,7 +448,6 @@ void main() {
       modes: modeCatalogFixture,
       workspaces: modeWorkspacesFixture,
       nodes: [
-        modeNodesFixture.first,
         {
           'id': 'device',
           'modes': ['directory'],
@@ -617,7 +471,6 @@ void main() {
       modes: const [],
       workspaces: modeWorkspacesFixture.map(_legacy).toList(),
       nodes: [
-        {'id': 'assistant'},
         {'id': 'device'},
       ],
       path: '~/src/repo',

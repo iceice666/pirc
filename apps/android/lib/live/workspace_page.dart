@@ -10,7 +10,6 @@ import 'modes.dart';
 import 'session_row.dart';
 import 'web_controls.dart';
 import 'workspace_settings.dart';
-import 'project_deletion_dialog.dart';
 
 class WorkspacePage extends StatefulWidget {
   const WorkspacePage({
@@ -36,7 +35,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
   final query = TextEditingController();
   final _sessionsTabFocus = FocusNode(debugLabel: 'workspace-sessions-tab');
   final _settingsTabFocus = FocusNode(debugLabel: 'workspace-settings-tab');
-  final folds = <String>{};
   bool settings = false, showDone = false;
   @override
   void initState() {
@@ -144,18 +142,14 @@ class _WorkspacePageState extends State<WorkspacePage> {
         availableWidth;
   }
 
-  Widget row(Json s, {bool nested = false}) => Padding(
-    padding: EdgeInsets.only(left: nested ? 20 : 0),
-    child: Padding(
-      padding: const EdgeInsets.only(bottom: 1),
-      child: SessionRow(
-        key: ValueKey('workspace-${s['id']}'),
-        controller: widget.controller,
-        session: s,
-        page: true,
-        onOpen: () => widget.onOpen('${s['id']}'),
-        onDeleted: (_) {},
-      ),
+  Widget row(Json s) => Padding(
+    padding: const EdgeInsets.only(bottom: 1),
+    child: SessionRow(
+      key: ValueKey('workspace-${s['id']}'),
+      controller: widget.controller,
+      session: s,
+      page: true,
+      onOpen: () => widget.onOpen('${s['id']}'),
     ),
   );
   @override
@@ -179,17 +173,14 @@ class _WorkspacePageState extends State<WorkspacePage> {
     final all = c.sessions.where((s) => s['workspaceId'] == w['id']).toList();
     final done = all.where(isDone).length,
         unread = all.where((s) => s['unread'] == true).length;
-    final groups = foldRecent(
-      pinnedFirst(
-        all.where(
-          (s) =>
-              (showDone || query.text.isNotEmpty || !isDone(s)) &&
-              '${s['name']}'.toLowerCase().contains(query.text.toLowerCase()),
-        ),
+    final listed = pinnedFirst(
+      all.where(
+        (s) =>
+            (showDone || query.text.isNotEmpty || !isDone(s)) &&
+            '${s['name']}'.toLowerCase().contains(query.text.toLowerCase()),
       ),
     );
     final online = workspaceOnline(w, c.nodes);
-    final deleting = w['deleting'] == true;
     return Material(
       color: palette(context)['surface.page'],
       child: Column(
@@ -221,9 +212,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                     onPressed: widget.onExpand,
                   ),
                 Icon(
-                  mode.assistant
-                      ? LucideIcons.messageSquare
-                      : LucideIcons.folder,
+                  LucideIcons.folder,
                   size: 18,
                   color: palette(context)['text.secondary'],
                 ),
@@ -250,11 +239,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                         Flexible(
                           fit: FlexFit.loose,
                           child: Text(
-                            '${mode.assistant
-                                ? c.catalog.topChats(w)
-                                      ? 'Chats'
-                                      : 'Project'
-                                : '${mode.repository ? 'Workspace' : mode.label} · ${w['hostId']}'}${online ? '' : ' · offline'}',
+                            '${mode.repository ? 'Workspace' : mode.label} · ${w['hostId']}${online ? '' : ' · offline'}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: webText(
@@ -275,7 +260,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                     'New $noun',
                     primary: true,
                     icon: LucideIcons.squarePen,
-                    onPressed: online && !deleting && !readOnly
+                    onPressed: online && !readOnly
                         ? () => guarded(context, () => c.create('${w['id']}'))
                         : null,
                   ),
@@ -287,25 +272,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: WebNotice(workspaceUnavailableNotice),
-            ),
-          if (deleting)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const WebNotice(workspaceDeletionNotice, error: true),
-                  WebButton(
-                    'Finish deleting…',
-                    key: const ValueKey('project-deletion-finish'),
-                    primary: true,
-                    disabledOpacity: .5,
-                    onPressed: online
-                        ? () => deleteProjectDialog(context, c, w)
-                        : null,
-                  ),
-                ],
-              ),
             ),
           LayoutBuilder(
             builder: (context, size) {
@@ -491,73 +457,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                for (final group in groups)
-                                  if (!group.folded)
-                                    row(group.sessions.single)
-                                  else ...[
-                                    InkWell(
-                                      onTap: () => setState(() {
-                                        if (!folds.add(group.scheduleId!)) {
-                                          folds.remove(group.scheduleId);
-                                        }
-                                      }),
-                                      child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          12,
-                                          12,
-                                          100,
-                                          12,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            StatusDot(
-                                              session: {
-                                                'unread': group.sessions.any(
-                                                  (s) => s['unread'] == true,
-                                                ),
-                                              },
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Icon(
-                                              LucideIcons.clock,
-                                              size: 13,
-                                              color: palette(
-                                                context,
-                                              )['text.muted'],
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                group.title!,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: webText(context),
-                                              ),
-                                            ),
-                                            Text(
-                                              '${group.sessions.length} runs',
-                                              style: webText(
-                                                context,
-                                                size: 11,
-                                                color: 'text.muted',
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Icon(
-                                              folds.contains(group.scheduleId)
-                                                  ? LucideIcons.chevronDown
-                                                  : LucideIcons.chevronRight,
-                                              size: 13,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    if (folds.contains(group.scheduleId))
-                                      for (final s in group.sessions)
-                                        row(s, nested: true),
-                                  ],
-                                if (groups.isEmpty)
+                                for (final s in listed) row(s),
+                                if (listed.isEmpty)
                                   Padding(
                                     padding: const EdgeInsets.all(12),
                                     child: Text(

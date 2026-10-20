@@ -24,7 +24,6 @@ class ObservedEventsTest {
             server.enqueue(socket(1001,
                 """{"type":"memory_changed"}""",
                 """{"sessionId":"s","epoch":3,"sequence":7,"type":"pi_event","timestamp":1,"data":{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"hello"}}}""",
-                """{"type":"schedules_changed"}""",
                 """{"type":"sessions_changed"}""",
                 """{"type":"directory_changed"}"""))
             server.enqueue(socket(4401))
@@ -32,11 +31,11 @@ class ObservedEventsTest {
             val changes = mutableListOf<String>()
             val api = PircApi(Pairing(server.url("/").toString().trimEnd('/'), "pirc_dev_" + "c".repeat(43)))
             val signals = withTimeout(5_000) { EventStream(api, onChange = { changes.add(it) }, backoff = { 1 }).open("s", "3:6").toList() }
-            assertEquals(listOf("memory_changed", "schedules_changed", "sessions_changed", "directory_changed"), changes)
+            assertEquals(listOf("memory_changed", "sessions_changed", "directory_changed"), changes)
             assertEquals(listOf("3:7"), signals.filterIsInstance<StreamSignal.Event>().map { it.envelope.cursor })
             assertEquals(401, (signals.last() as StreamSignal.Closed).error.status)
             val first = server.takeRequest()
-            for (name in listOf("memory", "schedules", "sessions", "directory")) assertEquals("1", first.url.queryParameter(name))
+            for (name in listOf("memory", "sessions", "directory")) assertEquals("1", first.url.queryParameter(name))
             assertEquals("3:6", first.url.queryParameter("cursor"))
             val second = server.takeRequest()
             assertEquals("3:7", second.url.queryParameter("cursor"))

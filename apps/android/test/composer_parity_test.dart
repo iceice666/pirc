@@ -196,10 +196,10 @@ void main() {
       addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
       final g = FakeGateway(), c = LiveController(g);
       c.state = {
-        'session': {'name': 'Review native layout', 'workspaceId': 'chats'},
+        'session': {'name': 'Review native layout', 'workspaceId': 'repo'},
       };
       c.workspaces = [
-        {'id': 'chats', 'kind': 'chat', 'displayName': 'Chats'},
+        {'id': 'repo', 'kind': 'directory', 'displayName': 'Repo'},
       ];
       c.connection = 'live';
       c.control = {'held': true};
@@ -233,7 +233,7 @@ void main() {
         matching: find.byType(RichText),
       );
       final crumb = find.descendant(
-        of: find.text('Chats'),
+        of: find.text('Repo'),
         matching: find.byType(RichText),
       );
       expect(t.renderObject<RenderParagraph>(title).didExceedMaxLines, isFalse);

@@ -9,32 +9,27 @@ import 'package:pirc_mobile/live/session_sidebar.dart';
 import 'package:pirc_mobile/live/workspace_page.dart';
 import 'live_test.dart' show FakeGateway, theme;
 
-const _chats = <String, dynamic>{
-  'id': 'host:chats',
-  'hostId': 'host',
-  'kind': 'chat',
-  'displayName': 'Chats',
-};
 const _project = <String, dynamic>{
   'id': 'host:project',
   'hostId': 'host',
-  'kind': 'chat',
   'displayName': 'Project',
 };
 
 LiveController _controller(FakeGateway gateway) => LiveController(gateway)
   ..booting = false
   ..origin = 'https://gateway.example'
-  ..workspaces = [_chats, _project]
+  ..workspaces = [_project]
   ..nodes = [
     {'id': 'host'},
   ];
 
+/// Unread, so the sidebar lists it under its workspace.
 Json _session(String id, {String? status}) => {
   'id': id,
   'name': id,
-  'workspaceId': _chats['id'],
+  'workspaceId': _project['id'],
   'runStatus': status ?? 'idle',
+  'unread': true,
 };
 
 Widget _app(
@@ -69,7 +64,6 @@ void main() {
           onWorkspace: (_) {},
           onPage: (_) {},
           onCollapse: () {},
-          onMode: (_) {},
         ),
       ),
     );
@@ -111,7 +105,6 @@ void main() {
                 controller: controller,
                 session: session,
                 onOpen: () {},
-                onDeleted: (_) {},
               ),
             ),
           ),
@@ -141,48 +134,6 @@ void main() {
       await gateway.stream.close();
     },
   );
-
-  testWidgets('work mode dot is limited to an inactive mode with attention', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(900, 780);
-    addTearDown(tester.view.reset);
-    final gateway = FakeGateway(), controller = _controller(gateway);
-    controller.sessions = [_session('Waiting', status: 'waiting_input')];
-    final sidebar = SessionSidebar(
-      controller: controller,
-      onOpen: (_) {},
-      onWorkspace: (_) {},
-      onPage: (_) {},
-      onCollapse: () {},
-      onMode: (_) {},
-    );
-    await tester.pumpWidget(_app(sidebar));
-    await tester.pumpAndSettle();
-    expect(find.byTooltip('1 waiting for you'), findsOneWidget);
-    expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is Semantics &&
-            widget.properties.label == '1 waiting for you',
-      ),
-      findsOneWidget,
-    );
-
-    controller.mode = 'work';
-    await tester.pumpWidget(_app(sidebar));
-    await tester.pumpAndSettle();
-    expect(find.byTooltip('1 waiting for you'), findsNothing);
-
-    controller.mode = 'chat';
-    controller.sessions = [];
-    await tester.pumpWidget(_app(sidebar));
-    await tester.pumpAndSettle();
-    expect(find.byTooltip('waiting for you'), findsNothing);
-    controller.dispose();
-    await gateway.stream.close();
-  });
 
   testWidgets(
     'workspace tabs expose tab semantics and rove by arrows/Home/End',
@@ -224,7 +175,7 @@ void main() {
           hasLength(1),
         );
 
-        await tester.tap(find.text('Chats').first);
+        await tester.tap(find.text('Sessions').first);
         await tester.pumpAndSettle();
         expect(
           FocusManager.instance.primaryFocus?.debugLabel,
@@ -240,7 +191,7 @@ void main() {
           tester.getSemantics(tabBarFinder).getSemanticsData().role,
           SemanticsRole.tabBar,
         );
-        expect(find.text('PROJECT INSTRUCTIONS'), findsOneWidget);
+        expect(find.text('WORKSPACE'), findsOneWidget);
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
         await tester.pumpAndSettle();
         expect(
@@ -313,7 +264,6 @@ void main() {
                 onWorkspace: (_) {},
                 onPage: (_) {},
                 onCollapse: () {},
-                onMode: (_) {},
               ),
               brightness: brightness,
             ),

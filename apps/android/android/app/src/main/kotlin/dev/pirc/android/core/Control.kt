@@ -7,7 +7,6 @@ import dev.pirc.android.core.timeline.text
 import dev.pirc.android.core.timeline.truthy
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -51,25 +50,14 @@ data class Upload(val id: String, val mimeType: String, val byteSize: Long, val 
 sealed interface InteractionAnswer {
     data class Text(val value: String) : InteractionAnswer
     data class Choices(val values: List<String>) : InteractionAnswer
-    data class Confirm(
-        val value: Boolean,
-        val choice: JsonObject? = null,
-        /** True only for a confirmed interaction that offered this checkbox. */
-        val asUserRequest: Boolean = false,
-        /** Captured from the fresh question so rpc() cannot emit an unsupported flag. */
-        val hasUserRequestChoice: Boolean = false,
-    ) : InteractionAnswer
+    data class Confirm(val value: Boolean) : InteractionAnswer
     data object Cancel : InteractionAnswer
 
     /** The agent RPC's answer shape, as the web sends it. */
     fun rpc() = buildJsonObject {
         when (this@InteractionAnswer) {
             Cancel -> put("cancelled", true)
-            is Confirm -> {
-                put("confirmed", value)
-                if (value && choice != null) choice.forEach { (key, field) -> put(key, field) }
-                if (value && hasUserRequestChoice && asUserRequest) put("asUserRequest", true)
-            }
+            is Confirm -> put("confirmed", value)
             is Text -> put("value", value)
             is Choices -> {
                 put("value", values.joinToString(", "))

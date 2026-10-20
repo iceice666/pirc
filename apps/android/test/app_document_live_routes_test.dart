@@ -7,7 +7,6 @@ import 'package:pirc_mobile/live/app.dart';
 import 'package:pirc_mobile/live/app_document_route.dart';
 import 'package:pirc_mobile/live/document_navigation_state.dart';
 import 'package:pirc_mobile/live/gateway.dart';
-import 'package:pirc_mobile/live/schedules_page.dart';
 import 'package:pirc_mobile/live/settings_dialog.dart';
 import 'package:pirc_mobile/live/workspace_page.dart';
 import 'live_test.dart' show FakeGateway, theme;
@@ -68,10 +67,6 @@ class RouteGateway extends FakeGateway {
       if (path == '/api/sessions') return {'sessions': api['sessions']};
       if (path == '/api/workspaces') return {'workspaces': api['workspaces']};
       if (path == '/api/nodes') return {'nodes': api['nodes']};
-      if (path == '/api/schedules') return {'schedules': api['schedules']};
-      if (path.startsWith('/api/schedules/')) {
-        return {'schedule': rows(api['schedules']).first, 'runs': []};
-      }
       if (path == '/api/memory') return api['memory'];
     }
     return super.normal(method, args);
@@ -116,7 +111,6 @@ void main() {
           await tester.pumpAndSettle();
           final state = obj(oracle['appState']);
           expect(c.sessionId, state['activeSessionId']);
-          expect(c.mode, state['mode']);
           expect(
             scope(tester).documentUrl,
             Uri.parse('${oracle['finalUrl']}')
@@ -134,35 +128,7 @@ void main() {
               state['workspaceViewId'],
             );
           }
-          final schedules = find.byType(SchedulesPage);
-          expect(
-            schedules,
-            state['view'] == 'schedules' ? findsOneWidget : findsNothing,
-          );
-          if (state['view'] == 'schedules') {
-            expect(
-              tester.widget<SchedulesPage>(schedules).focusId,
-              route
-                  .resolve(
-                    sessions: rows(api['sessions']),
-                    workspaces: rows(api['workspaces']),
-                    phone: width <= 650,
-                  )
-                  .scheduleId,
-            );
-          }
           final visible = obj(oracle['visiblePage']);
-          if (state['view'] == 'schedules') {
-            final dynamic pageState = tester.state(schedules);
-            final expanded = pageState.state.expanded;
-            final expandedRows = rows(
-              api['schedules'],
-            ).where((row) => row['id'] == expanded).length;
-            final browserExpandedRows = rows(
-              visible['scheduleRows'],
-            ).where((row) => row['runsExpanded'] == true).length;
-            expect(expandedRows, browserExpandedRows);
-          }
           expect(c.state.isNotEmpty, isTrue);
           expect(
             find.byType(NativeSettingsDialog),
@@ -228,7 +194,7 @@ void main() {
         ? pending.future
         : gateway.normal(method, args);
     final route = NativeAppDocumentRoute.parse(
-      'https://gateway.example/?open=schedules',
+      'https://gateway.example/?open=memory',
       appRootUrl: 'https://gateway.example/',
     )!;
     final routed = scope(tester).windows.onAppRoute!(route);
@@ -238,7 +204,7 @@ void main() {
     await routed;
     await tester.pumpAndSettle();
     expect(controller.sessionId, 'session-second');
-    expect(find.byType(SchedulesPage), findsNothing);
+    expect(find.byType(NativeSettingsDialog), findsNothing);
     await finish(tester, gateway, controller);
   });
   testWidgets(

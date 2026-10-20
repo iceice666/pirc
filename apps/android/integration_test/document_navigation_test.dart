@@ -305,11 +305,7 @@ void main() {
         () => appRoutes.length == callbackCount + 1,
         '303 POST redirect to a GET Pirc shell returns to App',
       );
-      expect(appRoutes.last.target, isA<NativeAppSchedulesRouteTarget>());
-      expect(
-        (appRoutes.last.target! as NativeAppSchedulesRouteTarget).scheduleId,
-        'real-route',
-      );
+      expect(appRoutes.last.target, isA<NativeAppMemoryRouteTarget>());
       expect(
         appRoutes.last.canonicalUrl,
         contains('/parity-documents/app-shell?'),
@@ -358,7 +354,7 @@ void main() {
         '/parity-documents/app-shell?session=real-session',
         '/parity-documents/app-shell',
         '/parity-documents/app-redirect303',
-        '/parity-documents/app-shell?open=schedules&schedule=real-route',
+        '/parity-documents/app-shell?open=memory',
         '/parity-documents/deep/reports?session=deep-session&trace=kept',
       ]);
       expect(routeRequests.map((request) => request['body']), [

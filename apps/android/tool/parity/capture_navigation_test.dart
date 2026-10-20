@@ -15,23 +15,8 @@ class _FixtureGateway extends FakeGateway {
   final Json fixture;
   @override
   dynamic normal(String method, Json args) {
-    if (method == 'wallInput' && fixture['missedRuns'] != null) {
-      return '${rows(fixture['missedRuns']).first['wallTime']}'.replaceFirst(
-        ' ',
-        'T',
-      );
-    }
     if (method == 'request') {
       if (args['path'] == '/api/memory') return fixture['memory'] ?? {};
-      if (args['path'] == '/api/schedules') {
-        return {'schedules': fixture['schedules'] ?? []};
-      }
-      if (args['path'] == '/api/schedules/daily') {
-        return {
-          'schedule': rows(fixture['schedules']).first,
-          'runs': rows(fixture['missedRuns']).map((i) => i['run']).toList(),
-        };
-      }
       for (final kind in ['nodes', 'workspaces', 'sessions']) {
         if (args['path'] == '/api/$kind') return {kind: fixture[kind]};
       }
@@ -41,7 +26,7 @@ class _FixtureGateway extends FakeGateway {
 }
 
 void main() {
-  for (final kind in ['navigation', 'workspace', 'attention', 'memory']) {
+  for (final kind in ['navigation', 'workspace', 'memory']) {
     for (final brightness in Brightness.values) {
       testWidgets('shared $kind fixture ${brightness.name}', (t) async {
         final fixture = obj(
@@ -59,7 +44,7 @@ void main() {
         addTearDown(t.view.reset);
         addTearDown(t.platformDispatcher.clearPlatformBrightnessTestValue);
         final g = _FixtureGateway(fixture);
-        final c = LiveController(g)..mode = fixture['mode'];
+        final c = LiveController(g);
         final key = GlobalKey();
         await t.pumpWidget(
           RepaintBoundary(

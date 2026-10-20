@@ -22,7 +22,6 @@ import 'conversation_header.dart';
 import 'conversation_empty.dart';
 import 'conversation_composer.dart';
 import 'conversation_timeline.dart';
-import 'delegations_strip.dart';
 import 'conversation_jump_latest.dart';
 import 'conversation_earlier_messages.dart';
 import 'timeline_models.dart';
@@ -93,15 +92,12 @@ class _AppDocumentViewSnapshot {
     required this.panelKind,
     required this.panelWidth,
     required this.sidebarCollapsed,
-    required this.mode,
-    required this.scheduleFocus,
     required this.scrollOffset,
   });
   final Object surfaceIdentity, surfaceOwner;
-  final String? url, sessionId, section, scheduleFocus, panelKind;
+  final String? url, sessionId, section, panelKind;
   final bool listOpen, panelOpen, sidebarCollapsed;
   final double panelWidth, scrollOffset;
-  final String mode;
 }
 
 class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
@@ -175,8 +171,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     panelKind: panelKind,
     panelWidth: panelWidth,
     sidebarCollapsed: sidebarCollapsed,
-    mode: c.mode,
-    scheduleFocus: scheduleFocus,
     scrollOffset: chatScroll.hasClients ? chatScroll.offset : 0,
   );
 
@@ -215,9 +209,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
           panelKind = value.panelKind;
           panelWidth = value.panelWidth;
           sidebarCollapsed = value.sidebarCollapsed;
-          c.mode = value.mode;
-          scheduleFocus = value.scheduleFocus;
-          if (section == 'schedules') scheduleFocusRevision++;
         });
         if (value.panelOpen && value.sessionId != null) {
           _panel(value.panelKind ?? 'files', remember: false);
@@ -286,9 +277,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
         final window = widget.documentWindow ?? _documents.active;
         _appSurfaceIdentity = window?.current ?? Object();
         _documentRouteUrl =
-            selection.workspaceId == null &&
-                !selection.showSchedules &&
-                selection.sessionId != null
+            selection.workspaceId == null && selection.sessionId != null
             ? nativePircReplaceRouteQuery(
                 route.canonicalUrl,
                 key: 'session',
@@ -297,19 +286,9 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
             : route.canonicalUrl;
         section = selection.workspaceId != null
             ? 'workspace:${selection.workspaceId}'
-            : selection.showSchedules
-            ? 'schedules'
             : null;
         listOpen = selection.listOpen;
-        scheduleFocus = selection.showSchedules ? selection.scheduleId : null;
-        if (selection.showSchedules) scheduleFocusRevision++;
         if (section != null) panelOpen = false;
-        if (selection.workspaceId != null) {
-          final workspace = c.workspaces.firstWhere(
-            (w) => w['id'] == selection.workspaceId,
-          );
-          c.mode = c.catalog.assistant(workspace) ? 'chat' : 'work';
-        }
       });
       _update();
       if (selection.showMemory && current()) {
@@ -357,8 +336,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
   bool sidebarCollapsed = false;
   bool? phoneLayout;
   String? section;
-  String? scheduleFocus;
-  int scheduleFocusRevision = 0;
   bool _syncing = false;
   bool _platformVisible = true;
   int seenNavigationRevision = 0;
@@ -433,7 +410,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
         _documentRouteTicket++;
         _documentRouting = false;
         _documentRouteUrl = null;
-        scheduleFocus = null;
       }
       pane = null;
       panelCounts.clear();
@@ -728,27 +704,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       );
       return;
     }
-    if (name == 'schedules') {
-      c.sessionVisible = false;
-      setState(() {
-        section = name;
-        scheduleFocus = null;
-        listOpen = false;
-        panelOpen = false;
-      });
-      return;
-    }
-    if (name.startsWith('schedule:')) {
-      c.sessionVisible = false;
-      setState(() {
-        section = 'schedules';
-        scheduleFocus = name.substring(9);
-        scheduleFocusRevision++;
-        listOpen = false;
-        panelOpen = false;
-      });
-      return;
-    }
     if (name == 'activity') {
       showModalBottomSheet<void>(
         context: context,
@@ -926,8 +881,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
         final showList = phone && listOpen;
         final showTabs = phone && (listOpen || section != null);
         final canLeave = !panelOpen && (!phone || listOpen) && section == null;
-        final hasChats = c.workspaces.any(c.catalog.topChats);
-        final mobileMode = hasChats ? c.mode : 'work';
         return ListenableBuilder(
           listenable: _documents,
           builder: (context, _) {
@@ -964,16 +917,13 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
                       ? MobileTabs(
                           current: settingsOpen
                               ? 'settings'
-                              : listOpen
-                              ? mobileMode
-                              : section?.startsWith('workspace:') == true
-                              ? mobileMode
-                              : section ?? mobileMode,
-                          chats: hasChats,
+                              : listOpen ||
+                                    section?.startsWith('workspace:') == true
+                              ? 'work'
+                              : section ?? 'work',
                           waiting: c.attentionCount,
                           onPick: (tab) {
-                            if (tab == 'chat' || tab == 'work') {
-                              unawaited(guarded(context, () => c.setMode(tab)));
+                            if (tab == 'work') {
                               c.workspaceFilter = null;
                               if (section != null) {
                                 // The Web app opens its phone sidebar over the
@@ -1068,22 +1018,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
                                                                 ),
                                                               );
                                                             },
-                                                          )
-                                                        : section == 'schedules'
-                                                        ? SchedulesPage(
-                                                            controller: c,
-                                                            focusId:
-                                                                scheduleFocus,
-                                                            focusRevision:
-                                                                scheduleFocusRevision,
-                                                            onOpenChat:
-                                                                _openSession,
-                                                            sidebarCollapsed:
-                                                                sidebarCollapsed,
-                                                            onExpand: () =>
-                                                                _sidebarCollapsed(
-                                                                  false,
-                                                                ),
                                                           )
                                                         : ManagementPage(
                                                             kind: section!,
@@ -1227,13 +1161,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       final id = obj(c.state['session'])['workspaceId'];
       if (id != null) _openWorkspace('$id');
     },
-    onOrigin: (origin) {
-      if (origin['kind'] == 'schedule') {
-        _page('schedule:${origin['scheduleId']}');
-      } else {
-        _openSession('${origin['fromSessionId']}');
-      }
-    },
+    onOrigin: (origin) => _openSession('${origin['fromSessionId']}'),
   );
 
   Widget _conversationArea(bool overlay, bool phone, double viewport) {
@@ -1436,10 +1364,8 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     _documentRouteTicket++;
     _documentRouting = false;
     _replaceDocumentAddress('workspace', id);
-    final w = c.workspaces.where((w) => w['id'] == id).firstOrNull;
     c.sessionVisible = false;
     setState(() {
-      if (w != null) c.mode = c.catalog.assistant(w) ? 'chat' : 'work';
       section = 'workspace:$id';
       listOpen = false;
       panelOpen = false;
@@ -1457,10 +1383,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     onOpen: _openSession,
     onWorkspace: _openWorkspace,
     onPage: _page,
-    onMode: (mode) {
-      // The desktop switch filters the sidebar without navigating the surface.
-      unawaited(guarded(context, () => c.setMode(mode)));
-    },
     onCollapse: () => _sidebarCollapsed(true),
   );
 
@@ -1619,14 +1541,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
                                             embedded: true,
                                             onLayout: _keepBottomAfterLayout,
                                           ),
-                                        DelegationsStrip(
-                                          key: ValueKey(
-                                            '${c.sessionId}:delegations',
-                                          ),
-                                          delegations: c.delegations,
-                                          onOpen: (id) => c.open(id),
-                                          onStop: c.stopDelegation,
-                                        ),
                                       ],
                                     ),
                                   ),

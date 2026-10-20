@@ -5,23 +5,17 @@ import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/workspace_page.dart';
 import 'live_test.dart' show FakeGateway, theme;
 
-const _chatProject = <String, dynamic>{
+const _project = <String, dynamic>{
   'id': 'host:project',
   'hostId': 'host',
-  'kind': 'chat',
-  'displayName': 'Trip',
-};
-const _directory = <String, dynamic>{
-  'id': 'host:directory',
-  'hostId': 'host',
   'kind': 'directory',
-  'displayName': 'Files',
+  'displayName': 'Trip',
 };
 
 LiveController _controller(FakeGateway gateway) => LiveController(gateway)
   ..booting = false
   ..origin = 'https://gateway.example'
-  ..workspaces = [_chatProject, _directory]
+  ..workspaces = [_project]
   ..nodes = [
     {'id': 'host'},
   ]
@@ -29,7 +23,7 @@ LiveController _controller(FakeGateway gateway) => LiveController(gateway)
     {
       'id': 's1',
       'name': 'A long session title that should stay inside its row',
-      'workspaceId': _chatProject['id'],
+      'workspaceId': _project['id'],
       'runStatus': 'idle',
       'unread': true,
     },
@@ -73,7 +67,7 @@ void main() {
                     height: 900,
                     child: WorkspacePage(
                       controller: controller,
-                      workspaceId: '${_chatProject['id']}',
+                      workspaceId: '${_project['id']}',
                       onBack: () {},
                       onOpen: (_) {},
                     ),
@@ -121,7 +115,7 @@ void main() {
   }
 
   testWidgets(
-    'header follows chat/directory identity and phone subtitle rule',
+    'header follows the workspace identity and phone subtitle rule',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(768, 900);
@@ -143,20 +137,9 @@ void main() {
         Brightness.light,
       );
 
-      await tester.pumpWidget(page('${_chatProject['id']}'));
+      await tester.pumpWidget(page('${_project['id']}'));
       await tester.pumpAndSettle();
       expect(find.text('Trip'), findsOneWidget);
-      expect(find.text('Project'), findsOneWidget);
-      expect(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget is Icon && widget.icon == LucideIcons.messageSquare,
-        ),
-        findsOneWidget,
-      );
-
-      await tester.pumpWidget(page('${_directory['id']}'));
-      await tester.pumpAndSettle();
       expect(find.text('Workspace · host'), findsOneWidget);
       expect(
         find.byWidgetPredicate(
@@ -173,7 +156,7 @@ void main() {
             height: 900,
             child: WorkspacePage(
               controller: controller,
-              workspaceId: '${_chatProject['id']}',
+              workspaceId: '${_project['id']}',
               onBack: () {},
               onOpen: (_) {},
             ),
@@ -182,7 +165,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Project'), findsNothing);
+      expect(find.text('Workspace · host'), findsNothing);
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -208,7 +191,7 @@ void main() {
             height: 900,
             child: WorkspacePage(
               controller: controller,
-              workspaceId: '${_chatProject['id']}',
+              workspaceId: '${_project['id']}',
               onBack: () {},
               onOpen: (_) {},
             ),

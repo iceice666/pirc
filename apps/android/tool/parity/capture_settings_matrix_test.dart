@@ -12,17 +12,9 @@ import 'package:pirc_mobile/live/settings_dialog.dart';
 import '../../test/live_test.dart' show FakeGateway, theme;
 import 'capture_fonts.dart';
 
-const _captureTabs = [
-  'General',
-  'Assistant',
-  'Memory',
-  'Models',
-  'Devices',
-  'About',
-];
+const _captureTabs = ['General', 'Memory', 'Models', 'Devices', 'About'];
 const _tabHeading = {
   'General': 'SESSIONS',
-  'Assistant': 'ASSISTANT',
   'Memory': 'MEMORY',
   'Models': 'MODEL BACKENDS',
   'Devices': 'NODES',
@@ -470,8 +462,6 @@ void main() {
             if (method == 'pushStatus') return {'code': 'off'};
             if (method != 'request') return null;
             final path = '${args['path']}';
-            if (path == '/api/assistant/node') return fixture['binding'];
-            if (path == '/api/assistant/prompts') return fixture['prompts'];
             if (path == '/api/memory') return fixture['memory'];
             if (path == '/api/providers' || path == '/api/devices') {
               final message = path == '/api/providers'
@@ -571,7 +561,6 @@ void main() {
                 .toList();
             final requiredPaths = switch (tab) {
               'General' => ['/api/push'],
-              'Assistant' => ['/api/assistant/node', '/api/assistant/prompts'],
               'Memory' => ['/api/memory'],
               'Models' => ['/api/providers'],
               'Devices' => ['/api/devices'],

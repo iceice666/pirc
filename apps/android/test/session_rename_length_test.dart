@@ -79,8 +79,8 @@ void main() {
               {
                 'id': 'host:chats',
                 'hostId': 'host',
-                'kind': 'chat',
-                'displayName': 'Chats',
+                'kind': 'directory',
+                'displayName': 'Workspace',
               },
             ]
             ..nodes = [
@@ -95,7 +95,6 @@ void main() {
                   session: obj(g.snapshot['session']),
                   active: true,
                   onOpen: () {},
-                  onDeleted: (_) {},
                 ),
               ),
             ),

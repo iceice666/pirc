@@ -92,8 +92,7 @@ class StartupGateway extends FakeGateway {
           };
         }
         if (path == '/api/nodes') return {'nodes': []};
-        if (path == '/api/memory') return {'proposals': [], 'user': []};
-        if (path == '/api/schedules') return {'schedules': []};
+        if (path == '/api/memory') return {'user': []};
         if (path.endsWith('/read')) return {};
         if (path.startsWith('/api/models')) {
           return {

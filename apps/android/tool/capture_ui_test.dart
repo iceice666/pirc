@@ -21,7 +21,6 @@ void main() {
     for (final screen in [
       'permissions',
       'pairing',
-      'schedule',
       'error',
       'home',
       'session',
@@ -102,13 +101,7 @@ void main() {
             {'id': 'w', 'displayName': '我的專案'},
           ];
         final key = GlobalKey();
-        final Widget child = screen == 'schedule'
-            ? MaterialApp(
-                debugShowCheckedModeBanner: false,
-                theme: theme.build(brightness),
-                home: Scaffold(body: SchedulesPage(controller: c)),
-              )
-            : screen == 'error'
+        final Widget child = screen == 'error'
             ? MaterialApp(
                 debugShowCheckedModeBanner: false,
                 theme: theme.build(brightness),
@@ -304,7 +297,7 @@ void main() {
         });
         await t.pumpWidget(const SizedBox());
         await t.pump();
-        if (screen == 'schedule' || screen == 'error') c.dispose();
+        if (screen == 'error') c.dispose();
         await g.stream.close();
       });
     }

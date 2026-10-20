@@ -67,16 +67,12 @@ void main() {
       final route = _classify(
         _shell('/assets/index-a1b2c3.js'),
         status: 201,
-        url: 'https://pirc.example/index.html?open=schedules&schedule=cron-1',
+        url: 'https://pirc.example/index.html?open=memory',
       );
 
       expect(route, isNotNull);
       expect(route!.isIndexAlias, isTrue);
-      expect(route.target, isA<NativeAppSchedulesRouteTarget>());
-      expect(
-        (route.target! as NativeAppSchedulesRouteTarget).scheduleId,
-        'cron-1',
-      );
+      expect(route.target, isA<NativeAppMemoryRouteTarget>());
     });
 
     test(

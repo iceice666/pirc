@@ -588,7 +588,7 @@ void main() {
             final gateway = WorkspaceMatrixGateway(stateFixture);
             final run = _WorkspaceStateRun(state, gateway);
             gateway.handler = run.handle;
-            final controller = LiveController(gateway)..mode = 'work';
+            final controller = LiveController(gateway);
             final boundaryKey = GlobalKey();
             await tester.pumpWidget(
               RepaintBoundary(

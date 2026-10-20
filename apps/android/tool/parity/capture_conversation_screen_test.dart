@@ -196,7 +196,6 @@ class _ConversationGateway extends FakeGateway {
         return {'models': _maps(fixture['models'])};
       }
       if (path == '/api/memory') return <String, dynamic>{};
-      if (path == '/api/schedules') return {'schedules': <Json>[]};
 
       final sessionId = '${_map(fixture['session'])['id']}';
       if (path == '/api/sessions/$sessionId/read') {
@@ -280,8 +279,7 @@ void main() {
             );
 
             final gateway = _ConversationGateway(fixture);
-            final controller = LiveController(gateway)
-              ..mode = '${_map(fixture['ui'])['mode']}';
+            final controller = LiveController(gateway);
             final boundaryKey = GlobalKey();
             await tester.pumpWidget(
               RepaintBoundary(

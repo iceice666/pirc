@@ -59,7 +59,7 @@ class EventStream(
         while (isActive) {
             val url = (api.pairing.baseUrl + "/api/events").toHttpUrl().newBuilder()
                 .addQueryParameter("sessionId", sessionId)
-                .apply { if (onChange != null) listOf("directory", "memory", "schedules", "sessions").forEach { addQueryParameter(it, "1") } }
+                .apply { if (onChange != null) listOf("directory", "memory", "sessions").forEach { addQueryParameter(it, "1") } }
                 .apply { cursor?.let { addQueryParameter("cursor", it) } }
                 .build()
             val ended = CompletableDeferred<Ended>()
@@ -80,7 +80,7 @@ class EventStream(
                         val envelope = try {
                             val raw = PircJson.parseToJsonElement(text)
                             val type = (raw as? JsonObject)?.get("type")?.jsonPrimitive?.contentOrNull
-                            if (onChange != null && type in setOf("directory_changed", "memory_changed", "schedules_changed", "sessions_changed")) {
+                            if (onChange != null && type in setOf("directory_changed", "memory_changed", "sessions_changed")) {
                                 onChange.invoke(type!!)
                                 return
                             }

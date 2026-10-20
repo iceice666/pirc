@@ -11,10 +11,10 @@ import 'package:pirc_mobile/live/session_sidebar.dart';
 import 'live_test.dart' show FakeGateway, theme;
 
 const project = <String, dynamic>{
-  'id': 'assistant:project',
-  'hostId': 'assistant',
+  'id': 'device:trip',
+  'hostId': 'device',
   'displayName': 'Trip',
-  'kind': 'chat',
+  'kind': 'directory',
 };
 const directory = <String, dynamic>{
   'id': 'device:project',
@@ -27,7 +27,6 @@ Json session(
   bool unread = false,
   bool pinned = false,
   bool done = false,
-  String? schedule,
   String? status,
 }) => {
   'id': id,
@@ -37,19 +36,12 @@ Json session(
   if (pinned) 'pinnedAt': 1,
   if (done) 'settledAt': 2,
   'runStatus': ?status,
-  if (schedule != null)
-    'origin': {
-      'kind': 'schedule',
-      'scheduleId': schedule,
-      'title': 'Daily review',
-    },
 };
 LiveController fixture(FakeGateway g) => LiveController(g)
   ..booting = false
   ..origin = 'https://gateway.example'
   ..workspaces = [project, directory]
   ..nodes = [
-    {'id': 'assistant'},
     {'id': 'device'},
   ];
 Widget host(Widget child) => MaterialApp(
@@ -91,30 +83,14 @@ void main() {
       ).map((s) => s['id']),
       ['unread', 'waiting'],
     );
-    final groups = foldRecent(
-      pinnedFirst([
-        session('a', schedule: 'x'),
-        session('b'),
-        session('c', schedule: 'x'),
-        session('d', schedule: 'x', pinned: true),
-        session('e', schedule: 'y'),
-      ]),
-    );
-    expect(groups.length, 4);
-    expect(groups.first.sessions.single['id'], 'd');
-    expect(groups[1].sessions.map((s) => s['id']), ['a', 'c']);
-    expect(groups[1].folded, true);
-    expect(groups.last.folded, false);
   });
-  test('hosts retain offline workspaces and exclude assistant nodes', () {
+  test('hosts retain offline workspaces and list empty nodes', () {
     final list = workHosts(
       [
-        {'id': 'assistant:chats', 'hostId': 'assistant', 'kind': 'chat'},
         directory,
         {'id': 'offline:old', 'hostId': 'offline'},
       ],
       [
-        {'id': 'assistant'},
         {'id': 'device'},
         {'id': 'empty'},
       ],
@@ -152,51 +128,14 @@ void main() {
       await g.stream.close();
     },
   );
-  test(
-    'late deletion keeps another selected chat and its draft, filters stale index',
-    () async {
-      final g = FakeGateway(), pending = Completer<Json>();
-      final old = session('old');
-      final c = fixture(g)
-        ..sessions = [old, session('new')]
-        ..sessionId = 'old'
-        ..draft = 'old draft';
-      g.handler = (method, args) async {
-        if (method == 'request' && args['method'] == 'DELETE') {
-          return pending.future;
-        }
-        if (method == 'request' && args['path'] == '/api/sessions') {
-          return {
-            'sessions': [old, session('new')],
-          };
-        }
-        return g.normal(method, args);
-      };
-      final deleting = c.deleteChat('old');
-      c.sessionId = 'new';
-      c.draft = 'new draft';
-      pending.complete({});
-      await deleting;
-      expect(c.sessionId, 'new');
-      expect(c.draft, 'new draft');
-      expect(g.calls.where((x) => x.$1 == 'unwatch'), isEmpty);
-      expect(g.drafts['old'], '');
-      await c.refreshList();
-      expect(c.sessions.map((s) => s['id']), ['new']);
-      c.dispose();
-      await g.stream.close();
-    },
-  );
   testWidgets(
-    'workspace history includes read sessions, folds schedules and searches done',
+    'workspace history includes read sessions and searches done',
     (t) async {
       final g = FakeGateway(), c = fixture(g);
       c.sessions = [
         session('Read conversation'),
         session('Completed', done: true),
-        session('First run', schedule: 'daily'),
-        session('Second run', schedule: 'daily'),
-        session('Pinned run', pinned: true, schedule: 'daily'),
+        session('Pinned run', pinned: true),
       ];
       String? selected;
       await t.pumpWidget(
@@ -213,10 +152,6 @@ void main() {
       expect(find.text('Read conversation'), findsOneWidget);
       expect(find.text('Completed'), findsNothing);
       expect(find.text('Pinned run'), findsOneWidget);
-      expect(find.text('First run'), findsNothing);
-      await t.tap(find.text('Daily review'));
-      await t.pumpAndSettle();
-      expect(find.text('First run'), findsOneWidget);
       await t.tap(find.text('Read conversation'));
       await t.pump(const Duration(milliseconds: 350));
       expect(selected, 'Read conversation');
@@ -229,102 +164,6 @@ void main() {
       await g.stream.close();
     },
   );
-  testWidgets(
-    'delete dialog warns about memories and preserves failure without repeating DELETE',
-    (t) async {
-      final g = FakeGateway(),
-          c = fixture(g)..sessions = [session('Trip plans')];
-      g.handler = (method, args) async {
-        if (method == 'request' && args['method'] == 'DELETE') {
-          throw StateError('Connection lost');
-        }
-        return g.normal(method, args);
-      };
-      await t.pumpWidget(
-        host(
-          WorkspacePage(
-            controller: c,
-            workspaceId: '${project['id']}',
-            onBack: () {},
-            onOpen: (_) {},
-          ),
-        ),
-      );
-      await t.pumpAndSettle();
-      await t.tap(find.byTooltip('Delete Trip plans'));
-      await t.pumpAndSettle();
-      expect(
-        find.textContaining('USER memories and MEMORY notes'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('Memories created by other chats are kept.'),
-        findsOneWidget,
-      );
-      await t.tap(find.text('Delete chat and memories'));
-      await t.pumpAndSettle();
-      expect(find.text('Connection lost'), findsOneWidget);
-      expect(find.text('Delete chat?'), findsOneWidget);
-      expect(c.sessions.length, 1);
-      expect(g.calls.where((x) => x.$2['method'] == 'DELETE').length, 1);
-      await t.tap(find.text('Cancel'));
-      await t.pumpAndSettle();
-      await t.pumpWidget(const SizedBox());
-      c.dispose();
-      await g.stream.close();
-    },
-  );
-  testWidgets('capability switch remains server-owned when save fails', (
-    t,
-  ) async {
-    final g = FakeGateway(), c = fixture(g);
-    g.handler = (method, args) async {
-      if (method == 'request' && '${args['path']}'.endsWith('/capabilities')) {
-        if (args['method'] == 'PATCH') {
-          throw PlatformException(code: 'HTTP_403', message: 'Policy denied');
-        }
-        return {
-          'capabilities': {
-            'delegation': true,
-            'memory_search': true,
-            'remote_recall': true,
-            'schedules': true,
-            'web_search': true,
-          },
-        };
-      }
-      if (method == 'request' && '${args['path']}'.endsWith('/instructions')) {
-        return {
-          'instructions': {'text': 'Keep answers concise', 'maxChars': 80},
-        };
-      }
-      return g.normal(method, args);
-    };
-    await t.pumpWidget(
-      host(
-        SingleChildScrollView(
-          child: WorkspaceSettings(controller: c, workspace: project),
-        ),
-      ),
-    );
-    await t.pumpAndSettle();
-    final check = find.descendant(
-      of: find.byKey(const ValueKey('capability-checkbox-delegation')),
-      matching: find.byType(Checkbox),
-    );
-    await t.ensureVisible(check);
-    await t.tap(check);
-    await t.pumpAndSettle();
-    expect(t.widget<Checkbox>(check).value, true);
-    expect(find.text('Policy denied'), findsOneWidget);
-    final patch = g.calls.singleWhere((x) => x.$2['method'] == 'PATCH');
-    expect(patch.$2['body'], {
-      'capabilities': {'delegation': false},
-    });
-    await t.pumpWidget(const SizedBox());
-    c.dispose();
-    await g.stream.close();
-  });
   testWidgets(
     'trust sends only the reviewed hash, reloads conflict without retrying trust',
     (t) async {
@@ -389,7 +228,6 @@ void main() {
       addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
       final g = FakeGateway(),
           c = fixture(g)
-            ..mode = 'work'
             ..sessions = [
               {
                 ...session('Waiting for approval', status: 'waiting_input'),
@@ -404,7 +242,6 @@ void main() {
             onWorkspace: (_) {},
             onPage: (_) {},
             onCollapse: () {},
-            onMode: (_) {},
           ),
         ),
       );

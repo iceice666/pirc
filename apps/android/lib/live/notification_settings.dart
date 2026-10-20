@@ -216,7 +216,7 @@ class _NotificationSettingsState extends State<NativeNotificationSettings>
     divider: true,
     children: [
       const AssistantParagraph(
-        'Scheduled runs, sessions waiting for your answer, finished delegations and memory changes to approve. Each schedule chooses which of its runs notify.',
+        'Sessions waiting for your answer and finished delegations.',
       ),
       if (status == 'loading')
         const AssistantParagraph('Checking notifications…', live: true)

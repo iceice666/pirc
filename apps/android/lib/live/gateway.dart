@@ -15,8 +15,6 @@ String enc(String value) => Uri.encodeComponent(value);
 String sessionPath(String id) => '/api/sessions/${enc(id)}';
 const workspaceUnavailableNotice =
     "This workspace's mode is unavailable on the gateway: its history is read-only and it takes no new sessions.";
-const workspaceDeletionNotice =
-    "This project's deletion did not finish: its chats accept no more work. Finish deleting it once the chat node is connected.";
 
 class Gateway {
   static const channel = MethodChannel('dev.pirc.mobile/gateway');
@@ -64,7 +62,7 @@ class LiveController extends ChangeNotifier {
     attention.addListener(changed);
   }
   late final AttentionState attention = AttentionState(gateway);
-  int get attentionCount => sessions.where(isWaiting).length + attention.count;
+  int get attentionCount => sessions.where(isWaiting).length;
   final Gateway gateway;
   String? origin, clientId, sessionId, error, actionError, pairLink, routePage;
   Json state = {}, control = {}, preferences = {};
@@ -116,40 +114,10 @@ class LiveController extends ChangeNotifier {
   }
 
   String get selectedThinking => '${state['thinking'] ?? 'medium'}';
-  int _approvalSelectionRevision = 0, _approvalSnapshotRevision = 0;
   String? get approvalMode =>
       const ['read-only', 'auto', 'full-access'].contains(state['approvalMode'])
       ? state['approvalMode'] as String
       : null;
-
-  Future<void> changeApprovalMode(String mode) async {
-    if (!const ['read-only', 'auto', 'full-access'].contains(mode) ||
-        approvalMode == mode) {
-      return;
-    }
-    if (!canControl) {
-      actionError = 'Take control of this session to change its approval mode.';
-      changed();
-      return;
-    }
-    final id = sessionId, account = accountRevision;
-    final navigation = sessionNavigationRevision;
-    final selection = ++_approvalSelectionRevision;
-    final snapshot = _approvalSnapshotRevision;
-    final accepted = await sendCommand({
-      'type': 'set_approval_mode',
-      'mode': mode,
-    });
-    if (accepted &&
-        sessionId == id &&
-        accountRevision == account &&
-        sessionNavigationRevision == navigation &&
-        selection == _approvalSelectionRevision &&
-        snapshot == _approvalSnapshotRevision) {
-      state = {...state, 'approvalMode': mode};
-      changed();
-    }
-  }
 
   Future<void> changeModel(Json model) async {
     final id = sessionId;
@@ -189,7 +157,7 @@ class LiveController extends ChangeNotifier {
       loading = false,
       active = true,
       unknownCommand = false;
-  String connection = 'connecting', draft = '', mode = 'chat';
+  String connection = 'connecting', draft = '';
   String? workspaceFilter;
   bool sessionVisible = false;
   int _documentDepth = 0, _visibilityRevision = 0;
@@ -211,10 +179,7 @@ class LiveController extends ChangeNotifier {
   int sessionNavigationRevision = 0;
   bool _selectFirstSessionOnRefresh = false;
   final _reading = <String>{};
-  final _deleting = <String>{};
   final _deleted = <String>{};
-  final _deletedWorkspaces = <String>{};
-  final _projectDeletions = <String, Object>{};
   final readers = <String, ReadingState>{};
   final panelState = <String, Json>{};
   PanelResource? _panelData;
@@ -266,9 +231,6 @@ class LiveController extends ChangeNotifier {
     return workspace == null ? null : catalog.of(workspace);
   }
 
-  /// Assistant chrome (no Work jobs/control) for the open session.
-  bool get chat => sessionMode?.assistant ?? false;
-
   /// Side panels by capability: Git needs a repository, terminals a shared
   /// workspace directory. Unknown workspaces keep every panel, as before.
   bool sessionPanel(String kind) {
@@ -293,7 +255,6 @@ class LiveController extends ChangeNotifier {
   void _applySnapshot(Json next, {bool authoritativeHistory = false}) {
     if (_historyNeedsSnapshot && !authoritativeHistory) return;
     _historyNeedsSnapshot = false;
-    _approvalSnapshotRevision++;
     state = next;
     if (!_historyInitialized) {
       hiddenMessages = max(0, messages.length - messagePageSize);
@@ -333,9 +294,6 @@ class LiveController extends ChangeNotifier {
       final data = obj(await gateway.call('boot'));
       onboardingComplete = data['onboardingComplete'] != false;
       preferences = obj(await gateway.call('preferences'));
-      if (const ['chat', 'work'].contains(preferences['mode'])) {
-        mode = preferences['mode'];
-      }
       origin = data['origin'] as String?;
       clientId = data['clientId'] as String?;
       pairingStamp = data['pairingStamp'] as String?;
@@ -409,13 +367,6 @@ class LiveController extends ChangeNotifier {
     return true;
   }
 
-  Future<void> setMode(String value) async {
-    if (!const ['chat', 'work'].contains(value)) return;
-    mode = value;
-    changed();
-    await savePreferences({'mode': value});
-  }
-
   Future<void> _dockWrite = Future.value();
   void setDockExpanded(String key, bool expanded) {
     if (!['goalExpanded', 'todoExpanded'].contains(key)) return;
@@ -446,8 +397,6 @@ class LiveController extends ChangeNotifier {
     _selectFirstSessionOnRefresh = false;
     _retryListOnNetwork = false;
     _deleted.clear();
-    _deletedWorkspaces.clear();
-    _projectDeletions.clear();
     attention.reset();
     _selection++;
     loading = false;
@@ -490,8 +439,6 @@ class LiveController extends ChangeNotifier {
       _selectFirstSessionOnRefresh = false;
       _retryListOnNetwork = false;
       _deleted.clear();
-      _deletedWorkspaces.clear();
-      _projectDeletions.clear();
       attention.reset();
       _selection++;
       loading = false;
@@ -540,18 +487,11 @@ class LiveController extends ChangeNotifier {
       final catalogRows = await modes;
       if (revision != _accountRevision) return;
       if (catalogRows != null) catalog = ModeCatalog(catalogRows);
-      sessions = rows(result[0]['sessions'])
-          .where(
-            (s) =>
-                !_deleted.contains(s['id']) &&
-                !_deletedWorkspaces.contains(s['workspaceId']),
-          )
-          .toList();
-      workspaces = rows(
-        result[1]['workspaces'],
-      ).where((w) => !_deletedWorkspaces.contains(w['id'])).toList();
+      sessions = rows(
+        result[0]['sessions'],
+      ).where((s) => !_deleted.contains(s['id'])).toList();
+      workspaces = rows(result[1]['workspaces']);
       nodes = rows(result[2]['nodes']);
-      if (!workspaces.any(catalog.topChats)) mode = 'work';
       if (!workspaces.any((w) => w['id'] == workspaceFilter)) {
         workspaceFilter = null;
       }
@@ -627,13 +567,6 @@ class LiveController extends ChangeNotifier {
     sessionId = id;
     ++_historyRevision;
     _historyNeedsSnapshot = false;
-    final target = sessions.where((s) => s['id'] == id).firstOrNull;
-    final workspace = workspaces
-        .where((w) => w['id'] == target?['workspaceId'])
-        .firstOrNull;
-    if (workspace != null) {
-      mode = catalog.assistant(workspace) ? 'chat' : 'work';
-    }
     revealSelectedSession = reveal;
     sessionNavigationRevision++;
     sessionVisible = reveal;
@@ -712,12 +645,6 @@ class LiveController extends ChangeNotifier {
     final workspace = workspaces
         .where((w) => w['id'] == workspaceId)
         .firstOrNull;
-    if (workspace?['deleting'] == true) {
-      throw StateError(workspaceDeletionNotice);
-    }
-    if (_deletedWorkspaces.contains(workspaceId)) {
-      throw StateError('This project is no longer available.');
-    }
     if (isReadOnly(workspace)) {
       throw StateError(workspaceUnavailableNotice);
     }
@@ -728,17 +655,11 @@ class LiveController extends ChangeNotifier {
       pairingStamp: stamp,
       body: {'workspaceId': workspaceId},
     );
-    if (_disposed ||
-        account != _accountRevision ||
-        stamp != pairingStamp ||
-        _deletedWorkspaces.contains(workspaceId)) {
+    if (_disposed || account != _accountRevision || stamp != pairingStamp) {
       return;
     }
     await refreshList();
-    if (_disposed ||
-        account != _accountRevision ||
-        stamp != pairingStamp ||
-        _deletedWorkspaces.contains(workspaceId)) {
+    if (_disposed || account != _accountRevision || stamp != pairingStamp) {
       return;
     }
     await open('${obj(data['session'])['id']}');
@@ -784,101 +705,6 @@ class LiveController extends ChangeNotifier {
     }
     await refreshList();
     return workspace;
-  }
-
-  /// Acknowledged project deletion is terminal, even if an older index arrives later.
-  Future<void> deleteProject(String id, List<Json> decisions) async {
-    final workspace = workspaces.where((w) => w['id'] == id).firstOrNull;
-    if (workspace == null ||
-        !catalog.of(workspace).projects ||
-        catalog.topChats(workspace)) {
-      throw StateError('Only chat projects can be deleted.');
-    }
-    if (!workspaceOnline(workspace, nodes)) {
-      throw StateError('Connect the chat node to delete this project.');
-    }
-    final stamp = pairingStamp;
-    if (stamp == null || stamp.isEmpty) {
-      throw StateError('Pair this device before deleting a project.');
-    }
-    if (_projectDeletions.containsKey(id)) {
-      throw StateError('Deletion is already in progress.');
-    }
-    final operation = Object();
-    _projectDeletions[id] = operation;
-    final account = _accountRevision, host = origin, client = clientId;
-    try {
-      await gateway.request(
-        '/api/workspaces/${enc(id)}/deletion',
-        method: 'POST',
-        pairingStamp: stamp,
-        body: {
-          'decisions': [
-            for (final decision in decisions) {...decision},
-          ],
-        },
-      );
-      if (_disposed ||
-          account != _accountRevision ||
-          host != origin ||
-          client != clientId ||
-          stamp != pairingStamp) {
-        return;
-      }
-      final currentWorkspace = workspaces
-          .where((w) => w['id'] == id)
-          .firstOrNull;
-      if (currentWorkspace != null &&
-          (currentWorkspace['hostId'] != workspace['hostId'] ||
-              !catalog.of(currentWorkspace).projects)) {
-        return;
-      }
-      _deletedWorkspaces.add(id);
-      final removed = sessions
-          .where((s) => s['workspaceId'] == id)
-          .map((s) => '${s['id']}')
-          .toSet();
-      if (obj(state['session'])['workspaceId'] == id && sessionId != null) {
-        removed.add(sessionId!);
-      }
-      for (final session in removed) {
-        unawaited(_removeSession(session));
-      }
-      workspaces = workspaces.where((w) => w['id'] != id).toList();
-      if (workspaceFilter == id) workspaceFilter = null;
-      if (routePage == 'workspace:$id') routePage = null;
-      changed();
-      // Refresh failures do not undo a completed deletion. Tombstones fence older reads.
-      unawaited(refreshList());
-      unawaited(attention.memoryChanged());
-      unawaited(attention.refreshSchedules());
-    } finally {
-      if (identical(_projectDeletions[id], operation)) {
-        _projectDeletions.remove(id);
-      }
-    }
-  }
-
-  Future<void> deleteChat(String id) async {
-    final session = sessions.where((s) => s['id'] == id).firstOrNull;
-    if (session == null ||
-        !workspaces.any(
-          (w) =>
-              w['id'] == session['workspaceId'] && catalog.of(w).deleteSessions,
-        )) {
-      throw StateError("This workspace's sessions cannot be deleted.");
-    }
-    if (!_deleting.add(id)) {
-      throw StateError('Deletion is already in progress.');
-    }
-    final revision = _accountRevision;
-    try {
-      await gateway.request(sessionPath(id), method: 'DELETE');
-      if (revision != _accountRevision) return;
-      await _removeSession(id);
-    } finally {
-      _deleting.remove(id);
-    }
   }
 
   /// A server deletion is terminal, even when it arrives before our DELETE ack.
@@ -968,8 +794,6 @@ class LiveController extends ChangeNotifier {
       _save?.cancel();
       _selectFirstSessionOnRefresh = next['origin'] != null;
       _deleted.clear();
-      _deletedWorkspaces.clear();
-      _projectDeletions.clear();
       origin = next['origin'] as String?;
       clientId = next['clientId'] as String?;
       pairingStamp = next['pairingStamp'] as String?;
@@ -1029,9 +853,6 @@ class LiveController extends ChangeNotifier {
           if (!active || origin == null) return;
           if (changes.contains('memory_changed')) {
             unawaited(attention.memoryChanged());
-          }
-          if (changes.contains('schedules_changed')) {
-            unawaited(attention.refreshSchedules());
           }
           if (changes.contains('directory_changed') ||
               changes.contains('sessions_changed')) {
@@ -1153,17 +974,6 @@ class LiveController extends ChangeNotifier {
     if (sessionId == id) control = next;
     changed();
   }
-
-  /// The open chat's running/waiting delegations (snapshot `delegations`,
-  /// kept current by `delegations_changed`). Empty on older gateways.
-  List<Json> get delegations => rows(state['delegations'])
-      .where(
-        (d) =>
-            d['id'] is String &&
-            d['targetSessionId'] is String &&
-            const ['running', 'waiting_input'].contains(d['status']),
-      )
-      .toList();
 
   /// `POST /api/delegations/:id/stop`, no lease. Throws with the gateway's
   /// message on 404/409 (e.g. another device controls the delegated session).

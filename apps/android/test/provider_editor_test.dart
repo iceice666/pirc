@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/provider_editor.dart';
 
-import 'assistant_settings_test.dart' show tap;
+import 'settings_shell.dart' show tap;
 import 'live_test.dart' show FakeGateway, theme;
 
 Json presetResponse() => {

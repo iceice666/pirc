@@ -24,7 +24,7 @@ class _SharedGateway extends Gateway {
   Json bootResponse = <String, dynamic>{
     'origin': 'https://gateway.example',
     'pairingStamp': 'pair-stamp',
-    'route': 'schedules',
+    'route': 'memory',
     'targetSession': 'notification-session',
     'interactionId': 'notification-interaction',
     'answerChoice': 'accept',
@@ -298,7 +298,7 @@ void main() {
         expect(shared.bootResponse['targetSession'], 'notification-session');
 
         final rootBoot = obj(await root.call('boot'));
-        expect(rootBoot['route'], 'schedules');
+        expect(rootBoot['route'], 'memory');
         expect(rootBoot['targetSession'], 'notification-session');
         expect(rootBoot['pairLink'], 'https://gateway.example/pair/secret');
         expect(shared.calls.last.arguments, isEmpty);

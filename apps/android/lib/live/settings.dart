@@ -8,8 +8,6 @@ import 'common.dart';
 import 'memory_settings.dart';
 import 'assistant_settings.dart';
 import 'web_controls.dart';
-import 'schedules_page.dart';
-export 'schedules_page.dart';
 
 class ManagementPage extends StatelessWidget {
   const ManagementPage({
@@ -40,7 +38,6 @@ class ManagementPage extends StatelessWidget {
       title: Text(
         {
               'settings': '設定',
-              'schedules': '排程',
               'memory': 'Memory',
               'activity': '待處理與動態',
             }[kind] ??
@@ -54,8 +51,7 @@ class ManagementPage extends StatelessWidget {
           theme: theme,
           onWindows: onWindows,
         ),
-        'schedules' => SchedulesPage(controller: controller),
-        'memory' => MemoryProposals(controller: controller),
+        'memory' => MemoryPage(controller: controller),
         _ => ActivityPage(controller: controller, theme: theme),
       },
     ),
@@ -216,22 +212,7 @@ class _SettingsContentState extends State<SettingsContent> {
                   onTap: () => _appearance(context),
                 ),
                 row(
-                  title: 'Assistant',
-                  subtitle: 'Soul and chat rules',
-                  icon: LucideIcons.bot,
-                  onTap: () => showDialog<void>(
-                    context: context,
-                    useRootNavigator: false,
-                    builder: (_) => WebDialog(
-                      title: 'Assistant',
-                      eyebrow: 'SETTINGS',
-                      actions: const [],
-                      children: [AssistantSettings(controller: c)],
-                    ),
-                  ),
-                ),
-                row(
-                  title: '記憶提案',
+                  title: 'Memory',
                   icon: LucideIcons.brain,
                   onTap: () => Navigator.push(
                     context,
@@ -758,9 +739,7 @@ class _PushSettingsState extends State<PushSettings>
                 ], divider: false),
                 group('通知類別', [
                   toggle('q', '需要你回應', '問題、確認與等待回覆'),
-                  toggle('missed', '錯過的排程', '需要你決定執行或略過'),
                   toggle('deleg', '委派的工作', '其他對話交付的工作'),
-                  toggle('mem', '記憶提案', '助手想記住的新內容', defaultValue: false),
                   toggle(
                     'done',
                     '工作完成或失敗',
@@ -916,8 +895,8 @@ String _date(dynamic value) => value is num
       ).toLocal().toString().split('.').first
     : '—';
 
-class MemoryProposals extends StatelessWidget {
-  const MemoryProposals({super.key, required this.controller});
+class MemoryPage extends StatelessWidget {
+  const MemoryPage({super.key, required this.controller});
   final LiveController controller;
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
@@ -975,26 +954,8 @@ class ActivityPage extends StatelessWidget {
           (b['expiresAt'] as num?) ?? 9007199254740991,
         ),
       );
-      final unavailable = <String>[];
-      Future<Json> source(String path, String label) async {
-        try {
-          return await controller.gateway.request(path);
-        } catch (_) {
-          unavailable.add(label);
-          return {};
-        }
-      }
-
-      final responses = await Future.wait([
-        source('/api/schedules', '排程'),
-        source('/api/memory', '記憶提案'),
-      ]);
-      final data = responses[0], memory = responses[1];
       return {
-        'unavailable': unavailable,
         'pending': pending,
-        'schedules': data['schedules'],
-        'proposals': memory['proposals'],
         'recent': await controller.gateway.call('activity'),
       };
     },
@@ -1016,23 +977,12 @@ class ActivityPage extends StatelessWidget {
             ),
           ],
         ),
-        if ((data['unavailable'] as List? ?? []).isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text(
-              '${(data['unavailable'] as List).join('、')} 暫時無法載入，請重新整理。',
-            ),
-          ),
-        if (rows(data['pending']).isEmpty &&
-            !rows(
-              data['schedules'],
-            ).any((s) => (s['attention'] as num? ?? 0) > 0) &&
-            !rows(data['proposals']).any((p) => p['status'] == 'pending'))
+        if (rows(data['pending']).isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: SupportingState(
               title: '目前沒有待處理項目',
-              detail: '需要你回答的問題與錯過排程會顯示在這裡。',
+              detail: '需要你回答的問題會顯示在這裡。',
             ),
           ),
         for (final s in rows(data['pending']))
@@ -1046,38 +996,6 @@ class ActivityPage extends StatelessWidget {
               await controller.open('${s['sessionId']}');
               if (context.mounted) Navigator.pop(context);
             }),
-          ),
-        for (final s in rows(
-          data['schedules'],
-        ).where((s) => (s['attention'] as num? ?? 0) > 0))
-          ListTile(
-            leading: const Icon(LucideIcons.clock),
-            title: Text('${s['title']}'),
-            subtitle: Text('${s['attention']} 次執行待處理'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => ScheduleDetailPage(
-                  controller: controller,
-                  id: '${s['id']}',
-                ),
-              ),
-            ),
-          ),
-        if (rows(data['proposals']).any((p) => p['status'] == 'pending'))
-          ListTile(
-            leading: const Icon(LucideIcons.brain),
-            title: const Text('記憶提案'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => ManagementPage(
-                  kind: 'memory',
-                  controller: controller,
-                  theme: theme,
-                ),
-              ),
-            ),
           ),
         const SizedBox(height: 24),
         const Text(

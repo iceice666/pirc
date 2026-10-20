@@ -32,7 +32,6 @@ void main() {
       final gateway = _MemoryGateway()
         ..response = <String, dynamic>{
           'revision': 4,
-          'proposals': <dynamic>[],
           'entries': <dynamic>[
             <String, dynamic>{
               'id': 'memory-1',
@@ -72,7 +71,6 @@ void main() {
             'id': 'memory-1',
           },
         ],
-        'proposals': <dynamic>[],
         'revision': 4,
       };
 

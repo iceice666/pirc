@@ -15,12 +15,6 @@ class NavigationGateway extends FakeGateway {
       return {
         'workspaces': [
           {
-            'id': 'assistant:chats',
-            'hostId': 'assistant',
-            'displayName': 'Chats',
-            'kind': 'chat',
-          },
-          {
             'id': 'w',
             'hostId': 'device',
             'displayName': 'Workspace',

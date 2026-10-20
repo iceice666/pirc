@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pirc_mobile/live/delegations_strip.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/interaction.dart';
 import 'package:pirc_mobile/live/interaction_card.dart';
@@ -141,63 +139,6 @@ void main() {
       await gateway.stream.close();
     },
   );
-
-  testWidgets('delegations strip shows status and stops through the gateway', (
-    tester,
-  ) async {
-    final opened = <String>[], stopped = <String>[];
-    await tester.pumpWidget(
-      app(
-        DelegationsStrip(
-          delegations: const [
-            {
-              'id': 'd1',
-              'title': 'Fix build',
-              'workspace': 'repo on mac',
-              'status': 'waiting_input',
-              'dispatch': 'auto',
-              'targetSessionId': 'delegated',
-            },
-          ],
-          onOpen: opened.add,
-          onStop: (id) async {
-            stopped.add(id);
-            throw PlatformException(
-              code: 'HTTP_409',
-              message: 'Another device controls the delegated session',
-            );
-          },
-        ),
-      ),
-    );
-    expect(find.text('Delegated to repo on mac — Fix build'), findsOneWidget);
-    expect(
-      find.text('Waiting for you · started automatically'),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('Open'));
-    expect(opened, ['delegated']);
-    await tester.tap(find.text('Stop'));
-    await tester.pumpAndSettle();
-    expect(stopped, ['d1']);
-    expect(
-      find.textContaining('Another device controls the delegated session'),
-      findsOneWidget,
-    );
-  });
-
-  test('controller lists only well-formed active delegations', () {
-    final controller = LiveController(FakeGateway())
-      ..state = {
-        'delegations': [
-          {'id': 'd1', 'status': 'running', 'targetSessionId': 't'},
-          {'id': 'd2', 'status': 'completed', 'targetSessionId': 't'},
-          {'id': 'd3', 'status': 'running'},
-        ],
-      };
-    expect(controller.delegations.map((d) => d['id']), ['d1']);
-    controller.dispose();
-  });
 
   test('stop and relayed approval go through the native API layer', () async {
     final gateway = FakeGateway();

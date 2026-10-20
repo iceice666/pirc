@@ -610,48 +610,6 @@ llm.route = (body) => {
       }),
     );
   }
-  // Project-deletion fixtures create memory notes with real session source
-  // records, then exercise the production preview and deletion transaction.
-  const projectMemoryAdd = /^\/parity-project-memory-add (.+)$/s.exec(content);
-  if (projectMemoryAdd) {
-    return ptcReply(
-      toolCallCode('memory_note', {
-        action: 'add',
-        content: projectMemoryAdd[1],
-      }),
-    );
-  }
-  const projectMemoryReplace = /^\/parity-project-memory-replace (\S+) (.+)$/s.exec(content);
-  if (projectMemoryReplace) {
-    return ptcReply(
-      toolCallCode('memory_note', {
-        action: 'replace',
-        id: projectMemoryReplace[1],
-        content: projectMemoryReplace[2],
-      }),
-    );
-  }
-  const remove = /^\/parity-remove (\S+)$/.exec(content);
-  if (remove) {
-    return ptcReply(
-      'return await tools.memory_propose_user(' +
-        JSON.stringify({ action: 'remove', id: remove[1], quote: content }) +
-        ');',
-    );
-  }
-  const replace = /^\/parity-replace (\S+) (.+)$/s.exec(content);
-  if (replace) {
-    return ptcReply(
-      'return await tools.memory_propose_user(' +
-        JSON.stringify({
-          action: 'replace',
-          id: replace[1],
-          content: replace[2],
-          quote: content,
-        }) +
-        ');',
-    );
-  }
   const ganttMatch = /^\/parity-gantt (\S+)$/.exec(content);
   if (ganttMatch) {
     const fixture = JSON.parse(
@@ -660,17 +618,6 @@ llm.route = (body) => {
     const chart = fixture.cases.find((item: { id: string }) => item.id === ganttMatch[1]);
     if (!chart) throw new Error('Unknown Gantt fixture');
     return { text: chart.source };
-  }
-  if (content.includes('記住')) {
-    const proposal = { action: 'add', content, quote: content };
-    const note = { action: 'add', content: '原生驗收筆記：' + content };
-    return ptcReply(
-      'await tools.memory_propose_user(' +
-        JSON.stringify(proposal) +
-        ');\nreturn await tools.memory_note(' +
-        JSON.stringify(note) +
-        ');',
-    );
   }
   return { text: '本地固定回覆。此測試使用真實 gateway、聊天節點與沙箱，沒有外部模型呼叫。' };
 };
@@ -1339,7 +1286,7 @@ http.on('request', async (req, res) => {
     }
     if (url.pathname === '/parity-documents/app-redirect303') {
       res.writeHead(303, {
-        Location: '/parity-documents/app-shell?open=schedules&schedule=real-route',
+        Location: '/parity-documents/app-shell?open=memory',
       });
       res.end();
       return;

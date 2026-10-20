@@ -10,63 +10,32 @@ import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '../../../..');
 const require = createRequire(resolve(root, 'apps/gateway/package.json'));
 const { chromium } = require('playwright-core');
-const kind = process.argv.includes('--attachments')
-  ? 'attachments'
-  : process.argv.includes('--backend-settings')
-    ? 'backend-settings'
-    : process.argv.includes('--syntax-highlighting')
-      ? 'syntax-highlighting'
-      : process.argv.includes('--html')
-        ? 'html'
-        : process.argv.includes('--schedules')
-          ? 'schedules'
-          : process.argv.includes('--markdown-selection')
-            ? 'markdown-selection'
-            : process.argv.includes('--markdown-images')
-              ? 'markdown-images'
-              : process.argv.includes('--markdown-links')
-                ? 'markdown-links'
-                : process.argv.includes('--browser')
-                  ? 'browser'
-                  : process.argv.includes('--terminal')
-                    ? 'terminal'
-                    : process.argv.includes('--git')
-                      ? 'git'
-                      : process.argv.includes('--observational-memory')
-                        ? 'observational-memory'
-                        : process.argv.includes('--tasks')
-                          ? 'tasks'
-                          : process.argv.includes('--side-panel')
-                            ? 'side-panel'
-                            : process.argv.includes('--files')
-                              ? 'files'
-                              : process.argv.includes('--settings-dialog')
-                                ? 'settings-dialog'
-                                : process.argv.includes('--assistant-settings')
-                                  ? 'assistant-settings'
-                                  : process.argv.includes('--memory-interactions')
-                                    ? 'memory-interactions'
-                                    : process.argv.includes('--streaming')
-                                      ? 'streaming'
-                                      : process.argv.includes('--jobs')
-                                        ? 'jobs'
-                                        : process.argv.includes('--interactions')
-                                          ? 'interactions'
-                                          : process.argv.includes('--timeline')
-                                            ? 'timeline'
-                                            : process.argv.includes('--docks')
-                                              ? 'docks'
-                                              : process.argv.includes('--composer')
-                                                ? 'composer'
-                                                : process.argv.includes('--memory')
-                                                  ? 'memory'
-                                                  : process.argv.includes('--attention')
-                                                    ? 'attention'
-                                                    : process.argv.includes('--workspace')
-                                                      ? 'workspace'
-                                                      : process.argv.includes('--navigation')
-                                                        ? 'navigation'
-                                                        : 'markdown';
+const kinds = [
+  'attachments',
+  'backend-settings',
+  'syntax-highlighting',
+  'html',
+  'markdown-selection',
+  'markdown-images',
+  'markdown-links',
+  'browser',
+  'terminal',
+  'git',
+  'observational-memory',
+  'tasks',
+  'side-panel',
+  'files',
+  'streaming',
+  'jobs',
+  'interactions',
+  'timeline',
+  'docks',
+  'composer',
+  'memory',
+  'workspace',
+  'navigation',
+];
+const kind = kinds.find((name) => process.argv.includes('--' + name)) ?? 'markdown';
 const fixture = JSON.parse(
   await readFile(resolve(root, `fixtures/mobile-parity/${kind}.json`), 'utf8'),
 );
@@ -86,19 +55,7 @@ const modalSource = await readFile(
 const h3Rule = settingsSource.match(/:global\(\.settings-section h3\)\s*(\{[^}]+\})/)[1];
 const pRule = modalSource.match(/:global\(p\)\s*(\{[^}]+\})/)[1];
 const pMargins = settingsSource.match(/:global\(\.settings-section p\)\s*(\{[^}]+\})/)[1];
-const assistantWidth = Number(
-  process.argv.find((arg) => arg.startsWith('--assistant-width='))?.split('=')[1] ?? fixture.width,
-);
-const assistantScale = Number(
-  process.argv.find((arg) => arg.startsWith('--assistant-scale='))?.split('=')[1] ?? 1,
-);
-const assistantVariant =
-  kind === 'assistant-settings' && (assistantWidth !== fixture.width || assistantScale !== 1);
-const out = resolve(
-  root,
-  'apps/android/build/parity',
-  ...(assistantVariant ? [`assistant-${assistantWidth}-scale${assistantScale}`] : []),
-);
+const out = resolve(root, 'apps/android/build/parity');
 await mkdir(out, { recursive: true });
 const server = await createServer({
   cacheDir: resolve(out, 'vite-cache'),
@@ -195,7 +152,7 @@ const server = await createServer({
       </script></body></html>`);
             return;
           }
-          if (kind === 'interactions' || kind === 'memory-interactions') {
+          if (kind === 'interactions') {
             await send(`<!doctype html><html><head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{font-family:Arial!important;--font-mono:Menlo,monospace!important}body{overflow:auto!important}#fixture{padding:14px;display:flex;flex-direction:column}</style></head><body><div id="fixture"></div><script type="module">
         import '/src/app.css'; import {mount,tick} from 'svelte'; import InteractionCard from '/src/lib/components/InteractionCard.svelte';
         const fixture=${source}; const originalFetch=window.fetch.bind(window);
@@ -330,20 +287,6 @@ const server = await createServer({
       </script></body></html>`);
             return;
           }
-          if (kind === 'settings-dialog') {
-            await send(`<!doctype html><html><head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{font-family:Arial!important;--font-mono:Menlo,monospace!important}</style></head><body><div id="fixture"></div><script type="module">
-        import '/src/app.css'; import {mount,tick} from 'svelte'; import SettingsDialog from '/src/lib/components/dialogs/SettingsDialog.svelte'; import {app} from '/src/lib/app.svelte.ts';
-        const fixture=${source}; const originalFetch=window.fetch.bind(window);
-        const responses={'/api/assistant/node':fixture.binding,'/api/assistant/prompts':fixture.prompts,'/api/memory':fixture.memory,'/api/devices':{devices:[]},'/api/push':{subscriptions:[]},'/api/providers':{providers:[],oauthProviders:[],defaultModel:null}};
-        window.fetch=(input,init)=>responses[String(input)]?Promise.resolve(new Response(JSON.stringify(responses[String(input)]),{headers:{'Content-Type':'application/json'}})):originalFetch(input,init);
-        app.clientId=fixture.clientId; app.nodes=fixture.nodes;
-        mount(SettingsDialog,{target:document.querySelector('#fixture'),props:{open:true,tab:'assistant',showSettled:false,onresetlayout:()=>{}}});
-        for(let n=0;n<100 && !document.querySelector('textarea');n++){await new Promise(resolve=>setTimeout(resolve,10));await tick();}
-        if(!document.querySelector('textarea'))throw new Error('Settings fixture did not load');
-        await document.fonts.ready; window.captureReady=true;
-      </script></body></html>`);
-            return;
-          }
           if (kind === 'backend-settings') {
             await send(`<!doctype html><html><head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{font-family:Arial!important;--font-mono:Menlo,monospace!important}body{overflow:auto!important}#fixture{padding:24px}#fixture h3${h3Rule}#fixture p${pRule}#fixture p${pMargins}#fixture .settings-section+.settings-section{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}#fixture input,#fixture select{width:100%;height:40px;padding:0 12px;border:0;border-radius:var(--radius-md);outline:0;background:var(--bg-subtle);font-size:14px}#fixture input:focus,#fixture select:focus{box-shadow:inset 0 0 0 1px var(--accent)}#fixture label{display:grid;gap:6px;margin:12px 0;color:var(--text-2);font-size:13px;font-weight:500}</style></head><body><div id="fixture"></div><script type="module">
         import '/src/app.css'; import {mount,tick} from 'svelte'; import BackendSettings from '/src/lib/components/BackendSettings.svelte';
@@ -352,18 +295,6 @@ const server = await createServer({
         mount(BackendSettings,{target:document.querySelector('#fixture')});
         for(let n=0;n<100 && !document.querySelector('.backend-card');n++){await new Promise(resolve=>setTimeout(resolve,10));await tick();}
         if(!document.querySelector('.backend-card'))throw new Error('Backend fixture did not load');
-        await document.fonts.ready; window.captureReady=true;
-      </script></body></html>`);
-            return;
-          }
-          if (kind === 'assistant-settings') {
-            await send(`<!doctype html><html><head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{font-family:Arial!important;--font-mono:Menlo,monospace!important}body{overflow:auto!important}#fixture{padding:24px}#fixture h3${h3Rule}#fixture p${pRule}#fixture p${pMargins}#fixture .settings-section+.settings-section{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}#fixture label{display:grid;gap:6px;margin:12px 0;color:var(--text-2);font-size:13px;font-weight:500}</style></head><body><div id="fixture"></div><script type="module">
-        import '/src/app.css'; import {mount,tick} from 'svelte'; import AssistantSettings from '/src/lib/components/AssistantSettings.svelte';
-        const fixture=${source}; const originalFetch=window.fetch.bind(window);
-        window.fetch=(input,init)=>String(input).includes('/api/assistant/')?Promise.resolve(new Response(JSON.stringify(String(input).endsWith('/node')?fixture.binding:fixture.prompts),{headers:{'Content-Type':'application/json'}})):originalFetch(input,init);
-        mount(AssistantSettings,{target:document.querySelector('#fixture')});
-        for(let n=0;n<100 && !document.querySelector('textarea');n++){await new Promise(resolve=>setTimeout(resolve,10));await tick();}
-        if(!document.querySelector('textarea'))throw new Error('Assistant fixture did not load');
         await document.fonts.ready; window.captureReady=true;
       </script></body></html>`);
             return;
@@ -405,30 +336,6 @@ const server = await createServer({
       </script></body></html>`);
             return;
           }
-          if (kind === 'schedules') {
-            await send(`<!doctype html><html><head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{font-family:Arial!important}#fixture{height:100dvh;display:flex;flex-direction:column}</style></head><body><div id="fixture"></div><script type="module">
-        import '/src/app.css'; import { mount, tick } from 'svelte';
-        import { app } from '/src/lib/app.svelte.ts';
-        import SchedulesPage from '/src/lib/components/SchedulesPage.svelte';
-        const fixture=${source}; Date.now=()=>fixture.now; const originalFetch=window.fetch.bind(window);
-        app.workspaces=fixture.workspaces;
-        const responses={'/api/schedules':{schedules:fixture.schedules,timezone:'UTC'},'/api/schedules/daily':{schedule:fixture.schedules[0],runs:fixture.runs},'/api/models':{models:fixture.models}};
-        window.fetch=(input,init)=>{const key=String(input);return responses[key]?Promise.resolve(new Response(JSON.stringify(responses[key]),{headers:{'Content-Type':'application/json'}})):originalFetch(input,init);};
-        mount(SchedulesPage,{target:document.querySelector('#fixture'),props:{onopenchat:()=>{}}});
-        for(let n=0;n<100 && !document.querySelector('.schedule-list');n++){await new Promise(r=>setTimeout(r,10));await tick();}
-        if(!document.querySelector('.schedule-list'))throw new Error('Schedules did not load');
-        const view=new URLSearchParams(location.search).get('view');
-        if(view==='runs'){
-          [...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Runs').click();
-          for(let n=0;n<100 && !document.querySelector('.schedule-runs');n++){await new Promise(r=>setTimeout(r,10));await tick();}
-          if(!document.querySelector('.schedule-runs'))throw new Error('Schedule runs did not load');
-          document.querySelector('.schedule-prompt').open=true;
-        }
-        if(view==='editor'){[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Edit').click();await tick();}
-        await document.fonts.ready; window.captureReady=true;
-      </script></body></html>`);
-            return;
-          }
           if (kind === 'memory') {
             await send(`<!doctype html><html><head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{font-family:Arial!important}body{overflow:auto!important}#fixture{padding:20px}#fixture h3${h3Rule}#fixture p${pRule}#fixture p${pMargins}</style></head><body><div id="fixture"></div><script type="module">
         import '/src/app.css'; import { mount, tick } from 'svelte';
@@ -442,7 +349,7 @@ const server = await createServer({
       </script></body></html>`);
             return;
           }
-          if (kind === 'navigation' || kind === 'workspace' || kind === 'attention') {
+          if (kind === 'navigation' || kind === 'workspace') {
             await send(`<!doctype html><html><head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{font-family:Arial!important}#fixture{height:100dvh;display:flex;flex-direction:column}</style></head><body><div id="fixture"></div><script type="module">
         import '/src/app.css';
         import { mount, tick } from 'svelte';
@@ -453,14 +360,11 @@ const server = await createServer({
         const fixture = ${source};
         app.nodes=fixture.nodes; app.workspaces=fixture.workspaces;
         app.sessions=fixture.sessions.map(s=>({...s,pinned:s.pinnedAt!=null,settled:s.settledAt!=null,unread:s.unread===true,lastActivityAt:new Date(s.updatedAt).toISOString()}));
-        app.mode=fixture.mode;
-        app.memoryProposals=(fixture.memory?.proposals??[]).filter(p=>p.status==='pending');
-        app.missedRuns=fixture.missedRuns??[]; app.schedules=fixture.schedules??[];
         const noop=()=>{};
         const target=document.querySelector('#fixture');
-        mount(Sidebar,{target, props:{open:${kind !== 'workspace'},oncollapse:noop,onselect:noop,onnew:noop,onopenworkspace:noop,onaddworkspace:noop,onaddproject:noop,onclose:noop,onsettings:noop}});
+        mount(Sidebar,{target, props:{open:${kind !== 'workspace'},oncollapse:noop,onselect:noop,onnew:noop,onopenworkspace:noop,onaddworkspace:noop,onclose:noop,onsettings:noop}});
         if (fixture.workspaceId) mount(WorkspacePage,{target,props:{workspace:fixture.workspaces.find(w=>w.id===fixture.workspaceId),onselect:noop,onnew:noop}});
-        mount(Tabs,{target,props:{current:fixture.mode,chats:true,onpick:noop}});
+        mount(Tabs,{target,props:{current:'work',onpick:noop}});
         await tick(); await document.fonts.ready; window.captureReady=true;
       </script></body></html>`);
             return;
@@ -490,9 +394,7 @@ try {
     headless: true,
   });
   const measurements = {};
-  for (const width of kind === 'assistant-settings'
-    ? [assistantWidth]
-    : (fixture.widths ?? [fixture.width])) {
+  for (const width of fixture.widths ?? [fixture.width]) {
     for (const view of fixture.views ?? ['']) {
       for (const colorScheme of ['light', 'dark']) {
         const page = await browser.newPage({
@@ -518,16 +420,6 @@ try {
             throw new Error([e.message, ...errors].join('\n'));
           });
         if (errors.length) throw new Error(errors.join('\n'));
-        if (kind === 'assistant-settings' && assistantScale !== 1) {
-          await page.locator('#fixture').evaluate((root, scale) => {
-            const sizes = [...root.querySelectorAll('*')].map((el) => [
-              el,
-              parseFloat(getComputedStyle(el).fontSize),
-            ]);
-            for (const [el, size] of sizes)
-              el.style.setProperty('font-size', `${size * scale}px`, 'important');
-          }, assistantScale);
-        }
         await page.screenshot({
           path: resolve(
             out,
@@ -643,78 +535,6 @@ try {
             resolve(out, 'streaming-web-boundaries.json'),
             JSON.stringify(await page.evaluate(() => window.boundaries), null, 2) + '\n',
           );
-        if (kind === 'assistant-settings') {
-          await writeFile(
-            resolve(out, `assistant-settings-web-code-${colorScheme}.json`),
-            JSON.stringify(
-              await page.locator('code').evaluateAll((nodes) =>
-                nodes.map((node) => {
-                  const style = getComputedStyle(node);
-                  return {
-                    text: node.textContent,
-                    font: style.font,
-                    fontFamily: style.fontFamily,
-                    lineHeight: style.lineHeight,
-                  };
-                }),
-              ),
-              null,
-              2,
-            ) + '\n',
-          );
-          const controls = await page.locator('textarea').evaluateAll((nodes) =>
-            nodes.map((node) => {
-              const read = () => {
-                const style = getComputedStyle(node),
-                  r = node.getBoundingClientRect();
-                return {
-                  x: r.x,
-                  y: r.y,
-                  width: r.width,
-                  height: r.height,
-                  paddingLeft: style.paddingLeft,
-                  paddingTop: style.paddingTop,
-                  borderWidth: style.borderLeftWidth,
-                  borderColor: style.borderLeftColor,
-                  outlineColor: style.outlineColor,
-                  outlineWidth: style.outlineWidth,
-                  font: style.font,
-                  readOnly: node.readOnly,
-                };
-              };
-              const normal = read();
-              node.focus();
-              const focused = read();
-              node.blur();
-              const actions = node.closest('form').querySelector('.actions');
-              const rect = (element) => {
-                const r = element.getBoundingClientRect();
-                return { x: r.x, y: r.y, width: r.width, height: r.height };
-              };
-              return {
-                normal,
-                focused,
-                actions: {
-                  box: rect(actions),
-                  children: [...actions.children].map((element) => {
-                    const range = document.createRange();
-                    range.selectNodeContents(element);
-                    return {
-                      text: element.textContent,
-                      ...rect(element),
-                      textHeight: range.getBoundingClientRect().height,
-                      lineHeight: getComputedStyle(element).lineHeight,
-                    };
-                  }),
-                },
-              };
-            }),
-          );
-          await writeFile(
-            resolve(out, `assistant-settings-web-inputs-${colorScheme}.json`),
-            JSON.stringify(controls, null, 2) + '\n',
-          );
-        }
         measurements[
           `${fixture.widths ? width + '-' : ''}${view ? view + '-' : ''}${colorScheme}`
         ] = await page.locator('#fixture').evaluate((el) =>
@@ -734,41 +554,6 @@ try {
             }),
           ),
         );
-        if (kind === 'assistant-settings') {
-          const resize = [];
-          for (let index = 0; index < 2; index++) {
-            const field = page.locator('textarea').nth(index);
-            const original = await field.getAttribute('style');
-            for (const disabled of [false, true]) {
-              await field.evaluate((el, disabled) => {
-                el.disabled = disabled;
-                el.style.height = '';
-              }, disabled);
-              for (const delta of [80, -400]) {
-                await field.scrollIntoViewIfNeeded();
-                const before = await field.boundingBox();
-                await page.mouse.move(before.x + before.width - 4, before.y + before.height - 4);
-                await page.mouse.down();
-                await page.mouse.move(
-                  before.x + before.width - 4,
-                  before.y + before.height - 4 + delta,
-                  { steps: 10 },
-                );
-                await page.mouse.up();
-                resize.push({ index, disabled, delta, before, after: await field.boundingBox() });
-              }
-            }
-            await field.evaluate((el, original) => {
-              el.disabled = false;
-              if (original === null) el.removeAttribute('style');
-              else el.setAttribute('style', original);
-            }, original);
-          }
-          await writeFile(
-            resolve(out, `assistant-settings-web-resize-${colorScheme}.json`),
-            JSON.stringify(resize, null, 2) + '\n',
-          );
-        }
         await page.close();
       }
     }

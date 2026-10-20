@@ -17,21 +17,6 @@ void configureSettings(FakeGateway g, LiveController c) {
     if (method == 'savePreferences') return {...c.preferences, ...args};
     if (method == 'pushStatus') return {'code': 'off'};
     if (method == 'permissions') return {'notifications': true};
-    if (args['path'] == '/api/assistant/node') {
-      return {'nodeId': 'node', 'online': true};
-    }
-    if (args['path'] == '/api/assistant/prompts') {
-      return {
-        'nodeId': 'node',
-        for (final name in ['soul', 'chat'])
-          name: {
-            'text': 'original',
-            'path': '/$name.md',
-            'writable': true,
-            'maxChars': 12000,
-          },
-      };
-    }
     if (args['path'] == '/api/push') return {'subscriptions': []};
     if (args['path'] == '/api/providers') {
       throw PlatformException(
@@ -213,7 +198,7 @@ void main() {
   );
 
   testWidgets(
-    'six categories keep mounted panels and reset Assistant on leaving',
+    'categories keep mounted panels',
     (t) async {
       final g = FakeGateway(), c = LiveController(g);
       configureSettings(g, c);
@@ -223,11 +208,6 @@ void main() {
       final memory = t.element(
         find.byType(MemorySettings, skipOffstage: false),
       );
-      await choose(t, 'Assistant');
-      await t.enterText(
-        find.byKey(const ValueKey('assistant-soul-text')),
-        'unsaved',
-      );
       await choose(t, 'Models');
       expect(
         find.text(
@@ -235,16 +215,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      await choose(t, 'Assistant');
-      expect(
-        t
-            .widget<TextField>(
-              find.byKey(const ValueKey('assistant-soul-text')),
-            )
-            .controller!
-            .text,
-        'original',
-      );
+      await choose(t, 'Memory');
       expect(
         identical(
           memory,
@@ -279,7 +250,7 @@ void main() {
       await t.pump();
       await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await t.pumpAndSettle();
-      expect(find.byKey(const ValueKey('assistant-soul-text')), findsOneWidget);
+      expect(find.text('MEMORY'), findsOneWidget);
       await t.sendKeyEvent(LogicalKeyboardKey.end);
       await t.pumpAndSettle();
       expect(find.text('THIS BROWSER'), findsOneWidget);
@@ -361,7 +332,7 @@ void main() {
           await t.pumpWidget(settingsHost(c, scale: scale));
           await t.tap(find.text('Open settings'));
           await t.pumpAndSettle();
-          await choose(t, 'Assistant');
+          await choose(t, 'Memory');
           expect(t.takeException(), isNull);
           await choose(t, 'Devices');
           expect(t.takeException(), isNull);
@@ -376,7 +347,7 @@ void main() {
       await t.pumpWidget(settingsHost(c, keyboard: 320));
       await t.tap(find.text('Open settings'));
       await t.pumpAndSettle();
-      await choose(t, 'Assistant');
+      await choose(t, 'Memory');
       expect(t.takeException(), isNull);
       expect(
         t.getRect(find.byKey(const Key('settings-frame'))).bottom,

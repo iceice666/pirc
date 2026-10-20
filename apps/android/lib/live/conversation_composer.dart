@@ -12,7 +12,6 @@ import 'composer_dock.dart';
 import 'composer_attachments.dart';
 import 'composer_clipboard.dart';
 import 'external_image_drop_target.dart';
-import 'approval_mode_control.dart';
 
 const thinkingChoices = [
   ComposerOption('off', 'No thinking'),
@@ -447,28 +446,13 @@ class _ConversationComposerState extends State<ConversationComposer> {
                                 .where((o) => o.value == c.selectedThinking)
                                 .first
                                 .label;
-                            final approvalWidth = c.approvalMode == null
-                                ? 0.0
-                                : math.min(
-                                    labelWidth(
-                                      approvalModeLabels[c.approvalMode]!,
-                                    ),
-                                    available * .4,
-                                  );
-                            final selectorsAvailable = math.max(
-                              0.0,
-                              available -
-                                  (c.approvalMode == null
-                                      ? 0
-                                      : approvalWidth + 4),
-                            );
                             final thinkingWidth = math.min(
                               labelWidth(thinkingLabel),
-                              selectorsAvailable * .75,
+                              available * .75,
                             );
                             final modelWidth = math.min(
                               phone ? 112.0 : 220.0,
-                              math.max(0.0, selectorsAvailable - thinkingWidth),
+                              math.max(0.0, available - thinkingWidth),
                             );
                             return Row(
                               children: [
@@ -521,15 +505,6 @@ class _ConversationComposerState extends State<ConversationComposer> {
                                     onSelect: c.changeThinking,
                                   ),
                                 ),
-                                if (c.approvalMode != null) ...[
-                                  const SizedBox(width: 4),
-                                  ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: approvalWidth,
-                                    ),
-                                    child: ApprovalModeControl(controller: c),
-                                  ),
-                                ],
                                 const Spacer(),
                                 if (c.running && !stopPrimary) ...[
                                   action(

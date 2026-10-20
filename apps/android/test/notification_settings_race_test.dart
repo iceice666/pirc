@@ -41,8 +41,7 @@ void _installHandler(
         '/api/sessions' => {'sessions': <Json>[]},
         '/api/workspaces' => {'workspaces': <Json>[]},
         '/api/nodes' => {'nodes': <Json>[]},
-        '/api/memory' => {'proposals': <Json>[]},
-        '/api/schedules' => {'schedules': <Json>[]},
+        '/api/memory' => {'user': <Json>[]},
         _ => <String, dynamic>{},
       };
     }
@@ -355,7 +354,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.byKey(const ValueKey('settings-tab-Assistant')));
+      await tester.tap(find.byKey(const ValueKey('settings-tab-About')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 6));
       expect(pushReads, 1, reason: 'hidden General must not keep polling');
@@ -367,7 +366,7 @@ void main() {
       await tester.pump();
       expect(pushReads, 3, reason: 'polling resumes after General is visible');
 
-      await tester.tap(find.byKey(const ValueKey('settings-tab-Assistant')));
+      await tester.tap(find.byKey(const ValueKey('settings-tab-About')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 6));
       expect(pushReads, 3, reason: 'polling stops again after hiding General');

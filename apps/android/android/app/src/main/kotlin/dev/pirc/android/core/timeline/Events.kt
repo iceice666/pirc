@@ -227,12 +227,6 @@ private fun interaction(raw: JsonElement): Interaction {
             kind = "confirm",
             confirmLabel = request["confirmLabel"].text,
             cancelLabel = request["cancelLabel"].text,
-            modelChoice = request["modelChoice"] as? JsonObject,
-            userRequestChoice = request["userRequestChoice"].let { choice ->
-                choice["label"].string?.let { label ->
-                    UserRequestChoice(label, (choice["checked"] as? JsonPrimitive)?.booleanOrNull == true)
-                }
-            },
         )
         "editor" -> base.copy(kind = "editor", initialValue = request["prefill"].text ?: "")
         else -> base.copy(placeholder = request["placeholder"].text)

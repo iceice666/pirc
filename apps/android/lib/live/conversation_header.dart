@@ -136,12 +136,10 @@ class ConversationHeader extends StatelessWidget {
               8 -
               70 -
               (sidebarCollapsed ? 46 : 0) -
-              (c.chat || phone ? 0 : labelWidth('99 running') + 42),
+              (phone ? 0 : labelWidth('99 running') + 42),
         );
         final controlNatural = !held
             ? labelWidth('Take control') + 45
-            : c.chat
-            ? 0.0
             : labelWidth('In control') + 39;
         final liveNatural = labelWidth(status) + 38;
         final ratio = math.min(1.0, room / (controlNatural + liveNatural));
@@ -216,24 +214,20 @@ class ConversationHeader extends StatelessWidget {
                           ),
                         ),
                       ],
-                      if (origin['kind'] == 'schedule' ||
-                          origin['kind'] == 'delegation') ...[
+                      if (origin['kind'] == 'delegation') ...[
                         const SizedBox(width: 10),
                         Flexible(
                           flex: titleFlex(
-                            '${origin['kind'] == 'schedule' ? 'Scheduled' : 'Delegated'} · ${origin['title'] ?? ''}',
+                            'Delegated · ${origin['title'] ?? ''}',
                             extra: 38,
                           ),
                           child: chip(
-                            '${origin['kind'] == 'schedule' ? 'Scheduled' : 'Delegated'} · ${origin['title'] ?? ''}',
-                            origin['kind'] == 'schedule'
-                                ? LucideIcons.clock
-                                : LucideIcons.forward,
+                            'Delegated · ${origin['title'] ?? ''}',
+                            LucideIcons.forward,
                             action:
-                                origin['kind'] == 'schedule' ||
-                                    c.sessions.any(
-                                      (s) => s['id'] == origin['fromSessionId'],
-                                    )
+                                c.sessions.any(
+                                  (s) => s['id'] == origin['fromSessionId'],
+                                )
                                 ? () => onOrigin(origin)
                                 : null,
                           ),
@@ -256,10 +250,8 @@ class ConversationHeader extends StatelessWidget {
                   ),
                 ),
                 SizedBox(width: phone ? 4 : 12),
-                if (!c.chat) ...[
-                  JobsMenu(controller: c),
-                  SizedBox(width: phone ? 2 : 4),
-                ],
+                JobsMenu(controller: c),
+                SizedBox(width: phone ? 2 : 4),
                 Tooltip(
                   message: status,
                   child: Semantics(
@@ -357,7 +349,7 @@ class ConversationHeader extends StatelessWidget {
                     ),
                   ),
                   SizedBox(width: phone ? 2 : 4),
-                ] else if (!phone && !c.chat) ...[
+                ] else if (!phone) ...[
                   Container(
                     width: controlWidth,
                     constraints: const BoxConstraints(minHeight: 26),

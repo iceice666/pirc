@@ -105,7 +105,6 @@ class _StatusGateway extends FakeGateway {
         };
       }
       if (path == '/api/memory') return <String, dynamic>{};
-      if (path == '/api/schedules') return {'schedules': <Json>[]};
     }
     return super.normal(method, args);
   }
@@ -291,8 +290,7 @@ void main() {
             scenario,
             startupList: startupList,
           );
-          final controller = LiveController(gateway)
-            ..mode = '${_map(fixture['ui'])['mode']}';
+          final controller = LiveController(gateway);
           final boundaryKey = GlobalKey();
           await tester.pumpWidget(
             RepaintBoundary(
@@ -372,16 +370,6 @@ void main() {
             of: sidebarFinder,
             matching: find.text('Connect a device to add a workspace.'),
           );
-          final sidebarSchedulesText = find.descendant(
-            of: sidebarFinder,
-            matching: find.text('Schedules'),
-          );
-          final sidebarSchedulesFinder = find
-              .ancestor(
-                of: sidebarSchedulesText,
-                matching: find.byType(TextButton),
-              )
-              .first;
           final sidebarSettingsText = find.descendant(
             of: sidebarFinder,
             matching: find.text('Settings'),
@@ -403,9 +391,6 @@ void main() {
             tester,
             sidebarEmptyNoteFinder,
           );
-          final sidebarSchedulesRect = phone
-              ? null
-              : _rectIfFound(tester, sidebarSchedulesFinder);
           final sidebarSettingsRect = phone
               ? null
               : _rectIfFound(tester, sidebarSettingsFinder);
@@ -453,7 +438,6 @@ void main() {
           final webScroll = _firstBox(webCase, 'sidebarScroll');
           final webEmptyNote = _firstBox(webCase, 'sidebarEmptyNote');
           final webSearchInput = _firstElement(webCase, 'sidebarSearchInput');
-          final webSchedules = _firstBox(webCase, 'sidebarSchedules');
           final webFooterSettings = _firstBox(webCase, 'sidebarFooterSettings');
           final webState = _firstBox(webCase, 'loadingState');
           final webStateMark = _firstBox(webCase, 'loadingStateMark');
@@ -502,25 +486,13 @@ void main() {
           );
           if (phone) {
             final webTabs = _firstBox(webCase, 'mobileTabs');
-            expect(
-              find.descendant(of: tabsFinder, matching: find.text('Schedules')),
-              findsOneWidget,
-              reason: '$caseId schedules tab',
-            );
             _expectRectMatchesWeb(tabsRect!, webTabs!, '$caseId tabs vs web');
           } else {
-            expect(sidebarSchedulesText, findsOneWidget, reason: caseId);
             expect(sidebarSettingsText, findsOneWidget, reason: caseId);
-            expect(webSchedules, isNotNull, reason: '$caseId web schedules');
             expect(
               webFooterSettings,
               isNotNull,
               reason: '$caseId web footer settings',
-            );
-            _expectRectMatchesWeb(
-              sidebarSchedulesRect!,
-              webSchedules!,
-              '$caseId schedules footer vs web',
             );
             _expectRectMatchesWeb(
               sidebarSettingsRect!,
@@ -583,9 +555,6 @@ void main() {
               'sidebarSearchPlaceholder': searchHint,
               'sidebarScroll': _rect(sidebarScrollRect),
               'sidebarEmptyNote': _rect(sidebarEmptyNoteRect),
-              'sidebarSchedules': sidebarSchedulesRect == null
-                  ? null
-                  : _rect(sidebarSchedulesRect),
               'sidebarSettings': sidebarSettingsRect == null
                   ? null
                   : _rect(sidebarSettingsRect),
@@ -605,7 +574,6 @@ void main() {
               ),
               'sidebarScroll': webScroll,
               'sidebarEmptyNote': webEmptyNote,
-              'sidebarSchedules': webSchedules,
               'sidebarSettings': webFooterSettings,
               'mobileTabs': _firstBox(webCase, 'mobileTabs'),
               'statusRoot': webState,
@@ -664,8 +632,7 @@ void main() {
         for (final scenario in sessionCases) {
           final caseId = '${scenario['id']}';
           final gateway = _StatusGateway(fixture, scenario);
-          final controller = LiveController(gateway)
-            ..mode = '${_map(fixture['ui'])['mode']}';
+          final controller = LiveController(gateway);
           final boundaryKey = GlobalKey();
           await tester.pumpWidget(
             RepaintBoundary(

@@ -177,7 +177,7 @@ void main() {
       final gateway = DocumentGateway()
         ..responses.add(
           response(
-            '/?open=schedules&schedule=cron-1',
+            '/?open=memory',
             _pircShell(),
             finalMethod: 'GET',
           ),
@@ -205,11 +205,7 @@ void main() {
         'application/x-www-form-urlencoded',
       );
       expect(_routes, hasLength(1));
-      expect(_routes.single.target, isA<NativeAppSchedulesRouteTarget>());
-      expect(
-        (_routes.single.target! as NativeAppSchedulesRouteTarget).scheduleId,
-        'cron-1',
-      );
+      expect(_routes.single.target, isA<NativeAppMemoryRouteTarget>());
       expect(find.byType(NativeDocumentWorkspace), findsNothing);
       expect(t.takeException(), isNull);
     },

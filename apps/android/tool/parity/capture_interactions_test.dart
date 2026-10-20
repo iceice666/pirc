@@ -45,7 +45,6 @@ void main() {
                     for (final q in rows(fixture['questions']))
                       NativeInteractionCard(
                         question: q,
-                        models: rows(fixture['models']),
                         onAnswer: (_) async {},
                       ),
                   ],

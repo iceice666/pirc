@@ -7,7 +7,7 @@ import 'package:pirc_mobile/live/backend_api.dart';
 import 'package:pirc_mobile/live/backend_settings.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/provider_editor.dart';
-import 'assistant_settings_test.dart' show shell, tap;
+import 'settings_shell.dart' show shell, tap;
 import 'live_test.dart' show FakeGateway, theme;
 
 Json snapshot({

@@ -10,8 +10,6 @@ import 'modes.dart';
 import 'web_controls.dart';
 import 'session_row.dart';
 import 'workspace_dialogs.dart';
-import 'attention.dart';
-import 'attention_card.dart';
 
 class SessionSidebar extends StatefulWidget {
   const SessionSidebar({
@@ -21,12 +19,11 @@ class SessionSidebar extends StatefulWidget {
     required this.onWorkspace,
     required this.onPage,
     required this.onCollapse,
-    required this.onMode,
     this.activeId,
     this.workspaceId,
   });
   final LiveController controller;
-  final ValueChanged<String> onOpen, onWorkspace, onPage, onMode;
+  final ValueChanged<String> onOpen, onWorkspace, onPage;
   final VoidCallback onCollapse;
   final String? activeId, workspaceId;
   @override
@@ -35,7 +32,6 @@ class SessionSidebar extends StatefulWidget {
 
 class _SessionSidebarState extends State<SessionSidebar> {
   final search = TextEditingController();
-  String? hoveredMode;
   String? revealedSessionId;
   LiveController get c => widget.controller;
   @override
@@ -137,9 +133,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
     revealed: revealedSessionId == s['id'],
     onReveal: () => setState(() => revealedSessionId = '${s['id']}'),
     onOpen: () => widget.onOpen('${s['id']}'),
-    onDeleted: (id) {
-      if (c.sessionId == null) widget.onWorkspace(id);
-    },
   );
   List<Widget> sessionRows(
     Iterable<Json> sessions, {
@@ -154,80 +147,8 @@ class _SessionSidebarState extends State<SessionSidebar> {
     ];
   }
 
-  double _singleLineWidth(BuildContext context, String text, TextStyle style) {
-    final painter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      textDirection: Directionality.of(context),
-      textScaler: MediaQuery.textScalerOf(context),
-      maxLines: 1,
-    )..layout();
-    final width = painter.width;
-    painter.dispose();
-    return width;
-  }
-
-  double _projectWorkspaceRowWidth(
-    BuildContext context,
-    Json w, {
-    required bool phone,
-  }) {
-    final all = c.sessions.where((s) => s['workspaceId'] == w['id']).toList();
-    final offline = !workspaceOnline(w, c.nodes);
-    final unread = all.where((s) => s['unread'] == true).length;
-    final titleWidth = _singleLineWidth(
-      context,
-      '${w['displayName']}',
-      webText(
-        context,
-        weight: FontWeight.w500,
-      ).copyWith(height: kTextHeightNone),
-    );
-    final offlineWidth = offline
-        ? _singleLineWidth(
-            context,
-            '· offline',
-            webText(
-              context,
-              size: 11,
-              color: 'text.muted',
-            ).copyWith(height: kTextHeightNone),
-          )
-        : 0.0;
-    final unreadWidth = unread == 0
-        ? 0.0
-        : math.max(
-            18.0,
-            _singleLineWidth(
-                  context,
-                  '$unread',
-                  webText(
-                    context,
-                    size: 11,
-                    weight: FontWeight.w600,
-                    color: 'accent.default',
-                  ).copyWith(height: kTextHeightNone),
-                ) +
-                10,
-          );
-
-    // The shared Projects grid track includes each row's fixed controls and
-    // the workspace-meta span's 4px trailing padding. Pinned Projects render
-    // unread metadata here; running counts and lease marks belong to Work.
-    return 10 +
-        15 +
-        8 +
-        titleWidth +
-        (offline ? 8 + offlineWidth : 0) +
-        8 +
-        4 +
-        unreadWidth +
-        (phone ? 32 : 24) +
-        4;
-  }
-
-  Widget workspace(Json w, bool work, {double? projectTrackWidth}) {
+  Widget workspace(Json w) {
     final phone = MediaQuery.sizeOf(context).width <= 650;
-    final deleting = w['deleting'] == true;
     final all = c.sessions.where((s) => s['workspaceId'] == w['id']).toList();
     final unread = all.where((s) => s['unread'] == true).length;
     final running = all.where(isWorking).length;
@@ -236,9 +157,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
       c.sessions,
       '${w['id']}',
       widget.activeId,
-      skipWaiting: work,
+      skipWaiting: true,
     );
-    final row = Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Material(
@@ -263,80 +184,8 @@ class _SessionSidebarState extends State<SessionSidebar> {
                           color: palette(context)['text.secondary'],
                         ),
                         const SizedBox(width: 8),
-                        if (projectTrackWidth == null) ...[
-                          Expanded(
-                            child: Text(
-                              '${w['displayName']}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: webText(
-                                context,
-                                weight: FontWeight.w500,
-                              ).copyWith(height: kTextHeightNone),
-                            ),
-                          ),
-                          if (!online && !work) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              '· offline',
-                              style: webText(
-                                context,
-                                size: 11,
-                                color: 'text.muted',
-                              ).copyWith(height: kTextHeightNone),
-                            ),
-                          ],
-                          if (work &&
-                              all.any(
-                                (s) =>
-                                    s['writeLease'] != null &&
-                                    s['writeLease'] != false,
-                              ))
-                            Padding(
-                              padding: const EdgeInsets.only(left: 6),
-                              child: Icon(
-                                LucideIcons.lock,
-                                size: 12,
-                                color: palette(context)['status.warning'],
-                              ),
-                            ),
-                          if (work && running > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 6),
-                              child: Row(
-                                children: [
-                                  const StatusDot(
-                                    session: {'runStatus': 'running'},
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '$running',
-                                    style: webText(
-                                      context,
-                                      size: 11,
-                                      color: 'text.muted',
-                                    ).copyWith(height: kTextHeightNone),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          if (unread > 0)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                              ),
-                              child: Text(
-                                '$unread',
-                                semanticsLabel: '$unread unread',
-                                style: webText(
-                                  context,
-                                  size: 11,
-                                  color: 'accent.default',
-                                ).copyWith(height: kTextHeightNone),
-                              ),
-                            ),
-                        ] else ...[
-                          Text(
+                        Expanded(
+                          child: Text(
                             '${w['displayName']}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -345,56 +194,53 @@ class _SessionSidebarState extends State<SessionSidebar> {
                               weight: FontWeight.w500,
                             ).copyWith(height: kTextHeightNone),
                           ),
-                          if (!online && !work) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              '· offline',
-                              style: webText(
-                                context,
-                                size: 11,
-                                color: 'text.muted',
-                              ).copyWith(height: kTextHeightNone),
-                            ),
-                          ],
-                          // workspace-meta's margin-left:auto consumes the
-                          // shared track's spare space before its fixed gap.
-                          const Spacer(),
-                          const SizedBox(width: 8),
+                        ),
+                        if (all.any(
+                          (s) =>
+                              s['writeLease'] != null &&
+                              s['writeLease'] != false,
+                        ))
                           Padding(
-                            padding: const EdgeInsets.only(right: 4),
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Icon(
+                              LucideIcons.lock,
+                              size: 12,
+                              color: palette(context)['status.warning'],
+                            ),
+                          ),
+                        if (running > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6),
                             child: Row(
-                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (unread > 0)
-                                  Container(
-                                    constraints: const BoxConstraints(
-                                      minWidth: 18,
-                                    ),
-                                    height: 18,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                    ),
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: palette(context)['accent.default'],
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Text(
-                                      '$unread',
-                                      semanticsLabel: '$unread unread',
-                                      textAlign: TextAlign.center,
-                                      style: webText(
-                                        context,
-                                        size: 11,
-                                        weight: FontWeight.w600,
-                                        color: 'accent.on',
-                                      ).copyWith(height: kTextHeightNone),
-                                    ),
-                                  ),
+                                const StatusDot(
+                                  session: {'runStatus': 'running'},
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '$running',
+                                  style: webText(
+                                    context,
+                                    size: 11,
+                                    color: 'text.muted',
+                                  ).copyWith(height: kTextHeightNone),
+                                ),
                               ],
                             ),
                           ),
-                        ],
+                        if (unread > 0)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Text(
+                              '$unread',
+                              semanticsLabel: '$unread unread',
+                              style: webText(
+                                context,
+                                size: 11,
+                                color: 'accent.default',
+                              ).copyWith(height: kTextHeightNone),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -404,7 +250,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                 LucideIcons.plus,
                 'New ${c.catalog.of(w).noun} in ${w['displayName']}',
                 size: phone ? 32 : 24,
-                onPressed: online && !deleting && !isReadOnly(w)
+                onPressed: online && !isReadOnly(w)
                     ? () => guarded(context, () => c.create('${w['id']}'))
                     : null,
               ),
@@ -412,14 +258,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
             ],
           ),
         ),
-        if (deleting)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 8, 4),
-            child: Text(
-              workspaceDeletionNotice,
-              style: webText(context, size: 11, color: 'status.danger'),
-            ),
-          ),
         if (list.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(left: 12, top: 1),
@@ -427,8 +265,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
           ),
       ],
     );
-    if (projectTrackWidth == null) return row;
-    return SizedBox(width: projectTrackWidth, child: row);
   }
 
   /// Relayed delegation approvals being answered, by interaction id.
@@ -472,7 +308,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
     final origin = obj(s['origin']);
     final sub = origin.isEmpty
         ? '${w?['displayName'] ?? ''}'
-        : '${origin['kind'] == 'schedule' ? 'Scheduled' : 'Delegated'} · ${origin['title']}';
+        : 'Delegated · ${origin['title']}';
     final approval = delegationApproval(s);
     final approvalId = '${approval?['interactionId'] ?? ''}';
     final answering = _answeringApprovals.contains(approvalId);
@@ -605,67 +441,8 @@ class _SessionSidebarState extends State<SessionSidebar> {
     );
   }
 
-  Widget modeCaption(String mode, int count) {
-    final label = mode == 'chat' ? 'Chat' : 'Work';
-    final style = webText(
-      context,
-      size: 13,
-      weight: FontWeight.w500,
-      color: c.mode == mode || hoveredMode == mode
-          ? 'text.primary'
-          : 'text.muted',
-    ).copyWith(height: kTextHeightNone);
-    final showDot = mode == 'work' && count > 0 && c.mode != 'work';
-    return LayoutBuilder(
-      builder: (context, bounds) {
-        double labelWidth = 0;
-        if (showDot) {
-          final painter = TextPainter(
-            text: TextSpan(text: label, style: style),
-            textDirection: Directionality.of(context),
-            textScaler: MediaQuery.textScalerOf(context),
-            locale: Localizations.maybeLocaleOf(context),
-          )..layout();
-          labelWidth = painter.width;
-          painter.dispose();
-        }
-        // Sidebar.svelte uses an absolute .attention-dot. It must not consume
-        // caption width or move the centred label at an enlarged text scale.
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Center(
-              child: Text(label, textAlign: TextAlign.center, style: style),
-            ),
-            if (showDot)
-              Positioned(
-                top: 8,
-                left: (bounds.maxWidth + labelWidth) / 2 + 4,
-                child: Tooltip(
-                  message: '$count waiting for you',
-                  child: Semantics(
-                    container: true,
-                    label: '$count waiting for you',
-                    child: Container(
-                      key: const ValueKey('sidebar-work-attention-dot'),
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: palette(context)['status.warning'],
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> add(String node, bool project) async {
-    final id = await newWorkspaceDialog(context, c, node, project: project);
+  Future<void> add(String node) async {
+    final id = await newWorkspaceDialog(context, c, node);
     if (mounted && id != null) widget.onWorkspace(id);
   }
 
@@ -673,31 +450,18 @@ class _SessionSidebarState extends State<SessionSidebar> {
   Widget build(BuildContext context) {
     final phone = MediaQuery.sizeOf(context).width <= 650;
     final catalog = c.catalog;
-    final chats = c.workspaces.where(catalog.topChats).firstOrNull;
-    final chatMode = c.mode == 'chat' && chats != null;
-    final projects = c.workspaces
-        .where((w) => catalog.assistant(w) && !catalog.topChats(w))
-        .toList();
     final page = c.workspaces
-        .where((w) => w['id'] == widget.workspaceId && !catalog.assistant(w))
+        .where((w) => w['id'] == widget.workspaceId)
         .firstOrNull;
     final hosts = workHosts(c.workspaces, c.nodes, catalog);
-    // The primary action creates in the Chats workspace or the open Work page.
-    final newNoun = chatMode
-        ? catalog.of(chats).noun
-        : page == null
-        ? 'session'
-        : catalog.of(page).noun;
+    // The primary action creates in the open workspace page.
+    final newNoun = page == null ? 'session' : catalog.of(page).noun;
     final inbox = c.sessions.where(isWaiting).toList();
     final count = c.attentionCount;
     final result = c.sessions
         .where(
           (s) =>
-              c.workspaces.any(
-                (w) =>
-                    w['id'] == s['workspaceId'] &&
-                    catalog.assistant(w) == chatMode,
-              ) &&
+              c.workspaces.any((w) => w['id'] == s['workspaceId']) &&
               '${s['name']}'.toLowerCase().contains(search.text.toLowerCase()),
         )
         .toList();
@@ -752,58 +516,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   ),
                 ),
               ),
-              if (!phone && chats != null)
-                Container(
-                  margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    color: palette(context)['fill.hover'],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      for (final mode in ['chat', 'work']) ...[
-                        if (mode == 'work') const SizedBox(width: 2),
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: c.mode == mode
-                                  ? palette(context)['surface.layer']
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: c.mode == mode
-                                  ? [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: .08,
-                                        ),
-                                        offset: const Offset(0, 1),
-                                        blurRadius: 2,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                            child: Material(
-                              color: Colors.transparent,
-                              borderRadius: BorderRadius.circular(10),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(10),
-                                onHover: (hovering) => setState(() {
-                                  hoveredMode = hovering ? mode : null;
-                                }),
-                                onTap: () => widget.onMode(mode),
-                                child: SizedBox(
-                                  height: 30,
-                                  child: modeCaption(mode, count),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                 child: Material(
@@ -811,17 +523,11 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   borderRadius: BorderRadius.circular(12),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    onTap:
-                        (chatMode && !workspaceOnline(chats, c.nodes)) ||
-                            (!chatMode && page != null && isReadOnly(page))
+                    onTap: page != null && isReadOnly(page)
                         ? null
                         : () {
-                            final target = chatMode ? chats : page;
-                            if (target != null) {
-                              guarded(
-                                context,
-                                () => c.create('${target['id']}'),
-                              );
+                            if (page != null) {
+                              guarded(context, () => c.create('${page['id']}'));
                             } else {
                               newSessionDialog(context, c);
                             }
@@ -861,7 +567,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   fixedHeight: 36,
                   fontSize: 16,
                   controller: search,
-                  label: chatMode ? 'Search ${newNoun}s' : 'Search sessions',
+                  label: 'Search sessions',
                   onChanged: (_) => setState(() {}),
                 ),
               ),
@@ -870,22 +576,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   builder: (context, constraints) {
                     final sidebarWidth = constraints.maxWidth;
                     final availableRowWidth = math.max(0.0, sidebarWidth - 16);
-                    final projectTrackWidth = chatMode && search.text.isEmpty
-                        ? projects.fold(
-                            availableRowWidth,
-                            (width, project) => math.max(
-                              width,
-                              _projectWorkspaceRowWidth(
-                                context,
-                                project,
-                                phone: phone,
-                              ),
-                            ),
-                          )
-                        : availableRowWidth;
                     final horizontalContentWidth = math.max(
                       sidebarWidth,
-                      projectTrackWidth + 8,
+                      availableRowWidth + 8,
                     );
                     Widget fixedListItem(Widget child) => Align(
                       alignment: AlignmentDirectional.topStart,
@@ -898,10 +591,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                         width: horizontalContentWidth,
                         child: RefreshIndicator(
                           onRefresh: () async {
-                            await Future.wait([
-                              c.refreshList(),
-                              c.attention.refresh(),
-                            ]);
+                            await c.refreshList();
                           },
                           child: ListView(
                             padding: const EdgeInsets.only(left: 8),
@@ -925,72 +615,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                   result,
                                   showWorkspace: true,
                                 ).map(fixedListItem),
-                              ] else if (chatMode) ...[
-                                fixedListItem(
-                                  heading(
-                                    'Projects',
-                                    trailing: WebIconButton(
-                                      LucideIcons.plus,
-                                      'New project',
-                                      size: 22,
-                                      onPressed: workspaceOnline(chats, c.nodes)
-                                          ? () =>
-                                                add('${chats['hostId']}', true)
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                                if (projects.isEmpty)
-                                  fixedListItem(
-                                    note('Group related chats into a project.'),
-                                  ),
-                                for (final w in projects)
-                                  Align(
-                                    alignment: AlignmentDirectional.topStart,
-                                    child: workspace(
-                                      w,
-                                      false,
-                                      projectTrackWidth: projectTrackWidth,
-                                    ),
-                                  ),
-                                fixedListItem(const SizedBox(height: 14)),
-                                fixedListItem(
-                                  heading(
-                                    'Chats',
-                                    trailing: WebIconButton(
-                                      LucideIcons.settings2,
-                                      'All chats and their settings',
-                                      size: 22,
-                                      onPressed: () =>
-                                          widget.onWorkspace('${chats['id']}'),
-                                    ),
-                                  ),
-                                ),
-                                fixedListItem(const SizedBox(height: 1)),
-                                ...sessionRows(
-                                  pinnedFirst(
-                                    c.sessions.where(
-                                      (s) =>
-                                          s['workspaceId'] == chats['id'] &&
-                                          !isDone(s),
-                                    ),
-                                  ),
-                                ).map(fixedListItem),
                               ] else ...[
-                                if (c.attention.memoryError != null)
-                                  fixedListItem(
-                                    WebNotice(
-                                      c.attention.memoryError!,
-                                      error: true,
-                                    ),
-                                  ),
-                                if (c.attention.scheduleError != null)
-                                  fixedListItem(
-                                    WebNotice(
-                                      c.attention.scheduleError!,
-                                      error: true,
-                                    ),
-                                  ),
                                 if (count > 0) ...[
                                   fixedListItem(
                                     heading(
@@ -1021,24 +646,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                   ),
                                   for (final s in inbox)
                                     fixedListItem(waiting(s)),
-                                  for (final item in c.attention.missedRuns)
-                                    fixedListItem(
-                                      AttentionCard(
-                                        controller: c,
-                                        item: item,
-                                        memory: false,
-                                        onMemory: () => widget.onPage('memory'),
-                                      ),
-                                    ),
-                                  for (final p in c.attention.proposals)
-                                    fixedListItem(
-                                      AttentionCard(
-                                        controller: c,
-                                        item: p,
-                                        memory: true,
-                                        onMemory: () => widget.onPage('memory'),
-                                      ),
-                                    ),
                                   fixedListItem(const SizedBox(height: 14)),
                                 ],
                                 for (final host in hosts) ...[
@@ -1074,10 +681,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                             'Add workspace on ${host['id']}',
                                             size: 22,
                                             onPressed: host['online'] == true
-                                                ? () => add(
-                                                    '${host['id']}',
-                                                    false,
-                                                  )
+                                                ? () => add('${host['id']}')
                                                 : null,
                                           ),
                                         ],
@@ -1087,7 +691,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                   if (rows(host['workspaces']).isEmpty)
                                     fixedListItem(note('No workspaces yet.')),
                                   for (final w in rows(host['workspaces']))
-                                    fixedListItem(workspace(w, true)),
+                                    fixedListItem(workspace(w)),
                                   fixedListItem(const SizedBox(height: 14)),
                                 ],
                                 if (hosts.isEmpty)
@@ -1118,17 +722,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (!chatMode) ...[
-                        footerEntry(
-                          'Schedules',
-                          LucideIcons.calendarClock,
-                          'schedules',
-                          detail: c.attention.nextSchedule == null
-                              ? null
-                              : 'Next: ${c.attention.nextSchedule!['title']} · ${untilRun(c.attention.nextSchedule!['nextRunAt'] as num)}',
-                        ),
-                        const SizedBox(height: 2),
-                      ],
                       footerEntry('Settings', LucideIcons.settings, 'settings'),
                     ],
                   ),

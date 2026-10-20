@@ -233,75 +233,6 @@ void main() {
     },
   );
   testWidgets(
-    'delegation retains unavailable suggestion and allows explicit defaults',
-    (t) async {
-      final q = {
-        ...question('confirm'),
-        'modelChoice': {
-          'model': {'provider': 'p', 'id': 'missing'},
-          'thinking': 'max',
-        },
-      };
-      Json? answer;
-      await t.pumpWidget(
-        shell(
-          NativeInteractionCard(
-            question: q,
-            onAnswer: (a) async {
-              answer = a;
-            },
-          ),
-        ),
-      );
-      await t.pumpAndSettle();
-      expect(find.text('p / missing'), findsWidgets);
-      await t.tap(find.text('Yes, continue'));
-      await t.pumpAndSettle();
-      expect(answer, {
-        'confirmed': true,
-        'model': {'provider': 'p', 'id': 'missing'},
-        'thinking': 'max',
-      });
-      await t.tap(find.byType(DropdownButton<String>).first);
-      await t.pumpAndSettle();
-      await t.tap(find.text('Default model').last);
-      await t.pumpAndSettle();
-      await t.tap(find.byType(DropdownButton<String>).last);
-      await t.pumpAndSettle();
-      await t.tap(find.text('Default thinking').last);
-      await t.pumpAndSettle();
-      await t.tap(find.text('Yes, continue'));
-      await t.pumpAndSettle();
-      expect(answer, {'confirmed': true, 'model': null, 'thinking': null});
-      await t.pumpWidget(
-        shell(
-          NativeInteractionCard(
-            question: {
-              ...q,
-              'modelChoice': {
-                'model': {'provider': 'p', 'id': 'new'},
-                'thinking': 'low',
-              },
-            },
-            onAnswer: (a) async {
-              answer = a;
-            },
-          ),
-        ),
-      );
-      await t.pumpAndSettle();
-      await t.tap(find.text('Yes, continue'));
-      await t.pumpAndSettle();
-      expect(answer, {
-        'confirmed': true,
-        'model': {'provider': 'p', 'id': 'new'},
-        'thinking': 'low',
-      });
-
-      await t.pumpWidget(const SizedBox());
-    },
-  );
-  testWidgets(
     'inline answers hold busy, never acquire control, and unknown delivery cannot retry',
     (t) async {
       final g = FakeGateway(), c = readyController(g);
@@ -605,7 +536,7 @@ void main() {
     },
   );
   for (final width in [390.0, 651.0, 1024.0]) {
-    testWidgets('delegation footer and editor fit $width at 2x text', (
+    testWidgets('confirm footer and editor fit $width at 2x text', (
       t,
     ) async {
       t.view.devicePixelRatio = 1;
@@ -619,7 +550,6 @@ void main() {
                 question: {
                   ...question('confirm'),
                   'description': 'One\nTwo',
-                  'modelChoice': {'model': null, 'thinking': null},
                   'expiresAt': '2050-01-01T00:00:00Z',
                 },
                 onAnswer: (_) async {},

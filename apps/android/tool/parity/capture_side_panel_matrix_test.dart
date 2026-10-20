@@ -685,8 +685,7 @@ void main() {
                 'run': {'status': 'idle'},
                 'runnerStatus': 'ready',
               }
-              ..connection = 'connected'
-              ..mode = 'work';
+              ..connection = 'connected';
 
             gateway.handler = (method, args) async {
               if (method == 'request') {

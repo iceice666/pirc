@@ -6,9 +6,6 @@ import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assert.assertArrayEquals
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
@@ -53,22 +50,6 @@ class PircApiTest {
         assertTrue(!api.client.followRedirects && !api.client.followSslRedirects)
         api.clearManagementGrant()
         assertEquals(null, api.request("/api/devices").build().header("X-Pirc-Management"))
-    }
-
-    @Test
-    fun projectFilesUseRawBytesAndEncodeNamesWithoutCreatingAttachments() = runTest {
-        val bytes = "{\"hello\":\"你好\"}\n".toByteArray()
-        server.enqueue(MockResponse.Builder().code(201).body("""{"file":{"name":"設定 notes +.json","byteSize":${bytes.size},"modifiedAt":1}}""").build())
-        val reply = api.uploadProjectFile("chat:project /+", "設定 notes +.json",
-            bytes.toRequestBody("application/octet-stream".toMediaType()))
-        assertTrue(reply.containsKey("file"))
-        val request = server.takeRequest()
-        assertEquals("POST", request.method)
-        assertEquals("/api/workspaces/chat%3Aproject%20%2F%2B/files", request.url.encodedPath)
-        assertEquals("設定 notes +.json", request.url.queryParameter("filename"))
-        assertEquals("application/octet-stream", request.headers["Content-Type"])
-        assertEquals("Bearer $token", request.headers["Authorization"])
-        assertArrayEquals(bytes, request.body!!.toByteArray())
     }
 
     @Test

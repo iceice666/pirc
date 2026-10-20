@@ -22,7 +22,6 @@ class SessionRow extends StatefulWidget {
     required this.controller,
     required this.session,
     required this.onOpen,
-    required this.onDeleted,
     this.active = false,
     this.page = false,
     this.showWorkspace = false,
@@ -32,7 +31,6 @@ class SessionRow extends StatefulWidget {
   final LiveController controller;
   final Json session;
   final VoidCallback onOpen;
-  final ValueChanged<String> onDeleted;
   final bool active, page, showWorkspace;
   final bool revealed;
   final VoidCallback? onReveal;
@@ -225,15 +223,12 @@ class _SessionRowState extends State<SessionRow> {
                                       size: widget.page ? 7 : 6,
                                     ),
                                     const SizedBox(width: 8),
-                                    if (origin['kind'] == 'schedule' ||
-                                        origin['kind'] == 'delegation') ...[
+                                    if (origin['kind'] == 'delegation') ...[
                                       Tooltip(
                                         message:
-                                            '${origin['kind'] == 'schedule' ? 'Scheduled' : 'Delegated'}: ${origin['title']}${delegationStatus == null ? '' : ' ($delegationStatus)'}',
+                                            'Delegated: ${origin['title']}${delegationStatus == null ? '' : ' ($delegationStatus)'}',
                                         child: Icon(
-                                          origin['kind'] == 'schedule'
-                                              ? LucideIcons.clock
-                                              : LucideIcons.forward,
+                                          LucideIcons.forward,
                                           size: 13,
                                           color: color['text.muted'],
                                         ),
@@ -385,39 +380,6 @@ class _SessionRowState extends State<SessionRow> {
                                   ? null
                                   : () => patch({'settled': !isDone(s)}),
                             ),
-                            if (widget.controller.catalog
-                                .of(w)
-                                .deleteSessions) ...[
-                              const SizedBox(width: 2),
-                              WebIconButton(
-                                LucideIcons.trash2,
-                                'Delete ${s['name']}',
-                                size: widget.page
-                                    ? 28
-                                    : phone
-                                    ? 32
-                                    : 24,
-                                iconSize: 14,
-                                onPressed: saving
-                                    ? null
-                                    : () async {
-                                        final deleted = await showDialog<bool>(
-                                          context: context,
-                                          useRootNavigator: false,
-                                          barrierDismissible: false,
-                                          builder: (_) => _DeleteChat(
-                                            controller: widget.controller,
-                                            session: s,
-                                          ),
-                                        );
-                                        if (deleted == true) {
-                                          widget.onDeleted(
-                                            '${s['workspaceId']}',
-                                          );
-                                        }
-                                      },
-                              ),
-                            ],
                             const SizedBox(width: 2),
                             WebIconButton(
                               LucideIcons.pencil,
@@ -497,69 +459,5 @@ class _UnreadDot extends StatelessWidget {
         color: palette(context)['accent.default'],
       ),
     ),
-  );
-}
-
-class _DeleteChat extends StatefulWidget {
-  const _DeleteChat({required this.controller, required this.session});
-  final LiveController controller;
-  final Json session;
-  @override
-  State<_DeleteChat> createState() => _DeleteChatState();
-}
-
-class _DeleteChatState extends State<_DeleteChat> {
-  bool busy = false;
-  String? error;
-  @override
-  Widget build(BuildContext context) => WebDialog(
-    title: 'Delete chat?',
-    busy: busy,
-    actions: [
-      WebButton(
-        'Cancel',
-        onPressed: busy ? null : () => Navigator.pop(context, false),
-      ),
-      WebButton(
-        busy ? 'Deleting…' : 'Delete chat and memories',
-        primary: true,
-        danger: true,
-        onPressed: busy
-            ? null
-            : () async {
-                setState(() {
-                  busy = true;
-                  error = null;
-                });
-                try {
-                  await widget.controller.deleteChat('${widget.session['id']}');
-                  if (context.mounted) Navigator.pop(context, true);
-                } catch (e) {
-                  if (mounted) {
-                    setState(() {
-                      busy = false;
-                      error = LiveController.describe(e);
-                    });
-                  }
-                }
-              },
-      ),
-    ],
-    children: [
-      Text(
-        '“${widget.session['name']}” will be permanently deleted, including its messages and chat files.',
-      ),
-      const SizedBox(height: 12),
-      const Text(
-        'This also deletes USER memories and MEMORY notes created by this chat, and its pending memory proposals.',
-        style: TextStyle(fontWeight: FontWeight.w600),
-      ),
-      const Text('Memories created by other chats are kept.'),
-      const SizedBox(height: 12),
-      const Text(
-        'Copies already present in other chats are not erased. Any running reply will stop. This cannot be undone.',
-      ),
-      if (error != null) WebNotice(error!, error: true),
-    ],
   );
 }

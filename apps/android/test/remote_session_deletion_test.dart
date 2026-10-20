@@ -25,7 +25,7 @@ void main() {
             if (method == 'request' && args['path'] == '/api/workspaces') {
               return {
                 'workspaces': [
-                  {'id': 'w', 'displayName': 'My chats', 'kind': 'chat'},
+                  {'id': 'w', 'displayName': 'Workspace', 'kind': 'directory'},
                 ],
               };
             }
@@ -108,41 +108,4 @@ void main() {
     c.dispose();
     await g.stream.close();
   });
-  testWidgets(
-    'late deletion event and DELETE acknowledgement preserve a newly selected chat',
-    (t) async {
-      final g = FakeGateway(), ack = Completer<Json>();
-      g.handler = (method, args) async {
-        if (method == 'request' && args['method'] == 'DELETE') {
-          return ack.future;
-        }
-        if (method == 'request' && args['path'] == '/api/workspaces') {
-          return {
-            'workspaces': [
-              {'id': 'w', 'displayName': 'Chats', 'kind': 'chat'},
-            ],
-          };
-        }
-        return g.normal(method, args);
-      };
-      final c = LiveController(g);
-      await c.boot();
-      await c.open('s');
-      g.publish('s');
-      final removing = c.deleteChat('s');
-      g.stream.add(deletedEvent('s'));
-      await c.open('next');
-      c.editDraft('new draft');
-      g.stream.add(deletedEvent('s'));
-      ack.complete({});
-      await removing;
-      await t.pump();
-      expect(c.sessionId, 'next');
-      expect(c.draft, 'new draft');
-      expect(c.routePage, isNull);
-      expect(g.calls.where((call) => call.$1 == 'unwatch'), hasLength(1));
-      c.dispose();
-      await g.stream.close();
-    },
-  );
 }

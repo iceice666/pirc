@@ -10,8 +10,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import androidx.test.platform.app.InstrumentationRegistry
-import dev.pirc.android.core.timeline.Interaction
-import dev.pirc.android.core.timeline.UserRequestChoice
 import org.junit.Assert.*
 import org.junit.Test
 import org.unifiedpush.android.connector.PushService
@@ -100,35 +98,6 @@ class GatewayQuestionRevocationDeviceTest {
                 manager.cancel(identity.notificationTag, 0)
                 removeIdentity(context, identity)
                 restorePreferences(push, saved)
-            }
-        }
-    }
-
-    @Test fun delegatedChoiceNotificationRequiresOpeningTheCompleteQuestion() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val manager = GatewayNotifications.manager(context)
-        val session = "delegation-choice-${UUID.randomUUID()}"
-        val identity = QuestionNotificationIdentity(session, "delegate", "1")
-        withPreferences(context) {
-            try {
-                check(context.getSharedPreferences("notification_preferences", Context.MODE_PRIVATE)
-                    .edit().putBoolean("rich", true).putBoolean("popup", false).commit())
-                val question = Interaction(
-                    id = identity.interactionId, runnerEpoch = identity.interactionEpoch,
-                    kind = "confirm", title = "Delegate?",
-                    userRequestChoice = UserRequestChoice("Treat as my request", false),
-                )
-                GatewayNotifications.show(context, "Delegation", "synthetic", session,
-                    question = question, questionIdentity = identity, allowQuestionActions = true)
-                waitFor("delegation notification posted") {
-                    manager.activeNotifications.any { it.tag == identity.notificationTag }
-                }
-                val actions = manager.activeNotifications.single { it.tag == identity.notificationTag }.notification.actions
-                assertNotNull(actions)
-                assertEquals(listOf("開啟對話回答"), actions.map { it.title.toString() })
-            } finally {
-                manager.cancel(identity.notificationTag, 0)
-                removeIdentity(context, identity)
             }
         }
     }

@@ -90,9 +90,6 @@ data class QueueItem(val id: String, val kind: String, val content: String, val 
 
 data class InteractionOption(val value: String, val label: String, val description: String? = null)
 
-/** Optional checkbox on a confirmation, used for delegated user requests. */
-data class UserRequestChoice(val label: String, val checked: Boolean)
-
 /** Where a relayed (`relay.`) confirm comes from: the delegated session that waits on it. */
 data class RelayedFrom(
     val sessionId: String,
@@ -135,9 +132,7 @@ data class Interaction(
     val initialValue: String? = null,
     val confirmLabel: String? = null,
     val cancelLabel: String? = null,
-    val modelChoice: kotlinx.serialization.json.JsonObject? = null,
     val language: String? = null,
-    val userRequestChoice: UserRequestChoice? = null,
     /** Set on a delegated session's confirm relayed to the chat that started it. */
     val relayed: RelayedFrom? = null,
 )

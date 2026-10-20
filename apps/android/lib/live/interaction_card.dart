@@ -30,7 +30,6 @@ class NativeInteractionCard extends StatefulWidget {
     required this.question,
     required this.onAnswer,
     this.disabled = false,
-    this.models = const [],
     this.initialChoice,
     this.onOpenSession,
   });
@@ -40,7 +39,6 @@ class NativeInteractionCard extends StatefulWidget {
   /// Opens a relayed interaction's delegated session.
   final ValueChanged<String>? onOpenSession;
   final bool disabled;
-  final List<Json> models;
   final String? initialChoice;
   @override
   State<NativeInteractionCard> createState() => _NativeInteractionCardState();
@@ -50,9 +48,8 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
   final text = TextEditingController();
   final selected = <String>{};
   final nodes = <FocusNode>[];
-  String model = '', thinking = '';
   Timer? timer;
-  bool expired = false, sending = false, asUserRequest = false;
+  bool expired = false, sending = false;
   Json get q => widget.question;
   @override
   void initState() {
@@ -69,14 +66,6 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
         rows(q['options']).any((o) => o['value'] == widget.initialChoice)) {
       selected.add(widget.initialChoice!);
     }
-    final choice = obj(q['modelChoice']), suggestion = obj(choice['model']);
-    model = suggestion['provider'] is String && suggestion['id'] is String
-        ? jsonEncode([suggestion['provider'], suggestion['id']])
-        : '';
-    thinking = '${choice['thinking'] ?? ''}';
-    asUserRequest =
-        q['kind'] == 'confirm' &&
-        obj(q['userRequestChoice'])['checked'] == true;
     for (final node in nodes) {
       node.dispose();
     }
@@ -112,20 +101,6 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
         nodes.clear();
         nodes.addAll(rows(q['options']).map((_) => FocusNode()));
       }
-      if (jsonEncode(old.question['modelChoice']) !=
-          jsonEncode(q['modelChoice'])) {
-        final choice = obj(q['modelChoice']), suggestion = obj(choice['model']);
-        model = suggestion['provider'] is String && suggestion['id'] is String
-            ? jsonEncode([suggestion['provider'], suggestion['id']])
-            : '';
-        thinking = '${choice['thinking'] ?? ''}';
-      }
-      if (jsonEncode(old.question['userRequestChoice']) !=
-          jsonEncode(q['userRequestChoice'])) {
-        asUserRequest =
-            q['kind'] == 'confirm' &&
-            obj(q['userRequestChoice'])['checked'] == true;
-      }
       if (old.question['expiresAt'] != q['expiresAt']) armExpiry();
     }
   }
@@ -159,18 +134,6 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
     final Json payload;
     if (q['kind'] == 'confirm') {
       payload = {'confirmed': accept};
-      if (accept &&
-          asUserRequest &&
-          obj(q['userRequestChoice'])['label'] is String) {
-        payload['asUserRequest'] = true;
-      }
-      if (accept && q['modelChoice'] is Map) {
-        final pair = model.isEmpty ? null : jsonDecode(model) as List;
-        payload['model'] = pair == null
-            ? null
-            : {'provider': pair[0], 'id': pair[1]};
-        payload['thinking'] = thinking.isEmpty ? null : thinking;
-      }
     } else if (!accept) {
       payload = {'cancelled': true};
     } else if (q['kind'] == 'select') {
@@ -368,87 +331,10 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
     );
   }
 
-  Widget picker(
-    String label,
-    String selectedValue,
-    List<(String, String)> choices,
-    ValueChanged<String> change,
-  ) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    decoration: BoxDecoration(
-      color: palette(context)['web.bg-subtle'],
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
-        value: selectedValue,
-        isExpanded: true,
-        isDense: true,
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        borderRadius: BorderRadius.circular(12),
-        dropdownColor: palette(context)['surface.layer'],
-        style: webText(context, size: 16).copyWith(height: 1.15),
-        hint: Text(label),
-        icon: Icon(
-          LucideIcons.chevronDown,
-          size: 14,
-          color: palette(context)['text.muted'],
-        ),
-        items: [
-          for (final choice in choices)
-            DropdownMenuItem(
-              value: choice.$1,
-              child: Text(
-                choice.$2,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-        ],
-        onChanged: locked
-            ? null
-            : (v) {
-                if (v != null) setState(() => change(v));
-              },
-      ),
-    ),
-  );
   @override
   Widget build(BuildContext context) {
     final p = palette(context), phone = MediaQuery.sizeOf(context).width <= 650;
     final at = instant(q['expiresAt']);
-    final modelOptions = <String, String>{
-      '': 'Default model',
-      for (final m in widget.models.where((m) => m['available'] == true))
-        jsonEncode([m['provider'], m['id']]):
-            '${m['displayName']} · ${m['provider']}',
-    };
-    if (model.isNotEmpty && !modelOptions.containsKey(model)) {
-      modelOptions[model] = (jsonDecode(model) as List).join(' / ');
-    }
-    final levels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
-    final modelPickers = Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: picker(
-            'Model',
-            model,
-            modelOptions.entries.map((e) => (e.key, e.value)).toList(),
-            (v) => model = v,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: picker('Thinking', thinking, [
-            ('', 'Default thinking'),
-            for (final level in levels) (level, 'Thinking: $level'),
-            if (thinking.isNotEmpty && !levels.contains(thinking))
-              (thinking, 'Thinking: $thinking'),
-          ], (v) => thinking = v),
-        ),
-      ],
-    );
     final actions = Wrap(
       spacing: 6,
       runSpacing: 6,
@@ -653,9 +539,7 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
                 ),
               ),
             ],
-            if (q['kind'] == 'confirm' &&
-                q['modelChoice'] == null &&
-                !'${q['id']}'.startsWith('memory:'))
+            if (q['kind'] == 'confirm')
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(
@@ -665,36 +549,6 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
                     size: 13,
                     color: 'text.secondary',
                   ).copyWith(height: 1.55),
-                ),
-              ),
-            if (q['kind'] == 'confirm' &&
-                obj(q['userRequestChoice'])['label'] is String)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    dense: true,
-                    value: asUserRequest,
-                    onChanged: locked
-                        ? null
-                        : (value) =>
-                              setState(() => asUserRequest = value == true),
-                    title: Text(
-                      '${obj(q['userRequestChoice'])['label']}',
-                      style: webText(context, size: 13),
-                    ),
-                    subtitle: Text(
-                      'Auto mode then reads the task as if you had typed it in that session, so an operation the task names exactly is not stopped as dangerous. Only for the run the task starts.',
-                      style: webText(
-                        context,
-                        size: 12,
-                        color: 'text.secondary',
-                      ),
-                    ),
-                  ),
                 ),
               ),
             const SizedBox(height: 16),
@@ -733,28 +587,9 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
                             FontWeight.w400,
                           ) +
                           19;
-                if (q['modelChoice'] is Map &&
-                    bounds.maxWidth > 600 &&
-                    MediaQuery.textScalerOf(context).scale(13) <= 18) {
-                  return Row(
-                    children: [
-                      if (at != null) ...[clock, const SizedBox(width: 12)],
-                      Expanded(child: modelPickers),
-                      const SizedBox(width: 12),
-                      ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: actionWidth),
-                        child: actions,
-                      ),
-                    ],
-                  );
-                }
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (q['modelChoice'] is Map) ...[
-                      modelPickers,
-                      const SizedBox(height: 12),
-                    ],
                     if (at != null &&
                         clockWidth + 12 + actionWidth > bounds.maxWidth) ...[
                       clock,

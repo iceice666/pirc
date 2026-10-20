@@ -313,13 +313,6 @@ void main() {
         expect(obj(completedAsk)['status'], 'succeeded');
         expect('${obj(completedAsk)['output']}', contains('Continue'));
 
-        await c.deleteChat(createdChat);
-        expect(c.sessionId, isNull);
-        expect(
-          c.sessions.any((session) => session['id'] == createdChat),
-          isFalse,
-        );
-        createdChat = null;
         expect(tester.takeException(), isNull);
       } finally {
         // LiveShell owns and disposes its controller when unmounted.

@@ -32,7 +32,6 @@ class ContextRouteGateway extends RouteGateway {
   ContextRouteGateway() {
     preferences = {
       'appearance': 'light',
-      'mode': 'chat',
       'sidebarCollapsed': false,
       'goalExpanded': true,
     };
@@ -575,7 +574,7 @@ void main() {
   );
 
   testWidgets(
-    'child appearance preference updates the shared root theme without changing another context mode',
+    'child appearance preference updates the shared root theme',
     (tester) async {
       final gateway = ContextRouteGateway();
       final root = LiveController(DartScopedGateway(gateway));
@@ -595,20 +594,10 @@ void main() {
       expect(child.sessionId, 'session-second');
       expect(root.sessionId, 'session-latest');
 
-      await root.setMode('work');
-      await tester.pumpAndSettle();
-      expect(root.mode, 'work');
-      expect(child.preferences['mode'], 'work');
-      expect(child.mode, 'chat');
-
       await child.savePreferences({'appearance': 'dark'});
       await tester.pumpAndSettle();
       expect(root.preferences['appearance'], 'dark');
       expect(child.preferences['appearance'], 'dark');
-      expect(root.preferences['mode'], 'work');
-      expect(child.preferences['mode'], 'work');
-      expect(root.mode, 'work');
-      expect(child.mode, 'chat');
       expect(
         (Theme.of(tester.element(find.byWidget(childShell))).brightness),
         Brightness.dark,
@@ -633,9 +622,6 @@ void main() {
         Theme.of(tester.element(find.byWidget(rootShell))).brightness,
         Brightness.dark,
       );
-      // The root's own pre-document view is restored independently of the
-      // shared stored preference value.
-      expect(root.mode, 'chat');
       expect(root.sessionId, 'session-latest');
       expect(root.draft, 'root draft survives appearance change');
       expect(tester.takeException(), isNull);

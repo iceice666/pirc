@@ -327,7 +327,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
             cancelPendingDistributorPicker()
             documentSavePicker.cancelForContextInvalidation()
             clearExternalDropTargets()
-            clearProjectFileSelections()
             documentScripts.closeAll()
         },
         invalidateContexts = {
@@ -348,7 +347,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
         activeBarcodeScanRequestId = null
         activeBarcodeScan.also { activeBarcodeScan = null }?.dispose()
         clearExternalDropTargets()
-        clearProjectFileSelections()
         documentSavePicker.dispose()
         externalDropView?.setOnDragListener(null)
         externalDropView = null
@@ -358,16 +356,11 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
         htmlMedia.dispose()
         documentScripts.dispose()
     }
-    private val projectFileSelections = ProjectFileSelections()
-    private enum class FilePickerMode { LEGACY_UPLOAD, READ_ATTACHMENTS, PROJECT_FILES }
+    private enum class FilePickerMode { LEGACY_UPLOAD, READ_ATTACHMENTS }
     private data class PendingFilePicker(
         val result: MethodChannel.Result,
         val mode: FilePickerMode,
         val sessionId: String? = null,
-        val workspaceId: String? = null,
-        val pairingStamp: String? = null,
-        val contextId: String? = null,
-        val contextGeneration: Long = 0,
     )
     private data class AttachmentContents(val name: String, val mimeType: String, val bytes: ByteArray)
     private sealed class AttachmentRead {
@@ -602,10 +595,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                 documentSavePicker.start(result, payload, pairingStamp, contextId)
                 return@setMethodCallHandler
             }
-            if (call.method == "pickProjectFiles") {
-                startProjectFilePicker(args, result, contextId)
-                return@setMethodCallHandler
-            }
             if (call.method == "pickUpload" || call.method == "pickAttachments") {
                 if (pendingFilePicker != null || documentSavePicker.isPending) { result.error("BUSY", "已有附件選擇器開啟", null); return@setMethodCallHandler }
                 val mode = if (call.method == "pickAttachments") FilePickerMode.READ_ATTACHMENTS else FilePickerMode.LEGACY_UPLOAD
@@ -662,7 +651,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                         "closeContext" -> {
                             val closingContext = str("contextId")
                             clearExternalDropContext(closingContext)
-                            projectFileSelections.closeContext(closingContext)
                             documentScripts.closeContext(closingContext)
                             accountContextMutationLock.withLock {
                                 htmlMedia.closeContext(closingContext)
@@ -699,7 +687,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                         "completeOnboarding" -> { activity.permissionAccess.finish(); null }
                         "activity" -> PircJson.parseToJsonElement(activity.getSharedPreferences("recent_activity", Activity.MODE_PRIVATE).getString("items", "[]")!!).wire()
                         "pair" -> accountContextMutationLock.withLock {
-                            clearProjectFileSelections()
                             documentScripts.closeAll()
                             clearExternalDropTargets()
                             recordings.closeAll()
@@ -707,7 +694,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             runtime.pair(str("link"))
                         }
                         "unpair" -> accountContextMutationLock.withLock {
-                            clearProjectFileSelections()
                             documentScripts.closeAll()
                             clearExternalDropTargets()
                             recordings.closeAll()
@@ -946,31 +932,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             }
                             mapOf("text" to text, "files" to files)
                         }
-                        "releaseProjectFiles" -> {
-                            val tokens = optionalStringList("fileTokens") ?: emptyList()
-                            projectFileSelections.release(tokens, contextId)
-                            null
-                        }
-                        "uploadProjectFile" -> {
-                            val workspaceId = str("workspaceId")
-                            val name = str("name")
-                            val stamp = str("pairingStamp")
-                            val limit = projectFileLimit(args["maxBytes"])
-                            val api = projectFileApi(stamp, contextId)
-                            val token = optionalString("fileToken")
-                            val bytes = optionalBytes("bytes")
-                            require((token == null) != (bytes == null)) { "Specify either fileToken or bytes" }
-                            val body = if (token != null) {
-                                val selection = projectFileSelections.consume(token, workspaceId, stamp, contextId)
-                                require(selection.name == name) { "Selected file name changed" }
-                                ProjectFileUploadBody(limit) { activity.contentResolver.openInputStream(Uri.parse(selection.uri)) }
-                            } else {
-                                requireNotNull(bytes)
-                                if (bytes.isEmpty() || bytes.size > limit) throw ApiException(413, "payload_too_large", "File is empty or exceeds the project file size limit.")
-                                ProjectFileUploadBody(limit) { bytes.inputStream() }
-                            }
-                            api.uploadProjectFile(workspaceId, name, body).wire()
-                        }
                         "uploadAttachment" -> {
                             val sessionId = str("sessionId")
                             val name = str("name")
@@ -990,8 +951,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             }
                         }
                         "fileLink" -> parseFileLink(str("href"), args["base"] as? String ?: "")?.let { mapOf("path" to it.path, "line" to it.line) }
-                        "timeZoneInfo" -> mapOf("default" to java.time.ZoneId.systemDefault().id, "zones" to java.time.ZoneId.getAvailableZoneIds().sorted())
-                        "wallInput" -> wallInput((args["at"] as Number).toLong(), str("timezone"))
                         "unwatch" -> { runtime.unwatch(contextId, optionalString("watchTag")); null }
                         "refresh" -> runtime.snapshot(str("sessionId")).wire()
                         "draft" -> { runtime.local.saveDraft(str("sessionId"), str("text")); null }
@@ -1050,18 +1009,15 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             PushRegistration.disable(activity, runtime.api()); null
                         }
                         "overlay" -> {
-                            val id = args["sessionId"] as? String
-                            val schedule = args["scheduleId"] as? String
-                            require(id != null || schedule != null)
+                            val id = str("sessionId")
                             if (!android.provider.Settings.canDrawOverlays(activity)) {
-                                GatewayNotifications.show(activity, "pirc · 待你處理", "開啟 App 確認最新狀態", id, schedule?.let { "schedule:$it" }, if(schedule!=null) "missed" else "q")
+                                GatewayNotifications.show(activity, "pirc · 待你處理", "開啟 App 確認最新狀態", id, null, "q")
                                 "浮窗權限尚未開啟，已嘗試改用通知；也可直接在對話內回答"
                             } else {
                                 activity.startForegroundService(Intent(activity, GatewayOverlayService::class.java)
                                     .putExtra("sessionId", id).putExtra("interactionId", args["interactionId"] as? String)
                                     .putExtra("interactionEpoch", args["interactionEpoch"]?.toString())
-                                    .putExtra("questionPairingStamp", args["interactionPairingStamp"] as? String ?: args["questionPairingStamp"] as? String ?: args["pairingStamp"] as? String)
-                                    .putExtra("scheduleId",schedule))
+                                    .putExtra("questionPairingStamp", args["interactionPairingStamp"] as? String ?: args["questionPairingStamp"] as? String ?: args["pairingStamp"] as? String))
                                 activity.moveTaskToBack(true)
                                 null
                             }
@@ -1084,7 +1040,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                     result.success(value)
                 } catch (e: CancellationException) { result.error("CANCELLED", "操作已取消，請檢查狀態", null) }
                 catch (e: DocumentScriptException) { result.error(e.code, e.message, null) }
-                catch (e: ProjectFileReadException) { result.error("PROJECT_FILE_READ", e.message, null) }
                 catch (e: PushEnableFailure) { result.error(e.code, e.message, null) }
                 catch (e: ApiException) { result.error("HTTP_${e.status}", e.message, mapOf("status" to e.status, "code" to e.code)) }
                 catch (e: Exception) {
@@ -1174,10 +1129,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
         pendingFilePicker = null
         val result = pending.result
         if (resultCode != Activity.RESULT_OK) { result.success(null); return }
-        if (pending.mode == FilePickerMode.PROJECT_FILES) {
-            completeProjectFilePicker(pending, selectedUris(intent))
-            return
-        }
         if (pending.mode == FilePickerMode.LEGACY_UPLOAD) {
             val uri = intent?.data
             if (uri == null) { result.success(null); return }
@@ -1410,105 +1361,11 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
         return uris
     }
 
-    private fun projectFileLimit(value: Any?): Long {
-        if (value == null) return MAX_PROJECT_FILE_BYTES
-        val number = value as? Number ?: throw IllegalArgumentException("maxBytes must be an integer")
-        val limit = number.toLong()
-        require(number.toDouble() == limit.toDouble() && limit >= 0) { "Invalid project file size limit" }
-        if (limit == 0L) return MAX_PROJECT_FILE_BYTES
-        require(limit <= MAX_PROJECT_FILE_BYTES) { "Invalid project file size limit" }
-        return limit
-    }
-
-    private suspend fun projectFileApi(stamp: String, contextId: String?): PircApi = capturePairedApi(stamp, contextId).also {
-        projectFileSelections.bind(stamp)
-    }
-
     private suspend fun capturePairedApi(stamp: String, contextId: String?): PircApi = accountContextMutationLock.withLock {
         runtime.validateContext(contextId)
         val current = runtime.boot()["pairingStamp"] as? String
         requirePairingStamp(stamp, current)
         runtime.api()
-    }
-
-    private fun clearProjectFileSelections() {
-        projectFileSelections.clear()
-        val pending = pendingFilePicker?.takeIf { it.mode == FilePickerMode.PROJECT_FILES } ?: return
-        pendingFilePicker = null
-        pending.result.error("HTTP_409", "The project or account changed. Choose the files again.", mapOf("status" to 409, "code" to "account_changed"))
-    }
-
-    private fun startProjectFilePicker(args: Map<*, *>, result: MethodChannel.Result, contextId: String?) {
-        if (pendingFilePicker != null || documentSavePicker.isPending) {
-            result.error("BUSY", "A file picker is already open.", null)
-            return
-        }
-        val pending = try {
-            val workspaceId = args["workspaceId"] as? String ?: throw IllegalArgumentException("workspaceId is required")
-            val stamp = args["pairingStamp"] as? String ?: throw IllegalArgumentException("pairingStamp is required")
-            require(workspaceId.isNotBlank() && stamp.isNotBlank()) { "Project and pairing are required" }
-            projectFileLimit(args["maxBytes"])
-            PendingFilePicker(result, FilePickerMode.PROJECT_FILES, workspaceId = workspaceId,
-                pairingStamp = stamp, contextId = contextId, contextGeneration = contextGeneration.get())
-        } catch (e: Exception) {
-            result.error("INVALID", e.message, null)
-            return
-        }
-        pendingFilePicker = pending
-        runtime.scope.launch {
-            try {
-                projectFileApi(requireNotNull(pending.pairingStamp), contextId)
-                if (pendingFilePicker !== pending) return@launch
-                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
-                    .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, args["multiple"] != false)
-                activity.startActivityForResult(picker, FILE_PICKER_REQUEST_CODE)
-            } catch (e: Exception) {
-                if (pendingFilePicker !== pending) return@launch
-                pendingFilePicker = null
-                if (e is ApiException) result.error("HTTP_${e.status}", e.message, mapOf("status" to e.status, "code" to e.code))
-                else result.error("PICKER", e.message ?: "Unable to open the file picker.", null)
-            }
-        }
-    }
-
-    private fun completeProjectFilePicker(pending: PendingFilePicker, uris: List<Uri>) {
-        runtime.scope.launch {
-            try {
-                val stamp = requireNotNull(pending.pairingStamp)
-                val workspaceId = requireNotNull(pending.workspaceId)
-                val selected = withContext(Dispatchers.IO) {
-                    uris.map { uri ->
-                        try {
-                            var name = uri.lastPathSegment ?: "file"
-                            var size: Long? = null
-                            activity.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
-                                if (cursor.moveToFirst()) {
-                                    val nameColumn = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                                    if (nameColumn >= 0 && !cursor.isNull(nameColumn)) name = cursor.getString(nameColumn).takeUnless { it.isBlank() } ?: name
-                                    val sizeColumn = cursor.getColumnIndex(OpenableColumns.SIZE)
-                                    if (sizeColumn >= 0 && !cursor.isNull(sizeColumn)) size = cursor.getLong(sizeColumn).takeIf { it >= 0 }
-                                }
-                            }
-                            ProjectFileSelections.Selection(uri.toString(), name, size, workspaceId, stamp, pending.contextId) to null
-                        } catch (e: Exception) {
-                            null to mapOf("name" to (uri.lastPathSegment ?: "file"), "error" to (e.message ?: "Unable to read the selected file."))
-                        }
-                    }
-                }
-                projectFileApi(stamp, pending.contextId)
-                if (pending.contextGeneration != contextGeneration.get()) throw ApiException(409, "context_expired", "App context changed. Choose the files again.")
-                pending.result.success(selected.map { (selection, error) ->
-                    if (selection == null) error else mapOf(
-                        "name" to selection.name,
-                        "byteSize" to selection.byteSize,
-                        "fileToken" to projectFileSelections.add(selection),
-                    )
-                })
-            } catch (e: Exception) {
-                if (e is ApiException) pending.result.error("HTTP_${e.status}", e.message, mapOf("status" to e.status, "code" to e.code))
-                else pending.result.error("PICKER_READ", e.message ?: "Unable to read the selected files.", null)
-            }
-        }
     }
 
     private fun readAttachment(uri: Uri): AttachmentRead {

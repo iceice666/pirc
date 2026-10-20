@@ -28,17 +28,16 @@ List<Json> sidebarSessions(
   ),
 );
 
-/// The Work tab: every non-assistant workspace (including per-session and
-/// unavailable ones) grouped by host, plus nodes that can host Work workspaces.
+/// The Work tab: every workspace (including per-session and unavailable ones)
+/// grouped by host, plus nodes that can host workspaces.
 List<Json> workHosts(
   List<Json> workspaces,
   List<Json> nodes,
   ModeCatalog catalog,
 ) {
-  final directories = workspaces.where((w) => !catalog.assistant(w)).toList();
   final ids = <String>{
-    ...directories.map((w) => '${w['hostId']}'),
-    ...catalog.workNodes(nodes, workspaces).map((n) => '${n['id']}'),
+    ...workspaces.map((w) => '${w['hostId']}'),
+    ...catalog.workNodes(nodes).map((n) => '${n['id']}'),
   }.toList();
   bool online(String id) => nodes.any((n) => n['id'] == id);
   ids.sort(
@@ -53,40 +52,9 @@ List<Json> workHosts(
       {
         'id': id,
         'online': online(id),
-        'workspaces': directories.where((w) => w['hostId'] == id).toList(),
+        'workspaces': workspaces.where((w) => w['hostId'] == id).toList(),
       },
   ];
-}
-
-class RecentGroup {
-  RecentGroup(this.sessions, {this.scheduleId, this.title});
-  final List<Json> sessions;
-  final String? scheduleId, title;
-  bool get folded => scheduleId != null && sessions.length > 1;
-}
-
-List<RecentGroup> foldRecent(List<Json> sessions) {
-  final result = <RecentGroup>[], folds = <String, RecentGroup>{};
-  for (final s in sessions) {
-    final origin = obj(s['origin']);
-    if (origin['kind'] != 'schedule' || isPinned(s)) {
-      result.add(RecentGroup([s]));
-    } else {
-      final id = '${origin['scheduleId']}';
-      if (folds.containsKey(id)) {
-        folds[id]!.sessions.add(s);
-      } else {
-        final group = RecentGroup(
-          [s],
-          scheduleId: id,
-          title: '${origin['title']}',
-        );
-        folds[id] = group;
-        result.add(group);
-      }
-    }
-  }
-  return result;
 }
 
 String shortAgo(dynamic updatedAt, {DateTime? now}) {

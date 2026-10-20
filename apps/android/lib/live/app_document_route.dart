@@ -48,12 +48,6 @@ final class NativeAppSessionRouteTarget extends NativeAppDocumentRouteTarget {
   final String sessionId;
 }
 
-final class NativeAppSchedulesRouteTarget extends NativeAppDocumentRouteTarget {
-  const NativeAppSchedulesRouteTarget({this.scheduleId});
-
-  final String? scheduleId;
-}
-
 final class NativeAppMemoryRouteTarget extends NativeAppDocumentRouteTarget {
   const NativeAppMemoryRouteTarget();
 }
@@ -80,7 +74,7 @@ class NativeAppDocumentQueryParameter {
 /// A Pirc web-app route plus the original URL metadata needed by callers.
 ///
 /// The web app chooses the first nonempty `session` value before considering
-/// `open=schedules` or `open=memory`. `workspace` is read independently after
+/// `open=memory`. `workspace` is read independently after
 /// that target and therefore takes precedence for the visible page while a
 /// session target may still identify the session behind it.
 class NativeAppDocumentRoute {
@@ -103,7 +97,6 @@ class NativeAppDocumentRoute {
     'session',
     'workspace',
     'open',
-    'schedule',
   };
 
   /// Parses a canonical absolute URL only when it names [appRootUrl] or its
@@ -180,16 +173,11 @@ class NativeAppDocumentRoute {
 
     final session = firstValue('session');
     final open = firstValue('open');
-    final schedule = firstValue('schedule');
     final workspace = firstValue('workspace');
 
     final NativeAppDocumentRouteTarget? target;
     if (session != null && session.isNotEmpty) {
       target = NativeAppSessionRouteTarget(session);
-    } else if (open == 'schedules') {
-      target = NativeAppSchedulesRouteTarget(
-        scheduleId: schedule == null || schedule.isEmpty ? null : schedule,
-      );
     } else if (open == 'memory') {
       target = const NativeAppMemoryRouteTarget();
     } else {
@@ -264,8 +252,8 @@ class NativeAppDocumentRoute {
   /// A requested session is selected only if it is present in [sessions]; an
   /// unknown or absent session falls back to the first nonempty session ID.
   /// A workspace is selected only when [workspaces] contains its requested
-  /// ID. The web app can keep a session selected behind a workspace or
-  /// schedules page, so these results are deliberately independent.
+  /// ID. The web app can keep a session selected behind a workspace page, so
+  /// these results are deliberately independent.
   NativeAppDocumentSelection resolve({
     required List<Map<String, dynamic>> sessions,
     required List<Map<String, dynamic>> workspaces,
@@ -276,21 +264,11 @@ class NativeAppDocumentRoute {
         : null;
     final sessionId = _knownOrFirstId(sessions, requestedSession);
     final workspaceId = _knownId(workspaces, this.workspaceId);
-    final schedulesTarget = target is NativeAppSchedulesRouteTarget
-        ? target as NativeAppSchedulesRouteTarget
-        : null;
-    final showSchedules = schedulesTarget != null && workspaceId == null;
     return NativeAppDocumentSelection(
       sessionId: sessionId,
       workspaceId: workspaceId,
-      showSchedules: showSchedules,
-      scheduleId: schedulesTarget?.scheduleId,
       showMemory: target is NativeAppMemoryRouteTarget,
-      listOpen:
-          phone &&
-          !hasSessionParameter &&
-          !showSchedules &&
-          workspaceId == null,
+      listOpen: phone && !hasSessionParameter && workspaceId == null,
     );
   }
 }
@@ -300,20 +278,12 @@ class NativeAppDocumentSelection {
   const NativeAppDocumentSelection({
     required this.sessionId,
     required this.workspaceId,
-    required this.showSchedules,
-    required this.scheduleId,
     required this.showMemory,
     required this.listOpen,
   });
 
   final String? sessionId;
   final String? workspaceId;
-  final bool showSchedules;
-
-  /// Schedule focus from the URL. It remains available when a workspace page
-  /// hides the schedules page; consumers should apply it only if
-  /// [showSchedules] is true.
-  final String? scheduleId;
 
   /// Memory opens its settings overlay even when the workspace page is shown.
   final bool showMemory;

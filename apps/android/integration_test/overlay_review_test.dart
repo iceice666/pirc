@@ -31,21 +31,15 @@ void main() {
       'expired',
       'offline',
       'controlled',
-      'schedule',
       'submit',
     ]) {
       await g.request(
-        '/api/review/scenario?kind=${scenario == 'schedule' || scenario == 'submit' ? 'ready' : scenario}',
+        '/api/review/scenario?kind=${scenario == 'submit' ? 'ready' : scenario}',
       );
       await g.call('savePreferences', {
         'appearance': scenario == 'ready' ? 'dark' : 'light',
       });
-      await g.call(
-        'overlay',
-        scenario == 'schedule'
-            ? {'scheduleId': 'review'}
-            : {'sessionId': 's1', 'interactionId': 'review-q'},
-      );
+      await g.call('overlay', {'sessionId': 's1', 'interactionId': 'review-q'});
       // The external review captures and verifies Android views during this window.
       debugPrint('OVERLAY_REVIEW:$scenario');
       await Future<void>.delayed(const Duration(seconds: 12));
