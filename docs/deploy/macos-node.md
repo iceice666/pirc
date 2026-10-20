@@ -25,9 +25,9 @@ Choose one:
 ~/.local/pirc-node/
 ├── bin/pirc-node     (compiled build only)
 ├── agent.env         PIRC_* for the node, mode 0600
-├── state/            PIRC_STATE_DIR
 ├── agent.log         stdout
 └── agent.err         stderr
+~/.local/state/pirc-node/   PIRC_STATE_DIR (not inside ~/.local/pirc-node, see below)
 ~/.config/.pirc/      PIRC_CONFIG_DIR: config.json, AGENTS.md, skills/
 ```
 
@@ -38,11 +38,11 @@ PIRC_NODE_ID=m5pro
 PIRC_NODE_TOKEN=…                      # matches the gateway's PIRC_NODE_TOKENS["m5pro"]
 PIRC_DAEMON_URL=wss://pirc.example.ts.net
 PIRC_ALLOWED_USERS=alice@example.com
-PIRC_STATE_DIR=/Users/alice/.local/pirc-node/state
+PIRC_STATE_DIR=/Users/alice/.local/state/pirc-node
 PIRC_WORKSPACES=[]                     # add workspaces from the web; they must be under the home
 ```
 
-`agent.env` sits outside `PIRC_STATE_DIR`; the sandbox hides `~/.local/pirc-node` from agents by default. If you keep the env file elsewhere, add its directory to `sandbox.filesystem.denyRead` in `~/.config/.pirc/config.json`:
+The sandbox hides and write-protects `~/.local/pirc-node` by default, so `agent.env` is safe there. That same protection is why `PIRC_STATE_DIR` must **not** be inside it: agents could not write their own session files, and every command would fail with `Runner exited (1)` ([Node configuration](node.md#state)). An older install with `~/.local/pirc-node/state` must move it: stop the job, `mv ~/.local/pirc-node/state ~/.local/state/pirc-node`, rewrite the old prefix in the node database's `sessions.private_session_path`, update `PIRC_STATE_DIR` and start the job again. If you keep the env file elsewhere, add its directory to `sandbox.filesystem.denyRead` in `~/.config/.pirc/config.json`:
 
 ```json
 { "sandbox": { "filesystem": { "denyRead": ["~/path/to/env-dir"] } } }

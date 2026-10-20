@@ -27,6 +27,10 @@ Sandbox and browser settings have their own page: [Sandbox and browser](sandbox-
 
 The state directory is also the natural `HOME` of the node account (build caches land there). Under the sandbox, agents cannot read it except their own session directory and their workspace's memory ledger.
 
+**Do not put `PIRC_STATE_DIR` inside `~/.local/pirc-node`** (or any other built-in credential path, `SENSITIVE_HOME_PATHS` in `crates/pirc-policy/src/lib.rs`). Those paths are always write-denied in the sandbox, and a write deny overrides the session directory's write permission, so every agent fails on start: each command (even switching models) returns `runner_unavailable: Runner exited (1)`, and the agent's stderr reads `EROFS: read-only file system, open '…/sessions/pi_…/session.jsonl'`. The start-up sandbox probe does not catch this. Use a dedicated directory such as `~/.local/state/pirc-node` or `/var/lib/pirc-node`.
+
+On Linux, also keep the `pirc-node` executable out of any directory hidden from agents (`denyRead`, `~/.local/pirc-node`): the sandbox bridge runs that same executable inside the sandbox.
+
 ## Workspaces
 
 | Variable          | Default | Meaning                                                                                                                                                                                                 |

@@ -43,7 +43,7 @@ sqlite3 /var/lib/pirc/daemon/gateway.sqlite ".backup '/backup/gateway-$(date +%F
 
 # a node
 launchctl bootout gui/$(id -u)/dev.pirc.node-agent      # macOS
-tar -C ~/.local/pirc-node -czf pirc-node-$(date +%F).tgz state
+tar -C ~/.local/state -czf pirc-node-$(date +%F).tgz pirc-node   # PIRC_STATE_DIR
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.pirc.node-agent.plist
 ```
 
