@@ -39,7 +39,7 @@ faces(id, name, bio, tone, avatar, color, created_at)        -- 10 用；這裡�
 
 ## 工作項目
 
-- [ ] 新 DB 檔與 migration 骨架（`db.rs` 拆成 `db/{mod,rooms,engine}.rs`；worker 的 `sessions`/`commands`/`leases` 等表原樣搬進新檔）。
+- [x] 新 DB 檔與 migration 骨架（`db.rs` 拆成 `db/{mod,rooms,engine}.rs`；worker 的 `sessions`/`commands`/`leases` 等表原樣搬進新檔）。（2026-10-20）新檔以 `PRAGMA application_id`（"pirc"）辨認，沒有它的非空檔一律拒絕（舊 gateway 的 1000–1005 與 TS 的 1–19 都會撞到從 1 起算的版本號）；`session_deletions` 與它的 409 fence 不進新檔（新檔不可能有未完成的舊刪除）；`schema-1000.sql` 與 1001–1005 migration 刪除。
 - [ ] `rooms.rs`：store + 不變量（`#general` 唯一且不可封存；封存不刪訊息；搬家寫兩條 line）。
 - [ ] `routes/rooms.rs`；`events.rs` 加 room 事件流；`sockets.rs` 的訂閱。
 - [ ] typing 與 pending 累積（純資料；02 加排程）。
@@ -57,7 +57,9 @@ faces(id, name, bio, tone, avatar, color, created_at)        -- 10 用；這裡�
 
 - `docs/development/gateway-and-node.md` 的 API 段加 rooms；`docs/deploy/backup-and-recovery.md` 加新 DB 檔。
 
-## 實作前待決
+## 實作前待決（2026-10-20 使用者已定）
 
-- 房間附件存 gateway 還是只存 metadata 轉給 node？建議 gateway（它沒有 node 可依賴），但要設大小上限與保留期。
-- `room_pending` 入表還是記憶體：入表才能跨 gateway 重啟不丟訊息；建議入表。
+- 房間附件：**存 gateway**，沿用 session uploads 的 sniff / 大小上限，放在 gateway state 下；保留期先不自動清（之後再定），封存不刪檔。
+- `room_pending`：**入表**，gateway 重啟不丟尚未交給頭腦的訊息。
+- `PIRC_DATABASE_PATH`：**保留覆寫**，gateway 預設改成 `$PIRC_STATE_DIR/pirc.sqlite`；node 的 DB 預設檔名這份 plan 不動。
+- Plan 00 的手動驗證與 Kotlin 編譯仍掛著，不擋 01 開工。

@@ -295,7 +295,9 @@ impl GatewayConfig {
             .map_err(|_| ConfigError(format!("PIRC_PORT {port} is not a TCP port")))?;
         let timezone = timezone(env.get("PIRC_TIMEZONE"), env.get("TZ"))?;
         let vapid_subject = vapid_subject(env.get("PIRC_VAPID_SUBJECT"), &allowed_origins[0])?;
-        let dirs = StateDirs::create(env)?;
+        // A new file for the rewrite (plans/rewrite/01-rooms.md); the old
+        // gateway.sqlite is not read.
+        let dirs = StateDirs::create(env, "pirc.sqlite")?;
         Ok(Self {
             host: env.get("PIRC_HOST").unwrap_or("127.0.0.1").to_owned(),
             port,
@@ -455,17 +457,18 @@ struct StateDirs {
 }
 
 impl StateDirs {
-    fn create(env: &Env) -> Result<Self, ConfigError> {
+    /// `database_file`: the database's name in the state directory unless
+    /// `PIRC_DATABASE_PATH` names another file.
+    fn create(env: &Env, database_file: &str) -> Result<Self, ConfigError> {
         let state_dir = env.resolve(env.get("PIRC_STATE_DIR").unwrap_or(".state"));
         make_private_dir(&state_dir)?;
         let uploads_dir = env
             .get("PIRC_UPLOADS_DIR")
             .map_or_else(|| state_dir.join("uploads"), |dir| env.resolve(dir));
         make_private_dir(&uploads_dir)?;
-        let database_path = env.get("PIRC_DATABASE_PATH").map_or_else(
-            || state_dir.join("gateway.sqlite"),
-            |file| env.resolve(file),
-        );
+        let database_path = env
+            .get("PIRC_DATABASE_PATH")
+            .map_or_else(|| state_dir.join(database_file), |file| env.resolve(file));
         Ok(Self {
             state_dir,
             uploads_dir,
@@ -518,7 +521,7 @@ mod tests {
         let config = GatewayConfig::load(&base(path.to_str().unwrap(), &[])).unwrap();
         assert_eq!(config.port, 8787);
         assert_eq!(config.host, "127.0.0.1");
-        assert_eq!(config.database_path, path.join("gateway.sqlite"));
+        assert_eq!(config.database_path, path.join("pirc.sqlite"));
         assert!(path.join("uploads").is_dir());
         assert_eq!(config.vapid_subject, "https://a.example");
         assert_eq!(config.auth.identity_header, "x-pirc-user");

@@ -8,7 +8,6 @@ use super::schema::{array, hex12, int, optional, required, strict, string};
 use super::store::{Action, Change, NoteInput};
 use crate::agent_ops::OpContext;
 use crate::app::AppState;
-use crate::db::Store as _;
 use crate::error::{ApiError, ApiResult};
 use crate::memory_records;
 
@@ -182,9 +181,6 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             };
             let (entry, unchanged, usage) = {
                 let conn = app.db.lock();
-                // Checked under the lock that writes: a chat fenced for
-                // deletion since the operation arrived writes nothing.
-                conn.require_session_available(session_id)?;
                 let store = super::store(app, &conn);
                 let (entry, unchanged) = store.write_note(user, &args.input, &change)?;
                 (entry, unchanged, store.usage(user)?)

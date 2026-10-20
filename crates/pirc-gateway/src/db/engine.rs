@@ -1,304 +1,19 @@
-//! The gateway's SQLite database (`apps/gateway/src/database.ts`): a fresh
-//! schema (`schema.sql`) and the queries over sessions, workspaces,
-//! commands and leases. Feature modules (devices, memory,
-//! delegations, ...) keep their own queries next to their logic.
-//!
-//! Queries are methods of [`Store`], implemented for [`Connection`], so a
-//! transaction (which dereferences to a connection) can combine several.
-
-use std::path::Path;
-use std::sync::{Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+//! The engine's index (plans/rewrite/01-rooms.md): workspaces, sessions,
+//! commands and leases. The nodes own the sessions; the gateway keeps which
+//! node has each, who owns it, and the browser commands sent to it.
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use super::atomic;
 use crate::error::{ApiError, ApiResult};
 use crate::util::{new_id, now_ms, safe_json};
 
-/// `PRAGMA user_version` of the Rust schema. The TS gateway's migrations
-/// numbered 1 to 19; the Rust line starts far above them, at
-/// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
-/// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1005;
-/// The first Rust schema; later ones are reached through [`MIGRATIONS`].
-const FIRST_SCHEMA_VERSION: i64 = 1000;
-const SCHEMA: &str = include_str!("schema.sql");
-/// Each migration takes a database from the version before it to its own;
-/// `schema.sql` is always the newest whole.
-const MIGRATIONS: &[(i64, &str)] = &[
-    (
-        // Repository identity by normalized `origin` (docs/architecture/assistant-memory.md).
-        1001,
-        "ALTER TABLE workspaces ADD COLUMN repo TEXT;
-         ALTER TABLE memory_records ADD COLUMN repo TEXT;",
-    ),
-    (
-        // Projects linked to workspaces (docs/architecture/assistant-memory.md).
-        1002,
-        "CREATE TABLE project_links (
-           project_workspace_id TEXT NOT NULL REFERENCES workspaces(id), workspace_id TEXT NOT NULL,
-           repo TEXT, created_at INTEGER NOT NULL,
-           PRIMARY KEY (project_workspace_id, workspace_id)
-         );",
-    ),
-    (
-        // Agents' schedule deletions wait for the user (security audit L10);
-        1003,
-        "ALTER TABLE schedule_proposals ADD COLUMN operation TEXT NOT NULL DEFAULT 'save';
-         -- The delegation checkbox for auto mode, and retention (docs/architecture/assistant-memory.md).
-         ALTER TABLE delegations ADD COLUMN as_user_request INTEGER NOT NULL DEFAULT 0;
-         CREATE INDEX delegations_follows ON delegations(follows);",
-    ),
-    (
-        // Project deletion (docs/guides/chat-projects.md): its fence, and
-        // tombstones scoped to the deleted project.
-        1004,
-        "ALTER TABLE session_deletions ADD COLUMN workspace_id TEXT;
-         CREATE TABLE workspace_deletions (
-           workspace_id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL
-         );
-         CREATE TABLE memory_tombstones_scoped (
-           owner_user TEXT NOT NULL, scope_id TEXT NOT NULL DEFAULT 'global', content_hash TEXT NOT NULL,
-           forgotten_at INTEGER NOT NULL,
-           PRIMARY KEY (owner_user, scope_id, content_hash)
-         );
-         INSERT INTO memory_tombstones_scoped (owner_user, scope_id, content_hash, forgotten_at)
-           SELECT owner_user, 'global', content_hash, forgotten_at FROM memory_tombstones;
-         DROP TABLE memory_tombstones;
-         ALTER TABLE memory_tombstones_scoped RENAME TO memory_tombstones;",
-    ),
-    (
-        // Delegation without the approval card (docs/guides/chat-projects.md):
-        // how each started, and what its dispatch rested on.
-        1005,
-        "ALTER TABLE delegations ADD COLUMN dispatch TEXT;
-         ALTER TABLE delegations ADD COLUMN origins_json TEXT;
-         ALTER TABLE delegations ADD COLUMN quote TEXT;
-         ALTER TABLE delegations ADD COLUMN quote_entry_ids TEXT;
-         UPDATE delegations SET dispatch='approved' WHERE dispatched_at IS NOT NULL OR status IN ('running','waiting_input','completed','failed');",
-    ),
-];
+pub use pirc_protocol::mode::ModeId;
 
 /// Placeholder name of a new session until the agent's title replaces it.
 pub const PLACEHOLDER_SESSION_NAME: &str = "New session";
-
-/// The open database. Never hold the lock across an `await`.
-pub struct Db(Mutex<Connection>);
-
-impl Db {
-    /// Open (creating) the database at `path`, readable by the owner only.
-    pub fn open(path: &Path) -> Result<Self, String> {
-        let describe = |error: rusqlite::Error| format!("{}: {error}", path.display());
-        let connection = Connection::open(path).map_err(describe)?;
-        // Another process may hold the write lock (opening, migrating).
-        connection
-            .busy_timeout(SQLITE_BUSY_TIMEOUT)
-            .map_err(describe)?;
-        // Push keys, device-token hashes and memory live here. SQLite gives
-        // the WAL and shm files the main file's mode, so this covers them.
-        restrict_mode(path)?;
-        enable_wal_mode_with_retry(&connection, path, || {})?;
-        for suffix in ["-wal", "-shm"] {
-            let mut name = path.as_os_str().to_owned();
-            name.push(suffix);
-            restrict_mode(Path::new(&name))?;
-        }
-        connection
-            .pragma_update(None, "foreign_keys", "ON")
-            .map_err(describe)?;
-        // Deleted and overwritten content (forgotten memory, revoked tokens)
-        // is zeroed in the database file, not left in free space. Measured
-        // at under 1% more WAL bytes and no measurable time on a
-        // representative write mix; it does not clean old WAL frames,
-        // backups or copies (docs/deploy/backup-and-recovery.md).
-        connection
-            .pragma_update(None, "secure_delete", "ON")
-            .map_err(describe)?;
-        create_schema(&connection, path)?;
-        Ok(Self(Mutex::new(connection)))
-    }
-
-    /// An in-memory database (tests).
-    #[cfg(test)]
-    pub fn memory() -> Self {
-        let connection = Connection::open_in_memory().unwrap();
-        connection
-            .pragma_update(None, "foreign_keys", "ON")
-            .unwrap();
-        create_schema(&connection, Path::new(":memory:")).unwrap();
-        Self(Mutex::new(connection))
-    }
-
-    pub fn lock(&self) -> MutexGuard<'_, Connection> {
-        self.0
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-}
-
-/// A TS-era `gateway.sqlite` left in the state directory while
-/// `PIRC_DATABASE_PATH` points elsewhere is refused too.
-pub fn refuse_typescript_database(path: &Path) -> Result<(), String> {
-    if !path.exists() {
-        return Ok(());
-    }
-    let connection = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .map_err(|error| format!("{}: {error}", path.display()))?;
-    let version: i64 = connection
-        .pragma_query_value(None, "user_version", |row| row.get(0))
-        .map_err(|error| format!("{}: {error}", path.display()))?;
-    if (1..FIRST_SCHEMA_VERSION).contains(&version) {
-        return Err(typescript_era(path));
-    }
-    Ok(())
-}
-
-fn typescript_era(path: &Path) -> String {
-    format!(
-        "{} was written by the TypeScript gateway (pirc 0.3 or earlier). This gateway starts \
-         from a fresh state directory: devices are paired again, sessions start anew. See the \
-         upgrade notes (docs/deploy/upgrades.md), then move the old state directory away.",
-        path.display()
-    )
-}
-
-fn restrict_mode(path: &Path) -> Result<(), String> {
-    use std::os::unix::fs::PermissionsExt;
-    match std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(format!("{}: {error}", path.display()))
-        }
-        _ => Ok(()),
-    }
-}
-
-const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
-const WAL_BUSY_TIMEOUT: Duration = Duration::from_millis(50);
-const WAL_BUSY_RETRY_WINDOW: Duration = Duration::from_secs(5);
-const WAL_BUSY_RETRY_INTERVAL: Duration = Duration::from_millis(10);
-
-/// WAL mode changes can return SQLITE_BUSY without invoking SQLite's busy
-/// handler when multiple connections switch the same new database at once.
-/// Retry only that pragma; schema transactions and other errors keep their
-/// existing behavior.
-fn enable_wal_mode_with_retry(
-    connection: &Connection,
-    path: &Path,
-    mut on_busy: impl FnMut(),
-) -> Result<(), String> {
-    let describe = |error: rusqlite::Error| format!("{}: {error}", path.display());
-    connection
-        .busy_timeout(WAL_BUSY_TIMEOUT)
-        .map_err(&describe)?;
-
-    let deadline = Instant::now() + WAL_BUSY_RETRY_WINDOW;
-    let result = loop {
-        match connection.pragma_update(None, "journal_mode", "WAL") {
-            Ok(()) => break Ok(()),
-            Err(error) if is_busy_or_locked(&error) && Instant::now() < deadline => {
-                on_busy();
-                let remaining = deadline.saturating_duration_since(Instant::now());
-                std::thread::sleep(WAL_BUSY_RETRY_INTERVAL.min(remaining));
-            }
-            Err(error) => break Err(describe(error)),
-        }
-    };
-
-    let restore_timeout = connection
-        .busy_timeout(SQLITE_BUSY_TIMEOUT)
-        .map_err(&describe);
-    match (result, restore_timeout) {
-        (Err(error), _) => Err(error),
-        (Ok(()), Err(error)) => Err(error),
-        (Ok(()), Ok(())) => Ok(()),
-    }
-}
-
-fn is_busy_or_locked(error: &rusqlite::Error) -> bool {
-    matches!(
-        error,
-        rusqlite::Error::SqliteFailure(failure, _)
-            if matches!(
-                failure.code,
-                rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
-            )
-    )
-}
-
-/// Create the schema in a new database; refuse one from the TS gateway or a
-/// newer Rust gateway. The version is read and acted on under one
-/// `BEGIN IMMEDIATE` write lock, so two processes opening the same database
-/// cannot both create or migrate it; any failure rolls the whole chain back.
-fn create_schema(connection: &Connection, path: &Path) -> Result<(), String> {
-    let describe = |error: rusqlite::Error| format!("{}: {error}", path.display());
-    connection
-        .execute_batch("BEGIN IMMEDIATE")
-        .map_err(describe)?;
-    let result = apply_schema(connection, path)
-        .and_then(|()| connection.execute_batch("COMMIT").map_err(describe));
-    if result.is_err() {
-        let _ = connection.execute_batch("ROLLBACK");
-    }
-    result
-}
-
-/// [`create_schema`]'s body, inside its transaction.
-fn apply_schema(connection: &Connection, path: &Path) -> Result<(), String> {
-    let describe = |error: rusqlite::Error| format!("{}: {error}", path.display());
-    let version: i64 = connection
-        .pragma_query_value(None, "user_version", |row| row.get(0))
-        .map_err(describe)?;
-    if version == SCHEMA_VERSION {
-        return Ok(());
-    }
-    if (1..FIRST_SCHEMA_VERSION).contains(&version) {
-        return Err(typescript_era(path));
-    }
-    if (FIRST_SCHEMA_VERSION..SCHEMA_VERSION).contains(&version) {
-        return migrate(connection, version).map_err(describe);
-    }
-    if version > SCHEMA_VERSION {
-        return Err(format!(
-            "{} has schema version {version}, newer than this gateway's {SCHEMA_VERSION}",
-            path.display()
-        ));
-    }
-    let tables: i64 = connection
-        .query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get(0))
-        .map_err(describe)?;
-    if tables > 0 {
-        return Err(format!(
-            "{} is not empty but has no pirc schema version; refusing to use it",
-            path.display()
-        ));
-    }
-    connection
-        .execute_batch(&format!(
-            "{SCHEMA}\nPRAGMA user_version = {SCHEMA_VERSION};"
-        ))
-        .map_err(describe)
-}
-
-/// Bring an older Rust schema up to date, inside [`create_schema`]'s
-/// transaction.
-fn migrate(connection: &Connection, from: i64) -> rusqlite::Result<()> {
-    for (version, sql) in MIGRATIONS.iter().filter(|(version, _)| *version > from) {
-        connection.execute_batch(&format!("{sql}\nPRAGMA user_version = {version};"))?;
-    }
-    Ok(())
-}
-
-/// Storage failures are logged and become a plain 500.
-impl From<rusqlite::Error> for ApiError {
-    fn from(error: rusqlite::Error) -> Self {
-        crate::log::error(&format!("database: {error}"));
-        ApiError::internal()
-    }
-}
-
-pub use pirc_protocol::mode::ModeId;
 
 /// A workspace as clients see it (its stored `canonical_path` is a
 /// gateway-internal unique key and is not read).
@@ -453,29 +168,6 @@ pub struct Lease {
     pub expires_at: i64,
 }
 
-/// Run `body` atomically: a savepoint, so it nests inside a caller's
-/// transaction as bun:sqlite's `transaction()` did.
-pub fn atomic<T>(
-    connection: &Connection,
-    body: impl FnOnce(&Connection) -> ApiResult<T>,
-) -> ApiResult<T> {
-    /// Rolls the savepoint back unless released (an error or a panic).
-    struct Guard<'a>(&'a Connection, bool);
-    impl Drop for Guard<'_> {
-        fn drop(&mut self) {
-            if !self.1 {
-                let _ = self.0.execute_batch("ROLLBACK TO atomic; RELEASE atomic");
-            }
-        }
-    }
-    connection.execute_batch("SAVEPOINT atomic")?;
-    let mut guard = Guard(connection, false);
-    let value = body(connection)?;
-    connection.execute_batch("RELEASE atomic")?;
-    guard.1 = true;
-    Ok(value)
-}
-
 fn session_not_found() -> ApiError {
     ApiError::not_found("Session not found")
 }
@@ -523,9 +215,6 @@ pub trait Store {
     fn auto_rename_session(&self, session_id: &str, name: &str) -> ApiResult<bool>;
     fn claim_session(&self, session_id: &str, user: &str) -> ApiResult<Session>;
     fn session_origins(&self, owner_user: &str) -> ApiResult<Vec<(String, SessionOrigin)>>;
-    /// 409 for a chat whose deletion did not finish before chat deletion
-    /// was removed: it stays fenced.
-    fn require_session_available(&self, session_id: &str) -> ApiResult<()>;
     fn resolve_remote_session(&self, node_id: &str, remote_id: &str) -> ApiResult<Option<String>>;
     fn interrupt_remote_session(&self, session_id: &str) -> ApiResult<()>;
     fn remote_session_ids(&self, node_id: &str) -> ApiResult<Vec<String>>;
@@ -781,7 +470,6 @@ impl Store for Connection {
                 "Session belongs to another user",
             ));
         }
-        self.require_session_available(session_id)?;
         Ok(session)
     }
 
@@ -808,28 +496,10 @@ impl Store for Connection {
         Ok(origins)
     }
 
-    fn require_session_available(&self, session_id: &str) -> ApiResult<()> {
-        let fenced = self
-            .query_row(
-                "SELECT 1 FROM session_deletions WHERE session_id=?",
-                [session_id],
-                |_| Ok(()),
-            )
-            .optional()?;
-        if fenced.is_some() {
-            return Err(ApiError::new(
-                409,
-                "conflict",
-                "This chat was being deleted",
-            ));
-        }
-        Ok(())
-    }
-
     fn resolve_remote_session(&self, node_id: &str, remote_id: &str) -> ApiResult<Option<String>> {
         Ok(self
             .query_row(
-                "SELECT id FROM sessions WHERE node_id=? AND pi_session_id=? AND id NOT IN (SELECT session_id FROM session_deletions)",
+                "SELECT id FROM sessions WHERE node_id=? AND pi_session_id=?",
                 [node_id, remote_id],
                 |row| row.get(0),
             )
@@ -1045,6 +715,7 @@ impl Store for Connection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::Db;
 
     fn with_workspace(db: &Db) {
         db.lock()
@@ -1053,269 +724,6 @@ mod tests {
                 &[("w".into(), "W".into(), ModeId::new("chat").unwrap())],
             )
             .unwrap();
-    }
-
-    #[test]
-    fn wal_mode_retries_until_a_concurrent_write_transaction_finishes() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("gateway.sqlite");
-        let blocker = Connection::open(&path).unwrap();
-        let connection = Connection::open(&path).unwrap();
-        blocker.execute_batch("BEGIN IMMEDIATE").unwrap();
-
-        let (busy_tx, busy_rx) = std::sync::mpsc::channel();
-        let release = std::thread::spawn(move || {
-            busy_rx
-                .recv()
-                .expect("WAL switch attempted while the write lock is held");
-            blocker.execute_batch("ROLLBACK").unwrap();
-        });
-        let mut busy_seen = false;
-        let result = enable_wal_mode_with_retry(&connection, &path, || {
-            busy_seen = true;
-            let _ = busy_tx.send(());
-        });
-        // Unblock the holder if initialization failed before reaching its retry
-        // callback.
-        let _ = busy_tx.send(());
-        release.join().unwrap();
-        result.unwrap();
-        assert!(
-            busy_seen,
-            "the held SQLite write lock must trigger the bounded retry"
-        );
-
-        let mode: String = connection
-            .pragma_query_value(None, "journal_mode", |row| row.get(0))
-            .unwrap();
-        assert_eq!(mode, "wal");
-
-        let busy_timeout: i64 = connection
-            .pragma_query_value(None, "busy_timeout", |row| row.get(0))
-            .unwrap();
-        assert_eq!(busy_timeout, SQLITE_BUSY_TIMEOUT.as_millis() as i64);
-    }
-
-    #[test]
-    fn concurrent_opens_create_the_schema_once() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("gateway.sqlite");
-        let barrier = std::sync::Barrier::new(8);
-        std::thread::scope(|scope| {
-            let opens: Vec<_> = (0..8)
-                .map(|_| {
-                    scope.spawn(|| {
-                        barrier.wait();
-                        Db::open(&path).map(drop)
-                    })
-                })
-                .collect();
-            for open in opens {
-                open.join().unwrap().unwrap();
-            }
-        });
-        let db = Db::open(&path).unwrap();
-        let version: i64 = db
-            .lock()
-            .pragma_query_value(None, "user_version", |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
-        let fresh = Db::memory();
-        let tables = |db: &Db| -> Vec<String> {
-            let connection = db.lock();
-            let mut statement = connection
-                .prepare("SELECT name FROM sqlite_master ORDER BY name")
-                .unwrap();
-            statement
-                .query_map([], |row| row.get(0))
-                .unwrap()
-                .collect::<Result<_, _>>()
-                .unwrap()
-        };
-        assert_eq!(tables(&db), tables(&fresh));
-    }
-
-    #[test]
-    fn refuses_typescript_databases() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("gateway.sqlite");
-        let old = Connection::open(&path).unwrap();
-        old.execute_batch("CREATE TABLE workspaces (id TEXT); PRAGMA user_version = 19;")
-            .unwrap();
-        drop(old);
-        let error = Db::open(&path).err().unwrap();
-        assert!(error.contains("TypeScript gateway"), "{error}");
-        assert!(error.contains("upgrades.md"), "{error}");
-    }
-
-    /// Column names and types of every table, as `PRAGMA table_info` lists them.
-    fn columns(conn: &Connection) -> Vec<String> {
-        let tables: Vec<String> = conn
-            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-            .unwrap()
-            .query_map([], |row| row.get(0))
-            .unwrap()
-            .collect::<Result<_, _>>()
-            .unwrap();
-        let mut out = Vec::new();
-        for table in tables {
-            let mut statement = conn
-                .prepare(&format!(
-                    "SELECT name, type FROM pragma_table_info('{table}')"
-                ))
-                .unwrap();
-            let rows = statement
-                .query_map([], |row| {
-                    Ok(format!(
-                        "{table}.{}:{}",
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?
-                    ))
-                })
-                .unwrap();
-            out.extend(rows.map(Result::unwrap));
-        }
-        // And the indexes, which migrations add too.
-        let mut indexes = conn
-            .prepare("SELECT 'index.' || name FROM sqlite_master WHERE type='index' AND sql IS NOT NULL ORDER BY name")
-            .unwrap();
-        out.extend(
-            indexes
-                .query_map([], |row| row.get::<_, String>(0))
-                .unwrap()
-                .map(Result::unwrap),
-        );
-        out
-    }
-
-    #[test]
-    fn migrates_the_first_rust_schema() {
-        let first = include_str!("testdata/schema-1000.sql");
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("gateway.sqlite");
-        let old = Connection::open(&path).unwrap();
-        old.execute_batch(&format!(
-            "BEGIN; {first}\nPRAGMA user_version = {FIRST_SCHEMA_VERSION}; COMMIT;"
-        ))
-        .unwrap();
-        old.execute(
-            "INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at) VALUES ('n1:w','n1','W','node://n1/w','{}',0)",
-            [],
-        )
-        .unwrap();
-        old.execute(
-            "INSERT INTO memory_tombstones (owner_user,content_hash,forgotten_at) VALUES ('u','h',1)",
-            [],
-        )
-        .unwrap();
-        drop(old);
-
-        let db = Db::open(&path).unwrap();
-        let conn = db.lock();
-        let version: i64 = conn
-            .pragma_query_value(None, "user_version", |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
-        let workspace = conn.get_workspace("n1:w").unwrap();
-        assert_eq!(
-            (workspace.display_name.as_str(), workspace.repo),
-            ("W", None)
-        );
-        // Old tombstones are global.
-        let scope: String = conn
-            .query_row(
-                "SELECT scope_id FROM memory_tombstones WHERE owner_user='u' AND content_hash='h'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(scope, "global");
-        // The same tables and columns as a new database, besides what the
-        // rewrite retired: that stays, unread, in databases that had it.
-        let migrated: Vec<String> = columns(&conn)
-            .into_iter()
-            .filter(|column| !RETIRED.iter().any(|retired| column.starts_with(retired)))
-            .collect();
-        assert_eq!(migrated, columns(&Db::memory().lock()));
-        drop(conn);
-        drop(db);
-        // And it stays at the new version when opened again.
-        drop(Db::open(&path).unwrap());
-    }
-
-    /// What the rewrite retired (plans/rewrite/00-demolition.md) and old
-    /// databases keep, as [`columns`] names it.
-    const RETIRED: &[&str] = &[
-        "session_deletions.workspace_id:",
-        "workspace_deletions.",
-        "schedules.",
-        "schedule_runs.",
-        "schedule_proposals.",
-        "index.schedules_",
-        "index.schedule_",
-        "memory_proposals.",
-        "index.memory_proposals_",
-        "workspace_capabilities.",
-        "assistant_node.",
-    ];
-
-    #[test]
-    fn refuses_unversioned_databases() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("other.sqlite");
-        Connection::open(&path)
-            .unwrap()
-            .execute_batch("CREATE TABLE x (y TEXT);")
-            .unwrap();
-        assert!(Db::open(&path).err().unwrap().contains("no pirc schema"));
-    }
-
-    #[test]
-    fn deleted_content_is_zeroed() {
-        let dir = tempfile::tempdir().unwrap();
-        let sentinel = "forgotten-memory-sentinel-7f3a";
-        let written = |db: &Connection, path: &Path| {
-            db.execute_batch("CREATE TABLE scratch (x TEXT);").unwrap();
-            db.execute("INSERT INTO scratch VALUES (?)", [sentinel.repeat(20)])
-                .unwrap();
-            db.execute("DELETE FROM scratch", []).unwrap();
-            db.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))
-                .unwrap();
-            let bytes = std::fs::read(path).unwrap();
-            bytes
-                .windows(sentinel.len())
-                .any(|window| window == sentinel.as_bytes())
-        };
-        let path = dir.path().join("db.sqlite");
-        let db = Db::open(&path).unwrap();
-        let on: i64 = db
-            .lock()
-            .pragma_query_value(None, "secure_delete", |row| row.get(0))
-            .unwrap();
-        assert_eq!(on, 1);
-        assert!(!written(&db.lock(), &path));
-        // Without the pragma the text would stay in the file.
-        let plain_path = dir.path().join("plain.sqlite");
-        let plain = Connection::open(&plain_path).unwrap();
-        plain.pragma_update(None, "journal_mode", "WAL").unwrap();
-        plain.pragma_update(None, "secure_delete", "OFF").unwrap();
-        assert!(written(&plain, &plain_path));
-    }
-
-    #[test]
-    fn creates_and_reopens() {
-        use std::os::unix::fs::PermissionsExt;
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("gateway.sqlite");
-        drop(Db::open(&path).unwrap());
-        let db = Db::open(&path).unwrap();
-        let version: i64 = db
-            .lock()
-            .pragma_query_value(None, "user_version", |row| row.get(0))
-            .unwrap();
-        assert_eq!(version, SCHEMA_VERSION);
-        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
-        assert_eq!(mode & 0o777, 0o600);
     }
 
     #[test]
@@ -1352,17 +760,7 @@ mod tests {
             .unwrap();
         assert!(flagged.pinned_at.is_some() && flagged.settled_at.is_none());
         assert_eq!(conn.increment_epoch(&session.id).unwrap(), 1);
-        // A chat whose deletion did not finish stays fenced.
-        conn.execute(
-            "INSERT INTO session_deletions (session_id,owner_user,status,created_at) VALUES (?,'u','deleting',0)",
-            [&session.id],
-        )
-        .unwrap();
-        assert_eq!(
-            conn.claim_session(&session.id, "u").unwrap_err().code,
-            "conflict"
-        );
-        assert_eq!(conn.resolve_remote_session("n1", "r1").unwrap(), None);
+        assert_eq!(conn.claim_session(&session.id, "u").unwrap().id, session.id);
     }
 
     #[test]

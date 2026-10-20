@@ -98,9 +98,8 @@ fn main() -> ExitCode {
 }
 
 async fn run(config: GatewayConfig) -> Result<(), String> {
-    let default_database = config.state_dir.join("gateway.sqlite");
-    if default_database != config.database_path {
-        db::refuse_typescript_database(&default_database)?;
+    if let Some(note) = db::legacy_database_note(&config.state_dir, &config.database_path) {
+        log::info(&note);
     }
     let db = Arc::new(Db::open(&config.database_path)?);
     let recovery = db

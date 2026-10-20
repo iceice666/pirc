@@ -161,7 +161,7 @@ impl NodeConfig {
                 "Node transport requires wss:// off loopback (or explicit development-only insecure override)",
             );
         }
-        let dirs = StateDirs::create(env)?;
+        let dirs = StateDirs::create(env, "gateway.sqlite")?;
         let sessions_dir = env
             .get("PIRC_SESSIONS_DIR")
             .map_or_else(|| dirs.state_dir.join("sessions"), |dir| env.resolve(dir));

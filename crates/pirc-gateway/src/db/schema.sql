@@ -1,8 +1,9 @@
--- The gateway's SQLite schema (docs/development/historical-records.md): the TS
--- migrations of apps/gateway/src/database.ts consolidated into one fresh
--- schema. Tables the TS gateway created but never wrote (runs, interactions,
--- uploads, workspace_trust: those live on the nodes) are left out.
+-- The gateway's SQLite schema, `pirc.sqlite` (plans/rewrite/01-rooms.md).
+-- A new file, version 1: the old gateway.sqlite is neither read nor migrated
+-- (decision #14). The engine's index (workspaces .. leases) keeps the old
+-- shape; rooms and what belongs to them follow it.
 
+-- The engine: workspaces and sessions live on the nodes; this is their index.
 CREATE TABLE workspaces (
   id TEXT PRIMARY KEY, host_id TEXT NOT NULL, display_name TEXT NOT NULL,
   canonical_path TEXT NOT NULL UNIQUE, defaults_json TEXT NOT NULL, created_at INTEGER NOT NULL,
@@ -38,10 +39,6 @@ CREATE TABLE leases (
   owner_user TEXT
 );
 
-CREATE TABLE session_deletions (
-  session_id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL
-);
-
 CREATE TABLE device_tokens (
   id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, name TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
@@ -66,7 +63,7 @@ CREATE TABLE memory_log (
 );
 CREATE INDEX memory_log_entry ON memory_log(entry_id, revision);
 CREATE TABLE memory_tombstones (
-  -- 'global' (Forget, chat deletion) refuses the text from then on.
+  -- 'global' (Forget) refuses the text from then on.
   owner_user TEXT NOT NULL, scope_id TEXT NOT NULL DEFAULT 'global', content_hash TEXT NOT NULL,
   forgotten_at INTEGER NOT NULL,
   PRIMARY KEY (owner_user, scope_id, content_hash)
@@ -130,3 +127,73 @@ CREATE TABLE project_links (
   repo TEXT, created_at INTEGER NOT NULL,
   PRIMARY KEY (project_workspace_id, workspace_id)
 );
+
+-- Rooms (docs/architecture/direction.md §2.2): every room is one thread that
+-- is always there. Rooms are the household's, not one user's; reads are per
+-- user. Exactly one 'general' room exists (seeded with the schema) and it is
+-- never archived. Archiving hides a room from the list and deletes nothing.
+CREATE TABLE rooms (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('general', 'topic')),
+  created_at INTEGER NOT NULL, archived_at INTEGER, last_activity_at INTEGER NOT NULL,
+  -- The sources and workspaces the room is about (plan 09/10), opaque here.
+  source_scope_json TEXT,
+  -- A move (POST /api/rooms/:id/move): where the conversation went, and came from.
+  moved_to_room_id TEXT REFERENCES rooms(id), moved_from_room_id TEXT REFERENCES rooms(id),
+  -- The seq the room's next message gets.
+  next_seq INTEGER NOT NULL DEFAULT 1,
+  CHECK (kind != 'general' OR archived_at IS NULL)
+);
+CREATE UNIQUE INDEX rooms_one_general ON rooms(kind) WHERE kind = 'general';
+
+-- A room's messages, numbered from 1 within the room. speaker is 'user' or
+-- 'face:<id>'; user is who sent a 'user' message. kind 'line' is a small
+-- expandable note, 'progress' is updated in place, 'question' asks the user.
+CREATE TABLE room_messages (
+  id TEXT PRIMARY KEY, room_id TEXT NOT NULL REFERENCES rooms(id), seq INTEGER NOT NULL,
+  speaker TEXT NOT NULL, user TEXT,
+  kind TEXT NOT NULL CHECK (kind IN ('text', 'line', 'progress', 'question')),
+  body_json TEXT NOT NULL, thread_id TEXT REFERENCES threads(id),
+  created_at INTEGER NOT NULL, edited_at INTEGER, pinned_at INTEGER,
+  UNIQUE (room_id, seq)
+);
+CREATE INDEX room_messages_pinned ON room_messages(room_id, pinned_at) WHERE pinned_at IS NOT NULL;
+
+-- What each user has read of a room, and since when it waits for their reply.
+CREATE TABLE room_reads (
+  room_id TEXT NOT NULL REFERENCES rooms(id), user TEXT NOT NULL,
+  last_seq INTEGER NOT NULL DEFAULT 0, waiting_since INTEGER,
+  PRIMARY KEY (room_id, user)
+);
+
+-- The user's messages not yet handed to the brain as a turn (decision #16):
+-- the typing debounce accumulates here, plan 02 consumes it. message_ids_json
+-- is a JSON array in send order.
+CREATE TABLE room_pending (
+  room_id TEXT NOT NULL REFERENCES rooms(id), user TEXT NOT NULL,
+  message_ids_json TEXT NOT NULL, first_at INTEGER NOT NULL, last_at INTEGER NOT NULL,
+  -- 1: a message was sent with "send now" (Cmd+Enter) and skips the debounce.
+  immediate INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (room_id, user)
+);
+
+-- Threads under a message (plan 06); created here, unused until then.
+CREATE TABLE threads (
+  id TEXT PRIMARY KEY, room_id TEXT NOT NULL REFERENCES rooms(id),
+  anchor_message_id TEXT NOT NULL, created_at INTEGER NOT NULL, closed_at INTEGER
+);
+
+-- Faces the brain speaks through (plan 10); only the host, seeded with the schema.
+CREATE TABLE faces (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, bio TEXT NOT NULL DEFAULT '', tone TEXT NOT NULL DEFAULT '',
+  avatar TEXT, color TEXT, created_at INTEGER NOT NULL
+);
+
+-- Files sent into rooms, kept by the gateway (it has no node to keep them
+-- on): name and type as sniffed, the file under <state>/room-uploads/<id>.
+CREATE TABLE room_uploads (
+  id TEXT PRIMARY KEY, room_id TEXT NOT NULL REFERENCES rooms(id), user TEXT NOT NULL,
+  name TEXT NOT NULL, mime_type TEXT NOT NULL, size INTEGER NOT NULL,
+  message_id TEXT REFERENCES room_messages(id), created_at INTEGER NOT NULL
+);
+CREATE INDEX room_uploads_room ON room_uploads(room_id);
