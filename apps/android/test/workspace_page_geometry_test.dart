@@ -114,65 +114,64 @@ void main() {
     }
   }
 
-  testWidgets(
-    'header follows the workspace identity and phone subtitle rule',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(768, 900);
-      addTearDown(tester.view.reset);
-      final gateway = FakeGateway();
-      final controller = _controller(gateway);
+  testWidgets('header follows the workspace identity and phone subtitle rule', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(768, 900);
+    addTearDown(tester.view.reset);
+    final gateway = FakeGateway();
+    final controller = _controller(gateway);
 
-      Widget page(String id) => _host(
+    Widget page(String id) => _host(
+      SizedBox(
+        width: 536,
+        height: 900,
+        child: WorkspacePage(
+          controller: controller,
+          workspaceId: id,
+          onBack: () {},
+          onOpen: (_) {},
+        ),
+      ),
+      Brightness.light,
+    );
+
+    await tester.pumpWidget(page('${_project['id']}'));
+    await tester.pumpAndSettle();
+    expect(find.text('Trip'), findsOneWidget);
+    expect(find.text('Workspace · host'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Icon && widget.icon == LucideIcons.folder,
+      ),
+      findsOneWidget,
+    );
+
+    tester.view.physicalSize = const Size(390, 900);
+    await tester.pumpWidget(
+      _host(
         SizedBox(
-          width: 536,
+          width: 390,
           height: 900,
           child: WorkspacePage(
             controller: controller,
-            workspaceId: id,
+            workspaceId: '${_project['id']}',
             onBack: () {},
             onOpen: (_) {},
           ),
         ),
         Brightness.light,
-      );
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Workspace · host'), findsNothing);
+    expect(tester.takeException(), isNull);
 
-      await tester.pumpWidget(page('${_project['id']}'));
-      await tester.pumpAndSettle();
-      expect(find.text('Trip'), findsOneWidget);
-      expect(find.text('Workspace · host'), findsOneWidget);
-      expect(
-        find.byWidgetPredicate(
-          (widget) => widget is Icon && widget.icon == LucideIcons.folder,
-        ),
-        findsOneWidget,
-      );
-
-      tester.view.physicalSize = const Size(390, 900);
-      await tester.pumpWidget(
-        _host(
-          SizedBox(
-            width: 390,
-            height: 900,
-            child: WorkspacePage(
-              controller: controller,
-              workspaceId: '${_project['id']}',
-              onBack: () {},
-              onOpen: (_) {},
-            ),
-          ),
-          Brightness.light,
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Workspace · host'), findsNothing);
-      expect(tester.takeException(), isNull);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      controller.dispose();
-      await gateway.stream.close();
-    },
-  );
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    await gateway.stream.close();
+  });
 
   testWidgets('phone workspace tabs use content widths and a 4px gap', (
     tester,

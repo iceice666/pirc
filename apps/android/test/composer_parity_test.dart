@@ -210,7 +210,7 @@ void main() {
             body: Align(
               alignment: Alignment.topLeft,
               child: SizedBox(
-                width: 1000,
+                width: 1300,
                 height: 56,
                 child: ConversationHeader(
                   controller: c,

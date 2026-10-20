@@ -176,11 +176,7 @@ void main() {
     (t) async {
       final gateway = DocumentGateway()
         ..responses.add(
-          response(
-            '/?open=memory',
-            _pircShell(),
-            finalMethod: 'GET',
-          ),
+          response('/?open=memory', _pircShell(), finalMethod: 'GET'),
         );
       final windows = NativeDocumentWindows(gateway, onAppRoute: _captureRoute);
       addTearDown(windows.dispose);

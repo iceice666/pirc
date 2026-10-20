@@ -93,11 +93,7 @@ class NativeAppDocumentRoute {
     required this.workspaceId,
   });
 
-  static const _knownQueryNames = <String>{
-    'session',
-    'workspace',
-    'open',
-  };
+  static const _knownQueryNames = <String>{'session', 'workspace', 'open'};
 
   /// Parses a canonical absolute URL only when it names [appRootUrl] or its
   /// `index.html` alias, unless [allowSpaFallback] enables app-prefix paths.

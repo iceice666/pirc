@@ -128,42 +128,41 @@ void main() {
       await g.stream.close();
     },
   );
-  testWidgets(
-    'workspace history includes read sessions and searches done',
-    (t) async {
-      final g = FakeGateway(), c = fixture(g);
-      c.sessions = [
-        session('Read conversation'),
-        session('Completed', done: true),
-        session('Pinned run', pinned: true),
-      ];
-      String? selected;
-      await t.pumpWidget(
-        host(
-          WorkspacePage(
-            controller: c,
-            workspaceId: '${project['id']}',
-            onBack: () {},
-            onOpen: (id) => selected = id,
-          ),
+  testWidgets('workspace history includes read sessions and searches done', (
+    t,
+  ) async {
+    final g = FakeGateway(), c = fixture(g);
+    c.sessions = [
+      session('Read conversation'),
+      session('Completed', done: true),
+      session('Pinned run', pinned: true),
+    ];
+    String? selected;
+    await t.pumpWidget(
+      host(
+        WorkspacePage(
+          controller: c,
+          workspaceId: '${project['id']}',
+          onBack: () {},
+          onOpen: (id) => selected = id,
         ),
-      );
-      await t.pumpAndSettle();
-      expect(find.text('Read conversation'), findsOneWidget);
-      expect(find.text('Completed'), findsNothing);
-      expect(find.text('Pinned run'), findsOneWidget);
-      await t.tap(find.text('Read conversation'));
-      await t.pump(const Duration(milliseconds: 350));
-      expect(selected, 'Read conversation');
-      await t.enterText(find.byType(TextField), 'Completed');
-      await t.pumpAndSettle();
-      expect(find.text('Completed'), findsWidgets);
-      expect(find.text('Read conversation'), findsNothing);
-      await t.pumpWidget(const SizedBox());
-      c.dispose();
-      await g.stream.close();
-    },
-  );
+      ),
+    );
+    await t.pumpAndSettle();
+    expect(find.text('Read conversation'), findsOneWidget);
+    expect(find.text('Completed'), findsNothing);
+    expect(find.text('Pinned run'), findsOneWidget);
+    await t.tap(find.text('Read conversation'));
+    await t.pump(const Duration(milliseconds: 350));
+    expect(selected, 'Read conversation');
+    await t.enterText(find.byType(TextField), 'Completed');
+    await t.pumpAndSettle();
+    expect(find.text('Completed'), findsWidgets);
+    expect(find.text('Read conversation'), findsNothing);
+    await t.pumpWidget(const SizedBox());
+    c.dispose();
+    await g.stream.close();
+  });
   testWidgets(
     'trust sends only the reviewed hash, reloads conflict without retrying trust',
     (t) async {

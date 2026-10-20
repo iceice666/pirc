@@ -536,9 +536,7 @@ void main() {
     },
   );
   for (final width in [390.0, 651.0, 1024.0]) {
-    testWidgets('confirm footer and editor fit $width at 2x text', (
-      t,
-    ) async {
+    testWidgets('confirm footer and editor fit $width at 2x text', (t) async {
       t.view.devicePixelRatio = 1;
       t.view.physicalSize = Size(width, 1400);
       addTearDown(t.view.reset);

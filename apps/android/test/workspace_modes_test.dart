@@ -345,9 +345,7 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('WORKSPACE'), findsOneWidget);
     expect(find.text('Device'), findsOneWidget);
-    for (final absent in [
-      'PROJECT CONFIG',
-    ]) {
+    for (final absent in ['PROJECT CONFIG']) {
       expect(find.text(absent), findsNothing, reason: absent);
     }
     expect(

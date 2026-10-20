@@ -41,7 +41,7 @@ void main() {
 
       await _openDocumentRoute(
         tester,
-        'https://gateway.example/index.html?trace=old#week',
+        'https://gateway.example/index.html?workspace=work-local&trace=old#week',
       );
       _sidebar(tester).onOpen('session-second');
       await tester.pumpAndSettle();

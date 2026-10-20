@@ -12,13 +12,7 @@ import 'backend_settings.dart';
 import 'about_settings.dart';
 import 'paired_devices.dart';
 
-const settingsCategories = [
-  'General',
-  'Memory',
-  'Models',
-  'Devices',
-  'About',
-];
+const settingsCategories = ['General', 'Memory', 'Models', 'Devices', 'About'];
 Future<void> showNativeSettings(
   BuildContext context, {
   required LiveController controller,

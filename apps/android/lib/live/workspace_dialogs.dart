@@ -148,10 +148,7 @@ class _WorkspaceDialogState extends State<_WorkspaceDialog> {
           value: devices.any((n) => n['id'] == node) ? node : null,
           items: [
             for (final n in devices)
-              DropdownMenuItem(
-                value: '${n['id']}',
-                child: Text('${n['id']}'),
-              ),
+              DropdownMenuItem(value: '${n['id']}', child: Text('${n['id']}')),
           ],
           onChanged: busy
               ? null
@@ -183,9 +180,7 @@ class _WorkspaceDialogState extends State<_WorkspaceDialog> {
                   ),
                 ),
             ],
-            onChanged: busy
-                ? null
-                : (value) => setState(() => modeId = value),
+            onChanged: busy ? null : (value) => setState(() => modeId = value),
           ),
         ],
         formField(
@@ -209,7 +204,7 @@ class _WorkspaceDialogState extends State<_WorkspaceDialog> {
         Text(
           needsPath
               ? "Choose an existing folder inside that device’s home directory. No files or folders will be created."
-              : 'Each ${mode!.noun} gets its own folder on that device; no folder to pick.',
+              : 'Each ${mode.noun} gets its own folder on that device; no folder to pick.',
         ),
         if (devices.isEmpty)
           const WebNotice('No device can host workspaces.', error: true),
@@ -259,8 +254,7 @@ class _NewSessionState extends State<_NewSession> {
           WebButton(
             busy ? 'Creating…' : 'Create session',
             primary: true,
-            onPressed:
-                busy || selected == null || !_open(selected)
+            onPressed: busy || selected == null || !_open(selected)
                 ? null
                 : () async {
                     setState(() {

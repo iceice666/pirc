@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/app.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/interaction.dart';
-import 'package:pirc_mobile/live/settings.dart';
 import 'package:pirc_mobile/live/common.dart';
 import 'package:pirc_mobile/theme.dart';
 

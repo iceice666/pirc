@@ -502,10 +502,9 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                   project['hooks'],
                 ).values.any((v) => rows(v).isNotEmpty)) ...[
                   subheading('Hooks'),
-                  for (final (index, e)
-                      in obj(project['hooks']).entries
-                          .where((e) => rows(e.value).isNotEmpty)
-                          .indexed) ...[
+                  for (final (index, e) in obj(
+                    project['hooks'],
+                  ).entries.where((e) => rows(e.value).isNotEmpty).indexed) ...[
                     if (index > 0) const SizedBox(height: 10),
                     RichText(
                       textScaler: MediaQuery.textScalerOf(context),

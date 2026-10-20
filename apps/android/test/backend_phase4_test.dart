@@ -27,28 +27,31 @@ Future<LiveController> ready(FakeGateway g) async {
 }
 
 void main() {
-  testWidgets('full-access warning and selectors fit a narrow enlarged composer', (
-    t,
-  ) async {
-    t.view.devicePixelRatio = 1;
-    t.view.physicalSize = const Size(320, 900);
-    addTearDown(t.view.reset);
-    final g = FakeGateway(), c = await ready(g), text = TextEditingController();
-    c.state = {...c.state, 'approvalMode': 'full-access'};
-    await t.pumpWidget(
-      shell(ConversationComposer(controller: c, text: text), scale: 2),
-    );
-    await t.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('composer-full-access-notice')),
-      findsOneWidget,
-    );
-    expect(t.takeException(), isNull);
-    await t.pumpWidget(const SizedBox());
-    text.dispose();
-    c.dispose();
-    await g.stream.close();
-  });
+  testWidgets(
+    'full-access warning and selectors fit a narrow enlarged composer',
+    (t) async {
+      t.view.devicePixelRatio = 1;
+      t.view.physicalSize = const Size(320, 900);
+      addTearDown(t.view.reset);
+      final g = FakeGateway(),
+          c = await ready(g),
+          text = TextEditingController();
+      c.state = {...c.state, 'approvalMode': 'full-access'};
+      await t.pumpWidget(
+        shell(ConversationComposer(controller: c, text: text), scale: 2),
+      );
+      await t.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('composer-full-access-notice')),
+        findsOneWidget,
+      );
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+      text.dispose();
+      c.dispose();
+      await g.stream.close();
+    },
+  );
   for (final status in ['completed', 'failed']) {
     testWidgets('delegated task $status is visible', (t) async {
       final g = FakeGateway(), c = await ready(g);

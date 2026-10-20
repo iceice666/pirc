@@ -573,61 +573,60 @@ void main() {
     },
   );
 
-  testWidgets(
-    'child appearance preference updates the shared root theme',
-    (tester) async {
-      final gateway = ContextRouteGateway();
-      final root = LiveController(DartScopedGateway(gateway));
-      await tester.pumpWidget(MobileApp(theme: theme, controller: root));
-      await tester.pumpAndSettle();
-      root.editDraft('root draft survives appearance change');
-      await root.flushDraft();
+  testWidgets('child appearance preference updates the shared root theme', (
+    tester,
+  ) async {
+    final gateway = ContextRouteGateway();
+    final root = LiveController(DartScopedGateway(gateway));
+    await tester.pumpWidget(MobileApp(theme: theme, controller: root));
+    await tester.pumpAndSettle();
+    root.editDraft('root draft survives appearance change');
+    await root.flushDraft();
 
-      final windows = scope(tester).windows;
-      final source = await _openRootSource(tester, windows);
-      await _submit(tester, 'Open blank second');
-      final childWindow = windows.active!;
-      final childShell = _childShell(tester, childWindow);
-      final child = childShell.controller;
-      final childGateway = child.gateway as DartScopedGateway;
-      final contextId = childGateway.contextId;
-      expect(child.sessionId, 'session-second');
-      expect(root.sessionId, 'session-latest');
+    final windows = scope(tester).windows;
+    final source = await _openRootSource(tester, windows);
+    await _submit(tester, 'Open blank second');
+    final childWindow = windows.active!;
+    final childShell = _childShell(tester, childWindow);
+    final child = childShell.controller;
+    final childGateway = child.gateway as DartScopedGateway;
+    final contextId = childGateway.contextId;
+    expect(child.sessionId, 'session-second');
+    expect(root.sessionId, 'session-latest');
 
-      await child.savePreferences({'appearance': 'dark'});
-      await tester.pumpAndSettle();
-      expect(root.preferences['appearance'], 'dark');
-      expect(child.preferences['appearance'], 'dark');
-      expect(
-        (Theme.of(tester.element(find.byWidget(childShell))).brightness),
-        Brightness.dark,
-      );
-      final preferenceCall = gateway.calls.lastWhere(
-        (entry) => entry.$1 == 'savePreferences',
-      );
-      expect(preferenceCall.$2, {'appearance': 'dark'});
-      expect(windows.active, same(childWindow));
-      expect(root.sessionId, 'session-latest');
-      expect(root.draft, 'root draft survives appearance change');
+    await child.savePreferences({'appearance': 'dark'});
+    await tester.pumpAndSettle();
+    expect(root.preferences['appearance'], 'dark');
+    expect(child.preferences['appearance'], 'dark');
+    expect(
+      (Theme.of(tester.element(find.byWidget(childShell))).brightness),
+      Brightness.dark,
+    );
+    final preferenceCall = gateway.calls.lastWhere(
+      (entry) => entry.$1 == 'savePreferences',
+    );
+    expect(preferenceCall.$2, {'appearance': 'dark'});
+    expect(windows.active, same(childWindow));
+    expect(root.sessionId, 'session-latest');
+    expect(root.draft, 'root draft survives appearance change');
 
-      await _back(tester); // Close the child App window.
-      expect(gateway.closedContexts, contains(contextId));
-      expect(windows.active, same(source));
-      await _back(tester); // Return to the root App shell.
-      await tester.pumpAndSettle();
-      final rootShell = _liveShells(
-        tester,
-      ).firstWhere((shell) => identical(shell.controller, root));
-      expect(
-        Theme.of(tester.element(find.byWidget(rootShell))).brightness,
-        Brightness.dark,
-      );
-      expect(root.sessionId, 'session-latest');
-      expect(root.draft, 'root draft survives appearance change');
-      expect(tester.takeException(), isNull);
-      await finish(tester, gateway, root);
-    },
-  );
+    await _back(tester); // Close the child App window.
+    expect(gateway.closedContexts, contains(contextId));
+    expect(windows.active, same(source));
+    await _back(tester); // Return to the root App shell.
+    await tester.pumpAndSettle();
+    final rootShell = _liveShells(
+      tester,
+    ).firstWhere((shell) => identical(shell.controller, root));
+    expect(
+      Theme.of(tester.element(find.byWidget(rootShell))).brightness,
+      Brightness.dark,
+    );
+    expect(root.sessionId, 'session-latest');
+    expect(root.draft, 'root draft survives appearance change');
+    expect(tester.takeException(), isNull);
+    await finish(tester, gateway, root);
+  });
 
   test(
     'same-session controllers keep local drafts but share persisted drafts',

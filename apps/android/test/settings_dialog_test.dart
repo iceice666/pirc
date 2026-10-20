@@ -197,44 +197,39 @@ void main() {
     },
   );
 
-  testWidgets(
-    'categories keep mounted panels',
-    (t) async {
-      final g = FakeGateway(), c = LiveController(g);
-      configureSettings(g, c);
-      await t.pumpWidget(settingsHost(c));
-      await t.tap(find.text('Open settings'));
-      await t.pumpAndSettle();
-      final memory = t.element(
-        find.byType(MemorySettings, skipOffstage: false),
-      );
-      await choose(t, 'Models');
-      expect(
-        find.text(
-          'Backend request failed (403). Check your settings and try again.',
-        ),
-        findsOneWidget,
-      );
-      await choose(t, 'Memory');
-      expect(
-        identical(
-          memory,
-          t.element(find.byType(MemorySettings, skipOffstage: false)),
-        ),
-        isTrue,
-      );
-      expect(
-        g.calls.where((call) => call.$2['path'] == '/api/providers').length,
-        1,
-      );
-      await t.tap(find.byTooltip('Close'));
-      await t.pumpAndSettle();
-      expect(find.byType(NativeSettingsDialog), findsNothing);
-      await t.pumpWidget(const SizedBox());
-      c.dispose();
-      await g.stream.close();
-    },
-  );
+  testWidgets('categories keep mounted panels', (t) async {
+    final g = FakeGateway(), c = LiveController(g);
+    configureSettings(g, c);
+    await t.pumpWidget(settingsHost(c));
+    await t.tap(find.text('Open settings'));
+    await t.pumpAndSettle();
+    final memory = t.element(find.byType(MemorySettings, skipOffstage: false));
+    await choose(t, 'Models');
+    expect(
+      find.text(
+        'Backend request failed (403). Check your settings and try again.',
+      ),
+      findsOneWidget,
+    );
+    await choose(t, 'Memory');
+    expect(
+      identical(
+        memory,
+        t.element(find.byType(MemorySettings, skipOffstage: false)),
+      ),
+      isTrue,
+    );
+    expect(
+      g.calls.where((call) => call.$2['path'] == '/api/providers').length,
+      1,
+    );
+    await t.tap(find.byTooltip('Close'));
+    await t.pumpAndSettle();
+    expect(find.byType(NativeSettingsDialog), findsNothing);
+    await t.pumpWidget(const SizedBox());
+    c.dispose();
+    await g.stream.close();
+  });
   testWidgets(
     'roving keyboard navigation activates categories, Escape closes dialog',
     (t) async {

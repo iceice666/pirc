@@ -249,72 +249,78 @@ void main() {
       expect(_parse('/apps/pirc//?session=s1'), isNull);
     });
 
-    test('deep SPA fallback requires opt-in and excludes API/foreign paths', () {
-      const deepUrl =
-          'https://pirc.example/apps/pirc/pages/weekly?open=memory#week';
-      expect(NativeAppDocumentRoute.parse(deepUrl, appRootUrl: _root), isNull);
+    test(
+      'deep SPA fallback requires opt-in and excludes API/foreign paths',
+      () {
+        const deepUrl =
+            'https://pirc.example/apps/pirc/pages/weekly?open=memory#week';
+        expect(
+          NativeAppDocumentRoute.parse(deepUrl, appRootUrl: _root),
+          isNull,
+        );
 
-      final deep = NativeAppDocumentRoute.parse(
-        deepUrl,
-        appRootUrl: _root,
-        allowSpaFallback: true,
-      )!;
-      expect(deep.isSpaFallbackPath, isTrue);
-      expect(deep.isIndexAlias, isFalse);
-      expect(deep.canonicalUrl, deepUrl);
-      expect(deep.rawQuery, 'open=memory');
-      expect(deep.rawFragment, 'week');
-      expect(deep.target, isA<NativeAppMemoryRouteTarget>());
+        final deep = NativeAppDocumentRoute.parse(
+          deepUrl,
+          appRootUrl: _root,
+          allowSpaFallback: true,
+        )!;
+        expect(deep.isSpaFallbackPath, isTrue);
+        expect(deep.isIndexAlias, isFalse);
+        expect(deep.canonicalUrl, deepUrl);
+        expect(deep.rawQuery, 'open=memory');
+        expect(deep.rawFragment, 'week');
+        expect(deep.target, isA<NativeAppMemoryRouteTarget>());
 
-      expect(
-        NativeAppDocumentRoute.parse(
-          'https://pirc.example/apps/pirc/api',
-          appRootUrl: _root,
-          allowSpaFallback: true,
-        ),
-        isNull,
-      );
-      expect(
-        NativeAppDocumentRoute.parse(
-          'https://pirc.example/apps/pirc/api/sessions',
-          appRootUrl: _root,
-          allowSpaFallback: true,
-        ),
-        isNull,
-      );
-      expect(
-        NativeAppDocumentRoute.parse(
-          'https://pirc.example/apps/pirc/%61pi/sessions',
-          appRootUrl: _root,
-          allowSpaFallback: true,
-        ),
-        isNull,
-      );
-      expect(
-        NativeAppDocumentRoute.parse(
-          'https://pirc.example/apps/pirc/apiary/page',
-          appRootUrl: _root,
-          allowSpaFallback: true,
-        )!.isSpaFallbackPath,
-        isTrue,
-      );
-      expect(
-        NativeAppDocumentRoute.parse(
-          'https://other.example/apps/pirc/pages',
-          appRootUrl: _root,
-          allowSpaFallback: true,
-        ),
-        isNull,
-      );
-      expect(
-        NativeAppDocumentRoute.parse(
-          'https://pirc.example/apps/pircevil/pages',
-          appRootUrl: _root,
-          allowSpaFallback: true,
-        ),
-        isNull,
-      );
-    });
+        expect(
+          NativeAppDocumentRoute.parse(
+            'https://pirc.example/apps/pirc/api',
+            appRootUrl: _root,
+            allowSpaFallback: true,
+          ),
+          isNull,
+        );
+        expect(
+          NativeAppDocumentRoute.parse(
+            'https://pirc.example/apps/pirc/api/sessions',
+            appRootUrl: _root,
+            allowSpaFallback: true,
+          ),
+          isNull,
+        );
+        expect(
+          NativeAppDocumentRoute.parse(
+            'https://pirc.example/apps/pirc/%61pi/sessions',
+            appRootUrl: _root,
+            allowSpaFallback: true,
+          ),
+          isNull,
+        );
+        expect(
+          NativeAppDocumentRoute.parse(
+            'https://pirc.example/apps/pirc/apiary/page',
+            appRootUrl: _root,
+            allowSpaFallback: true,
+          )!.isSpaFallbackPath,
+          isTrue,
+        );
+        expect(
+          NativeAppDocumentRoute.parse(
+            'https://other.example/apps/pirc/pages',
+            appRootUrl: _root,
+            allowSpaFallback: true,
+          ),
+          isNull,
+        );
+        expect(
+          NativeAppDocumentRoute.parse(
+            'https://pirc.example/apps/pircevil/pages',
+            appRootUrl: _root,
+            allowSpaFallback: true,
+          ),
+          isNull,
+        );
+      },
+    );
 
     test('rejects foreign origin, scheme, port, and invalid root URL', () {
       expect(

@@ -36,11 +36,7 @@ class ManagementPage extends StatelessWidget {
               icon: const Icon(LucideIcons.chevronLeft),
             ),
       title: Text(
-        {
-              'settings': '設定',
-              'memory': 'Memory',
-              'activity': '待處理與動態',
-            }[kind] ??
+        {'settings': '設定', 'memory': 'Memory', 'activity': '待處理與動態'}[kind] ??
             kind,
       ),
     ),
