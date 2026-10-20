@@ -113,8 +113,7 @@ starting the daemon.
 
 | Variable                                          | Default              | Meaning                                                                                                                                                  |
 | ------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PIRC_MEMORY_USER_CHARS`                          | `2000`               | Character budget of the assistant's USER entries per user.                                                                                               |
-| `PIRC_MEMORY_NOTE_CHARS`                          | `8000`               | Character budget of the assistant's MEMORY notes per user.                                                                                               |
+| `PIRC_MEMORY_USER_CHARS`                          | `2000`               | Character budget of the brain's preferences per person (always in its prompt). Facts have no budget.                                                     |
 | `EXA_API_KEY`                                     | unset                | Enables `web_search` for the agents and the brain (runs on the gateway). Without it the agents' tool reports it is off and the brain has none.           |
 | `PIRC_VAPID_PUBLIC_KEY`, `PIRC_VAPID_PRIVATE_KEY` | generated            | Web Push signing pair. Set both or neither; without them a pair is created once in `$STATE/vapid.json`. Changing it invalidates every push subscription. |
 | `PIRC_VAPID_SUBJECT`                              | first allowed origin | `mailto:` or `https:` contact push services see.                                                                                                         |

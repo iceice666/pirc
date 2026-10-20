@@ -37,7 +37,41 @@ A fixed, synthetic corpus and query set, so each phase is measured rather than j
 - A `#[test]` that loads the corpus into a temp gateway database and reports recall@8 and MRR per query class (`en`, `zh`, `mixed`, `identifier`, `paraphrase`). It asserts a floor that each phase raises; it is not an exact snapshot.
 - Record the `LIKE` baseline in this file before Phase 1 lands.
 
+**Done 2026-10-20** (with plans/rewrite/03-memory.md, which adds the `recall` class: a user's whole message, as the brain's automatic recall sends it, against household facts). `crates/pirc-gateway/src/memory_records/eval/`: 121 notes, 47 queries; `cargo test -p pirc-gateway search_evaluation -- --nocapture` prints the table. Some expected hits are cross-language (an English query for a Chinese note) on purpose: no lexical search finds them, they measure Phase 2.
+
+`LIKE` baseline:
+
+| class      | queries | recall@8 | MRR  |
+| ---------- | ------- | -------- | ---- |
+| en         | 10      | 0.77     | 0.93 |
+| zh         | 9       | 0.89     | 0.89 |
+| mixed      | 6       | 1.00     | 0.92 |
+| identifier | 10      | 1.00     | 1.00 |
+| paraphrase | 5       | 0.80     | 0.75 |
+| recall     | 7       | 0.36     | 0.43 |
+
+`資料庫遷移問題` finds nothing (weakness 1); whole-sentence queries fill the top 8 with notes sharing `I`, `on`, `do`.
+
 ## Phase 1: FTS5 + BM25 with CJK bigrams
+
+**Done 2026-10-20** with plans/rewrite/03-memory.md, in the new `pirc.sqlite` (schema 3, `db/migrations/3-memory.sql`, not "migration 1005"; the design below is otherwise what landed). Differences found on the evaluation set:
+
+- The tokenizer is `porter unicode61 remove_diacritics 0`: without stemming, `erase` missed `erased` and `switch` missed `switched`.
+- A spaceless run in a query is its pairs as separate phrases joined with `OR`, not one phrase: `資料庫遷移問題` as one phrase only finds that exact string, as `LIKE` did.
+- Ranking: how many of the query's phrases a hit holds first, then BM25 scaled to each table's best match (raw BM25 of notes and delegations does not compare, so a one-word delegation outranked a two-word note), a superseded note counting half.
+- The `LIKE` fallback stays, for words of three characters or more (or non-ASCII): short words (`I`, `on`) as substrings matched every note.
+- Validation: `cargo test -p pirc-gateway` (segmentation, index rebuild on a version change, a forgotten fact's token gone from the file after a checkpoint, the migration from schema 1), conformance `memory`, `brain_memory`.
+
+| class      | recall@8 | MRR  | (`LIKE`)    |
+| ---------- | -------- | ---- | ----------- |
+| en         | 0.80     | 0.93 | 0.77 / 0.93 |
+| zh         | 1.00     | 1.00 | 0.89 / 0.89 |
+| mixed      | 1.00     | 1.00 | 1.00 / 0.92 |
+| identifier | 1.00     | 1.00 | 1.00 / 1.00 |
+| paraphrase | 0.80     | 1.00 | 0.80 / 0.75 |
+| recall     | 0.64     | 0.71 | 0.36 / 0.43 |
+
+The remaining misses are cross-language (an English query for a Chinese note) or synonyms (`午餐` for `訂餐`): Phase 2's.
 
 The bundled `libsqlite3-sys` 0.35 already compiles with `SQLITE_ENABLE_FTS5`, so no new dependencies are needed.
 

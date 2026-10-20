@@ -48,6 +48,18 @@ A node-local proxy guarding every browser connection was considered but not impl
 - **Relayed approvals:** a delegated session's confirm dialogs are shown in the chat that started it and may be answered there, from Needs you or from a notification by the owning user **without the delegated session's control lease** (the gateway checks the user, the chat and that the dialog is still relayed, then calls the node's gateway-only `relayed-answer` route, which accepts only a confirm's yes/no). Agent text never answers; the node still decides. Stop takes the delegated session's lease only when no client holds it.
 - Not built: "allow again in this session" and soft/hard danger categories. If built later, remembered allows are exact text in the same working directory only, may include `unsandboxed_bash`, and never cover deny-list matches (decided 2026-10-19).
 
+## Memory writes without approval
+
+Decision (direction §2.4, [plans/rewrite/03-memory.md](../../plans/rewrite/03-memory.md)): the brain writes facts without asking. Safety rests on origin tagging and visibility, not review: the gateway computes each fact's origin (`user`, `tool:<name>`, `om:promoted`) from the room's conversation, the room shows a line for every fact and preference written, and **Don't keep** forgets it. Preferences, which are in every prompt, and forgetting need a quote of the person's own words, checked by code against their last three messages. Node sessions never reach the household's memory.
+
+Residual risk, accepted:
+
+- **Poisoned facts.** A page, email or tool result can lead the brain to remember something false or hostile. It carries a `tool:*` (or `om:promoted`) origin, which the prompt shows and which never becomes `user`; the brain is told only `user` is the person's own word. A fact grants no authorization. The person sees the line and can undo it; a fact written from an observation (promotion) gets no line.
+- **Recall injects text.** Automatic recall puts up to six facts, including `tool:*` ones, into the prompt of a turn that did not ask for them. They are labelled with their origin and framed as possibly stale or beside the point.
+- **Origin is coarse.** It names the latest tool result in the turn, not the data flow: a fact the brain wrote from the person's words after an unrelated search is labelled `tool:memory_search` (conservative), and one written in a later turn from something read earlier is `user` if only people spoke since.
+- **Quote matching.** A short quote must be all the person wrote, but a longer one may be a fragment of a longer message, read out of context ("not keep it short" contains "keep it short").
+- **Owners.** In a room where several people speak, a fact without a quote belongs to the turn's first speaker.
+
 ## Other accepted limits
 
 - **Filesystem planning:** Linux binds resolve paths at startup. Retargeted symlinks between planning and mounting, or pre-existing hard links in otherwise writable locations, can defeat path-based assumptions. The session's own agent cannot create a cross-mount hard link to an already protected file, but another actor may prepare one. Missing protected paths use placeholders visible on the host; nested repository scanning has a depth limit of three.
@@ -56,7 +68,7 @@ A node-local proxy guarding every browser connection was considered but not impl
 - **macOS:** `allowLocalBinding` permits access to loopback ports, not just an individual development server. Other sessions' proxies still require authentication. Native QuickJS guests have fd/resource restrictions on macOS, but not Linux's seccomp allowlist.
 - **Private state under broad writable roots:** allowing a broad root such as home weakens protection of files created later beneath private directories; in particular, a workspace-memory ledger created after planning may become writable. Avoid unnecessarily broad `allowedPaths`.
 - **Development stand-in:** `PIRC_SANDBOX_SRT` is not the production native backend and retains different confinement gaps. Do not use it as evidence for native security guarantees or as a production replacement.
-- **Memory and authorization:** provenance labels and secret redaction are best effort; forgetting does not erase retained transcripts and cannot detect paraphrases. Repository identity may follow git-directory references to another readable repository; it joins only same-user records and grants no authorization. See [assistant memory](assistant-memory.md).
+- **Memory and authorization:** provenance labels and secret redaction are best effort; forgetting does not erase retained transcripts (node sessions, the brain's room conversations) and cannot detect paraphrases. Repository identity may follow git-directory references to another readable repository; it joins only same-user records and grants no authorization. See [assistant memory](assistant-memory.md).
 
 ## Evidence and historical decisions
 

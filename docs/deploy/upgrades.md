@@ -25,6 +25,18 @@ moved from the chat node to the gateway's `PIRC_CONFIG_DIR`; copy yours there
 link them into the gateway's config directory). Messages sent before the
 upgrade that no turn took yet are answered after it starts.
 
+The brain remembers (plans/rewrite/03-memory.md). On first start
+`pirc.sqlite` migrates to schema 3 in one transaction: USER entries become
+preferences, the old assistant's MEMORY notes become your facts (origin
+`user` when they came from your words, else `tool:assistant`), only
+Forget's tombstones are kept, and the search index is built (also rebuilt
+whenever a gateway changes how it indexes). An older gateway refuses schema 3.
+`PIRC_MEMORY_NOTE_CHARS` is gone; `PIRC_MEMORY_USER_CHARS` is now the
+preference budget. The memory routes moved: `/api/memory/entries/:id/*` is
+`/api/memory/preferences/:id/*`, and facts are under `/api/memory/records`.
+The Android app's memory settings still read the old shape until
+plans/rewrite/12-android.md.
+
 ## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13

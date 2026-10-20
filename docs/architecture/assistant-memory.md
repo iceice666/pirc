@@ -1,36 +1,49 @@
-# Assistant memory, repositories and delegation
+# Memory, repositories and delegation
 
-This reference describes the current Rust contracts. For session compaction and local repository handoffs, see [observational memory](observational-memory.md); for prompt composition, see [prompt context](prompt-context.md). Configuration and user workflows are in [Gateway and node](../development/gateway-and-node.md).
+This reference describes the current Rust contracts. For session compaction and local repository handoffs, see [observational memory](observational-memory.md); for prompt composition, see [prompt context](prompt-context.md). Configuration and user workflows are in [Gateway and node](../development/gateway-and-node.md). The design is [direction §2.4](direction.md) and [plans/rewrite/03-memory.md](../../plans/rewrite/03-memory.md).
 
-## Memory scopes and authority
+## Three layers
 
-| Layer                            | Storage                      | Readers and writers                                                       |
-| -------------------------------- | ---------------------------- | ------------------------------------------------------------------------- |
-| Session observations/reflections | Node session ledger          | The session's memory workers; recall reads retained branch sources        |
-| Workspace handoff notes          | Node workspace-memory ledger | Main coding sessions in that repository; not teammates/subagents or chats |
-| USER                             | Gateway SQLite, per user     | The user can review, restore and forget                                   |
-| MEMORY                           | Gateway SQLite, per user     | Chats write notes directly; the user can review, restore and forget       |
-| Mirrored records/delegations     | Gateway SQLite               | Chats search the user's records; hits retain their workspace scope        |
+The brain (the agent the gateway runs, [prompt context](prompt-context.md)) has the household's memory. Workers on the nodes have none of it ([direction §2.7](direction.md)); repositories keep their own workspace notes as a handoff between coding sessions.
 
-The gateway derives the session owner and enforces the workspace mode and capabilities on agent operations. Directory sessions cannot use assistant note/search/delegation operations. Teammates and subagents have no gateway channel.
+| Layer                                       | Storage                                                               | Readers and writers                                                                                                                         |
+| ------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Open loops                                  | (plan 04)                                                             |                                                                                                                                             |
+| Facts (`memory_records`, `person`)          | Gateway SQLite, per person                                            | The brain writes them without approval (`remember`, observational-memory promotion); it and the person search them; the person forgets them |
+| Preferences (`preferences`)                 | Gateway SQLite, per person                                            | In every brain prompt. The brain saves one only with a quote of the person's words; the person removes, restores and forgets them           |
+| Repository notes (`memory_records`, `repo`) | Node workspace-memory ledger, mirrored to the gateway                 | Main coding sessions in that repository; the brain searches the mirror                                                                      |
+| Session observations/reflections            | The session's ledger (node session, or the brain's room conversation) | The session's memory workers; recall reads retained branch sources                                                                          |
 
-Origin is computed by code, not supplied by a model's account of where a fact came from. The assistant feature finds a quote in actual `user` messages (with normalized matching), not tool results, custom messages or delegated tasks. Notes carry origins and source entry IDs; a human origin requires a matching quote. Recall results are omitted from observer evidence rather than learned again. Gateway deliveries, delegation results and team events remain data, not user instructions.
+Prompts hold only the bounded layers: preferences (`PIRC_MEMORY_USER_CHARS`, default 2,000 characters per person; one entry at most 1,000) and, from plan 04, open loops. Facts are many and stay out of the prompt; before each turn the brain's host searches them with what people just said and puts the closest six (300 characters each, with their origin) in a "You may remember" section. A recall that takes over 200 ms is left out and logged.
+
+### Who a memory belongs to and where it came from
+
+Code decides both, never the model's account:
+
+- A fact's **origin** is `user` when only people's messages came since the last one in the room's conversation, else the latest tool result's origin (`tool:<name>`, `tool:bash:network` for a fetch; `origins.rs` `current_origins`). Facts from observational memory are `om:promoted`. Migrated MEMORY notes of the old assistant are `user` when their origins included it, else `tool:assistant`.
+- A fact belongs to the turn's first speaker (a promoted observation: the room's latest speaker).
+- A **preference** and a **forget** need a `quote`: the person's words in one of the last three messages of the room's conversation, matched as words (width, case, spacing, quote marks ignored). A quote of two characters or more may be part of a line; a shorter one (`ok`, `好`) must be all the person wrote. The line it is in says whose preference it is. So nothing the brain reads (a page, an email) can save a preference or make it forget.
+- Each fact or preference the brain writes is said in the room as a line ("Noted: …", "Saved as a preference: …") carrying `{kind, id, origin, user}`; **Don't keep** on it forgets it.
 
 Memory text is redacted before storage, on both the node and gateway. Redaction is best effort, not a guarantee that arbitrary secrets are detected.
 
+### Forgetting
+
+Forgetting a fact or preference (the person's **Forget** or **Don't keep**, or the brain's `forget` on their word) erases its text and logged versions, takes it out of the search index (merging the index segments, so `secure_delete` zeroes the pages) and rewrites the room lines that said it to "Forgotten.". Hashes of every version stay as tombstones that refuse the same text, as a fact or a preference, from then on. It does not erase the brain's room conversation on disk (the turn that said it), node transcripts or workspace memory, and cannot recognize paraphrases. A repository note is forgotten on its node (`/memory forget`), which the mirror follows.
+
+Remove (preferences only) is reversible: the preference leaves the prompt and comes back with Restore.
+
+### Routes
+
+`GET /api/memory` and `/api/memory/preferences` (the preferences page: active, removed, usage, room names), `GET …/preferences/:id/history`, `POST …/preferences/:id/{remove,forget,restore}`; `GET /api/memory/records?scope=person|repo|all&q=&limit=` (newest first, or search), `GET /api/memory/records/:id` and `…/history` (household facts), `DELETE /api/memory/records/:id` (forget a household fact). Replies are `no-store`; device tokens may use them.
+
 ## Agent gateway channel
 
-Agent requests travel as JSONL `gateway_request`/`gateway_response` through the runner, then `agent_request`/`agent_response` over the authenticated node link. The node applies a 30-second timeout; arguments are capped at 64 KiB, with at most 8 requests per session, 64 pending on a node's forwarding channel and 32 per node at the gateway. Invalid input is a request error, not a fatal agent/link error. `assistant.context`, `memory.note`, `memory.search`, `delegation.create`, `delegation.status` and `recall.remote` are explicit operations, not arbitrary gateway HTTP access. Protocol mismatches close the node link with 4426; deploy compatible gateway/node builds together.
-
-## Memory writes
-
-- `memory_note` adds, replaces or removes notes immediately. Replace/remove use the revision the chat last saw; stale writes fail with a conflict instead of overwriting unseen edits.
-- Budgets are characters: `PIRC_MEMORY_USER_CHARS` defaults to 2,000 and `PIRC_MEMORY_NOTE_CHARS` to 8,000; one entry holds at most 1,000. Over-budget writes fail with `memory_full`.
-- Remove is reversible. Explicit **Forget** erases entry text and logged versions, retaining normalized hashes of all versions to refuse the same text. It does not erase node transcripts or workspace memory, and cannot recognize paraphrases.
+Agent requests travel as JSONL `gateway_request`/`gateway_response` through the runner, then `agent_request`/`agent_response` over the authenticated node link. The node applies a 30-second timeout; arguments are capped at 64 KiB, with at most 8 requests per session, 64 pending on a node's forwarding channel and 32 per node at the gateway. Invalid input is a request error, not a fatal agent/link error. `memory.search`, `delegation.create`, `delegation.status` and `recall.remote` are explicit operations, not arbitrary gateway HTTP access. Node sessions never reach the household's facts or preferences; `memory.search` and `recall.remote` (repository notes only) stay refused until [plan 06](../../plans/rewrite/06-workers.md) hands workers a search tool. Protocol mismatches close the node link with 4426; deploy compatible gateway/node builds together.
 
 ### Fetched-content provenance
 
-A bash command naming a network fetcher or a URL is tagged `tool:bash:network`; PTC bash operations propagate that capability/taint. A MEMORY note with a network origin and no human origin is shown as “from fetched content,” with guidance to verify it as a claim, not follow it as an instruction. Mixed local/network sources are labelled too. This is a coarse heuristic: scripts or build commands may fetch without naming a fetcher, and names may appear without a fetch. It is not complete data-flow tracking.
+A bash command naming a network fetcher or a URL is tagged `tool:bash:network`; PTC bash operations propagate that capability/taint. This is a coarse heuristic: scripts or build commands may fetch without naming a fetcher, and names may appear without a fetch. It is not complete data-flow tracking.
 
 ## Repository identity, mirroring and search
 
@@ -43,7 +56,11 @@ For the latter, `pirc-node/src/repo.rs` reads only the workspace's own `.git` an
 
 Nodes mirror ledger chunks with byte offsets and acknowledgements; reconnect resumes from the gateway watermark, shrunk ledgers reset, and malformed lines are skipped. Paths/worktrees are not included in mirrored git metadata. Ownership comes from the writing session known to the gateway; unknown-owner records are not searchable. Forget/clear records remove searchable content. Per-node storage is capped at 200,000 rows and 64 MiB of text.
 
-`memory_search` matches up to eight query words with escaped SQL `LIKE`, ranked by matches, active before superseded, then recency. It searches workspace notes and delegations, preserving “applies to workspace” labels rather than promoting hits to global rules. A workspace filter also includes clones with the same repository key. `recall` on a remote workspace note asks its holding node for sources after an ownership check; when that node is offline, it returns the gateway copy explicitly labelled as such.
+### Search
+
+One FTS5 index (`memory_records_fts`, `delegations_fts`; [memory search](../../plans/memory-search.md) phase 1) covers facts, repository notes and delegations. `memory/text.rs` `index_terms` folds text (NFKC, lowercase) and turns every run of Han, kana or Hangul into overlapping pairs plus its last character (`資料庫` → `資料 料庫 庫`); other text goes to the `porter unicode61` tokenizer as it is. A query becomes quoted phrases joined with `OR` (a Latin run is one phrase, so `search_in` is `search` then `in`; each pair of a spaceless run is its own phrase; a lone CJK character is a prefix), so FTS5 syntax in a query is never interpreted. Hits rank by how many of the query's phrases they hold, then BM25 (scaled per table so notes and delegations compare), a superseded note counting half, then active before superseded and newest. When the index finds nothing, the query's words of three characters or more (or with non-ASCII) are matched as substrings, for part of a hash or an identifier. The index is kept in the same transaction as every write and rebuilt at startup when `search_index_meta.version` differs from the gateway's `SEARCH_INDEX_VERSION`. An evaluation set (`memory_records/eval/`) measures recall@8 and MRR per query class.
+
+Search keeps `owner_user` and status filters. The brain's `memory_search` covers the turn's people, `person` scope by default, `repo` or `all` on request; repository hits keep their “applies to workspace” labels rather than becoming global rules. A workspace filter (node sessions) also includes clones with the same repository key. `recall_note` (the brain) and `recall.remote` read a repository note's sources from its holding node after an ownership check; when that node is offline, they return the gateway copy explicitly labelled as such.
 
 ## Project links
 
@@ -75,7 +92,7 @@ Finished delegation records older than 90 days are pruned hourly unless a later 
 
 ## Implementation and provenance
 
-Primary contracts live in `crates/pirc-agent/src/features/assistant/`, `features/memory/serialize.rs`, `crates/pirc-gateway/src/memory/`, `memory_records.rs`, `delegations.rs`, `project_links.rs`, `crates/pirc-node/src/{repo,memory_mirror}.rs` and `crates/pirc-protocol/src/repo.rs`. Protocol versions and limits are defined in current Rust code; the old assistant plan's startup flags and protocol numbers are not current contracts.
+Primary contracts live in `crates/pirc-agent/src/origins.rs`, `features/memory/serialize.rs`, `crates/pirc-gateway/src/brain/memory.rs`, `crates/pirc-gateway/src/memory/`, `memory_records.rs` (and `memory_records/{index,person}.rs`), `delegations.rs`, `project_links.rs`, `crates/pirc-node/src/{repo,memory_mirror}.rs` and `crates/pirc-protocol/src/repo.rs`. Protocol versions and limits are defined in current Rust code; the old assistant plan's startup flags and protocol numbers are not current contracts.
 
 The original design/decision record is retrievable without a working-tree archive:
 

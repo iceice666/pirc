@@ -10,13 +10,15 @@ The same agent loop (`crates/pirc-agent`) runs in two hosts, and each puts its s
 
 **The brain** (`HostProfile::Brain`, plans/rewrite/02-brain-host.md) runs in the gateway and speaks in rooms. Its sections are rebuilt before every turn (`crates/pirc-gateway/src/brain/identity.rs`), so a changed file applies to the next turn, never to one already running:
 
-| Section   | Source                                         | Without it                              |
-| --------- | ---------------------------------------------- | --------------------------------------- |
-| `soul`    | `SOUL.md` in the gateway's `PIRC_CONFIG_DIR`   | a built-in household-assistant identity |
-| `room`    | built-in: the room's name and how batches read | always present                          |
-| `chat-md` | `CHAT.md` in the gateway's `PIRC_CONFIG_DIR`   | left out                                |
+| Section              | Source                                                                                | Without it                                                |
+| -------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `soul`               | `SOUL.md` in the gateway's `PIRC_CONFIG_DIR`                                          | a built-in household-assistant identity                   |
+| `room`               | built-in: the room's name and how batches read                                        | always present                                            |
+| `chat-md`            | `CHAT.md` in the gateway's `PIRC_CONFIG_DIR`                                          | left out                                                  |
+| `memory:preferences` | built-in: the turn's people's preferences (`crates/pirc-gateway/src/brain/memory.rs`) | always present (says none yet)                            |
+| `memory:recalled`    | built-in: "You may remember", the facts closest to what was said                      | left out when nothing matches, or recall took over 200 ms |
 
-Each file is at most 8000 characters. The brain gets no AGENTS.md, skills, hooks, capability index or working directory: it has no workspace, and its few tools (plan 02: `web_search`) are direct tools. `GET /api/brain/prompts` and `PUT /api/brain/prompts/:name` read and write the files unless they are read-only (a Nix store link, a symlink or file permissions).
+Each file is at most 8000 characters. The brain gets no AGENTS.md, skills, hooks, capability index or working directory: it has no workspace, and its tools (`web_search` with `EXA_API_KEY`; `remember`, `memory_search`, `recall_note`, `save_preference`, `forget` and observational memory's `recall`, plan 03) are direct tools. The memory sections come last, so the persona and rules stay a stable prefix ([assistant memory](assistant-memory.md)). `GET /api/brain/prompts` and `PUT /api/brain/prompts/:name` read and write the files unless they are read-only (a Nix store link, a symlink or file permissions).
 
 ## Section and snapshot contracts
 

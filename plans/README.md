@@ -15,7 +15,7 @@ manual validation and accepted limitations, can be read with
 
 Standalone plans:
 
-- [Memory search](memory-search.md): workspace-memory search quality.
+- [Memory search](memory-search.md): workspace-memory search quality. Phases 0–1 done (2026-10-20, with the rewrite's plan 03); phase 2 (semantic search) needs a decision on where embeddings come from.
 - [Mobile](mobile.md): Android app follow-up work and validation limits.
 - [Modes](modes.md): data-driven workspace modes.
 - [Sandbox GPU](sandbox-gpu.md): GPU access in the agent sandbox.
