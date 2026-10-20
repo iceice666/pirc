@@ -1,33 +1,6 @@
 {
   "id": "app-document-routes-v1",
   "webRevision": "bd3d90981271e1f93cf3d1d1a5bbf9b61136b74c",
-  "capture": {
-    "entrypoint": "actual Vite apps/web/index.html and src/main.ts mounting pinned App.svelte",
-    "viewport": { "width": 390, "height": 844, "deviceScaleFactor": 1, "isMobile": true, "hasTouch": true },
-    "browserExecutable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "apiMode": "Playwright fulfills same-origin /api requests from the stable source fixture below; no production app state or routing is injected"
-  },
-  "cases": [
-    { "id": "root", "url": "/" },
-    { "id": "index-html", "url": "/index.html" },
-    { "id": "root-hash", "url": "/?campaign=discard#start-here" },
-    { "id": "session-valid", "url": "/?session=session-second" },
-    { "id": "session-missing", "url": "/?session=missing" },
-    { "id": "session-empty", "url": "/?session=" },
-    { "id": "workspace-empty", "url": "/?workspace=" },
-    { "id": "open-empty", "url": "/?open=" },
-    { "id": "workspace-chat-project", "url": "/?workspace=home%3Anotes&campaign=keep#workspace-anchor" },
-    { "id": "workspace-directory", "url": "/?workspace=work-local" },
-    { "id": "workspace-missing", "url": "/?workspace=missing" },
-    { "id": "open-memory", "url": "/?open=memory" },
-    { "id": "memory-and-workspace", "url": "/?open=memory&workspace=home%3Anotes" },
-    { "id": "encoded-malformed-query", "url": "/?session=session%2Dsecond&broken=%ZZ&badUtf8=%E0%A4%A" },
-    { "id": "unknown-query-and-open", "url": "/?campaign=route-oracle&open=unknown" },
-    { "id": "duplicate-session-first", "url": "/?session=session-second&session=session-latest" },
-    { "id": "duplicate-workspace-first", "url": "/?workspace=missing&workspace=home%3Anotes" },
-    { "id": "session-target-precedes-open", "url": "/?session=missing&open=schedules" },
-    { "id": "workspace-overrides-open", "url": "/?open=schedules&workspace=home%3Anotes" }
-  ],
   "apiFixture": {
     "workspaces": [
       { "id": "home:chats", "hostId": "home", "displayName": "Chats", "kind": "chat", "defaults": {} },

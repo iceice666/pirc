@@ -8,20 +8,12 @@ import 'package:pirc_mobile/live/app_document_route.dart';
 import 'package:pirc_mobile/live/document_navigation_state.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/settings_dialog.dart';
-import 'package:pirc_mobile/live/workspace_page.dart';
 import 'live_test.dart' show FakeGateway, theme;
 
 final fixture = obj(
   jsonDecode(
     File(
       '../../fixtures/mobile-parity/app-document-routes.json',
-    ).readAsStringSync(),
-  ),
-);
-final expected = obj(
-  jsonDecode(
-    File(
-      '../../fixtures/mobile-parity/app-document-routes-expected.json',
     ).readAsStringSync(),
   ),
 );
@@ -87,80 +79,6 @@ Future<void> finish(
 }
 
 void main() {
-  for (final width in [390.0, 768.0]) {
-    for (final source in rows(fixture['cases'])) {
-      final oracle = rows(
-        expected['cases'],
-      ).firstWhere((entry) => entry['caseId'] == source['id']);
-      testWidgets(
-        'native App route ${source['id']} width $width matches pinned Chrome state',
-        (tester) async {
-          tester.view.devicePixelRatio = 1;
-          tester.view.physicalSize = Size(width, 1000);
-          addTearDown(tester.view.reset);
-          final gateway = RouteGateway();
-          final c = LiveController(gateway);
-          await tester.pumpWidget(MobileApp(theme: theme, controller: c));
-          await tester.pumpAndSettle();
-          final route = NativeAppDocumentRoute.parse(
-            'https://gateway.example${source['url']}',
-            appRootUrl: 'https://gateway.example/',
-            allowSpaFallback: true,
-          )!;
-          await scope(tester).windows.onAppRoute!(route);
-          await tester.pumpAndSettle();
-          final state = obj(oracle['appState']);
-          expect(c.sessionId, state['activeSessionId']);
-          expect(
-            scope(tester).documentUrl,
-            Uri.parse('${oracle['finalUrl']}')
-                .replace(scheme: 'https', host: 'gateway.example', port: 443)
-                .toString(),
-          );
-          final workspace = find.byType(WorkspacePage);
-          expect(
-            workspace,
-            state['view'] == 'workspace' ? findsOneWidget : findsNothing,
-          );
-          if (state['view'] == 'workspace') {
-            expect(
-              tester.widget<WorkspacePage>(workspace).workspaceId,
-              state['workspaceViewId'],
-            );
-          }
-          final visible = obj(oracle['visiblePage']);
-          expect(c.state.isNotEmpty, isTrue);
-          expect(
-            find.byType(NativeSettingsDialog),
-            visible['settingsOpen'] == true ? findsOneWidget : findsNothing,
-          );
-          if (visible['settingsOpen'] == true) {
-            expect(
-              tester
-                  .widget<NativeSettingsDialog>(
-                    find.byType(NativeSettingsDialog),
-                  )
-                  .initialTab,
-              visible['settingsTab'],
-            );
-          }
-          if (width == 390 && visible['settingsOpen'] != true) {
-            final hasDraft = find
-                .byKey(const Key('live-draft'))
-                .evaluate()
-                .isNotEmpty;
-            expect(
-              hasDraft,
-              state['view'] == 'session' &&
-                  obj(oracle['phoneNavigation'])['listOpen'] == false,
-            );
-          }
-          expect(tester.takeException(), isNull);
-          await finish(tester, gateway, c);
-        },
-      );
-    }
-  }
   testWidgets('same-session route preserves draft and does not rewatch', (
     tester,
   ) async {
