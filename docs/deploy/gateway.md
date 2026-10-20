@@ -84,7 +84,7 @@ The gateway runs every model request; nodes never see keys or endpoints. Backend
 - The file is validated at startup (invalid → the gateway does not start) and reloaded on `SIGHUP` (invalid → logged and ignored, the previous file stays in force). Running sessions use the new settings on their next request.
 
 `PIRC_CONFIG_DIR` also holds gateway-owned [workspace modes](../guides/modes.md)
-in `modes/<id>.md`. The gateway seeds a missing directory with the Chat/Work
+in `modes/<id>.md`. The gateway seeds a missing directory with the
 default files, loads valid files at startup and on SIGHUP, and distributes the
 catalog to nodes. Existing directories are authoritative, even when empty;
 invalid files are warned about and omitted rather than restored. For a
@@ -92,14 +92,12 @@ read-only provisioned config, supply the modes directory and its files before
 startup. `pirc-gateway modes --print-defaults` prints the shipped files without
 starting the daemon.
 
-## Assistant, schedules and notifications
+## Assistant and notifications
 
 | Variable                                          | Default              | Meaning                                                                                                                                                  |
 | ------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PIRC_MEMORY_USER_CHARS`                          | `2000`               | Character budget of the assistant's USER entries per user.                                                                                               |
 | `PIRC_MEMORY_NOTE_CHARS`                          | `8000`               | Character budget of the assistant's MEMORY notes per user.                                                                                               |
-| `PIRC_DELEGATION_TTL_MS`                          | `3600000` (1 h)      | How long a delegation waits for your confirmation in chat before it lapses.                                                                              |
-| `PIRC_TIMEZONE`                                   | the system's         | IANA zone used when an agent creates a schedule without naming one. Invalid → the gateway does not start.                                                |
 | `EXA_API_KEY`                                     | unset                | Enables the agents' `web_search` tool (runs on the gateway). Without it the tool reports it is off.                                                      |
 | `PIRC_VAPID_PUBLIC_KEY`, `PIRC_VAPID_PRIVATE_KEY` | generated            | Web Push signing pair. Set both or neither; without them a pair is created once in `$STATE/vapid.json`. Changing it invalidates every push subscription. |
 | `PIRC_VAPID_SUBJECT`                              | first allowed origin | `mailto:` or `https:` contact push services see.                                                                                                         |

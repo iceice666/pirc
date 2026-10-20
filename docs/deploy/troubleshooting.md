@@ -11,9 +11,8 @@ Symptoms first, then the cause and the command that confirms it. Log locations: 
 | `Node tokens must be unique` / a token shorter than 32 characters           | Regenerate with `openssl rand -base64 36`.                                                                              |
 | Gateway rejects `PIRC_WORKSPACES`                                           | Node variables in the gateway's environment. Split the gateway and node environments.                                   |
 | `Node transport requires wss:// off loopback`                               | `PIRC_DAEMON_URL` is `ws://` to a remote host. Use `wss://` through the proxy.                                          |
-| `PIRC_WORKSPACES must be empty on the chat node`                            | `pirc-node chat` with workspaces. Move the repositories to another node.                                                |
 | `PIRC_DEVICE_TOKEN_IDLE_DAYS cannot exceed PIRC_DEVICE_TOKEN_MAX_DAYS`      | Fix the two values.                                                                                                     |
-| `PIRC_TIMEZONE: unknown time zone` / `PIRC_VAPID_SUBJECT must be …`         | Use an IANA zone; a `mailto:` or `https:` subject.                                                                      |
+| `PIRC_VAPID_SUBJECT must be …`                                              | Use a `mailto:` or `https:` subject.                                                                                    |
 | The gateway exits on an invalid `models.json`                               | The file is validated at start (unknown keys, bad `api`, unresolvable key reference). Fix it; a later reload only logs. |
 | NixOS: `pirc.service` fails reading `apiKeyFile`                            | The file is owned by `pirc`, not `pirc-gateway`. Set the secret's owner ([NixOS](nixos.md)).                            |
 
@@ -53,7 +52,6 @@ Symptoms first, then the cause and the command that confirms it. Log locations: 
 | No models listed / "no default model"                                             | No backend on the gateway: add one in **Settings → Model backends** or `models.json`. Nodes have no provider settings; `providers` in a node `config.json` is ignored with a warning.                                                                  |
 | Browser tools missing or `No Chromium found on this node`                         | Install Chromium/Chrome and set `PIRC_BROWSER_EXECUTABLE`; `PIRC_FFMPEG` for recordings.                                                                                                                                                               |
 | `web_search` says it is not configured                                            | `EXA_API_KEY` is not in the gateway's environment.                                                                                                                                                                                                     |
-| A schedule shows a _missed_ run                                                   | The gateway was down or the node offline at fire time. Missed runs wait for **Allow and run now**; nothing runs by itself.                                                                                                                             |
 | A `bash` tool hangs then fails at 120 s                                           | `limits.bashTimeoutMs`; use `background_task` for long jobs.                                                                                                                                                                                           |
 
 ## Web client

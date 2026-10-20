@@ -20,7 +20,7 @@ git show af7074fc51742e79c8f0c76a9aaf64f80b414f7e:docs/evaluations/ptc/ptc-only.
 
 That snapshot also contains the assistant, browser, schedules (`cron.md`), sandbox and old Android client designs, plus the full implementation/validation diaries in `plans/README.md` and `plans/mobile.md`. Current assistant contracts and accepted security decisions are maintained in [assistant memory](../architecture/assistant-memory.md) and [security decisions](../architecture/security-decisions.md).
 
-Earlier consolidated plans (`assistant.md`, `project-isolation.md`, `backlog.md`, `mobile-audit.md`, `security-audit.md`) can be read with `git show 7677d24:plans/<file>.md`. Prompt customization's baseline is `69ae62c`; the former UI redesign was implemented in `4ce2c40`, `4a3e46f` and `ea76001`. Their current contracts are in [Prompt and Context](../architecture/prompt-context.md) and [Session UI](../guides/session-ui.md).
+Earlier consolidated plans (`assistant.md`, `project-isolation.md`, `backlog.md`, `mobile-audit.md`, `security-audit.md`) can be read with `git show 7677d24:plans/<file>.md`. Prompt customization's baseline is `69ae62c`; the former UI redesign was implemented in `4ce2c40`, `4a3e46f` and `ea76001`. Prompt customization's current contracts are in [Prompt and Context](../architecture/prompt-context.md).
 
 ## PTC evaluation outcome
 

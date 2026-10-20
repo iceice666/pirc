@@ -1,6 +1,6 @@
 # Assistant memory, repositories and delegation
 
-This reference describes the current Rust contracts. For session compaction and local repository handoffs, see [observational memory](observational-memory.md); for prompt composition, see [prompt context](prompt-context.md). Configuration and user workflows are in [Gateway and node](../development/gateway-and-node.md) and [Chat projects](../guides/chat-projects.md).
+This reference describes the current Rust contracts. For session compaction and local repository handoffs, see [observational memory](observational-memory.md); for prompt composition, see [prompt context](prompt-context.md). Configuration and user workflows are in [Gateway and node](../development/gateway-and-node.md).
 
 ## Memory scopes and authority
 
@@ -8,32 +8,25 @@ This reference describes the current Rust contracts. For session compaction and 
 | -------------------------------- | ---------------------------- | ------------------------------------------------------------------------- |
 | Session observations/reflections | Node session ledger          | The session's memory workers; recall reads retained branch sources        |
 | Workspace handoff notes          | Node workspace-memory ledger | Main coding sessions in that repository; not teammates/subagents or chats |
-| USER                             | Gateway SQLite, per user     | Chats propose changes; the user approves. Main coding sessions read only  |
+| USER                             | Gateway SQLite, per user     | The user can review, restore and forget                                   |
 | MEMORY                           | Gateway SQLite, per user     | Chats write notes directly; the user can review, restore and forget       |
 | Mirrored records/delegations     | Gateway SQLite               | Chats search the user's records; hits retain their workspace scope        |
 
-`pirc-node chat` hosts the top-level `chats` workspace and chat projects, not directory workspaces. Each chat has its own node-managed working directory under `<stateDir>/chat/<workspaceId>/sessions/<sessionId>/`; file tools and bash remain available. Session OM remains enabled independently of global memory. Repository work belongs on coding nodes.
+The gateway derives the session owner and enforces the workspace mode and capabilities on agent operations. Directory sessions cannot use assistant note/search/delegation operations. Teammates and subagents have no gateway channel.
 
-The gateway derives the session owner and enforces the workspace mode and capabilities on agent operations. Directory sessions may request USER context, but cannot use assistant note/proposal/search/delegation operations. Teammates and subagents have no gateway channel. Node credentials never authorize a USER proposal or delegation approval: those decisions use user-authenticated gateway routes.
-
-Origin is computed by code, not supplied by a model's account of where a fact came from. The assistant feature finds a proposed USER quote in actual `user` messages (with normalized matching), not tool results, custom messages or delegated tasks. Notes carry origins and source entry IDs; a human origin requires a matching quote. Recall results are omitted from observer evidence rather than learned again. Gateway deliveries, delegation results and team events remain data, not user instructions.
+Origin is computed by code, not supplied by a model's account of where a fact came from. The assistant feature finds a quote in actual `user` messages (with normalized matching), not tool results, custom messages or delegated tasks. Notes carry origins and source entry IDs; a human origin requires a matching quote. Recall results are omitted from observer evidence rather than learned again. Gateway deliveries, delegation results and team events remain data, not user instructions.
 
 Memory text is redacted before storage, on both the node and gateway. Redaction is best effort, not a guarantee that arbitrary secrets are detected.
 
 ## Agent gateway channel
 
-Agent requests travel as JSONL `gateway_request`/`gateway_response` through the runner, then `agent_request`/`agent_response` over the authenticated node link. The node applies a 30-second timeout; arguments are capped at 64 KiB, with at most 8 requests per session, 64 pending on a node's forwarding channel and 32 per node at the gateway. Invalid input is a request error, not a fatal agent/link error. `assistant.context`, `memory.note`, `memory.proposeUser`, `memory.search`, `delegation.create`, `delegation.status` and `recall.remote` are explicit operations, not arbitrary gateway HTTP access. Protocol mismatches close the node link with 4426; deploy compatible gateway/node builds together.
+Agent requests travel as JSONL `gateway_request`/`gateway_response` through the runner, then `agent_request`/`agent_response` over the authenticated node link. The node applies a 30-second timeout; arguments are capped at 64 KiB, with at most 8 requests per session, 64 pending on a node's forwarding channel and 32 per node at the gateway. Invalid input is a request error, not a fatal agent/link error. `assistant.context`, `memory.note`, `memory.search`, `delegation.create`, `delegation.status` and `recall.remote` are explicit operations, not arbitrary gateway HTTP access. Protocol mismatches close the node link with 4426; deploy compatible gateway/node builds together.
 
-## Frozen context and writes
-
-Before its first successful context load, a chat waits up to 10 seconds for `assistant.context`. USER, MEMORY, workspace/role listings and their revisions are saved in `assistant.snapshot` for prompt-cache stability. Changes reach new snapshots, not a running chat's frozen copy; capability restrictions are applied when presenting it. A failed load gives a notice, not an assertion that no memory exists, and a later run retries.
-
-Main coding sessions, delegated ones included, wait at most 3 seconds and freeze only a `## User` section. They get no MEMORY or workspace list and no assistant-memory tools. Repository instructions still determine how to work in the repository. A failed load omits USER for that run and warns once per agent process.
+## Memory writes
 
 - `memory_note` adds, replaces or removes notes immediately. Replace/remove use the revision the chat last saw; stale writes fail with a conflict instead of overwriting unseen edits.
-- `memory_propose_user` queues a change with the user's quote. Approval checks the shown revision. Duplicate pending proposals are reused; rejected proposals cannot simply be resubmitted unchanged. At most 20 proposals may wait.
 - Budgets are characters: `PIRC_MEMORY_USER_CHARS` defaults to 2,000 and `PIRC_MEMORY_NOTE_CHARS` to 8,000; one entry holds at most 1,000. Over-budget writes fail with `memory_full`.
-- Remove is reversible. Explicit **Forget** erases entry text, logged versions and proposals carrying them, retaining normalized hashes of all versions to refuse the same text. It does not erase node transcripts, workspace memory or already-frozen snapshots, and cannot recognize paraphrases. Project deletion has different, project-scoped cleanup/tombstones; see [deleting a project](../guides/chat-projects.md#deleting-a-project).
+- Remove is reversible. Explicit **Forget** erases entry text and logged versions, retaining normalized hashes of all versions to refuse the same text. It does not erase node transcripts or workspace memory, and cannot recognize paraphrases.
 
 ### Fetched-content provenance
 
@@ -58,26 +51,25 @@ Only the user edits links through authenticated `GET`/`PUT /api/workspaces/:id/l
 
 Links are defaults and ordering, **not permissions**:
 
-- Frozen context lists linked workspaces, other clones, then the rest; removed targets stay visible as removed.
 - Delegation without a target uses the sole link; multiple links require an explicit choice.
 - Search without a workspace tries the live linked workspaces/repositories first, then everything if empty. `everywhere: true` skips that preference; results say which scope was searched.
-- Unlinked workspaces remain reachable, and every delegation still requires confirmation.
+- Unlinked workspaces remain reachable.
 
 ## Node-local skills
 
-Skills are configuration, not memory. `SKILL.md` directories load from `~/.agents/skills/`, then `$PIRC_CONFIG_DIR/skills/`, then `<workspace>/.pirc/skills/`, with later sources taking precedence. Node-level skills reach chats too; repository skills belong to that workspace and are labelled untrusted repository content. Only their names, descriptions and paths are listed initially; the model reads a skill on demand or the user loads `/skill:<name>`. Loaded skill text is not new observer evidence. Skill directories are protected from agent writes and are not synced from the gateway; install a chat's skills and required programs on its chat node.
+Skills are configuration, not memory. `SKILL.md` directories load from `~/.agents/skills/`, then `$PIRC_CONFIG_DIR/skills/`, then `<workspace>/.pirc/skills/`, with later sources taking precedence. Repository skills belong to that workspace and are labelled untrusted repository content. Only their names, descriptions and paths are listed initially; the model reads a skill on demand or the user loads `/skill:<name>`. Loaded skill text is not new observer evidence. Skill directories are protected from agent writes and are not synced from the gateway.
 
 ## Roles and delegation
 
 The agent selects a named role, not a model or thinking level. Role files come from built-in `general`, node configuration, then workspace configuration; later files replace earlier roles wholesale, with source/override information exposed to the user. Invalid roles or model patterns with no catalog match fail rather than silently widening access. Model-pattern fallback is restricted to the expanded candidates and does not guarantee provider credentials or entitlement. See the [configuration reference](../development/gateway-and-node.md) and `crates/pirc-agent/src/roles.rs`.
 
-`delegate({workspace, task, title?, role?, quote?})` or `delegate({follows, task, quote?})` creates a gateway-owned pending approval, or, when the chat workspace's `delegation_approval` allows it, a task that starts at once ([chat projects guide](../guides/chat-projects.md#delegation)). The target must be a directory workspace on an online node. At most 10 delegations wait per user; `PIRC_DELEGATION_TTL_MS` defaults to one hour. Roles come from the node's registration catalog, refreshed on reconnect. A follow-up keeps its session's role and cannot select another.
+`delegate({workspace, task, title?, role?, quote?})` or `delegate({follows, task, quote?})` creates a gateway-owned task that starts at once. The target must be a directory workspace on an online node. Roles come from the node's registration catalog, refreshed on reconnect. A follow-up keeps its session's role and cannot select another.
 
-The confirmation presents the target and full task. Only the user chooses model/thinking overrides; agent schemas reject those fields. After approval, the gateway creates or reuses the target session, applies the role and approved settings, then delivers a custom `assistant-delegation` message. Delivery does not take the user's control lease. Every follow-up follows the same policy, so under `always` it needs a fresh approval. Without the card the role's model or the workspace default runs it.
+Agent schemas reject model/thinking overrides. The gateway creates or reuses the target session, applies the role, then delivers a custom `assistant-delegation` message. Delivery does not take the user's control lease. The role's model or the workspace default runs it.
 
-By default a dangerous command waits for the user in the delegated session. The approval checkbox “treat this task as my request for auto mode” authorizes the classifier to consider that task as a user request **only for the run it starts**, not future runs. It is not full access; delegated sessions use the node's default approval mode, not the chat's mode. Under every policy, a `quote` the chat's agent found verbatim in the user's last three messages reaches the delegated run as `details.userRequests`, and its classifier reads those words (never the task) as user requests for that run only. The delegated session's confirmations are relayed to the chat and answered there without a lease ([security decisions](security-decisions.md#delegation-approval)).
+By default a dangerous command waits for the user in the delegated session; delegated sessions use the node's default approval mode. A `quote` the chat's agent found verbatim in the user's last three messages reaches the delegated run as `details.userRequests`, and its classifier reads those words (never the task) as user requests for that run only. The delegated session's confirmations are relayed to the chat and answered there without a lease ([security decisions](security-decisions.md#delegation-approval)).
 
-The gateway tracks running, waiting-input, completed and failed states. Results are redacted; update messages carry up to 4,000 characters, while `delegation_status` reads the stored result in 12,000-character chunks (stored results are capped). Results are gateway data, never new user instructions. Updates that cannot reach the chat node are retried on reconnect. The user may take control of the coding session; completed sessions are left in place. Delegated main sessions may produce workspace memory, but never global assistant memory.
+The gateway tracks running, waiting-input, completed and failed states. Results are redacted; update messages carry up to 4,000 characters, while `delegation_status` reads the stored result in 12,000-character chunks (stored results are capped). Results are gateway data, never new user instructions. The user may take control of the coding session; completed sessions are left in place. Delegated main sessions may produce workspace memory, but never global assistant memory.
 
 Finished delegation records older than 90 days are pruned hourly unless a later delegation follows them. This does not imply deletion of their node sessions, mirrored workspace records or forgotten-memory tombstones.
 

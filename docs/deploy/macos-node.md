@@ -17,7 +17,7 @@ Choose one:
   target/release/pirc-node --version
   ```
 
-  Copy it to `~/.local/pirc-node/bin/pirc-node`. No Bun, Node, srt or Playwright installation is needed. Install git and Chromium/Chrome (optional ffmpeg for recording); macOS provides `sandbox-exec`. For the chat role append `chat` to the launch command. Existing 0.3.0 installations must use [fresh state](upgrades.md).
+  Copy it to `~/.local/pirc-node/bin/pirc-node`. No Bun, Node, srt or Playwright installation is needed. Install git and Chromium/Chrome (optional ffmpeg for recording); macOS provides `sandbox-exec`. Existing 0.3.0 installations must use [fresh state](upgrades.md).
 
 ## 2. Layout
 
@@ -103,6 +103,6 @@ Replace with `mv` (atomic) rather than overwriting in place: a running process k
 ## macOS specifics
 
 - **App Management prompt**: macOS may block a Home Manager activation from rewriting the plist ("App Management" privacy setting). Allow your terminal under _System Settings → Privacy & Security → App Management_, or bootout, copy the plist by hand and bootstrap again.
-- **Sleep**: a sleeping laptop is an offline node. Its sessions answer `503` and its scheduled runs become _missed_ until it is back; nothing is retried on its own.
+- **Sleep**: a sleeping laptop is an offline node. Its sessions answer `503` until it is back; nothing is retried on its own.
 - **Sandbox**: the native node uses Seatbelt (`sandbox-exec`). macOS caps Unix socket paths at 104 bytes; the node keeps its own sockets short, but keep `PIRC_STATE_DIR` at a reasonable depth. `allowUnixSockets` lists extra sockets (an `ssh-agent`, the Nix daemon) the agent may reach.
 - **Git over SSH** does not work inside the sandbox (`~/.ssh` is unreadable, and `ssh` does not use the sandbox's proxies); the agent asks through `unsandboxed_bash`, which you approve per command. HTTPS remotes with a narrowly scoped token in the workspace's `.pirc/config.json` `env` work without leaving the sandbox.

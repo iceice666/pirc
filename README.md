@@ -1,11 +1,10 @@
 # pirc
 
-A private, self-hosted workspace for persistent coding-agent sessions and assistant chats, with a forward-authenticated web UI and a native Android client. It ships as two native Rust executables: `pirc-gateway` and `pirc-node` (including the `chat` role).
+A private, self-hosted workspace for persistent coding-agent sessions, with a forward-authenticated web UI and a native Android client. It ships as two native Rust executables: `pirc-gateway` and `pirc-node`.
 
 It consists of:
 
 - a **gateway** that browsers talk to: authentication, the session index, and routing;
-- a **chat node** (`pirc-node chat`) for assistant chats and projects;
 - one or more **coding nodes** (`pirc-node`), one per machine with workspaces, which connect out to the gateway and run one built-in agent subprocess per session (over a JSONL RPC on stdin/stdout), plus side-panel shells;
 - a responsive Svelte PWA;
 - a native Flutter Android client ([`apps/android`](apps/android/README.md)), which pairs through device tokens; browser compatibility and some mobile workflows remain in progress.
@@ -14,11 +13,10 @@ The gateway never runs agents or tools; it only runs model requests on their beh
 
 ## Features
 
-- **Persistent sessions across machines:** reconnect from the web or Android, follow streaming runs, respond to approvals, and switch between assistant chats and coding workspaces.
+- **Persistent sessions across machines:** reconnect from the web or Android, follow streaming runs, and respond to approvals.
 - **Coding tools and collaboration:** file and shell tools, programmatic tool calling (PTC), background tasks, subagents and agent teams, with workspace write leases and per-session approval modes (`read-only`, `auto`, `full-access`).
-- **Chat projects:** project instructions, shared read-only project files, linked coding workspaces, task delegation (approved per task, or per project setting) with its approvals relayed to the chat, and project deletion with a preview and memory review.
-- **Memory and context:** observational memory for long sessions, shared USER/MEMORY notes for chats, approved USER preferences in coding sessions, and workspace-memory search across repository clones.
-- **Workspace panels:** files, Git changes and history, interactive terminals, and browser viewing and takeover. Scheduled runs and push notifications help follow work away from the session.
+- **Memory and context:** observational memory for long sessions and workspace-memory search across repository clones.
+- **Workspace panels:** files, Git changes and history, interactive terminals, and browser viewing and takeover. Push notifications help follow work away from the session.
 - **Gateway-managed models:** subscription logins, API keys and custom endpoints, without configuring provider credentials on every node.
 
 See the [user guides](docs/guides/README.md) for behavior and limits. Web and Android coverage differs; see the [Android README](apps/android/README.md) for supported workflows and remaining validation work.
@@ -63,9 +61,8 @@ The gateway is intended to sit behind a trusted reverse proxy using an Authelia-
 bun install
 # Export configuration from .env.example (never source untrusted files).
 # Rust does not auto-load .env files. Fill every security allowlist.
-# Gateway, chat and coding nodes take separate environments.
+# Gateway and coding nodes take separate environments.
 bun run dev        # gateway
-bun run dev:chat   # optional chat node, with its own node ID/token/state directory
 bun run dev:node   # coding node, with PIRC_DAEMON_URL=ws://127.0.0.1:8787
 bun run dev:web    # localhost only; add `-- --host 0.0.0.0` to try it from a phone on the LAN
 ```
@@ -77,19 +74,18 @@ The node's first workspace can point to this repository. See the [gateway and no
 ```sh
 bun run build                  # web bundle plus two native release executables
 ./target/release/pirc-gateway   # browser API and routing
-./target/release/pirc-node chat # assistant chats and projects
 ./target/release/pirc-node      # coding agents and shells for this machine
 ```
 
 Build one executable with `cargo build --locked --release -p pirc-gateway` or `-p pirc-node`; build the Web UI with `bun run --filter @pirc/web build`.
 
-SQLite is bundled; the node embeds native QuickJS for PTC, not a general-purpose JS runtime. `pirc-node chat` selects chat, with no environment/argv-name role switch. Internal `agent`, `ptc-guest` and `sandbox-bridge` commands are runtime helpers, not services. OAuth runs in the gateway process.
+SQLite is bundled; the node embeds native QuickJS for PTC, not a general-purpose JS runtime. Internal `agent`, `ptc-guest` and `sandbox-bridge` commands are runtime helpers, not services. OAuth runs in the gateway process.
 
 The Nix gateway includes the static Web UI; the node includes native sandbox/browser drivers and supplies bubblewrap on Linux. Neither ships srt, Playwright's Node package or a JS sidecar. Account separation, filesystem permissions and sandboxing remain the security boundaries.
 
 ### Upgrading
 
-Upgrade the gateway and every chat/coding node together. The unreleased workspace-mode implementation uses node protocol **12**; protocol 11 nodes cannot connect to it. Database schemas remain gateway **1004** and node **2001** (introduced in 0.6.0). Back up state and configuration first; see [Upgrades](docs/deploy/upgrades.md) for mode defaults, accepted node ids and rollback limitations.
+Upgrade the gateway and every node together. The unreleased workspace-mode implementation uses node protocol **12**; protocol 11 nodes cannot connect to it. Database schemas remain gateway **1004** and node **2001** (introduced in 0.6.0). Back up state and configuration first; see [Upgrades](docs/deploy/upgrades.md) for mode defaults, accepted node ids and rollback limitations.
 
 Upgrading from the pre-Rust **0.3.x** releases still requires fresh state: re-pair devices, re-login providers and start new sessions rather than reusing the old databases. See [migration and rollback guidance](docs/deploy/upgrades.md).
 
@@ -101,7 +97,7 @@ Start with the [documentation index](docs/README.md). Current usage guides and a
 
 - [Agent configuration and sandbox](docs/guides/agent.md), [tools and workflows](docs/guides/tools.md)
 - [Model backends and subscription logins](docs/guides/model-backends.md)
-- [Session UI](docs/guides/session-ui.md), [browser](docs/guides/browser.md), [schedules and notifications](docs/guides/schedules.md), [chat projects](docs/guides/chat-projects.md)
+- [Browser](docs/guides/browser.md)
 - [Architecture references](docs/architecture/README.md), [deployment guides](docs/deploy/README.md)
 
 ## Validation

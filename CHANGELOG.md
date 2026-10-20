@@ -4,6 +4,10 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking: the rewrite toward an assistant that lives in the gateway has started, and the retired pieces are removed first.** The chat node (`pirc-node chat`, `services.pirc.chat`) and the Chat tab, chat projects (project instructions, project files, capability settings and delegation approval policy, project and chat deletion), schedules (user-managed schedules, schedule runs and proposals, `/cron`), memory proposals (USER proposal approval and rejection), delegation approval cards, the assistant-node binding and the SOUL/CHAT prompt relay are gone, along with their routes (`/api/assistant/node`, `/api/assistant/prompts`, `/api/schedules`, `/api/memory/proposals/:id/approve|reject`, and `/api/workspaces/:id/{capabilities,instructions,files,deletion}`), push notifications and mode capabilities (`assistant`, `delegate`, `schedule_scope`, `project_instructions`, `project_files`, `projects`, `delete_sessions`, and the default `chat` mode). Chat and assistant features are unavailable until the rewrite brings them back. Work workspaces, sessions and their panels, devices, model backends, push, memory view/history/forget/restore, delegation Stop and relayed interactions stay. Data they stored in existing gateway and node databases is not deleted. `PIRC_CHAT` is refused, `PIRC_DELEGATION_TTL_MS` and the NixOS options `services.pirc.chat`, `soulPrompt` and `chatPrompt` are gone, and delegations start without a card (at most 4 running per user). **Node protocol 14: upgrade the gateway and all nodes together.**
+
 ## [0.9.0] - 2026-10-19
 
 ### Changed

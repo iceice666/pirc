@@ -1,6 +1,6 @@
 # Workspace-memory search quality
 
-[Plans](README.md) · [Assistant memory](../docs/architecture/assistant-memory.md) · [Chat projects guide](../docs/guides/chat-projects.md)
+[Plans](README.md) · [Assistant memory](../docs/architecture/assistant-memory.md)
 
 Goal: `memory_search` finds the notes and delegation reports a chat is looking for, including Chinese queries without spaces and paraphrases, without changing who can see what. The gateway stays on SQLite.
 

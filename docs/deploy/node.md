@@ -1,6 +1,6 @@
-# Chat and coding node configuration
+# Node configuration
 
-`pirc-node` and `pirc-node chat` read their configuration from environment variables (`crates/pirc-config/src/`, `loadNodeConfig`) plus a per-node agent config directory. Run one node per machine that has workspaces, as an unprivileged account that owns exactly the repositories, credentials and tools the agents should reach. Never run a node as root.
+`pirc-node` reads its configuration from environment variables (`crates/pirc-config/src/`, `loadNodeConfig`) plus a per-node agent config directory. Run one node per machine that has workspaces, as an unprivileged account that owns exactly the repositories, credentials and tools the agents should reach. Never run a node as root.
 
 Sandbox and browser settings have their own page: [Sandbox and browser](sandbox-and-browser.md).
 
@@ -18,7 +18,7 @@ Sandbox and browser settings have their own page: [Sandbox and browser](sandbox-
 
 | Variable                    | Default                   | Meaning                                                                                                     |
 | --------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `PIRC_STATE_DIR`            | `./.state`                | Sessions, uploads, SQLite, browser profiles, workspace memory, chat directories. Set it explicitly.         |
+| `PIRC_STATE_DIR`            | `./.state`                | Sessions, uploads, SQLite, browser profiles, workspace memory. Set it explicitly.                           |
 | `PIRC_DATABASE_PATH`        | `$STATE/gateway.sqlite`   | The node's own SQLite (sessions, runs, interactions, uploads, workspaces).                                  |
 | `PIRC_SESSIONS_DIR`         | `$STATE/sessions`         | One directory per session holding `session.jsonl` (the conversation source of truth).                       |
 | `PIRC_UPLOADS_DIR`          | `$STATE/uploads`          | Uploaded files.                                                                                             |
@@ -37,15 +37,13 @@ An empty list is fine: the web's **Add workspace** (`POST /api/workspaces` with 
 
 Workspaces are an execution allowlist: sessions only ever run in a listed directory. Several sessions may share a workspace; concurrent writes are serialized by the node's write broker (a second session gets `workspace_busy` until the first run ends).
 
-## The chat node
+## Accepted modes
 
-Run `pirc-node chat` for assistant chats/projects, or `pirc-node` for coding workspaces. Both use the same executable; the explicit `chat` subcommand selects the role, not an environment switch. `pirc-node chat` requires an empty `PIRC_WORKSPACES`. By default it accepts only the `chat` mode; coding nodes accept only `directory`. Set comma-separated `PIRC_MODES` to accept additional gateway-defined ids, for example `directory,review` or `chat,research`. Workspace creation follows the mode's workdir capability, not the node role. An explicitly empty list accepts no modes; a fresh chat node then does not seed top-level Chats. Run at most one chat node, on an always-on host. On NixOS, `services.pirc.chat = true` selects `pirc-node chat` for the local runner.
-
-The chat node keeps every chat workspace under `$STATE/chat/<workspaceId>/` (the top-level `chats`, and each project), including each project's `instructions.md`. See [`docs/guides/chat-projects.md`](../guides/chat-projects.md).
+By default a node accepts only the `directory` mode. Set comma-separated `PIRC_MODES` to accept additional gateway-defined ids, for example `directory,review`. Workspace creation follows the mode's workdir capability. An explicitly empty list accepts no modes.
 
 ## Agent process
 
-The node executable supports the internal `agent` and `ptc-guest` commands and re-executes itself for those workers (`ptc-guest` runs one `ptc` script in the native QuickJS interpreter, with an empty environment, inside the agent's sandbox). These are not separately deployed executables. Keep the gateway and both node roles on the same release/protocol version ([Upgrades](upgrades.md)).
+The node executable supports the internal `agent` and `ptc-guest` commands and re-executes itself for those workers (`ptc-guest` runs one `ptc` script in the native QuickJS interpreter, with an empty environment, inside the agent's sandbox). These are not separately deployed executables. Keep the gateway and nodes on the same release/protocol version ([Upgrades](upgrades.md)).
 
 | Variable                                          | Default           | Meaning                                                                                               |
 | ------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------- |
@@ -76,9 +74,7 @@ receive validated `PIRC_MODE` JSON; `PIRC_WORKSPACE_KIND` is retired. See
 ```
 ~/.config/.pirc/
 ├── config.json     limits, features, hooks, env, allowedPaths, sandbox
-├── AGENTS.md       global coding rules (optional; not read by chats)
-├── SOUL.md         global chat persona (optional; never read by coding sessions)
-├── CHAT.md         global chat rules (optional; replaces AGENTS.md for chats)
+├── AGENTS.md       global coding rules (optional)
 ├── roles/          roles: <name>.md, front matter + instructions (optional)
 └── skills/         Agent Skills: <name>/SKILL.md (optional)
 ```
@@ -120,7 +116,6 @@ Do not edit files. Cite file:line evidence and mark anything unverified.
     "agentTeam": { "limit": 4, "subagentLimit": 4 },
     "browser": { "enabled": true },
     "webSearch": { "enabled": true },
-    "schedules": { "enabled": true },
     "skills": { "enabled": true },
     "goal": { "enabled": true, "minBlockedRounds": 3 }
   },
@@ -164,5 +159,3 @@ PIRC_WORKSPACES=[]
 ```
 
 Keep the file readable by the node account only (`0600`), and list its directory in `sandbox.filesystem.denyRead` when it sits outside `PIRC_STATE_DIR` ([Sandbox and browser](sandbox-and-browser.md)).
-
-Chat nodes read global `SOUL.md` (persona) then the fixed environment description and `CHAT.md` (rules), never `AGENTS.md`. Coding nodes never read SOUL/CHAT. Each chat file is capped at 8000 characters. Settings → Assistant edits these same node-local files when writable; symlinks and Nix store files are read-only. Empty Soul falls back to the built-in identity. Changes apply at the next agent start. The gateway persistently binds one chat node ID; stop the old node and release its binding in Settings → Assistant before replacing it.

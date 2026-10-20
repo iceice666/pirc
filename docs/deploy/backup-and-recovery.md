@@ -8,14 +8,14 @@ Two kinds of state exist, and they are not interchangeable.
 
 ### Gateway (`$PIRC_STATE_DIR` of `pirc-gateway`)
 
-| Path                                | Holds                                                                                                                                                                                                                                                           | Loss means                                                                                                                               |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `gateway.sqlite` (+ `-wal`, `-shm`) | Session index and ownership, pins/settled flags, leases, command outcomes, device tokens, assistant memory (USER/MEMORY, proposals, tombstones), delegations, schedules and run history, push subscriptions, workspace-memory mirror, chat project capabilities | Sessions vanish from every client until nodes re-register them (see below); memory, schedules, pairings and push subscriptions are gone. |
-| `backends/settings.json`            | Web-managed backends and subscription OAuth tokens                                                                                                                                                                                                              | Log in / re-enter keys.                                                                                                                  |
-| `vapid.json`                        | Push signing key                                                                                                                                                                                                                                                | Every device must re-enable notifications.                                                                                               |
-| `local-node-token` (NixOS)          | The local node's secret                                                                                                                                                                                                                                         | Regenerated on next start; nothing else to do.                                                                                           |
+| Path                                | Holds                                                                                                                                                                                          | Loss means                                                                                                                    |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `gateway.sqlite` (+ `-wal`, `-shm`) | Session index and ownership, pins/settled flags, leases, command outcomes, device tokens, assistant memory (USER/MEMORY, tombstones), delegations, push subscriptions, workspace-memory mirror | Sessions vanish from every client until nodes re-register them (see below); memory, pairings and push subscriptions are gone. |
+| `backends/settings.json`            | Web-managed backends and subscription OAuth tokens                                                                                                                                             | Log in / re-enter keys.                                                                                                       |
+| `vapid.json`                        | Push signing key                                                                                                                                                                               | Every device must re-enable notifications.                                                                                    |
+| `local-node-token` (NixOS)          | The local node's secret                                                                                                                                                                        | Regenerated on next start; nothing else to do.                                                                                |
 
-### Node (`$PIRC_STATE_DIR` of each `pirc-node` or `pirc-node chat`)
+### Node (`$PIRC_STATE_DIR` of each `pirc-node`)
 
 | Path                          | Holds                                                                                     | Loss means                                                                                                |
 | ----------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -23,7 +23,6 @@ Two kinds of state exist, and they are not interchangeable.
 | `gateway.sqlite`              | The node's session metadata, runs, interactions, uploads, web-added workspaces            | Sessions become unknown to the node even if their JSONL survives.                                         |
 | `uploads/`                    | Uploaded files                                                                            | Images in old messages no longer load.                                                                    |
 | `workspace-memory/`           | Per-repository memory ledgers                                                             | New sessions lose their cross-session notes (the gateway's mirror keeps searchable copies without paths). |
-| `chat/` (chat node)           | Chat workspaces, their sessions' working directories, project `instructions.md`           | Chats lose their files and instructions.                                                                  |
 | `browser/`                    | Browser profiles (logins)                                                                 | Log in again in the agent's browser.                                                                      |
 
 Workspaces (repositories) are not pirc state; back them up as you already do. `<workspace>/.pirc/` holds project config, uploads copied for the agent and recordings.
@@ -71,7 +70,7 @@ Copy the node's state directory and `PIRC_CONFIG_DIR`, keep the same `PIRC_NODE_
 
 Stop the process and take a backup first. The gateway and each node have their own database; a session exists in both and both must be fixed.
 
-- Gateway tables of interest: `workspaces`, `sessions`, `runs`, `commands`, `interactions`, `leases`, `uploads`, `device_tokens`, `memory_*`, `delegations`, `schedules`, `schedule_runs`, `push_subscriptions`, `workspace_capabilities` (`crates/pirc-gateway/src/schema.sql` is authoritative).
+- Gateway tables of interest: `workspaces`, `sessions`, `runs`, `commands`, `interactions`, `leases`, `uploads`, `device_tokens`, `memory_*`, `delegations`, `push_subscriptions` (`crates/pirc-gateway/src/schema.sql` is authoritative).
 - Foreign keys are on. Delete a session's `leases`, `interactions`, `commands`, `runs` before the `sessions` row.
 - Gateway workspace IDs are `<nodeId>:<workspaceId>`; node ones are the bare `<workspaceId>`.
 - Deleting a `device_tokens` row revokes that phone.
@@ -84,6 +83,5 @@ sqlite3 /var/lib/pirc/daemon/gateway.sqlite    # or: nix shell nixpkgs#sqlite -c
 
 ## Retention limits to know
 
-- Schedule run history keeps the newest 50 runs per schedule (open and missed runs are never pruned).
-- Forgetting an assistant memory entry deletes it and its history but keeps a hash tombstone so the same text is not re-added; the chats it came from stay on the chat node.
-- Sessions do not expire; the state directories grow with use. Deleting a chat or a chat project ([chat projects guide](../guides/chat-projects.md#deleting-a-chat)) removes its files and rows, but not the copies in backups or old WAL frames.
+- Forgetting an assistant memory entry deletes it and its history but keeps a hash tombstone so the same text is not re-added.
+- Sessions do not expire; the state directories grow with use.

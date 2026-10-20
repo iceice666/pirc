@@ -2,15 +2,14 @@
 
 ## Processes
 
-Two native executables implement three roles; chat uses an explicit subcommand:
+Two native executables implement the gateway and node roles:
 
-| Executable       | Runs on                              | Listens on                                                  | Does                                                                                                                                |
-| ---------------- | ------------------------------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `pirc-gateway`   | one always-on host                   | `PIRC_HOST:PIRC_PORT` (default `127.0.0.1:8787`), HTTP + WS | Authenticates browsers and phones, indexes sessions, routes requests, runs **all model requests**, keeps memory, schedules and push |
-| `pirc-node chat` | at most one always-on host           | nothing (connects out over one WebSocket)                   | Hosts assistant chats/projects, runs agents and their tools; owns chat transcripts                                                  |
-| `pirc-node`      | every machine with coding workspaces | nothing (connects out over one WebSocket)                   | Runs coding agents, side-panel shells, file/Git inspection, uploads and the agents' browser; owns session transcripts               |
+| Executable     | Runs on                              | Listens on                                                  | Does                                                                                                                     |
+| -------------- | ------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `pirc-gateway` | one always-on host                   | `PIRC_HOST:PIRC_PORT` (default `127.0.0.1:8787`), HTTP + WS | Authenticates browsers and phones, indexes sessions, routes requests, runs **all model requests**, keeps memory and push |
+| `pirc-node`    | every machine with coding workspaces | nothing (connects out over one WebSocket)                   | Runs coding agents, side-panel shells, file/Git inspection, uploads and the agents' browser; owns session transcripts    |
 
-Chat and coding roles share the node executable and agent implementation. Their internal worker commands are not independently deployed services:
+The node executable's internal worker commands are not independently deployed services:
 
 | Command                 | Available on     | Purpose                                                          |
 | ----------------------- | ---------------- | ---------------------------------------------------------------- |
@@ -31,10 +30,8 @@ browser ──https──▶ reverse proxy ──forward auth──▶ static we
 phone app ──https──▶    │  Bearer pirc_dev_… ────▶ pirc-gateway  /api/…      (no forward auth, identity header stripped)
                         └─ /node/connect ◀──wss── pirc-node (machine A)      (no forward auth, PIRC_NODE_TOKEN)
                                           ◀──wss── pirc-node (machine B)
-                                          ◀──ws─── pirc-node chat (always-on host, here loopback)
 
 pirc-node ──stdio JSONL──▶ pirc-node agent ──unix socket──▶ pirc-node ──node link──▶ gateway ──▶ model provider
-pirc-node chat ──stdio JSONL──▶ pirc-node agent ──unix socket──▶ pirc-node chat ──node link──▶ gateway
 ```
 
 - Browsers and phones only ever reach the gateway, and only through the proxy.
@@ -56,25 +53,20 @@ A small always-on host runs the gateway (and optionally a local node); workstati
 
 The gateway host has no workspaces (`services.pirc.localNode.enable = false`, or simply no node there). All work happens on remote nodes. The gateway still needs at least one entry in `PIRC_NODE_TOKENS`.
 
-### The chat node
-
-Run at most one `pirc-node chat` process (NixOS: `services.pirc.chat = true` selects it for the local runner). It hosts the assistant's chats (the top-level **Chats** workspace and the projects created from the web) in directories it manages under its state directory, and hosts **nothing else**: `PIRC_WORKSPACES` must be empty there and the web refuses to add directory workspaces to it. Pick an always-on machine, usually the gateway host's local node. Without a chat node, the assistant features (memory, delegation, schedules from chat) are simply absent.
-
 ## Where state lives
 
-| Data                                                                       | Process   | Location                                                                    |
-| -------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------- |
-| Session index, control leases, command outcomes, device tokens             | gateway   | `$PIRC_STATE_DIR/gateway.sqlite`                                            |
-| Assistant memory, delegations, schedules, push subscriptions, project caps | gateway   | same database                                                               |
-| Web-managed model backends and subscription logins                         | gateway   | `$PIRC_STATE_DIR/backends/settings.json` (0600)                             |
-| VAPID key pair for push (unless given by environment)                      | gateway   | `$PIRC_STATE_DIR/vapid.json`                                                |
-| Session transcripts (the conversation source of truth), runs, interactions | node      | `$PIRC_STATE_DIR/sessions/<id>/`, `gateway.sqlite`                          |
-| Uploads                                                                    | node      | `$PIRC_STATE_DIR/uploads/`, and `<workspace>/.pirc/uploads/` for non-images |
-| Workspace memory ledgers (mirrored to the gateway without paths)           | node      | `$PIRC_STATE_DIR/workspace-memory/`                                         |
-| Chat workspaces and per-project instructions                               | chat node | `$PIRC_STATE_DIR/chat/<workspaceId>/`                                       |
-| Browser profiles (logins)                                                  | node      | `$PIRC_STATE_DIR/browser/`                                                  |
-| Agent config, global `AGENTS.md`, skills                                   | node      | `$PIRC_CONFIG_DIR` (default `~/.config/.pirc`)                              |
-| Node ↔ agent inference socket (random per start)                          | node      | `$PIRC_STATE_DIR/i-*/socket` (0600)                                         |
+| Data                                                                       | Process | Location                                                                    |
+| -------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------- |
+| Session index, control leases, command outcomes, device tokens             | gateway | `$PIRC_STATE_DIR/gateway.sqlite`                                            |
+| Assistant memory, delegations, push subscriptions                          | gateway | same database                                                               |
+| Web-managed model backends and subscription logins                         | gateway | `$PIRC_STATE_DIR/backends/settings.json` (0600)                             |
+| VAPID key pair for push (unless given by environment)                      | gateway | `$PIRC_STATE_DIR/vapid.json`                                                |
+| Session transcripts (the conversation source of truth), runs, interactions | node    | `$PIRC_STATE_DIR/sessions/<id>/`, `gateway.sqlite`                          |
+| Uploads                                                                    | node    | `$PIRC_STATE_DIR/uploads/`, and `<workspace>/.pirc/uploads/` for non-images |
+| Workspace memory ledgers (mirrored to the gateway without paths)           | node    | `$PIRC_STATE_DIR/workspace-memory/`                                         |
+| Browser profiles (logins)                                                  | node    | `$PIRC_STATE_DIR/browser/`                                                  |
+| Agent config, global `AGENTS.md`, skills                                   | node    | `$PIRC_CONFIG_DIR` (default `~/.config/.pirc`)                              |
+| Node ↔ agent inference socket (random per start)                          | node    | `$PIRC_STATE_DIR/i-*/socket` (0600)                                         |
 
 Both state directories are created with mode `0700`. See [Backup and recovery](backup-and-recovery.md) for what to copy.
 

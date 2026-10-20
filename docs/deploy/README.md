@@ -4,23 +4,23 @@
 
 These pages describe how to run pirc outside a development checkout. Each page covers one concern; read them in order the first time, then use them as reference.
 
-| Page                                          | Covers                                                                                                            |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [Topology](topology.md)                       | The processes, who talks to whom, what runs where, and which layouts are supported                                |
-| [Gateway](gateway.md)                         | `pirc-gateway`: every environment variable, the state directory, model backends, signals                          |
-| [Node](node.md)                               | `pirc-node` / `pirc-node chat`: every environment variable, the agent config directory, workspaces, the chat node |
-| [Sandbox and browser](sandbox-and-browser.md) | The per-agent native OS sandbox and the agents' Chromium, per node                                                |
-| [Reverse proxy](reverse-proxy.md)             | Forward auth, the routes that bypass it, static web serving, nginx and Traefik examples                           |
-| [Secrets](secrets.md)                         | Which secrets exist, where each one lives, how to generate and rotate them                                        |
-| [NixOS](nixos.md)                             | The `services.pirc` module: options, accounts, remote nodes, upgrading                                            |
-| [macOS node](macos-node.md)                   | A launchd node on a Mac, with or without Nix                                                                      |
-| [Upgrades](upgrades.md)                       | Release order, the node protocol version, reloads without restarts, rollback                                      |
-| [Backup and recovery](backup-and-recovery.md) | What to back up per process, restore, crash semantics, manual database surgery                                    |
-| [Troubleshooting](troubleshooting.md)         | Symptoms, their causes and the commands that confirm them                                                         |
+| Page                                          | Covers                                                                                   |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [Topology](topology.md)                       | The processes, who talks to whom, what runs where, and which layouts are supported       |
+| [Gateway](gateway.md)                         | `pirc-gateway`: every environment variable, the state directory, model backends, signals |
+| [Node](node.md)                               | `pirc-node`: every environment variable, the agent config directory, workspaces          |
+| [Sandbox and browser](sandbox-and-browser.md) | The per-agent native OS sandbox and the agents' Chromium, per node                       |
+| [Reverse proxy](reverse-proxy.md)             | Forward auth, the routes that bypass it, static web serving, nginx and Traefik examples  |
+| [Secrets](secrets.md)                         | Which secrets exist, where each one lives, how to generate and rotate them               |
+| [NixOS](nixos.md)                             | The `services.pirc` module: options, accounts, remote nodes, upgrading                   |
+| [macOS node](macos-node.md)                   | A launchd node on a Mac, with or without Nix                                             |
+| [Upgrades](upgrades.md)                       | Release order, the node protocol version, reloads without restarts, rollback             |
+| [Backup and recovery](backup-and-recovery.md) | What to back up per process, restore, crash semantics, manual database surgery           |
+| [Troubleshooting](troubleshooting.md)         | Symptoms, their causes and the commands that confirm them                                |
 
 ## Requirements
 
-- The two native executables: `pirc-gateway` and `pirc-node` (chat: `pirc-node chat`). `bun run build` produces them in `target/release/` plus the static web bundle; Nix packages are `.#pirc-gateway` and `.#pirc-node`. No Bun/Node runtime, srt or Playwright package is shipped. Install git, Linux bubblewrap, Chromium/Chrome and optional ffmpeg. Protocol 10 requires a coordinated [fresh-start migration](upgrades.md) from 0.3.0.
+- The two native executables: `pirc-gateway` and `pirc-node`. `bun run build` produces them in `target/release/` plus the static web bundle; Nix packages are `.#pirc-gateway` and `.#pirc-node`. No Bun/Node runtime, srt or Playwright package is shipped. Install git, Linux bubblewrap, Chromium/Chrome and optional ffmpeg. Protocol 10 requires a coordinated [fresh-start migration](upgrades.md) from 0.3.0.
 - The static web bundle (`apps/web/dist`, or the gateway package's `share/pirc/web`) served by a web server: the gateway does **not** serve it.
 - A reverse proxy that performs forward authentication (Authelia or compatible) and terminates TLS.
 - A model backend reachable **from the gateway**: a subscription login made in the web UI, or an API-key endpoint from the web UI or `models.json`.
@@ -28,7 +28,7 @@ These pages describe how to run pirc outside a development checkout. Each page c
 
 ### One user
 
-Every identity in `PIRC_ALLOWED_USERS` is treated as **the same person**, for example your phone's and your laptop's logins. pirc keeps sessions, memory and schedules per identity, but it does not isolate them from one another: there are no workspace owners, quotas or per-user limits. Any allowed identity can trust a workspace's project config, link, configure and schedule in any workspace, and every chat's assistant lists every directory workspace. Do not list people you would not give your shell to; give a second person their own gateway and nodes. (Decided 2026-10-16; security audit L5 and I4.)
+Every identity in `PIRC_ALLOWED_USERS` is treated as **the same person**, for example your phone's and your laptop's logins. pirc keeps sessions and memory per identity, but it does not isolate them from one another: there are no workspace owners, quotas or per-user limits. Any allowed identity can trust a workspace's project config, link and configure any workspace. Do not list people you would not give your shell to; give a second person their own gateway and nodes. (Decided 2026-10-16; security audit L5 and I4.)
 
 ## Minimum checklist
 

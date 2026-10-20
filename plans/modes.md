@@ -1,6 +1,6 @@
 # Data-driven workspace modes
 
-[Plans](README.md) · [Assistant contracts](../docs/architecture/assistant-memory.md) · [Chat projects guide](../docs/guides/chat-projects.md)
+[Plans](README.md) · [Assistant contracts](../docs/architecture/assistant-memory.md)
 
 Goal: a workspace's mode (today `chat` or `directory`, shown as Chat / Work) is data, not two hard-coded branches, so the user can define more modes. Code defines a fixed vocabulary of capabilities; a mode file combines them. There are no built-in modes: `chat` and `directory` are two default mode files, edited or removed like any other.
 
@@ -93,7 +93,7 @@ Decided with the user 2026-10-19:
 1. The tab is derived from `assistant`: `full` → Chat, `user` → Work. `ui.group` is removed outright (breaking change, below).
 2. The scratch mode is a guide example, not a default file or part of `--print-defaults`.
 
-Not mode fields, by decision (keep them out of mode files): the delegation dispatch policy ([Delegation autonomy](delegation-autonomy.md); per assistant workspace, consistent with "modes set no approval mode") and GPU access ([Sandbox GPU](sandbox-gpu.md); a node sandbox setting a mode cannot change). Clients may show a node's GPU availability next to its modes, as node information.
+Not mode fields, by decision (keep them out of mode files): the delegation dispatch policy (per assistant workspace, consistent with "modes set no approval mode") and GPU access ([Sandbox GPU](sandbox-gpu.md); a node sandbox setting a mode cannot change). Clients may show a node's GPU availability next to its modes, as node information.
 
 Implemented 2026-10-19 with the user's go-ahead: protocol 13 without `ui.group`, node modes in `/api/nodes`, mode-aware delegation targets, Web and Android by capability, scratch guide example, upgrade notes and CHANGELOG. Checked: `cargo fmt --check`, workspace Clippy `-D warnings`, workspace tests; Web typecheck, 349 tests and build; Android `flutter analyze` and the full unit/widget suite (5669 passed; the 9 Mermaid Gantt failures also fail on unmodified HEAD on this Mac: missing macOS font asset directory); repository Prettier. Conformance: the new `delegation_to_a_per_session_workspace` and `modes` scenarios pass on macOS debug and Linux release. Full Linux conformance (NixOS/aarch64 OrbStack copy, git and Python added to the shell) passed except snapshot diffs: five expected (`mode` in delegation targets, node `modes`, protocol 13) were re-recorded after review and then passed with `INSTA_UPDATE=no`; `node_panels_access`/`node_panels_git` differ only in the tail of git's usage text from the git 2.51.2 added to that shell, so they were not re-recorded. Not done: Settings Modes page, retiring `kind`, Android scratch parity capture, guide screenshots.
 
@@ -106,4 +106,4 @@ Implemented 2026-10-19 with the user's go-ahead: protocol 13 without `ui.group`,
 - [x] **Scratch example and delegation into per-session workspaces.** Guide example `scratch.md`: `workdir: per-session`, `assistant: user`, `repository: false`, `delegate_target: true`, `projects: false`, project files/instructions off, accepted on a coding node through `PIRC_MODES`. `resolve_directory_workspace` (`dispatch.rs`) checks only `delegate_target`, so delegating there should work but is untested: add a conformance scenario (delegate to a per-session workspace on a coding node, the session gets its own node-managed directory, the report returns). Intended use: one-off jobs such as a ComfyUI run on a GPU node, with models in a shared `allowedPaths` directory.
 - [ ] **Settings (lower priority).** A read-only Modes page listing each mode, its source file and its validation warnings; warnings are only logged today, so the API must expose them (editing stays in files: they are gateway-host configuration the agent cannot write).
 - [ ] **Retire `kind`.** After Web and Android stop reading it, keep the derived `kind` one more release, then remove it from workspace and node JSON.
-- [ ] Docs: done except screenshots. The modes guide (no `group`, tab rule, scratch and review examples, screenshots); `docs/guides/chat-projects.md` says projects are one mode's capability; `docs/guides/session-ui.md` (Work grouped by node, create dialog).
+- [ ] Docs: done except screenshots. The modes guide (no `group`, tab rule, scratch and review examples, screenshots).
