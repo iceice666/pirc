@@ -4,62 +4,24 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-10-20
+
 ### Added
 
-- Update the Android app icon.
-- Android terminal pinch and Ctrl-key zoom, plus mobile extra keys.
+- English and Traditional Chinese settings for Web and Android, including native notification and quick-reply controls.
+- New conversations open immediately and stay local until the first message is sent; abandoned drafts do not enter the session list.
+- Android app icon update, terminal pinch/Ctrl-key zoom and mobile extra keys.
 
 ### Fixed
 
-- Harden sandbox process channels, protect host caches and private state, expand credential isolation, and restore Git initialization in new workspaces.
-- New sandboxes isolate registered same-account node/gateway state and node temporary directories.
-- Refresh OpenCode Zen/Go model catalogs and route supported models through their native API endpoints.
-- Android notices use the available width, and terminal keyboard changes preserve glyph caches.
-- Android interactive dialogs support cancelable close requests and correctly replace their event handlers.
-- Android running and stopping indicators animate consistently, and supported document dialogs use browser default sizing and placement.
-- Android interactive nonmodal dialogs can open and restore native control focus when closed.
-- Android scripted dialog forms close locally and preserve return values, validation and input state across view replacement.
-- Android interactive pages keep images and script-updated form values consistent when switching views.
-- Android script file selection survives document view replacement and updates the active file controls.
-- Android static documents retain form inputs and selected files when reopening the same live document view.
-- Android HTML disclosures keep script state, named accordions and keyboard activation synchronized.
-- Android links reveal collapsed content and preserve disclosure state and eligible text drafts across view rebuilds.
+- Harden sandbox process channels and private state/cache protection; new sandboxes also isolate registered same-account node/gateway directories. Restart existing sessions to apply the policy changes.
+- Improve Android keyboard stability, loading indicators, agent labels and interactive document rendering, forms, dialogs and navigation.
+- Add approval-mode warning icons, fix Web source-file line/gutter alignment, and make automatic session naming retry with a fallback.
+- Refresh built-in provider model catalogs and preserve native API routes on supported official endpoints.
 
-- Android interactive content keeps relative positioning and link hits aligned with font and viewport units.
+### Notes
 
-- Android Back/Forward no longer waits for a layout timeout on ready static pages.
-
-- Android initial page routing preserves document targets and history reading positions.
-
-- Android initial document links wait for generated targets and retain the selected node through loading and remounts.
-
-- Android document targets update native styles and preserve target identity through History API changes.
-
-- Android document links focus native controls and keep their nested scroll position consistent; CSS-sized toggles retain label and keyboard interaction.
-
-- Android document links use native nested scrolling with CSS scroll margins/padding and retain hidden anchor priority.
-
-- Android document links correctly repeat fragment jumps and resolve encoded or duplicate anchors while preserving history and form controls.
-
-- Android interactive pages can scroll native elements into view through nested panels, including CSS scroll margins/padding and measured form controls.
-
-- Android scrolling APIs honor CSS smooth-scrolling defaults and keep immediate position reads consistent.
-
-- Android keeps positioned interactive content inside its native scrolling and clipping container.
-
-- Android interactive pages report native offset parents and layout positions through common CSS transforms, absolute positioning and fixed positioning.
-
-- Android improves positioning and whole-element opacity inside transformed HTML containers.
-
-- Android interactive pages keep element rectangles current after scripted scrolling and support common native CSS 2D transforms with matching touch targets and computed-style reads.
-
-- Android interactive pages support `document.scrollingElement`, with parser-based document mode and viewport/body scroll ownership.
-
-- Android interactive documents report updated scroll positions immediately after scripted changes, including repeated increments and range clamping.
-
-- Android preserves the order of consecutive scroll commands and correctly stops smooth scrolling with same-position or zero-distance calls.
-
-- Android preserves interactive document scroll positions when views are rebuilt and keeps positions isolated between pages.
+- Android remains a beta preview using the existing Release signing identity. Real-device keyboard behavior and remote background push still need acceptance testing.
 
 ## [0.9.1] - 2026-10-19
 

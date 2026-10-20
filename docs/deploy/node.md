@@ -16,14 +16,14 @@ Sandbox and browser settings have their own page: [Sandbox and browser](sandbox-
 
 ## State
 
-| Variable                    | Default                   | Meaning                                                                                                     |
-| --------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `PIRC_STATE_DIR`            | `./.state`                | Sessions, uploads, SQLite, browser profiles, workspace memory, chat directories. Set it explicitly.         |
-| `PIRC_DATABASE_PATH`        | `$STATE/gateway.sqlite`   | The node's own SQLite (sessions, runs, interactions, uploads, workspaces).                                  |
-| `PIRC_SESSIONS_DIR`         | `$STATE/sessions`         | One directory per session holding `session.jsonl` (the conversation source of truth).                       |
-| `PIRC_UPLOADS_DIR`          | `$STATE/uploads`          | Uploaded files.                                                                                             |
+| Variable                    | Default                   | Meaning                                                                                                                                    |
+| --------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PIRC_STATE_DIR`            | `./.state`                | Sessions, uploads, SQLite, browser profiles, workspace memory, chat directories. Set it explicitly.                                        |
+| `PIRC_DATABASE_PATH`        | `$STATE/gateway.sqlite`   | The node's own SQLite (sessions, runs, interactions, uploads, workspaces).                                                                 |
+| `PIRC_SESSIONS_DIR`         | `$STATE/sessions`         | One directory per session holding `session.jsonl` (the conversation source of truth).                                                      |
+| `PIRC_UPLOADS_DIR`          | `$STATE/uploads`          | Uploaded files.                                                                                                                            |
 | `PIRC_WORKSPACE_MEMORY_DIR` | `$STATE/workspace-memory` | Per-repository memory ledgers appended by the node on behalf of builtin agents; mirrored to the gateway (without paths) for the assistant. |
-| `PIRC_MEMORY_MIRROR_MS`     | `30000`                   | How often new workspace memory is mirrored.                                                                 |
+| `PIRC_MEMORY_MIRROR_MS`     | `30000`                   | How often new workspace memory is mirrored.                                                                                                |
 
 The state directory is also the natural `HOME` of the node account (build caches land there). Under the sandbox, agents cannot read it except their own session directory and their workspace's memory ledger.
 

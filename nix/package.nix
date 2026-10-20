@@ -28,7 +28,7 @@ rustPlatform.buildRustPackage {
       ../crates
     ];
   };
-  cargoHash = "sha256-WytrUbeORfnNbSVFrvDglpxsJ1DU7T4yJQNunbI1XEk=";
+  cargoHash = "sha256-TqSd80/uwt/JGyHh/6H/JwEzkXZDmd0UN7zVf7IhV1s=";
   cargoBuildFlags = [
     "-p"
     "pirc-${role}"
