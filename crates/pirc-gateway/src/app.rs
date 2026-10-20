@@ -375,6 +375,7 @@ pub fn router(app: AppState) -> Router {
         .merge(routes::rooms::routes())
         .merge(routes::brain::routes())
         .merge(routes::loops::routes())
+        .merge(routes::wakes::routes())
         .merge(routes::feature_routes())
         .merge(crate::management::routes())
         .merge(crate::backends::routes())
@@ -449,6 +450,7 @@ fn param_too_long(method: &str, path: &str) -> bool {
         .chain(routes::rooms::PARAM_ROUTES)
         .chain(routes::brain::PARAM_ROUTES)
         .chain(routes::loops::PARAM_ROUTES)
+        .chain(routes::wakes::PARAM_ROUTES)
         .any(|(route_method, route)| {
             if *route_method != method {
                 return false;

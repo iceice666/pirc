@@ -11,7 +11,9 @@
 //!   until?}`). When it comes ([`fire_due`], the timer of [`start_timer`]),
 //!   a time that is the thing itself (`autoClose`: a meeting, a deadline)
 //!   closes the loop (`elapsed`); a recurrence moves to its next time, and
-//!   ends with `until` (`recurrence_ended`). Plan 05 wakes the brain there.
+//!   ends with `until` (`recurrence_ended`). The brain wakes for each
+//!   (plans/rewrite/05-self-wake.md), and the day before an `autoClose`
+//!   time too; such a time then closes its loop once that wake is over.
 //! - The origin is the gateway's to say, as for facts: `user`, or
 //!   `tool:<source>` when something the brain read is behind it. A
 //!   `tool:*` loop never authorizes an action on its own (plans 06, 07).
@@ -73,6 +75,9 @@ pub struct OpenLoop {
     pub source_entry_ids: Value,
     /// When its anchor comes next, while open.
     pub due_at: Option<i64>,
+    /// The day before an `autoClose` time, while that is still to come:
+    /// the brain wakes then too (plans/rewrite/05-self-wake.md).
+    pub notice_at: Option<i64>,
 }
 
 impl OpenLoop {
@@ -97,6 +102,7 @@ impl OpenLoop {
             last_touched_at: row.get("last_touched_at")?,
             source_entry_ids: safe_json(&row.get::<_, String>("source_entry_ids_json")?, json!([])),
             due_at: row.get("due_at")?,
+            notice_at: row.get("notice_at")?,
         })
     }
 
@@ -119,11 +125,20 @@ pub struct AnchorInput {
     pub auto_close: Option<bool>,
 }
 
-/// A checked anchor: what is stored, and when it comes first.
+/// A checked anchor: what is stored, when it comes first, and the day
+/// before an `autoClose` time while that is to come.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Anchor {
     pub json: Value,
     pub due_at: i64,
+    pub notice_at: Option<i64>,
+}
+
+const DAY_MS: i64 = 86_400_000;
+
+/// The day before a time that is the thing itself, if that is still to come.
+fn notice(at: i64, auto_close: bool, now: i64) -> Option<i64> {
+    (auto_close && at - DAY_MS > now).then_some(at - DAY_MS)
 }
 
 fn zone_of(name: &str) -> Result<Zone, String> {
@@ -159,9 +174,11 @@ impl AnchorInput {
                 if at <= now {
                     return Err("That time has passed".to_owned());
                 }
+                let auto_close = self.auto_close.unwrap_or(false);
                 Ok(Anchor {
-                    json: json!({ "at": at, "zone": zone_name, "autoClose": self.auto_close.unwrap_or(false) }),
+                    json: json!({ "at": at, "zone": zone_name, "autoClose": auto_close }),
                     due_at: at,
+                    notice_at: notice(at, auto_close, now),
                 })
             }
             (None, Some(pattern)) => {
@@ -200,7 +217,11 @@ impl AnchorInput {
                 if let Some(until) = until {
                     json["until"] = json!(until);
                 }
-                Ok(Anchor { json, due_at: next })
+                Ok(Anchor {
+                    json,
+                    due_at: next,
+                    notice_at: None,
+                })
             }
             _ => Err("An anchor has `at` (one time) or `cron` (a recurrence)".to_owned()),
         }
@@ -341,7 +362,7 @@ pub fn open(conn: &Connection, new: &NewLoop<'_>, now: i64) -> ApiResult<(OpenLo
         }
         let id = new_id(conn)?;
         conn.execute(
-            "INSERT INTO open_loops (id,owner_user,room_id,face_id,what,why,origin,anchor_json,next_check,status,created_at,last_touched_at,source_entry_ids_json,due_at) VALUES (?,?,?,?,?,?,?,?,?,'open',?,?,?,?)",
+            "INSERT INTO open_loops (id,owner_user,room_id,face_id,what,why,origin,anchor_json,next_check,status,created_at,last_touched_at,source_entry_ids_json,due_at,notice_at) VALUES (?,?,?,?,?,?,?,?,?,'open',?,?,?,?,?)",
             params![
                 id,
                 new.user,
@@ -356,6 +377,7 @@ pub fn open(conn: &Connection, new: &NewLoop<'_>, now: i64) -> ApiResult<(OpenLo
                 now,
                 json!(new.source_entry_ids.iter().take(50).collect::<Vec<_>>()).to_string(),
                 new.anchor.as_ref().map(|anchor| anchor.due_at),
+                new.anchor.as_ref().and_then(|anchor| anchor.notice_at),
             ],
         )?;
         Ok((get(conn, &id)?, false))
@@ -413,19 +435,24 @@ pub fn update(conn: &Connection, id: &str, changes: &Changes<'_>, now: i64) -> A
             Some(next_check) => optional_text(next_check, NEXT_CHECK_MAX, "next_check")?,
             None => found.next_check,
         };
-        let (anchor, due_at) = match &changes.anchor {
-            Some(Some(anchor)) => (Some(anchor.json.clone()), Some(anchor.due_at)),
-            Some(None) => (None, None),
-            None => (found.anchor, found.due_at),
+        let (anchor, due_at, notice_at) = match &changes.anchor {
+            Some(Some(anchor)) => (
+                Some(anchor.json.clone()),
+                Some(anchor.due_at),
+                anchor.notice_at,
+            ),
+            Some(None) => (None, None, None),
+            None => (found.anchor, found.due_at, found.notice_at),
         };
         conn.execute(
-            "UPDATE open_loops SET what=?, why=?, next_check=?, anchor_json=?, due_at=?, last_touched_at=? WHERE id=?",
+            "UPDATE open_loops SET what=?, why=?, next_check=?, anchor_json=?, due_at=?, notice_at=?, last_touched_at=? WHERE id=?",
             params![
                 what,
                 why,
                 next_check,
                 anchor.map(|anchor| anchor.to_string()),
                 due_at,
+                notice_at,
                 now,
                 id
             ],
@@ -442,7 +469,7 @@ pub fn close(conn: &Connection, id: &str, reason: &str, now: i64) -> ApiResult<(
         return Ok((found, true));
     }
     conn.execute(
-        "UPDATE open_loops SET status='closed', closed_reason=?, closed_at=?, due_at=NULL WHERE id=?",
+        "UPDATE open_loops SET status='closed', closed_reason=?, closed_at=?, due_at=NULL, notice_at=NULL WHERE id=?",
         params![reason, now, id],
     )?;
     Ok((get(conn, id)?, false))
@@ -475,9 +502,21 @@ pub fn reopen(conn: &Connection, id: &str, now: i64) -> ApiResult<(OpenLoop, boo
             },
             None => None,
         };
+        let notice_at = match (&anchor, due_at) {
+            (Some(anchor), Some(at)) if anchor.get("at").is_some() => {
+                notice(at, anchor.get("autoClose") == Some(&json!(true)), now)
+            }
+            _ => None,
+        };
         conn.execute(
-            "UPDATE open_loops SET status='open', closed_reason=NULL, closed_at=NULL, anchor_json=?, due_at=?, last_touched_at=? WHERE id=?",
-            params![anchor.map(|anchor| anchor.to_string()), due_at, now, id],
+            "UPDATE open_loops SET status='open', closed_reason=NULL, closed_at=NULL, anchor_json=?, due_at=?, notice_at=?, last_touched_at=? WHERE id=?",
+            params![
+                anchor.map(|anchor| anchor.to_string()),
+                due_at,
+                notice_at,
+                now,
+                id
+            ],
         )?;
         let facts: Vec<(String, String)> = {
             let mut statement = conn.prepare(
@@ -597,7 +636,8 @@ pub fn demote_overflow(conn: &Connection, now: i64) -> ApiResult<Vec<Demoted>> {
 /// What an anchor's coming did to its loop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fired {
-    /// A time that was the thing itself: closed (`elapsed`).
+    /// A time that was the thing itself: closed (`elapsed`), or, when the
+    /// brain wakes for it, passed and closed once the wake is over.
     Elapsed,
     /// A time that was not: the loop waits for the people.
     Passed,
@@ -605,20 +645,43 @@ pub enum Fired {
     Advanced,
     /// A recurrence past its `until`: closed (`recurrence_ended`).
     Ended,
+    /// The day before an `autoClose` time.
+    Eve,
 }
 
-/// The anchors that came by `now`, and what that did.
-pub fn fire_due(conn: &Connection, now: i64) -> ApiResult<Vec<(OpenLoop, Fired)>> {
+/// The anchors that came by `now`, what that did, and the time that came.
+/// With `defer_close` (the brain wakes for it), an `autoClose` time
+/// leaves its loop open, passed, for the wake to close.
+pub fn fire_due(
+    conn: &Connection,
+    now: i64,
+    defer_close: bool,
+) -> ApiResult<Vec<(OpenLoop, Fired, i64)>> {
     atomic(conn, |conn| {
         let due: Vec<OpenLoop> = {
             let mut statement = conn.prepare(
-                "SELECT * FROM open_loops WHERE status='open' AND due_at IS NOT NULL AND due_at<=? ORDER BY due_at, id",
+                "SELECT * FROM open_loops WHERE status='open' AND ((due_at IS NOT NULL AND due_at<=?1) OR (notice_at IS NOT NULL AND notice_at<=?1)) ORDER BY min(coalesce(due_at, notice_at), coalesce(notice_at, due_at)), id",
             )?;
             let rows = statement.query_map([now], OpenLoop::from_row)?;
             rows.collect::<Result<_, _>>()?
         };
         let mut fired = Vec::new();
         for open_loop in due {
+            if open_loop.due_at.is_none_or(|due_at| due_at > now) {
+                // Only the day before came.
+                conn.execute(
+                    "UPDATE open_loops SET notice_at=NULL WHERE id=?",
+                    [&open_loop.id],
+                )?;
+                let at = open_loop.due_at.unwrap_or(now);
+                fired.push((get(conn, &open_loop.id)?, Fired::Eve, at));
+                continue;
+            }
+            let came = open_loop.due_at.unwrap_or(now);
+            conn.execute(
+                "UPDATE open_loops SET notice_at=NULL WHERE id=?",
+                [&open_loop.id],
+            )?;
             let mut anchor = open_loop.anchor.clone().unwrap_or(Value::Null);
             let what = if anchor.get("cron").is_some() {
                 // A suspended machine catches up once, from now.
@@ -637,8 +700,15 @@ pub fn fire_due(conn: &Connection, now: i64) -> ApiResult<Vec<(OpenLoop, Fired)>
                         Fired::Ended
                     }
                 }
-            } else if anchor.get("autoClose") == Some(&json!(true)) {
+            } else if anchor.get("autoClose") == Some(&json!(true)) && !defer_close {
                 close(conn, &open_loop.id, ELAPSED, now)?;
+                Fired::Elapsed
+            } else if anchor.get("autoClose") == Some(&json!(true)) {
+                anchor["passed"] = json!(true);
+                conn.execute(
+                    "UPDATE open_loops SET anchor_json=?, due_at=NULL WHERE id=?",
+                    params![anchor.to_string(), open_loop.id],
+                )?;
                 Fired::Elapsed
             } else {
                 if anchor.is_object() {
@@ -653,16 +723,16 @@ pub fn fire_due(conn: &Connection, now: i64) -> ApiResult<Vec<(OpenLoop, Fired)>
                 )?;
                 Fired::Passed
             };
-            fired.push((get(conn, &open_loop.id)?, what));
+            fired.push((get(conn, &open_loop.id)?, what, came));
         }
         Ok(fired)
     })
 }
 
-/// When the next anchor comes.
+/// When the next anchor (or the day before one) comes.
 pub fn next_due(conn: &Connection) -> ApiResult<Option<i64>> {
     Ok(conn.query_row(
-        "SELECT min(due_at) FROM open_loops WHERE status='open' AND due_at IS NOT NULL",
+        "SELECT min(min(coalesce(due_at, notice_at), coalesce(notice_at, due_at))) FROM open_loops WHERE status='open' AND (due_at IS NOT NULL OR notice_at IS NOT NULL)",
         [],
         |row| row.get(0),
     )?)
@@ -878,18 +948,29 @@ pub fn start_timer(app: &crate::app::AppState) {
     slot.timer.start(due, fire);
 }
 
+/// The anchors that came: the brain wakes for each (plans/rewrite/05),
+/// and what closed is said.
 fn fire(app: &App, slot: &LoopTimer) {
-    let fired = fire_due(&app.db.lock(), now_ms());
+    use crate::wake::{self, moment};
+    let waking = wake::enabled(app);
+    let fired = fire_due(&app.db.lock(), now_ms(), waking);
     match fired {
         Ok(fired) => {
-            for (open_loop, what) in fired {
-                match what {
-                    Fired::Elapsed | Fired::Ended => {
-                        let room = home_room(app, &open_loop);
-                        say(app, &room, &open_loop, Event::Closed);
-                    }
-                    // Plan 05 wakes the brain for these.
-                    Fired::Passed | Fired::Advanced => changed(app, &open_loop),
+            for (open_loop, what, at) in fired {
+                if !open_loop.is_open() {
+                    let room = home_room(app, &open_loop);
+                    say(app, &room, &open_loop, Event::Closed);
+                } else {
+                    changed(app, &open_loop);
+                }
+                let moment = match what {
+                    Fired::Elapsed | Fired::Passed => moment::DUE,
+                    Fired::Advanced => moment::NEXT,
+                    Fired::Eve => moment::EVE,
+                    Fired::Ended => continue,
+                };
+                if waking {
+                    wake::for_loop(app, &open_loop, moment, Some(at));
                 }
             }
         }

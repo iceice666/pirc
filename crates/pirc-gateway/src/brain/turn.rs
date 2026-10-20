@@ -20,6 +20,7 @@ use super::loop_tools::LoopsFeature;
 use super::memory::{BrainPromoter, MemoryFeature, RoomMemory};
 use super::store::{brain_dir, room_dir};
 use super::ui::BrainUi;
+use super::waking::WakeFeature;
 use crate::app::AppState;
 use crate::db::rooms::{HOST_FACE_ID, Message, MessageKind, Pending, RoomStore, Speaker};
 use crate::error::ApiResult;
@@ -41,6 +42,11 @@ pub struct Progress {
     pub last_error: RefCell<Option<String>>,
     /// Token usage of the turn's replies.
     pub usage: RefCell<Option<Usage>>,
+    /// The wake this turn is, while it runs: its replies are shown to
+    /// nobody, only what it says with `speak` (plans/rewrite/05).
+    pub wake: RefCell<Option<crate::wake::Wake>>,
+    /// The wake said something in the room.
+    pub spoke: Cell<bool>,
     /// Wakes whoever waits on the fields above.
     pub changed: Notify,
 }
@@ -95,6 +101,10 @@ impl RoomAgent {
                 }),
                 Rc::new(LoopsFeature {
                     memory: memory.clone(),
+                }),
+                Rc::new(WakeFeature {
+                    memory: memory.clone(),
+                    progress: progress.clone(),
                 }),
             ],
             acquire_write: None,
@@ -193,7 +203,9 @@ impl Reply {
                 let delta = event
                     .get("assistantMessageEvent")
                     .and_then(|delta| serde_json::from_value::<AssistantDelta>(delta.clone()).ok());
-                if let Some(AssistantDelta::TextDelta { delta, .. }) = delta {
+                if let Some(AssistantDelta::TextDelta { delta, .. }) = delta
+                    && !self.waking()
+                {
                     self.text.push_str(&delta);
                     if now_ms() - self.written_at >= STREAM_WRITE_MS {
                         self.write(true);
@@ -219,6 +231,11 @@ impl Reply {
         }
     }
 
+    /// A wake's replies are shown to nobody.
+    fn waking(&self) -> bool {
+        self.progress.wake.borrow().is_some()
+    }
+
     fn end(&mut self, message: &pirc_protocol::AssistantMessage) {
         let text: String = message
             .content
@@ -231,7 +248,7 @@ impl Reply {
         if !text.is_empty() {
             self.text = text;
         }
-        if !self.text.is_empty() {
+        if !self.text.is_empty() && !self.waking() {
             self.write(false);
         }
         self.message_id = None;

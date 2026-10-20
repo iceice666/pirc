@@ -247,7 +247,8 @@ CREATE INDEX brain_turns_room ON brain_turns(room_id, started_at);
 -- (the turn's first speaker), where it goes when demoted. origin: 'user' or
 -- 'tool:<source>', worked out by the gateway. anchor_json: none, a time
 -- {at, zone, autoClose, passed?} or a recurrence {cron, zone, until?, nextAt};
--- due_at: when its anchor fires next while open (NULL: none, or passed).
+-- due_at: when its anchor fires next while open (NULL: none, or passed);
+-- notice_at: the day before an autoClose time, while still to come.
 -- closed_reason: the brain's words, the person's, or 'elapsed',
 -- 'recurrence_ended' or 'demoted'.
 CREATE TABLE open_loops (
@@ -257,7 +258,28 @@ CREATE TABLE open_loops (
   status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
   closed_reason TEXT, closed_at INTEGER,
   created_at INTEGER NOT NULL, last_touched_at INTEGER NOT NULL,
-  source_entry_ids_json TEXT NOT NULL DEFAULT '[]', due_at INTEGER
+  source_entry_ids_json TEXT NOT NULL DEFAULT '[]', due_at INTEGER,
+  notice_at INTEGER
 );
 CREATE INDEX open_loops_status ON open_loops(status, last_touched_at);
 CREATE INDEX open_loops_due ON open_loops(due_at) WHERE status = 'open';
+
+-- Wakes (plans/rewrite/05-self-wake.md): the brain waking up without anyone
+-- asking. kind: 'anchor' (an open loop's time came, or the day before an
+-- autoClose time), 'source' (plan 09) or 'self' (it asked to come back).
+-- trigger_json: what woke it ({loopId, moment, ...} or {at, why}). owner_user:
+-- whom it is for (the push, the turn's speaker). attempt: 2 for a wake put
+-- back after a user turn took over. outcome NULL: pending (started_at NULL)
+-- or running.
+CREATE TABLE wakes (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('anchor', 'source', 'self')),
+  trigger_json TEXT NOT NULL, room_id TEXT NOT NULL, face_id TEXT, owner_user TEXT,
+  scheduled_at INTEGER NOT NULL, started_at INTEGER, ended_at INTEGER,
+  outcome TEXT CHECK (outcome IN ('spoke', 'silent', 'preempted', 'failed', 'quota', 'cancelled')),
+  note TEXT, attempt INTEGER NOT NULL DEFAULT 1, turn_id TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX wakes_pending ON wakes(scheduled_at) WHERE outcome IS NULL;
+CREATE INDEX wakes_room ON wakes(room_id, scheduled_at);
+CREATE INDEX wakes_started ON wakes(started_at) WHERE started_at IS NOT NULL;

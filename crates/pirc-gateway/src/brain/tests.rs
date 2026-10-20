@@ -85,6 +85,7 @@ fn harness() -> Harness {
 struct Asked {
     system_prompt: String,
     messages: String,
+    tools: Vec<String>,
 }
 
 /// How the scripted model answers.
@@ -159,6 +160,7 @@ impl StreamFn for Scripted {
             self.asked.lock().unwrap().push(Asked {
                 system_prompt: request.system_prompt.clone(),
                 messages: serde_json::to_string(&request.messages).unwrap(),
+                tools: request.tools.iter().map(|tool| tool.name.clone()).collect(),
             });
             let answer = {
                 let mut answers = self.answers.lock().unwrap();
@@ -723,4 +725,357 @@ async fn the_brain_opens_a_loop_and_has_it_in_front_of_it() {
         message.body["text"] == "Closed: Team meeting (The team stopped meeting)"
             && message.body["loop"]["event"] == "closed"
     }));
+}
+
+// ---------- waking up (plans/rewrite/05-self-wake.md) ----------
+
+/// Wake up in #general now, as if the brain had asked to.
+fn wake_now(app: &AppState) -> crate::wake::Wake {
+    crate::wake::schedule(
+        app,
+        &crate::wake::NewWake {
+            kind: crate::wake::Kind::SelfScheduled,
+            trigger: json!({ "at": crate::util::now_ms(), "why": "look at the dotfiles" }),
+            room_id: GENERAL_ROOM_ID,
+            user: Some(ME),
+            scheduled_at: crate::util::now_ms(),
+        },
+    )
+    .unwrap()
+}
+
+fn wake_of(app: &AppState, id: &str) -> crate::wake::Wake {
+    crate::wake::get(&app.db.lock(), id).unwrap()
+}
+
+fn ended(app: &AppState, id: &str) -> bool {
+    wake_of(app, id).outcome.is_some()
+}
+
+#[tokio::test]
+async fn a_wake_says_something_only_with_speak() {
+    let h = harness();
+    let model = Scripted::new(vec![
+        Answer::Call("speak", json!({ "text": "Your dotfiles look fine." })),
+        Answer::Words("Done, nobody sees this."),
+        Answer::Words("Hello."),
+    ]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    let (events, _subscription) = record(&h.app);
+    let wake = wake_now(&h.app);
+    until("the wake", || ended(&h.app, &wake.id)).await;
+    let wake = wake_of(&h.app, &wake.id);
+    assert_eq!(wake.outcome.as_deref(), Some("spoke"));
+    let said = host_messages(&h.app);
+    assert_eq!(said.len(), 1, "only what it spoke: {said:?}");
+    assert_eq!(
+        (said[0].kind.as_str(), &said[0].body),
+        ("text", &json!({ "text": "Your dotfiles look fine." }))
+    );
+    let turn = &turns(&h.app)[0];
+    assert_eq!(
+        (turn.kind.as_str(), turn.outcome.as_deref(), Some(&turn.id)),
+        ("wake", Some("done"), wake.turn_id.as_ref())
+    );
+    let asked = model.asked();
+    assert!(asked[0].tools.contains(&"speak".to_owned()));
+    assert!(asked[0].tools.contains(&"schedule_wake".to_owned()));
+    let prompt = &asked[0].system_prompt;
+    assert!(prompt.contains("## Waking up"), "{prompt}");
+    assert!(prompt.contains("## When to speak after waking"));
+    assert!(
+        prompt.find("## When to speak").unwrap() > prompt.find("#general").unwrap(),
+        "after the room"
+    );
+    assert!(
+        asked[0]
+            .messages
+            .contains("You asked to come back now (on "),
+        "{}",
+        asked[0].messages
+    );
+    // No presence for a wake; its changes go out as wake_changed.
+    let kinds: Vec<String> = events
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|event| event.kind.clone())
+        .collect();
+    assert!(!kinds.contains(&"brain_presence".to_owned()), "{kinds:?}");
+    assert!(kinds.contains(&"wake_changed".to_owned()));
+
+    // A conversation has no speak: the reply is what is said.
+    say(&h.app, "hi", true);
+    until("the user turn", || {
+        turns(&h.app).len() == 2 && finished(&h.app)
+    })
+    .await;
+    let asked = model.asked();
+    let last = asked.last().unwrap();
+    assert!(
+        !last.tools.contains(&"speak".to_owned()),
+        "{:?}",
+        last.tools
+    );
+    assert!(last.tools.contains(&"schedule_wake".to_owned()));
+    assert!(!last.system_prompt.contains("## Waking up"));
+    assert_eq!(host_messages(&h.app).last().unwrap().body["text"], "Hello.");
+}
+
+#[tokio::test]
+async fn a_silent_wake_leaves_nothing_in_the_room() {
+    let h = harness();
+    let model = Scripted::new(vec![Answer::Words("Nothing new there.")]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    let wake = wake_now(&h.app);
+    until("the wake", || ended(&h.app, &wake.id)).await;
+    assert_eq!(wake_of(&h.app, &wake.id).outcome.as_deref(), Some("silent"));
+    assert!(host_messages(&h.app).is_empty());
+}
+
+#[tokio::test]
+async fn people_take_over_a_wake_and_it_comes_back_once() {
+    let h = harness();
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    let model = Scripted::new(vec![
+        Answer::After(gate.clone(), "never"),
+        Answer::Words("Hi!"),
+        Answer::After(gate.clone(), "never"),
+        Answer::Words("Hi again!"),
+        Answer::Words("Quiet."),
+    ]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    let first = wake_now(&h.app);
+    until("the wake's call", || model.asked().len() == 1).await;
+    say(&h.app, "hi", true);
+    until("the first wake to end", || ended(&h.app, &first.id)).await;
+    assert_eq!(
+        wake_of(&h.app, &first.id).outcome.as_deref(),
+        Some("preempted")
+    );
+    // The people's turn, then the wake put back.
+    until("the second wake's call", || model.asked().len() == 3).await;
+    assert!(model.asked()[1].messages.contains("me@example.com: hi"));
+    let again = crate::wake::list(&h.app.db.lock(), None, crate::wake::Status::Pending, 10)
+        .unwrap()
+        .remove(0);
+    assert_eq!(
+        (again.attempt, again.trigger.clone()),
+        (2, first.trigger.clone())
+    );
+    // Taken over again: it gives up, silently.
+    say(&h.app, "me again", true);
+    until("the second wake to end", || ended(&h.app, &again.id)).await;
+    let again = wake_of(&h.app, &again.id);
+    assert_eq!(
+        (again.outcome.as_deref(), again.note.as_deref()),
+        (Some("silent"), Some("people took over again"))
+    );
+    until("the last turn", || {
+        turns(&h.app).len() == 4 && finished(&h.app)
+    })
+    .await;
+    let kinds: Vec<(String, Option<String>)> = turns(&h.app)
+        .into_iter()
+        .rev()
+        .map(|turn| (turn.kind, turn.outcome))
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            ("wake".to_owned(), Some("preempted".to_owned())),
+            ("user".to_owned(), Some("done".to_owned())),
+            ("wake".to_owned(), Some("preempted".to_owned())),
+            ("user".to_owned(), Some("done".to_owned())),
+        ]
+    );
+    assert!(
+        crate::wake::list(&h.app.db.lock(), None, crate::wake::Status::Pending, 10)
+            .unwrap()
+            .is_empty(),
+        "not put back twice"
+    );
+    let texts: Vec<Value> = host_messages(&h.app)
+        .into_iter()
+        .map(|message| message.body["text"].clone())
+        .collect();
+    assert_eq!(texts, [json!("Hi!"), json!("Hi again!")]);
+}
+
+/// Open a loop in #general whose time comes in `ms`.
+fn loop_due_in(app: &AppState, what: &str, ms: i64, auto_close: bool) -> loops::OpenLoop {
+    let at = crate::util::now_ms() + ms;
+    loops::open(
+        &app.db.lock(),
+        &loops::NewLoop {
+            user: ME,
+            room_id: Some(GENERAL_ROOM_ID),
+            face_id: Some("host"),
+            what,
+            why: "",
+            origin: "user",
+            anchor: Some(loops::Anchor {
+                json: json!({ "at": at, "zone": "UTC", "autoClose": auto_close }),
+                due_at: at,
+                notice_at: None,
+            }),
+            next_check: None,
+            source_entry_ids: &[],
+        },
+        crate::util::now_ms(),
+    )
+    .unwrap()
+    .0
+}
+
+#[tokio::test]
+async fn a_time_that_comes_wakes_the_brain_and_then_closes_its_loop() {
+    let h = harness();
+    let model = Scripted::new(vec![
+        Answer::Call("speak", json!({ "text": "Time to drink water." })),
+        Answer::Words("ok"),
+    ]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    loops::start_timer(&h.app);
+    let water = loop_due_in(&h.app, "Drink water", 200, true);
+    // A little later, so the order of the wakes is known.
+    let kept = loop_due_in(&h.app, "Call the bank", 400, false);
+    until("both wakes", || {
+        crate::wake::list(&h.app.db.lock(), None, crate::wake::Status::Ended, 10)
+            .unwrap()
+            .len()
+            == 2
+    })
+    .await;
+    let closed = loops::get(&h.app.db.lock(), &water.id).unwrap();
+    assert_eq!(closed.closed_reason.as_deref(), Some(loops::ELAPSED));
+    let open = loops::get(&h.app.db.lock(), &kept.id).unwrap();
+    assert_eq!(open.status, "open", "it waits for the people");
+    let asked = model.asked();
+    assert!(
+        asked[0].messages.contains("An open loop's time came: [")
+            && asked[0].messages.contains("Drink water")
+            && asked[0].messages.contains("closes once this wake is over"),
+        "{}",
+        asked[0].messages
+    );
+    // Said, then closed (the wake of the other loop said nothing: "ok").
+    let texts: Vec<String> = host_messages(&h.app)
+        .into_iter()
+        .map(|message| message.body["text"].as_str().unwrap_or_default().to_owned())
+        .collect();
+    let spoken = texts
+        .iter()
+        .position(|text| text == "Time to drink water.")
+        .unwrap();
+    let closing = texts
+        .iter()
+        .position(|text| text.starts_with("Closed: Drink water"))
+        .unwrap();
+    assert!(spoken < closing, "{texts:?}");
+}
+
+#[tokio::test]
+async fn past_the_days_wakes_a_time_is_still_said() {
+    let h = harness();
+    let model = Scripted::new(vec![Answer::Words("never asked")]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    let now = crate::util::now_ms();
+    for n in 0..24 {
+        h.app
+            .db
+            .lock()
+            .execute(
+                "INSERT INTO wakes (id,kind,trigger_json,room_id,scheduled_at,started_at,outcome,created_at) VALUES (?,'self','{}','general',?,?,'silent',?)",
+                rusqlite::params![format!("w{n}"), now, now, now],
+            )
+            .unwrap();
+    }
+    let open_loop = loop_due_in(&h.app, "Pay the rent", 60_000, true);
+    crate::wake::for_loop(&h.app, &open_loop, crate::wake::moment::DUE, Some(now));
+    until("the quota", || {
+        crate::wake::list(&h.app.db.lock(), None, crate::wake::Status::Pending, 10)
+            .unwrap()
+            .is_empty()
+    })
+    .await;
+    let quota = crate::wake::list(&h.app.db.lock(), None, crate::wake::Status::Ended, 1)
+        .unwrap()
+        .remove(0);
+    assert_eq!(
+        (quota.outcome.as_deref(), quota.started_at),
+        (Some("quota"), None)
+    );
+    assert!(model.asked().is_empty(), "the 25th did not start");
+    until("the lines", || host_messages(&h.app).len() == 2).await;
+    let texts: Vec<Value> = host_messages(&h.app)
+        .into_iter()
+        .map(|message| message.body["text"].clone())
+        .collect();
+    assert_eq!(texts[0], "Reminder: Pay the rent");
+    assert!(
+        texts[1]
+            .as_str()
+            .unwrap()
+            .starts_with("Closed: Pay the rent")
+    );
+}
+
+#[tokio::test]
+async fn the_brain_comes_back_when_it_said_it_would() {
+    let h = harness();
+    let at = crate::time::cron::format_time(
+        crate::util::now_ms() + 120_000,
+        crate::time::cron::Zone::Fixed(0),
+        "UTC",
+    );
+    // `YYYY-MM-DD HH:MM (UTC)` → `YYYY-MM-DDTHH:MM`.
+    let at = at[..16].replace(' ', "T");
+    let model = Scripted::new(vec![
+        Answer::Call(
+            "schedule_wake",
+            json!({ "at": at, "why": "look at his dotfiles" }),
+        ),
+        Answer::Words("I'll look later."),
+    ]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    say(&h.app, "can you look at my dotfiles later?", true);
+    until("the turn", || finished(&h.app)).await;
+    let pending =
+        crate::wake::list(&h.app.db.lock(), None, crate::wake::Status::Pending, 10).unwrap();
+    assert_eq!(pending.len(), 1);
+    let wake = &pending[0];
+    assert_eq!(
+        (
+            wake.kind.as_str(),
+            wake.user.as_deref(),
+            wake.trigger["why"].clone()
+        ),
+        ("self", Some(ME), json!("look at his dotfiles"))
+    );
+    let line = host_messages(&h.app)
+        .into_iter()
+        .find(|message| message.kind == "line")
+        .unwrap();
+    assert!(
+        line.body["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("I'll come back "),
+        "{}",
+        line.body
+    );
+    assert!(
+        line.body["text"]
+            .as_str()
+            .unwrap()
+            .ends_with(" to look at: look at his dotfiles")
+    );
+    assert_eq!(
+        line.body["wake"],
+        json!({ "id": wake.id, "event": "scheduled" })
+    );
+    let (cancelled, _) =
+        crate::wake::cancel(&h.app.db.lock(), &wake.id, crate::util::now_ms()).unwrap();
+    assert_eq!(cancelled.outcome.as_deref(), Some("cancelled"));
 }

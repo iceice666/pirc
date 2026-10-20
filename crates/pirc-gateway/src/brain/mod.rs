@@ -12,6 +12,7 @@
 //! - [`turn`]: a room's agent, its streamed reply, its input.
 //! - [`store`]: the rooms' conversations on disk and the turn records.
 //! - [`loops`]: the open loops, always in its prompt.
+//! - [`waking`]: a wake turn (`crate::wake`): its prompt, input and tools.
 
 pub mod identity;
 mod loop_tools;
@@ -25,6 +26,7 @@ mod tests;
 mod tools;
 mod turn;
 mod ui;
+mod waking;
 
 use std::collections::HashMap;
 use std::rc::Rc;

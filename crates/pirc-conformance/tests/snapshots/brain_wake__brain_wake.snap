@@ -1,0 +1,520 @@
+---
+source: crates/pirc-conformance/tests/brain_wake.rs
+expression: stable(t.into_value())
+---
+[
+  {
+    "observed": [
+      {
+        "body": {
+          "loop": {
+            "event": "opened",
+            "id": "<loop:1>"
+          },
+          "text": "Holding on to: Drink water (due <weekday> <local-time> (UTC), closes itself then)"
+        },
+        "kind": "line"
+      },
+      {
+        "loop_changed": [
+          "Drink water",
+          "open"
+        ]
+      },
+      {
+        "body": {
+          "text": "I'll remind you."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "a loop with a time"
+  },
+  {
+    "observed": [
+      {
+        "loop_changed": [
+          "Drink water",
+          "open"
+        ]
+      },
+      {
+        "wake_changed": {
+          "attempt": 1,
+          "kind": "anchor",
+          "note": null,
+          "outcome": null,
+          "started": false
+        }
+      },
+      {
+        "wake_changed": {
+          "attempt": 1,
+          "kind": "anchor",
+          "note": null,
+          "outcome": null,
+          "started": true
+        }
+      },
+      {
+        "body": {
+          "text": "Time to drink water."
+        },
+        "kind": "text"
+      },
+      {
+        "wake_changed": {
+          "attempt": 1,
+          "kind": "anchor",
+          "note": null,
+          "outcome": "spoke",
+          "started": true
+        }
+      },
+      {
+        "body": {
+          "loop": {
+            "event": "closed",
+            "id": "<loop:1>"
+          },
+          "text": "Closed: Drink water (its time has passed)"
+        },
+        "kind": "line"
+      }
+    ],
+    "step": "the time comes: the brain wakes and speaks, then the loop closes"
+  },
+  {
+    "observed": {
+      "conversation": {
+        "lastUser": "test@example.com: remind me to drink water in a few seconds",
+        "tools": [
+          "recall",
+          "remember",
+          "memory_search",
+          "recall_note",
+          "save_preference",
+          "forget",
+          "open_loop",
+          "close_loop",
+          "touch_loop",
+          "update_loop",
+          "reopen_loop",
+          "schedule_wake",
+          "cancel_wake"
+        ]
+      },
+      "wake": {
+        "lastUser": "[You woke up; nobody called you.]\nAn open loop's time came: [<loop:1>] Drink water · from user · was due <weekday> <local-time> (UTC), closes itself then. Its time was the thing itself, so it closes once this wake is over.\n\nThe latest in #general (oldest first):\ntest@example.com: remind me to drink water in a few seconds\n(line): Holding on to: Drink water (due <weekday> <local-time> (UTC), closes itself then)\nyou: I'll remind you.",
+        "tools": [
+          "recall",
+          "remember",
+          "memory_search",
+          "recall_note",
+          "save_preference",
+          "forget",
+          "open_loop",
+          "close_loop",
+          "touch_loop",
+          "update_loop",
+          "reopen_loop",
+          "speak",
+          "schedule_wake",
+          "cancel_wake"
+        ]
+      }
+    },
+    "step": "a conversation has no speak; a wake has, and is told what woke it"
+  },
+  {
+    "observed": [
+      {
+        "loop_changed": [
+          "Drink water",
+          "closed"
+        ]
+      },
+      {
+        "wake_changed": {
+          "attempt": 1,
+          "kind": "self",
+          "note": null,
+          "outcome": null,
+          "started": false
+        }
+      },
+      {
+        "body": {
+          "text": "I'll come back <weekday> <local-time> (UTC) to look at: look at the dotfiles",
+          "wake": {
+            "event": "scheduled",
+            "id": "wake_<uuid:1>"
+          }
+        },
+        "kind": "line"
+      },
+      {
+        "body": {
+          "text": "Later, then."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "coming back, said"
+  },
+  {
+    "observed": [
+      {
+        "wake_changed": {
+          "attempt": 1,
+          "kind": "self",
+          "note": null,
+          "outcome": null,
+          "started": true
+        }
+      }
+    ],
+    "step": "it wakes"
+  },
+  {
+    "observed": [
+      {
+        "wake_changed": {
+          "attempt": 2,
+          "kind": "self",
+          "note": null,
+          "outcome": null,
+          "started": false
+        }
+      },
+      {
+        "wake_changed": {
+          "attempt": 1,
+          "kind": "self",
+          "note": null,
+          "outcome": "preempted",
+          "started": true
+        }
+      },
+      {
+        "body": {
+          "text": "Yes, here."
+        },
+        "kind": "text"
+      },
+      {
+        "wake_changed": {
+          "attempt": 2,
+          "kind": "self",
+          "note": null,
+          "outcome": null,
+          "started": true
+        }
+      },
+      {
+        "wake_changed": {
+          "attempt": 2,
+          "kind": "self",
+          "note": null,
+          "outcome": "silent",
+          "started": true
+        }
+      }
+    ],
+    "step": "people take over, and it comes back silent"
+  },
+  {
+    "body": {
+      "wake": {
+        "attempt": 1,
+        "createdAt": "<epoch-ms>",
+        "endedAt": "<epoch-ms>",
+        "faceId": "host",
+        "id": "wake_<uuid:2>",
+        "kind": "self",
+        "note": null,
+        "outcome": "cancelled",
+        "roomId": "general",
+        "scheduledAt": "<epoch-ms>",
+        "startedAt": null,
+        "trigger": {
+          "at": "<epoch-ms>",
+          "why": "check the build"
+        },
+        "turnId": null,
+        "user": "test@example.com"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/wakes/:id",
+    "status": 200,
+    "step": "cancel"
+  },
+  {
+    "observed": [
+      {
+        "wake_changed": {
+          "attempt": 1,
+          "kind": "self",
+          "note": null,
+          "outcome": "cancelled",
+          "started": false
+        }
+      },
+      {
+        "body": {
+          "text": "I won't come back about: check the build",
+          "wake": {
+            "event": "cancelled",
+            "id": "wake_<uuid:2>"
+          }
+        },
+        "kind": "line"
+      }
+    ],
+    "step": "said in the room"
+  },
+  {
+    "body": {
+      "wake": {
+        "attempt": 1,
+        "createdAt": "<epoch-ms>",
+        "endedAt": "<epoch-ms>",
+        "faceId": "host",
+        "id": "wake_<uuid:2>",
+        "kind": "self",
+        "note": null,
+        "outcome": "cancelled",
+        "roomId": "general",
+        "scheduledAt": "<epoch-ms>",
+        "startedAt": null,
+        "trigger": {
+          "at": "<epoch-ms>",
+          "why": "check the build"
+        },
+        "turnId": null,
+        "user": "test@example.com"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/wakes/:id",
+    "status": 200,
+    "step": "cancelled already"
+  },
+  {
+    "observed": [
+      {
+        "wake_changed": {
+          "attempt": 1,
+          "kind": "self",
+          "note": null,
+          "outcome": "quota",
+          "started": false
+        }
+      }
+    ],
+    "step": "past the day's wakes"
+  },
+  {
+    "body": {
+      "today": {
+        "limit": 2,
+        "used": 2
+      },
+      "wakes": [
+        {
+          "attempt": 1,
+          "createdAt": "<epoch-ms>",
+          "endedAt": "<epoch-ms>",
+          "faceId": "host",
+          "id": "wake_<uuid:3>",
+          "kind": "self",
+          "note": null,
+          "outcome": "quota",
+          "roomId": "general",
+          "scheduledAt": "<epoch-ms>",
+          "startedAt": null,
+          "trigger": {
+            "at": "<epoch-ms>",
+            "why": "see if the backup ran"
+          },
+          "turnId": null,
+          "user": "test@example.com"
+        },
+        {
+          "attempt": 1,
+          "createdAt": "<epoch-ms>",
+          "endedAt": "<epoch-ms>",
+          "faceId": "host",
+          "id": "wake_<uuid:2>",
+          "kind": "self",
+          "note": null,
+          "outcome": "cancelled",
+          "roomId": "general",
+          "scheduledAt": "<epoch-ms>",
+          "startedAt": null,
+          "trigger": {
+            "at": "<epoch-ms>",
+            "why": "check the build"
+          },
+          "turnId": null,
+          "user": "test@example.com"
+        },
+        {
+          "attempt": 2,
+          "createdAt": "<epoch-ms>",
+          "endedAt": "<epoch-ms>",
+          "faceId": "host",
+          "id": "wake_<uuid:4>",
+          "kind": "self",
+          "note": null,
+          "outcome": "silent",
+          "roomId": "general",
+          "scheduledAt": "<epoch-ms>",
+          "startedAt": "<epoch-ms>",
+          "trigger": {
+            "at": "<epoch-ms>",
+            "why": "look at the dotfiles"
+          },
+          "turnId": "turn_<uuid:5>",
+          "user": "test@example.com"
+        },
+        {
+          "attempt": 1,
+          "createdAt": "<epoch-ms>",
+          "endedAt": "<epoch-ms>",
+          "faceId": "host",
+          "id": "wake_<uuid:1>",
+          "kind": "self",
+          "note": null,
+          "outcome": "preempted",
+          "roomId": "general",
+          "scheduledAt": "<epoch-ms>",
+          "startedAt": "<epoch-ms>",
+          "trigger": {
+            "at": "<epoch-ms>",
+            "why": "look at the dotfiles"
+          },
+          "turnId": "turn_<uuid:6>",
+          "user": "test@example.com"
+        },
+        {
+          "attempt": 1,
+          "createdAt": "<epoch-ms>",
+          "endedAt": "<epoch-ms>",
+          "faceId": "host",
+          "id": "wake_<uuid:7>",
+          "kind": "anchor",
+          "note": null,
+          "outcome": "spoke",
+          "roomId": "general",
+          "scheduledAt": "<epoch-ms>",
+          "startedAt": "<epoch-ms>",
+          "trigger": {
+            "at": "<epoch-ms>",
+            "autoClose": true,
+            "loopId": "<loop:1>",
+            "moment": "due"
+          },
+          "turnId": "turn_<uuid:8>",
+          "user": "test@example.com"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/wakes?status=all",
+    "status": 200,
+    "step": "the wakes"
+  },
+  {
+    "observed": [
+      [
+        "user",
+        "done"
+      ],
+      [
+        "wake",
+        "done"
+      ],
+      [
+        "user",
+        "done"
+      ],
+      [
+        "wake",
+        "preempted"
+      ],
+      [
+        "user",
+        "done"
+      ],
+      [
+        "wake",
+        "done"
+      ],
+      [
+        "user",
+        "done"
+      ],
+      [
+        "user",
+        "done"
+      ]
+    ],
+    "step": "the turns"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "No wake wake_none"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/wakes/wake_none",
+    "status": 404,
+    "step": "an unknown wake"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/wakes?status=nope",
+    "status": 400,
+    "step": "a status that is not one"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Room not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/wakes?room=room_none",
+    "status": 404,
+    "step": "an unknown room"
+  }
+]

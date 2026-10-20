@@ -31,8 +31,7 @@ pub enum Outcome {
     Failed,
     Aborted,
     Timeout,
-    /// A user turn took over (plan 05's wakes).
-    #[allow(dead_code, reason = "wake turns start in plan 05")]
+    /// People took over a wake.
     Preempted,
 }
 

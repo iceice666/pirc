@@ -60,7 +60,6 @@ pub struct PushMessage {
 /// The target of a notification about a room: clients open the room
 /// (the web at `/?room=<id>`). Rooms push their own tag, `room:<id>`, so
 /// a newer notification about a room replaces the older one.
-#[allow(dead_code, reason = "room notifications start with plans 05 to 07")]
 pub fn room_message(room_id: &str, title: String, body: String) -> PushMessage {
     PushMessage {
         title,
@@ -1108,7 +1107,7 @@ pub fn start(app: &AppState) -> Result<(), String> {
 }
 
 /// Send `message` to every subscription of `user`, in the background.
-pub fn notify(app: &AppState, user: &str, message: PushMessage) {
+pub fn notify(app: &App, user: &str, message: PushMessage) {
     let Ok(push) = push_of(app) else {
         return;
     };

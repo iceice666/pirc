@@ -228,14 +228,14 @@ fn anchors_close_wait_or_move_on_when_they_come() {
         now,
     )
     .unwrap();
-    assert_eq!(fire_due(&conn, now).unwrap(), []);
+    assert_eq!(fire_due(&conn, now, false).unwrap(), []);
     assert_eq!(
         next_due(&conn).unwrap(),
         Some(date_utc(2026, 9, 20, 11, 0, 0, 0))
     );
 
-    let fired = fire_due(&conn, date_utc(2026, 9, 20, 11, 0, 0, 0)).unwrap();
-    let mut kinds: Vec<(&str, Fired)> = fired.iter().map(|(l, f)| (l.id.as_str(), *f)).collect();
+    let fired = fire_due(&conn, date_utc(2026, 9, 20, 11, 0, 0, 0), false).unwrap();
+    let mut kinds: Vec<(&str, Fired)> = fired.iter().map(|(l, f, _)| (l.id.as_str(), *f)).collect();
     kinds.sort_by_key(|(id, _)| *id != meeting.id);
     assert_eq!(
         kinds,
@@ -258,13 +258,13 @@ fn anchors_close_wait_or_move_on_when_they_come() {
     // `until`, so the recurrence ends there.
     let first = date_utc(2026, 9, 21, 18, 0, 0, 0);
     assert_eq!(next_due(&conn).unwrap(), Some(first));
-    let fired = fire_due(&conn, first + 1_000).unwrap();
+    let fired = fire_due(&conn, first + 1_000, false).unwrap();
     assert_eq!(fired.len(), 1);
-    assert_eq!(fired[0].1, Fired::Advanced);
+    assert_eq!((fired[0].1, fired[0].2), (Fired::Advanced, first));
     let second = date_utc(2026, 9, 28, 18, 0, 0, 0);
     assert_eq!(fired[0].0.due_at, Some(second));
     assert_eq!(fired[0].0.anchor.as_ref().unwrap()["nextAt"], second);
-    let fired = fire_due(&conn, second).unwrap();
+    let fired = fire_due(&conn, second, false).unwrap();
     assert_eq!(fired[0].1, Fired::Ended);
     let ended = get(&conn, &weekly.id).unwrap();
     assert_eq!(
@@ -272,6 +272,67 @@ fn anchors_close_wait_or_move_on_when_they_come() {
         ("closed", Some(RECURRENCE_ENDED))
     );
     assert_eq!(next_due(&conn).unwrap(), None);
+}
+
+#[test]
+fn a_time_that_is_the_thing_itself_comes_the_day_before_and_waits_for_its_wake() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let now = tuesday();
+    let deadline = |at: &str, now: i64| {
+        AnchorInput {
+            auto_close: Some(true),
+            ..anchor(Some(at), None)
+        }
+        .resolve("UTC", now)
+        .unwrap()
+    };
+    let thursday = date_utc(2026, 9, 22, 11, 0, 0, 0);
+    let wednesday = thursday - DAY_MS;
+    let hw = deadline("2026-10-22T11:00", now);
+    assert_eq!(hw.notice_at, Some(wednesday));
+    // Less than a day before: no day before.
+    assert_eq!(deadline("2026-10-21T09:00", now).notice_at, None);
+    assert_eq!(
+        anchor(Some("2026-10-22T11:00"), None)
+            .resolve("UTC", now)
+            .unwrap()
+            .notice_at,
+        None,
+        "only a time that is the thing itself"
+    );
+    let (open_loop, _) = open(&conn, &said("HW3", Some(hw)), now).unwrap();
+    assert_eq!(open_loop.notice_at, Some(wednesday));
+    assert_eq!(next_due(&conn).unwrap(), Some(wednesday));
+
+    let fired = fire_due(&conn, wednesday, true).unwrap();
+    assert_eq!(fired.len(), 1);
+    assert_eq!((fired[0].1, fired[0].2), (Fired::Eve, thursday));
+    assert_eq!(
+        (fired[0].0.notice_at, fired[0].0.due_at),
+        (None, Some(thursday))
+    );
+    assert_eq!(next_due(&conn).unwrap(), Some(thursday));
+
+    // The brain wakes for it: the loop waits, passed, for the wake to close it.
+    let fired = fire_due(&conn, thursday, true).unwrap();
+    assert_eq!((fired[0].1, fired[0].2), (Fired::Elapsed, thursday));
+    let waiting = &fired[0].0;
+    assert_eq!((waiting.status.as_str(), waiting.due_at), ("open", None));
+    assert_eq!(waiting.anchor.as_ref().unwrap()["passed"], true);
+    assert_eq!(next_due(&conn).unwrap(), None);
+
+    // Closed and reopened before the day before: it comes again.
+    let (other, _) = open(
+        &conn,
+        &said("Exam", Some(deadline("2026-10-30T09:00", now))),
+        now,
+    )
+    .unwrap();
+    close(&conn, &other.id, "moved", now + 1).unwrap();
+    assert_eq!(get(&conn, &other.id).unwrap().notice_at, None);
+    let (reopened, _) = reopen(&conn, &other.id, now + 2).unwrap();
+    assert_eq!(reopened.notice_at, Some(date_utc(2026, 9, 29, 9, 0, 0, 0)));
 }
 
 #[test]

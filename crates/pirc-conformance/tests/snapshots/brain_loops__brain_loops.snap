@@ -53,7 +53,9 @@ expression: stable(t.into_value())
         "close_loop",
         "touch_loop",
         "update_loop",
-        "reopen_loop"
+        "reopen_loop",
+        "schedule_wake",
+        "cancel_wake"
       ]
     },
     "step": "the first call: no loops yet, and the tools"
@@ -76,6 +78,7 @@ expression: stable(t.into_value())
           "id": "<loop:1>",
           "lastTouchedAt": "<epoch-ms>",
           "nextCheck": null,
+          "noticeAt": null,
           "origin": "user",
           "roomId": "general",
           "sourceEntryIds": [
@@ -204,6 +207,7 @@ expression: stable(t.into_value())
         "id": "<loop:2>",
         "lastTouchedAt": "<epoch-ms>",
         "nextCheck": null,
+        "noticeAt": null,
         "origin": "tool:memory_search",
         "roomId": "general",
         "sourceEntryIds": [
@@ -297,6 +301,7 @@ expression: stable(t.into_value())
         "id": "<loop:1>",
         "lastTouchedAt": "<epoch-ms>",
         "nextCheck": null,
+        "noticeAt": null,
         "origin": "user",
         "roomId": "general",
         "sourceEntryIds": [
@@ -356,6 +361,7 @@ expression: stable(t.into_value())
           "id": "<loop:1>",
           "lastTouchedAt": "<epoch-ms>",
           "nextCheck": null,
+          "noticeAt": null,
           "origin": "user",
           "roomId": "general",
           "sourceEntryIds": [
@@ -382,6 +388,7 @@ expression: stable(t.into_value())
           "id": "<loop:3>",
           "lastTouchedAt": "<epoch-ms>",
           "nextCheck": null,
+          "noticeAt": null,
           "origin": "user",
           "roomId": "general",
           "sourceEntryIds": [

@@ -146,7 +146,9 @@ expression: t.into_value()
           "close_loop",
           "touch_loop",
           "update_loop",
-          "reopen_loop"
+          "reopen_loop",
+          "schedule_wake",
+          "cancel_wake"
         ]
       },
       "calls": 1
@@ -238,7 +240,9 @@ expression: t.into_value()
           "close_loop",
           "touch_loop",
           "update_loop",
-          "reopen_loop"
+          "reopen_loop",
+          "schedule_wake",
+          "cancel_wake"
         ]
       },
       "calls": 3
@@ -389,7 +393,9 @@ expression: t.into_value()
         "close_loop",
         "touch_loop",
         "update_loop",
-        "reopen_loop"
+        "reopen_loop",
+        "schedule_wake",
+        "cancel_wake"
       ]
     },
     "step": "the latest call's context"

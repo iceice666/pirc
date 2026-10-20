@@ -57,6 +57,8 @@ fn no_store_route(method: &Method, path: &str) -> bool {
         ("GET" | "DELETE", ["api", "memory", "records", id]) => one(id),
         ("GET", ["api", "loops"]) => true,
         ("PATCH", ["api", "loops", id]) => one(id),
+        ("GET", ["api", "wakes"]) => true,
+        ("DELETE", ["api", "wakes", id]) => one(id),
         _ => false,
     }
 }

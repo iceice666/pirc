@@ -249,6 +249,9 @@ pub struct GatewayConfig {
     /// `PIRC_BRAIN=false` starts no brain: rooms are plain chat. Development
     /// only, for conformance transcripts of rooms alone.
     pub brain_enabled: bool,
+    /// Wakes the brain may start a day, in `timezone` (`PIRC_WAKES_PER_DAY`,
+    /// default 24; 0 turns waking up off).
+    pub wakes_per_day: u32,
     /// Characters of the brain's preferences per user (`PIRC_MEMORY_USER_CHARS`).
     pub memory_budget_user: usize,
     /// Exa key for agents' web_search (EXA_API_KEY); without it web search is off.
@@ -334,6 +337,10 @@ impl GatewayConfig {
             config_dir: env.resolve(default_config_dir(env)),
             brain_turn_timeout_ms: integer(env.get("PIRC_BRAIN_TURN_TIMEOUT_MS"), 600_000),
             brain_enabled: bool_var(env.get("PIRC_BRAIN"), true),
+            wakes_per_day: env
+                .get("PIRC_WAKES_PER_DAY")
+                .and_then(|value| value.trim().parse::<u32>().ok())
+                .unwrap_or(24),
             memory_budget_user: integer(env.get("PIRC_MEMORY_USER_CHARS"), 2000) as usize,
             exa_api_key: env
                 .get("EXA_API_KEY")

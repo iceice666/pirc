@@ -26,6 +26,7 @@ use crate::util::{payload_hash, present};
 pub mod brain;
 pub mod loops;
 pub mod rooms;
+pub mod wakes;
 
 /// A route's failure: an error, or a node's reply passed through as it is.
 pub enum Fail {
