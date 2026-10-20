@@ -418,7 +418,7 @@ expression: t.into_value()
         {
           "connected": false,
           "id": "anthropic",
-          "modelCount": 23,
+          "modelCount": 17,
           "name": "Anthropic (Claude Pro/Max)",
           "providerId": "oauth:anthropic",
           "requiresPolicyConsent": false,
@@ -427,7 +427,7 @@ expression: t.into_value()
         {
           "connected": false,
           "id": "github-copilot",
-          "modelCount": 26,
+          "modelCount": 36,
           "name": "GitHub Copilot",
           "providerId": "oauth:github-copilot",
           "requiresPolicyConsent": true,
@@ -436,7 +436,7 @@ expression: t.into_value()
         {
           "connected": false,
           "id": "openai-codex",
-          "modelCount": 10,
+          "modelCount": 9,
           "name": "ChatGPT Plus/Pro (Codex Subscription)",
           "providerId": "oauth:openai-codex",
           "requiresPolicyConsent": false,
@@ -627,7 +627,7 @@ expression: t.into_value()
         {
           "connected": false,
           "id": "anthropic",
-          "modelCount": 23,
+          "modelCount": 17,
           "name": "Anthropic (Claude Pro/Max)",
           "providerId": "oauth:anthropic",
           "requiresPolicyConsent": false,
@@ -636,7 +636,7 @@ expression: t.into_value()
         {
           "connected": false,
           "id": "github-copilot",
-          "modelCount": 26,
+          "modelCount": 36,
           "name": "GitHub Copilot",
           "providerId": "oauth:github-copilot",
           "requiresPolicyConsent": true,
@@ -645,7 +645,7 @@ expression: t.into_value()
         {
           "connected": false,
           "id": "openai-codex",
-          "modelCount": 10,
+          "modelCount": 9,
           "name": "ChatGPT Plus/Pro (Codex Subscription)",
           "providerId": "oauth:openai-codex",
           "requiresPolicyConsent": false,
