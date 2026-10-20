@@ -152,6 +152,7 @@ class NativeDocumentStyleEngine {
     this.hover = 'none',
     this.documentBaseUrl,
     this.fragmentTarget,
+    this.dialogDefaults = false,
   }) : stylesheets = List<NativeDocumentStylesheet>.unmodifiable(stylesheets);
 
   final List<NativeDocumentStylesheet> stylesheets;
@@ -159,6 +160,9 @@ class NativeDocumentStyleEngine {
   final double viewportHeight;
   final double devicePixelRatio;
   final bool dark;
+
+  /// Include normal-origin dialog UA rules for full native documents.
+  final bool dialogDefaults;
   final bool reducedMotion;
 
   /// The primary pointer capability, as exposed by the document environment.
@@ -549,6 +553,7 @@ class _Candidate {
     required this.order,
     required this.suborder,
     required this.baseUrl,
+    this.userAgent = false,
     this.backgroundGroup,
     this.backgroundComponent,
   });
@@ -556,6 +561,7 @@ class _Candidate {
   final css.Expression? valueExpression;
   final String value;
   final bool important;
+  final bool userAgent;
   final bool isInline;
   final _Specificity specificity;
   final int order;
@@ -565,6 +571,8 @@ class _Candidate {
   final String? backgroundComponent;
 
   bool outranks(_Candidate other) {
+    // Only normal UA declarations are seeded here; every author origin wins.
+    if (userAgent != other.userAgent) return !userAgent;
     if (important != other.important) return important;
     if (isInline != other.isInline) return isInline;
     final specificityOrder = specificity.compareTo(other.specificity);
@@ -686,6 +694,46 @@ class _Cascade {
   int _selectorProbeOrder = 0;
 
   NativeDocumentStylesResult apply() {
+    if (engine.dialogDefaults) {
+      for (final element in document.querySelectorAll('dialog')) {
+        final defaults = <String, String>{
+          'display': element.attributes.containsKey('open') ? 'block' : 'none',
+          'position': 'absolute',
+          'left': '0px',
+          'right': '0px',
+          'top': 'auto',
+          'bottom': 'auto',
+          'width': 'fit-content',
+          'height': 'fit-content',
+          'color': 'CanvasText',
+          'background-color': 'Canvas',
+          for (final side in ['top', 'right', 'bottom', 'left']) ...{
+            'margin-$side': 'auto',
+            'padding-$side': '1em',
+            'border-$side-width': '3px',
+            'border-$side-style': 'solid',
+            'border-$side-color': 'currentColor',
+          },
+        };
+        for (final entry in defaults.entries) {
+          _offer(
+            element,
+            entry.key,
+            _Candidate(
+              valueExpression: null,
+              value: entry.value,
+              important: false,
+              isInline: false,
+              userAgent: true,
+              specificity: _Specificity.zero,
+              order: -1,
+              suborder: 0,
+              baseUrl: engine.documentBaseUrl ?? '',
+            ),
+          );
+        }
+      }
+    }
     final imports = <NativeDocumentStyleImport>[];
     for (
       var sourceIndex = 0;
@@ -875,6 +923,42 @@ class _Cascade {
           <({int order, int suborder, String property, String text})>[];
       final backgroundCache = HashMap<Object, _BackgroundAnalysis?>.identity();
 
+      String inheritedScheme() {
+        final own = computedWinners['color-scheme'];
+        if (own != null) {
+          final value = own.valueExpression == null
+              ? own.value
+              : _resolveExpression(
+                  own.valueExpression!,
+                  scope,
+                  const {},
+                  own.baseUrl,
+                  'color-scheme',
+                );
+          if (value != null &&
+              !const {'inherit', 'unset'}.contains(value.trim())) {
+            return value;
+          }
+        }
+        for (
+          var ancestor = element.parent;
+          ancestor != null;
+          ancestor = ancestor.parent
+        ) {
+          final value = stylesByElement[ancestor]?['color-scheme'];
+          if (value != null &&
+              !const {'inherit', 'unset'}.contains(value.trim())) {
+            return value;
+          }
+        }
+        return 'normal';
+      }
+
+      final scheme = engine.dialogDefaults && element.localName == 'dialog'
+          ? inheritedScheme().toLowerCase().split(RegExp(r'\s+'))
+          : const <String>[];
+      final dialogDark =
+          scheme.contains('dark') && (engine.dark || !scheme.contains('light'));
       for (final entry in orderedWinners) {
         final property = entry.key;
         final candidate = entry.value;
@@ -910,6 +994,12 @@ class _Cascade {
                   candidate.baseUrl,
                   property,
                 );
+        }
+        if (candidate.userAgent && value == 'Canvas') {
+          value = dialogDark ? '#121212' : '#ffffff';
+        }
+        if (candidate.userAgent && value == 'CanvasText') {
+          value = dialogDark ? '#ffffff' : '#000000';
         }
         if (value != null && property == 'background-image') {
           value = _normalizeBackgroundValue(

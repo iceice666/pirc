@@ -84,7 +84,7 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
           children: [
             if (icon != null) ...[
               if (working)
-                _MemorySpinner(color: palette(context)['accent.default'])
+                WebSpinner(size: 12, color: palette(context)['accent.default'])
               else
                 Icon(icon, size: 12, color: palette(context)['text.secondary']),
               const SizedBox(width: 4),
@@ -607,31 +607,5 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
         },
       );
     },
-  );
-}
-
-class _MemorySpinner extends StatefulWidget {
-  const _MemorySpinner({required this.color});
-  final Color color;
-  @override
-  State<_MemorySpinner> createState() => _MemorySpinnerState();
-}
-
-class _MemorySpinnerState extends State<_MemorySpinner>
-    with SingleTickerProviderStateMixin {
-  late final animation = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 1),
-  )..repeat();
-  @override
-  void dispose() {
-    animation.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => RotationTransition(
-    turns: animation,
-    child: Icon(LucideIcons.loaderCircle, size: 12, color: widget.color),
   );
 }

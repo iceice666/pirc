@@ -1,0 +1,2062 @@
+{
+  "browserVersion": "153.0.8010.12",
+  "html": "<!doctype html><html><head><style>\nhtml{color-scheme:light dark}body{margin:0;font:16px/24px Arial;background:#708090}\n#open,#close,#tint{display:block;box-sizing:border-box;width:80px;height:32px;margin:0;padding:0;border:0;font:inherit}\n#before{height:24px}#after{height:20px}#content{width:120px;height:40px;background:#204060}\n</style></head><body><button id=\"open\" onclick=\"document.getElementById('dialog').show()\">Open</button><div id=\"before\"></div><dialog id=\"dialog\"><div id=\"content\">Panel</div></dialog><div id=\"after\"></div><button id=\"close\" onclick=\"document.getElementById('dialog').close()\">Close</button><button id=\"tint\" onclick=\"document.getElementById('dialog').style.color='red'\">Tint</button></body></html>",
+  "cases": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 1,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "closed",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                0,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "close",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                0,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "author-color",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "color": "rgb(255, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 1,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "closed",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "close",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "author-color",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "color": "rgb(255, 0, 0)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                0,
+                0,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 3,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "closed",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                0,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "close",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                0,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "author-color",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "color": "rgb(255, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "dpr": 3,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "closed",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "close",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "author-color",
+          "value": {
+            "open": true,
+            "rect": [
+              116,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "662px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "color": "rgb(255, 0, 0)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                117,
+                57
+              ],
+              [
+                124,
+                64
+              ],
+              [
+                246,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                0,
+                0,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 1,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "closed",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                0,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "close",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                0,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "author-color",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "color": "rgb(255, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 1,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "closed",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "close",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "author-color",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "color": "rgb(255, 0, 0)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                0,
+                0,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 3,
+      "theme": "light",
+      "steps": [
+        {
+          "name": "closed",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                0,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "close",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(0, 0, 0)",
+              "color": "rgb(0, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                0,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "author-color",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "color": "rgb(255, 0, 0)",
+              "background-color": "rgb(255, 255, 255)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                0,
+                0,
+                255
+              ],
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "dpr": 3,
+      "theme": "dark",
+      "steps": [
+        {
+          "name": "closed",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "open",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "close",
+          "value": {
+            "open": false,
+            "rect": null,
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "none",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "auto",
+              "bottom": "auto",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            }
+          }
+        },
+        {
+          "name": "reopen",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 255, 255)",
+              "color": "rgb(255, 255, 255)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                255,
+                255,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        },
+        {
+          "name": "author-color",
+          "value": {
+            "open": true,
+            "rect": [
+              305,
+              56,
+              158,
+              78
+            ],
+            "after": [
+              56,
+              76
+            ],
+            "css": {
+              "display": "block",
+              "position": "absolute",
+              "left": "0px",
+              "right": "0px",
+              "top": "56px",
+              "bottom": "842px",
+              "padding-top": "16px",
+              "border-top-width": "3px",
+              "border-top-style": "solid",
+              "border-top-color": "rgb(255, 0, 0)",
+              "color": "rgb(255, 0, 0)",
+              "background-color": "rgb(18, 18, 18)",
+              "box-sizing": "content-box"
+            },
+            "points": [
+              [
+                306,
+                57
+              ],
+              [
+                313,
+                64
+              ],
+              [
+                435,
+                106
+              ]
+            ],
+            "pixels": [
+              [
+                255,
+                0,
+                0,
+                255
+              ],
+              [
+                18,
+                18,
+                18,
+                255
+              ],
+              [
+                32,
+                64,
+                96,
+                255
+              ]
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

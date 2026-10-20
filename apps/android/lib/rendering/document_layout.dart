@@ -1200,11 +1200,40 @@ void _attachComputedStyles(
       box['clientWidthIndependentOfDescendantSizes'] = true;
     }
     final exactDimensions = <String, double>{};
+    var positionedAutoInsets = const <String, double>{};
+    final styleSurface = surfaces[id];
+    if (styleSurface != null &&
+        const {'absolute', 'fixed'}.contains(spec.values['position'])) {
+      final root = _nearestRoot(styleSurface);
+      for (
+        RenderObject? current = styleSurface;
+        current != null;
+        current = current.parent
+      ) {
+        if (current is! _RenderNativeDocumentLayoutElement) continue;
+        if (current.id == id && root != null) {
+          final positioned = _nativePositionedSurface(
+            current,
+            styleSurface,
+            root,
+          );
+          if (positioned != null) {
+            positionedAutoInsets =
+                nativeDocumentPositionedLayout(
+                  positioned.surface,
+                )?.autoInsets ??
+                const {};
+          }
+        }
+        break;
+      }
+    }
     final values = _resolvedComputedStyles(
       spec,
       surfaces[id],
       viewport,
       noBox: box['kind'] == 'none',
+      positionedAutoInsets: positionedAutoInsets,
       onUsedDimension: spec.canvasEquivalentStyleWrites
           ? (name, value) => exactDimensions[name] = value
           : null,
@@ -1405,6 +1434,7 @@ Map<String, String> _resolvedComputedStyles(
   RenderBox? surface,
   Size viewport, {
   required bool noBox,
+  Map<String, double> positionedAutoInsets = const {},
   void Function(String, double)? onUsedDimension,
 }) {
   final values = Map<String, String>.of(spec.values);
@@ -1589,10 +1619,14 @@ Map<String, String> _resolvedComputedStyles(
       }
     } else {
       for (final name in pair) {
-        final value = computedLength(
-          spec.lengths[name] ?? 'auto',
-          preservePercent: true,
-        );
+        final measured = positionedAutoInsets[name];
+        final value =
+            (spec.lengths[name] ?? 'auto') == 'auto' && measured != null
+            ? px(measured)
+            : computedLength(
+                spec.lengths[name] ?? 'auto',
+                preservePercent: true,
+              );
         if (value != null) values[name] = value;
       }
     }

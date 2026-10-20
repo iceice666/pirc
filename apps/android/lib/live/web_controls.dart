@@ -373,3 +373,48 @@ class WebNotice extends StatelessWidget {
     ),
   );
 }
+
+/// The web's one-second loader rotation, suspended with the visible surface.
+class WebSpinner extends StatefulWidget {
+  const WebSpinner({super.key, this.size = 15, this.color});
+  final double size;
+  final Color? color;
+  @override
+  State<WebSpinner> createState() => _WebSpinnerState();
+}
+
+class _WebSpinnerState extends State<WebSpinner>
+    with SingleTickerProviderStateMixin {
+  late final animation = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 1),
+  );
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    final enabled = TickerMode.valuesOf(context).enabled && !reducedMotion;
+    if (enabled) {
+      if (!animation.isAnimating) animation.repeat();
+    } else {
+      animation.stop();
+      if (reducedMotion) animation.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    animation.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RotationTransition(
+    turns: animation,
+    child: Icon(
+      LucideIcons.loaderCircle,
+      size: widget.size,
+      color: widget.color,
+    ),
+  );
+}

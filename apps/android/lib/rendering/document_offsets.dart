@@ -5,6 +5,69 @@ import 'document_relative_position.dart';
 import 'document_computed_styles.dart';
 import 'package:html/dom.dart' as dom;
 
+/// A zero-size block marker preserves static position only in block-only flow.
+/// Mixed inline runs and flex/grid static-position rectangles need their own
+/// formatting-context geometry and are not guessed here.
+bool nativeDocumentStaticBlockPositionSupported(
+  dom.Element element,
+  Map<String, String> Function(dom.Element) styles,
+) {
+  const blocks = {
+    'html',
+    'body',
+    'div',
+    'dialog',
+    'form',
+    'section',
+    'article',
+    'main',
+    'header',
+    'footer',
+    'nav',
+    'aside',
+    'p',
+    'pre',
+    'h1',
+    'h2',
+    'h3',
+    'ul',
+    'ol',
+    'li',
+  };
+  const metadata = {'head', 'style', 'script', 'link', 'meta', 'title', 'base'};
+  String display(dom.Element e) =>
+      styles(e)['display'] ??
+      (metadata.contains(e.localName)
+          ? 'none'
+          : blocks.contains(e.localName)
+          ? 'block'
+          : 'inline');
+  final parent = element.parent;
+  if (parent == null ||
+      display(parent) != 'block' ||
+      display(element) != 'block') {
+    return false;
+  }
+  for (final node in parent.nodes) {
+    if (node is dom.Text && !RegExp(r'^[\t\n\r\f ]*$').hasMatch(node.text)) {
+      return false;
+    }
+    if (node is! dom.Element ||
+        identical(node, element) ||
+        display(node) == 'none' ||
+        node.attributes.containsKey('hidden') ||
+        (node.localName == 'input' &&
+            node.attributes['type']?.toLowerCase() == 'hidden')) {
+      continue;
+    }
+    if (const {'absolute', 'fixed'}.contains(styles(node)['position'])) {
+      continue;
+    }
+    if (display(node) != 'block') return false;
+  }
+  return true;
+}
+
 enum NativeDocumentOffsetOrigin {
   initialContainingBlock,
   viewport,
@@ -54,14 +117,18 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
     if (!const {'static', 'relative', 'absolute', 'fixed'}.contains(position)) {
       return false;
     }
-    if (const {'absolute', 'fixed'}.contains(position) &&
-        NativeAbsolutePositionSpec.parse(
-              css,
-              fontSize: 16,
-              viewport: Size.zero,
-            ) ==
-            null) {
-      return false;
+    if (const {'absolute', 'fixed'}.contains(position)) {
+      final spec = NativeAbsolutePositionSpec.parse(
+        css,
+        fontSize: 16,
+        viewport: Size.zero,
+        allowStaticPosition: true,
+      );
+      if (spec == null ||
+          (spec.needsStaticPosition &&
+              !nativeDocumentStaticBlockPositionSupported(element, styles))) {
+        return false;
+      }
     }
     if (position == 'relative') {
       final spec = NativeDocumentRelativePositionSpec.parse(

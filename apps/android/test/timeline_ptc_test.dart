@@ -125,7 +125,9 @@ void main() {
       expect(toolDescription(snapshotTool), '2 operations');
 
       await tester.pumpWidget(shell(controller));
-      await tester.pumpAndSettle();
+      // Running tools have continuous loaders; wait for entry transitions
+      // while retaining the live animation and every content/hit-test check.
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.text('ptc'), findsOneWidget);
       expect(find.text('read'), findsOneWidget);
       expect(find.text('edit'), findsOneWidget);
@@ -137,17 +139,17 @@ void main() {
       expect(find.text('ls'), findsOneWidget);
 
       await tester.tap(find.text('ptc'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.text('Allow edit?'), findsOneWidget);
 
       await tester.tap(find.text('read'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.text('1\tconst foo = 1;'), findsOneWidget);
 
       final liveEvent = obj(rows(fixture()['events']).first['data']);
       controller.state = stateFor(withLiveOperationResult(snapshot, liveEvent));
       controller.changed();
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.text('Edited a.ts (1 replacement)'), findsOneWidget);
       expect(find.text('Diff'), findsOneWidget);
       expect(find.byTooltip('Done'), findsAtLeastNWidgets(1));
@@ -239,7 +241,9 @@ void main() {
         };
 
       await tester.pumpWidget(shell(controller));
-      await tester.pumpAndSettle();
+      // Running tools have continuous loaders; wait for entry transitions
+      // while retaining the live animation and every content/hit-test check.
+      await tester.pump(const Duration(milliseconds: 350));
 
       final parentTool = find.byWidgetPredicate(
         (widget) => widget is TimelineTool && widget.tool['id'] == 'p1',
@@ -261,7 +265,7 @@ void main() {
       expect(tester.widget<TextButton>(submit).onPressed, isNotNull);
 
       await tester.ensureVisible(submit);
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 350));
       expect(
         submit.hitTestable(),
         findsOneWidget,

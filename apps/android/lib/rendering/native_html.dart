@@ -2987,7 +2987,14 @@ class _NativeHtmlFactory extends WidgetFactory {
   final _absoluteChildren =
       <
         dom.Element?,
-        List<({BuildTree tree, Widget child, Map<String, String> styles})>
+        List<
+          ({
+            BuildTree tree,
+            Widget child,
+            Map<String, String> styles,
+            GlobalKey? marker,
+          })
+        >
       >{};
   final _absolutePlaceholders = <WidgetPlaceholder>{};
   final _geometryBlockWrapped = Expando<bool>();
@@ -3847,8 +3854,16 @@ class _NativeHtmlFactory extends WidgetFactory {
       styles,
       fontSize: 16,
       viewport: imageViewport(),
+      allowStaticPosition: true,
     );
-    if (spec == null) return false;
+    if (spec == null ||
+        (spec.needsStaticPosition &&
+            !nativeDocumentStaticBlockPositionSupported(
+              element,
+              _flexChildStyles,
+            ))) {
+      return false;
+    }
     final fixed = spec.fixedToViewport, host = _absoluteHost(element);
     final viewportFixed = fixed && host == null;
     if (viewportFixed &&
@@ -4027,8 +4042,10 @@ class _NativeHtmlFactory extends WidgetFactory {
               Directionality.of(context),
           viewport: imageViewport(),
           fixedUsesViewport: host == null,
+          allowStaticPosition: item.marker != null,
         )!,
         child: item.child,
+        staticMarker: item.marker,
         overflowHitTest: nativeDocumentRestorePointerHit,
       ),
   ];
@@ -4085,16 +4102,32 @@ class _NativeHtmlFactory extends WidgetFactory {
       );
     }
     if (!_absoluteSupported(tree.element)) return;
+    final markerSpec = NativeAbsolutePositionSpec.parse(
+      styles,
+      fontSize: 16,
+      viewport: imageViewport(),
+      allowStaticPosition: true,
+    )!;
+    final marker = markerSpec.needsStaticPosition ? GlobalKey() : null;
     tree.register(
       BuildOp(
         alwaysRenderBlock: true,
         debugLabel: 'native-absolute-extract',
         priority: 9000009000000000,
         onParsed: (parsed) {
-          // Build/extract before the parent flattens its inline runs. Returning
-          // an empty tree removes the flow bit entirely, preserving paragraphs.
+          // Extract before the parent flattens flow. Definite insets remove the
+          // flow bit; accepted static axes retain a zero-size block marker.
           parsed.build();
-          return parsed.parent.sub();
+          final replacement = parsed.parent.sub();
+          if (marker != null) {
+            replacement.append(
+              WidgetBit.block(
+                replacement,
+                SizedBox(key: marker, width: 0, height: 0),
+              ),
+            );
+          }
+          return replacement;
         },
         onRenderBlock: (parsed, placeholder) {
           final focus = _scriptFocusNodeForElement(parsed.element);
@@ -4106,6 +4139,7 @@ class _NativeHtmlFactory extends WidgetFactory {
                     ? placeholder
                     : Focus(focusNode: focus, child: placeholder),
                 styles: styles,
+                marker: marker,
               ));
           final empty = WidgetPlaceholder(child: widget0);
           _absolutePlaceholders.add(empty);

@@ -123,6 +123,15 @@ layout, broader focus delegates and close-request APIs remain in the mobile plan
 The tests keep the observed close/toggle task-order difference explicit.
 Validation popup paint has separate visual acceptance; an obscured pixel is not compared as background.
 
+`test/document_live_runtime_dialog_layout_test.dart` checks default dialog
+presentation in full fetched documents: native block-flow markers, fit-content
+sizing, UA border/padding/color, CSSOM insets, Open/Close and authored color updates.
+Recreate its independent browser reference with
+`node apps/android/tool/parity/capture_document_dialog_layout_chromium153.mjs`.
+Mixed inline/flex/grid static positions, embedded Markdown defaults and modal
+presentation remain in the mobile plan. `test/loading_spinner_test.dart` verifies
+actual loader rotation and suspension on hidden/reduced-motion surfaces.
+
 ## Build and run
 
 Use Flutter 3.44.4 / Dart 3.12.2 or a compatible SDK, Android SDK and JDK 17.

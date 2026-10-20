@@ -15,7 +15,8 @@ are available from Git through Historical records, not repeated here.
       now work through the script/native host. Complete `showModal()`, the native
       top layer/backdrop, inert background, focus trapping, Escape/Back
       cancellation and `requestClose()`.
-      Default browser dialog positioning/intrinsic styling, modern invoker and
+      Extend default dialog positioning beyond block-only flow to mixed inline
+      runs and flex/grid static-position rectangles. Modern invoker and
       `closedby` behavior, event-handler attribute/IDL replacement and dialog
       task-source scheduling still need coverage. `alert`/`confirm`/`prompt`
       remain explicit unsupported APIs; do not replace them with async booleans.
@@ -409,12 +410,46 @@ to 48 CSS px through margin collapse; Flutter keeps it at 32 CSS px. Tests asser
 both measurements explicitly; the other rectangle components/states remain
 matched, and corresponding dialog-local background probes do not assert equal
 screen positions for that state. The browser's default positioning/intrinsic
-layout is still pending. Full stylesheet-driven synchronous focus eligibility, shadow/
+layout beyond the block-only positioning gate below is still pending. Full
+stylesheet-driven synchronous focus eligibility, shadow/
 scrollable focus delegates, text selection on dialog focus, popover interaction,
 render-task scheduling of hidden-focus cleanup and physical keyboard/IME focus
 remain outside this bounded focus gate. The close/toggle task-source ordering
 difference above is also retained; these gates do not certify a full browser
 event loop.
+
+Full fetched documents now opt into normal-origin dialog UA declarations. Any
+normal author rule, including `*`, outranks those defaults; inline and important
+rules retain their existing cascade rank. Closed visibility, fit-content sizing,
+1em padding, 3px solid current-color borders and Canvas/CanvasText colors use the
+same cascade for native paint and computed style. Used color scheme follows
+inherited, explicit and variable-authored declarations. The generic author-only
+style engine remains unchanged unless dialog defaults are requested.
+
+Supported block-only static-position paths retain a zero-size native flow marker
+when a positioned box is extracted. Actual marker layout determines the auto
+axis; it is not inferred from CSS lengths or a previous screenshot. Positioned
+fit-content width remains intrinsic instead of stretching between definite
+insets. Native measured insets also supply the auto-axis CSSOM values. The new
+`document_live_runtime_dialog_layout_test.dart` gate uses the shipped runtime,
+actual Open/Close/Tint controls and a separate Chromium 153 reference at eight
+phone/tablet, DPR 1/3 and light/dark profiles. Its five states check visibility,
+rectangles within 1/32 CSS px, unchanged following-flow positions, computed styles
+and 72 border/padding/content pixel probes, including dynamic authored color.
+
+This does not implement modal presentation or certify arbitrary dialog layouts.
+Mixed inline runs, flex/grid static-position rectangles, float/vertical-writing
+static positions, general normal-flow fit-content sizing and embedded Markdown
+UA dialog presentation remain unfinished. The block marker path is gated out
+when its formatting-context evidence is missing. The existing default-paragraph
+font-relative margin difference and broader focus/event-loop limits above remain.
+
+Tool-running and background-stopping loader icons now share the web's continuous
+one-second rotation. The memory loader retains its size and uses the same native
+widget. Hidden surfaces pause their ticker; reduced-motion settings show the
+resting icon. Frame-driven tests verify quarter/three-quarter turns, repeated
+cycles, completion removal, hidden/resumed surfaces and reduced-motion stopping.
+Real Android frame pacing remains part of physical-device acceptance.
 
 Native Canvas supports matched text measurement, intrinsic/pixel/percentage
 sizing, container resizing, the eight stock Chart.js chart types and their default

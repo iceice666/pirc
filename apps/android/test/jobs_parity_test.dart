@@ -78,7 +78,7 @@ void main() {
               ],
             },
           };
-          g.handler = (_, __) async => data;
+          g.handler = (_, _) async => data;
           final jobs = JobsState(c)..data = data;
           try {
             await t.pumpWidget(shell(JobsList(jobs: jobs), scale: scale));

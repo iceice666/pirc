@@ -132,7 +132,9 @@ void main() {
         ],
       };
       await t.pumpWidget(shell(c));
-      await t.pumpAndSettle();
+      // A running tool now has a continuous loader; wait for entry layout,
+      // without waiting for the intentionally live animation to end.
+      await t.pump(const Duration(milliseconds: 350));
       expect(find.text('Command'), findsNothing);
       final tool = rows(c.messages.first['tools']).first;
       c.state = {

@@ -584,11 +584,7 @@ class JobsList extends StatelessWidget {
                     padding: const EdgeInsets.only(right: 10),
                     child: Semantics(
                       label: 'Stopping',
-                      child: Icon(
-                        LucideIcons.loaderCircle,
-                        size: 12,
-                        color: colors['text.muted'],
-                      ),
+                      child: WebSpinner(size: 12, color: colors['text.muted']),
                     ),
                   ),
               ],

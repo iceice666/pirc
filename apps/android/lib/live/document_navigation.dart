@@ -2369,6 +2369,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       dark: dark,
     );
     final result = NativeDocumentStyleEngine(
+      dialogDefaults: true,
       viewportHeight: environment.height,
       devicePixelRatio: environment.devicePixelRatio,
       reducedMotion: environment.reducedMotion,

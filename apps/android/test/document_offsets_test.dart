@@ -131,9 +131,46 @@ void main() {
       expect(specs['child']!.origin, NativeDocumentOffsetOrigin.paddingEdge);
     },
   );
+  test(
+    'static block markers skip hidden siblings but reject visible inline whitespace',
+    () {
+      for (final row in [
+        ('<span hidden>hidden</span>', true),
+        ('<input type="hidden">', true),
+        (' \n ', true),
+        ('&nbsp;', false),
+        ('<span>inline</span>', false),
+      ]) {
+        final doc = html.parse(
+          '<body>${row.$1}<dialog open id="d"></dialog></body>',
+        );
+        expect(
+          nativeDocumentStaticBlockPositionSupported(
+            doc.querySelector('dialog')!,
+            (_) => {},
+          ),
+          row.$2,
+          reason: row.$1,
+        );
+      }
+    },
+  );
+  for (final position in ['absolute', 'fixed']) {
+    test(
+      'block static-position $position exposes native containing block metadata',
+      () {
+        final specs = _specs('#parent{position:$position}');
+        expect(
+          specs['parent']!.parentId,
+          position == 'fixed' ? isNull : 'body',
+        );
+        expect(specs['parent']!.requiresPositionedSurface, isTrue);
+        expect(specs['child']!.parentId, 'parent');
+        expect(specs['child']!.origin, NativeDocumentOffsetOrigin.paddingEdge);
+      },
+    );
+  }
   for (final css in [
-    'position:absolute',
-    'position:fixed',
     'position:sticky',
     'position:relative;top:1em',
     'position:relative;left:calc(1px + 2%)',

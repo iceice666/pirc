@@ -22,20 +22,15 @@ class TimelineStatus extends StatelessWidget {
         : status == 'failed'
         ? 'Failed'
         : 'Done',
-    child: Icon(
-      status == 'running'
-          ? LucideIcons.loaderCircle
-          : status == 'failed'
-          ? LucideIcons.circleAlert
-          : LucideIcons.check,
-      size: 15,
-      color:
-          palette(context)[status == 'running'
-              ? 'accent.default'
-              : status == 'failed'
-              ? 'status.danger'
-              : 'status.success'],
-    ),
+    child: status == 'running'
+        ? WebSpinner(size: 15, color: palette(context)['accent.default'])
+        : Icon(
+            status == 'failed' ? LucideIcons.circleAlert : LucideIcons.check,
+            size: 15,
+            color: palette(
+              context,
+            )[status == 'failed' ? 'status.danger' : 'status.success'],
+          ),
   );
 }
 

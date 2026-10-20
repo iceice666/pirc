@@ -60,8 +60,7 @@ class NativeAbsoluteLength {
   }
 }
 
-/// Physical positioned axes. Both-auto static-position axes need flow markers
-/// and are deliberately not accepted by this first native positioning surface.
+/// Physical positioned axes. Static-position axes require a real flow marker.
 class NativeAbsolutePositionSpec {
   NativeAbsolutePositionSpec._(
     this.styles,
@@ -79,6 +78,7 @@ class NativeAbsolutePositionSpec {
     required Size viewport,
     TextDirection direction = TextDirection.ltr,
     bool fixedUsesViewport = true,
+    bool allowStaticPosition = false,
   }) {
     if (!const {
       'absolute',
@@ -126,6 +126,10 @@ class NativeAbsolutePositionSpec {
         lengths[name] = const NativeAbsoluteLength(0);
         continue;
       }
+      if ((name == 'width' || name == 'height') && raw == 'fit-content') {
+        lengths[name] = null;
+        continue;
+      }
       if (raw == null ||
           raw == 'auto' ||
           (raw == 'none' && name.startsWith('max-'))) {
@@ -141,8 +145,9 @@ class NativeAbsolutePositionSpec {
       }
       lengths[name] = length;
     }
-    if (lengths['left'] == null && lengths['right'] == null ||
-        lengths['top'] == null && lengths['bottom'] == null) {
+    if (!allowStaticPosition &&
+        ((lengths['left'] == null && lengths['right'] == null) ||
+            (lengths['top'] == null && lengths['bottom'] == null))) {
       return null;
     }
     for (final name in [
@@ -233,14 +238,30 @@ class NativeAbsolutePositionSpec {
   }
 
   bool stretch(String axis) =>
+      styles[axis]?.trim() != 'fit-content' &&
       lengths[axis] == null &&
       lengths[axis == 'width' ? 'left' : 'top'] != null &&
       lengths[axis == 'width' ? 'right' : 'bottom'] != null;
-  double offset(String axis, double extent, Size basis) {
+  bool staticAxis(String axis) =>
+      lengths[axis == 'width' ? 'left' : 'top'] == null &&
+      lengths[axis == 'width' ? 'right' : 'bottom'] == null;
+  bool get needsStaticPosition => staticAxis('width') || staticAxis('height');
+
+  double offset(
+    String axis,
+    double extent,
+    Size basis, {
+    double staticPosition = 0,
+  }) {
     final horizontal = axis == 'width',
         size = horizontal ? basis.width : basis.height;
     final a = horizontal ? 'left' : 'top', b = horizontal ? 'right' : 'bottom';
     final start = value(a, size), end = value(b, size);
+    if (start == null && end == null) {
+      return staticPosition +
+          (value('margin-$a', basis.width) ?? 0) -
+          (horizontal && direction == TextDirection.rtl ? extent : 0);
+    }
     var first = value('margin-$a', basis.width),
         last = value('margin-$b', basis.width);
     if (start != null && end != null) {
@@ -271,7 +292,9 @@ class NativeAbsoluteEntry {
     required this.spec,
     required this.child,
     this.overflowHitTest,
+    this.staticMarker,
   });
+  final GlobalKey? staticMarker;
   final NativeAbsolutePositionSpec spec;
   final Widget child;
   final bool Function(RenderBox, BoxHitTestResult, Offset)? overflowHitTest;
@@ -293,6 +316,7 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
            for (final item in positioned)
              _AbsoluteItem(
                spec: item.spec,
+               staticMarker: item.staticMarker,
                overflowHitTest: item.overflowHitTest,
                child: item.child,
              ),
@@ -329,14 +353,16 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
 class _AbsoluteItem extends SingleChildRenderObjectWidget {
   const _AbsoluteItem({
     required this.spec,
+    required this.staticMarker,
     required this.overflowHitTest,
     required super.child,
   });
   final NativeAbsolutePositionSpec spec;
+  final GlobalKey? staticMarker;
   final bool Function(RenderBox, BoxHitTestResult, Offset)? overflowHitTest;
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderAbsoluteItem(spec, overflowHitTest);
+      _RenderAbsoluteItem(spec, overflowHitTest, staticMarker);
   @override
   void updateRenderObject(
     BuildContext context,
@@ -344,6 +370,7 @@ class _AbsoluteItem extends SingleChildRenderObjectWidget {
   ) {
     renderObject
       ..spec = spec
+      ..staticMarker = staticMarker
       ..overflowHitTest = overflowHitTest
       ..markNeedsLayout();
   }
@@ -351,7 +378,9 @@ class _AbsoluteItem extends SingleChildRenderObjectWidget {
 
 class _RenderAbsoluteItem extends RenderProxyBox
     implements NativeDocumentPositioningBasis, NativeDocumentFixedSurface {
-  _RenderAbsoluteItem(this.spec, this.overflowHitTest);
+  _RenderAbsoluteItem(this.spec, this.overflowHitTest, this.staticMarker);
+  GlobalKey? staticMarker;
+  Offset usedOffset = Offset.zero;
   NativeAbsolutePositionSpec spec;
   @override
   bool get fixedToViewport => spec.fixedToViewport;
@@ -407,7 +436,12 @@ class _RenderAbsoluteItem extends RenderProxyBox
 }
 
 /// Actual un-routed position assigned by the native containing-block layout.
-({Offset offset, bool fixedToViewport, bool initialContainingBlock})?
+({
+  Offset offset,
+  bool fixedToViewport,
+  bool initialContainingBlock,
+  Map<String, double> autoInsets,
+})?
 nativeDocumentPositionedLayout(RenderObject object) {
   if (object is! _RenderAbsoluteItem || !object.attached || !object.hasSize) {
     return null;
@@ -418,6 +452,26 @@ nativeDocumentPositionedLayout(RenderObject object) {
   }
   return (
     offset: data.offset,
+    autoInsets: object.spec.needsStaticPosition
+        ? {
+            'left':
+                object.usedOffset.dx -
+                (object.spec.value('margin-left', object.basis.width) ?? 0),
+            'right':
+                object.basis.width -
+                object.usedOffset.dx -
+                object.size.width -
+                (object.spec.value('margin-right', object.basis.width) ?? 0),
+            'top':
+                object.usedOffset.dy -
+                (object.spec.value('margin-top', object.basis.width) ?? 0),
+            'bottom':
+                object.basis.height -
+                object.usedOffset.dy -
+                object.size.height -
+                (object.spec.value('margin-bottom', object.basis.width) ?? 0),
+          }
+        : const <String, double>{},
     fixedToViewport: object.fixedToViewport,
     initialContainingBlock: parent.initialContainingBlock != null,
   );
@@ -582,14 +636,31 @@ class _RenderAbsoluteLayer extends RenderBox
           );
         }
       }
-      (current.parentData! as _AbsoluteParentData).offset = Offset(
-        origin.dx +
-            border.left +
-            spec.offset('width', current.size.width, basis),
-        origin.dy +
-            border.top +
-            spec.offset('height', current.size.height, basis),
+      final marker = current.staticMarker?.currentContext?.findRenderObject();
+      assert(
+        !spec.needsStaticPosition ||
+            (marker is RenderBox && marker.attached && marker.hasSize),
+        'Static position requires a laid-out flow marker',
       );
+      final anchor = marker is RenderBox && marker.attached && marker.hasSize
+          ? MatrixUtils.transformPoint(marker.getTransformTo(this), Offset.zero)
+          : origin + Offset(border.left, border.top);
+      current.usedOffset = Offset(
+        spec.offset(
+          'width',
+          current.size.width,
+          basis,
+          staticPosition: anchor.dx - origin.dx - border.left,
+        ),
+        spec.offset(
+          'height',
+          current.size.height,
+          basis,
+          staticPosition: anchor.dy - origin.dy - border.top,
+        ),
+      );
+      (current.parentData! as _AbsoluteParentData).offset =
+          origin + Offset(border.left, border.top) + current.usedOffset;
       item = childAfter(item);
     }
   }
