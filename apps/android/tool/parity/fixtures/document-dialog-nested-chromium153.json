@@ -1,0 +1,69 @@
+{
+  "oracle": "Dedicated Playwright-pinned Chromium Headless Shell; no external requests or daily Chrome profile.",
+  "browserVersion": "153.0.8010.12",
+  "viewport": {
+    "width": 390,
+    "height": 796
+  },
+  "backdropPixel": [
+    206,
+    206,
+    206,
+    255
+  ],
+  "initial": {
+    "modalIds": [
+      "first",
+      "second"
+    ],
+    "activeElement": "two",
+    "clicks": {
+      "outside": 0,
+      "one": 0,
+      "two": 0
+    }
+  },
+  "blockedFirstClick": {
+    "modalIds": [
+      "first",
+      "second"
+    ],
+    "activeElement": "two",
+    "clicks": {
+      "outside": 0,
+      "one": 0,
+      "two": 1
+    }
+  },
+  "afterTopBackdrop": {
+    "modalIds": [
+      "first"
+    ],
+    "activeElement": "one",
+    "clicks": {
+      "outside": 0,
+      "one": 0,
+      "two": 1
+    }
+  },
+  "afterFirstClick": {
+    "modalIds": [
+      "first"
+    ],
+    "activeElement": "one",
+    "clicks": {
+      "outside": 0,
+      "one": 1,
+      "two": 1
+    }
+  },
+  "afterBothBackdrops": {
+    "modalIds": [],
+    "activeElement": "first",
+    "clicks": {
+      "outside": 0,
+      "one": 1,
+      "two": 1
+    }
+  }
+}

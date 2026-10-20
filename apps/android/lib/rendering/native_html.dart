@@ -3870,6 +3870,7 @@ class _NativeHtmlFactory extends WidgetFactory {
       fontSize: 16,
       viewport: imageViewport(),
       allowStaticPosition: true,
+      topLayer: element.attributes.containsKey('data-pirc-dialog-modal'),
     );
     if (spec == null ||
         (spec.needsStaticPosition &&
@@ -4071,6 +4072,9 @@ class _NativeHtmlFactory extends WidgetFactory {
           viewport: imageViewport(),
           fixedUsesViewport: host == null,
           allowStaticPosition: item.marker != null,
+          topLayer: item.tree.element.attributes.containsKey(
+            'data-pirc-dialog-modal',
+          ),
         )!,
         child: item.child,
         staticMarker: item.marker,
@@ -4135,6 +4139,7 @@ class _NativeHtmlFactory extends WidgetFactory {
       fontSize: 16,
       viewport: imageViewport(),
       allowStaticPosition: true,
+      topLayer: tree.element.attributes.containsKey('data-pirc-dialog-modal'),
     )!;
     final marker = markerSpec.needsStaticPosition ? GlobalKey() : null;
     tree.register(

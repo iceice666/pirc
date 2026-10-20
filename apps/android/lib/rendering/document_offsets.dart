@@ -123,6 +123,7 @@ Map<String, NativeDocumentOffsetSpec> nativeDocumentOffsetSpecs({
         fontSize: 16,
         viewport: Size.zero,
         allowStaticPosition: true,
+        topLayer: element.attributes.containsKey('data-pirc-dialog-modal'),
       );
       if (spec == null ||
           (spec.needsStaticPosition &&

@@ -83,6 +83,7 @@ class NativeAbsolutePositionSpec {
     TextDirection direction = TextDirection.ltr,
     bool fixedUsesViewport = true,
     bool allowStaticPosition = false,
+    bool topLayer = false,
   }) {
     if (!const {
       'absolute',
@@ -169,9 +170,8 @@ class NativeAbsolutePositionSpec {
         return null;
       }
     }
-    if (int.tryParse(values['z-index'] ?? '0') case final int z when z < 0) {
-      return null;
-    }
+    final zIndex = int.tryParse(values['z-index'] ?? '0');
+    if (!topLayer && zIndex != null && zIndex < 0) return null;
     return NativeAbsolutePositionSpec._(
       values,
       lengths,
@@ -870,7 +870,9 @@ class RenderNativeDocumentPositioningViewport extends RenderProxyBox {
         .lastOrNull;
     if (topModal == null) return;
     final origin = topModal.localToGlobal(Offset.zero, ancestor: this);
-    callback(event, origin & topModal.size);
+    final bounds = origin & topModal.size;
+    if (bounds.contains(event.localPosition)) return;
+    callback(event, bounds);
   }
 
   void _scrollChanged() {

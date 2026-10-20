@@ -26,9 +26,14 @@ are available from Git through Historical records, not repeated here.
       `static !important`, `sticky`, offset absolute/fixed) and positioned or
       transformed DOM parents now use the Chromium 153 top-layer containing
       block in 16 phone/tablet geometry and computed-style cases. Check author
-      `inset:auto` and other untested positioning combinations, nested modal
-      stacking, focus/semantics
+      `inset:auto` and other untested positioning combinations, focus/semantics
       isolation and backdrop pointer/hover behavior beyond the tested gestures.
+      Two stacked modals now paint both backdrops and ignore authored negative
+      z-index for top-layer order; only the upper dialog receives input, and
+      closing it restores the lower dialog. After light-dismissing the final
+      dialog, Chromium 153 leaves that dialog element focused while Flutter's
+      script focus drops to body; this detail and tablet/dark nested-modal
+      visual checks remain open.
       Extend default dialog positioning beyond block-only flow to mixed inline
       runs and flex/grid static-position rectangles. Modern invoker and
       dialog task-source scheduling still need coverage. Dialog handler
