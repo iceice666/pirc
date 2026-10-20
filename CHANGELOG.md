@@ -6,6 +6,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Added
 
+- Update the Android app icon.
 - Android terminal pinch and Ctrl-key zoom, plus mobile extra keys.
 
 ### Fixed
