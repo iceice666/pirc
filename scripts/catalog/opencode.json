@@ -3,15 +3,15 @@
   "sources": [
     {
       "url": "https://models.dev/api.json",
-      "sha256": "e34251954e9b1c4e5183ee974be54e98d7dd4280e62b9350fee5ee1f737bc9f0"
+      "sha256": "1d4c0146296d153c79cb53ac9eace8716af381f46ea78e832862ae3d205c3834"
     },
     {
       "url": "https://opencode.ai/inference/v1/models",
-      "sha256": "2f0f239896d0ebd609272678a6bee77cf81c835730f5c17a8fe345485a99ebe3"
+      "sha256": "51190ad5f296f19b9a608c13aabd80feff296d3afbfdfca615f43c8bf9d03618"
     },
     {
       "url": "https://opencode.ai/inference/go/v1/models",
-      "sha256": "141c661517f276535d0ee05c00ecd0af4c0325d501d500e99dec1f560367dfe2"
+      "sha256": "187e25bab29033382dd8e2f73f1db804b22c190996e54afec5ec9158037be57a"
     }
   ],
   "providers": {

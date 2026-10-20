@@ -30,7 +30,7 @@ This is not a legal/ToS review of any provider's third-party-client policy. Upst
 
 ## 2. Upstream scope
 
-Pinned: `@mariozechner/pi-ai@0.73.1` (tag `v0.73.1`, commit `781152fc24841dc54b22284514604048ebe5e2c9`).
+OAuth/transport baseline: `@mariozechner/pi-ai@0.73.1` (tag `v0.73.1`, commit `781152fc24841dc54b22284514604048ebe5e2c9`).
 
 Three built-in OAuth providers:
 
@@ -40,6 +40,8 @@ Three built-in OAuth providers:
 | `github-copilot` | GitHub Copilot                                               | Device code; optional Enterprise domain                       | `anthropic-messages`, `openai-completions`, `openai-responses` |
 | `openai-codex`   | ChatGPT Plus/Pro (Codex Subscription)                        | Authorization Code + PKCE; localhost callback or manual paste | `openai-codex-responses`                                       |
 | —                | (removed upstream in 0.71.0) Google Gemini CLI / Antigravity | —                                                             | —                                                              |
+
+Model metadata is independently refreshed from `@earendil-works/pi-ai@1.3.0` (2026-10-20), with a separate official OpenCode pin; see [model lists](../guides/model-backends.md#built-in-provider-model-lists). This does not silently upgrade the OAuth implementation.
 
 The published model catalog per provider is a static list, not a live query of what the logged-in account can actually use; the UI distinguishes "pi-ai knows this model" from "the account has verified access to it".
 
@@ -124,7 +126,7 @@ Consequences of B, as built:
 
 API-key backend setup (`crates/pirc-providers/src/backends/discovery.rs`):
 
-- `GET /api/providers/presets`: pi-ai catalog providers usable with a plain key (one supported API, one concrete endpoint; subscription-only catalogs excluded), separately pinned OpenCode Zen/Go catalogs, and local Ollama/LM Studio servers. OpenCode presets support per-model native APIs on their official endpoints; a custom proxy retains its configured API and endpoint. A backend saved with `preset` stores it as `piProvider` and keeps the catalog's gateway-only compat/headers/thinking map for known model IDs, so requests behave like pi-ai's own provider.
+- `GET /api/providers/presets`: pi-ai catalog providers usable with a plain key (a supported API and concrete endpoint; subscription-only catalogs excluded), separately pinned OpenCode Zen/Go catalogs, and local Ollama/LM Studio servers. OpenCode, OpenRouter and Fireworks presets support validated per-model native API routes on their official endpoints; a custom proxy retains its configured API and endpoint. A backend saved with `preset` stores it as `piProvider` and keeps the catalog's gateway-only compat/headers/thinking map for known model IDs, so requests behave like pi-ai's own provider.
 - `POST /api/providers/discover`: lists an unsaved form's models from the endpoint (`/models`, or `/v1/models` for Anthropic Messages). `POST /api/providers/test`: sends one tiny request through the normal inference path. Both accept the form without saving it; an omitted `apiKey` reuses only the saved key of the web-managed `backendId` being edited. Redirects are refused (a key is never forwarded), bodies are size- and time-capped, at most four probes run at once, and only curated messages come back — never upstream bodies.
 
 Each login session has a random ID, TTL, generation counter, and count limit; every query/input/cancel checks ownership. `onAuth` and a manual-paste prompt can coexist; the state model must not collapse them into a single screen and lose information.

@@ -230,7 +230,7 @@ async fn saving_from_a_preset_keeps_catalog_metadata_gateway_side() {
         .unwrap();
     let resolved = resolve(&backends, "router", known).await;
     assert_eq!(resolved.provider.pi_provider.as_deref(), Some("openrouter"));
-    assert_eq!(resolved.model.compat["thinkingFormat"], "deepseek");
+    assert_eq!(resolved.model.compat["thinkingFormat"], "openrouter");
     assert!(resolved.model.thinking_level_map.is_some());
     assert!(
         resolve(&backends, "router", "vendor/custom")
@@ -1162,5 +1162,46 @@ async fn opencode_catalog_routes_stream_through_all_three_local_wire_apis() {
                 format!("Bearer {SECRET}")
             }
         );
+    }
+}
+
+#[tokio::test]
+async fn refreshed_multi_api_presets_keep_native_routes_without_redirecting_custom_proxies() {
+    use pirc_protocol::ModelApi;
+    let dir = tempfile::tempdir().unwrap();
+    let (backends, _) = service(dir.path());
+    for provider in ["openrouter", "fireworks"] {
+        let preset = backends
+            .presets()
+            .iter()
+            .find(|p| p.id == provider)
+            .unwrap();
+        let catalog = crate::catalog::catalog_models(provider);
+        let anthropic = catalog
+            .iter()
+            .find(|m| m.api == ModelApi::AnthropicMessages)
+            .unwrap();
+        let chat = catalog
+            .iter()
+            .find(|m| m.api == ModelApi::OpenaiCompletions)
+            .unwrap();
+        let mut body = json!({"api": preset.api, "baseUrl": preset.base_url,
+            "preset": provider, "apiKey": SECRET,
+            "models": [{"id": anthropic.id}, {"id": chat.id}]});
+        backends.save_provider(provider, &body, true).unwrap();
+        for expected in [anthropic, chat] {
+            let resolved = resolve(&backends, provider, &expected.id).await;
+            assert_eq!(resolved.model.api, Some(expected.api));
+            assert_eq!(
+                resolved.model.base_url.as_deref(),
+                Some(expected.base_url.as_str())
+            );
+        }
+        body["baseUrl"] = json!("https://my-proxy.example/v1");
+        backends.save_provider(provider, &body, false).unwrap();
+        let custom = resolve(&backends, provider, &anthropic.id).await;
+        assert_eq!(custom.provider.base_url, "https://my-proxy.example/v1");
+        assert_eq!(custom.model.api, None);
+        assert_eq!(custom.model.base_url, None);
     }
 }

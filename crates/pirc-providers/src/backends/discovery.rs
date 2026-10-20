@@ -183,7 +183,7 @@ fn https_template_free(url: &str) -> bool {
 
 /// The OpenCode catalog uses one account across three native wire APIs.
 /// Only these exact endpoints may receive catalog-derived route overrides.
-pub fn opencode_base_url(provider: &str, api: ModelApi) -> Option<&'static str> {
+pub fn catalog_base_url(provider: &str, api: ModelApi) -> Option<&'static str> {
     match (provider, api) {
         ("opencode", ModelApi::OpenaiCompletions | ModelApi::OpenaiResponses) => {
             Some("https://opencode.ai/inference/openai/v1")
@@ -197,12 +197,16 @@ pub fn opencode_base_url(provider: &str, api: ModelApi) -> Option<&'static str> 
         ("opencode-go", ModelApi::AnthropicMessages) => {
             Some("https://opencode.ai/inference/go/anthropic")
         }
+        ("openrouter", ModelApi::OpenaiCompletions) => Some("https://openrouter.ai/api/v1"),
+        ("openrouter", ModelApi::AnthropicMessages) => Some("https://openrouter.ai/api"),
+        ("fireworks", ModelApi::OpenaiCompletions) => Some("https://api.fireworks.ai/inference/v1"),
+        ("fireworks", ModelApi::AnthropicMessages) => Some("https://api.fireworks.ai/inference"),
         _ => None,
     }
 }
 
 /// `catalogPresets`: catalog providers usable with a plain API key, then
-/// local servers. OpenCode retains its model-specific native API routes.
+/// local servers. Verified multi-API services retain their model-specific native routes.
 pub fn catalog_presets<'a>(providers: impl Iterator<Item = &'a str>) -> Vec<BackendPreset> {
     let mut presets = Vec::new();
     for id in providers {
@@ -210,8 +214,8 @@ pub fn catalog_presets<'a>(providers: impl Iterator<Item = &'a str>) -> Vec<Back
             continue;
         }
         let models = catalog_models(id);
-        let opencode = matches!(id, "opencode" | "opencode-go");
-        let first = if opencode {
+        let routed = matches!(id, "opencode" | "opencode-go" | "openrouter" | "fireworks");
+        let first = if routed {
             models
                 .iter()
                 .find(|model| model.api == ModelApi::OpenaiCompletions)
@@ -226,8 +230,8 @@ pub fn catalog_presets<'a>(providers: impl Iterator<Item = &'a str>) -> Vec<Back
         if !preset_api
             || !https_template_free(&first.base_url)
             || models.iter().any(|model| {
-                if opencode {
-                    opencode_base_url(id, model.api) != Some(model.base_url.as_str())
+                if routed {
+                    catalog_base_url(id, model.api) != Some(model.base_url.as_str())
                 } else {
                     model.api != first.api || model.base_url != first.base_url
                 }
@@ -581,38 +585,38 @@ mod tests {
     use crate::catalog::catalog_providers;
 
     #[test]
-    fn presets_keep_service_order_with_refreshed_opencode_catalogs() {
+    fn presets_keep_service_order_with_refreshed_catalogs() {
         let presets = catalog_presets(catalog_providers());
         let listed: Vec<String> = presets
             .iter()
             .map(|p| format!("{}|{}|{}", p.id, p.name, p.models.len()))
             .collect();
-        // Original service order, with separately refreshed OpenCode catalogs.
+        // Service order is stable as upstream catalogs change.
         assert_eq!(
             listed,
             [
-                "openai|OpenAI|42",
-                "anthropic|Anthropic|23",
-                "openrouter|OpenRouter|275",
+                "openai|OpenAI|44",
+                "anthropic|Anthropic|17",
+                "openrouter|OpenRouter|396",
                 "deepseek|DeepSeek|2",
-                "xai|xAI|25",
-                "groq|Groq|18",
-                "cerebras|Cerebras|4",
-                "fireworks|Fireworks|19",
-                "huggingface|Hugging Face|22",
-                "kimi-coding|Kimi Coding|2",
-                "minimax|MiniMax|2",
-                "minimax-cn|MiniMax (China)|2",
-                "moonshotai|Moonshot AI|7",
-                "moonshotai-cn|Moonshot AI (China)|7",
+                "xai|xAI|4",
+                "groq|Groq|7",
+                "cerebras|Cerebras|2",
+                "fireworks|Fireworks|22",
+                "huggingface|Hugging Face|78",
+                "kimi-coding|Kimi Coding|4",
+                "minimax|MiniMax|3",
+                "minimax-cn|MiniMax (China)|3",
+                "moonshotai|Moonshot AI|4",
+                "moonshotai-cn|Moonshot AI (China)|4",
                 "opencode-go|OpenCode Go|34",
                 "opencode|OpenCode Zen|72",
-                "vercel-ai-gateway|Vercel AI Gateway|162",
-                "xiaomi|Xiaomi MiMo|5",
-                "xiaomi-token-plan-ams|xiaomi-token-plan-ams|5",
-                "xiaomi-token-plan-cn|xiaomi-token-plan-cn|5",
-                "xiaomi-token-plan-sgp|xiaomi-token-plan-sgp|5",
-                "zai|Z.ai Coding Plan|5",
+                "vercel-ai-gateway|Vercel AI Gateway|301",
+                "xiaomi|Xiaomi MiMo|6",
+                "xiaomi-token-plan-ams|xiaomi-token-plan-ams|4",
+                "xiaomi-token-plan-cn|xiaomi-token-plan-cn|4",
+                "xiaomi-token-plan-sgp|xiaomi-token-plan-sgp|4",
+                "zai|Z.ai Coding Plan|7",
                 "ollama|Ollama (local)|0",
                 "lmstudio|LM Studio (local)|0",
             ]

@@ -12,6 +12,7 @@
  *   bun scripts/model-catalog.ts --check  fail when the snapshot is stale
  */
 import { readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { refreshOpenCodeCatalog } from './opencode-catalog.ts';
@@ -92,14 +93,31 @@ if (import.meta.main) {
     });
     writeFileSync(openCodePath, formatted);
   }
-  const { version } = JSON.parse(readFileSync(path.join(piAi, 'package.json'), 'utf8')) as {
+  if (process.argv.includes('--refresh-providers')) {
+    if (process.argv.includes('--check'))
+      throw new Error('Refresh and --check are mutually exclusive');
+    execFileSync('python3', [path.join(root, 'scripts/refresh-provider-catalog.py')], {
+      stdio: 'inherit',
+    });
+  }
+  const providerPin = JSON.parse(
+    readFileSync(path.join(root, 'scripts/catalog/providers.json'), 'utf8'),
+  );
+  const { version: _legacyVersion } = JSON.parse(
+    readFileSync(path.join(piAi, 'package.json'), 'utf8'),
+  ) as {
     version: string;
   };
   const { getModels, getProviders } = (await import(path.join(piAi, 'dist/models.js'))) as {
     getProviders(): string[];
     getModels(provider: string): CatalogModel[];
   };
-  const text = snapshot(version, getProviders(), getModels);
+  const version = providerPin.version as string;
+  const text = snapshot(
+    version,
+    getProviders(),
+    (provider) => providerPin.providers[provider] ?? getModels(provider),
+  );
   if (process.argv.includes('--check')) {
     let current = '';
     try {

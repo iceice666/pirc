@@ -8,6 +8,64 @@
 
   Endpoints must be reachable from the gateway (a model server that only listens on a node's `localhost` is not). Nodes have no provider settings of their own; `providers` and `defaultModel` in a node's `config.json` are ignored with a warning.
 
+## Built-in provider model lists
+
+The model metadata was refreshed on **2026-10-20** from the published,
+integrity-checked `@earendil-works/pi-ai@1.3.0` data files. OpenCode Zen and
+Go use their separately pinned official live metadata. All existing provider IDs
+are retained; only chat models using a transport pirc implements are included.
+This metadata refresh does **not** replace the pinned OAuth/login implementation
+or certify account access to every model. Existing configured models and defaults
+are preserved. Choose **Discover** or edit the backend to adopt a new model.
+
+| Provider catalog        | Models |
+| ----------------------- | -----: |
+| `anthropic`             |     17 |
+| `cerebras`              |      2 |
+| `cloudflare-ai-gateway` |     57 |
+| `cloudflare-workers-ai` |     18 |
+| `deepseek`              |      2 |
+| `fireworks`             |     22 |
+| `github-copilot`        |     36 |
+| `groq`                  |      7 |
+| `huggingface`           |     78 |
+| `kimi-coding`           |      4 |
+| `minimax`               |      3 |
+| `minimax-cn`            |      3 |
+| `moonshotai`            |      4 |
+| `moonshotai-cn`         |      4 |
+| `openai`                |     44 |
+| `openai-codex`          |      9 |
+| `opencode`              |     72 |
+| `opencode-go`           |     34 |
+| `openrouter`            |    396 |
+| `vercel-ai-gateway`     |    301 |
+| `xai`                   |      4 |
+| `xiaomi`                |      6 |
+| `xiaomi-token-plan-ams` |      4 |
+| `xiaomi-token-plan-cn`  |      4 |
+| `xiaomi-token-plan-sgp` |      4 |
+| `zai`                   |      7 |
+
+Ollama and LM Studio expose models installed on the user's server, so their
+presets discover that server rather than shipping a fixed model list. Custom
+endpoints keep the models/API/base URL the user configured.
+
+Known models on the official OpenRouter and Fireworks endpoints also retain their
+per-model API routing (Chat Completions or Anthropic Messages). Custom proxies are
+never redirected to an official service.
+
+Maintainers can regenerate the data with:
+
+```sh
+bun scripts/model-catalog.ts --refresh-providers --refresh-opencode
+bun scripts/model-catalog.ts --check
+```
+
+The refresh downloads public package data without installing or executing package
+code. Review `scripts/catalog/providers.json`, `scripts/catalog/opencode.json` and
+the generated Rust catalog together; unsupported APIs are recorded in the pins.
+
 ## OpenCode Zen and Go
 
 **Settings → Model backends** includes separate **OpenCode Zen** and **OpenCode Go** presets. The gateway ships a dated catalog and lists models from OpenCode's official endpoint when you choose **Discover**. Updating the gateway refreshes the built-in choices for both Web and Android; existing saved model selections are retained. Edit the backend and select the new models you want to use.

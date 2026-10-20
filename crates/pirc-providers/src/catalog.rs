@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn snapshot_parses_with_the_subscription_catalogs() {
-        assert_eq!(catalog_version(), "0.73.1");
+        assert_eq!(catalog_version(), "1.3.0");
         for provider in ["anthropic", "openai-codex", "github-copilot", "openai"] {
             assert!(!catalog_models(provider).is_empty(), "{provider}");
         }

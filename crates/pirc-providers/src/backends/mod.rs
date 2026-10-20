@@ -496,16 +496,16 @@ impl BackendService {
                 return Err(invalid("Unknown backend preset"));
             }
             known = catalog_models(preset);
-            if let Some(base) = discovery::opencode_base_url(preset, connection.api) {
+            if let Some(base) = discovery::catalog_base_url(preset, connection.api) {
                 let configured = connection.base_url.trim_end_matches('/');
                 // A custom proxy keeps the user's endpoint and wire API. Never
                 // send its credentials to an implicit catalog destination.
                 let legacy = match preset.as_str() {
-                    "opencode" => "https://opencode.ai/zen/v1",
-                    "opencode-go" => "https://opencode.ai/zen/go/v1",
-                    _ => unreachable!(),
+                    "opencode" => Some("https://opencode.ai/zen/v1"),
+                    "opencode-go" => Some("https://opencode.ai/zen/go/v1"),
+                    _ => None,
                 };
-                catalog_routes = configured == base || configured == legacy;
+                catalog_routes = configured == base || Some(configured) == legacy;
             }
         }
         let models = models
