@@ -3,6 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
+typedef NativeModalBackdropPointerCallback =
+    void Function(PointerDownEvent event, Rect dialogBounds);
+
 /// The document root can reach visible positioned paint outside flow ancestors.
 abstract interface class NativeDocumentPositionedHitTarget {
   bool hitTestPositioned(BoxHitTestResult result, {required Offset position});
@@ -815,24 +818,35 @@ class NativeDocumentPositioningViewport extends SingleChildRenderObjectWidget {
   const NativeDocumentPositioningViewport({
     super.key,
     this.scrollChanges,
+    this.onModalBackdropPointer,
     required super.child,
   });
   final Listenable? scrollChanges;
+  final NativeModalBackdropPointerCallback? onModalBackdropPointer;
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      RenderNativeDocumentPositioningViewport(scrollChanges);
+      RenderNativeDocumentPositioningViewport(
+        scrollChanges,
+        onModalBackdropPointer,
+      );
   @override
   void updateRenderObject(
     BuildContext context,
     covariant RenderNativeDocumentPositioningViewport renderObject,
   ) {
-    renderObject.scrollChanges = scrollChanges;
+    renderObject
+      ..scrollChanges = scrollChanges
+      ..onModalBackdropPointer = onModalBackdropPointer;
   }
 }
 
 class RenderNativeDocumentPositioningViewport extends RenderProxyBox {
-  RenderNativeDocumentPositioningViewport(this._scrollChanges);
+  RenderNativeDocumentPositioningViewport(
+    this._scrollChanges,
+    this._onModalBackdropPointer,
+  );
   Listenable? _scrollChanges;
+  NativeModalBackdropPointerCallback? _onModalBackdropPointer;
   final _roots = <_RenderAbsoluteLayer>{};
   final _clip = LayerHandle<ClipRectLayer>();
   set scrollChanges(Listenable? value) {
@@ -841,6 +855,22 @@ class RenderNativeDocumentPositioningViewport extends RenderProxyBox {
     _scrollChanges = value;
     if (attached) _scrollChanges?.addListener(_scrollChanged);
     markNeedsPaint();
+  }
+
+  set onModalBackdropPointer(NativeModalBackdropPointerCallback? value) {
+    _onModalBackdropPointer = value;
+  }
+
+  @override
+  void handleEvent(PointerEvent event, covariant BoxHitTestEntry entry) {
+    final callback = _onModalBackdropPointer;
+    if (callback == null || event is! PointerDownEvent) return;
+    final topModal = _positioned
+        .where((child) => (child as _RenderAbsoluteItem).isModal)
+        .lastOrNull;
+    if (topModal == null) return;
+    final origin = topModal.localToGlobal(Offset.zero, ancestor: this);
+    callback(event, origin & topModal.size);
   }
 
   void _scrollChanged() {
@@ -965,8 +995,8 @@ class RenderNativeDocumentPositioningViewport extends RenderProxyBox {
       return true;
     }
     if (topModal != null) {
-      // Modal backdrops absorb all pointer input outside the top dialog.
-      result.add(BoxHitTestEntry(this, position));
+      // RenderBox.hitTest adds this viewport once when children report a hit.
+      // Adding it here too would dispatch two pointerdowns and close requests.
       return true;
     }
     return super.hitTestChildren(result, position: position);

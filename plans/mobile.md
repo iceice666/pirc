@@ -16,15 +16,19 @@ are available from Git through Historical records, not repeated here.
       content with a backdrop, block background taps and root scrolling, and
       consume Escape/Android Back through a cancelable close request. Local
       widget and script tests cover focus, close, reopen and canceled Back.
+      `closedby="any"` now light-dismisses after a real backdrop pointerdown;
+      a canceled `cancel` keeps it open, `closedby="none"` does not dismiss,
+      and mouse/touch click ordering matches the pinned Chromium 153 oracle in
+      phone/tablet widget tests. Physical Android acceptance remains pending.
       A matched Roboto fixture now gives the same 89.6 CSS px dialog width in
       Flutter and Chromium 153; the Flutter box remains 1 CSS px taller in the
       tested button-only case. Check author CSS
       that overrides modal positioning, nested modal stacking, focus/semantics
-      isolation and light-dismiss `closedby` behavior on devices.
+      isolation and backdrop pointer/hover behavior beyond the tested gestures.
       Extend default dialog positioning beyond block-only flow to mixed inline
       runs and flex/grid static-position rectangles. Modern invoker and
-      `closedby` light-dismiss behavior and dialog task-source scheduling still need
-      coverage. Dialog handler attribute/IDL replacement has a bounded gate below.
+      dialog task-source scheduling still need coverage. Dialog handler
+      attribute/IDL replacement has a bounded gate below.
       `alert`/`confirm`/`prompt`
       remain explicit unsupported APIs; do not replace them with async booleans.
 - [ ] **Dynamic content compatibility:** wider synchronous DOM write/read layout,

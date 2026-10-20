@@ -123,6 +123,11 @@ margin-collapse difference. `document_dialog_modal_test.mjs` and
 state, native backdrop/centering, blocked background taps, Escape/Android Back
 and cancelable requests in phone/tablet light/dark profiles. The script test
 also checks `closedby=none` and rejects forged native top-layer markers.
+`closedby=any` backdrop pointerdown/cancel/close and mouse/touch click order are
+compared with the pinned Chromium 153 fixture captured by
+`node apps/android/tool/parity/capture_document_dialog_modal_backdrop_chromium153.mjs`.
+The Flutter widget gate checks touch light-dismiss, canceled light-dismiss,
+`closedby=none` and background tap blocking. Physical-device acceptance remains open.
 Broader UA layout/focus delegates and the remaining modal differences are listed
 in the mobile plan.
 The tests keep the observed close/toggle task-order difference explicit.

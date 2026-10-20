@@ -9,6 +9,10 @@ const bundle = readFileSync(
   new URL('../../assets/document-script-runtime.js', import.meta.url),
   'utf8',
 );
+const backdropOracle = JSON.parse(readFileSync(
+  new URL('./fixtures/document-dialog-modal-backdrop-chromium153.json', import.meta.url),
+  'utf8',
+));
 const markup =
   '<button id="outside">Outside</button><dialog id="first"><button id="first-control">First</button></dialog><dialog id="second"><button id="second-control">Second</button></dialog>';
 function setup() {
@@ -31,6 +35,18 @@ function run(context, source) {
 }
 function snapshot(context) {
   return JSON.parse(run(context, '__pircDocument.snapshot({})'));
+}
+const backdropPointer = {
+  pointerId: 1, pointerType: 'mouse', isPrimary: true,
+  clientX: 20, clientY: 200, offsetX: -100, offsetY: -100,
+  button: 0, buttons: 1, pressure: 0.5,
+  geometry: { left: 120, top: 300, width: 150, height: 100 },
+};
+function backdropDown(context) {
+  const id = snapshot(context).modalDialogIds.at(-1);
+  return JSON.parse(run(context,
+    `__pircDocument.dispatchModalBackdropPointerDown(${JSON.stringify({id, type: 'pointerdown', eventData: backdropPointer})})`,
+  ));
 }
 
 test('showModal has browser-compatible state, focus and top-layer snapshot markers', () => {
@@ -124,6 +140,89 @@ test('closedby=none blocks the platform request without a cancel event', () => {
   run(c, 'document.getElementById("first").requestClose()');
   assert.equal(read(c, 'document.getElementById("first").open'), false);
   assert.equal(read(c, 'cancelCount'), 1);
+});
+
+test('closedby=any light-dismisses after dialog pointerdown and respects cancel', () => {
+  const c = setup();
+  run(c, `window.modalEvents=[];
+    const d=document.getElementById('first'); d.setAttribute('closedby','any');
+    for(const type of ['pointerdown','cancel','beforetoggle'])
+      d.addEventListener(type, e=>modalEvents.push(type + (e.newState ? ':' + e.newState : '')));
+    d.addEventListener('pointerdown', e=>e.preventDefault()); d.showModal();`);
+  assert.equal(backdropDown(c).error, undefined);
+  assert.equal(read(c, 'document.getElementById("first").open'), false);
+  assert.deepEqual(read(c, 'modalEvents'), [
+    'beforetoggle:open', 'pointerdown', 'cancel', 'beforetoggle:closed',
+  ]);
+
+  run(c, `modalEvents=[];document.getElementById('first').addEventListener(
+    'cancel', e=>e.preventDefault(), {once:true});
+    document.getElementById('first').showModal();`);
+  backdropDown(c);
+  assert.equal(read(c, 'document.getElementById("first").open'), true);
+  assert.deepEqual(read(c, 'modalEvents'), ['beforetoggle:open', 'pointerdown', 'cancel']);
+});
+
+test('backdrop pointer targets the top modal and only closedby=any dismisses', () => {
+  const c = setup();
+  run(c, `window.events=[];const first=document.getElementById('first');
+    const second=document.getElementById('second');
+    first.addEventListener('pointerdown',()=>events.push('first'));
+    second.addEventListener('pointerdown',()=>events.push('second'));
+    first.showModal();second.showModal();`);
+  backdropDown(c);
+  assert.deepEqual(read(c, 'events'), ['second']);
+  assert.equal(read(c, 'document.getElementById("second").open'), true);
+  run(c, `document.getElementById('second').setAttribute('closedby','none')`);
+  backdropDown(c);
+  assert.equal(read(c, 'document.getElementById("second").open'), true);
+  run(c, `document.getElementById('second').setAttribute('closedby','any')`);
+  backdropDown(c);
+  assert.equal(read(c, 'document.getElementById("second").open'), false);
+  assert.equal(read(c, 'document.getElementById("first").open'), true);
+  assert.deepEqual(read(c, 'events'), ['second', 'second', 'second']);
+});
+
+test('modal backdrop event order matches the fixed Chromium 153 mouse/touch oracle', () => {
+  assert.match(backdropOracle.browserVersion, /^153\./);
+  for (const browserCase of backdropOracle.cases) {
+    const c = setup();
+    const declaration = browserCase.closedby == null ? '' :
+      `d.setAttribute('closedby',${JSON.stringify(browserCase.closedby)});`;
+    run(c, `{const d=document.getElementById('first');${declaration}
+      window.backdropLog=[];
+      for(const type of ['pointerdown','cancel','beforetoggle','pointerup','click'])
+        d.addEventListener(type,event=>{
+          backdropLog.push(type);
+          if(type==='cancel' && ${browserCase.cancel}) event.preventDefault();
+          if(type==='pointerdown' && ${browserCase.preventPointerDown}) event.preventDefault();
+        });
+      d.showModal();}`);
+    run(c, 'backdropLog=[]');
+    const id = read(c, 'document.getElementById("first").getAttribute("data-pirc-script-id")');
+    const eventData = {
+      ...backdropPointer,
+      pointerType: browserCase.gesture,
+      pointerId: browserCase.gesture === 'touch' ? 3 : 1,
+    };
+    JSON.parse(run(c, `__pircDocument.dispatchModalBackdropPointerDown(${JSON.stringify({
+      id, type: 'pointerdown', eventData,
+    })})`));
+    JSON.parse(run(c, `__pircDocument.dispatch(${JSON.stringify({
+      id, type: 'pointerup', eventData: {...eventData, buttons: 0, pressure: 0},
+    })})`));
+    if (browserCase.gesture === 'mouse' || read(c, 'document.getElementById("first").open')) {
+      JSON.parse(run(c, `__pircDocument.dispatch(${JSON.stringify({
+        id, type: 'click', eventData: {...eventData, buttons: 0, pressure: 0},
+      })})`));
+    }
+    assert.equal(read(c, 'document.getElementById("first").open'), browserCase.open,
+      browserCase.name);
+    assert.deepEqual(read(c, 'backdropLog'), browserCase.events
+      .map(event => event.type)
+      .filter(type => ['pointerdown','cancel','beforetoggle','pointerup','click'].includes(type)),
+    browserCase.name);
+  }
 });
 
 test('author markup cannot forge a native modal top-layer marker', () => {

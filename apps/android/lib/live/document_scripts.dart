@@ -2799,12 +2799,24 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     Json eventData,
   ) => dispatch(id, type, controls, eventData: eventData);
 
+  /// A backdrop pointerdown targets the top dialog and may then light-dismiss
+  /// it. Keep both DOM steps in one script turn so cancel can veto the close.
+  Future<bool> dispatchModalBackdropPointerDown(String id, Json eventData) =>
+      dispatch(
+        id,
+        'pointerdown',
+        const [],
+        eventData: eventData,
+        modalBackdrop: true,
+      );
+
   Future<bool> dispatch(
     String id,
     String type,
     List<Json> controls, {
     String? submitter,
     Json? eventData,
+    bool modalBackdrop = false,
   }) {
     final capturedEventData = eventData == null
         ? null
@@ -2871,7 +2883,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       var prevented = false;
       try {
         final data = await _run(
-          '__pircDocument.dispatch(${jsonEncode({'id': id, 'type': type, 'controls': capturedControls, 'submitter': ?submitter, 'eventData': ?capturedEventData, 'now': _now})})',
+          '__pircDocument.${modalBackdrop ? 'dispatchModalBackdropPointerDown' : 'dispatch'}(${jsonEncode({'id': id, 'type': type, 'controls': capturedControls, 'submitter': ?submitter, 'eventData': ?capturedEventData, 'now': _now})})',
           expectedActionGeneration: actionGeneration,
           expectedFocusEpoch: focusEpoch,
           allowPopups: const {'click', 'input', 'change'}.contains(type),

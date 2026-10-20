@@ -45289,6 +45289,28 @@ function createPircDocumentLayout(options) {
     return response({modalCloseRequested: true});
   }
 
+  function dispatchModalBackdropPointerDown(input) {
+    const state = activeState;
+    const top = state?.modalDialogs[state.modalDialogs.length - 1];
+    const request = input && typeof input === 'object' ? input : {};
+    if (!top || !top.isConnected || !top.hasAttribute('open') ||
+        String(request.type) !== 'pointerdown' ||
+        String(request.id) !== top.getAttribute(MARKER_ATTRIBUTE)) {
+      return response({defaultPrevented: true, error: 'stale_modal_backdrop'});
+    }
+    return dispatchCore(request, () => {
+      // A backdrop pointerdown first reaches the dialog. Light dismissal then
+      // sends cancel regardless of pointerdown.preventDefault(), while a
+      // canceled cancel event keeps the dialog open.
+      if (activeState === state && top.isConnected && top.hasAttribute('open') &&
+          state.modalDialogs[state.modalDialogs.length - 1] === top &&
+          String(top.getAttribute('closedby') || '').toLowerCase() === 'any' &&
+          Number(request.eventData?.button ?? 0) === 0) {
+        requestCloseDocumentDialog(top);
+      }
+    });
+  }
+
   function completeImageResource(state, id, completion) {
     if (state.pendingImageRequests.delete(id)) state.layout?.invalidate();
     const accepted = state.images.complete(completion);
@@ -45462,7 +45484,7 @@ function createPircDocumentLayout(options) {
     }
   }
 
-  function dispatchCore(input) {
+  function dispatchCore(input, afterDispatch) {
     const state = activeState;
     if (!state || !state.document) {
       return JSON.stringify({
@@ -45688,6 +45710,7 @@ function createPircDocumentLayout(options) {
         id: id,
         type: type
       });
+      if (afterDispatch) afterDispatch();
       return response({
         defaultPrevented: Boolean(event && event.defaultPrevented),
         defaultHandled: defaultHandled,
@@ -45702,6 +45725,8 @@ function createPircDocumentLayout(options) {
     } catch (error) {
       diagnostic('runtime.dom_update_error', 'error', exceptionMessage(error));
     }
+
+    if (afterDispatch) afterDispatch();
 
     const result = {
       defaultPrevented: Boolean(event ? event.defaultPrevented : syntheticDefaultPrevented),
@@ -45843,6 +45868,7 @@ function createPircDocumentLayout(options) {
     continueAnimationFrame: continueAnimationFrame,
     snapshot: snapshot,
     requestTopModalClose: requestTopModalClose,
+    dispatchModalBackdropPointerDown: dispatchModalBackdropPointerDown,
     filePickerResult: filePickerResult,
     completeResource: completeResource,
     restoreControls: function(input) {

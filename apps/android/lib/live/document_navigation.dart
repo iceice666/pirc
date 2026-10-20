@@ -3,6 +3,7 @@ import 'package:csslib/parser.dart' as css_parser;
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:html/parser.dart' as html;
@@ -1550,6 +1551,174 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
   NativeDocumentElementScrollController get _elementScroll =>
       widget.document.elementScroll;
   Size _layoutViewport = Size.zero;
+  final Map<
+    int,
+    ({
+      NativeDocumentScripts scripts,
+      String id,
+      Offset start,
+      Offset viewportOrigin,
+      Rect dialogBounds,
+      bool primary,
+      int button,
+    })
+  >
+  _modalBackdropPointers = {};
+
+  Json _modalBackdropEventData(
+    PointerEvent event,
+    Rect dialogBounds, {
+    required Offset point,
+    required bool primary,
+    required int button,
+  }) {
+    final touch = event.kind == PointerDeviceKind.touch;
+    final pointerType = switch (event.kind) {
+      PointerDeviceKind.touch => 'touch',
+      PointerDeviceKind.stylus || PointerDeviceKind.invertedStylus => 'pen',
+      _ => 'mouse',
+    };
+    final rawButtons = event is PointerUpEvent || event is PointerCancelEvent
+        ? 0
+        : event.buttons;
+    final buttons =
+        (rawButtons & kPrimaryMouseButton != 0 ? 1 : 0) |
+        (rawButtons & kSecondaryMouseButton != 0 ? 2 : 0) |
+        (rawButtons & kMiddleMouseButton != 0 ? 4 : 0);
+    return {
+      'pointerId': pointerType == 'mouse' ? 1 : event.pointer + 2,
+      'pointerType': pointerType,
+      'isPrimary': primary,
+      'clientX': point.dx,
+      'clientY': point.dy,
+      'offsetX': point.dx - dialogBounds.left,
+      'offsetY': point.dy - dialogBounds.top,
+      'button': button,
+      'buttons': touch && event is PointerDownEvent && buttons == 0
+          ? 1
+          : buttons,
+      'pressure': event is PointerUpEvent || event is PointerCancelEvent
+          ? 0.0
+          : event.pressure,
+      'geometry': {
+        'left': dialogBounds.left,
+        'top': dialogBounds.top,
+        'width': dialogBounds.width,
+        'height': dialogBounds.height,
+      },
+      'metaKey': HardwareKeyboard.instance.isMetaPressed,
+      'ctrlKey': HardwareKeyboard.instance.isControlPressed,
+      'shiftKey': HardwareKeyboard.instance.isShiftPressed,
+      'altKey': HardwareKeyboard.instance.isAltPressed,
+    };
+  }
+
+  void _modalBackdropPointer(PointerDownEvent event, Rect dialogBounds) {
+    final scripts = _scripts;
+    if (scripts == null || !scripts.hasModalDialog) return;
+    final button = event.buttons & kSecondaryMouseButton != 0
+        ? 2
+        : event.buttons & kMiddleMouseButton != 0
+        ? 1
+        : 0;
+    final primary =
+        event.kind != PointerDeviceKind.touch ||
+        !_modalBackdropPointers.values.any(
+          (pointer) => pointer.scripts == scripts && pointer.primary,
+        );
+    final pointer = (
+      scripts: scripts,
+      id: scripts.modalDialogIds.last,
+      start: event.localPosition,
+      viewportOrigin: event.position - event.localPosition,
+      dialogBounds: dialogBounds,
+      primary: primary,
+      button: button,
+    );
+    if (_modalBackdropPointers.containsKey(event.pointer)) {
+      GestureBinding.instance.pointerRouter.removeRoute(
+        event.pointer,
+        _modalBackdropRoute,
+      );
+    }
+    _modalBackdropPointers[event.pointer] = pointer;
+    GestureBinding.instance.pointerRouter.addRoute(
+      event.pointer,
+      _modalBackdropRoute,
+    );
+    unawaited(
+      scripts.dispatchModalBackdropPointerDown(
+        pointer.id,
+        _modalBackdropEventData(
+          event,
+          dialogBounds,
+          point: event.localPosition,
+          primary: primary,
+          button: button,
+        ),
+      ),
+    );
+  }
+
+  void _modalBackdropRoute(PointerEvent event) {
+    if (event is PointerDownEvent) return;
+    final pointer = _modalBackdropPointers[event.pointer];
+    if (pointer == null) return;
+    if (!mounted || !identical(_scripts, pointer.scripts)) {
+      _modalBackdropPointers.remove(event.pointer);
+      GestureBinding.instance.pointerRouter.removeRoute(
+        event.pointer,
+        _modalBackdropRoute,
+      );
+      return;
+    }
+    final point = event.position - pointer.viewportOrigin;
+    final data = _modalBackdropEventData(
+      event,
+      pointer.dialogBounds,
+      point: point,
+      primary: pointer.primary,
+      button: pointer.button,
+    );
+    if (event is PointerMoveEvent) {
+      unawaited(
+        pointer.scripts.dispatchDetailed(pointer.id, 'pointermove', [], data),
+      );
+    } else if (event is PointerUpEvent) {
+      _modalBackdropPointers.remove(event.pointer);
+      GestureBinding.instance.pointerRouter.removeRoute(
+        event.pointer,
+        _modalBackdropRoute,
+      );
+      unawaited(() async {
+        await pointer.scripts.dispatchDetailed(
+          pointer.id,
+          'pointerup',
+          [],
+          data,
+        );
+        if (!mounted ||
+            !identical(_scripts, pointer.scripts) ||
+            pointer.button != 0 ||
+            (point - pointer.start).distance > 18 ||
+            (event.kind == PointerDeviceKind.touch &&
+                !pointer.scripts.modalDialogIds.contains(pointer.id))) {
+          return;
+        }
+        await pointer.scripts.dispatchDetailed(pointer.id, 'click', [], data);
+      }());
+    } else if (event is PointerCancelEvent) {
+      _modalBackdropPointers.remove(event.pointer);
+      GestureBinding.instance.pointerRouter.removeRoute(
+        event.pointer,
+        _modalBackdropRoute,
+      );
+      unawaited(
+        pointer.scripts.dispatchDetailed(pointer.id, 'pointercancel', [], data),
+      );
+    }
+  }
+
   late final _touchBoundary = NativeDocumentTouchBoundary(
     onExit: (id, relatedTarget, position) {
       final scripts = _scripts;
@@ -1579,6 +1748,13 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
   void _clearTouchBoundary() {
     _pendingTouchHit = null;
     _touchBoundary.clear();
+    for (final pointer in _modalBackdropPointers.keys) {
+      GestureBinding.instance.pointerRouter.removeRoute(
+        pointer,
+        _modalBackdropRoute,
+      );
+    }
+    _modalBackdropPointers.clear();
   }
 
   void _documentTouchUp(PointerUpEvent event) {
@@ -2245,6 +2421,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
                   elements: _elementScroll,
                   child: NativeDocumentPositioningViewport(
                     scrollChanges: document.scroll,
+                    onModalBackdropPointer: _modalBackdropPointer,
                     child: SingleChildScrollView(
                       key: ObjectKey(document),
                       controller: document.scroll,

@@ -1,0 +1,349 @@
+{
+  "oracle": "Dedicated Playwright-pinned Chromium Headless Shell; no external requests or daily Chrome profile.",
+  "browserVersion": "153.0.8010.12",
+  "viewport": {
+    "width": 390,
+    "height": 796
+  },
+  "cases": [
+    {
+      "name": "mouse-any",
+      "gesture": "mouse",
+      "closedby": "any",
+      "cancel": false,
+      "preventPointerDown": false,
+      "open": false,
+      "events": [
+        {
+          "type": "pointerdown",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "cancel",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "beforetoggle",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": "open",
+          "newState": "closed"
+        },
+        {
+          "type": "pointerup",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "click",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "close",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "toggle",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": "open",
+          "newState": "closed"
+        }
+      ]
+    },
+    {
+      "name": "mouse-any-pointerdown-prevented",
+      "gesture": "mouse",
+      "closedby": "any",
+      "cancel": false,
+      "preventPointerDown": true,
+      "open": false,
+      "events": [
+        {
+          "type": "pointerdown",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "cancel",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "beforetoggle",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": "open",
+          "newState": "closed"
+        },
+        {
+          "type": "pointerup",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "click",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "close",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "toggle",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": "open",
+          "newState": "closed"
+        }
+      ]
+    },
+    {
+      "name": "mouse-any-cancel-prevented",
+      "gesture": "mouse",
+      "closedby": "any",
+      "cancel": true,
+      "preventPointerDown": false,
+      "open": true,
+      "events": [
+        {
+          "type": "pointerdown",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "cancel",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "pointerup",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "click",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        }
+      ]
+    },
+    {
+      "name": "mouse-none",
+      "gesture": "mouse",
+      "closedby": "none",
+      "cancel": false,
+      "preventPointerDown": false,
+      "open": true,
+      "events": [
+        {
+          "type": "pointerdown",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "pointerup",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "click",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        }
+      ]
+    },
+    {
+      "name": "mouse-default",
+      "gesture": "mouse",
+      "closedby": null,
+      "cancel": false,
+      "preventPointerDown": false,
+      "open": true,
+      "events": [
+        {
+          "type": "pointerdown",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "pointerup",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "click",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        }
+      ]
+    },
+    {
+      "name": "touch-any",
+      "gesture": "touch",
+      "closedby": "any",
+      "cancel": false,
+      "preventPointerDown": false,
+      "open": false,
+      "events": [
+        {
+          "type": "pointerdown",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "cancel",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "beforetoggle",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": "open",
+          "newState": "closed"
+        },
+        {
+          "type": "pointerup",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "close",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "toggle",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": "open",
+          "newState": "closed"
+        }
+      ]
+    },
+    {
+      "name": "touch-any-cancel-prevented",
+      "gesture": "touch",
+      "closedby": "any",
+      "cancel": true,
+      "preventPointerDown": false,
+      "open": true,
+      "events": [
+        {
+          "type": "pointerdown",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "cancel",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "pointerup",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "click",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        }
+      ]
+    },
+    {
+      "name": "touch-none",
+      "gesture": "touch",
+      "closedby": "none",
+      "cancel": false,
+      "preventPointerDown": false,
+      "open": true,
+      "events": [
+        {
+          "type": "pointerdown",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "pointerup",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        },
+        {
+          "type": "click",
+          "target": "dialog",
+          "trusted": true,
+          "oldState": null,
+          "newState": null
+        }
+      ]
+    }
+  ]
+}

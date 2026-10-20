@@ -42,10 +42,16 @@ void main() {
 window.outsideClicks = 0;
 window.blockCancel = false;
 window.cancelCount = 0;
+window.backdropEvents = [];
 document.getElementById('dialog').addEventListener('cancel', event => {
+  backdropEvents.push('cancel');
   cancelCount++;
   if (blockCancel) event.preventDefault();
 });
+for (const type of ['pointerdown', 'pointerup', 'click']) {
+  document.getElementById('dialog').addEventListener(type, () =>
+    backdropEvents.push(type));
+}
 document.getElementById('outside').onclick = () => outsideClicks++;
 document.getElementById('open').onclick = () =>
   document.getElementById('dialog').showModal();
@@ -220,6 +226,130 @@ document.getElementById('dialog').showModal();
             reason: 'Back closed modal',
           );
           expect(identical(window.currentDocument, doc), isTrue);
+          await t.runAsync(
+            () => g.inspect(
+              "(document.getElementById('dialog').setAttribute('closedby','any'),true)",
+            ),
+          );
+          await t.tap(button('Open'));
+          await driveDocumentVm(
+            t,
+            () => dialog.evaluate().length == 1,
+            reason: 'reopened for light dismiss',
+          );
+          await t.runAsync(() => g.inspect('window.backdropEvents=[]'));
+          await t.tapAt(const Offset(20, 200));
+          await driveDocumentVm(
+            t,
+            () => dialog.evaluate().isEmpty,
+            reason: 'backdrop light-dismissed modal',
+          );
+          for (var i = 0; i < 30; i++) {
+            if (await t.runAsync(
+                  () => g.inspect('JSON.stringify(backdropEvents)'),
+                ) ==
+                '["pointerdown","cancel","pointerup"]') {
+              break;
+            }
+            await t.pump(const Duration(milliseconds: 16));
+          }
+          expect(
+            await t.runAsync(() => g.inspect('JSON.stringify(backdropEvents)')),
+            '["pointerdown","cancel","pointerup"]',
+          );
+          expect(await t.runAsync(() => g.inspect('outsideClicks')), 1);
+
+          await t.tap(button('Open'));
+          await driveDocumentVm(
+            t,
+            () => dialog.evaluate().length == 1,
+            reason: 'reopened for canceled light dismiss',
+          );
+          await t.runAsync(() => g.inspect('window.blockCancel=true'));
+          await t.runAsync(() => g.inspect('window.backdropEvents=[]'));
+          final beforeCancel = await t.runAsync(() => g.inspect('cancelCount'));
+          await t.tapAt(const Offset(20, 200));
+          for (var i = 0; i < 30; i++) {
+            if (await t.runAsync(() => g.inspect('cancelCount')) ==
+                (beforeCancel as int) + 1) {
+              break;
+            }
+            await t.pump(const Duration(milliseconds: 16));
+          }
+          expect(
+            await t.runAsync(() => g.inspect('cancelCount')),
+            (beforeCancel as int) + 1,
+            reason: 'cancel listener received backdrop close request',
+          );
+          expect(dialog, findsOneWidget);
+          for (var i = 0; i < 30; i++) {
+            if (await t.runAsync(
+                  () => g.inspect('JSON.stringify(backdropEvents)'),
+                ) ==
+                '["pointerdown","cancel","pointerup","click"]') {
+              break;
+            }
+            await t.pump(const Duration(milliseconds: 16));
+          }
+          expect(
+            await t.runAsync(() => g.inspect('JSON.stringify(backdropEvents)')),
+            '["pointerdown","cancel","pointerup","click"]',
+          );
+          await t.runAsync(() => g.inspect('window.blockCancel=false'));
+          await t.runAsync(
+            () => g.inspect(
+              "(document.getElementById('dialog').setAttribute('closedby','none'),true)",
+            ),
+          );
+          final noCloseCount = await t.runAsync(() => g.inspect('cancelCount'));
+          await t.runAsync(() => g.inspect('window.backdropEvents=[]'));
+          await t.tapAt(const Offset(20, 200));
+          for (var i = 0; i < 30; i++) {
+            if (await t.runAsync(
+                  () => g.inspect('JSON.stringify(backdropEvents)'),
+                ) ==
+                '["pointerdown","pointerup","click"]') {
+              break;
+            }
+            await t.pump(const Duration(milliseconds: 16));
+          }
+          expect(
+            await t.runAsync(() => g.inspect('JSON.stringify(backdropEvents)')),
+            '["pointerdown","pointerup","click"]',
+          );
+          expect(dialog, findsOneWidget);
+          expect(
+            await t.runAsync(() => g.inspect('cancelCount')),
+            noCloseCount,
+          );
+          expect(await t.runAsync(() => g.inspect('outsideClicks')), 1);
+          await t.runAsync(
+            () => g.inspect(
+              "(document.getElementById('dialog').setAttribute('closedby','any'),true)",
+            ),
+          );
+          await t.runAsync(() => g.inspect('window.backdropEvents=[]'));
+          final mouse = await t.createGesture(kind: ui.PointerDeviceKind.mouse);
+          await mouse.down(const Offset(20, 200));
+          await mouse.up();
+          await driveDocumentVm(
+            t,
+            () => dialog.evaluate().isEmpty,
+            reason: 'mouse backdrop light-dismissed modal',
+          );
+          for (var i = 0; i < 30; i++) {
+            if (await t.runAsync(
+                  () => g.inspect('JSON.stringify(backdropEvents)'),
+                ) ==
+                '["pointerdown","cancel","pointerup","click"]') {
+              break;
+            }
+            await t.pump(const Duration(milliseconds: 16));
+          }
+          expect(
+            await t.runAsync(() => g.inspect('JSON.stringify(backdropEvents)')),
+            '["pointerdown","cancel","pointerup","click"]',
+          );
           expect(t.takeException(), isNull);
         } finally {
           await t.pumpWidget(const SizedBox.shrink());
