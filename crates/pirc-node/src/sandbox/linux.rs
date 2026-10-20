@@ -315,7 +315,7 @@ pub struct NativeSandbox {
 
 impl NativeSandbox {
     pub fn new(config: NodeConfig, env: Env, helper: PathBuf) -> Self {
-        let node_tmp = common::NodeTmp::new(&env);
+        let node_tmp = common::NodeTmp::new(&config, &env);
         Self {
             config,
             env,

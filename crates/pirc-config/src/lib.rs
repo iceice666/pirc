@@ -18,6 +18,7 @@ pub mod env_allowlist;
 pub mod frontmatter;
 pub mod modes;
 pub mod node;
+pub mod registry;
 
 pub use node::{
     BrowserSettings, CHAT_WORKSPACE_ID, ConfigWorkspace, NodeConfig, SandboxSettings, Viewport,

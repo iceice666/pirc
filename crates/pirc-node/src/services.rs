@@ -198,6 +198,8 @@ impl Services {
     ///    and put its config into `models` before the link connects.
     pub async fn start(config: NodeConfig, env: Env) -> Result<Node, String> {
         crate::link::endpoint(&config.daemon_url)?;
+        pirc_config::registry::register_node(&config, &env, None)
+            .map_err(|error| format!("cannot register node private directories: {error}"))?;
         let legacy = config.state_dir.join("gateway.sqlite");
         if legacy != config.database_path {
             crate::store::refuse_typescript_database(&legacy)?;

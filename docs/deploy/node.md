@@ -170,3 +170,5 @@ PIRC_WORKSPACES=[]
 Keep the file readable by the node account only (`0600`), and list its directory in `sandbox.filesystem.denyRead` when it sits outside `PIRC_STATE_DIR` ([Sandbox and browser](sandbox-and-browser.md)).
 
 Chat nodes read global `SOUL.md` (persona) then the fixed environment description and `CHAT.md` (rules), never `AGENTS.md`. Coding nodes never read SOUL/CHAT. Each chat file is capped at 8000 characters. Settings → Assistant edits these same node-local files when writable; symlinks and Nix store files are read-only. Empty Soul falls back to the built-in identity. Changes apply at the next agent start. The gateway persistently binds one chat node ID; stop the old node and release its binding in Settings → Assistant before replacing it.
+
+Multiple nodes may share one OS account with distinct IDs and stores. Their private paths are registered automatically; see [same-account isolation](sandbox-and-browser.md#same-account-nodes-and-gateway), including upgrade/restart requirements and the limits for already-running sandboxes.

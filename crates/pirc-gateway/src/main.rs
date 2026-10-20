@@ -98,6 +98,9 @@ fn main() -> ExitCode {
 }
 
 async fn run(config: GatewayConfig) -> Result<(), String> {
+    let env = Env::from_process();
+    pirc_config::registry::register_gateway(&config, &env)
+        .map_err(|error| format!("cannot register gateway private directories: {error}"))?;
     let default_database = config.state_dir.join("gateway.sqlite");
     if default_database != config.database_path {
         db::refuse_typescript_database(&default_database)?;
@@ -119,7 +122,6 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
         );
     }
     // An invalid models file at startup is fatal; a missing one means no providers.
-    let env = Env::from_process();
     let models = pirc_providers::load_models_file(
         &config.models_file,
         &|name| env.get(name).map(str::to_owned),

@@ -345,7 +345,7 @@ pub struct MacSandbox {
 
 impl MacSandbox {
     pub fn new(config: NodeConfig, env: Env) -> Self {
-        let node_tmp = common::NodeTmp::new(&env);
+        let node_tmp = common::NodeTmp::new(&config, &env);
         Self {
             config,
             env,

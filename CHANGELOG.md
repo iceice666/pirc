@@ -10,6 +10,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
+- New sandboxes isolate registered same-account node/gateway state and node temporary directories.
 - Refresh OpenCode Zen/Go model catalogs and route supported models through their native API endpoints.
 - Android notices use the available width, and terminal keyboard changes preserve glyph caches.
 - Android interactive dialogs support cancelable close requests and correctly replace their event handlers.

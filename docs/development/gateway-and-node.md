@@ -155,3 +155,5 @@ At startup (of the gateway or a node) unfinished runs become `interrupted`, pend
 ## Data
 
 Each process keeps its own SQLite below its `PIRC_STATE_DIR`. The gateway's holds the session index, leases, and command outcomes; a node's also holds runs, interactions, and uploads, and its state directory contains the agent session JSONL files (the conversation source of truth) and uploaded files. Non-image uploads are also copied into the workspace at `.pirc/uploads/` so the agent's read/bash tools can reach them (that directory is writable by the uploader but protected from the agent's own writes).
+
+Same-account gateways and nodes register private directories automatically; see [same-account isolation and its startup snapshot limit](../deploy/sandbox-and-browser.md#same-account-nodes-and-gateway). Restart existing agent sessions after all daemons are upgraded.

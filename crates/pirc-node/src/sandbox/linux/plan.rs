@@ -302,7 +302,8 @@ const NODE_TMP_PREFIX: &str = "pirc-n-";
 /// socket, or a probe's. Not hidden: each answers only its session's
 /// credentials, and they come and go with sessions, so one hidden at plan
 /// time could be gone before bubblewrap mounts on it, failing the start
-/// (see the accepted gaps). The node's own parent is a private dir anyway.
+/// (see the accepted gaps). Registered node parents, including peers, are
+/// independently hidden as private directories by the account registry.
 fn in_node_tmp(path: &str) -> bool {
     let uid = nix::unistd::getuid().as_raw();
     Path::new(path).ancestors().skip(1).any(|dir| {

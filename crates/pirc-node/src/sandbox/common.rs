@@ -196,12 +196,14 @@ pub fn make_temp_dir(base: &Path, prefix: &str) -> std::io::Result<PathBuf> {
 ///   makes [`session`] warn about it.
 ///
 /// Its name is short, as the sessions' are (macOS's 104-byte socket
-/// paths). Removed, when empty, with the backend (its last clone).
+/// paths). Registered parents remain after shutdown to keep peer mount plans valid.
 #[derive(Clone)]
 pub struct NodeTmp(Arc<NodeTmpDir>);
 
 struct NodeTmpDir {
     base: PathBuf,
+    config: NodeConfig,
+    env: Env,
     dir: Mutex<Option<PathBuf>>,
     /// The backend's sandboxes do not keep writes out of the parent.
     writable_siblings: bool,
@@ -210,19 +212,21 @@ struct NodeTmpDir {
 impl NodeTmp {
     /// For a backend whose sandboxes keep each session out of the others'
     /// temporary directories.
-    pub fn new(env: &Env) -> Self {
-        Self::with(env, false)
+    pub fn new(config: &NodeConfig, env: &Env) -> Self {
+        Self::with(config, env, false)
     }
 
     /// For a backend whose sandboxes hide the parent from reads only (srt
     /// on macOS): [`session`] warns when the parent lies in a write root.
-    pub fn with_writable_siblings(env: &Env) -> Self {
-        Self::with(env, true)
+    pub fn with_writable_siblings(config: &NodeConfig, env: &Env) -> Self {
+        Self::with(config, env, true)
     }
 
-    fn with(env: &Env, writable_siblings: bool) -> Self {
+    fn with(config: &NodeConfig, env: &Env, writable_siblings: bool) -> Self {
         Self(Arc::new(NodeTmpDir {
             base: tmpdir(env),
+            config: config.clone(),
+            env: env.clone(),
             dir: Mutex::new(None),
             writable_siblings,
         }))
@@ -242,9 +246,16 @@ impl NodeTmp {
         if let Some(existing) = dir.as_deref()
             && private(existing)
         {
+            pirc_config::registry::register_node(&self.0.config, &self.0.env, Some(existing))?;
             return Ok(existing.to_path_buf());
         }
         let made = make_temp_dir(&self.0.base, "pirc-n-")?;
+        if let Err(error) =
+            pirc_config::registry::register_node(&self.0.config, &self.0.env, Some(&made))
+        {
+            let _ = std::fs::remove_dir(&made);
+            return Err(error);
+        }
         *dir = Some(made.clone());
         Ok(made)
     }
@@ -257,15 +268,8 @@ impl NodeTmp {
     }
 }
 
-impl Drop for NodeTmpDir {
-    fn drop(&mut self) {
-        let dir = self.dir.get_mut().unwrap_or_else(|p| p.into_inner());
-        if let Some(dir) = dir.take() {
-            // Only when empty: a running command's directory stays.
-            let _ = std::fs::remove_dir(dir);
-        }
-    }
-}
+// Registered parents remain present after shutdown: another sandbox may have
+// planned a denial mount there. SessionTmp still removes each session's content.
 
 /// `<state>/sandbox`, made 0700 when missing.
 pub fn sandbox_state_dir(config: &NodeConfig) -> std::io::Result<PathBuf> {
@@ -418,6 +422,8 @@ pub fn session(
         warnings.push(format!("Sandbox settings ignored: {problem}"));
     }
     let private_dirs = private_dirs(config, env, &parent);
+    let mut registered_dirs = registered_private_dirs(env)?;
+    registered_dirs.extend(private_dirs.iter().cloned());
     let workspace_memory_file =
         input
             .workspace_memory_file
@@ -436,7 +442,7 @@ pub fn session(
         config: agent_config.sandbox,
         config_dir: agent_config.config_dir,
         home,
-        private_dirs: private_dirs.clone(),
+        private_dirs: registered_dirs,
         workspace_root: text(&input.workspace_root),
         allowed_paths: agent_config.allowed_paths,
         session_dir: text(&input.session_dir),
@@ -512,31 +518,18 @@ pub fn session(
 /// spelling through symlinks in `linked_denies`, which the native Linux
 /// backend checks for links the agent could replace.
 fn private_dirs(config: &NodeConfig, env: &Env, node_tmp: &Path) -> Vec<String> {
-    let database_dir = config
-        .database_path
-        .parent()
-        .map_or_else(|| PathBuf::from("/"), Path::to_path_buf);
-    [
-        config.state_dir.clone(),
-        config.sessions_dir.clone(),
-        config.uploads_dir.clone(),
-        database_dir,
-        config.browser.profiles_dir.clone(),
-        // Every repository's ledger: a session gets its own back
-        // (`workspace_memory_file`). Inside the state dir by default, but
-        // `PIRC_WORKSPACE_MEMORY_DIR` may put it anywhere.
-        config.workspace_memory_dir.clone(),
-    ]
-    .into_iter()
-    // systemd credentials (the NixOS module hands the node its token there).
-    .chain(
-        env.get("CREDENTIALS_DIRECTORY")
-            .filter(|dir| !dir.is_empty())
-            .map(PathBuf::from),
-    )
-    .chain([node_tmp.to_path_buf()])
-    .map(|dir| text(&dir))
-    .collect()
+    pirc_config::registry::node_private_dirs(config, env)
+        .into_iter()
+        .chain([node_tmp.to_path_buf()])
+        .map(|dir| text(&dir))
+        .collect()
+}
+
+fn registered_private_dirs(env: &Env) -> ApiResult<Vec<String>> {
+    pirc_config::registry::private_dirs(env).map_err(|error| {
+        crate::log::error(&format!("cannot read private-directory registry: {error}"));
+        ApiError::internal()
+    })
 }
 
 /// The policy and temporary directory of a read-only command for
@@ -572,11 +565,13 @@ pub fn readonly_session(
         warnings.push(format!("Sandbox settings ignored: {problem}"));
     }
     let workspace = text(&input.workspace_root);
+    let mut private_dirs = private_dirs(config, env, &parent);
+    private_dirs.extend(registered_private_dirs(env)?);
     let policy_input = SessionPolicyInput {
         config: agent_config.sandbox,
         config_dir: agent_config.config_dir,
         home,
-        private_dirs: private_dirs(config, env, &parent),
+        private_dirs,
         workspace_root: workspace.clone(),
         allowed_paths: agent_config.allowed_paths,
         session_dir: workspace,
@@ -659,7 +654,7 @@ mod tests {
         )
         .unwrap();
         let (config, env) = test_support::node(&root, &[]);
-        let node_tmp = NodeTmp::new(&env);
+        let node_tmp = NodeTmp::new(&config, &env);
         let workspace = root.join("workspace");
         let input = super::super::ReadonlyInput {
             workspace_root: workspace.clone(),
@@ -711,7 +706,7 @@ mod tests {
         let root = dir.path().canonicalize().unwrap();
         let state_in_tmp = is_inside(&text(&root), &real_resolve("/tmp"));
         let (config, env) = test_support::node(&root, &[("TMPDIR", "/tmp")]);
-        let node_tmp = NodeTmp::new(&env);
+        let node_tmp = NodeTmp::new(&config, &env);
         let input = |name: &str| PrepareInput {
             session_id: name.to_owned(),
             workspace_root: root.join("workspace"),
@@ -759,7 +754,8 @@ mod tests {
         Session::remove_tmp(&c.tmp);
         let parent = c.tmp.parent().unwrap().to_path_buf();
         drop(node_tmp);
-        assert!(!parent.exists(), "removed with the backend");
+        assert!(parent.exists(), "registered parent remains for peer mounts");
+        std::fs::remove_dir(parent).unwrap();
     }
 
     #[test]
@@ -792,8 +788,10 @@ mod tests {
                 .iter()
                 .any(|warning| warning.contains("pirc's temporary directory"))
         };
-        assert!(!temp_warning(&NodeTmp::new(&env)));
-        assert!(temp_warning(&NodeTmp::with_writable_siblings(&env)));
+        assert!(!temp_warning(&NodeTmp::new(&config, &env)));
+        assert!(temp_warning(&NodeTmp::with_writable_siblings(
+            &config, &env
+        )));
     }
 
     /// A session gets its own ledger back from the workspace-memory
@@ -809,7 +807,7 @@ mod tests {
         let (config, env) =
             test_support::node(&root, &[("PIRC_WORKSPACE_MEMORY_DIR", &memory_text)]);
         assert_eq!(config.workspace_memory_dir, memory);
-        let node_tmp = NodeTmp::new(&env);
+        let node_tmp = NodeTmp::new(&config, &env);
         let input = |file: &str| PrepareInput {
             session_id: "pi_a".to_owned(),
             workspace_root: root.join("workspace"),
