@@ -96,7 +96,7 @@ async fn run(prepared: &Prepared, cwd: &Path, script: &str) {
     command
         .args(["-c", script])
         .env_clear()
-        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+        .env("PATH", "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin")
         .envs(prepared.env.iter().map(|(k, v)| (k, v)))
         .current_dir(cwd)
         .stdin(Stdio::null())
@@ -159,6 +159,15 @@ async fn isolates_registered_nodes_gateway_and_tmp_without_breaking_own_state() 
     );
     let gateway_config = pirc_config::GatewayConfig::load(&gateway_env).unwrap();
     pirc_config::registry::register_gateway(&gateway_config, &gateway_env).unwrap();
+    let cache_files = [
+        home.join(".cargo/registry/src/fake/build.rs"),
+        home.join(".cache/ms-playwright/chromium/chrome"),
+        home.join(".bun/install/cache/package/script"),
+    ];
+    for path in &cache_files {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, "trusted-cache").unwrap();
+    }
     let a_sandbox = native(&a, &a_env);
     let b_sandbox = native(&b, &b_env);
     assert!(matches!(
@@ -218,6 +227,18 @@ async fn isolates_registered_nodes_gateway_and_tmp_without_breaking_own_state() 
         ));
     }
     script.push_str(&format!("if (printf new >{}) 2>/dev/null; then exit 93; fi\nprintf appended >>{}\nprintf own >\"$TMPDIR/own\"\n", quote(&tmp(&b_run).join("new-file")),quote(&a_file)));
+    for path in &cache_files {
+        let resolved = real_resolve(&path.display().to_string());
+        assert!(read_allowed(&a_run.policy.paths, &resolved));
+        assert!(!write_allowed(&a_run.policy.paths, &resolved));
+        script.push_str(&format!(
+            "cat {} >/dev/null; if (printf poisoned >{}) 2>/dev/null; then exit 97; fi\n",
+            quote(path),
+            quote(path)
+        ));
+    }
+    script.push_str("mkdir -p \"$CARGO_HOME\" \"$XDG_CACHE_HOME\" \"$BUN_INSTALL_CACHE_DIR\"; printf own >\"$CARGO_HOME/probe\"; printf own >\"$XDG_CACHE_HOME/probe\"; printf own >\"$BUN_INSTALL_CACHE_DIR/probe\"\n");
+    script.push_str("git init -q; git rev-parse --git-dir >/dev/null\n");
     run(&a_run, &a_cwd, &script).await;
     assert_eq!(fs::read_to_string(&a_file).unwrap(), "ownappended");
     for (file, original) in b_files.iter().zip(originals) {

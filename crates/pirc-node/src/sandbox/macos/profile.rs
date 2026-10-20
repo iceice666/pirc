@@ -18,6 +18,7 @@
 //! Seatbelt is last-match-wins; every comment on rule order below is srt's.
 
 use indexmap::IndexSet;
+use std::path::Path;
 
 use super::paths::{
     self, Context, basename, compile, contains_glob_chars, deny_glob_regex, dirname,
@@ -563,7 +564,11 @@ fn read_rules(resolved: &ResolvedRead, tag: &str) -> Result<Vec<String>, String>
 /// `macGetMandatoryDenyEntries`: srt's dangerous files and directories in
 /// the cwd and anywhere beneath it, `.git/hooks`, and `.git/config` unless
 /// `allowGitConfig`.
-fn mandatory_deny_entries(allow_git_config: bool, ctx: Context<'_>) -> Vec<Entry> {
+fn mandatory_deny_entries(
+    allow_git_config: bool,
+    protect_git: bool,
+    ctx: Context<'_>,
+) -> Vec<Entry> {
     let cwd = normalize_path_for_sandbox(ctx.cwd, true, ctx);
     let literal = |rel: &str| to_literal_path_entry(&paths::resolve(&cwd, rel), ctx);
     let mut entries = Vec::new();
@@ -575,11 +580,19 @@ fn mandatory_deny_entries(allow_git_config: bool, ctx: Context<'_>) -> Vec<Entry
         entries.push(literal(name));
         entries.push(anchored_glob_entry(&cwd, &format!("**/{name}/**")));
     }
-    entries.push(literal(".git/hooks"));
-    entries.push(anchored_glob_entry(&cwd, "**/.git/hooks/**"));
-    if !allow_git_config {
-        entries.push(literal(".git/config"));
-        entries.push(anchored_glob_entry(&cwd, "**/.git/config"));
+    if protect_git {
+        entries.push(literal(".git/hooks"));
+        entries.push(anchored_glob_entry(&cwd, "**/.git/hooks/**"));
+        if !allow_git_config {
+            entries.push(literal(".git/config"));
+            entries.push(anchored_glob_entry(&cwd, "**/.git/config"));
+        }
+    } else {
+        // Keep nested-repository guards without pinning a missing root .git.
+        entries.push(anchored_glob_entry(&cwd, "*/**/.git/hooks/**"));
+        if !allow_git_config {
+            entries.push(anchored_glob_entry(&cwd, "*/**/.git/config"));
+        }
     }
     entries
 }
@@ -725,6 +738,7 @@ fn write_rules(
     deny_within_allow: &[String],
     extra_denies: &[String],
     input: &ProfileInput<'_>,
+    protect_git: bool,
     ctx: Context<'_>,
 ) -> Vec<String> {
     let tag = input.log_tag;
@@ -742,7 +756,11 @@ fn write_rules(
                 .iter()
                 .map(|path| to_literal_path_entry(path, ctx)),
         )
-        .chain(mandatory_deny_entries(input.allow_git_config, ctx))
+        .chain(mandatory_deny_entries(
+            input.allow_git_config,
+            protect_git,
+            ctx,
+        ))
         .collect();
     let (groups, ungrouped) = group_literal_deny_paths(deny_entries);
     let group_filters: Vec<(Vec<String>, Vec<String>)> =
@@ -798,6 +816,16 @@ fn write_rules(
 /// preparation of the settings). `Err` where srt would throw: a glob that
 /// does not compile as a regex.
 pub fn generate(input: &ProfileInput<'_>) -> Result<String, String> {
+    generate_inner(input, true)
+}
+
+/// A missing root .git must stay creatable, while nested repository guards
+/// remain active. The raw generator preserves srt's recorded behavior.
+pub fn generate_native(input: &ProfileInput<'_>) -> Result<String, String> {
+    generate_inner(input, Path::new(input.cwd).join(".git").is_dir())
+}
+
+fn generate_inner(input: &ProfileInput<'_>, protect_git: bool) -> Result<String, String> {
     let ctx = Context {
         cwd: input.cwd,
         home: input.home,
@@ -917,6 +945,7 @@ pub fn generate(input: &ProfileInput<'_>) -> Result<String, String> {
         &deny_within_allow,
         input.extra_write_denies,
         input,
+        protect_git,
         ctx,
     ));
     let unlink = read_deny_unlink_rules(&resolved, tag)?;

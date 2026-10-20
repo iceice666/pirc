@@ -271,6 +271,26 @@ impl NodeTmp {
 // Registered parents remain present after shutdown: another sandbox may have
 // planned a denial mount there. SessionTmp still removes each session's content.
 
+/// Tool caches belong to this sandbox; none can poison a host build/browser.
+/// The programs create these directories lazily, and SessionTmp removes them.
+pub fn private_cache_env(tmp: &str) -> Vec<(String, String)> {
+    [
+        ("XDG_CACHE_HOME", "cache"),
+        ("CARGO_HOME", "cargo"),
+        ("BUN_INSTALL_CACHE_DIR", "bun"),
+        ("npm_config_cache", "npm"),
+        ("NPM_CONFIG_CACHE", "npm"),
+        ("YARN_CACHE_FOLDER", "yarn"),
+        ("PIP_CACHE_DIR", "pip"),
+        ("GOCACHE", "go-build"),
+        ("GOMODCACHE", "go-mod"),
+        ("GRADLE_USER_HOME", "gradle"),
+    ]
+    .into_iter()
+    .map(|(key, leaf)| (key.to_owned(), format!("{tmp}/{leaf}")))
+    .collect()
+}
+
 /// `<state>/sandbox`, made 0700 when missing.
 pub fn sandbox_state_dir(config: &NodeConfig) -> std::io::Result<PathBuf> {
     let dir = config.state_dir.join("sandbox");
@@ -438,6 +458,17 @@ pub fn session(
                     None
                 }
             });
+    let brokered = config.agent_args.first().is_some_and(|arg| arg == "agent");
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&input.session_dir)
+        .map_err(|_| ApiError::internal())?;
+    let mut protected_paths: Vec<String> = input.protected_paths.iter().map(|p| text(p)).collect();
+    if brokered {
+        protected_paths.push(text(&input.session_dir));
+        protected_paths.extend(workspace_memory_file.iter().cloned());
+    }
     let policy_input = SessionPolicyInput {
         config: agent_config.sandbox,
         config_dir: agent_config.config_dir,
@@ -449,7 +480,7 @@ pub fn session(
         workspace_memory_file,
         inference_socket: input.inference_socket.as_deref().map(text),
         tmp_dirs: vec![text(&tmp), "/tmp".to_owned()],
-        protected_paths: input.protected_paths.iter().map(|p| text(p)).collect(),
+        protected_paths,
         read_only_dirs: [text(&sandbox_bin_dir(config))]
             .into_iter()
             .chain(input.project_files_dir.as_deref().map(text))
@@ -829,7 +860,10 @@ mod tests {
         let other = text(&memory.join("other.jsonl"));
         assert!(memory.join("k.jsonl").is_file(), "made by the node");
         assert!(pirc_policy::read_allowed(paths, &own));
-        assert!(pirc_policy::write_allowed(paths, &own));
+        assert!(
+            !pirc_policy::write_allowed(paths, &own),
+            "builtin agent persists through the node"
+        );
         assert!(!pirc_policy::read_allowed(paths, &other));
         assert!(!pirc_policy::write_allowed(paths, &other));
 

@@ -90,6 +90,7 @@ fn string(arg: &Option<Arg>) -> Option<&str> {
 /// transport, the chat policy, project instructions and a role.
 pub struct Configure {
     pub models: Models,
+    pub persistence: Option<pirc_protocol::InferenceConfig>,
     pub capabilities: Capabilities,
     pub instructions: Option<String>,
     pub role: Option<AgentRole>,
@@ -156,8 +157,14 @@ pub fn parse_configure(message: &Value) -> Result<Configure, String> {
                 .ok_or("configure.approvalMode is one of read-only, auto, full-access")?,
         ),
     };
+    let persistence = message
+        .get("persistence")
+        .filter(|v| !v.is_null())
+        .map(|v| serde_json::from_value(v.clone()).map_err(|_| "Invalid persistence transport"))
+        .transpose()?;
     Ok(Configure {
         models,
+        persistence,
         capabilities,
         instructions,
         role,
@@ -271,6 +278,7 @@ async fn main(args: Vec<String>) -> Result<(), String> {
     let ui = RpcUi::new(write.clone());
     let mut lines = stdin_lines();
     let configured = read_configure(&mut lines).await?;
+    crate::state_io::configure(configured.persistence)?;
     let config = load_agent_config(&cwd, configured.models, &|name| std::env::var(name).ok())?;
     let warnings = config.warnings.clone();
     let store = SessionStore::open(PathBuf::from(session_dir), &cwd)?;
@@ -395,6 +403,15 @@ async fn shutdown(agent: &Rc<Agent>, ui: &RpcUi, channels: &NodeChannels) {
 
 /// Run one session agent; `args` follow `agent`.
 pub fn run_agent(args: Vec<String>) -> ExitCode {
+    // Tool subprocesses share this uid and PID namespace. Protect the RPC
+    // pipes and in-memory transport credentials before reading configure.
+    #[cfg(target_os = "linux")]
+    if let Err(error) =
+        nix::sys::prctl::set_dumpable(false).and_then(|()| nix::sys::prctl::set_no_new_privs())
+    {
+        eprintln!("error: cannot protect agent RPC process: {error}");
+        return ExitCode::FAILURE;
+    }
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

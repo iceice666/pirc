@@ -143,6 +143,55 @@ pub struct SessionPolicyInput {
     pub ssh_auth_sock: Option<String>,
 }
 
+/// Mounted Windows account profiles are credential stores too. Reopen a
+/// workspace beneath Users normally; never expose every Windows account just
+/// because the node's Linux home has a deny list. Other mount roots can still
+/// be protected explicitly with denyRead.
+pub fn wsl_user_dirs(mount_root: &Path, kernel_release: &str) -> Result<Vec<String>, String> {
+    if !kernel_release.to_ascii_lowercase().contains("microsoft") {
+        return Ok(Vec::new());
+    }
+    let entries = match std::fs::read_dir(mount_root) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(_) => return Err("Cannot inspect WSL Windows user directories".to_owned()),
+    };
+    let mut out = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|_| "Cannot inspect WSL Windows user directories")?;
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if name.len() != 1 || !name.as_bytes()[0].is_ascii_alphabetic() {
+            continue;
+        }
+        let users = entry.path().join("Users");
+        match std::fs::metadata(&users) {
+            Ok(meta) if meta.is_dir() => out.push(users.display().to_string()),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err("Cannot inspect WSL Windows user directories".to_owned()),
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
+fn host_wsl_user_dirs(platform: Platform) -> Result<Vec<String>, String> {
+    if platform != Platform::Linux {
+        return Ok(Vec::new());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease")
+            .map_err(|_| "Cannot inspect WSL kernel identity")?;
+        wsl_user_dirs(Path::new("/mnt"), &kernel)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        Ok(Vec::new())
+    }
+}
+
 /// `SessionPolicy`. The agent gets `paths` as `PIRC_SANDBOX_POLICY` (JSON).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1006,6 +1055,8 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         .iter()
         .map(|item| real_resolve(item))
         .collect();
+    let wsl_spelled = host_wsl_user_dirs(input.platform)?;
+    let wsl_denies = resolve_all(&wsl_spelled);
     let host_sockets: Vec<String> = if input.platform == Platform::Linux {
         let allowed = configured(&input.config.network.allow_unix_sockets);
         linux_host_sockets(input.uid, input.ssh_auth_sock.as_deref())
@@ -1020,14 +1071,14 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         filesystem,
         network,
     } = &input.config;
-    let shared_write = unique(
-        tmp_dirs.iter().cloned().chain(
-            CACHE_HOME_PATHS
-                .iter()
-                .map(|item| real_resolve(&resolve_path(home, item)))
-                .filter(|item| exists(item)),
-        ),
-    );
+    // Host caches are executable inputs to future host builds/browsers. They
+    // are readable, never shared writable roots. Each sandbox gets private
+    // tool cache locations beneath its own temporary directory.
+    let host_caches: Vec<String> = CACHE_HOME_PATHS
+        .iter()
+        .map(|item| real_resolve(&resolve_path(home, item)))
+        .collect();
+    let shared_write = unique(tmp_dirs.iter().cloned());
     let allow_write = unique(
         [workspace.clone()]
             .into_iter()
@@ -1059,12 +1110,14 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         )?);
     }
     let mode_paths = mode_write_paths(&input.config_dir)?;
+    let git_dir = Path::new(&workspace).join(".git").is_dir();
     let paths = PathPolicy {
         deny_read: unique(
             private_dirs
                 .iter()
                 .cloned()
                 .chain(sensitive.iter().cloned())
+                .chain(wsl_denies)
                 .chain(host_sockets)
                 .chain(configured(&filesystem.deny_read)),
         ),
@@ -1094,29 +1147,31 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         // contains them (a workspace holding the state dir, `~` in
         // allowedPaths).
         deny_write: unique(
-            [
-                resolve_path(&workspace, ".pirc"),
-                // srt keeps these read-only too; listed so the file tools
-                // refuse them alike.
-                resolve_path(&workspace, ".git/hooks"),
-            ]
-            .into_iter()
-            .chain((!filesystem.allow_git_config).then(|| resolve_path(&workspace, ".git/config")))
-            // User-managed global configuration stays read-only even under
-            // an allowed root.
-            .chain([real_resolve(&input.config_dir)])
-            .chain(prompt_paths)
-            .chain(mode_paths.iter().cloned())
-            .chain(resolve_all(&input.protected_paths))
-            .chain(sensitive)
-            .chain(read_only_dirs)
-            .chain(
-                private_dirs
-                    .iter()
-                    .filter(|dir| allow_write.iter().any(|root| is_inside(dir, root)))
-                    .flat_map(|dir| deny_write_around(dir, &own_state)),
-            )
-            .chain(configured(&filesystem.deny_write)),
+            [resolve_path(&workspace, ".pirc")]
+                .into_iter()
+                // A nonexistent .git must remain creatable (git init/clone).
+                // Worktree .git files have no hooks/config children either.
+                .chain(git_dir.then(|| resolve_path(&workspace, ".git/hooks")))
+                .chain(
+                    (git_dir && !filesystem.allow_git_config)
+                        .then(|| resolve_path(&workspace, ".git/config")),
+                )
+                // User-managed global configuration stays read-only even under
+                // an allowed root.
+                .chain([real_resolve(&input.config_dir)])
+                .chain(prompt_paths)
+                .chain(mode_paths.iter().cloned())
+                .chain(resolve_all(&input.protected_paths))
+                .chain(sensitive)
+                .chain(host_caches)
+                .chain(read_only_dirs)
+                .chain(
+                    private_dirs
+                        .iter()
+                        .filter(|dir| allow_write.iter().any(|root| is_inside(dir, root)))
+                        .flat_map(|dir| deny_write_around(dir, &own_state)),
+                )
+                .chain(configured(&filesystem.deny_write)),
         ),
         shared_write: Some(shared_write),
     };
@@ -1129,7 +1184,9 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
     let linked_denies: Vec<LinkedPath> = unique(
         sensitive_spelled
             .into_iter()
+            .chain(wsl_spelled)
             .chain(input.private_dirs.iter().map(|dir| absolute(dir)))
+            .chain(CACHE_HOME_PATHS.iter().map(|item| resolve_path(home, item)))
             .chain(input.read_only_dirs.iter().map(|dir| absolute(dir)))
             .chain(input.protected_paths.iter().map(|path| absolute(path)))
             .chain(mode_paths)
@@ -1268,6 +1325,7 @@ mod tests {
     #[test]
     fn hides_pirc_state_and_credentials_but_gives_the_session_its_own_directories_back() {
         let d = layout();
+        fs::create_dir_all(p(&d.workspace, ".git/hooks")).unwrap();
         let SessionPolicy { paths, network, .. } = policy_for(&d, &d.workspace, json!({}));
         assert!(!read_allowed(&paths, &p(&d.state, "node.sqlite")));
         assert!(!read_allowed(&paths, &p(&d.state, "sessions/pi_2/x.jsonl")));
@@ -1301,14 +1359,14 @@ mod tests {
             &git_config.paths,
             &p(&d.workspace, ".git/config")
         ));
-        assert!(write_allowed(&paths, &p(&d.home, ".cache/bun/x")));
+        assert!(!write_allowed(&paths, &p(&d.home, ".cache/bun/x")));
         assert!(!write_allowed(&paths, &p(&d.home, ".bashrc")));
         assert!(write_allowed(&paths, &p(&d.tmp, "x")));
         assert!(!write_allowed(&paths, &p(&d.state, "node.sqlite")));
-        // Temp dirs and build caches are shared by every session: no write lease.
+        // Only temporary roots are shared; host build caches stay read-only.
         assert_eq!(
             paths.shared_write.as_deref().unwrap(),
-            [d.tmp.clone(), p(&d.home, ".cache")]
+            std::slice::from_ref(&d.tmp)
         );
         for domain in DEFAULT_ALLOWED_DOMAINS {
             assert!(network.allowed_domains.iter().any(|d| d == domain));
@@ -1351,7 +1409,10 @@ mod tests {
             &d.home,
         );
         assert_eq!(guard.lease_root(&p(&d.tmp, "x/y")), None);
-        assert_eq!(guard.lease_root(&p(&d.home, ".cache/bun/x")), None);
+        assert!(!write_allowed(
+            &policy_for(&d, &d.workspace, json!({})).paths,
+            &p(&d.home, ".cache/bun/x")
+        ));
         assert_eq!(
             guard.lease_root(&p(&d.workspace, "src/a.ts")).as_deref(),
             Some(d.workspace.as_str())
@@ -1977,5 +2038,85 @@ mod tests {
         assert!(malformed.problem.unwrap().starts_with(&format!("{file}: ")));
         fs::write(&file, "[1]").unwrap();
         assert_eq!(read_agent_config(&config_dir, "/home/u").problem, None);
+    }
+    #[test]
+    fn host_caches_stay_readonly_under_broad_home_grants() {
+        let d = layout();
+        let policy = policy_for(
+            &d,
+            &d.workspace,
+            json!({"filesystem":{"allowWrite":[d.home]}}),
+        );
+        for relative in CACHE_HOME_PATHS {
+            let file = p(&p(&d.home, relative), "future-code");
+            assert!(!write_allowed(&policy.paths, &file), "{relative}");
+            assert!(
+                !policy
+                    .paths
+                    .shared_write
+                    .as_ref()
+                    .unwrap()
+                    .contains(&p(&d.home, relative))
+            );
+        }
+    }
+
+    #[test]
+    fn missing_git_directory_and_worktree_pointer_do_not_create_child_denies() {
+        let d = layout();
+        for worktree in [false, true] {
+            if worktree {
+                fs::write(p(&d.workspace, ".git"), "gitdir: /some/repository").unwrap();
+            }
+            let policy = policy_for(&d, &d.workspace, json!({}));
+            assert!(
+                !policy
+                    .paths
+                    .deny_write
+                    .iter()
+                    .any(|path| is_inside(path, &p(&d.workspace, ".git")))
+            );
+            assert!(write_allowed(
+                &policy.paths,
+                &p(&d.workspace, ".git/config")
+            ));
+        }
+    }
+
+    #[test]
+    fn detects_windows_profiles_only_on_wsl_and_keeps_workspace_exceptions() {
+        let d = layout();
+        let mounts = Path::new(&d.root).join("mnt");
+        for name in [
+            "c/Users/alice/AppData",
+            "D/Users/bob",
+            "not-a-drive/Users/ignored",
+            "e/tools",
+        ] {
+            fs::create_dir_all(mounts.join(name)).unwrap();
+        }
+        assert!(wsl_user_dirs(&mounts, "6.18.0-generic").unwrap().is_empty());
+        let users = wsl_user_dirs(&mounts, "6.18.0-Microsoft-standard-WSL2").unwrap();
+        assert_eq!(users.len(), 2);
+        let workspace = mounts.join("c/Users/alice/project");
+        fs::create_dir(&workspace).unwrap();
+        let mut input = input(&d, workspace.to_str().unwrap(), json!({}));
+        input.private_dirs.extend(users);
+        let policy = session_policy(&input).unwrap();
+        assert!(read_allowed(
+            &policy.paths,
+            &workspace.join("main.rs").display().to_string()
+        ));
+        assert!(!read_allowed(
+            &policy.paths,
+            &mounts
+                .join("c/Users/alice/AppData/token")
+                .display()
+                .to_string()
+        ));
+        assert!(!read_allowed(
+            &policy.paths,
+            &mounts.join("D/Users/bob/secret").display().to_string()
+        ));
     }
 }

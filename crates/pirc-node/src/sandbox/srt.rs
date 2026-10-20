@@ -224,7 +224,8 @@ impl Sandbox for SrtSandbox {
                 self.config.agent_command.clone().into(),
             ];
             args.extend(self.config.agent_args.iter().map(OsString::from));
-            let env = vec![("CLAUDE_CODE_TMPDIR".to_owned(), tmp.display().to_string())];
+            let mut env = vec![("CLAUDE_CODE_TMPDIR".to_owned(), tmp.display().to_string())];
+            env.extend(common::private_cache_env(&tmp.display().to_string()));
             let control = SrtControl {
                 policy: policy.clone(),
                 platform,
@@ -284,7 +285,8 @@ impl Sandbox for SrtSandbox {
                 "--".into(),
             ];
             args.extend(input.command);
-            let env = vec![("CLAUDE_CODE_TMPDIR".to_owned(), tmp.display().to_string())];
+            let mut env = vec![("CLAUDE_CODE_TMPDIR".to_owned(), tmp.display().to_string())];
+            env.extend(common::private_cache_env(&tmp.display().to_string()));
             let temp_dir = tmp.to_path_buf();
             Ok(Prepared::new(
                 PathBuf::from(&self.srt),

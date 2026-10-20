@@ -341,7 +341,8 @@ fn production_profiles_hold_pircs_deviations() {
         .chain(load("pirc-cases.json"))
         .collect();
     let case = |name: &str| cases.iter().find(|case| case.name == name).unwrap();
-    // Every line of srt's profile stays, but srt's glob reading of a
+    // Every non-Git line stays. Git guards cover existing repositories so
+    // a workspace without .git can run git init. Also except srt's glob reading of a
     // workspace with glob characters and what the read-only profile drops.
     for case in load("cases.json") {
         if case.name == "readonly" || case.name == "special-chars" {
@@ -350,7 +351,12 @@ fn production_profiles_hold_pircs_deviations() {
         let srt = expected(&format!("{FIXTURES}/{}.sb", case.name), &case.root);
         let pirc = production_profile(&case);
         let lines: std::collections::HashSet<&str> = pirc.lines().collect();
-        let lost: Vec<&str> = srt.lines().filter(|line| !lines.contains(line)).collect();
+        let lost: Vec<&str> = srt
+            .lines()
+            .filter(|line| {
+                !line.contains(".git/") && !line.ends_with("/.git\")") && !lines.contains(line)
+            })
+            .collect();
         assert!(lost.is_empty(), "{}: {lost:#?}", case.name);
     }
     // A `.git` linking elsewhere: denied where it leads, the link kept.
@@ -394,12 +400,16 @@ fn production_profiles_hold_pircs_deviations() {
     assert!(special.contains(&format!("(subpath \"{ws}/.pirc\")")));
     let globs = production_profile(case("user-globs"));
     let r = |rest: &str| format!("{}/{rest}", case("user-globs").root);
-    for literal in ["w[1]", "w[1]/.pirc", "w[1]/.git/hooks"] {
+    for literal in ["w[1]", "w[1]/.pirc"] {
         assert!(
             globs.contains(&format!("(subpath \"{}\")", r(literal))),
             "{literal}"
         );
     }
+    assert!(
+        !globs.contains(&format!("(subpath \"{}\")", r("w[1]/.git/hooks"))),
+        "no future Git placeholder"
+    );
     for glob in ["w[1]/gen/*", "w[1]/*.lock", "w[1]/**/*.key"] {
         assert!(
             !globs.contains(&format!("(subpath \"{}\")", r(glob))),

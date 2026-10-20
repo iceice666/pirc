@@ -12,7 +12,7 @@ pub mod session;
 
 /// Credential stores and private data under `$HOME` that agents never
 /// read (`SENSITIVE_HOME_PATHS`); the auto-mode rules use them too.
-pub const SENSITIVE_HOME_PATHS: [&str; 40] = [
+pub const SENSITIVE_HOME_PATHS: [&str; 56] = [
     ".ssh",
     ".gnupg",
     ".aws",
@@ -53,6 +53,22 @@ pub const SENSITIVE_HOME_PATHS: [&str; 40] = [
     "Library/Application Support/BraveSoftware",
     "Library/Application Support/Arc",
     "Library/Application Support/Microsoft Edge",
+    ".npmrc",
+    ".yarnrc.yml",
+    ".bundle/config",
+    ".config/pip/pip.conf",
+    ".pip/pip.conf",
+    ".config/containers/auth.json",
+    ".local/share/containers/auth.json",
+    ".config/google-chrome-for-testing",
+    ".local/share/pki",
+    ".config/opencode",
+    ".local/share/opencode",
+    ".vscode-server",
+    ".vscode-server-insiders",
+    "Library/Application Support/Google/Chrome for Testing",
+    ".config/Code/User/globalStorage",
+    "Library/Application Support/Code/User/globalStorage",
 ];
 
 /// Registry credentials builds read (`BUILD_CREDENTIAL_HOME_PATHS`).
@@ -79,8 +95,8 @@ pub struct PathPolicy {
     pub allow_read: Vec<String>,
     pub allow_write: Vec<String>,
     pub deny_write: Vec<String>,
-    /// Writable roots every session shares (temporary directories, build
-    /// caches): no write lease there.
+    /// Writable roots every session shares (system temporary directories):
+    /// no write lease there. Host build caches are read-only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared_write: Option<Vec<String>>,
 }

@@ -9,8 +9,6 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::io::Write as _;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 
@@ -548,10 +546,7 @@ pub struct Team {
 impl Team {
     pub fn new(options: TeamOptions) -> Rc<Self> {
         let directory = options.directory.clone();
-        let _ = std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&directory);
+        let _ = crate::state_io::create_dir_all(&directory);
         Rc::new_cyclic(|weak| Self {
             weak: weak.clone(),
             directory,
@@ -624,12 +619,7 @@ impl Team {
         }
         let file = self.directory.join("events.jsonl");
         let line = format!("{}\n", js::stringify(&Value::Object(entry.clone())));
-        std::fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .mode(0o600)
-            .open(&file)
-            .and_then(|mut handle| handle.write_all(line.as_bytes()))
+        crate::state_io::append(&file, line.as_bytes())
             .map_err(|error| js::fs_error(&error, "open", Some(&file.display().to_string())))?;
         self.records.borrow_mut().push(entry.clone());
         self.notify_waiters();
@@ -1107,6 +1097,9 @@ impl Team {
     fn configure_line(&self, member: &Member) -> Result<Value, String> {
         let mut line = Json::new();
         line.insert("type".to_owned(), json!("configure"));
+        if let Some(config) = crate::state_io::config() {
+            line.insert("persistence".into(), json!(config));
+        }
         line.insert(
             "models".to_owned(),
             serde_json::to_value(&self.options.models).unwrap_or_default(),
@@ -1163,9 +1156,7 @@ impl Team {
     async fn launch(&self, member: &MemberRef, signal: Option<&AbortSignal>) -> Result<(), String> {
         let name = member.borrow().name.clone();
         let dir = self.directory.join(&name);
-        std::fs::DirBuilder::new()
-            .mode(0o700)
-            .create(&dir)
+        crate::state_io::create_dir(&dir)
             .map_err(|error| js::fs_error(&error, "mkdir", Some(&dir.display().to_string())))?;
         // `addEventListener('abort', …)` until the launch ends.
         let listening = Rc::new(Cell::new(true));
@@ -2673,13 +2664,7 @@ pub fn pretty(value: &Value) -> String {
 
 /// `writeFileSync(file, text, { mode: 0o600 })`.
 fn write_private(file: &Path, text: &str) -> Result<(), String> {
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(file)
-        .and_then(|mut handle| handle.write_all(text.as_bytes()))
+    crate::state_io::write(file, text.as_bytes())
         .map_err(|error| js::fs_error(&error, "open", Some(&file.display().to_string())))
 }
 

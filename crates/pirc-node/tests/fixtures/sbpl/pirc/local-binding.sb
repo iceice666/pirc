@@ -227,10 +227,8 @@
   (regex "^{ROOT}/ws/(.*/)?\\.claude/commands/.*(/.*)?$")
   (subpath "{ROOT}/ws/.claude/agents")
   (regex "^{ROOT}/ws/(.*/)?\\.claude/agents/.*(/.*)?$")
-  (subpath "{ROOT}/ws/.git/hooks")
-  (regex "^{ROOT}/ws/(.*/)?\\.git/hooks/.*(/.*)?$")
-  (subpath "{ROOT}/ws/.git/config")
-  (regex "^{ROOT}/ws/(.*/)?\\.git/config(/.*)?$")
+  (regex "^{ROOT}/ws/[^/]*/(.*/)?\\.git/hooks/.*(/.*)?$")
+  (regex "^{ROOT}/ws/[^/]*/(.*/)?\\.git/config(/.*)?$")
   (with message "{TAG}"))
 (deny file-write-unlink file-write-create
   (subpath "{ROOT}/ws/.pirc")
@@ -264,11 +262,8 @@
   (regex "^{ROOT}/ws/(.*/)?\\.claude/commands/.*(/.*)?$")
   (subpath "{ROOT}/ws/.claude/agents")
   (regex "^{ROOT}/ws/(.*/)?\\.claude/agents/.*(/.*)?$")
-  (subpath "{ROOT}/ws/.git/hooks")
-  (literal "{ROOT}/ws/.git")
-  (regex "^{ROOT}/ws/(.*/)?\\.git/hooks/.*(/.*)?$")
-  (subpath "{ROOT}/ws/.git/config")
-  (regex "^{ROOT}/ws/(.*/)?\\.git/config(/.*)?$")
+  (regex "^{ROOT}/ws/[^/]*/(.*/)?\\.git/hooks/.*(/.*)?$")
+  (regex "^{ROOT}/ws/[^/]*/(.*/)?\\.git/config(/.*)?$")
   (with message "{TAG}"))
 
 ; Pseudo-terminal (pty) support

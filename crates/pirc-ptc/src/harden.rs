@@ -51,6 +51,8 @@ pub const ADDRESS_SPACE_BYTES: u64 = 512 * 1024 * 1024;
 /// Harden the calling process as described above; `Err` says which step
 /// failed.
 pub fn harden() -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    nix::sys::prctl::set_dumpable(false).map_err(|error| format!("PR_SET_DUMPABLE: {error}"))?;
     close_inherited_fds()?;
     limit_resources()?;
     #[cfg(target_os = "linux")]

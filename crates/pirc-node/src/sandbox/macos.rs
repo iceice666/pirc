@@ -181,6 +181,9 @@ pub fn extra_denies(
         &mut deny_write.iter().cloned().chain(
             profile::mandatory_names(allow_git_config)
                 .into_iter()
+                .filter(|name| {
+                    !name.starts_with(".git/") || Path::new(&cwd_real).join(".git").is_dir()
+                })
                 .map(|name| paths::resolve(&cwd_real, name)),
         ),
     );
@@ -256,7 +259,7 @@ pub fn policy_profile(policy: &SessionPolicy, settings: &Settings<'_>) -> Result
             move_blocks.push(link.clone());
         }
     }
-    profile::generate(&ProfileInput {
+    profile::generate_native(&ProfileInput {
         deny_read: &paths.deny_read,
         allow_read: &paths.allow_read,
         allow_write: &paths.allow_write,
@@ -290,6 +293,7 @@ fn sandbox_env(
         ("SANDBOX_RUNTIME".to_owned(), "1".to_owned()),
         ("TMPDIR".to_owned(), tmp.to_owned()),
     ];
+    env.extend(common::private_cache_env(tmp));
     if let Some((port, auth)) = proxy {
         env.extend(proxy::env_vars(EnvPlatform::MacOs, port, port, auth));
     }
@@ -844,6 +848,9 @@ mod tests {
                     .filter(|(name, _)| {
                         name != "CLAUDE_CODE_TMPDIR"
                             && name != "PIRC_SANDBOX_BACKEND"
+                            && !common::private_cache_env("")
+                                .iter()
+                                .any(|(key, _)| key == name)
                             && !name.starts_with("CLOUDSDK_PROXY_USERNAME")
                             && !name.starts_with("CLOUDSDK_PROXY_PASSWORD")
                     })

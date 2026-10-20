@@ -888,7 +888,25 @@ fn control_line(line: &Value, root: &Path) -> Value {
             filesystem.insert(key.clone(), kept);
         }
     }
-    json!({ "keys": sorted_keys(line), "network": line["network"],
+    let mut network = line["network"].clone();
+    // These are backend-specific; assert them instead of recording a Linux
+    // default in an otherwise platform-independent transport transcript.
+    if cfg!(target_os = "linux") {
+        assert_eq!(network["allowAllUnixSockets"], true);
+    } else {
+        let sockets = network["allowUnixSockets"].as_array().unwrap();
+        assert_eq!(sockets.len(), 1);
+        let socket = sockets[0].as_str().unwrap();
+        assert!(
+            socket.starts_with(&format!("{root}/node-state/i-")) && socket.ends_with("/socket")
+        );
+    }
+    network
+        .as_object_mut()
+        .unwrap()
+        .remove("allowAllUnixSockets");
+    network.as_object_mut().unwrap().remove("allowUnixSockets");
+    json!({ "keys": sorted_keys(line), "network": network,
         "allowPty": line["allowPty"], "filesystem (inside the run directory)": filesystem })
 }
 

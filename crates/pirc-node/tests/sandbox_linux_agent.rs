@@ -102,12 +102,18 @@ fn text_reply(text: &str) -> Vec<Value> {
 
 /// The node's inference socket: `GET /models`, and `POST /inference`
 /// answered with the next scripted reply (then "done").
-fn serve_inference(socket: &Path, catalog: Value, replies: Arc<Mutex<VecDeque<Vec<Value>>>>) {
+fn serve_inference(
+    socket: &Path,
+    catalog: Value,
+    replies: Arc<Mutex<VecDeque<Vec<Value>>>>,
+    writes: Arc<pirc_node::persistence::Writes>,
+) {
     let listener = UnixListener::bind(socket).unwrap();
     tokio::spawn(async move {
         while let Ok((mut stream, _)) = listener.accept().await {
             let catalog = catalog.clone();
             let replies = replies.clone();
+            let writes = writes.clone();
             tokio::spawn(async move {
                 let mut buffer = Vec::new();
                 let mut chunk = [0u8; 8192];
@@ -137,6 +143,18 @@ fn serve_inference(socket: &Path, catalog: Value, replies: Arc<Mutex<VecDeque<Ve
                 }
                 let body = if head.starts_with("GET /models") {
                     catalog.to_string()
+                } else if head.starts_with("POST /persistence ") {
+                    let token = head
+                        .lines()
+                        .find_map(|line| line.strip_prefix("Authorization: Bearer "))
+                        .unwrap_or_default();
+                    writes
+                        .apply(
+                            token,
+                            serde_json::from_slice(&buffer[head_end..head_end + length]).unwrap(),
+                        )
+                        .unwrap();
+                    "{\"ok\":true}".to_owned()
                 } else {
                     let reply = replies
                         .lock()
@@ -199,7 +217,13 @@ async fn a_real_agent_is_confined() {
     std::fs::create_dir_all(root.join("inference")).unwrap();
     let socket = root.join("inference/socket");
     let replies = Arc::new(Mutex::new(VecDeque::new()));
-    serve_inference(&socket, models(&socket), replies.clone());
+    let writes = Arc::new(pirc_node::persistence::Writes::default());
+    let session_dir = f.config.sessions_dir.join("pi_agent");
+    std::fs::create_dir_all(&session_dir).unwrap();
+    let persistence = writes
+        .register(socket.to_str().unwrap(), &session_dir, None)
+        .unwrap();
+    serve_inference(&socket, models(&socket), replies.clone(), writes);
     let secret = path(root, "state/secret");
     let home_probe = path(root, "home/probe");
     // Port of a host listener the agent must not reach.
@@ -261,7 +285,7 @@ async fn a_real_agent_is_confined() {
             .unwrap();
     };
     send(
-        json!({ "type": "configure", "models": models(&socket), "capabilities": { "version": 1 } }),
+        json!({ "type": "configure", "models": models(&socket), "persistence": persistence.config, "capabilities": { "version": 1 } }),
     )
     .await;
     let mut next_until = async |done: &dyn Fn(&Value) -> bool| -> Value {

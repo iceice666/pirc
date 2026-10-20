@@ -77,6 +77,7 @@ pub struct Runner {
     pub(super) epoch: i64,
     pid: Option<u32>,
     pub(super) prepared: Prepared,
+    persistence: Option<crate::persistence::Lease>,
     stdin: mpsc::UnboundedSender<Outbound>,
     pub(super) inner: Mutex<Inner>,
     /// Held while one agent line is handled, and while a snapshot reads the
@@ -235,6 +236,7 @@ impl Runner {
             epoch: 1,
             pid: None,
             prepared,
+            persistence: None,
             stdin,
             inner: Mutex::default(),
             view: Mutex::default(),
@@ -428,6 +430,9 @@ impl Runner {
         // `ensure` and `stop` wait for this: it must come even if a step
         // below panics.
         let _exited = Exited(&self.exited);
+        if let Some(lease) = &self.persistence {
+            lease.close();
+        }
         // Whatever the agent left in its group (a busy ptc script process
         // after a crash, which cannot notice its parent is gone) goes with it.
         self.kill(Signal::SIGKILL);
@@ -861,6 +866,23 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         prepared,
         ledger,
     } = spawn;
+    let persistence = if node
+        .config
+        .agent_args
+        .first()
+        .is_some_and(|arg| arg == "agent")
+    {
+        Some(
+            node.inference
+                .persistence(
+                    std::path::Path::new(&session.private_session_path),
+                    ledger.as_ref().map(|l| l.file.as_path()),
+                )
+                .map_err(|_| ApiError::internal())?,
+        )
+    } else {
+        None
+    };
     let (mut child, epoch) = match spawn_child(
         node,
         &session,
@@ -886,6 +908,7 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         epoch,
         pid,
         prepared,
+        persistence,
         stdin: stdin_tx,
         inner: Mutex::default(),
         view: Mutex::default(),
@@ -898,6 +921,9 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
     // Public catalog + node-local inference transport; no provider credentials.
     let mut configure = Map::new();
     configure.insert("type".into(), json!("configure"));
+    if let Some(lease) = &runner.persistence {
+        configure.insert("persistence".into(), json!(lease.config));
+    }
     configure.insert(
         "models".into(),
         serde_json::to_value(node.models.current()).unwrap_or_default(),

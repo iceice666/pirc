@@ -24,7 +24,7 @@ The sandbox is mandatory and cannot be turned off. The node probes the native ba
 
 ### Same-account nodes and gateway
 
-Updated nodes and gateways register their private paths in `~/.local/pirc-node/nodes/`. Each new agent or read-only panel command reads a fresh account-wide snapshot and hides the registered state, session stores, uploads, browser profiles, workspace-memory directories, database directories and node temporary parents. Configured path overrides are included. A session retains its own existing read/write exceptions. Distinct node IDs and state directories are still required; this registry does not make shared stores safe.
+Updated nodes and gateways register their private paths in `~/.local/pirc-node/nodes/`. Each new agent or read-only panel command reads a fresh account-wide snapshot and hides the registered state, session stores, uploads, browser profiles, workspace-memory directories, database directories and node temporary parents. Configured path overrides are included. A session retains its own read exceptions; the builtin agent saves private state through the node as described below. Distinct node IDs and state directories are still required; this registry does not make shared stores safe.
 
 The registry root is already a sensitive home path. Directories are private (0700), records/lock files are 0600, writes are atomic under an OS file lock, and unsafe links, ownership, permissions or malformed records refuse session startup. Registry components cannot be symlinks; an existing `.local` must be owned by the account and not writable by other accounts. File names use a hash of the daemon kind, ID and state path, so the same node ID in different installations cannot overwrite a record. Records contain paths, never tokens.
 
@@ -35,11 +35,21 @@ Records persist across stops and crashes because stopped nodes' data remains sen
 ### What the policy is
 
 - **Reads**: everywhere, except credential stores under the account's home (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`, `~/.netrc`, `~/.config/sops`, keychains, browser profiles, …; the full list is `SENSITIVE_HOME_PATHS` in `crates/pirc-policy/src/lib.rs`) and registered pirc state belonging to this OS account (`PIRC_STATE_DIR`, minus the session's own directory and its workspace's memory ledger; the systemd credentials directory on NixOS).
-- **Writes**: the workspace (or the chat's directory), the node config's `allowedPaths`, the session's temporary directory, `/tmp`, and common build caches (`~/.cache`, `~/.npm`, `~/.cargo/registry`, `~/go/pkg/mod`, `~/.gradle/caches`, …). `.pirc/` in the workspace, `.git/hooks`, `.git/config` and shell start-up files stay read-only.
+- **Writes**: the workspace (or the chat's directory), the node config's `allowedPaths`, the session's temporary directory and `/tmp`. Host build caches (`~/.cache`, `~/.npm`, `~/.cargo/registry`, `~/go/pkg/mod`, `~/.gradle/caches`, …) are read-only even inside a broad writable home. Cache environment variables point to session-private temporary paths; cold caches may require downloads. `.pirc/`, existing repositories' `.git/hooks` and `.git/config`, and shell start-up files stay read-only. A workspace with no `.git` may run `git init`; new repository guards take effect on the next session start.
 - **Network**: only through the sandbox's proxy, to `DEFAULT_ALLOWED_DOMAINS` (GitHub, GitLab, Codeberg, npm, PyPI, crates.io, Go proxy, Nix caches, Maven, RubyGems, …) plus what you add. A host the task needs and the list lacks makes the agent call `sandbox_allow_domains`; the **node** asks you in the session, and an approved host stays allowed for that session.
 - **Escape hatch**: for a `nix build`, a system change, or git over SSH that is not [set up for the sandbox](#git-and-the-github-cli), the agent calls `unsandboxed_bash`. The node asks you first, then runs the command as the node account, without the node's own secrets.
 
 Both approvals are the node's own dialogs; nothing the agent prints counts as your answer. Teammates' and subagents' requests are relayed through their parent and say who is asking.
+
+### Private process channels and state
+
+On Linux the builtin agent and PTC guest set `PR_SET_DUMPABLE=0` before reading private configuration, and set no-new-privileges. Same-user tool processes without `CAP_SYS_PTRACE` cannot reopen their `/proc/<pid>/fd` pipes or inspect their memory. This does not isolate signals between processes of the same UID or protect a custom agent executable that omits this hardening.
+
+The builtin agent's session directory (including transcripts, context snapshots and team metadata) and assigned workspace-memory ledger are read-only inside the sandbox. The node saves them through a separate, random per-run persistence capability sent only over the private configure pipe, never through tool environment variables or files. The capability cannot call inference APIs and is revoked when its runner exits. Writes are limited to that session tree and append-only access to its pre-opened ledger; paths traverse directory descriptors without following symlinks, and linked files are refused. Team children inherit the private capability through their configure pipes. Temporary command output remains untrusted tool data. Memory remains provenance-labelled untrusted content, not an authorization source.
+
+Custom `PIRC_AGENT_COMMAND` runtimes remain responsible for their own process channels and state custody; the builtin configure/persistence protocol is selected by the `agent` entry argument. Development SRT stand-ins are not covered by the native backend's full guarantees. Restart existing sessions after updating.
+
+The credential deny list now also covers package-manager credentials (`.npmrc`, `.yarnrc.yml`, pip/Bundler config), container auth, OpenCode auth, remote VS Code state, and Chrome for Testing profiles. Private package credentials require an intentional `allowRead` exception or an explicitly provisioned environment credential. On WSL, standard `/mnt/<drive>/Users` trees are hidden by default; an explicitly selected workspace there is reopened. Custom Windows mount locations need explicit `denyRead`. Reads outside protected paths remain permitted: this is not a filesystem read allowlist.
 
 ### Tuning it
 
@@ -95,9 +105,10 @@ The examples below originated with srt 0.0.78. Native sandbox coverage includes 
 
 ```json
 {
+  "sandbox": { "filesystem": { "allowWrite": ["~/.local/share/pirc-sandbox/gh"] } },
   "env": {
     "GH_TOKEN": "github_pat_…",
-    "GH_CONFIG_DIR": "/Users/you/.cache/pirc/gh",
+    "GH_CONFIG_DIR": "/Users/you/.local/share/pirc-sandbox/gh",
     "SSL_CERT_FILE": "/etc/ssl/cert.pem",
     "GIT_CONFIG_COUNT": "3",
     "GIT_CONFIG_KEY_0": "credential.helper",
@@ -111,7 +122,7 @@ The examples below originated with srt 0.0.78. Native sandbox coverage includes 
 ```
 
 - `GH_TOKEN`: `gh` uses it instead of `~/.config/gh/hosts.yml`. For a fine-grained token: Contents read/write to push, Pull requests read/write for `gh pr`, Metadata read. To keep it out of `config.json`, put it in the node's environment instead and name it in `PIRC_AGENT_ENV_ALLOW=GH_TOKEN` ([Node](node.md#agent-process)).
-- `GH_CONFIG_DIR`: the absolute path (with your home in place of `/Users/you`) of a directory the sandbox may write, outside `~/.config/gh`. It may be empty; create it once (`mkdir -p ~/.cache/pirc/gh`).
+- `GH_CONFIG_DIR`: the absolute path (with your home in place of `/Users/you`) of a directory the sandbox may write, outside `~/.config/gh`. It may be empty; create it once (`mkdir -p ~/.local/share/pirc-sandbox/gh`).
 - `SSL_CERT_FILE` (macOS only): makes `gh` and other Go programs verify TLS against this bundle, which macOS ships, instead of the system trust service. Other tools honour it too.
 - `GIT_CONFIG_*`: git configuration from the environment, so your `~/.gitconfig` (read-only in the sandbox, and shared with you) stays unchanged.
   - Key 0 clears inherited credential helpers. For example, Nix's git enables `osxkeychain`, which cannot reach the keychain and prints `failed to store: -60008`.
@@ -126,7 +137,7 @@ Check from a session: `gh auth status`, then `git ls-remote` on a private reposi
 As the node account, outside the sandbox (a side-panel terminal works), with a pirc checkout at hand:
 
 ```sh
-mkdir -p ~/.local/pirc-ssh ~/.cache/pirc/ssh
+mkdir -p ~/.local/pirc-ssh ~/.local/share/pirc-sandbox/ssh
 chmod 700 ~/.local/pirc-ssh
 ssh-keygen -t ed25519 -N '' -C pirc-agent -f ~/.local/pirc-ssh/id_ed25519
 cp scripts/sandbox-ssh-proxy.py ~/.local/pirc-ssh/
@@ -136,8 +147,9 @@ Add `~/.local/pirc-ssh/id_ed25519.pub` to each repository as a deploy key with w
 
 ```json
 {
+  "sandbox": { "filesystem": { "allowWrite": ["~/.local/share/pirc-sandbox/ssh"] } },
   "env": {
-    "GIT_SSH_COMMAND": "ssh -F /dev/null -o ControlMaster=no -o ControlPath=none -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.cache/pirc/ssh/known_hosts -i ~/.local/pirc-ssh/id_ed25519 -o ProxyCommand='python3 ~/.local/pirc-ssh/sandbox-ssh-proxy.py %h %p'"
+    "GIT_SSH_COMMAND": "ssh -F /dev/null -o ControlMaster=no -o ControlPath=none -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.local/share/pirc-sandbox/ssh/known_hosts -i ~/.local/pirc-ssh/id_ed25519 -o ProxyCommand='python3 ~/.local/pirc-ssh/sandbox-ssh-proxy.py %h %p'"
   }
 }
 ```

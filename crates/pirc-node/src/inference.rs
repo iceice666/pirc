@@ -106,6 +106,18 @@ impl InferenceServer {
         Ok(config)
     }
 
+    pub(crate) fn persistence(
+        &self,
+        root: &Path,
+        ledger: Option<&Path>,
+    ) -> Result<crate::persistence::Lease, String> {
+        let relay = self.relay.get().ok_or("Inference transport unavailable")?;
+        relay
+            .persistence
+            .register(&relay.config.socket_path, root, ledger)
+            .map_err(|_| "Cannot prepare private persistence".to_owned())
+    }
+
     /// A `model_delta`, `model_end` or `model_error` frame from the
     /// gateway (other frames are ignored).
     pub fn receive(&self, frame: GatewayMessage) {
@@ -170,6 +182,7 @@ pub(crate) struct Relay {
     connections: AtomicUsize,
     shutdown: watch::Sender<bool>,
     accept: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    persistence: Arc<crate::persistence::Writes>,
 }
 
 fn error_line(code: InferenceErrorCode) -> String {
@@ -241,6 +254,7 @@ impl Relay {
             connections: AtomicUsize::new(0),
             shutdown,
             accept: Mutex::new(None),
+            persistence: Arc::default(),
         });
         let accepting = tokio::spawn(accept(relay.clone(), listener));
         *relay
@@ -647,6 +661,39 @@ async fn serve(relay: &Arc<Relay>, stream: &mut UnixStream) {
         Ok(Err(Some(status))) => return respond(stream, status, None, b"").await,
         Ok(Err(None)) | Err(_) => return,
     };
+    if head.method == "POST" && head.target == "/persistence" {
+        let token = head
+            .header("authorization")
+            .unwrap_or_default()
+            .strip_prefix("Bearer ")
+            .unwrap_or_default()
+            .to_owned();
+        if relay.lock().closed || !relay.persistence.authorized(&token) {
+            return error(stream, 401, InferenceErrorCode::Unavailable).await;
+        }
+        let body = match tokio::time::timeout_at(deadline, read_body(stream, &head, buffer)).await {
+            Ok(Ok(body)) => body,
+            _ => return error(stream, 400, InferenceErrorCode::InvalidRequest).await,
+        };
+        let Ok(value) = serde_json::from_slice(&body) else {
+            return error(stream, 400, InferenceErrorCode::InvalidRequest).await;
+        };
+        let writes = relay.persistence.clone();
+        let ok = tokio::task::spawn_blocking(move || writes.apply(&token, value))
+            .await
+            .is_ok_and(|r| r.is_ok());
+        return respond(
+            stream,
+            if ok { 200 } else { 400 },
+            Some("application/json"),
+            if ok {
+                b"{\"ok\":true}"
+            } else {
+                b"{\"ok\":false}"
+            },
+        )
+        .await;
+    }
     let actual = head.header("authorization").unwrap_or_default().as_bytes();
     let expected = format!("Bearer {}", relay.config.token);
     if actual.len() != expected.len() || !bool::from(actual.ct_eq(expected.as_bytes())) {

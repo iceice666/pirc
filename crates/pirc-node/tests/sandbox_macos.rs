@@ -23,6 +23,8 @@ use pirc_node::sandbox::{PrepareInput, Prepared, ReadonlyInput, Sandbox, Sandbox
 use pirc_protocol::NodeRole;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
+mod persistence_support;
+
 const CLIENT: &str = "PIRC_SANDBOX_TEST_CLIENT";
 
 /// `user:pass@host:port` of `HTTP_PROXY`, user and password decoded.
@@ -184,7 +186,9 @@ fn fixture(name: &str) -> Fixture {
 /// of every session; short enough for Unix socket paths, which macOS caps
 /// at 104 bytes).
 fn fixture_with(name: &str, options: Options) -> Fixture {
-    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("sbx-{name}"));
+    // CARGO_TARGET_DIR may itself be /tmp (a sandbox write root).
+    // Keep Unix socket names short as well. /var/tmp is not a write root.
+    let root = Path::new("/var/tmp").join(format!("pm-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     let config_rel = if options.home_writable {
         "home/.config/.pirc"
@@ -1592,8 +1596,18 @@ async fn a_real_agent_starts_and_answers() {
         &f.root,
     );
     f.sandbox = MacSandbox::new(f.config.clone(), env);
-    let prepared = f.prepare("pi_agent").await;
     let session_dir = f.config.sessions_dir.join("pi_agent");
+    fs::create_dir_all(&session_dir).unwrap();
+    let socket = f.root.join("state/persistence/socket");
+    fs::create_dir_all(socket.parent().unwrap()).unwrap();
+    let address = pirc_protocol::SocketPath::new(&socket).unwrap();
+    let listener = tokio::net::UnixListener::bind(&address.path).unwrap();
+    let writes = std::sync::Arc::new(pirc_node::persistence::Writes::default());
+    let persistence = writes
+        .register(socket.to_str().unwrap(), &session_dir, None)
+        .unwrap();
+    let serving = persistence_support::serve(listener, writes);
+    let prepared = f.prepare_with("pi_agent", Some(socket), Vec::new()).await;
     let mut command = prepared.command().unwrap();
     command
         .args(["--mode", "rpc", "--session-dir"])
@@ -1616,7 +1630,7 @@ async fn a_real_agent_starts_and_answers() {
     let mut child = command.spawn().unwrap();
     let mut stdin = child.stdin.take().unwrap();
     // `pirc-conformance`'s `fake_models`, without an inference socket.
-    let configure = serde_json::json!({ "type": "configure", "capabilities": { "version": 1 },
+    let configure = serde_json::json!({ "type": "configure", "capabilities": { "version": 1 }, "persistence": persistence.config,
         "models": {
             "providers": { "fake": { "api": "openai-completions", "baseUrl": "https://gateway.invalid",
                 "headers": {}, "compat": {},
@@ -1646,5 +1660,6 @@ async fn a_real_agent_starts_and_answers() {
         answer.contains("\"success\":true"),
         "answer: {answer:?}\nstderr: {err}"
     );
+    serving.abort();
     prepared.cleanup();
 }

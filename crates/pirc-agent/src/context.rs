@@ -2,7 +2,6 @@
 //! shows (`agent/context.ts`), written to `<session>/context.json`.
 
 use std::io::Write as _;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use pirc_protocol::{Message, ToolSpec, Usage};
@@ -218,15 +217,11 @@ pub fn with_reported_usage(snapshot: &Value, usage: &Usage) -> Value {
 pub fn write_context(dir: &Path, snapshot: &Value) -> Result<(), String> {
     let file = dir.join(CONTEXT_FILE);
     let temp = dir.join(format!("{CONTEXT_FILE}.{}.tmp", crate::random_uuid()));
-    let result = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(&temp)
+    let result = crate::state_io::create_new(&temp)
         .and_then(|mut out| out.write_all(js::stringify(snapshot).as_bytes()))
         .map_err(|error| js::node_error(&error, "open", Some(&temp)))
         .and_then(|()| {
-            std::fs::rename(&temp, &file).map_err(|error| {
+            crate::state_io::rename(&temp, &file).map_err(|error| {
                 format!(
                     "{} -> '{}'",
                     js::node_error(&error, "rename", Some(&temp)),
@@ -234,7 +229,7 @@ pub fn write_context(dir: &Path, snapshot: &Value) -> Result<(), String> {
                 )
             })
         });
-    let _ = std::fs::remove_file(&temp);
+    let _ = crate::state_io::remove_file(&temp);
     result
 }
 

@@ -30,6 +30,7 @@ pub mod run;
 pub mod session_store;
 pub mod signal;
 pub mod skills;
+pub mod state_io;
 pub mod stream;
 pub mod tools;
 pub mod ui;

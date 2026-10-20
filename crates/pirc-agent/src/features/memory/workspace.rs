@@ -6,7 +6,7 @@
 
 use std::collections::HashSet;
 use std::io::Write as _;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -531,10 +531,7 @@ pub struct WorkspaceLedger {
 pub struct LedgerLock(#[allow(dead_code)] nix::fcntl::Flock<std::fs::File>);
 
 fn create_dir(dir: &str) -> Result<(), String> {
-    std::fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(dir)
+    crate::state_io::create_dir_all(Path::new(dir))
         .map_err(|error| mjs::node_error(&error, "mkdir", Some(Path::new(dir))))
 }
 
@@ -569,6 +566,10 @@ impl WorkspaceLedger {
     /// (the node made it), so the directory is touched only when it is not
     /// there.
     fn open(&self) -> Result<std::fs::File, String> {
+        if crate::state_io::config().is_some() {
+            return std::fs::File::open(&self.file)
+                .map_err(|error| mjs::node_error(&error, "open", Some(&self.file)));
+        }
         let open = || {
             std::fs::OpenOptions::new()
                 .append(true)
@@ -599,9 +600,15 @@ impl WorkspaceLedger {
 
     /// Append one line (`JSON.stringify(line)`).
     pub fn append(&self, line: &Value) -> Result<(), String> {
-        let mut file = self.open()?;
-        file.write_all(format!("{}\n", js::stringify(line)).as_bytes())
-            .map_err(|error| mjs::node_error(&error, "write", Some(&self.file)))
+        let bytes = format!("{}\n", js::stringify(line));
+        if crate::state_io::config().is_some() {
+            crate::state_io::append(&self.file, bytes.as_bytes())
+                .map_err(|error| mjs::node_error(&error, "write", Some(&self.file)))
+        } else {
+            self.open()?
+                .write_all(bytes.as_bytes())
+                .map_err(|error| mjs::node_error(&error, "write", Some(&self.file)))
+        }
     }
 
     /// `withLock`: an exclusive cross-process lock, or `None` when another

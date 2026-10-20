@@ -447,6 +447,16 @@ impl Drop for LoneNode {
 /// write there, and the node warns when its state lies inside a path its
 /// agents may write.
 fn run_dir() -> (TempDir, PathBuf) {
+    // A long checkout path exceeds macOS's Unix socket address limit.
+    // /var/tmp keeps names short without granting /tmp's sandbox write root.
+    if cfg!(target_os = "macos") {
+        let dir = tempfile::Builder::new()
+            .prefix("pc-")
+            .tempdir_in("/var/tmp")
+            .unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        return (dir, root);
+    }
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/conformance");
     fs::create_dir_all(&base).expect("conformance directory");
     let dir = tempfile::Builder::new()

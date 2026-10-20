@@ -170,6 +170,7 @@ pub fn bwrap_args(
         ("SANDBOX_RUNTIME".to_owned(), "1".to_owned()),
         ("TMPDIR".to_owned(), tmp.to_owned()),
     ];
+    setenv.extend(common::private_cache_env(tmp));
     setenv.extend(proxy_env.iter().cloned());
     // Not srt's: says which kind of sandbox this is.
     setenv.push(("PIRC_SANDBOX_BACKEND".to_owned(), "native".to_owned()));
@@ -203,6 +204,9 @@ pub fn readonly_bwrap_args(filesystem: Vec<String>, tmp: &str) -> BwrapArgs {
         ("PIRC_SANDBOX_BACKEND", "native"),
     ] {
         args.extend(["--setenv".to_owned(), name.to_owned(), value.to_owned()]);
+    }
+    for (name, value) in common::private_cache_env(tmp) {
+        args.extend(["--setenv".to_owned(), name, value]);
     }
     let start = args.len();
     args.extend(filesystem);

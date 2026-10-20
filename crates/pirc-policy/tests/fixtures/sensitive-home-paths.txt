@@ -38,3 +38,19 @@ Library/Application Support/Firefox
 Library/Application Support/BraveSoftware
 Library/Application Support/Arc
 Library/Application Support/Microsoft Edge
+.npmrc
+.yarnrc.yml
+.bundle/config
+.config/pip/pip.conf
+.pip/pip.conf
+.config/containers/auth.json
+.local/share/containers/auth.json
+.config/google-chrome-for-testing
+.local/share/pki
+.config/opencode
+.local/share/opencode
+.vscode-server
+.vscode-server-insiders
+Library/Application Support/Google/Chrome for Testing
+.config/Code/User/globalStorage
+Library/Application Support/Code/User/globalStorage

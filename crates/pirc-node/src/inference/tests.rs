@@ -454,3 +454,49 @@ async fn close_flushes_the_final_error() {
     );
     assert!(text.ends_with("0\r\n\r\n"), "{text}");
 }
+
+#[tokio::test]
+async fn persistence_auth_is_separate_scoped_and_revocable() {
+    use base64::Engine;
+    let (relay, _, dir) = relay(Duration::from_secs(600), |_, _| {}).await;
+    let root = dir.path().join("session");
+    std::fs::create_dir(&root).unwrap();
+    let lease = relay
+        .persistence
+        .register(&relay.config.socket_path, &root, None)
+        .unwrap();
+    let path = root.join("session.jsonl");
+    let body = json!({"op":"append","path":path,"data":base64::engine::general_purpose::STANDARD.encode("event\n")}).to_string();
+    let req = |token: &str| {
+        format!(
+            "POST /persistence HTTP/1.1\r\nAuthorization: Bearer {token}\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        )
+    };
+    assert_eq!(
+        raw(&relay.config, req(&relay.config.token).as_bytes())
+            .await
+            .0,
+        401
+    );
+    assert_eq!(
+        raw(&relay.config, req(&lease.config.token).as_bytes())
+            .await
+            .0,
+        200
+    );
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "event\n");
+    let get = format!(
+        "GET /models HTTP/1.1\r\nAuthorization: Bearer {}\r\n\r\n",
+        lease.config.token
+    );
+    assert_eq!(raw(&relay.config, get.as_bytes()).await.0, 401);
+    lease.close();
+    assert_eq!(
+        raw(&relay.config, req(&lease.config.token).as_bytes())
+            .await
+            .0,
+        401
+    );
+    relay.close().await;
+}

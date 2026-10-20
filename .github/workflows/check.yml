@@ -123,7 +123,7 @@ jobs:
           crates/pirc-node/tests/fixtures
       - run: >-
           cargo test -p pirc-node
-          --test sandbox_native --test sandbox_linux_uid0
+          --test sandbox_native --test sandbox_registry --test sandbox_persistence --test agent_process_privacy --test sandbox_linux_uid0
           --test sandbox_linux_readonly --test sandbox_linux_agent
           --test sandbox_linux_panel_git --test sandbox_network
           -- --nocapture

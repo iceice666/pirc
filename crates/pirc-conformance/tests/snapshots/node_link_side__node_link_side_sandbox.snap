@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/node_link_side.rs
+assertion_line: 1181
 expression: t.into_value()
 ---
 [
@@ -107,19 +108,29 @@ expression: t.into_value()
           ],
           "denyRead": [
             "<tmp>/node-state",
+            "<tmp>/node-state/browser",
             "<tmp>/node-state/sessions",
             "<tmp>/node-state/uploads",
-            "<tmp>/node-state/browser",
-            "<tmp>/node-state/workspace-memory"
+            "<tmp>/node-state/workspace-memory",
+            "<tmp>/node-home/.local/pirc-node"
           ],
           "denyWrite": [
             "<tmp>/workspace/.pirc",
-            "<tmp>/workspace/.git/hooks",
-            "<tmp>/workspace/.git/config",
             "<tmp>/node-config",
             "<tmp>/node-config/SOUL.md",
             "<tmp>/node-config/CHAT.md",
             "<tmp>/node-config/modes",
+            "<tmp>/node-state/sessions/pi_<uuid:5>",
+            "<tmp>/node-state/workspace-memory/<hex16:1>.jsonl",
+            "<tmp>/node-home/.local/pirc-node",
+            "<tmp>/node-home/.cache",
+            "<tmp>/node-home/Library/Caches",
+            "<tmp>/node-home/.npm",
+            "<tmp>/node-home/.bun/install/cache",
+            "<tmp>/node-home/.cargo/registry",
+            "<tmp>/node-home/.cargo/git",
+            "<tmp>/node-home/go/pkg/mod",
+            "<tmp>/node-home/.gradle/caches",
             "<tmp>/node-state/sandbox/bin"
           ]
         },
@@ -129,7 +140,6 @@ expression: t.into_value()
           "network"
         ],
         "network": {
-          "allowAllUnixSockets": true,
           "allowLocalBinding": true,
           "allowedDomains": [
             "github.com",

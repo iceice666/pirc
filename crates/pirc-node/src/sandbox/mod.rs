@@ -107,8 +107,9 @@ pub struct PrepareInput {
     pub inference_socket: Option<PathBuf>,
     /// Never writable from the session (a chat project's instructions).
     pub protected_paths: Vec<PathBuf>,
-    /// The workspace-memory ledger the session may read and append to
-    /// (made here when missing); the rest of the directory stays closed.
+    /// The workspace-memory ledger made by the node when missing. Builtin
+    /// agents read it directly and append through node persistence; the rest
+    /// of the directory stays closed.
     pub workspace_memory_file: Option<PathBuf>,
     /// A chat project's files, which the session may read but never write
     /// (the node changes them while the session runs).

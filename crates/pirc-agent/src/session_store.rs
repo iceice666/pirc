@@ -7,7 +7,6 @@
 
 use std::collections::{HashMap, HashSet};
 use std::io::Write as _;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 use pirc_protocol::{Message, UserBlock, UserContent};
@@ -634,12 +633,8 @@ fn atomic_branch_mutation<T>(
         .join(format!(".session-{}.tmp", crate::random_uuid()));
     let result = (|| {
         let bytes = std::fs::read(&original).map_err(|error| error.to_string())?;
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&temporary)
-            .map_err(|error| error.to_string())?;
+        let mut file =
+            crate::state_io::create_new(&temporary).map_err(|error| error.to_string())?;
         file.write_all(&bytes).map_err(|error| error.to_string())?;
         if !bytes.is_empty() && !bytes.ends_with(b"\n") {
             file.write_all(b"\n").map_err(|error| error.to_string())?;
@@ -647,12 +642,12 @@ fn atomic_branch_mutation<T>(
         store.file = temporary.clone();
         let value = mutate(store)?;
         file.sync_all().map_err(|error| error.to_string())?;
-        std::fs::rename(&temporary, &original).map_err(|error| error.to_string())?;
+        crate::state_io::rename(&temporary, &original).map_err(|error| error.to_string())?;
         Ok(value)
     })();
     store.file = original;
     if result.is_err() {
-        let _ = std::fs::remove_file(temporary);
+        let _ = crate::state_io::remove_file(&temporary);
     }
     result
 }
@@ -702,10 +697,7 @@ pub struct SessionStore {
 impl SessionStore {
     /// Open (or create, 0700) the directory and read its session.
     pub fn open(dir: PathBuf, cwd: &str) -> Result<Self, String> {
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&dir)
+        crate::state_io::create_dir_all(&dir)
             .map_err(|error| js::node_error(&error, "mkdir", Some(&dir)))?;
         let file = dir.join(SESSION_FILE);
         let mut store = Self {
@@ -759,12 +751,7 @@ impl SessionStore {
             data,
         };
         let line = format!("{}\n", js::stringify(&entry.to_value()));
-        std::fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .mode(0o600)
-            .open(&self.file)
-            .and_then(|mut file| file.write_all(line.as_bytes()))
+        crate::state_io::append(&self.file, line.as_bytes())
             .map_err(|error| js::node_error(&error, "open", Some(&self.file)))?;
         self.by_id.insert(id.clone(), self.entries.len());
         self.entries.push(entry.clone());
