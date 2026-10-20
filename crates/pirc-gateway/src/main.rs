@@ -1,13 +1,15 @@
 //! `pirc-gateway`, rewritten in Rust (docs/development/historical-records.md): the
 //! central daemon. It authenticates browsers (forward auth), indexes
 //! sessions, buffers their events and routes every session request to the
-//! node that owns it. It never runs agents, terminals or workspace
-//! inspection itself.
+//! node that owns it. It runs the brain (`brain`), which answers in the
+//! rooms with gateway-side tools only, but never runs sandboxed tools,
+//! terminals or workspace inspection itself.
 
 mod agent_ops;
 mod app;
 mod auth;
 mod backends;
+mod brain;
 mod db;
 mod delegations;
 mod devices;
@@ -136,6 +138,11 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
     let app = app::App::new(config, db, backends, catalog);
     // Everything that can refuse to start does so before the port is bound.
     features::start(&app)?;
+    if app.config.brain_enabled {
+        brain::Brain::start(&app)?;
+    } else {
+        log::warn("PIRC_BRAIN=false: no brain answers in the rooms");
+    }
     app.devices.start_sweeper();
     let listener = tokio::net::TcpListener::bind((host.as_str(), port))
         .await
@@ -153,6 +160,7 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
         let app = app.clone();
         async move {
             shutdown().await;
+            brain::Brain::stop(&app).await;
             app.backends.close();
             app.inference.cancel_all();
             app.nodes.close_all();

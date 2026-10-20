@@ -23,6 +23,7 @@ use crate::http::{Body, no_content, ok};
 use crate::node_events::run_name;
 use crate::util::{payload_hash, present};
 
+pub mod brain;
 pub mod rooms;
 
 /// A route's failure: an error, or a node's reply passed through as it is.

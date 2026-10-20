@@ -23,6 +23,8 @@ futures-util = { version = "0.3", default-features = false, features = ["sink"] 
 form_urlencoded = "1"
 hkdf = "0.12"
 http-body-util = "0.1"
+# access(2) for the brain's prompt files (already linked through pirc-agent).
+nix = { version = "0.31", features = ["fs"] }
 # Web Push (push.rs): VAPID signatures and RFC 8291 key agreement.
 p256 = { version = "0.13", default-features = false, features = ["ecdh", "ecdsa", "std"] }
 regex-lite = "0.1"
@@ -40,6 +42,8 @@ tz-rs = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
 url = "2"
 
+# The brain (plans/rewrite/02-brain-host.md): the agent loop, without tools.
+pirc-agent = { path = "../pirc-agent" }
 pirc-config = { path = "../pirc-config" }
 pirc-protocol = { path = "../pirc-protocol" }
 pirc-providers = { path = "../pirc-providers" }

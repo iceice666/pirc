@@ -1,0 +1,395 @@
+---
+source: crates/pirc-conformance/tests/brain.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": [],
+    "step": "no face is thinking yet"
+  },
+  {
+    "body": {
+      "prompts": {
+        "chat": {
+          "maxChars": 8000,
+          "path": "<tmp>/gateway-config/CHAT.md",
+          "text": "",
+          "writable": true
+        },
+        "soul": {
+          "maxChars": 8000,
+          "path": "<tmp>/gateway-config/SOUL.md",
+          "text": "",
+          "writable": true
+        }
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/brain/prompts",
+    "status": 200,
+    "step": "the prompts start empty"
+  },
+  {
+    "body": {
+      "prompt": {
+        "maxChars": 8000,
+        "path": "<tmp>/gateway-config/SOUL.md",
+        "text": "You are Mo, the house's helper.",
+        "writable": true
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/brain/prompts/soul",
+    "status": 200,
+    "step": "a persona"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Prompt not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PUT /api/brain/prompts/other",
+    "status": 404,
+    "step": "only soul and chat"
+  },
+  {
+    "observed": [
+      [
+        "room_message",
+        {
+          "body": {
+            "text": "SlimeOS"
+          },
+          "edited": false,
+          "kind": "text",
+          "speaker": "user"
+        }
+      ],
+      [
+        "room_message",
+        {
+          "body": {
+            "text": "PR#123"
+          },
+          "edited": false,
+          "kind": "text",
+          "speaker": "user"
+        }
+      ],
+      [
+        "room_message",
+        {
+          "body": {
+            "text": "怎樣了？"
+          },
+          "edited": false,
+          "kind": "text",
+          "speaker": "user"
+        }
+      ],
+      [
+        "brain_presence",
+        "thinking"
+      ],
+      [
+        "room_message",
+        {
+          "body": {
+            "streaming": true,
+            "text": "Three things,"
+          },
+          "edited": false,
+          "kind": "text",
+          "speaker": "face:host"
+        }
+      ],
+      [
+        "room_message_updated",
+        {
+          "body": {
+            "text": "Three things, one answer."
+          },
+          "edited": false,
+          "kind": "text",
+          "speaker": "face:host"
+        }
+      ],
+      [
+        "brain_presence",
+        "idle"
+      ]
+    ],
+    "step": "one reply, streamed, between thinking and idle"
+  },
+  {
+    "observed": {
+      "asked": {
+        "lastUser": "test@example.com: SlimeOS\ntest@example.com: PR#123\ntest@example.com: 怎樣了？",
+        "systemStart": "You are Mo, the house's helper.",
+        "tools": []
+      },
+      "calls": 1
+    },
+    "step": "one model call with all three, as the new persona"
+  },
+  {
+    "observed": [
+      [
+        "room_message",
+        {
+          "body": {
+            "text": "first"
+          },
+          "edited": false,
+          "kind": "text",
+          "speaker": "user"
+        }
+      ],
+      [
+        "brain_presence",
+        "thinking"
+      ],
+      [
+        "room_message",
+        {
+          "body": {
+            "text": "second"
+          },
+          "edited": false,
+          "kind": "text",
+          "speaker": "user"
+        }
+      ],
+      [
+        "room_message",
+        {
+          "body": {
+            "streaming": true,
+            "text": "First a"
+          },
+          "edited": false,
+          "kind": "text",
+          "speaker": "face:host"
+        }
+      ],
+      [
+        "room_message_updated",
+        {
+          "body": {
+            "text": "First answer."
+          },
+          "edited": false,
+          "kind": "text",
+          "speaker": "face:host"
+        }
+      ],
+      [
+        "room_message",
+        {
+          "body": {
+            "text": "And the second."
+          },
+          "edited": false,
+          "kind": "text",
+          "speaker": "face:host"
+        }
+      ],
+      [
+        "brain_presence",
+        "idle"
+      ]
+    ],
+    "step": "two replies in one turn"
+  },
+  {
+    "observed": {
+      "asked": {
+        "lastUser": "test@example.com: second",
+        "systemStart": "You are Mo, the house's helper.",
+        "tools": []
+      },
+      "calls": 3
+    },
+    "step": "the steer's model call"
+  },
+  {
+    "observed": [
+      [
+        "room_message",
+        {
+          "body": {
+            "text": "think hard"
+          },
+          "edited": false,
+          "kind": "text",
+          "speaker": "user"
+        }
+      ],
+      [
+        "brain_presence",
+        "thinking"
+      ],
+      [
+        "room_message",
+        {
+          "body": {
+            "text": "That took longer than 3 seconds, so I stopped."
+          },
+          "edited": false,
+          "kind": "line",
+          "speaker": "face:host"
+        }
+      ],
+      [
+        "brain_presence",
+        "idle"
+      ]
+    ],
+    "step": "stopped after the limit"
+  },
+  {
+    "body": {
+      "turns": [
+        {
+          "endedAt": "<epoch-ms>",
+          "error": null,
+          "id": "turn_<uuid:1>",
+          "kind": "user",
+          "messageIds": [
+            "msg_<uuid:2>"
+          ],
+          "outcome": "timeout",
+          "roomId": "general",
+          "startedAt": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "input": 0,
+            "output": 0,
+            "totalTokens": 0
+          }
+        },
+        {
+          "endedAt": "<epoch-ms>",
+          "error": null,
+          "id": "turn_<uuid:3>",
+          "kind": "user",
+          "messageIds": [
+            "msg_<uuid:4>",
+            "msg_<uuid:5>"
+          ],
+          "outcome": "done",
+          "roomId": "general",
+          "startedAt": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 80,
+            "cacheWrite": 0,
+            "input": 120,
+            "output": 20,
+            "totalTokens": 220
+          }
+        },
+        {
+          "endedAt": "<epoch-ms>",
+          "error": null,
+          "id": "turn_<uuid:6>",
+          "kind": "user",
+          "messageIds": [
+            "msg_<uuid:7>",
+            "msg_<uuid:8>",
+            "msg_<uuid:9>"
+          ],
+          "outcome": "done",
+          "roomId": "general",
+          "startedAt": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 60,
+            "output": 10,
+            "totalTokens": 110
+          }
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/brain/turns?room=general",
+    "status": 200,
+    "step": "the turns, newest first"
+  },
+  {
+    "observed": {
+      "model": {
+        "contextWindow": 100000,
+        "id": "fake-model",
+        "provider": "fake"
+      },
+      "sections": [
+        [
+          "soul",
+          "<tmp>/gateway-config/SOUL.md"
+        ],
+        [
+          "room",
+          "built-in"
+        ]
+      ],
+      "status": 200,
+      "tools": []
+    },
+    "step": "the latest call's context"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/brain/turns",
+    "status": 400,
+    "step": "turns need a room"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Room not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/brain/turns?room=nope",
+    "status": 404,
+    "step": "of a room that is there"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/brain/context",
+    "status": 400,
+    "step": "so does the context"
+  }
+]

@@ -215,7 +215,13 @@ fn follow_rooms(
             send_frame(
                 outbox,
                 max,
-                json!({ "type": "ready", "watermark": replay.watermark }).to_string(),
+                json!({
+                    "type": "ready",
+                    "watermark": replay.watermark,
+                    // Presence events are not replayed: where faces think now.
+                    "presence": crate::brain::current_presence(app),
+                })
+                .to_string(),
                 replay.watermark,
             );
         },

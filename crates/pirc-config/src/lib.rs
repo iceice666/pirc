@@ -241,6 +241,14 @@ pub struct GatewayConfig {
     pub models_file: PathBuf,
     /// Gateway-owned mode definitions (`$PIRC_CONFIG_DIR/modes`).
     pub modes_dir: PathBuf,
+    /// `$PIRC_CONFIG_DIR`: the brain's `SOUL.md`, `CHAT.md` and `brain.json`.
+    pub config_dir: PathBuf,
+    /// The longest a brain turn runs before it is stopped
+    /// (`PIRC_BRAIN_TURN_TIMEOUT_MS`, default 10 minutes; tests shorten it).
+    pub brain_turn_timeout_ms: u64,
+    /// `PIRC_BRAIN=false` starts no brain: rooms are plain chat. Development
+    /// only, for conformance transcripts of rooms alone.
+    pub brain_enabled: bool,
     /// Characters of the assistant's memory per user (USER entries, MEMORY notes).
     pub memory_budget_user: usize,
     pub memory_budget_note: usize,
@@ -260,7 +268,7 @@ impl GatewayConfig {
         for legacy in ["PIRC_WORKSPACES", "PIRC_NODE_ID"] {
             if env.get(legacy).is_some_and(|value| !value.is_empty()) {
                 return error(format!(
-                    "{legacy} belongs to `pirc-node`; the gateway never runs agents itself"
+                    "{legacy} belongs to `pirc-node`; the gateway never runs workers itself"
                 ));
             }
         }
@@ -324,6 +332,9 @@ impl GatewayConfig {
             device_token_max_age_ms,
             models_file: env.resolve(default_models_file(env)),
             modes_dir: env.resolve(modes::default_modes_dir(env)),
+            config_dir: env.resolve(default_config_dir(env)),
+            brain_turn_timeout_ms: integer(env.get("PIRC_BRAIN_TURN_TIMEOUT_MS"), 600_000),
+            brain_enabled: bool_var(env.get("PIRC_BRAIN"), true),
             memory_budget_user: integer(env.get("PIRC_MEMORY_USER_CHARS"), 2000) as usize,
             memory_budget_note: integer(env.get("PIRC_MEMORY_NOTE_CHARS"), 8000) as usize,
             exa_api_key: env

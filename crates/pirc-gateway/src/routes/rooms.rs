@@ -63,7 +63,7 @@ pub const PARAM_ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/rooms/{id}/uploads/{uid}"),
 ];
 
-fn id(text: &str) -> ApiResult<&str> {
+pub(super) fn id(text: &str) -> ApiResult<&str> {
     if text.is_empty() || text.len() > ID_MAX {
         return Err(ApiError::invalid_input());
     }
@@ -71,7 +71,7 @@ fn id(text: &str) -> ApiResult<&str> {
 }
 
 /// One query parameter: absent, or given once.
-fn single(uri: &Uri, name: &str) -> ApiResult<Option<String>> {
+pub(super) fn single(uri: &Uri, name: &str) -> ApiResult<Option<String>> {
     match query_map(uri).remove(name).as_deref() {
         None => Ok(None),
         Some([value]) => Ok(Some(value.clone())),
@@ -80,7 +80,7 @@ fn single(uri: &Uri, name: &str) -> ApiResult<Option<String>> {
 }
 
 /// A positive integer query parameter.
-fn positive(uri: &Uri, name: &str) -> ApiResult<Option<i64>> {
+pub(super) fn positive(uri: &Uri, name: &str) -> ApiResult<Option<i64>> {
     single(uri, name)?
         .map(|value| {
             value
@@ -174,6 +174,10 @@ async fn update_room(
         )?;
         (room, conn.room_view(&room_id, &identity.user)?)
     };
+    if room.archived_at.is_none() {
+        // What waited while it was archived.
+        crate::brain::Brain::nudge(&app);
+    }
     app.room_changed(&room);
     Ok(ok(json!({ "room": view })))
 }
@@ -257,6 +261,7 @@ async fn send_message(
         (message, conn.room_view(&room_id, &identity.user)?)
     };
     app.typing().clear(&room_id, &identity.user);
+    crate::brain::Brain::nudge(&app);
     app.room_message(&message);
     app.room_changed(&room.room);
     app.room_read(&identity.user, &room);

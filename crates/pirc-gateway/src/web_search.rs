@@ -169,7 +169,7 @@ pub fn parse_args(args: &Value) -> Result<SearchArgs, ()> {
 }
 
 /// One search per `App`, with its key and cache (`WebSearch`).
-fn searcher(app: &App) -> Arc<WebSearch> {
+pub fn searcher(app: &App) -> Arc<WebSearch> {
     app.slots
         .get_or_init(|| WebSearch::new(app.config.exa_api_key.clone()))
 }

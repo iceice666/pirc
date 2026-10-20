@@ -36,6 +36,9 @@ pub enum Reply {
     },
     /// Answer with a non-streaming HTTP error.
     Status(u16, String),
+    /// Wait for a permit of the semaphore (none: until the client goes
+    /// away), then stream this text as [`Reply::Text`].
+    Held(Arc<tokio::sync::Semaphore>, String),
 }
 
 /// One scripted reply to `GET /v1/models`.
@@ -175,10 +178,19 @@ async fn complete(
             .pop_front()
             .unwrap_or_else(|| Reply::Text("default reply".to_owned()))
     };
-    if let Reply::Status(status, body) = reply {
-        let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        return (status, body).into_response();
-    }
+    let reply = match reply {
+        Reply::Status(status, body) => {
+            let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            return (status, body).into_response();
+        }
+        Reply::Held(gate, text) => {
+            if let Ok(permit) = gate.acquire().await {
+                permit.forget();
+            }
+            Reply::Text(text)
+        }
+        reply => reply,
+    };
     let events = chunks(&reply);
     let stream = futures_util::stream::unfold(events.into_iter(), |mut events| async move {
         let event = events.next()?;
@@ -226,7 +238,7 @@ fn chunks(reply: &Reply) -> Vec<String> {
             }
             out.push(chunk(json!({}), json!("tool_calls")));
         }
-        Reply::Status(..) => unreachable!("handled before streaming"),
+        Reply::Status(..) | Reply::Held(..) => unreachable!("handled before streaming"),
     }
     let usage = json!({ "choices": [], "usage": { "prompt_tokens": 100, "completion_tokens": 10,
         "total_tokens": 110, "prompt_tokens_details": { "cached_tokens": 40 } } });

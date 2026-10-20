@@ -254,9 +254,15 @@ pub trait RoomStore {
     /// The pinned messages of a room, oldest pin first.
     fn pinned_messages(&self, room_id: &str) -> ApiResult<Vec<Message>>;
     fn pin_message(&self, room_id: &str, message_id: &str, pinned: bool) -> ApiResult<Message>;
-    /// Replace a message's body (a progress update, an edit).
-    #[allow(dead_code, reason = "progress updates start in plan 02")]
-    fn update_message(&self, room_id: &str, message_id: &str, body: &Value) -> ApiResult<Message>;
+    /// Replace a message's body: an edit (`edited`, which stamps
+    /// `edited_at`), or a reply still streaming in or a progress update.
+    fn update_message(
+        &self,
+        room_id: &str,
+        message_id: &str,
+        body: &Value,
+        edited: bool,
+    ) -> ApiResult<Message>;
 
     /// Read up to `seq` (never back, never past the newest message);
     /// whether it moved.
@@ -478,11 +484,17 @@ impl RoomStore for Connection {
         self.get_message(room_id, message_id)
     }
 
-    fn update_message(&self, room_id: &str, message_id: &str, body: &Value) -> ApiResult<Message> {
+    fn update_message(
+        &self,
+        room_id: &str,
+        message_id: &str,
+        body: &Value,
+        edited: bool,
+    ) -> ApiResult<Message> {
         self.get_message(room_id, message_id)?;
         self.execute(
-            "UPDATE room_messages SET body_json=?, edited_at=? WHERE id=?",
-            params![body.to_string(), now_ms(), message_id],
+            "UPDATE room_messages SET body_json=?1, edited_at=CASE WHEN ?2 THEN ?3 ELSE edited_at END WHERE id=?4",
+            params![body.to_string(), edited, now_ms(), message_id],
         )?;
         self.get_message(room_id, message_id)
     }
@@ -619,13 +631,13 @@ pub trait RoomInputStore {
         message_id: &str,
         immediate: bool,
     ) -> ApiResult<Pending>;
-    /// Everyone's pending input, oldest first (plan 02's scheduler reads it,
-    /// and finds it again after a restart).
-    #[allow(dead_code, reason = "plan 02's turn scheduler consumes it")]
+    /// Everyone's pending input, oldest first (the brain's scheduler reads
+    /// it, and finds it again after a restart).
     fn list_pending(&self) -> ApiResult<Vec<Pending>>;
-    /// Take the user's pending input in a room: it becomes a turn.
-    #[allow(dead_code, reason = "plan 02's turn scheduler consumes it")]
-    fn take_pending(&self, room_id: &str, user: &str) -> ApiResult<Option<Pending>>;
+    /// The brain took `message_ids` (they are in its conversation): they
+    /// leave the user's pending input in the room, and the row goes when
+    /// nothing is left. Messages sent meanwhile stay, without "send now".
+    fn consume_pending(&self, room_id: &str, user: &str, message_ids: &[String]) -> ApiResult<()>;
 
     /// A user's message, in one transaction: stored with its attachments
     /// (`{text, attachments?}`) and added to their pending input.
@@ -723,20 +735,35 @@ impl RoomInputStore for Connection {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
-    fn take_pending(&self, room_id: &str, user: &str) -> ApiResult<Option<Pending>> {
+    fn consume_pending(&self, room_id: &str, user: &str, message_ids: &[String]) -> ApiResult<()> {
         atomic(self, |tx| {
-            let pending = tx
+            let Some(pending) = tx
                 .query_row(
                     "SELECT * FROM room_pending WHERE room_id=? AND user=?",
                     [room_id, user],
                     Pending::from_row,
                 )
-                .optional()?;
-            tx.execute(
-                "DELETE FROM room_pending WHERE room_id=? AND user=?",
-                [room_id, user],
-            )?;
-            Ok(pending)
+                .optional()?
+            else {
+                return Ok(());
+            };
+            let left: Vec<&String> = pending
+                .message_ids
+                .iter()
+                .filter(|id| !message_ids.contains(id))
+                .collect();
+            if left.is_empty() {
+                tx.execute(
+                    "DELETE FROM room_pending WHERE room_id=? AND user=?",
+                    [room_id, user],
+                )?;
+            } else if left.len() < pending.message_ids.len() {
+                tx.execute(
+                    "UPDATE room_pending SET message_ids_json=?, immediate=0 WHERE room_id=? AND user=?",
+                    params![serde_json::to_string(&left).unwrap_or_default(), room_id, user],
+                )?;
+            }
+            Ok(())
         })
     }
 
@@ -801,14 +828,19 @@ mod tests {
         conn.add_pending(GENERAL_ROOM_ID, "v", &ids[0], false)
             .unwrap();
         assert_eq!(conn.list_pending().unwrap().len(), 2);
+        // The brain took the first two; the third waits, without "send now".
+        conn.consume_pending(GENERAL_ROOM_ID, "u", &ids[..2])
+            .unwrap();
+        let left = conn.list_pending().unwrap();
+        let mine = left.iter().find(|pending| pending.user == "u").unwrap();
         assert_eq!(
-            conn.take_pending(GENERAL_ROOM_ID, "u")
-                .unwrap()
-                .unwrap()
-                .message_ids,
-            ids
+            (mine.message_ids.as_slice(), mine.immediate),
+            (&ids[2..], false)
         );
-        assert_eq!(conn.take_pending(GENERAL_ROOM_ID, "u").unwrap(), None);
+        conn.consume_pending(GENERAL_ROOM_ID, "u", &ids[2..])
+            .unwrap();
+        conn.consume_pending(GENERAL_ROOM_ID, "u", &ids[2..])
+            .unwrap();
         assert_eq!(conn.list_pending().unwrap().len(), 1);
     }
 
@@ -1105,8 +1137,26 @@ mod tests {
                 .pinned_at
                 .is_none()
         );
+        let streamed = conn
+            .update_message(
+                GENERAL_ROOM_ID,
+                &message.id,
+                &json!({ "text": "stream" }),
+                false,
+            )
+            .unwrap();
+        assert_eq!(
+            (streamed.body["text"].as_str(), streamed.edited_at),
+            (Some("stream"), None),
+            "a streaming reply is not an edit"
+        );
         let edited = conn
-            .update_message(GENERAL_ROOM_ID, &message.id, &json!({ "text": "edited" }))
+            .update_message(
+                GENERAL_ROOM_ID,
+                &message.id,
+                &json!({ "text": "edited" }),
+                true,
+            )
             .unwrap();
         assert!(edited.edited_at.is_some());
         assert_eq!(edited.body["text"], "edited");

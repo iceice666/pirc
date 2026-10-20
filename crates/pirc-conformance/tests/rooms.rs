@@ -1,7 +1,8 @@
 //! Rooms (plans/rewrite/01-rooms.md): creating them, messages and unread
 //! counts for two users, typing that is never kept, the room event stream
-//! and its cursor, moves, archiving, pins and uploads. No brain answers
-//! yet: the rooms hold only what the users send.
+//! and its cursor, moves, archiving, pins and uploads. The brain is off
+//! (`PIRC_BRAIN=false`): the rooms hold only what the users send; it has
+//! its own scenario (`brain.rs`).
 
 use pirc_conformance::{
     Cluster, GatewayOptions, HOST, ORIGIN, Transcript, USER, WebSocket, browser_headers,
@@ -46,7 +47,10 @@ fn unread(list: &Value, room: &str) -> Value {
 async fn rooms() {
     let Some(cluster) = Cluster::start_with(GatewayOptions {
         without_node: true,
-        env: vec![("PIRC_ALLOWED_USERS", format!("{USER},{OTHER}"))],
+        env: vec![
+            ("PIRC_ALLOWED_USERS", format!("{USER},{OTHER}")),
+            ("PIRC_BRAIN", "false".to_owned()),
+        ],
         ..Default::default()
     })
     .await

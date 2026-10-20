@@ -30,11 +30,11 @@ pub use engine::*;
 /// files numbered their schemas 1 to 1005.
 const APPLICATION_ID: i32 = 0x7069_7263;
 /// `PRAGMA user_version` of `schema.sql`.
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 const SCHEMA: &str = include_str!("schema.sql");
 /// Each migration takes a database from the version before it to its own;
 /// `schema.sql` is always the newest whole.
-const MIGRATIONS: &[(i64, &str)] = &[];
+const MIGRATIONS: &[(i64, &str)] = &[(2, include_str!("migrations/2-brain-turns.sql"))];
 
 /// The database file in a state directory when `PIRC_DATABASE_PATH` does
 /// not name another (pirc-config's default).
@@ -387,6 +387,25 @@ mod tests {
                 .unwrap();
             assert_eq!(kept, version);
         }
+    }
+
+    #[test]
+    fn migrates_a_plan_01_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DATABASE_FILE);
+        drop(Db::open(&path).unwrap());
+        // Version 1 had no brain turns.
+        Connection::open(&path)
+            .unwrap()
+            .execute_batch("DROP TABLE brain_turns; PRAGMA user_version = 1;")
+            .unwrap();
+        let db = Db::open(&path).unwrap();
+        let version: i64 = db
+            .lock()
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        assert_eq!(tables(&db.lock()), tables(&Db::memory().lock()));
     }
 
     #[test]
