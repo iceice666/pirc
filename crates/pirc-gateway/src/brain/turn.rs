@@ -16,6 +16,7 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 use tokio::sync::Notify;
 
+use super::memory::{BrainPromoter, MemoryFeature, RoomMemory};
 use super::store::{brain_dir, room_dir};
 use super::ui::BrainUi;
 use crate::app::AppState;
@@ -56,18 +57,20 @@ impl Progress {
 pub struct RoomAgent {
     pub agent: Rc<Agent>,
     pub progress: Rc<Progress>,
+    pub memory: Rc<RoomMemory>,
 }
 
 impl RoomAgent {
     pub async fn open(
         app: &AppState,
         room_id: &str,
-        stream: Rc<dyn StreamFn>,
-        tools: Vec<Rc<dyn Tool>>,
+        (stream, tools): (Rc<dyn StreamFn>, Vec<Rc<dyn Tool>>),
+        runtime: &tokio::runtime::Handle,
     ) -> Result<Self, String> {
         let home = brain_dir(&app.config.state_dir).display().to_string();
         let store = SessionStore::open(room_dir(&app.config.state_dir, room_id), &home)?;
         let progress = Rc::new(Progress::default());
+        let memory = RoomMemory::new(app.clone(), room_id);
         let reply = RefCell::new(Reply::new(
             app.clone(),
             room_id.to_owned(),
@@ -81,7 +84,15 @@ impl RoomAgent {
             ui: Rc::new(BrainUi::new(progress.clone())),
             has_ui: false,
             tools,
-            features: Vec::new(),
+            // Observational memory compacts the room's conversation, and
+            // what its dropper lets go becomes facts.
+            features: vec![
+                pirc_agent::features::memory::feature_with(Rc::new(BrainPromoter(memory.clone()))),
+                Rc::new(MemoryFeature {
+                    memory: memory.clone(),
+                    runtime: runtime.clone(),
+                }),
+            ],
             acquire_write: None,
             allowed_tools: None,
             stream: Some(stream),
@@ -90,7 +101,11 @@ impl RoomAgent {
         });
         agent.refresh_models().await;
         agent.init().await?;
-        Ok(Self { agent, progress })
+        Ok(Self {
+            agent,
+            progress,
+            memory,
+        })
     }
 
     /// Hand people's words to the agent: a run starts, or the running one
@@ -132,8 +147,17 @@ fn config(home: &str) -> AgentConfig {
         features: Default::default(),
         role_dirs: Vec::new(),
         system_prompt: Vec::new(),
-        mode: pirc_protocol::mode::default_work(),
+        mode: brain_mode(),
     }
+}
+
+/// The work mode without a repository: observational memory keeps no
+/// workspace ledger for the brain (its facts go to the gateway).
+fn brain_mode() -> pirc_protocol::mode::Mode {
+    let mut mode = pirc_protocol::mode::default_work();
+    mode.workspace_memory = false;
+    mode.repository = false;
+    mode
 }
 
 /// The reply being streamed into the room: one room message per assistant

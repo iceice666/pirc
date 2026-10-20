@@ -57,19 +57,19 @@ async fn http_edges() {
         (
             "memory history, no identity",
             "GET",
-            "/api/memory/entries/e1/history".to_owned(),
+            "/api/memory/preferences/p1/history".to_owned(),
             &anonymous,
         ),
         (
             "long memory id",
             "POST",
-            format!("/api/memory/entries/{long}/forget"),
+            format!("/api/memory/preferences/{long}/forget"),
             &browser,
         ),
         (
             "long memory id, no identity",
             "GET",
-            format!("/api/memory/entries/{long}/history"),
+            format!("/api/memory/preferences/{long}/history"),
             &anonymous,
         ),
         (

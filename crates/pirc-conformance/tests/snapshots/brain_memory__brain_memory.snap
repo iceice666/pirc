@@ -1,0 +1,402 @@
+---
+source: crates/pirc-conformance/tests/brain_memory.rs
+expression: stable(t.into_value())
+---
+[
+  {
+    "observed": [
+      {
+        "body": {
+          "memory": {
+            "id": "<fact:1>",
+            "kind": "fact",
+            "origin": "user",
+            "user": "test@example.com"
+          },
+          "text": "Noted: Uses TLP for power management"
+        },
+        "kind": "line"
+      },
+      {
+        "body": {
+          "text": "Noted."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "a fact, and the line that says so"
+  },
+  {
+    "observed": {
+      "preferences": [
+        "## Preferences",
+        "",
+        "What people asked you to keep in mind. Save one with `save_preference` only when a person says so, or says yes when you offer (\"Shall I remember that you use TLP?\"); `forget` removes it when they ask.",
+        "",
+        "(none yet)"
+      ],
+      "toolResult": [
+        "Remembered [<fact:1>] (from user): Uses TLP for power management"
+      ],
+      "tools": [
+        "recall",
+        "remember",
+        "memory_search",
+        "recall_note",
+        "save_preference",
+        "forget"
+      ]
+    },
+    "step": "the first call's tools and preferences"
+  },
+  {
+    "body": {
+      "records": [
+        {
+          "content": "Uses TLP for power management",
+          "date": "<local-time>",
+          "id": "<fact:1>",
+          "kind": "fact",
+          "origin": "user",
+          "relevance": "medium",
+          "roomId": "general",
+          "status": "active"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/records",
+    "status": 200,
+    "step": "the facts"
+  },
+  {
+    "body": {
+      "records": [
+        {
+          "content": "Uses TLP for power management",
+          "date": "<local-time>",
+          "id": "<fact:1>",
+          "kind": "fact",
+          "origin": "user",
+          "relevance": "medium",
+          "roomId": "general",
+          "status": "active"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/records?q=電源 tlp",
+    "status": 200,
+    "step": "found by its words"
+  },
+  {
+    "observed": [
+      "## You may remember",
+      "",
+      "Facts you remembered earlier that may bear on this (found by the words used; they can be stale or beside the point). `from` says where each came from: only `user` is the person's own word. Search with `memory_search` for more.",
+      "- [id] (<local-time>, from user) Uses TLP for power management"
+    ],
+    "step": "recalled before the turn"
+  },
+  {
+    "observed": [
+      [
+        "soul",
+        "built-in"
+      ],
+      [
+        "room",
+        "built-in"
+      ],
+      [
+        "memory:preferences",
+        "memory"
+      ],
+      [
+        "memory:recalled",
+        "memory"
+      ]
+    ],
+    "step": "the context's sections"
+  },
+  {
+    "body": {
+      "record": {
+        "content": "",
+        "createdAt": "<epoch-ms>",
+        "faceId": "host",
+        "id": "<fact:1>",
+        "origin": "user",
+        "roomId": "general",
+        "sourceEntryIds": [],
+        "status": "forgotten"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/memory/records/:id",
+    "status": 200,
+    "step": "don't keep this"
+  },
+  {
+    "observed": {
+      "memory": {
+        "forgotten": true,
+        "id": "<fact:1>",
+        "kind": "fact"
+      },
+      "text": "Forgotten."
+    },
+    "step": "the line no longer says it"
+  },
+  {
+    "body": {
+      "records": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/records?q=tlp",
+    "status": 200,
+    "step": "not found any more"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "text": "Understood."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "remembering it again"
+  },
+  {
+    "observed": [
+      "Remembered [<fact:1>] (from user): Uses TLP for power management",
+      "The user asked to forget this; do not save it again"
+    ],
+    "step": "is refused"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "memory": {
+            "id": "<fact:2>",
+            "kind": "fact",
+            "origin": "tool:memory_search",
+            "user": "test@example.com"
+          },
+          "text": "Noted: The laptop is a ThinkPad X1 Carbon"
+        },
+        "kind": "line"
+      },
+      {
+        "body": {
+          "text": "Done."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "a fact after a tool result"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "memory": {
+            "id": "<preference:1>",
+            "kind": "preference",
+            "origin": "user",
+            "user": "test@example.com"
+          },
+          "text": "Saved as a preference: Prefers short answers"
+        },
+        "kind": "line"
+      },
+      {
+        "body": {
+          "text": "Will do."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "a preference"
+  },
+  {
+    "observed": [
+      "Remembered [<fact:1>] (from user): Uses TLP for power management",
+      "The user asked to forget this; do not save it again",
+      "Nothing found.",
+      "Remembered [<fact:2>] (from tool:memory_search): The laptop is a ThinkPad X1 Carbon",
+      "That quote is not in what anyone here said in their last messages; ask them first",
+      "Saved preference [<preference:1>] for test@example.com: Prefers short answers"
+    ],
+    "step": "a made-up quote is refused, theirs is not"
+  },
+  {
+    "body": {
+      "preferences": [
+        {
+          "content": "Prefers short answers",
+          "createdAt": "<epoch-ms>",
+          "createdInRoom": "general",
+          "id": "<preference:1>",
+          "origins": [
+            "user"
+          ],
+          "revision": 1,
+          "sources": {
+            "entryIds": [
+              "<entry:1>"
+            ],
+            "quote": "keep it short",
+            "roomId": "general"
+          },
+          "status": "active",
+          "updatedAt": "<epoch-ms>"
+        }
+      ],
+      "removed": [],
+      "rooms": {
+        "general": "general"
+      },
+      "usage": {
+        "max": 2000,
+        "used": 21
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/preferences",
+    "status": 200,
+    "step": "the preferences"
+  },
+  {
+    "body": {
+      "versions": [
+        {
+          "actor": "face:host",
+          "at": "<epoch-ms>",
+          "content": "Prefers short answers",
+          "op": "add",
+          "origins": [
+            "user"
+          ],
+          "revision": 1,
+          "sources": {
+            "entryIds": [
+              "<entry:1>"
+            ],
+            "quote": "keep it short",
+            "roomId": "general"
+          }
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/preferences/:id/history",
+    "status": 200,
+    "step": "its history"
+  },
+  {
+    "body": {
+      "preferences": [],
+      "removed": [
+        {
+          "content": "Prefers short answers",
+          "createdAt": "<epoch-ms>",
+          "createdInRoom": "general",
+          "id": "<preference:1>",
+          "origins": [
+            "user"
+          ],
+          "revision": 2,
+          "sources": {
+            "entryIds": [
+              "<entry:1>"
+            ],
+            "quote": "keep it short",
+            "roomId": "general"
+          },
+          "status": "removed",
+          "updatedAt": "<epoch-ms>"
+        }
+      ],
+      "rooms": {
+        "general": "general"
+      },
+      "usage": {
+        "max": 2000,
+        "used": 0
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/memory/preferences/:id/remove",
+    "status": 200,
+    "step": "removed from the prompt"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "No fact <fact:3>"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/memory/records/<fact:3>",
+    "status": 404,
+    "step": "an unknown fact"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/records?scope=nope",
+    "status": 400,
+    "step": "a scope that is not one"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/records?limit=101",
+    "status": 400,
+    "step": "a limit too high"
+  }
+]

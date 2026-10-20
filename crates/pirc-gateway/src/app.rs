@@ -429,9 +429,13 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/provider-auth/sessions/{id}"),
     ("DELETE", "/api/provider-auth/sessions/{id}"),
     ("POST", "/api/provider-auth/sessions/{id}/input"),
-    ("GET", "/api/memory/entries/{id}/history"),
-    ("POST", "/api/memory/entries/{id}/forget"),
-    ("POST", "/api/memory/entries/{id}/restore"),
+    ("GET", "/api/memory/preferences/{id}/history"),
+    ("POST", "/api/memory/preferences/{id}/remove"),
+    ("POST", "/api/memory/preferences/{id}/forget"),
+    ("POST", "/api/memory/preferences/{id}/restore"),
+    ("GET", "/api/memory/records/{id}"),
+    ("DELETE", "/api/memory/records/{id}"),
+    ("GET", "/api/memory/records/{id}/history"),
 ];
 
 /// Fastify's router refuses a path parameter over 100 characters with

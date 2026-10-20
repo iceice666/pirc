@@ -46,27 +46,27 @@ CREATE TABLE device_tokens (
 );
 CREATE INDEX device_tokens_owner ON device_tokens(owner_user);
 
--- The assistant's memory (daemon/memory.ts).
-CREATE TABLE memory_entries (
-  id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, kind TEXT NOT NULL, content TEXT NOT NULL,
+-- The brain's memory (plans/rewrite/03-memory.md). Preferences: small, in
+-- the brain's prompt, changed only on the person's word. created_in_room:
+-- the room they said it in.
+CREATE TABLE preferences (
+  id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, content TEXT NOT NULL,
   status TEXT NOT NULL, revision INTEGER NOT NULL, origins_json TEXT NOT NULL,
   sources_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
-  -- Creation provenance is immutable even when later revisions come from other chats.
-  created_by_session TEXT
+  created_in_room TEXT
 );
-CREATE INDEX memory_entries_owner ON memory_entries(owner_user, kind, status);
-CREATE INDEX memory_entries_creator ON memory_entries(owner_user, created_by_session);
+CREATE INDEX preferences_owner ON preferences(owner_user, status);
+-- Every revision of a preference. actor: 'user:<email>', 'face:<id>' or 'om'.
 CREATE TABLE memory_log (
   seq INTEGER PRIMARY KEY AUTOINCREMENT, owner_user TEXT NOT NULL, entry_id TEXT NOT NULL,
   revision INTEGER NOT NULL, op TEXT NOT NULL, content TEXT, origins_json TEXT NOT NULL,
   sources_json TEXT NOT NULL, actor TEXT NOT NULL, at INTEGER NOT NULL
 );
 CREATE INDEX memory_log_entry ON memory_log(entry_id, revision);
+-- Forgotten text (a preference's or a fact's), refused from then on.
 CREATE TABLE memory_tombstones (
-  -- 'global' (Forget) refuses the text from then on.
-  owner_user TEXT NOT NULL, scope_id TEXT NOT NULL DEFAULT 'global', content_hash TEXT NOT NULL,
-  forgotten_at INTEGER NOT NULL,
-  PRIMARY KEY (owner_user, scope_id, content_hash)
+  owner_user TEXT NOT NULL, content_hash TEXT NOT NULL, forgotten_at INTEGER NOT NULL,
+  PRIMARY KEY (owner_user, content_hash)
 );
 
 -- Tasks the assistant hands to other workspaces (daemon/delegations.ts).
@@ -91,7 +91,12 @@ CREATE INDEX delegations_follows ON delegations(follows);
 CREATE INDEX delegations_assistant ON delegations(assistant_session_id, status);
 CREATE INDEX delegations_target ON delegations(target_session_id, status);
 
--- Workspace memory mirrored from the nodes (daemon/memory-records.ts).
+-- Facts: a repository's notes, mirrored from the nodes' workspace ledgers
+-- (scope 'repo'), and the household's facts the brain writes (scope
+-- 'person'; node_id '' and ledger_key 'person'). origin: 'user',
+-- 'tool:<source>', 'tool:delegation' or 'om:promoted';
+-- source_entry_ids_json: the brain's session entries (or observations)
+-- behind it. Room and face are labels.
 CREATE TABLE memory_mirrors (
   node_id TEXT NOT NULL, ledger_key TEXT NOT NULL, watermark INTEGER NOT NULL,
   updated_at INTEGER NOT NULL, PRIMARY KEY (node_id, ledger_key)
@@ -104,10 +109,28 @@ CREATE TABLE memory_records (
   status TEXT NOT NULL,
   -- Its workspace's repo when recorded, so clones find each other's notes.
   repo TEXT,
+  scope TEXT NOT NULL DEFAULT 'repo' CHECK (scope IN ('repo', 'person')),
+  room_id TEXT, face_id TEXT, origin TEXT, source_entry_ids_json TEXT, created_at INTEGER,
   PRIMARY KEY (node_id, ledger_key, id)
 );
 CREATE INDEX memory_records_owner ON memory_records(owner_user, status);
 CREATE INDEX memory_records_id ON memory_records(id);
+CREATE INDEX memory_records_scope ON memory_records(owner_user, scope, status);
+
+-- The search index (memory/text.rs index_terms; plans/memory-search.md),
+-- kept by the gateway's own writes, rebuilt at startup when
+-- search_index_meta.version is not the gateway's SEARCH_INDEX_VERSION.
+CREATE VIRTUAL TABLE memory_records_fts USING fts5(
+  node_id UNINDEXED, ledger_key UNINDEXED, id UNINDEXED, terms,
+  tokenize = 'porter unicode61 remove_diacritics 0'
+);
+CREATE VIRTUAL TABLE delegations_fts USING fts5(
+  id UNINDEXED, title, body,
+  tokenize = 'porter unicode61 remove_diacritics 0'
+);
+CREATE TABLE search_index_meta (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1), version INTEGER NOT NULL
+);
 
 -- Push notifications (daemon/push.ts).
 CREATE TABLE push_subscriptions (

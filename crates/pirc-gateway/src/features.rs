@@ -42,8 +42,19 @@ fn no_store_route(method: &Method, path: &str) -> bool {
         ("GET" | "DELETE", ["api", "provider-auth", "sessions", id]) => one(id),
         ("POST", ["api", "provider-auth", "sessions", id, "input"]) => one(id),
         ("GET", ["api", "memory"]) => true,
-        ("GET", ["api", "memory", "entries", id, "history"]) => one(id),
-        ("POST", ["api", "memory", "entries", id, "forget" | "restore"]) => one(id),
+        ("GET", ["api", "memory", "preferences" | "records"]) => true,
+        ("GET", ["api", "memory", "preferences" | "records", id, "history"]) => one(id),
+        (
+            "POST",
+            [
+                "api",
+                "memory",
+                "preferences",
+                id,
+                "remove" | "forget" | "restore",
+            ],
+        ) => one(id),
+        ("GET" | "DELETE", ["api", "memory", "records", id]) => one(id),
         _ => false,
     }
 }

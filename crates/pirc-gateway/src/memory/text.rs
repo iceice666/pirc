@@ -40,6 +40,127 @@ pub fn fold(text: &str) -> String {
         .to_lowercase()
 }
 
+/// Bump when [`index_terms`] changes: the gateway rebuilds the search
+/// index at startup when the stored version differs.
+pub const SEARCH_INDEX_VERSION: i64 = 1;
+
+/// Phrases a search query becomes, at most.
+const MAX_PHRASES: usize = 32;
+
+/// Han, kana and Hangul: scripts written without spaces, indexed as
+/// overlapping character pairs.
+fn spaceless(c: char) -> bool {
+    matches!(c,
+        '\u{3040}'..='\u{30ff}' // hiragana, katakana
+        | '\u{31f0}'..='\u{31ff}' // katakana extensions
+        | '\u{3400}'..='\u{4dbf}' // Han extension A
+        | '\u{4e00}'..='\u{9fff}' // Han
+        | '\u{f900}'..='\u{faff}' // Han compatibility
+        | '\u{1100}'..='\u{11ff}' // Hangul jamo
+        | '\u{3130}'..='\u{318f}' // Hangul compatibility jamo
+        | '\u{ac00}'..='\u{d7af}' // Hangul syllables
+        | '\u{20000}'..='\u{3134f}' // Han extensions B to H
+    )
+}
+
+/// A folded text in runs of spaceless script and the rest.
+fn runs(folded: &str) -> Vec<(bool, String)> {
+    let mut runs: Vec<(bool, String)> = Vec::new();
+    for c in folded.chars() {
+        let cjk = spaceless(c);
+        match runs.last_mut() {
+            Some((kind, run)) if *kind == cjk => run.push(c),
+            _ => runs.push((cjk, c.to_string())),
+        }
+    }
+    runs
+}
+
+/// The overlapping pairs of a spaceless run (`資料庫` → `資料 料庫`).
+fn bigrams(run: &str) -> Vec<String> {
+    let chars: Vec<char> = run.chars().collect();
+    chars.windows(2).map(|pair| pair.iter().collect()).collect()
+}
+
+/// The text the search index holds for `text`: folded, every spaceless
+/// run as its overlapping pairs plus its last character alone (so each of
+/// its characters starts some token, for one-character queries), the rest
+/// as it is for FTS5's `unicode61` tokenizer to split on punctuation
+/// (`foo_bar`, `src/db.rs`). Queries go through [`match_query`], built on
+/// the same runs.
+pub fn index_terms(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() * 2);
+    for (cjk, run) in runs(&fold(text)) {
+        if !cjk {
+            out.push_str(&run);
+            continue;
+        }
+        out.push(' ');
+        for pair in bigrams(&run) {
+            out.push_str(&pair);
+            out.push(' ');
+        }
+        out.extend(run.chars().last());
+        out.push(' ');
+    }
+    out
+}
+
+/// An FTS5 string literal: double-quoted, inner quotes doubled, so nothing
+/// in the user's query is FTS5 syntax.
+fn phrase(text: &str) -> String {
+    format!("\"{}\"", text.replace('"', "\"\""))
+}
+
+/// The FTS5 query for a search: every run of other script a phrase (its
+/// words in order, so `search_in` is `search` then `in`), every pair of a
+/// spaceless run a phrase of its own, and a lone spaceless character a
+/// prefix (`"庫"*`), all joined with `OR` and ranked by BM25. A sentence
+/// finds the notes sharing the most of its rare words and pairs. `None`
+/// when the query holds nothing to search for.
+pub fn match_query(query: &str) -> Option<String> {
+    let phrases: Vec<String> = query_phrases(query)
+        .iter()
+        .map(|text| {
+            let mut chars = text.chars();
+            match (chars.next(), chars.next()) {
+                (Some(c), None) if spaceless(c) => format!("{}*", phrase(text)),
+                _ => phrase(text),
+            }
+        })
+        .collect();
+    (!phrases.is_empty()).then(|| phrases.join(" OR "))
+}
+
+/// The folded texts of [`match_query`]'s phrases, to count how many of
+/// them a hit holds.
+pub fn query_phrases(query: &str) -> Vec<String> {
+    let mut phrases: Vec<String> = Vec::new();
+    let mut add = |item: String| {
+        if phrases.len() < MAX_PHRASES && !phrases.contains(&item) {
+            phrases.push(item);
+        }
+    };
+    for word in words(&fold(query)) {
+        for (cjk, run) in runs(word) {
+            if !cjk {
+                if run.chars().any(char::is_alphanumeric) {
+                    add(run);
+                }
+                continue;
+            }
+            if run.chars().count() == 1 {
+                add(run);
+                continue;
+            }
+            for pair in bigrams(&run) {
+                add(pair);
+            }
+        }
+    }
+    phrases
+}
+
 /// Hash that ignores case, width and spacing (`contentHash`).
 pub fn content_hash(text: &str) -> String {
     sha256_hex(squash(&fold(text)))
@@ -232,6 +353,49 @@ mod tests {
         );
         assert_ne!(content_hash("two cats"), content_hash("three cats"));
         assert_eq!(fold("ＡＢＣ"), "abc");
+    }
+
+    #[test]
+    fn index_terms_pair_up_spaceless_scripts() {
+        assert_eq!(index_terms("資料庫"), " 資料 料庫 庫 ");
+        assert_eq!(index_terms("OM的Dropper"), "om 的 dropper");
+        assert_eq!(index_terms("ＡＢＣ src/db.rs"), "abc src/db.rs");
+        assert_eq!(
+            index_terms("遷移：舊的"),
+            " 遷移 移 : 舊的 的 ",
+            "punctuation ends a run"
+        );
+        assert_eq!(index_terms("ひらがな"), " ひら らが がな な ");
+        assert_eq!(index_terms("한국어"), " 한국 국어 어 ");
+    }
+
+    #[test]
+    fn queries_are_quoted_phrases() {
+        assert_eq!(
+            match_query("資料庫遷移問題").unwrap(),
+            r#""資料" OR "料庫" OR "庫遷" OR "遷移" OR "移問" OR "問題""#
+        );
+        assert_eq!(match_query("庫").unwrap(), r#""庫"*"#);
+        assert_eq!(
+            match_query("search_in HostProfile::worker").unwrap(),
+            r#""search_in" OR "hostprofile::worker""#
+        );
+        assert_eq!(
+            match_query(r#"a" OR NEAR(b) *"#).unwrap(),
+            r#""a""" OR "or" OR "near(b)""#,
+            "FTS5 syntax is quoted"
+        );
+        assert_eq!(
+            match_query("dropper 事實層").unwrap(),
+            r#""dropper" OR "事實" OR "實層""#
+        );
+        assert_eq!(match_query("？ ， !"), None);
+        assert_eq!(match_query("a a A"), Some(r#""a""#.to_owned()));
+        let long = "word ".repeat(10) + &(0..40).map(|n| format!("w{n} ")).collect::<String>();
+        assert_eq!(
+            match_query(&long).unwrap().matches(" OR ").count(),
+            MAX_PHRASES - 1
+        );
     }
 
     #[test]

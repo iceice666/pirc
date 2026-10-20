@@ -81,32 +81,32 @@ expression: t.into_value()
       "answer": {
         "body": {
           "error": {
-            "code": "forbidden",
-            "message": "No session has the assistant memory"
+            "code": "unknown_operation",
+            "message": "Unknown gateway operation: assistant.context"
           }
         },
-        "status": 403
+        "status": 404
       },
       "op": "assistant.context",
       "session": "dev-1"
     },
-    "step": "the assistant's context"
+    "step": "the assistant's context is gone"
   },
   {
     "observed": {
       "answer": {
         "body": {
           "error": {
-            "code": "invalid_input",
-            "message": "Invalid arguments for assistant.context"
+            "code": "unknown_operation",
+            "message": "Unknown gateway operation: memory.note"
           }
         },
-        "status": 400
+        "status": 404
       },
-      "op": "assistant.context",
+      "op": "memory.note",
       "session": "dev-1"
     },
-    "step": "context takes no arguments"
+    "step": "so are its notes"
   },
   {
     "observed": {
@@ -114,39 +114,7 @@ expression: t.into_value()
         "body": {
           "error": {
             "code": "forbidden",
-            "message": "No session has the assistant memory"
-          }
-        },
-        "status": 403
-      },
-      "op": "memory.note",
-      "session": "dev-1"
-    },
-    "step": "a note"
-  },
-  {
-    "observed": {
-      "answer": {
-        "body": {
-          "error": {
-            "code": "invalid_input",
-            "message": "Invalid arguments for memory.note"
-          }
-        },
-        "status": 400
-      },
-      "op": "memory.note",
-      "session": "dev-1"
-    },
-    "step": "a note without origins"
-  },
-  {
-    "observed": {
-      "answer": {
-        "body": {
-          "error": {
-            "code": "forbidden",
-            "message": "No session has the assistant memory"
+            "message": "No session has memory search yet"
           }
         },
         "status": 403
@@ -178,7 +146,7 @@ expression: t.into_value()
         "body": {
           "error": {
             "code": "forbidden",
-            "message": "No session has the assistant memory"
+            "message": "No session has memory search yet"
           }
         },
         "status": 403
@@ -215,7 +183,7 @@ expression: t.into_value()
         },
         "status": 404
       },
-      "op": "memory.note",
+      "op": "memory.search",
       "session": "remote-z"
     },
     "step": "an unknown session"
@@ -246,20 +214,13 @@ expression: t.into_value()
   },
   {
     "body": {
-      "notes": [],
+      "preferences": [],
       "removed": [],
-      "sessions": {},
+      "rooms": {},
       "usage": {
-        "note": {
-          "max": 8000,
-          "used": 0
-        },
-        "user": {
-          "max": 2000,
-          "used": 0
-        }
-      },
-      "user": []
+        "max": 2000,
+        "used": 0
+      }
     },
     "headers": {
       "cache-control": "no-store",
@@ -267,22 +228,40 @@ expression: t.into_value()
     },
     "request": "GET /api/memory",
     "status": 200,
-    "step": "the memory page"
+    "step": "the preferences page"
   },
   {
     "body": {
-      "error": {
-        "code": "not_found",
-        "message": "No memory entry n00000000"
+      "preferences": [],
+      "removed": [],
+      "rooms": {},
+      "usage": {
+        "max": 2000,
+        "used": 0
       }
     },
     "headers": {
       "cache-control": "no-store",
       "content-type": "application/json"
     },
-    "request": "GET /api/memory/entries/n00000000/history",
+    "request": "GET /api/memory/preferences",
+    "status": 200,
+    "step": "the same"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "No preference p00000000"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/preferences/p00000000/history",
     "status": 404,
-    "step": "history of an unknown entry"
+    "step": "history of an unknown preference"
   },
   {
     "body": {
@@ -295,7 +274,7 @@ expression: t.into_value()
       "cache-control": "no-store",
       "content-type": "application/json"
     },
-    "request": "GET /api/memory/entries/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/history",
+    "request": "GET /api/memory/preferences/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/history",
     "status": 400,
     "step": "an id that is too long"
   },
@@ -303,13 +282,13 @@ expression: t.into_value()
     "body": {
       "code": "FST_ERR_MAX_PARAM_LENGTH",
       "error": "Bad Request",
-      "message": "'/api/memory/entries/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/forget' is exceeding the max param length",
+      "message": "'/api/memory/preferences/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/forget' is exceeding the max param length",
       "statusCode": 414
     },
     "headers": {
       "content-type": "application/json"
     },
-    "request": "POST /api/memory/entries/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/forget",
+    "request": "POST /api/memory/preferences/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/forget",
     "status": 414,
     "step": "an id beyond the router's limit"
   },
@@ -317,31 +296,46 @@ expression: t.into_value()
     "body": {
       "error": {
         "code": "not_found",
-        "message": "No memory entry n00000000"
+        "message": "No preference p00000000"
       }
     },
     "headers": {
       "cache-control": "no-store",
       "content-type": "application/json"
     },
-    "request": "POST /api/memory/entries/n00000000/forget",
+    "request": "POST /api/memory/preferences/p00000000/forget",
     "status": 404,
-    "step": "forget an unknown entry"
+    "step": "forget an unknown preference"
   },
   {
     "body": {
       "error": {
         "code": "not_found",
-        "message": "No memory entry n00000000"
+        "message": "No preference p00000000"
       }
     },
     "headers": {
       "cache-control": "no-store",
       "content-type": "application/json"
     },
-    "request": "POST /api/memory/entries/n00000000/restore",
+    "request": "POST /api/memory/preferences/p00000000/remove",
     "status": 404,
-    "step": "restore an unknown entry"
+    "step": "remove an unknown preference"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "No preference p00000000"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/memory/preferences/p00000000/restore",
+    "status": 404,
+    "step": "restore an unknown preference"
   },
   {
     "body": {
@@ -354,9 +348,91 @@ expression: t.into_value()
       "cache-control": "no-store",
       "content-type": "application/json"
     },
-    "request": "POST /api/memory/entries/n00000000/restore",
+    "request": "POST /api/memory/preferences/p00000000/restore",
     "status": 400,
     "step": "restore with a body that is not an object"
+  },
+  {
+    "body": {
+      "records": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/records",
+    "status": 200,
+    "step": "the household's facts"
+  },
+  {
+    "body": {
+      "records": [
+        {
+          "content": "Staging deploys need the VPN",
+          "date": "2026-09-28 09:00",
+          "git": "main@abcdef1*",
+          "id": "b00000000001",
+          "kind": "workspace",
+          "relevance": "high",
+          "status": "active",
+          "workspace": "Repo on test"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/records?scope=repo",
+    "status": 200,
+    "step": "the repositories' notes, newest first"
+  },
+  {
+    "body": {
+      "records": [
+        {
+          "content": "Staging deploys need the VPN",
+          "date": "2026-09-28 09:00",
+          "git": "main@abcdef1*",
+          "id": "b00000000001",
+          "kind": "workspace",
+          "relevance": "high",
+          "status": "active",
+          "workspace": "Repo on test"
+        },
+        {
+          "content": "A staging note that is retired",
+          "date": "2026-09-28 10:00",
+          "id": "b00000000002",
+          "kind": "workspace",
+          "relevance": "high",
+          "status": "superseded",
+          "workspace": "Repo on test"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/records?scope=all&q=staging%20VPN",
+    "status": 200,
+    "step": "searched"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "No fact b00000000001"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "DELETE /api/memory/records/b00000000001",
+    "status": 404,
+    "step": "a repository's note is not forgotten here"
   },
   {
     "observed": {

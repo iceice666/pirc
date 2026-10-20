@@ -13,6 +13,7 @@
 //! - [`store`]: the rooms' conversations on disk and the turn records.
 
 pub mod identity;
+mod memory;
 mod scheduler;
 pub mod store;
 mod stream;
@@ -87,7 +88,7 @@ impl Brain {
                 let local = tokio::task::LocalSet::new();
                 local.block_on(&local_runtime, async move {
                     let tools = tools::brain_tools(&thread_app, &runtime);
-                    scheduler::Scheduler::new(thread_app, stream(), tools, own)
+                    scheduler::Scheduler::new(thread_app, (stream(), tools, runtime), own)
                         .run(receiver)
                         .await;
                 });

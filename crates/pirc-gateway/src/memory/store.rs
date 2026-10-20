@@ -1,15 +1,15 @@
-//! The assistant's memory, held by the gateway for each user
-//! (`MemoryStore` in `apps/gateway/src/daemon/memory.ts`). USER entries say
-//! who the user is and what they want; they change only when the user
-//! changes them (restore, forget). MEMORY notes are the assistant's own, written
-//! directly. Every change is logged as a revision. Forgetting erases an
-//! entry's content and history and keeps only hashes, so the same text
-//! cannot be saved again.
+//! Preferences (plans/rewrite/03-memory.md): the small layer of the
+//! brain's memory that is always in its prompt. They are the person's
+//! word: the brain saves one only with a quote of what they said (checked
+//! in the brain's conversation), and the person removes, restores and
+//! forgets them. Every change is logged as a revision. Forgetting erases a
+//! preference's content and history and keeps only hashes
+//! ([`tombstone`]), which refuse the same text from then on, as a
+//! preference or as a fact.
 
-use rusqlite::types::Value as Sql;
-use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
+use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 use super::text::{content_hash, grouped, squash};
 use crate::db::atomic;
@@ -17,75 +17,29 @@ use crate::dispatch::redact_secrets;
 use crate::error::{ApiError, ApiResult};
 use crate::util::{hex, now_ms, random_bytes, safe_json};
 
+/// Characters one preference or fact holds at most.
 pub const ENTRY_MAX_CHARS: usize = 1000;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Kind {
-    User,
-    Note,
-}
-
-impl Kind {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::User => "user",
-            Self::Note => "note",
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::User => "USER",
-            Self::Note => "MEMORY",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Action {
-    Add,
-    Replace,
-    Remove,
-}
-
-impl Action {
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "add" => Some(Self::Add),
-            "replace" => Some(Self::Replace),
-            "remove" => Some(Self::Remove),
-            _ => None,
-        }
-    }
-}
-
-/// Characters of memory per user.
-#[derive(Clone, Copy, Debug)]
-pub struct Budgets {
-    pub user: usize,
-    pub note: usize,
-}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Entry {
+pub struct Preference {
     pub id: String,
-    pub kind: String,
     /// Empty once forgotten.
     pub content: String,
+    /// `active`, `removed` or `forgotten`.
     pub status: String,
     pub revision: i64,
     pub origins: Value,
     pub sources: Value,
     pub created_at: i64,
     pub updated_at: i64,
+    pub created_in_room: Option<String>,
 }
 
-impl Entry {
+impl Preference {
     fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         Ok(Self {
             id: row.get("id")?,
-            kind: row.get("kind")?,
             content: row.get("content")?,
             status: row.get("status")?,
             revision: row.get("revision")?,
@@ -93,37 +47,9 @@ impl Entry {
             sources: safe_json(&row.get::<_, String>("sources_json")?, json!({})),
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
+            created_in_room: row.get("created_in_room")?,
         })
     }
-
-    fn is(&self, kind: Kind) -> bool {
-        self.kind == kind.as_str()
-    }
-
-    /// Written from content fetched from the network and from nothing the
-    /// user said: a `bash` command that fetched (`tool:bash:network`), web
-    /// search or fetch, or the browser. The snapshot labels such notes.
-    pub fn fetched(&self) -> bool {
-        let origins: Vec<&str> = self
-            .origins
-            .as_array()
-            .map(|origins| origins.iter().filter_map(Value::as_str).collect())
-            .unwrap_or_default();
-        !origins.contains(&"user") && origins.iter().copied().any(network_origin)
-    }
-
-    /// The session the current text came from.
-    pub fn source_session(&self) -> Option<&str> {
-        self.sources.get("sessionId").and_then(Value::as_str)
-    }
-}
-
-/// An origin that is content fetched from the network.
-pub fn network_origin(origin: &str) -> bool {
-    matches!(
-        origin,
-        "tool:bash:network" | "tool:web_fetch" | "tool:web_search"
-    ) || origin.starts_with("tool:browser_")
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -138,7 +64,8 @@ pub struct Version {
     pub at: i64,
 }
 
-/// Who is changing memory, and what backs the change.
+/// Who is changing memory, and what backs the change. `actor`:
+/// `user:<email>`, `face:<id>` or `om`.
 #[derive(Clone, Debug)]
 pub struct Change {
     pub actor: String,
@@ -146,18 +73,8 @@ pub struct Change {
     pub sources: Value,
 }
 
-/// A note the assistant writes (`memory.note`).
-#[derive(Clone, Debug)]
-pub struct NoteInput {
-    pub action: Action,
-    pub id: Option<String>,
-    pub content: Option<String>,
-    /// The revision it last saw; `None` when absent or `null`.
-    pub base_revision: Option<i64>,
-}
-
-/// Entries are single lines; secrets are removed before anything is stored.
-fn clean(text: &str) -> String {
+/// Memory text is one line; secrets are removed before anything is stored.
+pub fn clean(text: &str) -> String {
     squash(&redact_secrets(text))
 }
 
@@ -165,8 +82,9 @@ fn len(text: &str) -> i64 {
     text.encode_utf16().count() as i64
 }
 
-fn entry_text(value: Option<&str>) -> ApiResult<String> {
-    let text = clean(value.unwrap_or_default());
+/// A cleaned entry, or why it cannot be one.
+pub fn entry_text(value: &str) -> ApiResult<String> {
+    let text = clean(value);
     if text.is_empty() {
         return Err(ApiError::new(400, "invalid_input", "content is required"));
     }
@@ -182,15 +100,109 @@ fn entry_text(value: Option<&str>) -> ApiResult<String> {
     Ok(text)
 }
 
-/// The memory of every user, over one connection (or transaction).
+/// Refuse text the user asked to forget (ignoring case, width and spacing).
+pub fn refuse_forgotten(conn: &Connection, user: &str, content: &str) -> ApiResult<()> {
+    let found = conn
+        .query_row(
+            "SELECT 1 FROM memory_tombstones WHERE owner_user=? AND content_hash=?",
+            [user, &content_hash(content)],
+            |_| Ok(()),
+        )
+        .optional()?;
+    if found.is_some() {
+        return Err(ApiError::new(
+            409,
+            "forgotten",
+            "The user asked to forget this; do not save it again",
+        ));
+    }
+    Ok(())
+}
+
+/// Refuse these texts from now on.
+pub fn tombstone<'a>(
+    conn: &Connection,
+    user: &str,
+    contents: impl IntoIterator<Item = &'a String>,
+) -> ApiResult<()> {
+    let at = now_ms();
+    for content in contents {
+        if content.is_empty() {
+            continue;
+        }
+        conn.execute(
+            "INSERT OR IGNORE INTO memory_tombstones (owner_user,content_hash,forgotten_at) VALUES (?,?,?)",
+            params![user, content_hash(content), at],
+        )?;
+    }
+    Ok(())
+}
+
+/// Log a revision of a preference or fact; removed and forgotten ones keep
+/// no text in the log.
+pub fn log(
+    conn: &Connection,
+    user: &str,
+    (id, revision): (&str, i64),
+    op: &str,
+    (content, origins, sources): (&str, &Value, &Value),
+    actor: &str,
+) -> ApiResult<()> {
+    let kept = op != "remove" && op != "forget";
+    conn.execute(
+        "INSERT INTO memory_log (owner_user,entry_id,revision,op,content,origins_json,sources_json,actor,at) VALUES (?,?,?,?,?,?,?,?,?)",
+        params![
+            user,
+            id,
+            revision,
+            op,
+            kept.then_some(content),
+            if kept { origins.to_string() } else { "[]".to_owned() },
+            if kept { sources.to_string() } else { "{}".to_owned() },
+            actor,
+            now_ms(),
+        ],
+    )?;
+    Ok(())
+}
+
+/// The logged revisions of a preference or fact, newest first.
+pub fn versions(conn: &Connection, user: &str, id: &str) -> ApiResult<Vec<Version>> {
+    let mut statement = conn
+        .prepare("SELECT * FROM memory_log WHERE entry_id=? AND owner_user=? ORDER BY seq DESC")?;
+    let rows = statement.query_map([id, user], |row| {
+        Ok(Version {
+            revision: row.get("revision")?,
+            op: row.get("op")?,
+            content: row.get("content")?,
+            origins: safe_json(&row.get::<_, String>("origins_json")?, json!([])),
+            sources: safe_json(&row.get::<_, String>("sources_json")?, json!({})),
+            actor: row.get("actor")?,
+            at: row.get("at")?,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// The texts a preference or fact ever had (its log), to tombstone.
+pub fn logged_texts(conn: &Connection, user: &str, id: &str) -> ApiResult<Vec<String>> {
+    let mut statement = conn.prepare(
+        "SELECT content FROM memory_log WHERE entry_id=? AND owner_user=? AND content IS NOT NULL",
+    )?;
+    let rows = statement.query_map([id, user], |row| row.get(0))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// The preferences of every user, over one connection (or transaction).
 pub struct Store<'a> {
     conn: &'a Connection,
-    pub budgets: Budgets,
+    /// Characters of active preferences per user.
+    pub budget: usize,
 }
 
 impl<'a> Store<'a> {
-    pub fn new(conn: &'a Connection, budgets: Budgets) -> Self {
-        Self { conn, budgets }
+    pub fn new(conn: &'a Connection, budget: usize) -> Self {
+        Self { conn, budget }
     }
 
     fn tx<T>(&self, body: impl FnOnce() -> ApiResult<T>) -> ApiResult<T> {
@@ -199,310 +211,168 @@ impl<'a> Store<'a> {
 
     // ---------- reading ----------
 
-    pub fn entries(
-        &self,
-        user: &str,
-        kind: Option<Kind>,
-        status: Option<&str>,
-    ) -> ApiResult<Vec<Entry>> {
+    /// Oldest first; with `status`, only those.
+    pub fn list(&self, user: &str, status: Option<&str>) -> ApiResult<Vec<Preference>> {
         let mut statement = self
             .conn
-            .prepare("SELECT * FROM memory_entries WHERE owner_user=? ORDER BY created_at, id")?;
-        let rows = statement.query_map([user], Entry::from_row)?;
-        let mut entries = Vec::new();
-        for entry in rows {
-            let entry = entry?;
-            if kind.is_none_or(|kind| entry.is(kind))
-                && status.is_none_or(|status| entry.status == status)
-            {
-                entries.push(entry);
+            .prepare("SELECT * FROM preferences WHERE owner_user=? ORDER BY created_at, id")?;
+        let rows = statement.query_map([user], Preference::from_row)?;
+        let mut out = Vec::new();
+        for preference in rows {
+            let preference = preference?;
+            if status.is_none_or(|status| preference.status == status) {
+                out.push(preference);
             }
         }
-        Ok(entries)
+        Ok(out)
     }
 
-    pub fn entry(&self, user: &str, id: &str) -> ApiResult<Entry> {
+    pub fn get(&self, user: &str, id: &str) -> ApiResult<Preference> {
         self.conn
             .query_row(
-                "SELECT * FROM memory_entries WHERE id=? AND owner_user=?",
+                "SELECT * FROM preferences WHERE id=? AND owner_user=?",
                 [id, user],
-                Entry::from_row,
+                Preference::from_row,
             )
             .optional()?
-            .ok_or_else(|| ApiError::not_found(format!("No memory entry {id}")))
+            .ok_or_else(|| ApiError::not_found(format!("No preference {id}")))
     }
 
-    fn used(&self, user: &str) -> ApiResult<(i64, i64)> {
-        let mut used = (0, 0);
-        for entry in self.entries(user, None, Some("active"))? {
-            if entry.is(Kind::User) {
-                used.0 += len(&entry.content);
-            } else if entry.is(Kind::Note) {
-                used.1 += len(&entry.content);
-            }
-        }
-        Ok(used)
+    fn used(&self, user: &str) -> ApiResult<i64> {
+        Ok(self
+            .list(user, Some("active"))?
+            .iter()
+            .map(|preference| len(&preference.content))
+            .sum())
     }
 
     pub fn usage(&self, user: &str) -> ApiResult<Value> {
-        let (user_used, note_used) = self.used(user)?;
-        Ok(json!({
-            "user": { "used": user_used, "max": self.budgets.user },
-            "note": { "used": note_used, "max": self.budgets.note },
-        }))
+        Ok(json!({ "used": self.used(user)?, "max": self.budget }))
     }
 
     /// Newest first.
     pub fn history(&self, user: &str, id: &str) -> ApiResult<Vec<Version>> {
-        self.entry(user, id)?;
-        let mut statement = self.conn.prepare(
-            "SELECT * FROM memory_log WHERE entry_id=? AND owner_user=? ORDER BY seq DESC",
-        )?;
-        let rows = statement.query_map([id, user], |row| {
-            Ok(Version {
-                revision: row.get("revision")?,
-                op: row.get("op")?,
-                content: row.get("content")?,
-                origins: safe_json(&row.get::<_, String>("origins_json")?, json!([])),
-                sources: safe_json(&row.get::<_, String>("sources_json")?, json!({})),
-                actor: row.get("actor")?,
-                at: row.get("at")?,
-            })
-        })?;
-        Ok(rows.collect::<Result<_, _>>()?)
+        self.get(user, id)?;
+        versions(self.conn, user, id)
     }
 
-    fn briefs(active: &[Entry], kind: Kind) -> Vec<Value> {
-        active
-            .iter()
-            .filter(|entry| entry.is(kind))
-            .map(|entry| {
-                let mut brief = json!({ "id": entry.id, "content": entry.content,
-                    "revision": entry.revision, "updatedAt": entry.updated_at });
-                if kind == Kind::Note && entry.fetched() {
-                    brief["fetched"] = json!(true);
-                }
-                brief
-            })
-            .collect()
-    }
+    // ---------- changes ----------
 
-    /// What an assistant session starts with.
-    pub fn context(&self, user: &str) -> ApiResult<Map<String, Value>> {
-        let active = self.entries(user, None, Some("active"))?;
-        let brief = |kind: Kind| Self::briefs(&active, kind);
-        let mut context = Map::new();
-        context.insert("user".into(), Value::Array(brief(Kind::User)));
-        context.insert("notes".into(), Value::Array(brief(Kind::Note)));
-        context.insert("usage".into(), self.usage(user)?);
-        Ok(context)
-    }
-
-    // ---------- the assistant ----------
-
-    /// The assistant adds, replaces or removes one of its notes. For replace
-    /// and remove, `base_revision` is the version it last saw; anything else
-    /// (or none) is a conflict that returns the current version, so another
-    /// chat's change is never overwritten unseen. An unchanged note is
-    /// returned as is.
-    pub fn write_note(
+    /// Save a preference; an active one with the same text (ignoring case
+    /// and spacing) is returned unchanged (`true`).
+    pub fn add(
         &self,
         user: &str,
-        input: &NoteInput,
+        content: &str,
+        room: Option<&str>,
         change: &Change,
-    ) -> ApiResult<(Entry, bool)> {
+    ) -> ApiResult<(Preference, bool)> {
         self.tx(|| {
-            if input.action == Action::Add {
-                let content = entry_text(input.content.as_deref())?;
-                self.refuse_forgotten(user, &content)?;
-                if let Some(same) = self.active_with(user, Kind::Note, &content)? {
-                    return Ok((same, true));
-                }
-                self.make_room(user, Kind::Note, len(&content))?;
-                return Ok((self.insert(user, Kind::Note, &content, change)?, false));
+            let content = entry_text(content)?;
+            refuse_forgotten(self.conn, user, &content)?;
+            let hash = content_hash(&content);
+            if let Some(same) = self
+                .list(user, Some("active"))?
+                .into_iter()
+                .find(|preference| content_hash(&preference.content) == hash)
+            {
+                return Ok((same, true));
             }
-            let entry = self.entry(user, input.id.as_deref().unwrap_or_default())?;
-            if !entry.is(Kind::Note) {
-                return Err(ApiError::new(
-                    403,
-                    "forbidden",
-                    format!("{} is a USER entry; only the user changes USER", entry.id),
-                ));
-            }
-            if entry.status == "forgotten" {
-                return Err(ApiError::new(
-                    409,
-                    "forgotten",
-                    "The user asked to forget this note",
-                ));
-            }
-            if entry.status == "removed" {
-                return Err(ApiError::new(
-                    409,
-                    "conflict",
-                    format!("Note {} was removed; add a new note instead", entry.id),
-                ));
-            }
-            if input.base_revision != Some(entry.revision) {
-                return Err(ApiError::new(
-                    409,
-                    "conflict",
-                    format!("Note {} changed since you last saw it", entry.id),
-                )
-                .with_details(json!({
-                    "id": entry.id, "revision": entry.revision, "content": entry.content,
-                })));
-            }
-            if input.action == Action::Remove {
-                let removed = self.update(
+            self.make_room(user, len(&content))?;
+            let id = new_id(self.conn)?;
+            let at = now_ms();
+            self.conn.execute(
+                "INSERT INTO preferences (id,owner_user,content,status,revision,origins_json,sources_json,created_at,updated_at,created_in_room) VALUES (?,?,?,'active',1,?,?,?,?,?)",
+                params![
+                    id,
                     user,
-                    &entry,
-                    Next {
-                        status: Some("removed"),
-                        ..Next::default()
-                    },
-                    "remove",
-                    &change.actor,
-                )?;
-                return Ok((removed, false));
-            }
-            let content = entry_text(input.content.as_deref())?;
-            if content_hash(&content) == content_hash(&entry.content) {
-                return Ok((entry, true));
-            }
-            self.refuse_forgotten(user, &content)?;
-            self.make_room(user, Kind::Note, len(&content) - len(&entry.content))?;
-            let replaced = self.update(
-                user,
-                &entry,
-                Next {
-                    content: Some(&content),
-                    origins: Some(&change.origins),
-                    sources: Some(&change.sources),
-                    ..Next::default()
-                },
-                "replace",
-                &change.actor,
+                    content,
+                    change.origins.to_string(),
+                    change.sources.to_string(),
+                    at,
+                    at,
+                    room,
+                ],
             )?;
-            Ok((replaced, false))
+            let preference = self.get(user, &id)?;
+            self.logged(user, &preference, "add", &change.actor)?;
+            Ok((preference, false))
         })
     }
 
-    // ---------- the user ----------
-
-    /// Erase an entry: its text, every earlier version and the old proposals
-    /// that carry them. Hashes of all its versions stay as tombstones, which
-    /// refuse the same text (ignoring case and spacing) from then on.
-    /// Rewordings are not caught. Session transcripts on the nodes are not
-    /// touched.
-    pub fn forget(&self, user: &str, entry_id: &str) -> ApiResult<()> {
-        self.forget_in(user, entry_id, GLOBAL_SCOPE)
+    /// Take a preference out of the prompt; it can be restored.
+    pub fn remove(&self, user: &str, id: &str, actor: &str) -> ApiResult<Preference> {
+        self.tx(|| {
+            let preference = self.get(user, id)?;
+            if preference.status != "active" {
+                return Ok(preference);
+            }
+            self.update(
+                user,
+                &preference,
+                Next {
+                    status: Some("removed"),
+                    ..Next::default()
+                },
+                "remove",
+                actor,
+            )
+        })
     }
 
-    /// [`Self::forget`] with tombstones in `scope`: [`GLOBAL_SCOPE`] refuses
-    /// the text from then on, a deleted project's id only records it.
-    fn forget_in(&self, user: &str, entry_id: &str, scope: &str) -> ApiResult<()> {
+    /// Erase a preference: its text and every earlier version. Hashes of
+    /// all its versions stay as tombstones, which refuse the same text
+    /// (ignoring case and spacing) from then on. Rewordings are not caught.
+    pub fn forget(&self, user: &str, id: &str) -> ApiResult<()> {
         self.tx(|| {
-            let entry = self.entry(user, entry_id)?;
-            if entry.status == "forgotten" {
+            let preference = self.get(user, id)?;
+            if preference.status == "forgotten" {
                 return Ok(());
             }
-            let versions: Vec<String> = {
-                let mut statement = self.conn.prepare(
-                    "SELECT content FROM memory_log WHERE entry_id=? AND owner_user=? AND content IS NOT NULL",
-                )?;
-                let rows = statement.query_map([entry_id, user], |row| row.get(0))?;
-                rows.collect::<Result<_, _>>()?
-            };
-            let mut hashes: Vec<String> = Vec::new();
-            for content in std::iter::once(&entry.content).chain(&versions) {
-                if content.is_empty() {
-                    continue;
-                }
-                let hash = content_hash(content);
-                if !hashes.contains(&hash) {
-                    hashes.push(hash);
-                }
-            }
-            let at = now_ms();
-            for hash in &hashes {
-                self.conn.execute(
-                    "INSERT OR IGNORE INTO memory_tombstones (owner_user,scope_id,content_hash,forgotten_at) VALUES (?,?,?,?)",
-                    params![user, scope, hash, at],
-                )?;
-            }
+            let mut texts = logged_texts(self.conn, user, id)?;
+            texts.push(preference.content.clone());
+            tombstone(self.conn, user, &texts)?;
             self.conn.execute(
-                "UPDATE memory_entries SET content='', status='forgotten', revision=revision+1, origins_json='[]', sources_json='{}', updated_at=? WHERE id=?",
-                params![at, entry_id],
+                "UPDATE preferences SET content='', status='forgotten', revision=revision+1, origins_json='[]', sources_json='{}', updated_at=? WHERE id=?",
+                params![now_ms(), id],
             )?;
             self.conn.execute(
                 "DELETE FROM memory_log WHERE entry_id=? AND owner_user=?",
-                [entry_id, user],
+                [id, user],
             )?;
-            let forgotten = self.entry(user, entry_id)?;
-            self.log(user, &forgotten, "forget", &format!("user:{user}"))?;
-            // Databases from before the rewrite keep their retired USER
-            // proposals (plans/rewrite/00-demolition.md): erase the text they carry too.
-            let proposals: bool = self.conn.query_row(
-                "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_proposals')",
-                [],
-                |row| row.get(0),
-            )?;
-            if !proposals {
-                return Ok(());
-            }
-            let hashed = if hashes.is_empty() {
-                String::new()
-            } else {
-                format!(
-                    " OR content_hash IN ({})",
-                    vec!["?"; hashes.len()].join(",")
-                )
-            };
-            let mut values = vec![
-                Sql::Integer(at),
-                Sql::Text(user.to_owned()),
-                Sql::Text(entry_id.to_owned()),
-            ];
-            values.extend(hashes.into_iter().map(Sql::Text));
-            self.conn.execute(
-                &format!(
-                    "UPDATE memory_proposals SET content=NULL, quote='', sources_json='{{}}', status=CASE WHEN status='pending' THEN 'rejected' ELSE status END, decided_at=COALESCE(decided_at, ?) WHERE owner_user=? AND (target_id=?{hashed})"
-                ),
-                params_from_iter(values),
-            )?;
-            Ok(())
+            let forgotten = self.get(user, id)?;
+            self.logged(user, &forgotten, "forget", &format!("user:{user}"))
         })
     }
 
-    /// Bring back a removed entry, or an earlier version (`revision`) of an
-    /// active or removed one.
-    pub fn restore(&self, user: &str, entry_id: &str, revision: Option<i64>) -> ApiResult<Entry> {
+    /// Bring back a removed preference, or an earlier version (`revision`)
+    /// of an active or removed one.
+    pub fn restore(&self, user: &str, id: &str, revision: Option<i64>) -> ApiResult<Preference> {
         self.tx(|| {
-            let entry = self.entry(user, entry_id)?;
-            if entry.status == "forgotten" {
+            let preference = self.get(user, id)?;
+            if preference.status == "forgotten" {
                 return Err(ApiError::new(
                     409,
                     "forgotten",
-                    "This entry was forgotten; nothing is left to restore",
+                    "This preference was forgotten; nothing is left to restore",
                 ));
             }
             let (content, origins, sources) = match revision {
                 None => {
-                    if entry.status == "active" {
-                        return Ok(entry);
+                    if preference.status == "active" {
+                        return Ok(preference);
                     }
                     (
-                        entry.content.clone(),
-                        entry.origins.clone(),
-                        entry.sources.clone(),
+                        preference.content.clone(),
+                        preference.origins.clone(),
+                        preference.sources.clone(),
                     )
                 }
                 Some(revision) => self
                     .conn
                     .query_row(
                         "SELECT * FROM memory_log WHERE entry_id=? AND owner_user=? AND revision=? AND content IS NOT NULL",
-                        params![entry_id, user, revision],
+                        params![id, user, revision],
                         |row| {
                             Ok((
                                 row.get::<_, String>("content")?,
@@ -512,28 +382,21 @@ impl<'a> Store<'a> {
                         },
                     )
                     .optional()?
-                    .ok_or_else(|| {
-                        ApiError::not_found(format!("No version {revision} of {entry_id}"))
-                    })?,
+                    .ok_or_else(|| ApiError::not_found(format!("No version {revision} of {id}")))?,
             };
-            if entry.status == "active" && content == entry.content {
-                return Ok(entry);
+            if preference.status == "active" && content == preference.content {
+                return Ok(preference);
             }
-            self.refuse_forgotten(user, &content)?;
-            let kind = if entry.is(Kind::User) {
-                Kind::User
-            } else {
-                Kind::Note
-            };
-            let before = if entry.status == "active" {
-                len(&entry.content)
+            refuse_forgotten(self.conn, user, &content)?;
+            let before = if preference.status == "active" {
+                len(&preference.content)
             } else {
                 0
             };
-            self.make_room(user, kind, len(&content) - before)?;
+            self.make_room(user, len(&content) - before)?;
             self.update(
                 user,
-                &entry,
+                &preference,
                 Next {
                     content: Some(&content),
                     status: Some("active"),
@@ -548,156 +411,82 @@ impl<'a> Store<'a> {
 
     // ---------- internals ----------
 
-    fn active_with(&self, user: &str, kind: Kind, content: &str) -> ApiResult<Option<Entry>> {
-        let hash = content_hash(content);
-        Ok(self
-            .entries(user, Some(kind), Some("active"))?
-            .into_iter()
-            .find(|entry| content_hash(&entry.content) == hash))
-    }
-
-    fn refuse_forgotten(&self, user: &str, content: &str) -> ApiResult<()> {
-        let found = self
-            .conn
-            .query_row(
-                "SELECT 1 FROM memory_tombstones WHERE owner_user=? AND scope_id='global' AND content_hash=?",
-                [user, &content_hash(content)],
-                |_| Ok(()),
-            )
-            .optional()?;
-        if found.is_some() {
-            return Err(ApiError::new(
-                409,
-                "forgotten",
-                "The user asked to forget this; do not save it again",
-            ));
-        }
-        Ok(())
-    }
-
-    fn make_room(&self, user: &str, kind: Kind, delta: i64) -> ApiResult<()> {
+    fn make_room(&self, user: &str, delta: i64) -> ApiResult<()> {
         if delta <= 0 {
             return Ok(());
         }
-        let (user_used, note_used) = self.used(user)?;
-        let (used, max) = match kind {
-            Kind::User => (user_used, self.budgets.user as i64),
-            Kind::Note => (note_used, self.budgets.note as i64),
-        };
+        let used = self.used(user)?;
+        let max = self.budget as i64;
         if used + delta > max {
             return Err(ApiError::new(
                 409,
                 "memory_full",
                 format!(
-                    "{} is full ({}/{} characters, {} more needed); replace or remove entries to make room",
-                    kind.label(),
+                    "Preferences are full ({}/{} characters, {} more needed); remove one to make room",
                     grouped(used),
                     grouped(max),
                     grouped(delta)
                 ),
             )
-            .with_details(json!({ "kind": kind.as_str(), "used": used, "max": max, "needed": delta })));
+            .with_details(json!({ "used": used, "max": max, "needed": delta })));
         }
         Ok(())
-    }
-
-    fn new_id(&self, table: &str, prefix: &str) -> ApiResult<String> {
-        loop {
-            let id = format!("{prefix}{}", hex(&random_bytes::<4>()));
-            let exists = self
-                .conn
-                .query_row(&format!("SELECT 1 FROM {table} WHERE id=?"), [&id], |_| {
-                    Ok(())
-                })
-                .optional()?;
-            if exists.is_none() {
-                return Ok(id);
-            }
-        }
-    }
-
-    /// A USER entry, as no route writes them any more (tests only).
-    #[cfg(test)]
-    pub fn insert_user(&self, user: &str, content: &str, session: &str) -> ApiResult<Entry> {
-        let change = Change {
-            actor: format!("user:{user}"),
-            origins: json!(["user"]),
-            sources: json!({ "sessionId": session }),
-        };
-        self.tx(|| self.insert(user, Kind::User, &clean(content), &change))
-    }
-
-    fn insert(&self, user: &str, kind: Kind, content: &str, change: &Change) -> ApiResult<Entry> {
-        let prefix = if kind == Kind::User { "u" } else { "n" };
-        let id = self.new_id("memory_entries", prefix)?;
-        let at = now_ms();
-        self.conn.execute(
-            "INSERT INTO memory_entries (id,owner_user,kind,content,status,revision,origins_json,sources_json,created_at,updated_at,created_by_session) VALUES (?,?,?,?,'active',1,?,?,?,?,?)",
-            params![
-                id,
-                user,
-                kind.as_str(),
-                content,
-                change.origins.to_string(),
-                change.sources.to_string(),
-                at,
-                at,
-                change.sources.get("sessionId").and_then(Value::as_str),
-            ],
-        )?;
-        let entry = self.entry(user, &id)?;
-        self.log(user, &entry, "add", &change.actor)?;
-        Ok(entry)
     }
 
     fn update(
         &self,
         user: &str,
-        entry: &Entry,
+        preference: &Preference,
         next: Next<'_>,
         op: &str,
         actor: &str,
-    ) -> ApiResult<Entry> {
+    ) -> ApiResult<Preference> {
         self.conn.execute(
-            "UPDATE memory_entries SET content=?, status=?, revision=?, origins_json=?, sources_json=?, updated_at=? WHERE id=? AND owner_user=?",
+            "UPDATE preferences SET content=?, status=?, revision=?, origins_json=?, sources_json=?, updated_at=? WHERE id=? AND owner_user=?",
             params![
-                next.content.unwrap_or(&entry.content),
-                next.status.unwrap_or(&entry.status),
-                entry.revision + 1,
-                next.origins.unwrap_or(&entry.origins).to_string(),
-                next.sources.unwrap_or(&entry.sources).to_string(),
+                next.content.unwrap_or(&preference.content),
+                next.status.unwrap_or(&preference.status),
+                preference.revision + 1,
+                next.origins.unwrap_or(&preference.origins).to_string(),
+                next.sources.unwrap_or(&preference.sources).to_string(),
                 now_ms(),
-                entry.id,
+                preference.id,
                 user,
             ],
         )?;
-        let updated = self.entry(user, &entry.id)?;
-        self.log(user, &updated, op, actor)?;
+        let updated = self.get(user, &preference.id)?;
+        self.logged(user, &updated, op, actor)?;
         Ok(updated)
     }
 
-    fn log(&self, user: &str, entry: &Entry, op: &str, actor: &str) -> ApiResult<()> {
-        let kept = op != "remove" && op != "forget";
-        self.conn.execute(
-            "INSERT INTO memory_log (owner_user,entry_id,revision,op,content,origins_json,sources_json,actor,at) VALUES (?,?,?,?,?,?,?,?,?)",
-            params![
-                user,
-                entry.id,
-                entry.revision,
-                op,
-                kept.then_some(&entry.content),
-                if kept { entry.origins.to_string() } else { "[]".to_owned() },
-                if kept { entry.sources.to_string() } else { "{}".to_owned() },
-                actor,
-                now_ms(),
-            ],
-        )?;
-        Ok(())
+    fn logged(&self, user: &str, preference: &Preference, op: &str, actor: &str) -> ApiResult<()> {
+        log(
+            self.conn,
+            user,
+            (&preference.id, preference.revision),
+            op,
+            (
+                &preference.content,
+                &preference.origins,
+                &preference.sources,
+            ),
+            actor,
+        )
     }
 }
 
-/// Tombstones that refuse the text again (Forget, chat deletion).
-pub const GLOBAL_SCOPE: &str = "global";
+/// `p` and eight hex digits, unused.
+fn new_id(conn: &Connection) -> ApiResult<String> {
+    loop {
+        let id = format!("p{}", hex(&random_bytes::<4>()));
+        let exists = conn
+            .query_row("SELECT 1 FROM preferences WHERE id=?", [&id], |_| Ok(()))
+            .optional()?;
+        if exists.is_none() {
+            return Ok(id);
+        }
+    }
+}
 
 /// What an update changes.
 #[derive(Default)]

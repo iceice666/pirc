@@ -1,0 +1,57 @@
+# Queries for the search evaluation (plans/memory-search.md phase 0).
+# Format: <class> | <query> | <expected note names, comma-separated>.
+# Classes: en, zh, mixed, identifier, paraphrase, recall (a user's whole
+# message, as the brain's automatic recall sends it; plan 03).
+
+en | database migration transaction | db01, db02, zdb01
+en | sqlite backup | db05, zdb03
+en | sandbox DNS resolver sockets | sb01
+en | WSL interop | sb02, zsb03
+en | flutter analyze HOME | and01, mx05
+en | brain debounce seconds | br03, mx03, zbr02
+en | turn timeout | br04
+en | binary size budget | bt02, zbt02, pp04
+en | conformance snapshots | bt04, mx04, bt07
+en | push subscription failures | dp05, pp02
+
+zh | 資料庫遷移問題 | zdb01, zdb02
+zh | 備份 | zdb03
+zh | 沙箱 唯讀 | zsb01
+zh | 頭腦 turn | zbr01, zbr03
+zh | 打字 | zbr02
+zh | 部署 | zdp01
+zh | 庫 | zdb01, zdb02, zdb03
+zh | 執行檔大小 | zbt02
+zh | 裝置 token 到期 | zdp03
+
+mixed | gateway key | mx01
+mixed | dropper promote 事實層 | mx02
+mixed | FTS5 依賴 | mx06
+mixed | CJK 查詢 | mx08
+mixed | debounce 預設 | mx03
+mixed | Flutter 版本 | mx05
+
+identifier | search_in | id01
+identifier | NODE_MAX_ROWS | id02
+identifier | agents.rs | id03
+identifier | take_pending | id05
+identifier | HostProfile::worker | id06
+identifier | rooms.svelte.ts | id08
+identifier | PIRC_BRAIN | id09
+identifier | 4b842ee | id10
+identifier | content_hash | id11
+identifier | find_quote | id12
+
+paraphrase | do not hold the database lock across awaits | db08, pp01
+paraphrase | erase memory permanently | pp03, db04
+paraphrase | executable too large | pp04, bt02
+paraphrase | people send several short messages | pp05, zbr02
+paraphrase | superseded notes ranking | pp07
+
+recall | 我電源管理用什麼？ | ps01, ps02
+recall | what power tool do I use on my laptop | ps01, ps02
+recall | 幫我訂午餐 | ps08
+recall | when is HW3 due | ps09
+recall | 星期三晚上有空嗎 | ps04
+recall | should I switch editors | ps15
+recall | what machine am I on | ps06

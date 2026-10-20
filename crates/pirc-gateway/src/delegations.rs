@@ -19,7 +19,7 @@ use tokio::sync::mpsc;
 
 use crate::agent_ops::OpContext;
 use crate::app::{App, AppState};
-use crate::db::{Session, Store, Workspace};
+use crate::db::{Session, Store, Workspace, atomic};
 use crate::dispatch::{
     Progress, clip, deliver, is_watched_event, one_line, read_progress, redact_secrets,
     resolve_directory_workspace, start_session, workspace_online,
@@ -320,6 +320,10 @@ fn brief(conn: &Connection, delegation: &Delegation, full: bool, offset: u64) ->
 /// project, those it is linked to come first (`linked`), then the other
 /// clones of their repositories; a linked one whose node no longer has it
 /// stays listed, marked `removed`.
+#[allow(
+    dead_code,
+    reason = "the brain's delegation lists them (plans/rewrite/06-workers.md)"
+)]
 pub fn workspaces(app: &App, project: Option<&str>) -> ApiResult<Value> {
     let (all, links, repos) = {
         let conn = app.db.lock();
@@ -811,6 +815,7 @@ fn create(
                 quote.as_ref().map(|_| json!(input.entry_ids).to_string()),
             ],
         )?;
+        crate::memory_records::index::put_delegation(&conn, &id, &title, &task, None)?;
         row(&conn, &id)?.ok_or_else(ApiError::internal)?
     };
     publish_active(app, &assistant.id);
@@ -1297,10 +1302,28 @@ fn status_shown(app: &App, id: &str) {
 }
 
 fn finish(app: &AppState, id: &str, status: &str, result: &str) {
-    let changed = app.db.lock().execute(
-        "UPDATE delegations SET status=?, result=?, updated_at=? WHERE id=? AND status IN ('running','waiting_input')",
-        params![status, clip(&redact_secrets(result), RESULT_MAX_CHARS), now_ms(), id],
-    );
+    let changed = {
+        let conn = app.db.lock();
+        let result = clip(&redact_secrets(result), RESULT_MAX_CHARS);
+        atomic(&conn, |conn| {
+            let changed = conn.execute(
+                "UPDATE delegations SET status=?, result=?, updated_at=? WHERE id=? AND status IN ('running','waiting_input')",
+                params![status, result, now_ms(), id],
+            )?;
+            if changed > 0
+                && let Some(delegation) = row(conn, id)?
+            {
+                crate::memory_records::index::put_delegation(
+                    conn,
+                    id,
+                    &delegation.title,
+                    &delegation.task,
+                    Some(&result),
+                )?;
+            }
+            Ok(changed)
+        })
+    };
     if !matches!(changed, Ok(1..)) {
         return;
     }
@@ -1469,10 +1492,17 @@ fn update_message(conn: &Connection, delegation: &Delegation) -> String {
 /// delegation follows; the number deleted. One that is followed goes once
 /// the delegation following it has gone.
 pub fn prune(conn: &Connection, before: i64) -> ApiResult<usize> {
-    Ok(conn.execute(
-        "DELETE FROM delegations WHERE status IN ('rejected','expired','completed','failed') AND updated_at<? AND NOT EXISTS (SELECT 1 FROM delegations later WHERE later.follows=delegations.id)",
-        [before],
-    )?)
+    atomic(conn, |conn| {
+        let pruned = conn.execute(
+            "DELETE FROM delegations WHERE status IN ('rejected','expired','completed','failed') AND updated_at<? AND NOT EXISTS (SELECT 1 FROM delegations later WHERE later.follows=delegations.id)",
+            [before],
+        )?;
+        if pruned > 0 {
+            crate::memory_records::index::prune_delegations(conn)?;
+            crate::memory_records::index::optimize(conn)?;
+        }
+        Ok(pruned)
+    })
 }
 
 fn prune_old(app: &App) {

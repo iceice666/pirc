@@ -30,11 +30,14 @@ pub use engine::*;
 /// files numbered their schemas 1 to 1005.
 const APPLICATION_ID: i32 = 0x7069_7263;
 /// `PRAGMA user_version` of `schema.sql`.
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 const SCHEMA: &str = include_str!("schema.sql");
 /// Each migration takes a database from the version before it to its own;
 /// `schema.sql` is always the newest whole.
-const MIGRATIONS: &[(i64, &str)] = &[(2, include_str!("migrations/2-brain-turns.sql"))];
+const MIGRATIONS: &[(i64, &str)] = &[
+    (2, include_str!("migrations/2-brain-turns.sql")),
+    (3, include_str!("migrations/3-memory.sql")),
+];
 
 /// The database file in a state directory when `PIRC_DATABASE_PATH` does
 /// not name another (pirc-config's default).
@@ -184,6 +187,7 @@ fn create_schema(connection: &Connection, path: &Path) -> Result<(), String> {
         .execute_batch("BEGIN IMMEDIATE")
         .map_err(describe)?;
     let result = apply_schema(connection, path)
+        .and_then(|()| crate::memory_records::index::ensure(connection).map_err(describe))
         .and_then(|()| connection.execute_batch("COMMIT").map_err(describe));
     if result.is_err() {
         let _ = connection.execute_batch("ROLLBACK");
@@ -389,23 +393,176 @@ mod tests {
         }
     }
 
+    /// Every table's columns, in order.
+    fn columns(connection: &Connection) -> Vec<(String, Vec<String>)> {
+        tables(connection)
+            .into_iter()
+            .map(|table| {
+                let mut statement = connection
+                    .prepare(&format!("SELECT name FROM pragma_table_info('{table}')"))
+                    .unwrap();
+                let names = statement
+                    .query_map([], |row| row.get(0))
+                    .unwrap()
+                    .collect::<Result<_, _>>()
+                    .unwrap();
+                (table, names)
+            })
+            .collect()
+    }
+
+    /// The schema of plan 01 (version 1), from today's.
+    const PLAN_01: &str = "
+        DROP TABLE brain_turns;
+        DROP TABLE preferences;
+        DROP TABLE memory_records_fts;
+        DROP TABLE delegations_fts;
+        DROP TABLE search_index_meta;
+        DROP INDEX memory_records_scope;
+        ALTER TABLE memory_records DROP COLUMN scope;
+        ALTER TABLE memory_records DROP COLUMN room_id;
+        ALTER TABLE memory_records DROP COLUMN face_id;
+        ALTER TABLE memory_records DROP COLUMN origin;
+        ALTER TABLE memory_records DROP COLUMN source_entry_ids_json;
+        ALTER TABLE memory_records DROP COLUMN created_at;
+        DROP TABLE memory_tombstones;
+        CREATE TABLE memory_tombstones (
+          owner_user TEXT NOT NULL, scope_id TEXT NOT NULL DEFAULT 'global', content_hash TEXT NOT NULL,
+          forgotten_at INTEGER NOT NULL,
+          PRIMARY KEY (owner_user, scope_id, content_hash)
+        );
+        CREATE TABLE memory_entries (
+          id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, kind TEXT NOT NULL, content TEXT NOT NULL,
+          status TEXT NOT NULL, revision INTEGER NOT NULL, origins_json TEXT NOT NULL,
+          sources_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          created_by_session TEXT
+        );
+        PRAGMA user_version = 1;
+    ";
+
     #[test]
     fn migrates_a_plan_01_database() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(DATABASE_FILE);
         drop(Db::open(&path).unwrap());
-        // Version 1 had no brain turns.
-        Connection::open(&path)
-            .unwrap()
-            .execute_batch("DROP TABLE brain_turns; PRAGMA user_version = 1;")
+        {
+            let old = Connection::open(&path).unwrap();
+            old.execute_batch(PLAN_01).unwrap();
+            old.execute_batch(
+                "INSERT INTO memory_entries VALUES ('u1','me','user','Prefers short answers','active',1,'[\"user\"]','{}',0,0,NULL);
+                 INSERT INTO memory_entries VALUES ('n1','me','note','The NAS is called lumo','active',2,'[\"assistant\"]','{}',0,0,NULL);
+                 INSERT INTO memory_tombstones VALUES ('me','global','h1',0), ('me','project','h2',0);",
+            )
             .unwrap();
+        }
         let db = Db::open(&path).unwrap();
-        let version: i64 = db
-            .lock()
+        let conn = db.lock();
+        let version: i64 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
         assert_eq!(version, SCHEMA_VERSION);
-        assert_eq!(tables(&db.lock()), tables(&Db::memory().lock()));
+        assert_eq!(columns(&conn), columns(&Db::memory().lock()));
+        // USER entries are preferences, MEMORY notes the person's facts
+        // (indexed), and only Forget's tombstones refuse text.
+        let preference: String = conn
+            .query_row("SELECT content FROM preferences WHERE id='u1'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(preference, "Prefers short answers");
+        let (scope, origin): (String, String) = conn
+            .query_row(
+                "SELECT scope, origin FROM memory_records WHERE id='n1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            (scope.as_str(), origin.as_str()),
+            ("person", "tool:assistant")
+        );
+        let found: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM memory_records_fts WHERE memory_records_fts MATCH 'lumo' AND id='n1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(found, 1);
+        let tombstones: Vec<String> = conn
+            .prepare("SELECT content_hash FROM memory_tombstones")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(tombstones, ["h1"]);
+    }
+
+    #[test]
+    fn a_forgotten_fact_leaves_the_file_and_its_index() {
+        use crate::memory_records::person;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DATABASE_FILE);
+        let db = Db::open(&path).unwrap();
+        let conn = db.lock();
+        let sentinel = "zqxforgottensentinel";
+        let content = format!("{sentinel} and 遷移秘密 again");
+        let fact = person::NewFact {
+            content: &content,
+            origin: "user",
+            room_id: None,
+            face_id: None,
+            source_entry_ids: &[],
+            actor: "face:host",
+        };
+        let (fact, _) = person::remember(&conn, "me", &fact).unwrap();
+        person::forget(&conn, "me", &fact.id, "user:me").unwrap();
+        conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))
+            .unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        for needle in [sentinel, "遷移秘密", "秘密"] {
+            assert!(
+                !bytes
+                    .windows(needle.len())
+                    .any(|window| window == needle.as_bytes()),
+                "{needle} is still in the file"
+            );
+        }
+    }
+
+    #[test]
+    fn the_search_index_is_rebuilt_for_another_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DATABASE_FILE);
+        drop(Db::open(&path).unwrap());
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute(
+                "INSERT INTO memory_records (node_id,ledger_key,id,content,relevance,recorded_at,source_ids_json,status) VALUES ('n','k','a','資料庫遷移','low','','[]','active')",
+                [],
+            )
+            .unwrap();
+            conn.execute("UPDATE search_index_meta SET version = 0", [])
+                .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        let found: i64 = db
+            .lock()
+            .query_row(
+                "SELECT count(*) FROM memory_records_fts WHERE memory_records_fts MATCH '\"遷移\"'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(found, 1);
+        let version: i64 = db
+            .lock()
+            .query_row("SELECT version FROM search_index_meta", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(version, crate::memory::text::SEARCH_INDEX_VERSION);
     }
 
     #[test]

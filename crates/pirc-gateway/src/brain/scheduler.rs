@@ -30,7 +30,7 @@ use tokio::task::JoinHandle;
 
 use super::store::{Outcome, TurnStore};
 use super::turn::{RoomAgent, compose, post_line};
-use super::{Command, identity, presence};
+use super::{Command, identity, memory, presence};
 use crate::app::AppState;
 use crate::db::rooms::{Pending, RoomInputStore, RoomStore};
 use crate::rooms::TYPING_TTL_MS;
@@ -100,6 +100,8 @@ pub struct Scheduler {
     config_dir: PathBuf,
     stream: Rc<dyn StreamFn>,
     tools: Vec<Rc<dyn Tool>>,
+    /// The gateway's main runtime (node requests).
+    runtime: tokio::runtime::Handle,
     rooms: HashMap<String, Rc<RoomAgent>>,
     /// Message ids handed to an agent and not yet admitted.
     in_flight: Rc<RefCell<HashSet<String>>>,
@@ -111,8 +113,7 @@ pub struct Scheduler {
 impl Scheduler {
     pub fn new(
         app: AppState,
-        stream: Rc<dyn StreamFn>,
-        tools: Vec<Rc<dyn Tool>>,
+        (stream, tools, runtime): (Rc<dyn StreamFn>, Vec<Rc<dyn Tool>>, tokio::runtime::Handle),
         commands: mpsc::UnboundedSender<Command>,
     ) -> Self {
         Self {
@@ -120,6 +121,7 @@ impl Scheduler {
             app,
             stream,
             tools,
+            runtime,
             rooms: HashMap::new(),
             in_flight: Rc::default(),
             running: None,
@@ -208,7 +210,13 @@ impl Scheduler {
             return Ok(room.clone());
         }
         let room = Rc::new(
-            RoomAgent::open(&self.app, room_id, self.stream.clone(), self.tools.clone()).await?,
+            RoomAgent::open(
+                &self.app,
+                room_id,
+                (self.stream.clone(), self.tools.clone()),
+                &self.runtime,
+            )
+            .await?,
         );
         self.rooms.insert(room_id.to_owned(), room.clone());
         Ok(room)
@@ -245,8 +253,15 @@ impl Scheduler {
             }
         };
         room.progress.reset_turn();
-        room.agent
-            .set_base_prompt(identity::sections(&self.config_dir, &room_row));
+        let speakers = speakers(batches);
+        let mut prompt = identity::sections(&self.config_dir, &room_row);
+        prompt.extend(memory::sections(
+            &self.app,
+            &speakers,
+            &memory::without_names(&text, &speakers),
+        ));
+        room.memory.set_speakers(speakers);
+        room.agent.set_base_prompt(prompt);
         room.agent.refresh_models().await;
         let turn = match self.app.db.lock().start_turn(room_id, "user", &ids) {
             Ok(turn) => turn,
@@ -320,6 +335,17 @@ impl Scheduler {
             let _ = tokio::time::timeout(Duration::from_secs(5), running.task).await;
         }
     }
+}
+
+/// The people of a turn, in the order of their batches.
+fn speakers(batches: &[Pending]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for batch in batches {
+        if !out.contains(&batch.user) {
+            out.push(batch.user.clone());
+        }
+    }
+    out
 }
 
 fn message_ids(batches: &[Pending]) -> Vec<String> {

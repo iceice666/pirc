@@ -95,6 +95,8 @@ enum Answer {
     /// Wait for a permit (or the abort), then these words.
     After(Arc<tokio::sync::Semaphore>, &'static str),
     Fail,
+    /// Call a tool with these arguments.
+    Call(&'static str, Value),
 }
 
 /// A model that answers each call with the next answer (the last one
@@ -168,6 +170,16 @@ impl StreamFn for Scripted {
             };
             let words = match answer {
                 Answer::Fail => return reply(&request, "", StopReason::Error),
+                Answer::Call(name, arguments) => {
+                    let mut message = reply(&request, "", StopReason::ToolUse);
+                    message.content = vec![AssistantContent::ToolCall {
+                        id: format!("call_{}", self.asked.lock().unwrap().len()),
+                        name: name.to_owned(),
+                        arguments: arguments.as_object().cloned().unwrap_or_default(),
+                        thought_signature: None,
+                    }];
+                    return message;
+                }
                 Answer::Words(words) => words,
                 Answer::After(gate, words) => {
                     tokio::select! {
@@ -484,4 +496,147 @@ async fn a_turn_uses_the_gateway_inference() {
         "the brain's identity: {request}"
     );
     assert!(!request.contains("ptc"), "no scripts: {request}");
+}
+
+/// The tool results the model was given in its last call.
+fn tool_results(asked: &Asked) -> String {
+    asked.messages.clone()
+}
+
+#[tokio::test]
+async fn remembering_says_so_and_brings_it_back_later() {
+    let h = harness();
+    let model = Scripted::new(vec![
+        Answer::Call(
+            "remember",
+            json!({ "fact": "Uses TLP for power management" }),
+        ),
+        Answer::Words("Noted."),
+        Answer::Words("You use TLP."),
+    ]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    say(&h.app, "I use TLP for power management", true);
+    until("the turn", || finished(&h.app)).await;
+    let facts = crate::memory_records::person::list(&h.app.db.lock(), ME, 10, None).unwrap();
+    assert_eq!(facts.len(), 1);
+    let fact = &facts[0];
+    assert_eq!(
+        (
+            fact.content.as_str(),
+            fact.origin.as_str(),
+            fact.room_id.as_deref()
+        ),
+        (
+            "Uses TLP for power management",
+            "user",
+            Some(GENERAL_ROOM_ID)
+        )
+    );
+    // The room is told, with what undoes it.
+    let line = host_messages(&h.app)
+        .into_iter()
+        .find(|message| message.kind == "line")
+        .unwrap();
+    assert_eq!(
+        line.body,
+        json!({ "text": "Noted: Uses TLP for power management",
+            "memory": { "kind": "fact", "id": fact.id, "origin": "user", "user": ME } })
+    );
+    assert!(tool_results(&model.asked()[1]).contains(&format!("Remembered [{}]", fact.id)));
+    assert!(model.asked()[0].system_prompt.contains("## Preferences"));
+
+    // The next turn about it recalls it without a search.
+    say(&h.app, "what do I use for power?", true);
+    until("the second turn", || {
+        turns(&h.app).len() == 2 && finished(&h.app)
+    })
+    .await;
+    let prompt = &model.asked()[2].system_prompt;
+    assert!(prompt.contains("## You may remember"), "{prompt}");
+    assert!(
+        prompt.contains(&format!("[{}] (", fact.id)) && prompt.contains("from user) Uses TLP"),
+        "{prompt}"
+    );
+
+    // "Don't keep this" forgets it and the line's text.
+    crate::memory::lines::forget_fact(&h.app, ME, &fact.id, "user:me@example.com").unwrap();
+    let line = h
+        .app
+        .db
+        .lock()
+        .get_message(GENERAL_ROOM_ID, &line.id)
+        .unwrap();
+    assert_eq!(line.body["text"], "Forgotten.");
+    assert_eq!(line.body["memory"]["forgotten"], true);
+}
+
+#[tokio::test]
+async fn preferences_and_forgetting_need_the_persons_words() {
+    let h = harness();
+    let model = Scripted::new(vec![
+        Answer::Call(
+            "save_preference",
+            json!({ "preference": "Prefers short answers", "quote": "I never said this" }),
+        ),
+        Answer::Call(
+            "save_preference",
+            json!({ "preference": "Prefers short answers", "quote": "keep answers short" }),
+        ),
+        Answer::Words("Will do."),
+        Answer::Call("forget", json!({ "id": "PREF", "quote": "forget that" })),
+        Answer::Words("Forgotten."),
+    ]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    say(&h.app, "please keep answers short", true);
+    until("the turn", || finished(&h.app)).await;
+    let asked = model.asked();
+    assert!(
+        tool_results(&asked[1]).contains("That quote is not in what anyone here said"),
+        "a made-up quote is refused"
+    );
+    let saved = {
+        let conn = h.app.db.lock();
+        crate::memory::store(&h.app, &conn)
+            .list(ME, Some("active"))
+            .unwrap()
+    };
+    assert_eq!(saved.len(), 1);
+    assert_eq!(saved[0].content, "Prefers short answers");
+    assert_eq!(saved[0].sources["quote"], "keep answers short");
+    let line = host_messages(&h.app)
+        .into_iter()
+        .find(|message| message.kind == "line")
+        .unwrap();
+    assert_eq!(line.body["memory"]["kind"], "preference");
+
+    // In every later prompt; forgetting takes the person's word too.
+    {
+        let mut answers = model.answers.lock().unwrap();
+        answers[0] = Answer::Call(
+            "forget",
+            json!({ "id": saved[0].id, "quote": "forget that" }),
+        );
+    }
+    say(&h.app, "forget that, please", true);
+    until("the second turn", || {
+        turns(&h.app).len() == 2 && finished(&h.app)
+    })
+    .await;
+    let asked = model.asked();
+    assert!(
+        asked[3]
+            .system_prompt
+            .contains(&format!("[{}] Prefers short answers", saved[0].id))
+    );
+    assert!(tool_results(&asked[4]).contains(&format!("Forgot [{}]", saved[0].id)));
+    let forgotten = {
+        let conn = h.app.db.lock();
+        crate::memory::store(&h.app, &conn)
+            .get(ME, &saved[0].id)
+            .unwrap()
+    };
+    assert_eq!(
+        (forgotten.status.as_str(), forgotten.content.as_str()),
+        ("forgotten", "")
+    );
 }

@@ -251,6 +251,14 @@ fn notes_and_delegations_are_found_by_any_word_in_any_script() {
             rusqlite::params![ME, crate::util::now_ms()],
         )
         .unwrap();
+    index::put_delegation(
+        &app.db.lock(),
+        "d12345678",
+        "Fix nginx",
+        "Reload it.",
+        Some("nginx reloaded"),
+    )
+    .unwrap();
 
     let hits = search(&app, ME, "部署 NGINX", None, None).unwrap();
     // Most words first: the two-character Chinese word counts like any other.
@@ -432,6 +440,14 @@ fn clones_of_a_repository_find_each_others_notes() {
             rusqlite::params![ME, crate::util::now_ms()],
         )
         .unwrap();
+    index::put_delegation(
+        &app.db.lock(),
+        "d87654321",
+        "Fix nginx",
+        "Reload it.",
+        Some("nginx reloaded"),
+    )
+    .unwrap();
 
     let hits = search(&app, ME, "nginx", Some("n1:repo"), Some(20)).unwrap();
     let mut found = ids(&hits);

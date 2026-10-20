@@ -1,13 +1,11 @@
-//! The assistant's memory in the web app (Settings → Memory;
-//! `apps/gateway/src/daemon/memory-routes.ts`): the user reviews USER
-//! entries and MEMORY notes, restores earlier versions and forgets entries. Device tokens
-//! may use these routes too. Every change answers with the whole view, and
-//! no reply is cached.
-
-use std::collections::HashSet;
+//! The brain's memory in the web app (plans/rewrite/03-memory.md): the
+//! person reviews their preferences (removes, restores earlier versions,
+//! forgets), browses and searches the facts, and forgets a fact ("don't
+//! keep this" on a room's line). Device tokens may use these routes too.
+//! Preference changes answer with the whole view; no reply is cached.
 
 use axum::Router;
-use axum::extract::{Extension, Path, Request, State};
+use axum::extract::{Extension, Path, Query, Request, State};
 use axum::http::{HeaderValue, header};
 use axum::middleware::{self, Next};
 use axum::response::Response;
@@ -18,17 +16,26 @@ use super::schema::{int, len16, optional, strict};
 use super::store::Store;
 use crate::app::{App, AppState, ReqBody};
 use crate::auth::Identity;
-use crate::db::Store as _;
+use crate::db::rooms::RoomStore as _;
 use crate::error::{ApiError, ApiResult, json_response};
 use crate::http::{Body, ok};
+use crate::memory_records::{self, Scopes, person};
 use crate::routes::Handled;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/memory", get(view_route))
-        .route("/api/memory/entries/{id}/history", get(history))
-        .route("/api/memory/entries/{id}/forget", post(forget))
-        .route("/api/memory/entries/{id}/restore", post(restore))
+        .route("/api/memory/preferences", get(view_route))
+        .route("/api/memory/preferences/{id}/history", get(history))
+        .route("/api/memory/preferences/{id}/remove", post(remove))
+        .route("/api/memory/preferences/{id}/forget", post(forget))
+        .route("/api/memory/preferences/{id}/restore", post(restore))
+        .route("/api/memory/records", get(records))
+        .route(
+            "/api/memory/records/{id}",
+            get(record).delete(forget_record),
+        )
+        .route("/api/memory/records/{id}/history", get(record_history))
         .route_layer(middleware::from_fn(scope))
 }
 
@@ -37,7 +44,7 @@ pub fn routes() -> Router<AppState> {
 /// says `no-store`.
 async fn scope(request: Request, next: Next) -> Response {
     let path = request.uri().path().to_owned();
-    // `/api/memory/entries/<id>/...`
+    // `/api/memory/preferences/<id>/...`, `/api/memory/records/<id>`
     if path.split('/').nth(4).is_some_and(|id| id.len() > 100) {
         return json_response(
             414,
@@ -81,41 +88,35 @@ fn revision_body(body: &Body, field: &str) -> ApiResult<Option<i64>> {
         .map_err(|()| ApiError::invalid_input())
 }
 
-/// Everything the page shows, with the names of the chats it refers to.
+/// The preferences page: active and removed preferences, the budget, and
+/// the names of the rooms they were said in.
 fn view(app: &App, user: &str) -> ApiResult<Value> {
     let conn = app.db.lock();
     let store = super::store(app, &conn);
-    let entries = store.entries(user, None, None)?;
-    let mut seen = HashSet::new();
-    let mut sessions = Map::new();
-    let ids = entries
+    let preferences = store.list(user, None)?;
+    let mut rooms = Map::new();
+    for room_id in preferences
         .iter()
-        .filter_map(|entry| entry.source_session())
-        .filter(|id| !id.is_empty());
-    for session_id in ids {
-        if !seen.insert(session_id.to_owned()) {
-            continue;
-        }
-        // A chat that is gone keeps its id on the page.
-        if let Ok(session) = conn.get_session(session_id)
-            && session.owner_user.as_deref() == Some(user)
+        .filter_map(|preference| preference.created_in_room.as_deref())
+    {
+        if !rooms.contains_key(room_id)
+            && let Ok(room) = conn.get_room(room_id)
         {
-            sessions.insert(session_id.to_owned(), json!(session.name));
+            rooms.insert(room_id.to_owned(), json!(room.name));
         }
     }
-    let pick = |wanted: &dyn Fn(&super::store::Entry) -> bool| -> Vec<Value> {
-        entries
+    let pick = |status: &str| -> Vec<Value> {
+        preferences
             .iter()
-            .filter(|entry| wanted(entry))
-            .map(|entry| serde_json::to_value(entry).unwrap_or_default())
+            .filter(|preference| preference.status == status)
+            .map(|preference| serde_json::to_value(preference).unwrap_or_default())
             .collect()
     };
     Ok(json!({
         "usage": store.usage(user)?,
-        "user": pick(&|entry| entry.kind == "user" && entry.status == "active"),
-        "notes": pick(&|entry| entry.kind == "note" && entry.status == "active"),
-        "removed": pick(&|entry| entry.status == "removed"),
-        "sessions": sessions,
+        "preferences": pick("active"),
+        "removed": pick("removed"),
+        "rooms": rooms,
     }))
 }
 
@@ -149,6 +150,19 @@ async fn history(
     Ok(ok(json!({ "versions": versions })))
 }
 
+async fn remove(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path(id): Path<String>,
+    ReqBody(_): ReqBody,
+) -> Handled {
+    let id = id_param(&id)?;
+    let actor = format!("user:{}", identity.user);
+    change(&app, &identity.user, |store| {
+        store.remove(&identity.user, id, &actor).map(drop)
+    })
+}
+
 async fn forget(
     State(app): State<AppState>,
     Extension(identity): Extension<Identity>,
@@ -156,9 +170,8 @@ async fn forget(
     ReqBody(_): ReqBody,
 ) -> Handled {
     let id = id_param(&id)?;
-    change(&app, &identity.user, |store| {
-        store.forget(&identity.user, id)
-    })
+    super::lines::forget_preference(&app, &identity.user, id)?;
+    Ok(ok(view(&app, &identity.user)?))
 }
 
 async fn restore(
@@ -172,4 +185,78 @@ async fn restore(
     change(&app, &identity.user, |store| {
         store.restore(&identity.user, id, revision).map(drop)
     })
+}
+
+/// `?scope=person|repo|all` (default `person`), `q` to search (else the
+/// newest first), `limit` (1 to 100, default 50).
+#[derive(serde::Deserialize)]
+struct RecordsQuery {
+    scope: Option<String>,
+    q: Option<String>,
+    limit: Option<String>,
+}
+
+async fn records(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Query(query): Query<RecordsQuery>,
+) -> Handled {
+    let scopes = match query.scope.as_deref() {
+        None => Scopes::Person,
+        Some(name) => Scopes::parse(name).ok_or_else(ApiError::invalid_input)?,
+    };
+    let limit = match query.limit.as_deref() {
+        None => 50,
+        Some(limit) => limit
+            .parse::<usize>()
+            .ok()
+            .filter(|limit| (1..=100).contains(limit))
+            .ok_or_else(ApiError::invalid_input)?,
+    };
+    let users = [identity.user.clone()];
+    let hits = match query.q.as_deref().map(str::trim) {
+        Some(q) if !q.is_empty() => {
+            if len16(q) > 500 {
+                return Err(ApiError::invalid_input().into());
+            }
+            memory_records::search_facts(&app, &users, q, limit.min(20), scopes)?
+        }
+        _ => memory_records::recent(&app, &identity.user, scopes, limit)?,
+    };
+    Ok(ok(json!({ "records": hits })))
+}
+
+/// A household fact and its logged changes.
+async fn record(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path(id): Path<String>,
+) -> Handled {
+    let id = id_param(&id)?;
+    let conn = app.db.lock();
+    let fact = person::get(&conn, &identity.user, id)?;
+    Ok(ok(json!({ "record": fact })))
+}
+
+async fn record_history(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path(id): Path<String>,
+) -> Handled {
+    let id = id_param(&id)?;
+    let versions = person::history(&app.db.lock(), &identity.user, id)?;
+    Ok(ok(json!({ "versions": versions })))
+}
+
+/// Forget a household fact ("don't keep this"). A repository's notes are
+/// forgotten in their node's workspace ledger, which the gateway mirrors.
+async fn forget_record(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path(id): Path<String>,
+) -> Handled {
+    let id = id_param(&id)?;
+    let actor = format!("user:{}", identity.user);
+    let fact = super::lines::forget_fact(&app, &identity.user, id, &actor)?;
+    Ok(ok(json!({ "record": fact })))
 }

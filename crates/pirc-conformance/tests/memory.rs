@@ -1,10 +1,11 @@
-//! The gateway's memory (`apps/gateway/src/daemon/memory*.ts`) while no
-//! session is the assistant (plans/rewrite/02-brain-host.md): its agent
-//! operations (`assistant.context`, `memory.note`, `memory.search`,
-//! `recall.remote` in `agent-ops.ts`) are refused once their arguments
-//! parse, a directory node still mirrors its workspace-memory ledger, and
-//! the memory page's routes answer on an empty memory. The test plays the
-//! directory node.
+//! The gateway's memory as node sessions and the memory pages see it
+//! (plans/rewrite/03-memory.md): the household's memory is the brain's,
+//! so a session's memory operations (`memory.search`, `recall.remote`)
+//! are refused once their arguments parse and the chat assistant's
+//! (`assistant.context`, `memory.note`) are gone; a directory node still
+//! mirrors its workspace-memory ledger, and the memory pages' routes answer
+//! on an empty memory. The test plays the directory node. The brain's own
+//! use of memory is `brain_memory.rs`.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -238,29 +239,17 @@ async fn memory() {
 
     // ---- the operations: refused, after their arguments ----
     op!(
-        "the assistant's context",
+        "the assistant's context is gone",
         "dev-1",
         "assistant.context",
         json!({})
     );
     op!(
-        "context takes no arguments",
-        "dev-1",
-        "assistant.context",
-        json!({ "x": 1 })
-    );
-    op!(
-        "a note",
+        "so are its notes",
         "dev-1",
         "memory.note",
         json!({ "action": "add", "content": "The pirc repo lives on m5pro",
             "origins": ["assistant"] })
-    );
-    op!(
-        "a note without origins",
-        "dev-1",
-        "memory.note",
-        json!({ "action": "add", "content": "x", "origins": [] })
     );
     op!(
         "a search",
@@ -284,8 +273,8 @@ async fn memory() {
     op!(
         "an unknown session",
         "remote-z",
-        "memory.note",
-        json!({ "action": "add", "content": "x", "origins": ["assistant"] })
+        "memory.search",
+        json!({ "query": "staging" })
     );
 
     // ---- workspace memory mirrors ----
@@ -318,43 +307,69 @@ async fn memory() {
         .await;
     t.note("a reset that does not start at 0", ack);
 
-    // ---- the memory page ----
-    call!("the memory page", "GET", "/api/memory", None);
+    // ---- the memory pages ----
+    call!("the preferences page", "GET", "/api/memory", None);
+    call!("the same", "GET", "/api/memory/preferences", None);
     call!(
-        "history of an unknown entry",
+        "history of an unknown preference",
         "GET",
-        "/api/memory/entries/n00000000/history",
+        "/api/memory/preferences/p00000000/history",
         None
     );
     call!(
         "an id that is too long",
         "GET",
-        format!("/api/memory/entries/{}/history", "x".repeat(41)),
+        format!("/api/memory/preferences/{}/history", "x".repeat(41)),
         None
     );
     call!(
         "an id beyond the router's limit",
         "POST",
-        format!("/api/memory/entries/{}/forget", "x".repeat(101)),
+        format!("/api/memory/preferences/{}/forget", "x".repeat(101)),
         None
     );
     call!(
-        "forget an unknown entry",
+        "forget an unknown preference",
         "POST",
-        "/api/memory/entries/n00000000/forget",
+        "/api/memory/preferences/p00000000/forget",
         None
     );
     call!(
-        "restore an unknown entry",
+        "remove an unknown preference",
         "POST",
-        "/api/memory/entries/n00000000/restore",
+        "/api/memory/preferences/p00000000/remove",
+        None
+    );
+    call!(
+        "restore an unknown preference",
+        "POST",
+        "/api/memory/preferences/p00000000/restore",
         Some(json!({ "revision": 1 }))
     );
     call!(
         "restore with a body that is not an object",
         "POST",
-        "/api/memory/entries/n00000000/restore",
+        "/api/memory/preferences/p00000000/restore",
         Some(json!([1]))
+    );
+    call!("the household's facts", "GET", "/api/memory/records", None);
+    call!(
+        "the repositories' notes, newest first",
+        "GET",
+        "/api/memory/records?scope=repo",
+        None
+    );
+    call!(
+        "searched",
+        "GET",
+        "/api/memory/records?scope=all&q=staging%20VPN",
+        None
+    );
+    call!(
+        "a repository's note is not forgotten here",
+        "DELETE",
+        format!("/api/memory/records/{NOTE}"),
+        None
     );
 
     // ---- registering again ----

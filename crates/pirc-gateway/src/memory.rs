@@ -1,11 +1,13 @@
-//! The assistant's memory (`apps/gateway/src/daemon/memory.ts`,
-//! `memory-routes.ts`) and its agent operations (`assistant.context`,
-//! `memory.note`, `memory.search`, `recall.remote` in `agent-ops.ts`).
+//! The brain's memory (plans/rewrite/03-memory.md): preferences
+//! ([`store`], always in its prompt), and the routes of the web app's
+//! memory pages. Facts, the household's and the repositories', live in
+//! [`crate::memory_records`]; open loops come with plan 04.
 
+pub mod lines;
 mod ops;
 mod routes;
 pub(crate) mod schema;
-mod store;
+pub(crate) mod store;
 pub(crate) mod text;
 
 use axum::Router;
@@ -16,18 +18,12 @@ use crate::agent_ops::OpContext;
 use crate::app::{App, AppState};
 use crate::error::ApiResult;
 
-pub use ops::Op;
-pub use store::{Budgets, Store};
+pub use ops::{Op, recall};
+pub use store::Store;
 
-/// The memory store over `conn`, with the configured budgets.
+/// The preferences over `conn`, with the configured budget.
 pub fn store<'a>(app: &App, conn: &'a Connection) -> Store<'a> {
-    Store::new(
-        conn,
-        Budgets {
-            user: app.config.memory_budget_user,
-            note: app.config.memory_budget_note,
-        },
-    )
+    Store::new(conn, app.config.memory_budget_user)
 }
 
 pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {

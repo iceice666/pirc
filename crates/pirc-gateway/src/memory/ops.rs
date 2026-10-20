@@ -1,20 +1,17 @@
-//! The memory and assistant operations of `apps/gateway/src/daemon/agent-ops.ts`:
-//! `assistant.context`, `memory.note`, `memory.search` and `recall.remote`.
+//! The memory operations of node sessions: `memory.search` and
+//! `recall.remote` (repositories' notes only).
 
 use pirc_protocol::{HttpMethod, NodeHttpRequest};
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
-use super::schema::{array, hex12, int, optional, required, strict, string};
-use super::store::{Action, Change, NoteInput};
+use super::schema::{hex12, int, optional, required, strict, string};
 use crate::agent_ops::OpContext;
-use crate::app::AppState;
+use crate::app::{App, AppState};
 use crate::error::{ApiError, ApiResult};
 use crate::memory_records;
 
-/// A parsed memory or assistant operation.
+/// A parsed memory operation of a node session.
 pub enum Op {
-    Context,
-    Note(NoteArgs),
     Search {
         query: String,
         workspace: Option<String>,
@@ -24,85 +21,6 @@ pub enum Op {
     Recall {
         id: String,
     },
-}
-
-pub struct NoteArgs {
-    input: NoteInput,
-    origins: Vec<String>,
-    entry_ids: Vec<String>,
-    quote: Option<String>,
-}
-
-type Fields<'a> = &'a Map<String, Value>;
-
-fn action(object: Fields<'_>) -> Result<Action, ()> {
-    required(object, "action", |value| {
-        value.as_str().and_then(Action::parse)
-    })
-}
-
-/// `entryId.optional()`.
-fn entry_id(object: Fields<'_>) -> Result<Option<String>, ()> {
-    optional(object, "id", |value| {
-        string(value, 1, 40).map(str::to_owned)
-    })
-}
-
-fn text(object: Fields<'_>, key: &str, max: usize) -> Result<Option<String>, ()> {
-    optional(object, key, |value| {
-        string(value, 0, max).map(str::to_owned)
-    })
-}
-
-/// `z.number().int().nonnegative().nullable().optional()`; `null` is no revision.
-fn base_revision(object: Fields<'_>) -> Result<Option<i64>, ()> {
-    match object.get("baseRevision") {
-        None | Some(Value::Null) => Ok(None),
-        Some(value) => int(value).filter(|n| *n >= 0).map(Some).ok_or(()),
-    }
-}
-
-/// `z.array(z.string().min(1).max(200)).max(20)`, at least `min`.
-fn entry_ids(value: &Value, min: usize) -> Option<Vec<String>> {
-    array(value, min, 20, |item| {
-        string(item, 1, 200).map(str::to_owned)
-    })
-}
-
-fn parse_note(args: &Value) -> Result<NoteArgs, ()> {
-    let object = strict(
-        args,
-        &[
-            "action",
-            "id",
-            "content",
-            "baseRevision",
-            "origins",
-            "entryIds",
-            "quote",
-        ],
-    )
-    .ok_or(())?;
-    let action = action(object)?;
-    let id = entry_id(object)?;
-    let content = text(object, "content", 4000)?;
-    let base_revision = base_revision(object)?;
-    let origins = required(object, "origins", |value| {
-        array(value, 1, 20, |item| string(item, 1, 100).map(str::to_owned))
-    })?;
-    let entry_ids = optional(object, "entryIds", |value| entry_ids(value, 0))?.unwrap_or_default();
-    let quote = text(object, "quote", 4000)?;
-    Ok(NoteArgs {
-        input: NoteInput {
-            action,
-            id,
-            content,
-            base_revision,
-        },
-        origins,
-        entry_ids,
-        quote,
-    })
 }
 
 fn parse_search(args: &Value) -> Result<Op, ()> {
@@ -123,8 +41,6 @@ fn parse_search(args: &Value) -> Result<Op, ()> {
 
 pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {
     Some(match op {
-        "assistant.context" => strict(args, &[]).map(|_| Op::Context).ok_or(()),
-        "memory.note" => parse_note(args).map(Op::Note),
         "memory.search" => parse_search(args),
         "recall.remote" => strict(args, &["id"])
             .and_then(|object| object.get("id"))
@@ -135,74 +51,30 @@ pub fn parse_op(op: &str, args: &Value) -> Option<Result<Op, ()>> {
     })
 }
 
-/// Memory belongs to the assistant, which no session is until the gateway
-/// hosts it (plans/rewrite/02-brain-host.md): every operation is refused.
-fn require_assistant(_context: &OpContext) -> ApiResult<()> {
+/// Node sessions (workers) have no memory of the household: the brain's
+/// memory stays in the gateway (direction §2.7). Searching the
+/// repositories' notes stays theirs to have (a decision of 2026-10-20), but
+/// no worker has the tool until plans/rewrite/06-workers.md hands it out;
+/// until then every operation is refused. Person-scope facts are never
+/// served here.
+fn require_worker_search(_context: &OpContext) -> ApiResult<()> {
     Err(ApiError::new(
         403,
         "forbidden",
-        "No session has the assistant memory",
+        "No session has memory search yet",
     ))
 }
 
 pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Value> {
     let user = context.user.as_str();
-    let session_id = context.session.id.as_str();
     match op {
-        Op::Context => {
-            require_assistant(context)?;
-            let memory = {
-                let conn = app.db.lock();
-                super::store(app, &conn).context(user)?
-            };
-            let mut result = Map::new();
-            result.insert("enabled".into(), json!(true));
-            result.extend(memory);
-            result.insert(
-                "workspaces".into(),
-                crate::delegations::workspaces(app, Some(&context.workspace.id))?,
-            );
-            Ok(Value::Object(result))
-        }
-        Op::Note(args) => {
-            require_assistant(context)?;
-            let mut sources = Map::new();
-            sources.insert("sessionId".into(), json!(session_id));
-            if !args.entry_ids.is_empty() {
-                sources.insert("entryIds".into(), json!(args.entry_ids));
-            }
-            if let Some(quote) = args.quote.filter(|quote| !quote.is_empty()) {
-                sources.insert("quote".into(), json!(quote));
-            }
-            let change = Change {
-                actor: format!("session:{session_id}"),
-                origins: json!(args.origins),
-                sources: Value::Object(sources),
-            };
-            let (entry, unchanged, usage) = {
-                let conn = app.db.lock();
-                let store = super::store(app, &conn);
-                let (entry, unchanged) = store.write_note(user, &args.input, &change)?;
-                (entry, unchanged, store.usage(user)?)
-            };
-            if !unchanged {
-                app.memory_changed(user);
-            }
-            Ok(json!({
-                "id": entry.id,
-                "revision": entry.revision,
-                "status": entry.status,
-                "unchanged": unchanged,
-                "usage": usage["note"],
-            }))
-        }
         Op::Search {
             query,
             workspace,
             limit,
             everywhere,
         } => {
-            require_assistant(context)?;
+            require_worker_search(context)?;
             // In a project linked to workspaces, those (and their clones) first.
             let (hits, searched) = memory_records::search_in(
                 app,
@@ -220,7 +92,7 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             Ok(result)
         }
         Op::Recall { id } => {
-            require_assistant(context)?;
+            require_worker_search(context)?;
             recall(app, user, &id).await
         }
     }
@@ -228,7 +100,7 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
 
 /// Recall a workspace-memory note found by search: its node reads the
 /// session that wrote it. With the node offline, the gateway's copy.
-async fn recall(app: &AppState, user: &str, id: &str) -> ApiResult<Value> {
+pub async fn recall(app: &App, user: &str, id: &str) -> ApiResult<Value> {
     let found = memory_records::find(app, user, id)?;
     if found.is_empty() {
         return Err(ApiError::not_found(format!(

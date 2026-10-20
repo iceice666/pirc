@@ -1,0 +1,148 @@
+# Synthetic workspace-memory notes for the search evaluation
+# (plans/memory-search.md phase 0). No real user notes.
+# Format: <name> | <content>. Lines starting with # and blank lines are skipped.
+
+# --- database and migrations (en) ---
+db01 | The gateway database migrations run inside one BEGIN IMMEDIATE transaction so two processes cannot both migrate.
+db02 | Schema changes go in a numbered migration file; schema.sql is always the newest whole schema.
+db03 | SQLite busy errors during the WAL pragma are retried for five seconds before the gateway gives up.
+db04 | secure_delete is on so forgotten memory is zeroed in the database file, not left in free pages.
+db05 | Backups: copy pirc.sqlite with the sqlite3 .backup command, never cp while the gateway runs.
+db06 | The old gateway.sqlite stays in the state directory untouched; the new gateway never reads it.
+db07 | Foreign keys are enabled per connection with PRAGMA foreign_keys=ON; rusqlite does not do it by default.
+db08 | Never hold the Db mutex across an await point; take the lock, copy the rows, drop it.
+
+# --- database and migrations (zh) ---
+zdb01 | 資料庫遷移要在同一個交易裡跑完，失敗就整個回滾，不要留半套 schema。
+zdb02 | 遷移問題：舊的 user_version 從 1 編到 1005，新資料庫用 application_id 分辨是不是自己的。
+zdb03 | 備份資料庫前先做 WAL checkpoint，不然複製出來的檔案可能缺最近的寫入。
+zdb04 | 資料表改名用 ALTER TABLE RENAME，SQLite 會一起改索引，但觸發器裡的參照要自己檢查。
+
+# --- sandbox (en) ---
+sb01 | The Linux sandbox uses bubblewrap; resolver sockets like nscd and systemd-resolved are hidden so DNS goes through the proxy.
+sb02 | /run/WSL is hidden entirely because the interop sockets can start Windows programs outside the sandbox.
+sb03 | The nix daemon socket stays reachable so nix builds work inside sessions; the daemon fetches past the proxy.
+sb04 | macOS sandbox profiles are generated as SBPL strings; test them with sandbox-exec -f before shipping.
+sb05 | Hard links to protected files made by the agent fail with EXDEV because the protected path is a separate mount.
+sb06 | The network proxy allowlist is per session; blocked hosts answer CONNECT with 403.
+
+# --- sandbox (zh) ---
+zsb01 | 沙箱裡 .git/config 和 hooks 是唯讀的，避免 core.fsmonitor 被拿來在主機上執行程式。
+zsb02 | 沙箱擋掉的網域要用 sandbox_allow_domains 請使用者核准，不能繞過。
+zsb03 | WSL 的 interop socket 整個藏起來，不然可以從沙箱裡叫 Windows 程式。
+
+# --- web frontend (en) ---
+web01 | The web app is Svelte 5 with runes; stores live in *.svelte.ts files and components use $state and $derived.
+web02 | Run vitest with bun run test in apps/web; svelte-check must report zero errors before a commit.
+web03 | Room messages stream: the server sends room_message then room_message_updated while streaming is true.
+web04 | The settings page loads /api/memory and shows USER entries, notes and removed entries.
+web05 | Use the shared golden case in packages/protocol for the room stream so web and Android agree.
+web06 | The Rooms view keeps the scroll pinned to the bottom unless the user scrolled up more than 80 px.
+
+# --- web frontend (zh) ---
+zweb01 | 前端的房間列表依最後一則訊息排序，封存的房間不顯示。
+zweb02 | 主持人正在想的時候顯示 presence，turn 結束才變回 idle。
+zweb03 | 網頁版的設定頁面要能看到記憶的使用量和每一條偏好。
+
+# --- android (en) ---
+and01 | The Android app is Flutter; flutter analyze needs a writable HOME because it creates ~/.dartServer.
+and02 | Android push notifications use Web Push through the gateway's VAPID keys, not Firebase.
+and03 | The Flutter renderer for room messages is shared with the old chat view and stays as it is.
+
+# --- brain (en) ---
+br01 | The brain runs one turn at a time on its own thread with a tokio LocalSet; user turns preempt wake turns.
+br02 | Messages that arrive while a turn runs are merged into one steer after the debounce.
+br03 | Debounce defaults to 3 seconds and is configured in brain.json under PIRC_CONFIG_DIR.
+br04 | A brain turn times out after 10 minutes; the room gets a line saying it stopped.
+br05 | SOUL.md and CHAT.md are read again before every turn, so edits apply on the next message.
+br06 | The brain has no filesystem or shell tools; it only has gateway tools like web_search.
+
+# --- brain (zh) ---
+zbr01 | 頭腦一次只跑一個 turn，使用者的訊息會搶在 wake 前面。
+zbr02 | 打字的時候不開 turn，最後一次按鍵後三秒才把累積的訊息交給頭腦。
+zbr03 | 頭腦的人格設定在 SOUL.md，聊天規則在 CHAT.md，改了下一個 turn 就生效。
+
+# --- build and tooling (en) ---
+bt01 | cargo clippy --workspace --all-targets must be clean; CI also runs cargo fmt --check.
+bt02 | The pirc-gateway release binary must stay under 16 MiB (crates/size-budget.json); keep oxc out of it.
+bt03 | Conformance tests need PIRC_CONFORMANCE_BIN_DIR; run bun run test:conformance after a release build.
+bt04 | Record new conformance snapshots with bun run conformance:record and review the .snap diff.
+bt05 | Release builds use --locked so Cargo.lock is never rewritten in CI.
+bt06 | The nix flake builds pirc with crane; update the cargoHash when dependencies change.
+bt07 | INSTA_UPDATE=no makes insta fail on snapshot mismatches instead of writing .snap.new files.
+
+# --- build and tooling (zh) ---
+zbt01 | 發版前要跑完整的 conformance，瀏覽器相關的測試在沙箱裡可能因為 Chromium 起不來而失敗。
+zbt02 | gateway 執行檔大小上限 16 MiB，加新依賴前先量一下 release 的大小。
+zbt03 | 編譯快取放在 target 目錄，沙箱裡可以寫。
+
+# --- identifiers and paths ---
+id01 | memory_records.rs search_in falls back to every workspace when the linked workspaces have no hits (Searched::Everywhere).
+id02 | NODE_MAX_ROWS is 200000 and NODE_MAX_BYTES is 64 MiB per node in the memory mirror.
+id03 | crates/pirc-agent/src/features/memory/agents.rs holds the observer, reflector and dropper tools.
+id04 | resolve_directory_workspace accepts a workspace id, a display name or a path.
+id05 | The RoomInputStore take_pending call selects and deletes pending input atomically.
+id06 | HostProfile::worker() fills ptc::model_tools; only pirc-node run.rs calls it.
+id07 | src/db/rooms.rs post_message takes a Speaker::Face(HOST_FACE_ID) for the host's replies.
+id08 | apps/web/src/lib/rooms/rooms.svelte.ts owns the room socket and reconnects with backoff.
+id09 | The env var PIRC_BRAIN=false disables the brain; conformance rooms.rs sets it so FakeLlm replies are not consumed.
+id10 | git commit 4b842ee added HostProfile and the injected model catalog.
+id11 | Use content_hash (NFKC, lowercase, squashed spaces) to compare memory text, never raw equality.
+id12 | The function find_quote looks for the quoted words in the user's own messages only.
+
+# --- mixed (en + zh) ---
+mx01 | Gateway 的 web_search 用 EXA_API_KEY，key 只在 gateway，不會到 node。
+mx02 | OM 的 dropper 只把 observation 拿出 active pool，要 promote 到事實層才不會真的消失。
+mx03 | Debounce 秒數寫在 brain.json，預設 3 秒，send_now 可以跳過。
+mx04 | Conformance 的 snapshot 改了要用 conformance:record 重錄，再看 diff。
+mx05 | Flutter 版本 3.44.4，pub get 在 apps/android 可以跑，analyze 需要可寫的 HOME。
+mx06 | Rust 的 rusqlite 已經編了 FTS5，不用加新依賴。
+mx07 | NixOS module 裡 soulPrompt 和 chatPrompt 會 symlink 到 gateway 的設定目錄。
+mx08 | memory_search 的 CJK 查詢沒有空白，整句變成一個 term，只能找到完全相同的字串。
+
+# --- deploy and config (en) ---
+dp01 | The NixOS module runs the gateway as a systemd service; state lives in /var/lib/pirc.
+dp02 | PIRC_ALLOWED_USERS is a comma-separated list; the identity header comes from the reverse proxy.
+dp03 | Tailscale serve fronts the gateway; the node connects over the tailnet with a node token.
+dp04 | Device tokens expire after 90 days; the web shows when each was last used.
+dp05 | Push subscriptions with five failures in a row are removed.
+
+# --- deploy (zh) ---
+zdp01 | 部署在 NixOS 上，gateway 是 systemd 服務，狀態目錄在 /var/lib/pirc。
+zdp02 | 反向代理要帶使用者身分的 header，沒有 header 的請求一律拒絕。
+zdp03 | 裝置 token 九十天到期，到期前網頁會提醒。
+
+# --- unrelated distractors ---
+ds01 | The coffee machine in the office descales every two weeks.
+ds02 | Lunch orders go in before eleven on Fridays.
+ds03 | The printer on the second floor needs A4 paper, not letter.
+zds01 | 週五中午記得訂便當，十一點前要送出。
+zds02 | 辦公室咖啡機兩週除垢一次。
+ds04 | The quarterly report template uses the blue theme.
+ds05 | Meeting rooms are booked through the shared calendar.
+
+# --- paraphrase targets (meaning, different words) ---
+pp01 | Do not keep the lock on the connection while waiting for the network.
+pp02 | When a notification endpoint keeps failing it gets dropped automatically.
+pp03 | The assistant forgets for real: text, history and search copies are erased and the same words are refused later.
+pp04 | Program size has a ceiling; check how big the optimized executable is before adding a crate.
+pp05 | Slow typists split one thought into several short messages, so the host waits a moment before answering.
+pp06 | Credential stores in the home directory are unreadable to agents.
+pp07 | Notes that were replaced by newer ones still show up, ranked after the current ones.
+
+# --- person (household facts, plan 03) ---
+ps01 | The user manages laptop power with TLP and does not want power-profiles-daemon.
+ps02 | 使用者用 TLP 管電源，不想裝 power-profiles-daemon。
+ps03 | The user's dentist appointment is every six months at the clinic near the station.
+ps04 | 使用者每週三晚上六點有社團會議。
+ps05 | The user prefers replies in Traditional Chinese.
+ps06 | 使用者的機器是 ThinkPad X1 Carbon，跑 NixOS。
+ps07 | The user is learning Japanese and practices kanji in the evening.
+ps08 | 使用者對花生過敏，訂餐時要避開。
+ps09 | The user's Moodle course HW3 is due on October 24.
+ps10 | 使用者喜歡簡短的回答，不要長篇大論。
+ps11 | The user's partner's birthday is on March 3.
+ps12 | 使用者的 dotfiles 放在 GitHub 上的 dotfiles repo，用 home-manager 管。
+ps13 | The user runs a Minecraft server for friends on the home server.
+ps14 | 使用者早上通常九點後才看訊息。
+ps15 | The user switched from Neovim to Helix last month.

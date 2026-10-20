@@ -135,7 +135,14 @@ expression: t.into_value()
       "asked": {
         "lastUser": "test@example.com: SlimeOS\ntest@example.com: PR#123\ntest@example.com: 怎樣了？",
         "systemStart": "You are Mo, the house's helper.",
-        "tools": []
+        "tools": [
+          "recall",
+          "remember",
+          "memory_search",
+          "recall_note",
+          "save_preference",
+          "forget"
+        ]
       },
       "calls": 1
     },
@@ -215,7 +222,14 @@ expression: t.into_value()
       "asked": {
         "lastUser": "test@example.com: second",
         "systemStart": "You are Mo, the house's helper.",
-        "tools": []
+        "tools": [
+          "recall",
+          "remember",
+          "memory_search",
+          "recall_note",
+          "save_preference",
+          "forget"
+        ]
       },
       "calls": 3
     },
@@ -343,10 +357,21 @@ expression: t.into_value()
         [
           "room",
           "built-in"
+        ],
+        [
+          "memory:preferences",
+          "memory"
         ]
       ],
       "status": 200,
-      "tools": []
+      "tools": [
+        "recall",
+        "remember",
+        "memory_search",
+        "recall_note",
+        "save_preference",
+        "forget"
+      ]
     },
     "step": "the latest call's context"
   },

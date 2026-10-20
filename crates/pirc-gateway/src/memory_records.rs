@@ -22,7 +22,7 @@ use crate::db::{Store, atomic};
 use crate::dispatch::resolve_directory_workspace;
 use crate::error::{ApiError, ApiResult};
 use crate::memory::schema::{array, hex12, optional, required, string};
-use crate::memory::text::{clip, fold, local_stamp, parse_date, words};
+use crate::memory::text::{clip, fold, local_stamp, match_query, parse_date, query_phrases, words};
 use crate::util::{now_ms, safe_json};
 
 const HIT_CHARS: usize = 600;
@@ -138,6 +138,8 @@ fn ingest_within(
 ) -> ApiResult<u64> {
     let conn = app.db.lock();
     let refused = std::cell::Cell::new(0);
+    // Something left the index: merge its segments before committing.
+    let erased = std::cell::Cell::new(false);
     let stored = atomic(&conn, |conn| {
         let current: u64 = conn
             .query_row(
@@ -155,6 +157,8 @@ fn ingest_within(
                 "DELETE FROM memory_records WHERE node_id=? AND ledger_key=?",
                 [node_id, ledger_key],
             )?;
+            index::delete_ledger(conn, node_id, ledger_key)?;
+            erased.set(true);
         } else if offset != current {
             return Ok(current);
         }
@@ -164,8 +168,11 @@ fn ingest_within(
         let mut quota = Quota::of(conn, node_id, max_rows, max_bytes)?;
         for line in lines {
             if let Some(line) = Line::parse(line) {
-                apply(conn, node_id, ledger_key, line, &mut quota)?;
+                erased.set(apply(conn, node_id, ledger_key, line, &mut quota)? | erased.get());
             }
+        }
+        if erased.get() {
+            index::optimize(conn)?;
         }
         refused.set(quota.refused);
         conn.execute(
@@ -271,20 +278,24 @@ impl Item {
     }
 }
 
-/// One ledger line, applied like `foldWorkspace`.
+/// One ledger line, applied like `foldWorkspace`; whether it took text
+/// out of the index.
 fn apply(
     conn: &Connection,
     node_id: &str,
     key: &str,
     line: Line<'_>,
     quota: &mut Quota,
-) -> ApiResult<()> {
+) -> ApiResult<bool> {
+    let mut erased = false;
     match line {
         Line::Cleared => {
             conn.execute(
                 "DELETE FROM memory_records WHERE node_id=? AND ledger_key=? AND status!='forgotten'",
                 [node_id, key],
             )?;
+            index::delete_ledger(conn, node_id, key)?;
+            erased = true;
             *quota = Quota::of(conn, node_id, quota.max_rows, quota.max_bytes)?.with(quota.refused);
         }
         Line::Retired { ids, forgotten } => {
@@ -304,14 +315,16 @@ fn apply(
                         |row| row.get(0),
                     )
                     .optional()?;
-                let erased = conn.execute(
+                let updated = conn.execute(
                     "UPDATE memory_records SET content='', git_json=NULL, source_ids_json='[]', origins_json=NULL, status='forgotten' WHERE node_id=? AND ledger_key=? AND id=?",
                     [node_id, key, id],
                 )?;
+                index::delete_record(conn, node_id, key, id)?;
+                erased = true;
                 if let Some(freed) = freed {
                     quota.bytes = quota.bytes.saturating_sub(freed.max(0) as u64);
                 }
-                if erased == 0 && quota.admit(0) {
+                if updated == 0 && quota.admit(0) {
                     conn.execute(
                         "INSERT INTO memory_records (node_id,ledger_key,id,content,relevance,recorded_at,source_ids_json,status) VALUES (?,?,?,'','low','','[]','forgotten')",
                         [node_id, key, id],
@@ -367,10 +380,11 @@ fn apply(
                         repo,
                     ],
                 )?;
+                index::put_record(conn, node_id, key, &item.id, &item.content)?;
             }
         }
     }
-    Ok(())
+    Ok(erased)
 }
 
 /// The gateway's session behind a node session: its id, workspace and owner.
@@ -431,7 +445,8 @@ fn escape_like(term: &str) -> String {
 }
 
 struct Ranked {
-    score: usize,
+    /// Higher is better: BM25 relevance, or how many words a note holds.
+    score: f64,
     current: bool,
     time: i64,
     hit: Value,
@@ -495,8 +510,66 @@ impl Searched {
     }
 }
 
+/// Which facts a search looks at: the repositories' notes (and the
+/// delegations), the household's facts, or both.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Scopes {
+    Repo,
+    Person,
+    All,
+}
+
+impl Scopes {
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "repo" => Some(Self::Repo),
+            "person" => Some(Self::Person),
+            "all" => Some(Self::All),
+            _ => None,
+        }
+    }
+
+    fn repo(self) -> bool {
+        self != Self::Person
+    }
+}
+
+/// A search query, ready for the index and for the substring fallback.
+struct Terms {
+    /// The FTS5 query (`memory/text.rs` `match_query`) and its phrases.
+    fts: Option<String>,
+    phrases: Vec<String>,
+    /// Folded words, for `LIKE` when the index finds nothing (part of a
+    /// hash or an identifier).
+    like: Vec<String>,
+}
+
+impl Terms {
+    fn of(query: &str) -> ApiResult<Self> {
+        let folded = fold(query);
+        let all: Vec<&str> = words(&folded).collect();
+        if all.is_empty() {
+            return Err(ApiError::new(400, "invalid_input", "query is required"));
+        }
+        // Short words (`I`, `on`) as substrings match nearly every note.
+        let mut like: Vec<String> = Vec::new();
+        for word in all {
+            let long = word.chars().count() >= 3 || !word.is_ascii();
+            if long && !like.iter().any(|known| known == word) {
+                like.push(word.to_owned());
+            }
+        }
+        like.truncate(MAX_TERMS);
+        Ok(Self {
+            fts: match_query(query),
+            phrases: query_phrases(query),
+            like,
+        })
+    }
+}
+
 /// Notes and delegations of `user` holding any of the words in `query`,
-/// most words first, then current before superseded, then newest. With
+/// most relevant first, then current before superseded, then newest. With
 /// `workspace`, those of its ledger and of every clone of its repository.
 #[cfg(test)]
 pub fn search(
@@ -521,25 +594,17 @@ pub fn search_in(
     project: Option<&str>,
     everywhere: bool,
 ) -> ApiResult<(Vec<Value>, Option<Searched>)> {
-    let folded = fold(query);
-    let mut terms: Vec<&str> = Vec::new();
-    for word in words(&folded) {
-        if !terms.contains(&word) {
-            terms.push(word);
-        }
-    }
-    terms.truncate(MAX_TERMS);
-    if terms.is_empty() {
-        return Err(ApiError::new(400, "invalid_input", "query is required"));
-    }
+    let terms = Terms::of(query)?;
     let limit = limit.unwrap_or(8).clamp(1, 20) as usize;
+    let users = [user.to_owned()];
+    let find = |scope: Option<&Scope>| find_hits(app, &users, &terms, limit, Scopes::Repo, scope);
     if let Some(reference) = workspace {
         let workspace = resolve_directory_workspace(app, reference)?;
         let scope = Scope {
             ids: vec![workspace.id],
             repos: workspace.repo.into_iter().collect(),
         };
-        return Ok((find_hits(app, user, &terms, limit, Some(&scope))?, None));
+        return Ok((find(Some(&scope))?, None));
     }
     if !everywhere && let Some(project) = project {
         let scope = {
@@ -551,27 +616,104 @@ pub fn search_in(
             }
         };
         if !scope.ids.is_empty() {
-            let hits = find_hits(app, user, &terms, limit, Some(&scope))?;
+            let hits = find(Some(&scope))?;
             if !hits.is_empty() {
                 return Ok((hits, Some(Searched::Linked)));
             }
-            return Ok((
-                find_hits(app, user, &terms, limit, None)?,
-                Some(Searched::Everywhere),
-            ));
+            return Ok((find(None)?, Some(Searched::Everywhere)));
         }
     }
-    Ok((find_hits(app, user, &terms, limit, None)?, None))
+    Ok((find(None)?, None))
 }
 
+/// The brain's search: the facts of `users` (the people in the turn) in
+/// `scopes`, every workspace.
+pub fn search_facts(
+    app: &App,
+    users: &[String],
+    query: &str,
+    limit: usize,
+    scopes: Scopes,
+) -> ApiResult<Vec<Value>> {
+    let terms = Terms::of(query)?;
+    find_hits(app, users, &terms, limit.clamp(1, 20), scopes, None)
+}
+
+/// The index first; when it finds nothing, every word as a substring.
 fn find_hits(
     app: &App,
-    user: &str,
-    terms: &[&str],
+    users: &[String],
+    terms: &Terms,
     limit: usize,
+    scopes: Scopes,
     scope: Option<&Scope>,
 ) -> ApiResult<Vec<Value>> {
-    let any_term = |column: &str| {
+    if users.is_empty() {
+        return Ok(Vec::new());
+    }
+    let conn = app.db.lock();
+    if let Some(fts) = &terms.fts {
+        let matching = Match::Index(fts, &terms.phrases);
+        let hits = query_hits(&conn, users, matching, limit, scopes, scope)?;
+        if !hits.is_empty() {
+            return Ok(hits);
+        }
+    }
+    if terms.like.is_empty() {
+        return Ok(Vec::new());
+    }
+    query_hits(&conn, users, Match::Like(&terms.like), limit, scopes, scope)
+}
+
+enum Match<'a> {
+    /// The FTS5 query, and its phrases.
+    Index(&'a str, &'a [String]),
+    Like(&'a [String]),
+}
+
+/// Rows the index ranks first, at most, before the merge with delegations.
+const INDEX_CANDIDATES: usize = 50;
+
+fn query_hits(
+    conn: &Connection,
+    users: &[String],
+    matching: Match<'_>,
+    limit: usize,
+    scopes: Scopes,
+    scope: Option<&Scope>,
+) -> ApiResult<Vec<Value>> {
+    let owners = placeholders(users.len());
+    let owner_values = || users.iter().cloned().map(Sql::Text);
+    let scope_values = |values: &mut Vec<Sql>| {
+        if let Some(scope) = scope {
+            values.extend(scope.ids.iter().cloned().map(Sql::Text));
+            // A workspace without a repository keeps to its own ledgers.
+            values.extend(scope.repos.iter().cloned().map(Sql::Text));
+        }
+    };
+    let (records_in, delegations_in) = match scope {
+        Some(scope) => {
+            let (ids, repos) = (
+                placeholders(scope.ids.len()),
+                placeholders(scope.repos.len()),
+            );
+            (
+                format!(
+                    " AND (r.scope='person' OR (r.node_id || '/' || r.ledger_key) IN (SELECT node_id || '/' || ledger_key FROM memory_records WHERE workspace_id IN {ids}) OR r.repo IN {repos})"
+                ),
+                format!(
+                    " AND (d.workspace_id IN {ids} OR d.workspace_id IN (SELECT id FROM workspaces WHERE repo IN {repos}))"
+                ),
+            )
+        }
+        None => (String::new(), String::new()),
+    };
+    let scope_names = match scopes {
+        Scopes::Repo => "('repo')",
+        Scopes::Person => "('person')",
+        Scopes::All => "('repo','person')",
+    };
+    let like_any = |terms: &[String], column: &str| {
         format!(
             "({})",
             terms
@@ -581,51 +723,102 @@ fn find_hits(
                 .join(" OR ")
         )
     };
-    let patterns = terms
-        .iter()
-        .map(|term| Sql::Text(format!("%{}%", escape_like(term))));
-    let mut values: Vec<Sql> = vec![Sql::Text(user.to_owned())];
-    values.extend(patterns.clone());
-    let (records_in, delegations_in) = match scope {
-        Some(scope) => {
-            values.extend(scope.ids.iter().cloned().map(Sql::Text));
-            // A workspace without a repository keeps to its own ledgers.
-            values.extend(scope.repos.iter().cloned().map(Sql::Text));
-            let (ids, repos) = (
-                placeholders(scope.ids.len()),
-                placeholders(scope.repos.len()),
-            );
+    let patterns = |terms: &[String]| {
+        terms
+            .iter()
+            .map(|term| Sql::Text(format!("%{}%", escape_like(term))))
+            .collect::<Vec<_>>()
+    };
+    // Records.
+    let mut values: Vec<Sql> = Vec::new();
+    let (from, matched, rank) = match matching {
+        Match::Index(fts, _) => {
+            values.push(Sql::Text(fts.to_owned()));
             (
-                format!(
-                    " AND ((node_id || '/' || ledger_key) IN (SELECT node_id || '/' || ledger_key FROM memory_records WHERE workspace_id IN {ids}) OR repo IN {repos})"
-                ),
-                format!(
-                    " AND (workspace_id IN {ids} OR workspace_id IN (SELECT id FROM workspaces WHERE repo IN {repos}))"
-                ),
+                "memory_records_fts f JOIN memory_records r ON r.node_id=f.node_id AND r.ledger_key=f.ledger_key AND r.id=f.id",
+                "memory_records_fts MATCH ?".to_owned(),
+                "bm25(memory_records_fts)",
             )
         }
-        None => (String::new(), String::new()),
+        Match::Like(terms) => {
+            values.extend(patterns(terms));
+            ("memory_records r", like_any(terms, "r.content"), "0")
+        }
     };
-    let conn = app.db.lock();
+    values.extend(owner_values());
+    scope_values(&mut values);
     let records = all_rows(
-        &conn,
+        conn,
         &format!(
-            "SELECT * FROM memory_records WHERE owner_user=? AND status IN ('active','superseded') AND {}{records_in}",
-            any_term("content"),
-        ),
-        values.clone(),
-    )?;
-    let delegations = all_rows(
-        &conn,
-        &format!(
-            "SELECT * FROM delegations WHERE owner_user=? AND {}{delegations_in}",
-            any_term("(title || ' ' || task || ' ' || COALESCE(result, ''))"),
+            "SELECT r.*, {rank} AS rank FROM {from} WHERE {matched} AND r.owner_user IN {owners} AND r.status IN ('active','superseded') AND r.scope IN {scope_names}{records_in} ORDER BY rank LIMIT {INDEX_CANDIDATES}",
         ),
         values,
     )?;
-    let score = |text: &str| {
-        let folded = fold(text);
-        terms.iter().filter(|term| folded.contains(**term)).count()
+    // Delegations.
+    let delegations = if scopes.repo() {
+        let mut values: Vec<Sql> = Vec::new();
+        let (from, matched, rank) = match matching {
+            Match::Index(fts, _) => {
+                values.push(Sql::Text(fts.to_owned()));
+                (
+                    "delegations_fts f JOIN delegations d ON d.id=f.id",
+                    "delegations_fts MATCH ?".to_owned(),
+                    "bm25(delegations_fts, 0.0, 2.0, 1.0)",
+                )
+            }
+            Match::Like(terms) => {
+                values.extend(patterns(terms));
+                (
+                    "delegations d",
+                    like_any(
+                        terms,
+                        "(d.title || ' ' || d.task || ' ' || COALESCE(d.result, ''))",
+                    ),
+                    "0",
+                )
+            }
+        };
+        values.extend(owner_values());
+        scope_values(&mut values);
+        all_rows(
+            conn,
+            &format!(
+                "SELECT d.*, {rank} AS rank FROM {from} WHERE {matched} AND d.owner_user IN {owners}{delegations_in} ORDER BY rank LIMIT {INDEX_CANDIDATES}",
+            ),
+            values,
+        )?
+    } else {
+        Vec::new()
+    };
+    // BM25 is lower for better matches, and only comparable within one
+    // table: each table's scores are scaled to its best match.
+    let best = |rows: &[Map<String, Value>]| {
+        rows.iter()
+            .filter_map(|row| row.get("rank").and_then(Value::as_f64))
+            .map(|rank| -rank)
+            .fold(f64::MIN_POSITIVE, f64::max)
+    };
+    let (best_record, best_delegation) = (best(&records), best(&delegations));
+    // How many of the query's phrases a hit holds comes first (so a note
+    // and a delegation compare), its relevance within its table next.
+    let score = |row: &Map<String, Value>, text: &str, best: f64| -> f64 {
+        match matching {
+            Match::Index(_, phrases) => {
+                let folded = fold(text);
+                let held = phrases
+                    .iter()
+                    .filter(|phrase| folded.contains(phrase.as_str()))
+                    .count() as f64;
+                held - row.get("rank").and_then(Value::as_f64).unwrap_or(0.0) / best
+            }
+            Match::Like(terms) => {
+                let folded = fold(text);
+                terms
+                    .iter()
+                    .filter(|term| folded.contains(term.as_str()))
+                    .count() as f64
+            }
+        }
     };
     let text = |row: &Map<String, Value>, key: &str| -> String {
         row.get(key)
@@ -636,34 +829,13 @@ fn find_hits(
     let mut ranked: Vec<Ranked> = Vec::new();
     for row in &records {
         let content = text(row, "content");
-        let git = row
-            .get("git_json")
-            .and_then(Value::as_str)
-            .map(|git| safe_json(git, Value::Null))
-            .and_then(|git| git_label(&git));
-        let mut hit = Map::new();
-        hit.insert("id".into(), json!(text(row, "id")));
-        hit.insert("kind".into(), json!("workspace"));
-        hit.insert(
-            "workspace".into(),
-            json!(label(
-                &conn,
-                row.get("workspace_id").and_then(Value::as_str),
-                row.get("node_id").and_then(Value::as_str),
-            )),
-        );
-        hit.insert("date".into(), json!(text(row, "recorded_at")));
-        hit.insert("status".into(), json!(text(row, "status")));
-        if let Some(git) = git {
-            hit.insert("git".into(), json!(git));
-        }
-        hit.insert("relevance".into(), json!(text(row, "relevance")));
-        hit.insert("content".into(), json!(clip(&content, HIT_CHARS)));
+        let current = text(row, "status") == "active";
         ranked.push(Ranked {
-            score: score(&content),
-            current: text(row, "status") == "active",
+            // A note replaced by a newer one counts half.
+            score: score(row, &content, best_record) * if current { 1.0 } else { 0.5 },
+            current,
             time: parse_date(&text(row, "recorded_at").replacen(' ', "T", 1)).unwrap_or(0),
-            hit: Value::Object(hit),
+            hit: record_hit(conn, row),
         });
     }
     for row in &delegations {
@@ -671,13 +843,17 @@ fn find_hits(
         let (title, task) = (text(row, "title"), text(row, "task"));
         let updated_at = row.get("updated_at").and_then(Value::as_i64).unwrap_or(0);
         ranked.push(Ranked {
-            score: score(&format!("{title} {task} {}", result.unwrap_or_default())),
+            score: score(
+                row,
+                &format!("{title} {task} {}", result.unwrap_or_default()),
+                best_delegation,
+            ),
             current: true,
             time: updated_at,
             hit: json!({
                 "id": text(row, "id"),
                 "kind": "delegation",
-                "workspace": label(&conn, row.get("workspace_id").and_then(Value::as_str), None),
+                "workspace": label(conn, row.get("workspace_id").and_then(Value::as_str), None),
                 "date": local_stamp(updated_at),
                 "status": text(row, "status"),
                 "content": clip(&format!("{title}: {}", result.unwrap_or(&task)), HIT_CHARS),
@@ -686,7 +862,7 @@ fn find_hits(
     }
     ranked.sort_by(|a, b| {
         b.score
-            .cmp(&a.score)
+            .total_cmp(&a.score)
             .then(b.current.cmp(&a.current))
             .then(b.time.cmp(&a.time))
     });
@@ -695,6 +871,67 @@ fn find_hits(
         .take(limit)
         .map(|ranked| ranked.hit)
         .collect())
+}
+
+/// A fact as search shows it: a household fact with its origin, a
+/// repository's note with its workspace and git state.
+fn record_hit(conn: &Connection, row: &Map<String, Value>) -> Value {
+    let text = |key: &str| -> String {
+        row.get(key)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let mut hit = Map::new();
+    hit.insert("id".into(), json!(text("id")));
+    if text("scope") == "person" {
+        hit.insert("kind".into(), json!("fact"));
+        hit.insert("origin".into(), json!(text("origin")));
+        if let Some(room_id) = row.get("room_id").filter(|room| room.is_string()) {
+            hit.insert("roomId".into(), room_id.clone());
+        }
+    } else {
+        hit.insert("kind".into(), json!("workspace"));
+        hit.insert(
+            "workspace".into(),
+            json!(label(
+                conn,
+                row.get("workspace_id").and_then(Value::as_str),
+                row.get("node_id").and_then(Value::as_str),
+            )),
+        );
+    }
+    hit.insert("date".into(), json!(text("recorded_at")));
+    hit.insert("status".into(), json!(text("status")));
+    let git = row
+        .get("git_json")
+        .and_then(Value::as_str)
+        .map(|git| safe_json(git, Value::Null))
+        .and_then(|git| git_label(&git));
+    if let Some(git) = git {
+        hit.insert("git".into(), json!(git));
+    }
+    hit.insert("relevance".into(), json!(text("relevance")));
+    hit.insert("content".into(), json!(clip(&text("content"), HIT_CHARS)));
+    Value::Object(hit)
+}
+
+/// `user`'s newest active facts in `scopes`, as search hits.
+pub fn recent(app: &App, user: &str, scopes: Scopes, limit: usize) -> ApiResult<Vec<Value>> {
+    let scope_names = match scopes {
+        Scopes::Repo => "('repo')",
+        Scopes::Person => "('person')",
+        Scopes::All => "('repo','person')",
+    };
+    let conn = app.db.lock();
+    let rows = all_rows(
+        &conn,
+        &format!(
+            "SELECT r.* FROM memory_records r WHERE r.owner_user=? AND r.status='active' AND r.scope IN {scope_names} ORDER BY r.recorded_at DESC, r.created_at DESC LIMIT {limit}"
+        ),
+        vec![Sql::Text(user.to_owned())],
+    )?;
+    Ok(rows.iter().map(|row| record_hit(&conn, row)).collect())
 }
 
 /// A mirrored note to recall.
@@ -743,5 +980,9 @@ pub fn find(app: &App, user: &str, id: &str) -> ApiResult<Vec<Found>> {
         .collect())
 }
 
+#[cfg(test)]
+mod eval;
+pub mod index;
+pub mod person;
 #[cfg(test)]
 mod tests;

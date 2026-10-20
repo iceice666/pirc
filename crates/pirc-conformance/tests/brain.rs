@@ -96,8 +96,14 @@ fn asked(request: &Value) -> Value {
         .find(|message| message["role"] == "user")
         .map(|message| message["content"].clone())
         .unwrap_or_default();
-    json!({ "systemStart": system.lines().next(), "lastUser": user,
-        "tools": request.get("tools").cloned().unwrap_or(json!([])) })
+    let tools: Vec<Value> = request
+        .get("tools")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|tool| tool["function"]["name"].clone())
+        .collect();
+    json!({ "systemStart": system.lines().next(), "lastUser": user, "tools": tools })
 }
 
 async fn poll(what: &str, mut done: impl AsyncFnMut() -> bool) {
@@ -225,7 +231,8 @@ async fn brain() {
             "model": snapshot["model"],
             "sections": snapshot["sections"].as_array().unwrap().iter()
                 .map(|section| json!([section["id"], section["source"]])).collect::<Vec<_>>(),
-            "tools": snapshot["tools"],
+            "tools": snapshot["tools"].as_array().unwrap().iter()
+                .map(|tool| tool["name"].clone()).collect::<Vec<_>>(),
         }),
     );
     for (step, path) in [
