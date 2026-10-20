@@ -7,6 +7,69 @@ import 'package:pirc_mobile/rendering/html_document_styles.dart';
 
 void main() {
   test(
+    'modal top-layer coerces nonfixed author positions without changing nonmodal dialogs',
+    () {
+      for (final authored in [
+        'position: relative',
+        'position: static !important',
+        'position: sticky',
+        'position: initial',
+      ]) {
+        final document = html.parse(
+          '<dialog open data-pirc-dialog-modal="1" style="$authored">Hi</dialog>',
+        );
+        final dialog = document.querySelector('dialog')!;
+        final result = NativeDocumentStyleEngine(
+          stylesheets: const [],
+          viewportWidth: 390,
+          viewportHeight: 796,
+          dark: false,
+          dialogDefaults: true,
+        ).apply(document);
+        expect(
+          result.stylesByElement[dialog]!['position'],
+          'absolute',
+          reason: authored,
+        );
+        expect(
+          dialog.attributes['style'],
+          contains('position: absolute !important;'),
+        );
+      }
+      final fixed = html.parse(
+        '<dialog open data-pirc-dialog-modal="1" style="position: fixed">Hi</dialog>',
+      );
+      expect(
+        NativeDocumentStyleEngine(
+          stylesheets: const [],
+          viewportWidth: 390,
+          viewportHeight: 796,
+          dark: false,
+          dialogDefaults: true,
+        ).apply(fixed).stylesByElement[fixed.querySelector(
+          'dialog',
+        )]!['position'],
+        'fixed',
+      );
+      final nonmodal = html.parse(
+        '<dialog open style="position: relative">Hi</dialog>',
+      );
+      expect(
+        NativeDocumentStyleEngine(
+          stylesheets: const [],
+          viewportWidth: 390,
+          viewportHeight: 796,
+          dark: false,
+          dialogDefaults: true,
+        ).apply(nonmodal).stylesByElement[nonmodal.querySelector(
+          'dialog',
+        )]!['position'],
+        'relative',
+      );
+    },
+  );
+
+  test(
     'root variables inherit through descendant, negation and nth-child selectors',
     () {
       final document = html.parse(

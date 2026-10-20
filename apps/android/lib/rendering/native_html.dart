@@ -3993,6 +3993,11 @@ class _NativeHtmlFactory extends WidgetFactory {
   }
 
   dom.Element? _absoluteHost(dom.Element element) {
+    if (element.attributes.containsKey('data-pirc-dialog-modal')) {
+      // A top-layer dialog's containing block is the initial containing
+      // block, even when its DOM parent is positioned or transformed.
+      return null;
+    }
     final fixed = _flexChildStyles(element)['position'] == 'fixed';
     var current = element.parent;
     while (current != null) {

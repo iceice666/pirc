@@ -1,0 +1,286 @@
+{
+  "oracle": "Dedicated Playwright-pinned Chromium Headless Shell; no external requests or daily Chrome profile.",
+  "browserVersion": "153.0.8010.12",
+  "cases": [
+    {
+      "name": "relative-centered",
+      "dialogStyle": "position:relative",
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 150.203125,
+          "y": 368.5,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "static-important-centered",
+      "dialogStyle": "position:static!important",
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 150.203125,
+          "y": 368.5,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "sticky-centered",
+      "dialogStyle": "position:sticky",
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 150.203125,
+          "y": 368.5,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "relative-offset",
+      "dialogStyle": "position:relative;top:40px;left:20px;margin:0",
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 20,
+          "y": 40,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "40px",
+          "left": "20px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "absolute-offset-in-positioned-parent",
+      "parentStyle": "position:relative;top:100px;left:100px",
+      "dialogStyle": "position:absolute;top:40px;left:20px;margin:0",
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 20,
+          "y": 40,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "40px",
+          "left": "20px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "fixed-offset-in-transformed-parent",
+      "parentStyle": "position:relative;transform:translateX(100px)",
+      "dialogStyle": "position:fixed;top:40px;left:20px;margin:0",
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "result": {
+        "position": "fixed",
+        "rect": {
+          "x": 20,
+          "y": 40,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "40px",
+          "left": "20px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "relative-centered",
+      "dialogStyle": "position:relative",
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 339.203125,
+          "y": 458.5,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "static-important-centered",
+      "dialogStyle": "position:static!important",
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 339.203125,
+          "y": 458.5,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "sticky-centered",
+      "dialogStyle": "position:sticky",
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 339.203125,
+          "y": 458.5,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "relative-offset",
+      "dialogStyle": "position:relative;top:40px;left:20px;margin:0",
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 20,
+          "y": 40,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "40px",
+          "left": "20px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "absolute-offset-in-positioned-parent",
+      "parentStyle": "position:relative;top:100px;left:100px",
+      "dialogStyle": "position:absolute;top:40px;left:20px;margin:0",
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 20,
+          "y": 40,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "40px",
+          "left": "20px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "fixed-offset-in-transformed-parent",
+      "parentStyle": "position:relative;transform:translateX(100px)",
+      "dialogStyle": "position:fixed;top:40px;left:20px;margin:0",
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "result": {
+        "position": "fixed",
+        "rect": {
+          "x": 20,
+          "y": 40,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "40px",
+          "left": "20px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    }
+  ]
+}

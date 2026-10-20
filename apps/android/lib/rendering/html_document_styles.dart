@@ -1081,6 +1081,23 @@ class _Cascade {
               '${declaration.important ? ' !important' : ''};',
         ));
       }
+      if (engine.dialogDefaults &&
+          element.localName == 'dialog' &&
+          element.attributes.containsKey('data-pirc-dialog-modal') &&
+          !const {'fixed', 'absolute'}.contains(effective['position'])) {
+        // A modal's top-layer used position is absolute unless its computed
+        // position is fixed. This also applies to author !important values;
+        // the snapshot is private, so its serialized style may carry the used
+        // value while the script DOM retains the authored declaration.
+        effective['position'] = 'absolute';
+        rendered.removeWhere((item) => item.property == 'position');
+        rendered.add((
+          order: _order++,
+          suborder: 0,
+          property: 'position',
+          text: 'position: absolute !important;',
+        ));
+      }
       if (effective.containsKey('overflow-x') ||
           effective.containsKey('overflow-y')) {
         final x = effective['overflow-x'] ?? 'visible';

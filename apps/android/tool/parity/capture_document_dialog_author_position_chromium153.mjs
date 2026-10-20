@@ -1,0 +1,53 @@
+import assert from 'node:assert/strict';
+import {writeFile} from 'node:fs/promises';
+import {chromium} from 'playwright-core';
+import {requireTestBrowserExecutable} from './test_browser.mjs';
+
+const cases=[
+  {name:'relative-centered',dialogStyle:'position:relative'},
+  {name:'static-important-centered',dialogStyle:'position:static!important'},
+  {name:'sticky-centered',dialogStyle:'position:sticky'},
+  {name:'relative-offset',dialogStyle:'position:relative;top:40px;left:20px;margin:0'},
+  {name:'absolute-offset-in-positioned-parent',
+    parentStyle:'position:relative;top:100px;left:100px',
+    dialogStyle:'position:absolute;top:40px;left:20px;margin:0'},
+  {name:'fixed-offset-in-transformed-parent',
+    parentStyle:'position:relative;transform:translateX(100px)',
+    dialogStyle:'position:fixed;top:40px;left:20px;margin:0'},
+];
+const browser=await chromium.launch({
+  executablePath:requireTestBrowserExecutable(),headless:true,
+});
+try {
+  assert.equal(browser.version(),'153.0.8010.12');
+  const rows=[];
+  for(const viewport of [{width:390,height:796},{width:768,height:976}]) {
+    const context=await browser.newContext({viewport});
+    try {
+      for(const scenario of cases) {
+        const page=await context.newPage();
+        await page.route('**/*',route=>route.abort());
+        const html=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+          <div style="${scenario.parentStyle||''}">
+          <dialog style="${scenario.dialogStyle}"><button>Inside</button></dialog></div>
+          <script>document.querySelector('dialog').showModal()</script></body></html>`;
+        await page.setContent(html);
+        const result=await page.evaluate(()=>{
+          const dialog=document.querySelector('dialog');
+          const style=getComputedStyle(dialog),rect=dialog.getBoundingClientRect();
+          return {position:style.position,
+            rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},
+            inset:{top:style.top,left:style.left,right:style.right,bottom:style.bottom}};
+        });
+        rows.push({...scenario,viewport,result});
+        await page.close();
+      }
+    } finally {await context.close();}
+  }
+  const output=new URL('./fixtures/document-dialog-author-position-chromium153.json',import.meta.url);
+  await writeFile(output,JSON.stringify({
+    oracle:'Dedicated Playwright-pinned Chromium Headless Shell; no external requests or daily Chrome profile.',
+    browserVersion:browser.version(),cases:rows,
+  },null,2)+'\n');
+  console.log(`${rows.length} modal author-position cases captured`);
+} finally {await browser.close();}
