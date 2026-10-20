@@ -16,7 +16,7 @@ export interface PushPlace {
 }
 
 /** What a notification opens (the `target` of a push). */
-export type PushTarget = { sessionId: string } | { memory: true };
+export type PushTarget = { roomId: string } | { sessionId: string } | { memory: true };
 
 /** Exact question identity carried by an interaction notification click. */
 export interface PushInteraction {
@@ -172,6 +172,8 @@ export async function disablePush(): Promise<PushState> {
 
 /** Where a notification (or a `?session=` / `?open=` link) leads, from a URL. */
 export function targetFromUrl(url: URL): PushTarget | undefined {
+  const room = url.searchParams.get('room');
+  if (room) return { roomId: room };
   const session = url.searchParams.get('session');
   if (session) return { sessionId: session };
   const open = url.searchParams.get('open');

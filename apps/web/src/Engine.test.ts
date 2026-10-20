@@ -2,7 +2,7 @@
 // @vitest-environment-options {"url":"http://localhost/"}
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import App from './App.svelte';
+import Engine from './Engine.svelte';
 import { app, MESSAGE_PAGE } from './lib/app.svelte';
 import { panelApi } from './lib/panel-api';
 import { demoWorkspaces } from './lib/mock';
@@ -75,7 +75,7 @@ async function start(count = 100, width = 1400) {
     app.hiddenMessages = Math.max(0, count - MESSAGE_PAGE);
     app.loading = false;
   });
-  component = mount(App, { target });
+  component = mount(Engine, { target });
   await tick();
   flushSync();
 }
@@ -108,7 +108,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-describe('App transcript', () => {
+describe('Engine transcript', () => {
   it('mounts the newest page and reveals earlier messages on demand', async () => {
     await start(100);
     expect(target.querySelectorAll('article.message')).toHaveLength(MESSAGE_PAGE);
@@ -163,7 +163,7 @@ describe('App transcript', () => {
   });
 });
 
-describe('App header', () => {
+describe('Engine header', () => {
   it('keeps a badge up while the agent runs unsandboxed', async () => {
     await start(2);
     expect(target.querySelector('.unsandboxed')).toBeNull();
@@ -181,7 +181,7 @@ describe('App header', () => {
   });
 });
 
-describe('App workspace page', () => {
+describe('Engine workspace page', () => {
   it('opens from the breadcrumb, lists the sessions and goes back to one', async () => {
     await start(2);
     app.workspaces = demoWorkspaces;
@@ -206,7 +206,7 @@ describe('App workspace page', () => {
   });
 });
 
-describe('App unread sessions', () => {
+describe('Engine unread sessions', () => {
   it('marks the session on screen read, but not one behind a page', async () => {
     await start(2);
     const id = app.sessionState!.session.id;
@@ -229,7 +229,7 @@ describe('App unread sessions', () => {
   });
 });
 
-describe('App side panel on a narrow screen', () => {
+describe('Engine side panel on a narrow screen', () => {
   it('ignores a remembered open panel and overlays it with a scrim when opened', async () => {
     localStorage.setItem('relay.layout.detailsOpen', 'true');
     await start(4, 700);
@@ -260,7 +260,7 @@ describe('App side panel on a narrow screen', () => {
   });
 });
 
-describe('App native management link', () => {
+describe('Engine native management link', () => {
   it('keeps normal bootstrap and the other query parameters while showing consent without approving', async () => {
     HTMLDialogElement.prototype.showModal = function () {
       this.open = true;

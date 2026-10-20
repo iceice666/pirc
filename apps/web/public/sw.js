@@ -99,10 +99,19 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-/** The page a notification opens (see targetFromUrl in src/lib/push.ts). */
+/**
+ * The page a notification opens (see targetFromUrl in src/lib/push.ts): a
+ * room at `/?room=`, the engine's sessions and memory under `/engine`
+ * (src/lib/routes.ts).
+ */
 function targetUrl(target, interaction) {
-  if (target?.sessionId) {
+  if (target?.roomId) {
     const url = new URL('/', self.location.origin);
+    url.searchParams.set('room', target.roomId);
+    return url.pathname + url.search;
+  }
+  if (target?.sessionId) {
+    const url = new URL('/engine', self.location.origin);
     url.searchParams.set('session', target.sessionId);
     if (interaction?.sessionId === target.sessionId) {
       url.searchParams.set('interactionId', interaction.interactionId);
@@ -110,9 +119,15 @@ function targetUrl(target, interaction) {
     }
     return url.pathname + url.search;
   }
-  if (target?.memory) return '/?open=memory';
+  if (target?.memory) return '/engine?open=memory';
   return '/';
 }
+
+/** Whether a page shows the engine (the rest is the rooms). */
+const onEngine = (url) => {
+  const { pathname } = new URL(url, self.location.origin);
+  return pathname === '/engine' || pathname.startsWith('/engine/');
+};
 
 function interactionIdentity(message) {
   if (
@@ -306,12 +321,18 @@ self.addEventListener('notificationclick', (event) => {
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       const client = windows.find((item) => new URL(item.url).origin === self.location.origin);
+      const url = targetUrl(target, exactInteraction);
       if (client) {
         await client.focus();
-        client.postMessage({ type: 'OPEN_TARGET', target, interaction: exactInteraction });
+        // Nothing in particular, or the page already open: it opens the target itself.
+        if (!target || url === '/' || onEngine(client.url) === onEngine(url)) {
+          client.postMessage({ type: 'OPEN_TARGET', target, interaction: exactInteraction });
+        } else {
+          await client.navigate(url);
+        }
         return;
       }
-      await self.clients.openWindow(targetUrl(target, exactInteraction));
+      await self.clients.openWindow(url);
     })(),
   );
 });

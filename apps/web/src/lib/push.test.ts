@@ -127,6 +127,7 @@ describe('push on this browser', () => {
 describe('where a notification leads', () => {
   it('reads targets from links', () => {
     const at = (query: string) => targetFromUrl(new URL(`https://pirc.example/${query}`));
+    expect(at('?room=general')).toEqual({ roomId: 'general' });
     expect(at('?session=s%201')).toEqual({ sessionId: 's 1' });
     expect(at('?open=memory')).toEqual({ memory: true });
     expect(at('')).toBeUndefined();

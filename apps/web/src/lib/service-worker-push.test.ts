@@ -9,8 +9,9 @@ function deferred<T = void>() {
 }
 
 function serviceWorkerHarness(
-  harnessOptions: { showGate?: Promise<void>; noClients?: boolean } = {},
+  harnessOptions: { showGate?: Promise<void>; noClients?: boolean; page?: string } = {},
 ) {
+  const navigated: string[] = [];
   const listeners = new Map<string, (event: any) => void>();
   const records = new Map<string, Response>();
   const shown: Array<{ title: string; options: any; closed: boolean; close(): void }> = [];
@@ -18,8 +19,11 @@ function serviceWorkerHarness(
   let showStarted!: () => void;
   const notificationShowStarted = new Promise<void>((resolve) => (showStarted = resolve));
   const pageClient = {
-    url: 'https://pirc.test/',
+    url: `https://pirc.test${harnessOptions.page ?? '/'}`,
     focused: false,
+    async navigate(url: string) {
+      navigated.push(url);
+    },
     visibilityState: 'hidden',
     async focus() {
       this.focused = true;
@@ -111,6 +115,7 @@ function serviceWorkerHarness(
     shown,
     messages,
     openedWindows,
+    navigated,
     notificationShowStarted,
     async push(message: unknown) {
       await this.startPush(message);
@@ -207,7 +212,7 @@ it('serializes a revoke that arrives while the created notification is being sho
 });
 
 it('forwards the exact interaction identity when its notification is clicked', async () => {
-  const worker = serviceWorkerHarness();
+  const worker = serviceWorkerHarness({ page: '/engine?session=other' });
   await worker.push({ kind: 'interaction_created', ...tuple, title: 'Continue?' });
   const data = worker.shown[0]!.options.data;
 
@@ -226,6 +231,34 @@ it('keeps the exact interaction tuple in the URL when a click opens a new window
   await worker.clickNotification(data);
 
   expect(worker.openedWindows).toEqual([
-    '/?session=session%3Aone&interactionId=ask%3Aq1%3A0&interactionEpoch=0',
+    '/engine?session=session%3Aone&interactionId=ask%3Aq1%3A0&interactionEpoch=0',
   ]);
+});
+
+it('moves an open window to the page the notification is about', async () => {
+  // A session's question while the rooms are open: the window goes to the engine.
+  const rooms = serviceWorkerHarness({ page: '/?room=general' });
+  await rooms.push({ kind: 'interaction_created', ...tuple, title: 'Continue?' });
+  await rooms.clickNotification(rooms.shown[0]!.options.data);
+  expect(rooms.messages).toEqual([]);
+  expect(rooms.navigated).toEqual([
+    '/engine?session=session%3Aone&interactionId=ask%3Aq1%3A0&interactionEpoch=0',
+  ]);
+
+  // A room's message while the engine is open: back to the rooms.
+  const engine = serviceWorkerHarness({ page: '/engine' });
+  await engine.clickNotification({ target: { roomId: 'room_1' } });
+  expect(engine.navigated).toEqual(['/?room=room_1']);
+
+  // The rooms already open: they switch rooms themselves.
+  const open = serviceWorkerHarness({ page: '/' });
+  await open.clickNotification({ target: { roomId: 'room_1' } });
+  expect(open.messages).toEqual([
+    { type: 'OPEN_TARGET', target: { roomId: 'room_1' }, interaction: undefined },
+  ]);
+  expect(open.navigated).toEqual([]);
+
+  const fresh = serviceWorkerHarness({ noClients: true });
+  await fresh.clickNotification({ target: { memory: true } });
+  expect(fresh.openedWindows).toEqual(['/engine?open=memory']);
 });

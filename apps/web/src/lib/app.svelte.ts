@@ -87,7 +87,7 @@ class AppState {
    * A place in Settings to show (the memory), asked for by a notification or
    * a `?open=` link (App opens Settings on it, then clears it).
    */
-  requestedTarget = $state<Exclude<PushTarget, { sessionId: string }> | undefined>();
+  requestedTarget = $state<{ memory: true } | undefined>();
   sessions = $state.raw<SessionSummary[]>([]);
   view = $state<MainView>('session');
   /** The workspace whose page is showing (view `workspace`). */
@@ -277,7 +277,7 @@ class AppState {
         const linkedSessionId = linkedTarget.sessionId;
         if (this.sessions.some((session) => session.id === linkedSessionId))
           this.activeSessionId = linkedSessionId;
-      } else if (linkedTarget) this.requestedTarget = linkedTarget;
+      } else if (linkedTarget && 'memory' in linkedTarget) this.requestedTarget = linkedTarget;
       pruneDrafts(this.sessions.map((session) => session.id));
     } catch (error) {
       if (import.meta.env.DEV) {
@@ -371,6 +371,11 @@ class AppState {
         await this.refreshSessions();
       if (this.sessions.some((session) => session.id === target.sessionId))
         await this.openSession(target.sessionId);
+      return;
+    }
+    if ('roomId' in target) {
+      // Rooms are the other page.
+      location.assign(`/?room=${encodeURIComponent(target.roomId)}`);
       return;
     }
     this.requestedTarget = target;
