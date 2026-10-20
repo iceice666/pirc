@@ -26,8 +26,6 @@
     /** Workspace pages list settled sessions. */
     showSettled: boolean;
     onresetlayout: () => void;
-    /** Open a chat that memory refers to (the dialog closes). */
-    onopenchat?: (sessionId: string) => void;
   }
 
   let {
@@ -35,7 +33,6 @@
     tab: settingsTab = $bindable('general'),
     showSettled = $bindable(),
     onresetlayout,
-    onopenchat,
   }: Props = $props();
 </script>
 
@@ -109,13 +106,7 @@
         aria-labelledby="settings-tab-memory"
         hidden={settingsTab !== 'memory'}
       >
-        <MemorySettings
-          disabled={app.usingDemo}
-          onopenchat={(sessionId) => {
-            open = false;
-            onopenchat?.(sessionId);
-          }}
-        />
+        <MemorySettings disabled={app.usingDemo} />
       </div>
 
       <div

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { Paperclip, Pin } from '@lucide/svelte';
+  import { ApiError } from '../../http';
+  import { describeOrigin, forgetRemembered } from '../../memory';
   import { roomsApi, type RoomMessage } from '../../rooms';
 
   interface Props {
@@ -38,6 +40,35 @@
   /** A stable hue per speaker. */
   const hue = $derived([...name].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % 360, 7));
   const initial = $derived([...name][0]?.toUpperCase() ?? '?');
+
+  /** What the line remembered: shown on expanding it, undone by "Don't keep". */
+  const remembered = $derived(message.body.memory?.forgotten ? undefined : message.body.memory);
+  let expanded = $state(false);
+  const detail = $derived.by(() => {
+    if (!remembered) return '';
+    const what =
+      remembered.kind === 'preference'
+        ? 'A preference: always on its mind.'
+        : 'A fact: found again when it matters.';
+    const whose = remembered.user ? ` · for ${remembered.user}` : '';
+    return `${what} ${describeOrigin(remembered.origin ?? '')}${whose}.`;
+  });
+  let forgetting = $state(false);
+  let forgetError = $state('');
+
+  async function dontKeep() {
+    if (!remembered || forgetting) return;
+    forgetting = true;
+    forgetError = '';
+    try {
+      // The gateway rewrites the line; the room's stream brings it.
+      await forgetRemembered(remembered);
+    } catch (cause) {
+      forgetError = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+    } finally {
+      forgetting = false;
+    }
+  }
 </script>
 
 {#if message.kind === 'line'}
@@ -46,11 +77,24 @@
       <button type="button" class="link" onclick={() => onopenroom?.(message.body.move!.roomId)}
         >{message.body.text ?? ''}</button
       >
+    {:else if remembered}
+      <button
+        type="button"
+        class="link quiet"
+        aria-expanded={expanded}
+        onclick={() => (expanded = !expanded)}>{message.body.text ?? ''}</button
+      >
+      <button type="button" class="link" disabled={forgetting} onclick={dontKeep}>Don't keep</button
+      >
     {:else}
       <span>{message.body.text ?? ''}</span>
     {/if}
     <time datetime={new Date(message.createdAt).toISOString()} title={fullTime}>{time}</time>
   </div>
+  {#if remembered && expanded}
+    <div class="line detail">{detail}</div>
+  {/if}
+  {#if forgetError}<div class="line error" role="alert">{forgetError}</div>{/if}
 {:else}
   <article
     class="message"
@@ -253,5 +297,16 @@
     color: var(--accent);
     font: inherit;
     cursor: pointer;
+  }
+  .link.quiet {
+    color: inherit;
+    text-align: left;
+  }
+  .line.detail {
+    padding-top: 0;
+    font-size: 12px;
+  }
+  .line.error {
+    color: var(--danger);
   }
 </style>

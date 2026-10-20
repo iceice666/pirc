@@ -664,7 +664,6 @@
   bind:tab={settingsTab}
   bind:showSettled
   onresetlayout={resetLayout}
-  onopenchat={openSession}
 />
 {#if nativeManagementRequestId}
   <NativeManagementConsent requestId={nativeManagementRequestId} />

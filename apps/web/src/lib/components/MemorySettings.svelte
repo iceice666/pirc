@@ -1,36 +1,41 @@
 <script lang="ts">
   /**
-   * The assistant's memory (docs/architecture/assistant-memory.md): review what it
-   * remembers and its history, restore earlier versions, and forget entries for good.
+   * The brain's memory (docs/architecture/assistant-memory.md): your preferences, which
+   * pirc always has in mind, and the facts it keeps and finds when they matter. Review
+   * where each came from, take preferences out or back, and forget for good.
    */
   import { onMount } from 'svelte';
   import { app } from '../app.svelte';
   import { ApiError } from '../http';
   import {
+    describeOrigin,
     describeOrigins,
     describeVersion,
     memoryApi,
-    type MemoryEntry,
+    type MemoryRecord,
     type MemoryVersion,
-    type MemoryView,
+    type Preference,
+    type PreferencesView,
+    type RecordScope,
   } from '../memory';
   import { ago } from '../time';
   import { watch } from '../watch.svelte';
 
   interface Props {
     disabled?: boolean;
-    /** Open the chat an entry came from. */
-    onopenchat?: (sessionId: string) => void;
   }
 
-  let { disabled = false, onopenchat }: Props = $props();
+  let { disabled = false }: Props = $props();
 
-  let view: MemoryView | undefined = $state();
+  let view: PreferencesView | undefined = $state();
+  let records: MemoryRecord[] = $state([]);
+  let scope: RecordScope = $state('person');
+  let query = $state('');
   let loading = $state(true);
   /** Key of the action in flight; one at a time. */
   let busy = $state('');
   let error = $state('');
-  /** Entry whose Forget awaits a second click. */
+  /** Preference or fact whose Forget awaits a second click. */
   let confirming: string | undefined = $state();
   let historyFor: string | undefined = $state();
   let versions: MemoryVersion[] = $state([]);
@@ -40,17 +45,27 @@
   const message = (cause: unknown) =>
     cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
 
-  function show(next: MemoryView) {
+  function show(next: PreferencesView) {
     view = next;
     confirming = undefined;
-    const listed = [...next.user, ...next.notes, ...next.removed];
-    if (historyFor && !listed.some((entry) => entry.id === historyFor)) historyFor = undefined;
+    const listed = [...next.preferences, ...next.removed];
+    if (historyFor && !listed.some((preference) => preference.id === historyFor))
+      historyFor = undefined;
     else if (historyFor) void loadHistory(historyFor);
+  }
+
+  async function loadRecords() {
+    try {
+      const listed = await memoryApi.records(scope, query);
+      if (alive) records = listed;
+    } catch (cause) {
+      if (alive) error = message(cause);
+    }
   }
 
   async function load() {
     try {
-      const next = await memoryApi.view();
+      const [next] = await Promise.all([memoryApi.view(), loadRecords()]);
       if (alive) show(next);
     } catch (cause) {
       if (alive) error = message(cause);
@@ -59,16 +74,16 @@
     }
   }
 
-  async function loadHistory(entryId: string) {
+  async function loadHistory(id: string) {
     try {
-      const listed = await memoryApi.history(entryId);
-      if (alive && historyFor === entryId) versions = listed;
+      const listed = await memoryApi.history(id);
+      if (alive && historyFor === id) versions = listed;
     } catch (cause) {
       if (alive) error = message(cause);
     }
   }
 
-  async function act(key: string, run: () => Promise<MemoryView>) {
+  async function act(key: string, run: () => Promise<PreferencesView>) {
     if (busy) return;
     busy = key;
     error = '';
@@ -78,7 +93,7 @@
     } catch (cause) {
       if (alive) {
         error = message(cause);
-        // Someone else (another chat, another tab) changed it: show the current state.
+        // Changed elsewhere (a room, another tab): show the current state.
         if (cause instanceof ApiError && cause.status === 409) void load();
       }
     } finally {
@@ -86,14 +101,34 @@
     }
   }
 
-  function toggleHistory(entry: MemoryEntry) {
-    if (historyFor === entry.id) {
+  async function forgetRecord(record: MemoryRecord) {
+    if (busy) return;
+    busy = record.id;
+    error = '';
+    try {
+      await memoryApi.forgetRecord(record.id);
+      confirming = undefined;
+      await loadRecords();
+    } catch (cause) {
+      if (alive) error = message(cause);
+    } finally {
+      busy = '';
+    }
+  }
+
+  function toggleHistory(preference: Preference) {
+    if (historyFor === preference.id) {
       historyFor = undefined;
       return;
     }
-    historyFor = entry.id;
+    historyFor = preference.id;
     versions = [];
-    void loadHistory(entry.id);
+    void loadHistory(preference.id);
+  }
+
+  function search(event: SubmitEvent) {
+    event.preventDefault();
+    void loadRecords();
   }
 
   onMount(() => {
@@ -103,7 +138,7 @@
       alive = false;
     };
   });
-  // Changes from chats (a new note) arrive while this is open.
+  // What pirc remembers in a room arrives while this is open.
   watch(
     () => app.memoryRevision,
     () => {
@@ -115,9 +150,10 @@
 <section class="settings-section" aria-labelledby="memory-title">
   <h3 id="memory-title">Memory</h3>
   <p>
-    What your assistant remembers across chats. <strong>USER</strong> is what you told it about
-    yourself. <strong>MEMORY</strong> holds the assistant's own notes. New chats start with both; open
-    chats keep what they started with. USER also reaches every new coding session on every node.
+    What pirc remembers, in every room. <strong>Preferences</strong> are always on its mind; it
+    saves one only when you say so. <strong>Facts</strong> it keeps on its own and brings up when they
+    matter; each says where it came from, and the room shows a line when one is kept. Coding sessions
+    on the nodes have none of this: repositories keep their own workspace notes.
   </p>
 
   {#if disabled}
@@ -127,88 +163,151 @@
   {:else}
     {#if error}<p class="memory-error" role="alert">{error}</p>{/if}
     {#if view}
+      <h4>Preferences</h4>
       <p class="memory-usage">
-        USER {number(view.usage.user.used)}/{number(view.usage.user.max)} characters · MEMORY {number(
-          view.usage.note.used,
-        )}/{number(view.usage.note.max)} characters
+        {number(view.usage.used)}/{number(view.usage.max)} characters
       </p>
-
-      <h4>About you · USER</h4>
-      {#if view.user.length}
-        {@render entries(view.user, 'About you')}
+      {#if view.preferences.length}
+        {@render preferences(view.preferences, 'Preferences')}
       {:else}
-        <p>Nothing yet.</p>
-      {/if}
-
-      <h4>The assistant's notes · MEMORY</h4>
-      {#if view.notes.length}
-        {@render entries(view.notes, "The assistant's notes")}
-      {:else}
-        <p>No notes yet.</p>
+        <p>None yet. Tell pirc how you want things, or say yes when it offers to remember.</p>
       {/if}
 
       {#if view.removed.length}
         <details class="memory-removed">
           <summary>Removed · {view.removed.length}</summary>
-          {@render entries(view.removed, 'Removed')}
+          {@render preferences(view.removed, 'Removed')}
         </details>
       {/if}
-
-      <p class="memory-fine-print">
-        Forget erases an entry with all its versions and keeps the same text from being saved again;
-        rewordings are not caught. Chats and coding sessions already started keep the USER they
-        started with, and repositories keep their own workspace memory.
-      </p>
     {/if}
+
+    <h4>Facts</h4>
+    <form class="memory-search" role="search" onsubmit={search}>
+      <input
+        type="search"
+        aria-label="Search facts"
+        placeholder="Search facts"
+        bind:value={query}
+      />
+      <select
+        aria-label="Which facts"
+        value={scope}
+        onchange={(event) => {
+          scope = event.currentTarget.value as RecordScope;
+          void loadRecords();
+        }}
+      >
+        <option value="person">Yours</option>
+        <option value="repo">Repositories</option>
+        <option value="all">Both</option>
+      </select>
+      <button class="button ghost small" type="submit">Search</button>
+    </form>
+    {#if records.length}
+      <ul class="memory-list" aria-label="Facts">
+        {#each records as record (record.kind + record.id)}
+          <li>
+            <div class="memory-row">
+              <div class="memory-text">
+                <span>{record.content}</span>
+                <small
+                  >{record.kind === 'fact'
+                    ? describeOrigin(record.origin ?? '')
+                    : record.kind === 'delegation'
+                      ? `Delegated to ${record.workspace}`
+                      : `Workspace note · ${record.workspace}`}{#if record.git}
+                    · {record.git}{/if} · {record.date}{#if record.status !== 'active'}
+                    · {record.status}{/if}</small
+                >
+              </div>
+              {#if record.kind === 'fact'}
+                <div class="memory-actions">
+                  {#if confirming === record.id}
+                    <button
+                      class="button ghost small forget"
+                      type="button"
+                      disabled={!!busy}
+                      onclick={() => forgetRecord(record)}>Forget for good</button
+                    >
+                    <button
+                      class="button ghost small"
+                      type="button"
+                      onclick={() => (confirming = undefined)}>Cancel</button
+                    >
+                  {:else}
+                    <button
+                      class="button ghost small"
+                      type="button"
+                      disabled={!!busy}
+                      onclick={() => (confirming = record.id)}>Forget</button
+                    >
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p>{query.trim() ? 'Nothing found.' : 'No facts yet.'}</p>
+    {/if}
+
+    <p class="memory-fine-print">
+      Forget erases a preference or fact with all its versions, takes it out of search and of the
+      room's line, and keeps the same text from being saved again; rewordings are not caught. A
+      repository's notes are forgotten on its node.
+    </p>
   {/if}
 </section>
 
-{#snippet chat(sessionId: string | undefined)}
-  {#if sessionId && view?.sessions[sessionId]}
-    <button class="chat-link" type="button" onclick={() => onopenchat?.(sessionId)}
-      >{view.sessions[sessionId]}</button
-    >
-  {:else}
-    a chat that is gone
-  {/if}
+{#snippet room(roomId: string | null)}
+  {#if roomId && view?.rooms[roomId]}#{view.rooms[roomId]}{:else}a room{/if}
 {/snippet}
 
-{#snippet entries(list: MemoryEntry[], label: string)}
+{#snippet preferences(list: Preference[], label: string)}
   <ul class="memory-list" aria-label={label}>
-    {#each list as entry (entry.id)}
+    {#each list as preference (preference.id)}
       <li>
         <div class="memory-row">
           <div class="memory-text">
-            <span>{entry.content}</span>
+            <span>{preference.content}</span>
             <small
-              >{describeOrigins(entry.origins)}{#if entry.sources.quote}
-                — you said “{entry.sources.quote}”{/if} · {@render chat(entry.sources.sessionId)} · {ago(
-                entry.updatedAt,
-              )}</small
+              >{describeOrigins(preference.origins)}{#if preference.sources.quote}
+                — you said “{preference.sources.quote}”{/if} · in {@render room(
+                preference.createdInRoom,
+              )} · {ago(preference.updatedAt)}</small
             >
           </div>
           <div class="memory-actions">
-            {#if entry.status === 'removed'}
+            {#if preference.status === 'removed'}
               <button
                 class="button ghost small"
                 type="button"
                 disabled={!!busy}
-                onclick={() => act(entry.id, () => memoryApi.restore(entry.id))}>Restore</button
+                onclick={() => act(preference.id, () => memoryApi.restore(preference.id))}
+                >Restore</button
               >
             {:else}
               <button
                 class="button ghost small"
                 type="button"
-                aria-expanded={historyFor === entry.id}
-                onclick={() => toggleHistory(entry)}>History</button
+                aria-expanded={historyFor === preference.id}
+                onclick={() => toggleHistory(preference)}>History</button
+              >
+              <button
+                class="button ghost small"
+                type="button"
+                disabled={!!busy}
+                onclick={() => act(preference.id, () => memoryApi.remove(preference.id))}
+                >Remove</button
               >
             {/if}
-            {#if confirming === entry.id}
+            {#if confirming === preference.id}
               <button
                 class="button ghost small forget"
                 type="button"
                 disabled={!!busy}
-                onclick={() => act(entry.id, () => memoryApi.forget(entry.id))}
+                onclick={() => act(preference.id, () => memoryApi.forget(preference.id))}
                 >Forget for good</button
               >
               <button
@@ -221,24 +320,24 @@
                 class="button ghost small"
                 type="button"
                 disabled={!!busy}
-                onclick={() => (confirming = entry.id)}>Forget</button
+                onclick={() => (confirming = preference.id)}>Forget</button
               >
             {/if}
           </div>
         </div>
-        {#if historyFor === entry.id}
+        {#if historyFor === preference.id}
           <ol class="memory-history" aria-label="History">
             {#each versions as version (version.revision)}
               <li>
-                <small>{describeVersion(version, view?.sessions ?? {})} · {ago(version.at)}</small>
+                <small>{describeVersion(version)} · {ago(version.at)}</small>
                 {#if version.content}<span>{version.content}</span>{/if}
-                {#if version.content && version.content !== entry.content}
+                {#if version.content && version.content !== preference.content}
                   <button
                     class="button ghost small"
                     type="button"
                     disabled={!!busy}
                     onclick={() =>
-                      act(entry.id, () => memoryApi.restore(entry.id, version.revision))}
+                      act(preference.id, () => memoryApi.restore(preference.id, version.revision))}
                     >Restore this</button
                   >
                 {/if}
@@ -265,6 +364,16 @@
   .memory-fine-print {
     color: var(--muted);
     font-size: 12px;
+  }
+  .memory-search {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .memory-search input {
+    flex: 1 1 200px;
+    min-width: 0;
   }
   .memory-list {
     display: grid;
@@ -305,15 +414,6 @@
   }
   .forget {
     color: var(--danger);
-  }
-  .chat-link {
-    padding: 0;
-    border: 0;
-    color: var(--accent);
-    background: none;
-    font: inherit;
-    text-decoration: underline;
-    cursor: pointer;
   }
   .memory-history {
     display: grid;

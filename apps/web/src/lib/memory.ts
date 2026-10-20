@@ -1,22 +1,20 @@
 /**
- * The assistant's memory, held by the gateway (docs/architecture/assistant-memory.md): USER
- * entries (who you are) and the assistant's MEMORY notes.
+ * The brain's memory, held by the gateway (docs/architecture/assistant-memory.md):
+ * preferences (always in its prompt, only on your word) and facts (searchable; the
+ * household's, and the repositories' workspace notes).
  */
 import { request } from './http';
 
-export type MemoryKind = 'user' | 'note';
-
 export interface MemorySources {
-  /** The chat a change came from. */
-  sessionId?: string;
+  /** The room it was said in. */
+  roomId?: string;
   entryIds?: string[];
-  /** Your exact words the change rests on. */
+  /** Your exact words it rests on. */
   quote?: string;
 }
 
-export interface MemoryEntry {
+export interface Preference {
   id: string;
-  kind: MemoryKind;
   content: string;
   status: 'active' | 'removed' | 'forgotten';
   revision: number;
@@ -24,6 +22,7 @@ export interface MemoryEntry {
   sources: MemorySources;
   createdAt: number;
   updatedAt: number;
+  createdInRoom: string | null;
 }
 
 export interface MemoryVersion {
@@ -32,58 +31,82 @@ export interface MemoryVersion {
   content: string | null;
   origins: string[];
   sources: MemorySources;
-  /** `user:<name>` or `session:<chat id>`. */
+  /** `user:<name>`, `face:<id>` or `om`. */
   actor: string;
   at: number;
 }
 
-export interface MemoryView {
-  usage: Record<MemoryKind, { used: number; max: number }>;
-  user: MemoryEntry[];
-  notes: MemoryEntry[];
-  removed: MemoryEntry[];
-  /** Names of the chats entries came from, by id. */
-  sessions: Record<string, string>;
+export interface PreferencesView {
+  usage: { used: number; max: number };
+  preferences: Preference[];
+  removed: Preference[];
+  /** Names of the rooms preferences were said in, by id. */
+  rooms: Record<string, string>;
 }
+
+/** A fact as search shows it. */
+export interface MemoryRecord {
+  id: string;
+  /** `fact`: the household's; `workspace`: a repository's note; `delegation`. */
+  kind: 'fact' | 'workspace' | 'delegation';
+  content: string;
+  date: string;
+  status: string;
+  /** Facts: `user`, `tool:<name>`, `om:promoted`. */
+  origin?: string;
+  roomId?: string;
+  /** Notes and delegations: where. */
+  workspace?: string;
+  git?: string;
+}
+
+export type RecordScope = 'person' | 'repo' | 'all';
 
 /** Memory is personal: never from a browser cache. */
 const noStore = <T>(path: string, init: RequestInit = {}) =>
   request<T>(path, { cache: 'no-store', ...init });
 const change = (path: string, body: Record<string, unknown> = {}) =>
-  noStore<MemoryView>(path, { method: 'POST', body: JSON.stringify(body) });
+  noStore<PreferencesView>(path, { method: 'POST', body: JSON.stringify(body) });
 const part = encodeURIComponent;
 
-/** Every change answers with the whole view. */
+/** Every preference change answers with the whole view. */
 export const memoryApi = {
-  view: () => noStore<MemoryView>('/api/memory'),
-  history: async (entryId: string) =>
-    (await noStore<{ versions: MemoryVersion[] }>(`/api/memory/entries/${part(entryId)}/history`))
+  view: () => noStore<PreferencesView>('/api/memory/preferences'),
+  history: async (id: string) =>
+    (await noStore<{ versions: MemoryVersion[] }>(`/api/memory/preferences/${part(id)}/history`))
       .versions,
-  forget: (entryId: string) => change(`/api/memory/entries/${part(entryId)}/forget`),
-  /** Bring back a removed entry, or restore an earlier version. */
-  restore: (entryId: string, revision?: number) =>
+  /** Out of the prompt; it can come back. */
+  remove: (id: string) => change(`/api/memory/preferences/${part(id)}/remove`),
+  forget: (id: string) => change(`/api/memory/preferences/${part(id)}/forget`),
+  /** Bring back a removed preference, or restore an earlier version. */
+  restore: (id: string, revision?: number) =>
     change(
-      `/api/memory/entries/${part(entryId)}/restore`,
+      `/api/memory/preferences/${part(id)}/restore`,
       revision === undefined ? {} : { revision },
     ),
+  /** Facts newest first, or those matching `q`. */
+  records: async (scope: RecordScope, q = '') => {
+    const query = new URLSearchParams({ scope });
+    if (q.trim()) query.set('q', q.trim());
+    return (await noStore<{ records: MemoryRecord[] }>(`/api/memory/records?${query}`)).records;
+  },
+  /** Forget a household fact for real ("don't keep this"). */
+  forgetRecord: (id: string) =>
+    noStore<{ record: unknown }>(`/api/memory/records/${part(id)}`, { method: 'DELETE' }),
 };
 
-/** Where an entry's text came from, for people. */
+/** Where a fact or preference came from, for people. */
+export function describeOrigin(origin: string): string {
+  if (origin === 'user') return 'From your words';
+  if (origin === 'om:promoted') return 'From an earlier conversation';
+  if (origin === 'tool:assistant') return 'From the old assistant';
+  if (origin.startsWith('tool:')) return `From what it read (${origin.slice(5)})`;
+  return origin ? `From ${origin}` : '';
+}
+
+/** Where a preference's text came from, for people. */
 export function describeOrigins(origins: string[]): string {
-  const tools = origins
-    .filter((origin) => origin.startsWith('tool:'))
-    .map((o) => (o === 'tool:bash:network' ? 'bash fetching from the network' : o.slice(5)));
-  const others = origins
-    .filter((origin) => origin.startsWith('custom:'))
-    .map((origin) => origin.slice(7));
-  const parts = [
-    ...(origins.includes('user') ? ['your words'] : []),
-    ...(origins.includes('assistant') ? ['the assistant'] : []),
-    ...(tools.length ? [`tool output (${tools.join(', ')})`] : []),
-    ...(others.length ? [`${others.join(', ')} messages`] : []),
-    ...(origins.includes('unknown') ? ['an unknown source'] : []),
-  ];
-  return parts.length ? `From ${parts.join(', ')}` : '';
+  return origins.includes('user') ? 'From your words' : describeOrigin(origins[0] ?? '');
 }
 
 const OPS: Record<MemoryVersion['op'], string> = {
@@ -93,10 +116,26 @@ const OPS: Record<MemoryVersion['op'], string> = {
   restore: 'Restored',
   forget: 'Forgotten',
 };
-/** "Changed by the assistant (Trip planning)", "Added by you". */
-export function describeVersion(version: MemoryVersion, sessions: Record<string, string>) {
-  const who = version.actor.startsWith('session:')
-    ? `the assistant${sessions[version.actor.slice(8)] ? ` (${sessions[version.actor.slice(8)]})` : ''}`
-    : 'you';
+/** "Added by pirc", "Restored by you". */
+export function describeVersion(version: MemoryVersion) {
+  const who = version.actor.startsWith('face:')
+    ? 'pirc'
+    : version.actor === 'om'
+      ? 'pirc, from an earlier conversation'
+      : 'you';
   return `${OPS[version.op] ?? version.op} by ${who}`;
+}
+
+/** What a room line says it remembered (`body.memory`). */
+export interface RememberedLine {
+  kind: 'fact' | 'preference';
+  id: string;
+  origin?: string;
+  user?: string;
+  forgotten?: boolean;
+}
+
+/** "Don't keep this" on a room line. */
+export function forgetRemembered(memory: RememberedLine) {
+  return memory.kind === 'fact' ? memoryApi.forgetRecord(memory.id) : memoryApi.forget(memory.id);
 }

@@ -3,6 +3,7 @@
  * gateway's `/api/rooms` routes and `/api/events?rooms=1`.
  */
 import { request } from './http';
+import type { RememberedLine } from './memory';
 
 export interface Room {
   id: string;
@@ -50,6 +51,8 @@ export interface RoomMessage {
     move?: { direction: 'to' | 'from'; roomId: string; roomName: string };
     /** A face's reply still coming in (plan 02). */
     streaming?: boolean;
+    /** A line saying what the brain remembered (plan 03), which "Don't keep" undoes. */
+    memory?: RememberedLine;
   };
   threadId: string | null;
   createdAt: number;
