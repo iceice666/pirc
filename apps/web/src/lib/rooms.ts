@@ -3,6 +3,7 @@
  * gateway's `/api/rooms` routes and `/api/events?rooms=1`.
  */
 import { request } from './http';
+import type { LoopLine } from './loops';
 import type { RememberedLine } from './memory';
 
 export interface Room {
@@ -53,6 +54,8 @@ export interface RoomMessage {
     streaming?: boolean;
     /** A line saying what the brain remembered (plan 03), which "Don't keep" undoes. */
     memory?: RememberedLine;
+    /** A line saying what happened to an open loop (plan 04): undone from the line. */
+    loop?: LoopLine;
   };
   threadId: string | null;
   createdAt: number;
@@ -125,7 +128,8 @@ export interface RoomEvent {
     | 'room_changed'
     | 'room_read'
     | 'room_typing'
-    | 'brain_presence';
+    | 'brain_presence'
+    | 'loop_changed';
   roomId: string;
   epoch: number;
   sequence: number;
@@ -198,7 +202,9 @@ export function connectRooms(options: {
         options.onReset();
       } else if (
         typeof frame?.type === 'string' &&
-        (frame.type.startsWith('room_') || frame.type === 'brain_presence')
+        (frame.type.startsWith('room_') ||
+          frame.type === 'brain_presence' ||
+          frame.type === 'loop_changed')
       ) {
         if (frame.sequence > 0) cursor = `${frame.epoch}:${frame.sequence}`;
         options.onEvent(frame as RoomEvent);

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Paperclip, Pin } from '@lucide/svelte';
   import { ApiError } from '../../http';
+  import { lineAction } from '../../loops';
   import { describeOrigin, forgetRemembered } from '../../memory';
   import { roomsApi, type RoomMessage } from '../../rooms';
 
@@ -56,6 +57,25 @@
   let forgetting = $state(false);
   let forgetError = $state('');
 
+  /** What happened to an open loop, undone from the line once. */
+  const loopAction = $derived(message.body.loop ? lineAction(message.body.loop) : undefined);
+  let loopDone = $state(false);
+
+  async function undoLoop() {
+    if (!loopAction || forgetting) return;
+    forgetting = true;
+    forgetError = '';
+    try {
+      // The gateway says what happened in the room.
+      await loopAction.run();
+      loopDone = true;
+    } catch (cause) {
+      forgetError = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+    } finally {
+      forgetting = false;
+    }
+  }
+
   async function dontKeep() {
     if (!remembered || forgetting) return;
     forgetting = true;
@@ -86,6 +106,13 @@
       >
       <button type="button" class="link" disabled={forgetting} onclick={dontKeep}>Don't keep</button
       >
+    {:else if loopAction}
+      <span>{message.body.text ?? ''}</span>
+      {#if !loopDone}
+        <button type="button" class="link" disabled={forgetting} onclick={undoLoop}
+          >{loopAction.label}</button
+        >
+      {/if}
     {:else}
       <span>{message.body.text ?? ''}</span>
     {/if}

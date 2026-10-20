@@ -2,6 +2,7 @@
   const SETTINGS_TABS = [
     { id: 'general', label: 'General' },
     { id: 'memory', label: 'Memory' },
+    { id: 'loops', label: 'Open loops' },
     { id: 'models', label: 'Models' },
     { id: 'devices', label: 'Devices' },
     { id: 'about', label: 'About' },
@@ -15,6 +16,7 @@
   import { app } from '../../app.svelte';
   import Modal from './Modal.svelte';
   import BackendSettings from '../BackendSettings.svelte';
+  import LoopsSettings from '../LoopsSettings.svelte';
   import MemorySettings from '../MemorySettings.svelte';
   import NotificationSettings from '../NotificationSettings.svelte';
   import PairedDevices from '../PairedDevices.svelte';
@@ -107,6 +109,15 @@
         hidden={settingsTab !== 'memory'}
       >
         <MemorySettings disabled={app.usingDemo} />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="settings-panel-loops"
+        aria-labelledby="settings-tab-loops"
+        hidden={settingsTab !== 'loops'}
+      >
+        <LoopsSettings disabled={app.usingDemo} />
       </div>
 
       <div

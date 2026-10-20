@@ -41,6 +41,8 @@ export class RoomsState {
   typing = $state<Record<string, Record<string, number>>>({});
   /** Faces thinking in each room now: room → face ids (plan 02: the host). */
   thinking = $state<Record<string, string[]>>({});
+  /** Bumped whenever an open loop changes (plan 04), for lists that show them. */
+  loopsRevision = $state(0);
 
   #stream: RoomStream | undefined;
   #lastTyping = 0;
@@ -224,6 +226,9 @@ export class RoomsState {
       }
       case 'room_message_updated':
         this.#replace(event.data.message);
+        break;
+      case 'loop_changed':
+        this.loopsRevision++;
         break;
       case 'room_changed': {
         const room: Room = event.data.room;
