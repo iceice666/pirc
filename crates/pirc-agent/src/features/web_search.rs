@@ -8,9 +8,11 @@ use std::rc::Rc;
 
 use serde_json::{Map, Value, json};
 
+use crate::LocalBoxFuture;
 use crate::agent::Agent;
 use crate::channels::{ChannelError, process_gateway};
 use crate::feature::Feature;
+use crate::signal::AbortSignal;
 use crate::tools::prompts::{PromptVar, tool_prompt};
 use crate::tools::result_schema::{arr, bool_, fields, obj, str_};
 use crate::tools::{Tool, ToolContext, ToolResult, ToolSpec, js, spec_tool, typed};
@@ -31,11 +33,47 @@ impl Feature for WebSearchFeature {
 
     fn tools(&self, agent: &Rc<Agent>) -> Vec<Rc<dyn Tool>> {
         if process_gateway().is_some() && enabled(agent) {
-            vec![Rc::new(WebSearchTool::new())]
+            vec![tool(Rc::new(NodeGateway))]
         } else {
             Vec::new()
         }
     }
+}
+
+/// Where `web_search` sends a query (`web.search`'s arguments): a node
+/// agent's gateway channel, or the gateway itself for its brain
+/// (plans/rewrite/02-brain-host.md). The answer is `{results, cached}`.
+pub trait SearchBackend {
+    fn search<'a>(
+        &'a self,
+        request: Map<String, Value>,
+        signal: &'a AbortSignal,
+    ) -> LocalBoxFuture<'a, Result<Value, ChannelError>>;
+}
+
+/// A node agent's gateway (`channels::process_gateway`).
+struct NodeGateway;
+
+impl SearchBackend for NodeGateway {
+    fn search<'a>(
+        &'a self,
+        request: Map<String, Value>,
+        signal: &'a AbortSignal,
+    ) -> LocalBoxFuture<'a, Result<Value, ChannelError>> {
+        Box::pin(async move {
+            let gateway =
+                process_gateway().ok_or_else(|| ChannelError::Plain("No gateway".to_owned()))?;
+            gateway
+                .gateway
+                .request("web.search", request, Some(signal))
+                .await
+        })
+    }
+}
+
+/// The `web_search` tool over `backend`.
+pub fn tool(backend: Rc<dyn SearchBackend>) -> Rc<dyn Tool> {
+    Rc::new(WebSearchTool::new(backend))
 }
 
 /// `features.webSearch.enabled !== false`.
@@ -195,10 +233,11 @@ fn domains(description: &str) -> Value {
 /// `web_search`.
 struct WebSearchTool {
     spec: ToolSpec,
+    backend: Rc<dyn SearchBackend>,
 }
 
 impl WebSearchTool {
-    fn new() -> Self {
+    fn new(backend: Rc<dyn SearchBackend>) -> Self {
         let description = tool_prompt("web_search", &[("today", PromptVar::Text(&today()))])
             .expect("the web_search description");
         Self {
@@ -253,6 +292,7 @@ impl WebSearchTool {
                     &[],
                 )),
             },
+            backend,
         }
     }
 
@@ -272,11 +312,7 @@ impl WebSearchTool {
                 json!(count.floor().clamp(1.0, 10.0) as i64),
             );
         }
-        let gateway = process_gateway().ok_or_else(|| "No gateway".to_owned())?;
-        let response = gateway
-            .gateway
-            .request("web.search", request, Some(&ctx.signal))
-            .await;
+        let response = self.backend.search(request, &ctx.signal).await;
         let result = match response {
             Ok(result) => result,
             Err(ChannelError::Plain(message)) => return Err(message),
@@ -334,7 +370,7 @@ spec_tool!(WebSearchTool, ptc: true);
 
 #[cfg(test)]
 pub(crate) fn registered_tool_names() -> Vec<String> {
-    vec![WebSearchTool::new().name().to_owned()]
+    vec![WebSearchTool::new(Rc::new(NodeGateway)).name().to_owned()]
 }
 
 #[cfg(test)]
