@@ -19,7 +19,7 @@ use crate::app::{App, AppState};
 use crate::error::ApiResult;
 
 pub use ops::Op;
-pub use store::{Budgets, ProjectChoice, ProjectDecision, ProjectEntry, Store};
+pub use store::{Budgets, Store};
 
 /// The memory store over `conn`, with the configured budgets.
 pub fn store<'a>(app: &App, conn: &'a Connection) -> Store<'a> {
@@ -50,31 +50,6 @@ pub fn routes() -> Router<AppState> {
 pub fn forget_session(app: &App, conn: &Connection, user: &str, session_id: &str) -> ApiResult<()> {
     interactions::ensure_known(app, conn);
     store(app, conn).forget_session(user, session_id)
-}
-
-/// What deleting a project would do to memory its chats wrote.
-pub fn project_plan(
-    app: &App,
-    conn: &Connection,
-    user: &str,
-    sessions: &[String],
-) -> ApiResult<Vec<ProjectEntry>> {
-    store(app, conn).project_plan(user, sessions)
-}
-
-/// Delete what a project's chats wrote to memory, inside the deletion's
-/// transaction (`Store::delete_project`).
-pub fn delete_project(
-    app: &App,
-    conn: &Connection,
-    user: &str,
-    sessions: &[String],
-    scope: &str,
-    decisions: &[(String, ProjectDecision)],
-    strict: bool,
-) -> ApiResult<()> {
-    interactions::ensure_known(app, conn);
-    store(app, conn).delete_project(user, sessions, scope, decisions, strict)
 }
 
 /// The user's memory changed (`MemoryInteractions.changed`): its pending

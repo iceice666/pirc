@@ -39,17 +39,7 @@ CREATE TABLE leases (
 );
 
 CREATE TABLE session_deletions (
-  session_id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL,
-  -- Its workspace, so deleting a project also finds the chats deleted from it before
-  -- (NULL for deletions before schema 1004).
-  workspace_id TEXT
-);
-
--- A chat project being deleted ('deleting') or deleted ('deleted'). The row outlives the
--- project, with no content, so node announcements, late events and restored node backups
--- cannot bring the project back (docs/guides/chat-projects.md).
-CREATE TABLE workspace_deletions (
-  workspace_id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL
+  session_id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL
 );
 
 CREATE TABLE device_tokens (
@@ -83,8 +73,7 @@ CREATE TABLE memory_proposals (
 );
 CREATE INDEX memory_proposals_owner ON memory_proposals(owner_user, status);
 CREATE TABLE memory_tombstones (
-  -- 'global' (Forget, chat deletion) refuses the text from then on; a project's
-  -- workspace id (project deletion) only records it: other chats may write it again.
+  -- 'global' (Forget, chat deletion) refuses the text from then on.
   owner_user TEXT NOT NULL, scope_id TEXT NOT NULL DEFAULT 'global', content_hash TEXT NOT NULL,
   forgotten_at INTEGER NOT NULL,
   PRIMARY KEY (owner_user, scope_id, content_hash)

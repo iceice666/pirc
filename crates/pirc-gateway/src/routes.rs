@@ -277,28 +277,15 @@ fn public_workspace(app: &AppState, workspace: &crate::db::Workspace) -> Value {
     value
 }
 
-pub async fn list_workspaces(
-    State(app): State<AppState>,
-    Extension(identity): Extension<Identity>,
-) -> Handled {
-    let conn = app.db.lock();
-    let mut workspaces: Vec<Value> = conn
+pub async fn list_workspaces(State(app): State<AppState>) -> Handled {
+    let workspaces: Vec<Value> = app
+        .db
+        .lock()
         .list_workspaces()?
         .into_iter()
         .filter(|workspace| workspace.id.contains(':'))
         .map(|workspace| public_workspace(&app, &workspace))
         .collect();
-    // A project whose deletion did not finish stays listed, for its owner to finish it.
-    for workspace in conn.deleting_workspaces()? {
-        let owner = conn
-            .workspace_deletion(&workspace.id)?
-            .map(|d| d.owner_user);
-        if owner.as_deref() == Some(identity.user.as_str()) {
-            let mut item = public_workspace(&app, &workspace);
-            item["deleting"] = json!(true);
-            workspaces.push(item);
-        }
-    }
     Ok(ok(json!({ "workspaces": workspaces })))
 }
 
