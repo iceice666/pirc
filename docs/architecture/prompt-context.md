@@ -2,9 +2,21 @@
 
 This reference preserves the implemented contracts from the completed 2026-10-02 prompt-customization plan (baseline `main@69ae62c`), checked against the Context types and transport. Upgrade requirements are in [Upgrades](../deploy/upgrades.md).
 
-## Prompt files
+## Two kinds of prompt
 
-Coding sessions use AGENTS.md. There is no configurable section ordering. Edits apply at the next agent start, not immediately to running agents.
+The same agent loop (`crates/pirc-agent`) runs in two hosts, and each puts its system prompt together differently (`HostProfile` in `crates/pirc-agent/src/host.rs`).
+
+**Workers** (coding sessions on a node, `HostProfile::Worker`) take their sections from the workspace's mode: the base coding instructions, the global, workspace and project AGENTS.md, and the mode's body (`load_agent_config`). The agent adds what its features contribute for the run, the hook output of `sessionStart`, the capability index of the `ptc` surface and the working directory. There is no configurable section ordering. Edits apply at the next agent start, not immediately to running agents.
+
+**The brain** (`HostProfile::Brain`, plans/rewrite/02-brain-host.md) runs in the gateway and speaks in rooms. Its sections are rebuilt before every turn (`crates/pirc-gateway/src/brain/identity.rs`), so a changed file applies to the next turn, never to one already running:
+
+| Section   | Source                                         | Without it                              |
+| --------- | ---------------------------------------------- | --------------------------------------- |
+| `soul`    | `SOUL.md` in the gateway's `PIRC_CONFIG_DIR`   | a built-in household-assistant identity |
+| `room`    | built-in: the room's name and how batches read | always present                          |
+| `chat-md` | `CHAT.md` in the gateway's `PIRC_CONFIG_DIR`   | left out                                |
+
+Each file is at most 8000 characters. The brain gets no AGENTS.md, skills, hooks, capability index or working directory: it has no workspace, and its few tools (plan 02: `web_search`) are direct tools. `GET /api/brain/prompts` and `PUT /api/brain/prompts/:name` read and write the files unless they are read-only (a Nix store link, a symlink or file permissions).
 
 ## Section and snapshot contracts
 
@@ -19,6 +31,8 @@ Estimates use the message estimator. Observational-memory tokens are allocated o
 The agent retains `lastContext` and atomically replaces `<sessionDir>/context.json` with a mode-0600 exclusive temporary file and rename. The duplicated prompt and tool content is not appended to `session.jsonl`. Snapshots contain prompt/tool information, not raw conversation or provider credentials. They are removed with the session directory; there is no additional automatic retention policy.
 
 Agent RPC `get_context` returns the live snapshot only below its bounded size allowance (at most 512 KiB). Node `GET /api/sessions/:id/panel/context` tries the live runner with an allowance below the RPC line limit, then falls back to the disk snapshot for large, stopped or older agents. Missing context returns `404 no_context` with a send-a-message-first explanation. The gateway relays under the existing session authorization and does not store the snapshot. Context updates use `panel_changed`.
+
+The brain keeps one snapshot per room in `$PIRC_STATE_DIR/brain/rooms/<room>/context.json`, read by `GET /api/brain/context?room=` (`null` before its first model call).
 
 The web Context panel shows sections, sources, frozen badges, tool definitions and usage. Workspace-readable sources can link to Files; global configuration sources are plain text. Copy all returns the joined prompt. Disk snapshots are labeled with their timestamp, not presented as freshly loaded configuration. Editing/reordering prompts from the inspector is not supported. Native Android inspector scope remains a [backlog decision](../../plans/README.md).
 

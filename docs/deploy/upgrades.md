@@ -16,6 +16,15 @@ to `/engine` (`/engine?session=<id>`, `/engine?open=memory`). Reverse proxies
 need the SPA fallback for `/engine` too (docs/deploy/reverse-proxy.md already
 falls back to `index.html` for every path).
 
+The brain answers in the rooms (plans/rewrite/02-brain-host.md): the gateway
+now runs an agent loop itself, with the default model and no node. A
+`pirc.sqlite` from before it (schema 1) gains the `brain_turns` table on first
+start (schema 2); an older gateway refuses schema 2. `SOUL.md` and `CHAT.md`
+moved from the chat node to the gateway's `PIRC_CONFIG_DIR`; copy yours there
+(or set `services.pirc.soulPrompt` / `chatPrompt` again on NixOS, which now
+link them into the gateway's config directory). Messages sent before the
+upgrade that no turn took yet are answered after it starts.
+
 ## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13

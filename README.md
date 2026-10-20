@@ -9,7 +9,7 @@ It consists of:
 - a responsive Svelte PWA;
 - a native Flutter Android client ([`apps/android`](apps/android/README.md)), which pairs through device tokens; browser compatibility and some mobile workflows remain in progress.
 
-The gateway never runs agents or tools; it only runs model requests on their behalf (see [Model backends](docs/guides/model-backends.md)). On a single machine, run the gateway and a node side by side; across devices, each device runs a node that connects to one central gateway over a private VPN. See [gateway and node reference](docs/development/gateway-and-node.md) for setup and the current limitations.
+The gateway never runs sandboxed tools: it runs the brain that answers in the rooms, and model requests on the workers' behalf (see [Model backends](docs/guides/model-backends.md)). On a single machine, run the gateway and a node side by side; across devices, each device runs a node that connects to one central gateway over a private VPN. See [gateway and node reference](docs/development/gateway-and-node.md) for setup and the current limitations.
 
 ## Features
 

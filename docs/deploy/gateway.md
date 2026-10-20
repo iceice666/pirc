@@ -83,6 +83,23 @@ The gateway runs every model request; nodes never see keys or endpoints. Backend
 - A file provider wins over a web backend with the same ID; a web-set default model wins over the file's.
 - The file is validated at startup (invalid → the gateway does not start) and reloaded on `SIGHUP` (invalid → logged and ignored, the previous file stays in force). Running sessions use the new settings on their next request.
 
+## The brain
+
+The gateway runs the brain, the agent that answers in the rooms ([reference](../development/gateway-and-node.md#brain)). It needs a model (the default model of the backends above) and no node. Its files live in the gateway's `PIRC_CONFIG_DIR` (default `~/.config/.pirc` of the gateway's account) and are read again before every turn:
+
+| File         | Meaning                                                                                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SOUL.md`    | Its persona, replacing the built-in identity. At most 8000 characters. Editable in the web UI unless it is a Nix store link, a symlink or read-only. |
+| `CHAT.md`    | House rules for talking in the rooms, after the persona. Same limits.                                                                                |
+| `brain.json` | Settings: `{"debounceSeconds": 3}`, how long it waits after someone's last message or keystroke (0 to 60). Plan 03's preferences take it over.       |
+
+| Variable                     | Default  | Meaning                                                                                       |
+| ---------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `PIRC_BRAIN_TURN_TIMEOUT_MS` | `600000` | A turn running longer is stopped, with a line in its room.                                    |
+| `PIRC_BRAIN`                 | `true`   | `false` starts no brain (development only: rooms become plain chat, nothing answers in them). |
+
+Each room's conversation with the brain is kept in `$PIRC_STATE_DIR/brain/rooms/<room>/`; back it up with the rest of the state directory.
+
 `PIRC_CONFIG_DIR` also holds gateway-owned [workspace modes](../guides/modes.md)
 in `modes/<id>.md`. The gateway seeds a missing directory with the
 default files, loads valid files at startup and on SIGHUP, and distributes the
@@ -98,7 +115,7 @@ starting the daemon.
 | ------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PIRC_MEMORY_USER_CHARS`                          | `2000`               | Character budget of the assistant's USER entries per user.                                                                                               |
 | `PIRC_MEMORY_NOTE_CHARS`                          | `8000`               | Character budget of the assistant's MEMORY notes per user.                                                                                               |
-| `EXA_API_KEY`                                     | unset                | Enables the agents' `web_search` tool (runs on the gateway). Without it the tool reports it is off.                                                      |
+| `EXA_API_KEY`                                     | unset                | Enables `web_search` for the agents and the brain (runs on the gateway). Without it the agents' tool reports it is off and the brain has none.           |
 | `PIRC_VAPID_PUBLIC_KEY`, `PIRC_VAPID_PRIVATE_KEY` | generated            | Web Push signing pair. Set both or neither; without them a pair is created once in `$STATE/vapid.json`. Changing it invalidates every push subscription. |
 | `PIRC_VAPID_SUBJECT`                              | first allowed origin | `mailto:` or `https:` contact push services see.                                                                                                         |
 | `PIRC_PUSH_ALLOW_HTTP`                            | `false`              | Accept plain-http push endpoints (an ntfy/UnifiedPush distributor on the LAN).                                                                           |

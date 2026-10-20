@@ -251,6 +251,39 @@ let
     )
   );
 
+  # The brain's SOUL.md and CHAT.md live in the gateway's PIRC_CONFIG_DIR
+  # (its default under the gateway account's home, the daemon state). Set
+  # here, each is a link into the store, which the web UI shows read-only;
+  # unset, a link left by an earlier setting goes and a file written from
+  # the web UI stays.
+  gatewayConfigDir = cfg.environment.PIRC_CONFIG_DIR or "${daemonState}/.config/.pirc";
+  brainPrompts = pkgs.writeShellScript "pirc-brain-prompts" (
+    ''
+      set -eu
+      PATH=${lib.makeBinPath [ pkgs.coreutils ]}
+      mkdir -p ${lib.escapeShellArg gatewayConfigDir}
+    ''
+    + lib.concatStrings (
+      lib.mapAttrsToList (
+        file: text:
+        let
+          target = lib.escapeShellArg "${gatewayConfigDir}/${file}";
+        in
+        if text == null then
+          ''
+            case "$(readlink ${target} || true)" in /nix/store/*) rm -f ${target} ;; esac
+          ''
+        else
+          ''
+            ln -sfn ${pkgs.writeText file text} ${target}
+          ''
+      ) {
+        "SOUL.md" = cfg.soulPrompt;
+        "CHAT.md" = cfg.chatPrompt;
+      }
+    )
+  );
+
   gatewayUpstream = "http://${cfg.listenAddress}:${toString cfg.port}";
 in
 {
@@ -265,16 +298,6 @@ in
       "pirc"
       "chat"
     ] "There is no chat node any more (plans/rewrite/README.md).")
-    (mkRemovedOptionModule [
-      "services"
-      "pirc"
-      "soulPrompt"
-    ] "Chats and their SOUL.md persona were removed (plans/rewrite/README.md).")
-    (mkRemovedOptionModule [
-      "services"
-      "pirc"
-      "chatPrompt"
-    ] "Chats and their CHAT.md rules were removed (plans/rewrite/README.md).")
     (mkRemovedOptionModule [
       "services"
       "pirc"
@@ -327,8 +350,9 @@ in
         description = ''
           Run `pirc-node` on this host
           as service `pirc-node` so its
-          workspaces can host sessions. The gateway itself never runs agents;
-          disable this for a routing-only gateway that serves remote nodes.
+          workspaces can host sessions. The gateway itself never runs workers
+          (only the brain, which has no sandboxed tools); disable this for a
+          routing-only gateway that serves remote nodes.
         '';
       };
       id = mkOption {
@@ -407,6 +431,18 @@ in
       type = types.nullOr types.lines;
       default = null;
       description = "Optional global AGENTS.md for coding agents.";
+    };
+
+    soulPrompt = mkOption {
+      type = types.nullOr types.lines;
+      default = null;
+      description = "The brain's SOUL.md persona, in the gateway's config directory; replaces the built-in identity. Read-only in the web UI.";
+    };
+
+    chatPrompt = mkOption {
+      type = types.nullOr types.lines;
+      default = null;
+      description = "The brain's CHAT.md house rules for talking in rooms, in the gateway's config directory. Read-only in the web UI.";
     };
 
     skills = mkOption {
@@ -721,7 +757,7 @@ in
           Group = gatewayUser;
           WorkingDirectory = daemonState;
           EnvironmentFile = optional (cfg.environmentFile != null) cfg.environmentFile;
-          ExecStartPre = optional cfg.localNode.enable "+${ensureToken}";
+          ExecStartPre = optional cfg.localNode.enable "+${ensureToken}" ++ [ brainPrompts ];
           ExecStart = gatewayStart;
           ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
           ReadWritePaths = [ daemonState ];

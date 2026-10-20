@@ -20,7 +20,7 @@ The node executable's internal worker commands are not independently deployed se
 
 The Nix gateway package includes the Web UI, but not sandbox/browser runtime. The node includes native sandbox/CDP drivers, but not the Web UI; OAuth runs in the gateway process. Keep every role on the same release/protocol version. The executable split is **not privacy isolation**: OS accounts, filesystem permissions and sandboxing define the protection boundaries.
 
-The gateway never runs agents, shells or tools, and never learns real workspace paths. A node never listens on a port; agents reach their node through a Unix socket in the node's state directory.
+The gateway runs the brain (the agent that answers in the rooms, with gateway-side tools only) but never runs sandboxed tools, shells or workspace inspection, and never learns real workspace paths. A node never listens on a port; agents reach their node through a Unix socket in the node's state directory.
 
 ## Who talks to whom
 

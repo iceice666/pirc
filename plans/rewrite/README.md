@@ -44,7 +44,7 @@
 
 | Plan | 問題                                                                                                |
 | ---- | --------------------------------------------------------------------------------------------------- |
-| 02   | 頭腦用 direct tools 還是受限 script runtime（spike 後定；plan 預設 direct tools）                   |
+| 02   | ~~頭腦用 direct tools 還是受限 script runtime~~ 已定（2026-10-20 spike）：direct tools              |
 | 03   | 偏好確認由頭腦判斷還是程式碼判斷                                                                    |
 | 04   | 「事情本身是時間」用 `auto_close` flag 還是頭腦判斷                                                 |
 | 07   | 「Allow again in this session」for `unsandboxed_bash` / `Outbound`（existing-plans §7.2）           |
