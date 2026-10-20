@@ -121,94 +121,94 @@ async fn agent_session_title() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn agent_title_retry() {
-    // Settings that do not fit the schema count as the defaults.
-    let Some(mut agent) = AgentRun::start(options(
-        json!({ "features": { "sessionTitle": { "enabled": "yes", "maxAttempts": 0 } } }),
-    ))
+    let Some(mut agent) = AgentRun::start(options(json!({}))).await else {
+        return;
+    };
+    agent.route(
+        MARKER,
+        [
+            ModelReply::Failed("Model provider request failed (HTTP 400).".into()),
+            text("<title>Upgrade dependencies</title>"),
+        ],
+    );
+    agent.push([text("Upgrading.")]);
+    agent
+        .call(json!({ "type": "prompt", "message": "upgrade the dependencies" }))
+        .await;
+    agent
+        .until(|line| line["type"] == "session_name_changed")
+        .await;
+    let state = agent.call(json!({ "type": "get_state" })).await;
+    assert_eq!(state["data"]["sessionName"], "Upgrade dependencies");
+    let titles: Vec<_> = agent.take_requests().into_iter().filter(is_title).collect();
+    assert_eq!(titles.len(), 2, "retries without a second human message");
+    assert_eq!(
+        titles[0]["messages"][0]["content"],
+        titles[1]["messages"][0]["content"]
+    );
+    agent.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_title_settings() {
+    let Some(mut agent) = AgentRun::start(options(json!({
+        "features": { "sessionTitle": { "model": { "provider": "fake", "id": "small-model" },
+            "prompt": "Name chats in French.", "maxAttempts": 2 } }
+    })))
     .await
     else {
         return;
     };
-    let mut r = Recorder::new(&agent);
     agent.route(
         MARKER,
-        [ModelReply::Failed(
-            "Model provider request failed (HTTP 400).".to_owned(),
-        )],
+        [
+            ModelReply::Error("inference_failed".into()),
+            text("<title>none</title>"),
+        ],
     );
-    agent.push([text("Upgrading.")]);
-    turn(
-        &mut agent,
-        &mut r,
-        "failed attempt",
-        "upgrade the dependencies",
-        None,
-    )
-    .await;
-    pause().await;
+    agent.push([text("Working.")]);
+    agent
+        .call(json!({ "type": "prompt", "message": "Fix the failing compiler test" }))
+        .await;
+    agent
+        .until(|line| line["type"] == "session_name_changed")
+        .await;
+    let state = agent.call(json!({ "type": "get_state" })).await;
+    assert_eq!(
+        state["data"]["sessionName"],
+        "Fix the failing compiler test"
+    );
+    let titles: Vec<_> = agent.take_requests().into_iter().filter(is_title).collect();
+    assert_eq!(titles.len(), 2);
+    agent.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn human_rename_wins_over_inflight_title() {
+    let Some(mut agent) = AgentRun::start(options(json!({}))).await else {
+        return;
+    };
     let gate = Gate::new();
     agent.route(
         MARKER,
         [ModelReply::gated(
             &gate,
-            text("```json\n{\"title\": \"Upgrade dependencies\"}\n```"),
+            text("<title>Automatic title</title>"),
         )],
     );
-    agent.push([text("Again.")]);
-    turn(
-        &mut agent,
-        &mut r,
-        "retry",
-        "upgrade the dependencies, again",
-        Some(&gate),
-    )
-    .await;
-    r.session(&agent);
-    insta::assert_json_snapshot!("agent_title_retry", r.into_value());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn agent_title_settings() {
-    // Another model, a custom prompt, and two attempts: one fails, one
-    // declines, then no more requests.
-    let Some(mut agent) = AgentRun::start(options(json!({ "features": { "sessionTitle": {
-        "model": { "provider": "fake", "id": "small-model" },
-        "prompt": "  Name chats in French.  ",
-        "maxAttempts": 2,
-    } } })))
-    .await
-    else {
-        return;
-    };
-    let mut r = Recorder::new(&agent);
-    agent.route(MARKER, [ModelReply::Error("inference_failed".to_owned())]);
-    agent.push([text("One.")]);
-    let long = format!("explain {}", "the build system ".repeat(150));
-    turn(&mut agent, &mut r, "failed attempt", &long, None).await;
+    agent.push([text("Working.")]);
+    agent
+        .call(json!({ "type": "prompt", "message": "Fix the compiler test" }))
+        .await;
+    agent.settle().await;
+    agent
+        .call(json!({ "type": "set_session_name", "name": "My title" }))
+        .await;
+    gate.open();
     pause().await;
-    agent.route(MARKER, [text("<title>none</title>")]);
-    agent.push([text("Two.")]);
-    turn(
-        &mut agent,
-        &mut r,
-        "declined",
-        "write the release notes",
-        None,
-    )
-    .await;
-    pause().await;
-    agent.push([text("Three.")]);
-    turn(
-        &mut agent,
-        &mut r,
-        "no attempts left",
-        "fix the flaky test",
-        None,
-    )
-    .await;
     let state = agent.call(json!({ "type": "get_state" })).await;
-    r.note("state", state);
-    insta::assert_json_snapshot!("agent_title_settings", r.into_value());
+    assert_eq!(state["data"]["sessionName"], "My title");
+    agent.finish().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

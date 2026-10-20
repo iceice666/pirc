@@ -2,8 +2,8 @@
 //! after oh-my-pi's title generator. The first user message that describes
 //! work is sent to a model in a side request (no tools, no thinking) that
 //! answers with `<title>…</title>`. Greetings are skipped without a model
-//! call, and a failed or declined attempt is retried on the next message
-//! while the session stays unnamed.
+//! call. Failed requests retry in the background using the same first message;
+//! a bounded local fallback keeps provider errors from leaving sessions unnamed.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -305,7 +305,23 @@ struct TitleState {
     next: Cell<u64>,
 }
 
-/// `attempt`: best effort; the next message retries while attempts remain.
+/// A non-model fallback, bounded like generated titles. It uses the original
+/// meaningful message, never a later "why is this not named?" follow-up.
+fn fallback_title(text: &str) -> Option<String> {
+    let line = text.lines().map(str::trim).find(|line| !line.is_empty())?;
+    let compact = line.split_whitespace().collect::<Vec<_>>().join(" ");
+    if compact.is_empty() {
+        return None;
+    }
+    let prefix: String = compact.chars().take(60).collect();
+    Some(if prefix.len() < compact.len() {
+        format!("{prefix}…")
+    } else {
+        prefix
+    })
+}
+
+/// Retry independently of the chat run; cancellation and a human rename win.
 async fn attempt(state: Rc<TitleState>, agent: Rc<Agent>, text: String) {
     let controller = AbortController::new();
     let id = state.next.get();
@@ -313,13 +329,29 @@ async fn attempt(state: Rc<TitleState>, agent: Rc<Agent>, text: String) {
     *state.inflight.borrow_mut() = Some((id, controller.clone()));
     // `AbortSignal.any([controller.signal, AbortSignal.timeout(TIMEOUT_MS)])`.
     let combined = AbortController::child_of(&controller.signal());
-    let title = tokio::select! {
-        title = generate_title(&agent, &text, combined.signal()) => title,
-        () = tokio::time::sleep(Duration::from_millis(TIMEOUT_MS)) => {
-            combined.abort();
-            None
+    let max_attempts = title_settings(&agent).max_attempts;
+    let mut title = None;
+    while state.attempts.get() < max_attempts
+        && !controller.signal().aborted()
+        && agent.session_name().is_none()
+    {
+        state.attempts.set(state.attempts.get() + 1);
+        let request = AbortController::child_of(&combined.signal());
+        title = tokio::select! {
+            title = generate_title(&agent, &text, request.signal()) => title,
+            () = tokio::time::sleep(Duration::from_millis(TIMEOUT_MS)) => {
+                request.abort();
+                None
+            }
+        };
+        if title.is_some() || controller.signal().aborted() {
+            break;
         }
-    };
+        if state.attempts.get() < max_attempts {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    }
+    let title = title.or_else(|| fallback_title(&text));
     // A user rename while the request was in flight wins.
     if let Some(title) = title
         && !controller.signal().aborted()
@@ -357,7 +389,6 @@ impl Feature for TitleFeature {
         if is_low_signal_title_input(text) {
             return;
         }
-        self.state.attempts.set(self.state.attempts.get() + 1);
         crate::spawn_eager(attempt(self.state.clone(), agent.clone(), text.to_owned()));
     }
 
@@ -375,6 +406,23 @@ impl Feature for TitleFeature {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn fallback_uses_the_first_line_and_bounds_unicode_without_markup_parsing() {
+        assert_eq!(
+            fallback_title("  Fix   the compiler\nprivate context"),
+            Some("Fix the compiler".into())
+        );
+        assert_eq!(
+            fallback_title("<title>user text</title>"),
+            Some("<title>user text</title>".into())
+        );
+        assert_eq!(fallback_title(" \n "), None);
+        assert_eq!(
+            fallback_title(&"中".repeat(80)).unwrap(),
+            format!("{}…", "中".repeat(60))
+        );
+    }
 
     #[test]
     fn extracts_and_cleans_the_tagged_title() {
