@@ -1,0 +1,1526 @@
+---
+source: crates/pirc-conformance/tests/rooms.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "gateway.sqlite": false,
+      "pirc.sqlite": true
+    },
+    "step": "the gateway's database files"
+  },
+  {
+    "body": {
+      "rooms": [
+        {
+          "archivedAt": null,
+          "createdAt": "<epoch-ms>",
+          "id": "general",
+          "kind": "general",
+          "lastActivityAt": "<epoch-ms>",
+          "lastSeq": 0,
+          "movedFromRoomId": null,
+          "movedToRoomId": null,
+          "name": "general",
+          "readSeq": 0,
+          "sourceScope": null,
+          "unread": 0,
+          "waiting": false,
+          "waitingSince": null
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/rooms",
+    "status": 200,
+    "step": "a new gateway has #general"
+  },
+  {
+    "observed": {
+      "type": "ready",
+      "watermark": {
+        "epoch": "<epoch-ms>",
+        "sequence": 0
+      }
+    },
+    "step": "a room socket starts with where the stream stands"
+  },
+  {
+    "body": {
+      "room": {
+        "archivedAt": null,
+        "createdAt": "<epoch-ms>",
+        "id": "room_<uuid:1>",
+        "kind": "topic",
+        "lastActivityAt": "<epoch-ms>",
+        "lastSeq": 0,
+        "movedFromRoomId": null,
+        "movedToRoomId": null,
+        "name": "SlimeOS討論區",
+        "sourceScope": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms",
+    "status": 201,
+    "step": "create a room"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "A room name has 1 to 80 characters"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms",
+    "status": 400,
+    "step": "a name that is empty"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "A room name has 1 to 80 characters"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms",
+    "status": 400,
+    "step": "a name that is too long"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms",
+    "status": 400,
+    "step": "no name"
+  },
+  {
+    "observed": [
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "room_<uuid:1>",
+            "kind": "topic",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 0,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "SlimeOS討論區",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "room_<uuid:1>",
+        "sequence": 1,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      }
+    ],
+    "step": "the other user sees the room appear"
+  },
+  {
+    "body": {
+      "message": {
+        "body": {
+          "text": "SlimeOS"
+        },
+        "createdAt": "<epoch-ms>",
+        "editedAt": null,
+        "id": "msg_<uuid:2>",
+        "kind": "text",
+        "pinnedAt": null,
+        "roomId": "general",
+        "seq": 1,
+        "speaker": "user",
+        "threadId": null,
+        "user": "test@example.com"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/general/messages",
+    "status": 201,
+    "step": "send \"SlimeOS\""
+  },
+  {
+    "body": {
+      "message": {
+        "body": {
+          "text": "PR#123"
+        },
+        "createdAt": "<epoch-ms>",
+        "editedAt": null,
+        "id": "msg_<uuid:3>",
+        "kind": "text",
+        "pinnedAt": null,
+        "roomId": "general",
+        "seq": 2,
+        "speaker": "user",
+        "threadId": null,
+        "user": "test@example.com"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/general/messages",
+    "status": 201,
+    "step": "send \"PR#123\""
+  },
+  {
+    "body": {
+      "message": {
+        "body": {
+          "text": "怎樣了？"
+        },
+        "createdAt": "<epoch-ms>",
+        "editedAt": null,
+        "id": "msg_<uuid:4>",
+        "kind": "text",
+        "pinnedAt": null,
+        "roomId": "general",
+        "seq": 3,
+        "speaker": "user",
+        "threadId": null,
+        "user": "test@example.com"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/general/messages",
+    "status": 201,
+    "step": "send \"怎樣了？\""
+  },
+  {
+    "observed": [
+      {
+        "data": {
+          "message": {
+            "body": {
+              "text": "SlimeOS"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:2>",
+            "kind": "text",
+            "pinnedAt": null,
+            "roomId": "general",
+            "seq": 1,
+            "speaker": "user",
+            "threadId": null,
+            "user": "test@example.com"
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 2,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "general",
+            "kind": "general",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 1,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "general",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 3,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "text": "PR#123"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:3>",
+            "kind": "text",
+            "pinnedAt": null,
+            "roomId": "general",
+            "seq": 2,
+            "speaker": "user",
+            "threadId": null,
+            "user": "test@example.com"
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 5,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "general",
+            "kind": "general",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 2,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "general",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 6,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "text": "怎樣了？"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:4>",
+            "kind": "text",
+            "pinnedAt": null,
+            "roomId": "general",
+            "seq": 3,
+            "speaker": "user",
+            "threadId": null,
+            "user": "test@example.com"
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 8,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      }
+    ],
+    "step": "the other user's socket: three messages, no reads of mine"
+  },
+  {
+    "observed": [
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "room_<uuid:1>",
+            "kind": "topic",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 0,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "SlimeOS討論區",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "room_<uuid:1>",
+        "sequence": 1,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "text": "SlimeOS"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:2>",
+            "kind": "text",
+            "pinnedAt": null,
+            "roomId": "general",
+            "seq": 1,
+            "speaker": "user",
+            "threadId": null,
+            "user": "test@example.com"
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 2,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "general",
+            "kind": "general",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 1,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "general",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 3,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "readSeq": 1,
+          "user": "test@example.com"
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 4,
+        "timestamp": "<epoch-ms>",
+        "type": "room_read"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "text": "PR#123"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:3>",
+            "kind": "text",
+            "pinnedAt": null,
+            "roomId": "general",
+            "seq": 2,
+            "speaker": "user",
+            "threadId": null,
+            "user": "test@example.com"
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 5,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "general",
+            "kind": "general",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 2,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "general",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 6,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "readSeq": 2,
+          "user": "test@example.com"
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 7,
+        "timestamp": "<epoch-ms>",
+        "type": "room_read"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "text": "怎樣了？"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:4>",
+            "kind": "text",
+            "pinnedAt": null,
+            "roomId": "general",
+            "seq": 3,
+            "speaker": "user",
+            "threadId": null,
+            "user": "test@example.com"
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 8,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "general",
+            "kind": "general",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 3,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "general",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 9,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "readSeq": 3,
+          "user": "test@example.com"
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 10,
+        "timestamp": "<epoch-ms>",
+        "type": "room_read"
+      }
+    ],
+    "step": "my socket: the room's changes and my own reads too"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/general/messages",
+    "status": 400,
+    "step": "an empty message"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "An attachment is not an unsent upload of yours in this room"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/general/messages",
+    "status": 400,
+    "step": "an unknown attachment"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Room not found"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/nope/messages",
+    "status": 404,
+    "step": "a room that is not there"
+  },
+  {
+    "observed": {
+      "mine": {
+        "readSeq": 3,
+        "unread": 0
+      },
+      "order": [
+        "general",
+        "SlimeOS討論區"
+      ],
+      "theirs": {
+        "readSeq": 0,
+        "unread": 3
+      }
+    },
+    "step": "unread: my own messages are read, the other user has three"
+  },
+  {
+    "body": {
+      "room": {
+        "archivedAt": null,
+        "createdAt": "<epoch-ms>",
+        "id": "general",
+        "kind": "general",
+        "lastActivityAt": "<epoch-ms>",
+        "lastSeq": 3,
+        "movedFromRoomId": null,
+        "movedToRoomId": null,
+        "name": "general",
+        "readSeq": 2,
+        "sourceScope": null,
+        "unread": 1,
+        "waiting": false,
+        "waitingSince": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/general/read",
+    "status": 200,
+    "step": "the other user reads two"
+  },
+  {
+    "observed": [
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "general",
+            "kind": "general",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 3,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "general",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 9,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "readSeq": 2,
+          "user": "other@example.com"
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 11,
+        "timestamp": "<epoch-ms>",
+        "type": "room_read"
+      }
+    ],
+    "step": "their socket learns it"
+  },
+  {
+    "body": {
+      "room": {
+        "archivedAt": null,
+        "createdAt": "<epoch-ms>",
+        "id": "general",
+        "kind": "general",
+        "lastActivityAt": "<epoch-ms>",
+        "lastSeq": 3,
+        "movedFromRoomId": null,
+        "movedToRoomId": null,
+        "name": "general",
+        "readSeq": 2,
+        "sourceScope": null,
+        "unread": 1,
+        "waiting": false,
+        "waitingSince": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/general/read",
+    "status": 200,
+    "step": "reading never goes back"
+  },
+  {
+    "body": null,
+    "request": "POST /api/rooms/general/typing",
+    "status": 204,
+    "step": "I am typing"
+  },
+  {
+    "observed": [
+      {
+        "data": {
+          "device": "web",
+          "expiresAt": "<epoch-ms>",
+          "user": "test@example.com"
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 0,
+        "timestamp": "<epoch-ms>",
+        "type": "room_typing"
+      }
+    ],
+    "step": "the other user sees it, outside the sequence"
+  },
+  {
+    "body": {
+      "hasMore": true,
+      "messages": [
+        {
+          "body": {
+            "text": "PR#123"
+          },
+          "createdAt": "<epoch-ms>",
+          "editedAt": null,
+          "id": "msg_<uuid:3>",
+          "kind": "text",
+          "pinnedAt": null,
+          "roomId": "general",
+          "seq": 2,
+          "speaker": "user",
+          "threadId": null,
+          "user": "test@example.com"
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/rooms/general/messages?before=3&limit=1",
+    "status": 200,
+    "step": "a page of older messages"
+  },
+  {
+    "body": {
+      "message": {
+        "body": {
+          "text": "PR#123"
+        },
+        "createdAt": "<epoch-ms>",
+        "editedAt": null,
+        "id": "msg_<uuid:3>",
+        "kind": "text",
+        "pinnedAt": "<epoch-ms>",
+        "roomId": "general",
+        "seq": 2,
+        "speaker": "user",
+        "threadId": null,
+        "user": "test@example.com"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/general/messages/<message>/pin",
+    "status": 200,
+    "step": "pin a message"
+  },
+  {
+    "body": {
+      "upload": {
+        "byteSize": 11,
+        "createdAt": "<epoch-ms>",
+        "filename": null,
+        "id": "upload_<uuid:5>",
+        "kind": "image",
+        "messageId": null,
+        "mimeType": "image/png",
+        "roomId": "room_<uuid:1>",
+        "sha256": "<sha256:1>",
+        "user": "test@example.com"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/<topic>/uploads",
+    "status": 201,
+    "step": "upload an image"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "bad_request",
+        "message": "filename is required for non-image uploads"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/<topic>/uploads",
+    "status": 400,
+    "step": "a file needs a name"
+  },
+  {
+    "body": {
+      "message": {
+        "body": {
+          "attachments": [
+            {
+              "byteSize": 11,
+              "filename": null,
+              "id": "upload_<uuid:5>",
+              "kind": "image",
+              "mimeType": "image/png"
+            }
+          ],
+          "text": ""
+        },
+        "createdAt": "<epoch-ms>",
+        "editedAt": null,
+        "id": "msg_<uuid:6>",
+        "kind": "text",
+        "pinnedAt": null,
+        "roomId": "room_<uuid:1>",
+        "seq": 1,
+        "speaker": "user",
+        "threadId": null,
+        "user": "test@example.com"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/<topic>/messages",
+    "status": 201,
+    "step": "send it, now"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "An attachment is not an unsent upload of yours in this room"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/<topic>/messages",
+    "status": 400,
+    "step": "an upload goes with one message"
+  },
+  {
+    "observed": {
+      "headers": [
+        [
+          "content-type",
+          "image/png"
+        ]
+      ],
+      "status": 200
+    },
+    "step": "the other user downloads it"
+  },
+  {
+    "body": {
+      "from": {
+        "archivedAt": null,
+        "createdAt": "<epoch-ms>",
+        "id": "general",
+        "kind": "general",
+        "lastActivityAt": "<epoch-ms>",
+        "lastSeq": 4,
+        "movedFromRoomId": null,
+        "movedToRoomId": "room_<uuid:1>",
+        "name": "general",
+        "sourceScope": null
+      },
+      "fromLine": {
+        "body": {
+          "move": {
+            "direction": "to",
+            "roomId": "room_<uuid:1>",
+            "roomName": "SlimeOS討論區"
+          },
+          "text": "Continued in #SlimeOS討論區"
+        },
+        "createdAt": "<epoch-ms>",
+        "editedAt": null,
+        "id": "msg_<uuid:7>",
+        "kind": "line",
+        "pinnedAt": null,
+        "roomId": "general",
+        "seq": 4,
+        "speaker": "face:host",
+        "threadId": null,
+        "user": null
+      },
+      "to": {
+        "archivedAt": null,
+        "createdAt": "<epoch-ms>",
+        "id": "room_<uuid:1>",
+        "kind": "topic",
+        "lastActivityAt": "<epoch-ms>",
+        "lastSeq": 2,
+        "movedFromRoomId": "general",
+        "movedToRoomId": null,
+        "name": "SlimeOS討論區",
+        "sourceScope": null
+      },
+      "toLine": {
+        "body": {
+          "move": {
+            "direction": "from",
+            "roomId": "general",
+            "roomName": "general"
+          },
+          "text": "Continued from #general"
+        },
+        "createdAt": "<epoch-ms>",
+        "editedAt": null,
+        "id": "msg_<uuid:8>",
+        "kind": "line",
+        "pinnedAt": null,
+        "roomId": "room_<uuid:1>",
+        "seq": 2,
+        "speaker": "face:host",
+        "threadId": null,
+        "user": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/general/move",
+    "status": 200,
+    "step": "move on to the topic room"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "A room cannot move into itself"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/general/move",
+    "status": 400,
+    "step": "a room cannot move into itself"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "#general cannot be archived"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/rooms/general",
+    "status": 409,
+    "step": "#general cannot be archived"
+  },
+  {
+    "body": {
+      "room": {
+        "archivedAt": "<epoch-ms>",
+        "createdAt": "<epoch-ms>",
+        "id": "room_<uuid:1>",
+        "kind": "topic",
+        "lastActivityAt": "<epoch-ms>",
+        "lastSeq": 2,
+        "movedFromRoomId": "general",
+        "movedToRoomId": null,
+        "name": "SlimeOS討論區",
+        "readSeq": 1,
+        "sourceScope": null,
+        "unread": 1,
+        "waiting": false,
+        "waitingSince": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/rooms/<topic>",
+    "status": 200,
+    "step": "archive the topic room"
+  },
+  {
+    "body": {
+      "rooms": [
+        {
+          "archivedAt": null,
+          "createdAt": "<epoch-ms>",
+          "id": "general",
+          "kind": "general",
+          "lastActivityAt": "<epoch-ms>",
+          "lastSeq": 4,
+          "movedFromRoomId": null,
+          "movedToRoomId": "room_<uuid:1>",
+          "name": "general",
+          "readSeq": 3,
+          "sourceScope": null,
+          "unread": 1,
+          "waiting": false,
+          "waitingSince": null
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/rooms",
+    "status": 200,
+    "step": "archived rooms leave the list"
+  },
+  {
+    "observed": 2,
+    "step": "and are listed when asked for"
+  },
+  {
+    "body": {
+      "pinned": [],
+      "room": {
+        "archivedAt": "<epoch-ms>",
+        "createdAt": "<epoch-ms>",
+        "id": "room_<uuid:1>",
+        "kind": "topic",
+        "lastActivityAt": "<epoch-ms>",
+        "lastSeq": 2,
+        "movedFromRoomId": "general",
+        "movedToRoomId": null,
+        "name": "SlimeOS討論區",
+        "readSeq": 0,
+        "sourceScope": null,
+        "unread": 2,
+        "waiting": false,
+        "waitingSince": null
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/rooms/<topic>",
+    "status": 200,
+    "step": "its URL still reads"
+  },
+  {
+    "body": {
+      "hasMore": false,
+      "messages": [
+        {
+          "body": {
+            "attachments": [
+              {
+                "byteSize": 11,
+                "filename": null,
+                "id": "upload_<uuid:5>",
+                "kind": "image",
+                "mimeType": "image/png"
+              }
+            ],
+            "text": ""
+          },
+          "createdAt": "<epoch-ms>",
+          "editedAt": null,
+          "id": "msg_<uuid:6>",
+          "kind": "text",
+          "pinnedAt": null,
+          "roomId": "room_<uuid:1>",
+          "seq": 1,
+          "speaker": "user",
+          "threadId": null,
+          "user": "test@example.com"
+        },
+        {
+          "body": {
+            "move": {
+              "direction": "from",
+              "roomId": "general",
+              "roomName": "general"
+            },
+            "text": "Continued from #general"
+          },
+          "createdAt": "<epoch-ms>",
+          "editedAt": null,
+          "id": "msg_<uuid:8>",
+          "kind": "line",
+          "pinnedAt": null,
+          "roomId": "room_<uuid:1>",
+          "seq": 2,
+          "speaker": "face:host",
+          "threadId": null,
+          "user": null
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "GET /api/rooms/<topic>/messages",
+    "status": 200,
+    "step": "and its messages"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "This room is archived"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/rooms/<topic>/messages",
+    "status": 409,
+    "step": "it takes no new messages"
+  },
+  {
+    "observed": [
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "room_<uuid:1>",
+            "kind": "topic",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 0,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "SlimeOS討論區",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "room_<uuid:1>",
+        "sequence": 1,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "text": "SlimeOS"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:2>",
+            "kind": "text",
+            "pinnedAt": null,
+            "roomId": "general",
+            "seq": 1,
+            "speaker": "user",
+            "threadId": null,
+            "user": "test@example.com"
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 2,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "general",
+            "kind": "general",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 1,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "general",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 3,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "text": "PR#123"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:3>",
+            "kind": "text",
+            "pinnedAt": null,
+            "roomId": "general",
+            "seq": 2,
+            "speaker": "user",
+            "threadId": null,
+            "user": "test@example.com"
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 5,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "general",
+            "kind": "general",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 2,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "general",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 6,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "text": "怎樣了？"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:4>",
+            "kind": "text",
+            "pinnedAt": null,
+            "roomId": "general",
+            "seq": 3,
+            "speaker": "user",
+            "threadId": null,
+            "user": "test@example.com"
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 8,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "general",
+            "kind": "general",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 3,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "general",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 9,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "readSeq": 2,
+          "user": "other@example.com"
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 11,
+        "timestamp": "<epoch-ms>",
+        "type": "room_read"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "text": "PR#123"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:3>",
+            "kind": "text",
+            "pinnedAt": "<epoch-ms>",
+            "roomId": "general",
+            "seq": 2,
+            "speaker": "user",
+            "threadId": null,
+            "user": "test@example.com"
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 12,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message_updated"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "attachments": [
+                {
+                  "byteSize": 11,
+                  "filename": null,
+                  "id": "upload_<uuid:5>",
+                  "kind": "image",
+                  "mimeType": "image/png"
+                }
+              ],
+              "text": ""
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:6>",
+            "kind": "text",
+            "pinnedAt": null,
+            "roomId": "room_<uuid:1>",
+            "seq": 1,
+            "speaker": "user",
+            "threadId": null,
+            "user": "test@example.com"
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "room_<uuid:1>",
+        "sequence": 13,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "room_<uuid:1>",
+            "kind": "topic",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 1,
+            "movedFromRoomId": null,
+            "movedToRoomId": null,
+            "name": "SlimeOS討論區",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "room_<uuid:1>",
+        "sequence": 14,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "move": {
+                "direction": "to",
+                "roomId": "room_<uuid:1>",
+                "roomName": "SlimeOS討論區"
+              },
+              "text": "Continued in #SlimeOS討論區"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:7>",
+            "kind": "line",
+            "pinnedAt": null,
+            "roomId": "general",
+            "seq": 4,
+            "speaker": "face:host",
+            "threadId": null,
+            "user": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 16,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      },
+      {
+        "data": {
+          "message": {
+            "body": {
+              "move": {
+                "direction": "from",
+                "roomId": "general",
+                "roomName": "general"
+              },
+              "text": "Continued from #general"
+            },
+            "createdAt": "<epoch-ms>",
+            "editedAt": null,
+            "id": "msg_<uuid:8>",
+            "kind": "line",
+            "pinnedAt": null,
+            "roomId": "room_<uuid:1>",
+            "seq": 2,
+            "speaker": "face:host",
+            "threadId": null,
+            "user": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "room_<uuid:1>",
+        "sequence": 17,
+        "timestamp": "<epoch-ms>",
+        "type": "room_message"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "general",
+            "kind": "general",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 4,
+            "movedFromRoomId": null,
+            "movedToRoomId": "room_<uuid:1>",
+            "name": "general",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "general",
+        "sequence": 18,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": null,
+            "createdAt": "<epoch-ms>",
+            "id": "room_<uuid:1>",
+            "kind": "topic",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 2,
+            "movedFromRoomId": "general",
+            "movedToRoomId": null,
+            "name": "SlimeOS討論區",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "room_<uuid:1>",
+        "sequence": 19,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "data": {
+          "room": {
+            "archivedAt": "<epoch-ms>",
+            "createdAt": "<epoch-ms>",
+            "id": "room_<uuid:1>",
+            "kind": "topic",
+            "lastActivityAt": "<epoch-ms>",
+            "lastSeq": 2,
+            "movedFromRoomId": "general",
+            "movedToRoomId": null,
+            "name": "SlimeOS討論區",
+            "sourceScope": null
+          }
+        },
+        "epoch": "<epoch-ms>",
+        "roomId": "room_<uuid:1>",
+        "sequence": 20,
+        "timestamp": "<epoch-ms>",
+        "type": "room_changed"
+      },
+      {
+        "type": "ready",
+        "watermark": {
+          "epoch": "<epoch-ms>",
+          "sequence": 20
+        }
+      }
+    ],
+    "step": "replay from the first cursor"
+  },
+  {
+    "observed": [
+      {
+        "reason": "cursor_expired_or_gateway_restarted",
+        "type": "reset",
+        "watermark": {
+          "epoch": "<epoch-ms>",
+          "sequence": 20
+        }
+      },
+      {
+        "type": "ready",
+        "watermark": {
+          "epoch": "<epoch-ms>",
+          "sequence": 20
+        }
+      }
+    ],
+    "step": "a cursor from another gateway start"
+  },
+  {
+    "observed": {
+      "closed": 4400,
+      "reason": "Invalid request"
+    },
+    "step": "rooms and a session at once"
+  },
+  {
+    "observed": {
+      "closed": 4400,
+      "reason": "Invalid request"
+    },
+    "step": "neither"
+  },
+  {
+    "observed": {
+      "closed": 4400,
+      "reason": "cursor must be epoch:sequence"
+    },
+    "step": "a malformed cursor"
+  }
+]

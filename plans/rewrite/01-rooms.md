@@ -40,12 +40,12 @@ faces(id, name, bio, tone, avatar, color, created_at)        -- 10 用；這裡�
 ## 工作項目
 
 - [x] 新 DB 檔與 migration 骨架（`db.rs` 拆成 `db/{mod,rooms,engine}.rs`；worker 的 `sessions`/`commands`/`leases` 等表原樣搬進新檔）。（2026-10-20）新檔以 `PRAGMA application_id`（"pirc"）辨認，沒有它的非空檔一律拒絕（舊 gateway 的 1000–1005 與 TS 的 1–19 都會撞到從 1 起算的版本號）；`session_deletions` 與它的 409 fence 不進新檔（新檔不可能有未完成的舊刪除）；`schema-1000.sql` 與 1001–1005 migration 刪除。
-- [ ] `rooms.rs`：store + 不變量（`#general` 唯一且不可封存；封存不刪訊息；搬家寫兩條 line）。
-- [ ] `routes/rooms.rs`；`events.rs` 加 room 事件流；`sockets.rs` 的訂閱。
-- [ ] typing 與 pending 累積（純資料；02 加排程）。
+- [x] `rooms.rs`：store + 不變量（`#general` 唯一且不可封存；封存不刪訊息；搬家寫兩條 line）。（2026-10-20）store 在 `db/rooms.rs`，事件與 typing 在 `rooms.rs`。房間屬於整個 household（所有 allowed users 共用），讀取 / 未讀 / 等你回話分人；`#general` 的唯一與不可封存另有 partial unique index 與 CHECK 擋在 SQL 層；封存的房間仍可讀，但不收新訊息（409）直到解封；`user` 訊息另存 `user` 欄記誰送的（schema 多一欄）；自己送的訊息算已讀，且會清掉自己在該房間的 `waiting_since`。
+- [x] `routes/rooms.rs`；`events.rs` 加 room 事件流；`sockets.rs` 的訂閱。（2026-10-20）另加 `GET /api/rooms/:id`（含釘選，封存的房間靠它從 URL 讀）與 `GET /api/rooms/:id/uploads/:uid`（圖片 inline，其餘一律 `attachment` + `nosniff` + sandbox CSP）。房間事件流的 cursor 是 `epoch:sequence`，epoch 是 gateway 這次啟動的時間（重啟後舊 cursor 一律 reset）；一個 socket 只跟一條流（`sessionId` 與 `rooms=1` 擇一）；開頭送 `ready {watermark}`；`room_read` 只送給本人；`room_typing` 的 sequence 為 0、不 replay。附件存在 `PIRC_UPLOADS_DIR`（`room-*.bin`，0600），一個 upload 只能跟一則訊息。
+- [x] typing 與 pending 累積（純資料；02 加排程）。（2026-10-20）typing 只在記憶體（每房間 / 使用者 / 裝置最後一次按鍵，6 秒過期）；`room_pending` 入表，send-now（`immediate`）一旦出現就整批跳過 debounce；`list_pending` / `take_pending` 留給 02。
 - [ ] `push.rs`：room deep link；`features.rs` 的 hint 改成 rooms。
 - [ ] Web 最小 UI：房間列表（活動排序、未讀點、等你回話標記）、訊息列（頭像 / 名字 / 時間 / 內容，無 bubble）、composer（送出即顯示；`Cmd+Enter` 立即送出 flag 先傳到 API，02 才有意義）。放在 `App.svelte` 的新頂層，Work tab 退到 `/engine` 路由。
-- [ ] conformance：`rooms.rs` scenario（建房、送訊、未讀、封存、搬家、cursor replay、typing 不入 DB）。
+- [x] conformance：`rooms.rs` scenario（建房、送訊、未讀、封存、搬家、cursor replay、typing 不入 DB）。（2026-10-20）`tests/rooms.rs` + `snapshots/rooms__rooms.snap`；兩個使用者、上傳與釘選也在裡面，「typing 不入 DB」以「不被 replay」驗證，DB 層另有 unit test。
 - [ ] `fixtures/timeline/`：加 room 事件的 golden case（舊 session case 保留給引擎蓋）。
 
 ## 驗證

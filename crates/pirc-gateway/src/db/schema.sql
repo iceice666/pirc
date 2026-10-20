@@ -190,10 +190,14 @@ CREATE TABLE faces (
 );
 
 -- Files sent into rooms, kept by the gateway (it has no node to keep them
--- on): name and type as sniffed, the file under <state>/room-uploads/<id>.
+-- on) under PIRC_UPLOADS_DIR/<storage_name>, with the session uploads' rules:
+-- kind 'image' (sniffed) or 'file' (named). message_id: the message that
+-- carries it, once sent. Nothing deletes them yet (no retention).
 CREATE TABLE room_uploads (
   id TEXT PRIMARY KEY, room_id TEXT NOT NULL REFERENCES rooms(id), user TEXT NOT NULL,
-  name TEXT NOT NULL, mime_type TEXT NOT NULL, size INTEGER NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('image', 'file')), filename TEXT,
+  mime_type TEXT NOT NULL, byte_size INTEGER NOT NULL, sha256 TEXT NOT NULL,
+  storage_name TEXT NOT NULL UNIQUE,
   message_id TEXT REFERENCES room_messages(id), created_at INTEGER NOT NULL
 );
 CREATE INDEX room_uploads_room ON room_uploads(room_id);

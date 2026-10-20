@@ -299,11 +299,296 @@ impl Drop for Subscription {
     }
 }
 
+// ---- rooms --------------------------------------------------------------------
+
+/// One event of the room stream (plans/rewrite/01-rooms.md): every room's
+/// messages, reads and changes in one sequence, which the gateway owns and
+/// no runner epoch touches. Its `epoch` is the hub's start, so a cursor from
+/// before a gateway restart is answered with a reset.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomEvent {
+    pub room_id: String,
+    pub epoch: i64,
+    pub sequence: u64,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub data: Value,
+    pub timestamp: i64,
+    /// The one user the event is for (their reads); everyone's otherwise.
+    #[serde(skip)]
+    pub audience: Option<String>,
+    /// The stream's sequence when it was published: its own, or for an
+    /// ephemeral event (sequence 0) the latest numbered one.
+    #[serde(skip)]
+    pub watermark: u64,
+}
+
+impl RoomEvent {
+    pub fn is_for(&self, user: &str) -> bool {
+        self.audience
+            .as_deref()
+            .is_none_or(|audience| audience == user)
+    }
+}
+
+pub type RoomListener = Arc<dyn Fn(&RoomEvent) + Send + Sync>;
+
+#[derive(Default)]
+struct RoomState {
+    sequence: u64,
+    events: VecDeque<Arc<RoomEvent>>,
+    sizes: VecDeque<usize>,
+    bytes: usize,
+    listeners: HashMap<u64, RoomListener>,
+}
+
+/// The room stream: bounded replay like a session's ([`EventHub`]), plus
+/// ephemeral events (typing) that are neither numbered nor kept.
+pub struct RoomHub {
+    epoch: i64,
+    capacity: usize,
+    max_bytes: usize,
+    state: Mutex<RoomState>,
+    next_listener: AtomicU64,
+}
+
+/// What a room socket gets first.
+pub struct RoomReplay {
+    pub reset: bool,
+    pub events: Vec<Arc<RoomEvent>>,
+    pub watermark: Cursor,
+}
+
+fn room_event_size(event: &RoomEvent) -> usize {
+    serde_json::to_vec(event).map_or(0, |bytes| bytes.len())
+}
+
+impl RoomHub {
+    pub fn new(capacity: usize) -> Arc<Self> {
+        Self::with_limits(now_ms(), capacity, REPLAY_MAX_BYTES)
+    }
+
+    pub fn with_limits(epoch: i64, capacity: usize, max_bytes: usize) -> Arc<Self> {
+        Arc::new(Self {
+            epoch,
+            capacity,
+            max_bytes,
+            state: Mutex::new(RoomState::default()),
+            next_listener: AtomicU64::new(0),
+        })
+    }
+
+    fn lock(&self) -> MutexGuard<'_, RoomState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn deliver(state: &RoomState, event: &RoomEvent) {
+        for listener in state.listeners.values() {
+            let delivered =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| listener(event)));
+            if delivered.is_err() {
+                crate::log::error(&format!("room listener failed for {}", event.kind));
+            }
+        }
+    }
+
+    /// Number, keep and deliver an event.
+    pub fn publish(
+        &self,
+        room_id: &str,
+        kind: &str,
+        data: Value,
+        audience: Option<&str>,
+    ) -> Arc<RoomEvent> {
+        let mut state = self.lock();
+        state.sequence += 1;
+        let event = Arc::new(RoomEvent {
+            room_id: room_id.to_owned(),
+            epoch: self.epoch,
+            sequence: state.sequence,
+            kind: kind.to_owned(),
+            data,
+            timestamp: now_ms(),
+            audience: audience.map(str::to_owned),
+            watermark: state.sequence,
+        });
+        let size = room_event_size(&event);
+        state.events.push_back(event.clone());
+        state.sizes.push_back(size);
+        state.bytes += size;
+        while state.events.len() > self.capacity
+            || (state.bytes > self.max_bytes && state.events.len() > 1)
+        {
+            state.events.pop_front();
+            let size = state.sizes.pop_front().unwrap_or(0);
+            state.bytes -= size;
+        }
+        Self::deliver(&state, &event);
+        event
+    }
+
+    /// Deliver an event outside the sequence (sequence 0) and keep nothing.
+    pub fn publish_ephemeral(&self, room_id: &str, kind: &str, data: Value) {
+        let state = self.lock();
+        let event = RoomEvent {
+            room_id: room_id.to_owned(),
+            epoch: self.epoch,
+            sequence: 0,
+            kind: kind.to_owned(),
+            data,
+            timestamp: now_ms(),
+            audience: None,
+            watermark: state.sequence,
+        };
+        Self::deliver(&state, &event);
+    }
+
+    pub fn watermark(&self) -> Cursor {
+        Cursor {
+            epoch: self.epoch,
+            sequence: self.lock().sequence,
+        }
+    }
+
+    fn replay_locked(&self, state: &RoomState, cursor: Option<Cursor>) -> RoomReplay {
+        let watermark = Cursor {
+            epoch: self.epoch,
+            sequence: state.sequence,
+        };
+        let Some(cursor) = cursor else {
+            // No cursor: the client loads what it needs over REST and follows
+            // from here.
+            return RoomReplay {
+                reset: false,
+                events: Vec::new(),
+                watermark,
+            };
+        };
+        let oldest = state
+            .events
+            .front()
+            .map_or(state.sequence + 1, |event| event.sequence);
+        if cursor.epoch != self.epoch
+            || cursor.sequence > state.sequence
+            || cursor.sequence + 1 < oldest
+        {
+            return RoomReplay {
+                reset: true,
+                events: Vec::new(),
+                watermark,
+            };
+        }
+        RoomReplay {
+            reset: false,
+            events: state
+                .events
+                .iter()
+                .filter(|event| event.sequence > cursor.sequence)
+                .cloned()
+                .collect(),
+            watermark,
+        }
+    }
+
+    /// Replay and subscribe in one step, so no event falls in between.
+    pub fn attach(
+        self: &Arc<Self>,
+        cursor: Option<Cursor>,
+        deliver_replay: impl FnOnce(RoomReplay),
+        listener: RoomListener,
+    ) -> RoomSubscription {
+        let key = self.next_listener.fetch_add(1, Ordering::Relaxed);
+        let mut state = self.lock();
+        deliver_replay(self.replay_locked(&state, cursor));
+        state.listeners.insert(key, listener);
+        RoomSubscription {
+            hub: Arc::downgrade(self),
+            key,
+        }
+    }
+
+    #[cfg(test)]
+    fn replay(&self, cursor: Option<Cursor>) -> RoomReplay {
+        self.replay_locked(&self.lock(), cursor)
+    }
+}
+
+/// A room listener; dropping it unsubscribes.
+pub struct RoomSubscription {
+    hub: Weak<RoomHub>,
+    key: u64,
+}
+
+impl Drop for RoomSubscription {
+    fn drop(&mut self) {
+        if let Some(hub) = self.hub.upgrade() {
+            hub.lock().listeners.remove(&self.key);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn room_stream_replays_by_cursor_within_one_start() {
+        let hub = RoomHub::with_limits(7, 3, REPLAY_MAX_BYTES);
+        for n in 1..=4 {
+            hub.publish("general", "room_message", json!(n), None);
+        }
+        let at = |sequence| cursor(7, sequence);
+        let sequences =
+            |replay: RoomReplay| replay.events.iter().map(|e| e.sequence).collect::<Vec<_>>();
+        assert_eq!(sequences(hub.replay(at(2))), [3, 4]);
+        assert!(hub.replay(at(1)).events.len() == 3 && !hub.replay(at(1)).reset);
+        assert!(hub.replay(at(0)).reset, "older than what is kept");
+        assert!(hub.replay(at(5)).reset, "ahead of the stream");
+        assert!(hub.replay(cursor(6, 2)).reset, "another gateway start");
+        assert!(hub.replay(None).events.is_empty());
+        assert_eq!(
+            hub.watermark(),
+            Cursor {
+                epoch: 7,
+                sequence: 4
+            }
+        );
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sink = seen.clone();
+        let subscription = hub.attach(
+            at(4),
+            |replay| assert!(replay.events.is_empty() && !replay.reset),
+            Arc::new(move |event| {
+                sink.lock()
+                    .unwrap()
+                    .push((event.sequence, event.kind.clone()))
+            }),
+        );
+        hub.publish_ephemeral("general", "room_typing", json!({}));
+        hub.publish("general", "room_read", json!({}), Some("u"));
+        drop(subscription);
+        hub.publish("general", "room_message", json!({}), None);
+        assert_eq!(
+            *seen.lock().unwrap(),
+            [(0, "room_typing".to_owned()), (5, "room_read".to_owned())]
+        );
+        // Typing is neither numbered nor kept.
+        assert_eq!(sequences(hub.replay(at(4))), [5, 6]);
+        let read = hub.replay(at(4)).events[0].clone();
+        assert!(read.is_for("u") && !read.is_for("v"));
+        assert!(
+            serde_json::to_value(&*read)
+                .unwrap()
+                .get("audience")
+                .is_none()
+        );
+    }
 
     fn cursor(epoch: i64, sequence: u64) -> Option<Cursor> {
         Some(Cursor { epoch, sequence })

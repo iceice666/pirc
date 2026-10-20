@@ -18,7 +18,7 @@ use crate::auth::{self, Identity};
 use crate::db::Store;
 use crate::devices::Tracked;
 use crate::error::{ApiError, ApiResult};
-use crate::events::{Cursor, GatewayEvent, Subscription};
+use crate::events::{Cursor, GatewayEvent, RoomEvent, RoomSubscription, Subscription};
 use crate::hints::HintGuard;
 use crate::http::websocket_required;
 use crate::nodes::{
@@ -98,9 +98,16 @@ pub async fn events(
         .on_upgrade(move |socket| run_events(app, peer, headers, uri, socket))
 }
 
+/// What an open event socket follows, held until it closes.
+#[allow(dead_code, reason = "held only to unsubscribe when dropped")]
+enum Following {
+    Session(Subscription),
+    Rooms(RoomSubscription),
+}
+
 /// What an open event socket holds; dropping it unsubscribes everything.
 struct EventSocket {
-    _subscription: Subscription,
+    _subscription: Following,
     _hints: Vec<HintGuard>,
     _tracked: Option<Tracked>,
 }
@@ -153,6 +160,69 @@ fn event_frame(event: &GatewayEvent) -> (String, Cursor) {
     )
 }
 
+/// The frame, and where the stream stood when it was sent (an ephemeral
+/// event's sequence is 0).
+fn room_frame(event: &RoomEvent) -> (String, Cursor) {
+    (
+        serde_json::to_string(event).unwrap_or_default(),
+        Cursor {
+            epoch: event.epoch,
+            sequence: event.watermark,
+        },
+    )
+}
+
+/// `rooms=1`: every room's events from `cursor` (`epoch:sequence` of the
+/// room stream), the user's own reads, and ephemeral typing.
+fn follow_rooms(
+    app: &AppState,
+    user: &str,
+    cursor: Option<Cursor>,
+    outbox: &Arc<Outbox>,
+) -> RoomSubscription {
+    let max = app.config.websocket_max_buffered_bytes;
+    let listener = {
+        let outbox = outbox.clone();
+        let user = user.to_owned();
+        Arc::new(move |event: &RoomEvent| {
+            if event.is_for(&user) {
+                let (frame, watermark) = room_frame(event);
+                send_frame(&outbox, max, frame, watermark);
+            }
+        })
+    };
+    app.rooms.attach(
+        cursor,
+        |replay| {
+            if replay.reset {
+                send_frame(
+                    outbox,
+                    max,
+                    json!({
+                        "type": "reset",
+                        "reason": "cursor_expired_or_gateway_restarted",
+                        "watermark": replay.watermark,
+                    })
+                    .to_string(),
+                    replay.watermark,
+                );
+            } else {
+                for event in replay.events.iter().filter(|event| event.is_for(user)) {
+                    send_frame(outbox, max, room_frame(event).0, replay.watermark);
+                }
+            }
+            // Where the stream stands, so a client without a cursor has one.
+            send_frame(
+                outbox,
+                max,
+                json!({ "type": "ready", "watermark": replay.watermark }).to_string(),
+                replay.watermark,
+            );
+        },
+        listener,
+    )
+}
+
 fn open_events(
     app: &AppState,
     peer: &SocketAddr,
@@ -162,21 +232,43 @@ fn open_events(
 ) -> ApiResult<EventSocket> {
     let identity = app.validate(peer, headers, uri, &axum::http::Method::GET, true)?;
     let query = query_map(uri);
-    let session_id = single(&query, "sessionId")?
-        .filter(|id| !id.is_empty())
-        .ok_or_else(ApiError::invalid_input)?;
+    let session_id = single(&query, "sessionId")?.filter(|id| !id.is_empty());
     let cursor = single(&query, "cursor")?;
-    let mut flags = [false; 3];
-    for (index, name) in ["directory", "memory", "sessions"].iter().enumerate() {
+    let mut flags = [false; 4];
+    for (index, name) in ["directory", "memory", "sessions", "rooms"]
+        .iter()
+        .enumerate()
+    {
         match single(&query, name)? {
             None => {}
             Some("1") => flags[index] = true,
             Some(_) => return Err(ApiError::invalid_input()),
         }
     }
-    let session = app.claim(&identity, session_id)?.session;
     let cursor = cursor_from(cursor)?;
     let max = app.config.websocket_max_buffered_bytes;
+    // A socket follows one stream: a session's, or the rooms'.
+    let session_id = match (session_id, flags[3]) {
+        (Some(session_id), false) => session_id,
+        (None, true) => {
+            let subscription = follow_rooms(app, &identity.user, cursor, outbox);
+            let hint = |kind: &'static str| {
+                let outbox = outbox.clone();
+                let rooms = app.rooms.clone();
+                Arc::new(move || {
+                    let watermark = rooms.watermark();
+                    send_frame(&outbox, max, json!({ "type": kind }).to_string(), watermark);
+                }) as crate::hints::Hint
+            };
+            return Ok(EventSocket {
+                _subscription: Following::Rooms(subscription),
+                _hints: hints(app, &identity.user, &flags, hint),
+                _tracked: track_device(app, &identity, outbox),
+            });
+        }
+        _ => return Err(ApiError::invalid_input()),
+    };
+    let session = app.claim(&identity, session_id)?.session;
 
     let listener = {
         let outbox = outbox.clone();
@@ -220,22 +312,39 @@ fn open_events(
             send_frame(&outbox, max, json!({ "type": kind }).to_string(), watermark);
         }) as crate::hints::Hint
     };
-    let user = identity.user.clone();
+    Ok(EventSocket {
+        _subscription: Following::Session(subscription),
+        _hints: hints(app, &identity.user, &flags, hint),
+        _tracked: track_device(app, &identity, outbox),
+    })
+}
+
+/// The hint frames a socket asked for (`directory=1`, `memory=1`, `sessions=1`).
+fn hints(
+    app: &AppState,
+    user: &str,
+    flags: &[bool; 4],
+    hint: impl Fn(&'static str) -> crate::hints::Hint,
+) -> Vec<HintGuard> {
     let mut hints = Vec::new();
     if flags[0] {
         hints.push(app.hints.directory.add((), hint("directory_changed")));
     }
     if flags[1] {
-        hints.push(app.hints.memory.add(user.clone(), hint("memory_changed")));
+        hints.push(
+            app.hints
+                .memory
+                .add(user.to_owned(), hint("memory_changed")),
+        );
     }
     if flags[2] {
-        hints.push(app.hints.sessions.add(user, hint("sessions_changed")));
+        hints.push(
+            app.hints
+                .sessions
+                .add(user.to_owned(), hint("sessions_changed")),
+        );
     }
-    Ok(EventSocket {
-        _subscription: subscription,
-        _hints: hints,
-        _tracked: track_device(app, &identity, outbox),
-    })
+    hints
 }
 
 /// Close a device's socket once its token is revoked or expires.

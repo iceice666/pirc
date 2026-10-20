@@ -20,7 +20,7 @@ use crate::auth::{self, Identity, RequestInfo};
 use crate::db::{Db, Session, Store};
 use crate::devices::DeviceTokens;
 use crate::error::{ApiError, ApiResult, json_response};
-use crate::events::EventHub;
+use crate::events::{EventHub, RoomHub};
 use crate::hints::Hints;
 use crate::http::{self, Body};
 use crate::management::NativeManagementGrants;
@@ -36,6 +36,8 @@ pub struct App {
     pub devices: Arc<DeviceTokens>,
     pub management: Arc<NativeManagementGrants>,
     pub events: Arc<EventHub>,
+    /// Every room's events, in one sequence (plans/rewrite/01-rooms.md).
+    pub rooms: Arc<RoomHub>,
     pub hints: Hints,
     pub nodes: Arc<NodeRegistry>,
     /// Open runs and write leases each node reported, by gateway session id.
@@ -74,6 +76,7 @@ impl App {
         let management = Arc::new(NativeManagementGrants::new(devices.clone()));
         let app = Arc::new(Self {
             events: EventHub::new(config.event_buffer_size),
+            rooms: RoomHub::new(config.event_buffer_size),
             modes: RwLock::new(Arc::new(catalog)),
             config,
             db,
@@ -369,6 +372,7 @@ pub fn router(app: AppState) -> Router {
             "/api/sessions/{id}/browser/recording",
             get(routes::recording),
         )
+        .merge(routes::rooms::routes())
         .merge(routes::feature_routes())
         .merge(crate::management::routes())
         .merge(crate::backends::routes())
@@ -434,29 +438,32 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
 fn param_too_long(method: &str, path: &str) -> bool {
     let method = if method == "HEAD" { "GET" } else { method };
     let segments: Vec<&str> = path.split('/').collect();
-    PARAM_ROUTES.iter().any(|(route_method, route)| {
-        if *route_method != method {
-            return false;
-        }
-        let pattern: Vec<&str> = route.split('/').collect();
-        let tail = pattern.last().is_some_and(|last| last.starts_with("{*"));
-        let fits = if tail {
-            segments.len() >= pattern.len()
-        } else {
-            segments.len() == pattern.len()
-        };
-        let mut long = false;
-        fits && pattern.iter().zip(&segments).all(|(part, segment)| {
-            if part.starts_with("{*") {
-                true
-            } else if part.starts_with('{') {
-                long |= segment.len() > 100;
-                !segment.is_empty()
-            } else {
-                part == segment
+    PARAM_ROUTES
+        .iter()
+        .chain(routes::rooms::PARAM_ROUTES)
+        .any(|(route_method, route)| {
+            if *route_method != method {
+                return false;
             }
-        }) && long
-    })
+            let pattern: Vec<&str> = route.split('/').collect();
+            let tail = pattern.last().is_some_and(|last| last.starts_with("{*"));
+            let fits = if tail {
+                segments.len() >= pattern.len()
+            } else {
+                segments.len() == pattern.len()
+            };
+            let mut long = false;
+            fits && pattern.iter().zip(&segments).all(|(part, segment)| {
+                if part.starts_with("{*") {
+                    true
+                } else if part.starts_with('{') {
+                    long |= segment.len() > 100;
+                    !segment.is_empty()
+                } else {
+                    part == segment
+                }
+            }) && long
+        })
 }
 
 async fn param_length(request: Request, next: Next) -> Response {

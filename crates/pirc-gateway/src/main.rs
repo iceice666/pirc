@@ -25,6 +25,7 @@ mod node_events;
 mod nodes;
 mod project_links;
 mod push;
+mod rooms;
 mod routes;
 mod slots;
 mod sockets;
