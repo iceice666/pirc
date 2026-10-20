@@ -3,10 +3,8 @@ name: Android
 on:
   push:
     branches: [main]
-    paths:
-      - apps/android/**
-      - fixtures/**
-      - .github/workflows/android.yml
+    # Release requires a successful Android run on the exact main commit,
+    # including commits that only fix backend checks or release metadata.
   pull_request:
     paths:
       - apps/android/**

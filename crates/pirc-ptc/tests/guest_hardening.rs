@@ -14,7 +14,7 @@
 //! Hardening is irreversible, so each case runs in a child: this binary
 //! (`harness = false`) re-executes itself as `<exe> child <case>`.
 
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
 use std::process::{Command, ExitCode, Stdio};
 
 /// Whether the seccomp filter applies here.
@@ -104,31 +104,54 @@ fn main() -> ExitCode {
 /// A check run by the parent, with this executable.
 type Check = fn(&std::path::Path) -> Result<(), String>;
 
-/// A descriptor open before hardening is gone after it (Linux: read from
-/// `/proc/<pid>/fd` while the child waits on stdin; elsewhere skipped).
+/// Descriptors open before hardening are closed. The child duplicates a
+/// socket onto low and high fds; EOF proves both were closed while it remains
+/// alive. Reading `/proc/<pid>/fd` is intentionally forbidden by dump protection.
 fn inherited_descriptors(exe: &std::path::Path) -> Result<(), String> {
-    if !cfg!(target_os = "linux") {
-        return Ok(());
-    }
+    use std::os::fd::OwnedFd;
+    use std::os::unix::net::UnixStream;
+    use std::time::Duration;
+
+    let (mut monitor, inherited) = UnixStream::pair().unwrap();
+    monitor
+        .set_read_timeout(Some(Duration::from_secs(1)))
+        .unwrap();
     let mut child = Command::new(exe)
         .args(["child", "descriptors"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
+        .stderr(Stdio::from(OwnedFd::from(inherited)))
         .spawn()
         .unwrap();
     let mut stdout = std::io::BufReader::new(child.stdout.take().unwrap());
     let mut line = String::new();
     stdout.read_line(&mut line).unwrap();
-    let open: Vec<String> = std::fs::read_dir(format!("/proc/{}/fd", child.id()))
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
+    let closed = monitor.read(&mut [0u8; 1]);
+    // A normal same-account process must not be able to reopen guest stdio.
+    // A privileged host tracer is outside this boundary (as with the agent).
+    #[cfg(target_os = "linux")]
+    let private = {
+        let status = std::fs::read_to_string("/proc/self/status").unwrap();
+        let caps = status
+            .lines()
+            .find_map(|line| line.strip_prefix("CapEff:\t"))
+            .and_then(|value| u64::from_str_radix(value.trim(), 16).ok())
+            .unwrap();
+        caps & (1 << 19) != 0
+            || (0..=2).all(|fd| {
+                std::fs::File::open(format!("/proc/{}/fd/{fd}", child.id()))
+                    .err()
+                    .is_some_and(|error| error.kind() == std::io::ErrorKind::PermissionDenied)
+            })
+    };
+    #[cfg(not(target_os = "linux"))]
+    let private = true;
     drop(child.stdin.take());
     let status = child.wait().unwrap();
-    let mut sorted = open.clone();
-    sorted.sort();
-    if line.trim() != "hardened 3" || sorted != ["0", "1", "2"] || !status.success() {
-        return Err(format!("descriptors: {line:?}, open {open:?}, {status}"));
+    if line.trim() != "hardened 3" || !matches!(closed, Ok(0)) || !private || !status.success() {
+        return Err(format!(
+            "descriptors: {line:?}, EOF {closed:?}, private {private}, {status}"
+        ));
     }
     Ok(())
 }
@@ -221,8 +244,18 @@ fn child(case: &str) -> ExitCode {
     }
     // Opened before hardening, without close-on-exec mattering: the
     // descriptor case checks it is closed.
-    let file = std::fs::File::open(std::env::current_exe().unwrap()).unwrap();
-    let fd = std::os::fd::IntoRawFd::into_raw_fd(file);
+    let fd = if case == "descriptors" {
+        // Keep the inherited socket only at fd 3 and at a high descriptor.
+        // Neither is owned by a Rust value after harden(), which closes them.
+        let low = nix::unistd::dup(std::io::stderr()).unwrap();
+        let high = nix::fcntl::fcntl(&low, nix::fcntl::FcntlArg::F_DUPFD(64)).unwrap();
+        assert!(high >= 64);
+        nix::unistd::dup2_stderr(std::io::stdout()).unwrap();
+        std::os::fd::IntoRawFd::into_raw_fd(low)
+    } else {
+        let file = std::fs::File::open(std::env::current_exe().unwrap()).unwrap();
+        std::os::fd::IntoRawFd::into_raw_fd(file)
+    };
     let scratch = std::path::PathBuf::from(std::env::var_os(SCRATCH).unwrap_or_default());
     pirc_ptc::harden::harden().unwrap();
     let dir = std::env::temp_dir();
@@ -237,7 +270,7 @@ fn child(case: &str) -> ExitCode {
         "descriptors" => {
             println!("hardened {fd}");
             std::io::stdout().flush().unwrap();
-            // Wait for the parent to look, through stdin (still allowed).
+            // Stay alive while the parent verifies EOF and process privacy.
             let mut rest = String::new();
             let _ = std::io::stdin().lock().read_line(&mut rest);
             return ExitCode::SUCCESS;
