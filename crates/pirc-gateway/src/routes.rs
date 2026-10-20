@@ -17,7 +17,7 @@ use serde_json::{Map, Value, json};
 
 use crate::app::{AppState, Claimed, ReqBody, forward, query_map};
 use crate::auth::Identity;
-use crate::db::{CapabilitiesPatch, Lease, Store, atomic};
+use crate::db::{Lease, Store, atomic};
 use crate::error::{ApiError, json_response};
 use crate::http::{Body, no_content, ok};
 use crate::node_events::run_name;
@@ -287,38 +287,6 @@ pub async fn list_workspaces(State(app): State<AppState>) -> Handled {
         .map(|workspace| public_workspace(&app, &workspace))
         .collect();
     Ok(ok(json!({ "workspaces": workspaces })))
-}
-
-pub async fn get_capabilities(
-    State(app): State<AppState>,
-    Path(workspace_id): Path<String>,
-) -> Handled {
-    let capabilities = app.db.lock().get_workspace_capabilities(&workspace_id)?;
-    Ok(ok(json!({ "capabilities": capabilities })))
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CapabilitiesBody {
-    capabilities: CapabilitiesPatch,
-}
-
-pub async fn patch_capabilities(
-    State(app): State<AppState>,
-    Path(workspace_id): Path<String>,
-    ReqBody(body): ReqBody,
-) -> Handled {
-    let CapabilitiesBody { capabilities } = body.parse()?;
-    let workspace = app.db.lock().get_workspace(&workspace_id)?;
-    if !app.require_mode(&workspace)?.full_assistant() {
-        return Err(ApiError::invalid_input().into());
-    }
-    let capabilities = app
-        .db
-        .lock()
-        .patch_workspace_capabilities(&workspace_id, &capabilities)?;
-    app.directory_changed();
-    Ok(ok(json!({ "capabilities": capabilities })))
 }
 
 /// The workspaces a chat project is linked to (docs/architecture/assistant-memory.md).
@@ -1387,17 +1355,6 @@ pub async fn answer(
         let conn = app.db.lock();
         conn.validate_lease(session_id, &client_id, generation)?;
         conn.validate_lease_user(session_id, &identity.user)?;
-    }
-    let given = body.json().and_then(|body| body.get("answer")).cloned();
-    // The gateway's own confirmations are answered here; the node never saw them.
-    if let Some(answer) = crate::features::answer_gateway_interaction(
-        &app,
-        session_id,
-        &interaction_id,
-        &identity.user,
-        given,
-    )? {
-        return Ok(ok(answer));
     }
     Ok(forward(
         app.relay(

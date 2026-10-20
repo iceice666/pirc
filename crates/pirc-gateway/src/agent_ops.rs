@@ -1,19 +1,18 @@
 //! Operations an agent may ask the gateway for through its node
 //! (`agent_request`; `apps/gateway/src/daemon/agent-ops.ts`). The node names
 //! the session. An operation runs only if it is allowlisted, the session
-//! belongs to that node and to a user who is still allowed, and the chat
-//! workspace's capability policy permits it; an agent can never act as
-//! another session.
+//! belongs to that node and to a user who is still allowed; an agent can
+//! never act as another session.
 //!
 //! Each area parses and runs its own operations (`memory`, `delegations`,
 //! `web_search`); this module does the common checks in the TS
 //! order: unknown session, foreign session, unknown op, invalid arguments,
-//! capability, then the op.
+//! then the op.
 
 use serde_json::{Value, json};
 
 use crate::app::AppState;
-use crate::db::{Capability, Session, Store, Workspace};
+use crate::db::{Session, Store, Workspace};
 use crate::error::ApiError;
 use crate::{delegations, memory, web_search};
 
@@ -48,19 +47,6 @@ fn parse(op: &str, args: &Value) -> Option<Result<Parsed, ()>> {
         return Some(parsed.map(Parsed::Delegation));
     }
     web_search::parse_op(op, args).map(|parsed| parsed.map(Parsed::Web))
-}
-
-fn capability(op: &str) -> Option<Capability> {
-    if op.starts_with("delegation.") {
-        Some(Capability::Delegation)
-    } else {
-        match op {
-            "memory.search" => Some(Capability::MemorySearch),
-            "recall.remote" => Some(Capability::RemoteRecall),
-            "web.search" => Some(Capability::WebSearch),
-            _ => None,
-        }
-    }
 }
 
 /// Answer an agent's operation: `(status, body)`, `{result}` on success.
@@ -104,11 +90,6 @@ pub async fn run(
     };
     let outcome = async {
         let workspace = app.db.lock().get_workspace(&session.workspace_id)?;
-        if let Some(capability) = capability(op) {
-            app.db
-                .lock()
-                .require_workspace_capability(&workspace.id, capability)?;
-        }
         let mode = app.require_mode(&workspace)?;
         let context = OpContext {
             mode,

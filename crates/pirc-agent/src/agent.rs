@@ -21,7 +21,6 @@ use tokio::sync::Notify;
 use crate::auto_mode::{
     APPROVAL_MODE_ENTRY, ApprovalMode, AutoMode, default_approval_mode, recorded_approval_mode,
 };
-use crate::capabilities::{Capabilities, capability_for_tool};
 use crate::compaction::{self, CompactionReason, CompactionSettings};
 use crate::config::{AgentConfig, session_settings};
 use crate::context::{self, ContextInput, PromptSection, join_prompt, trim_sections};
@@ -47,7 +46,6 @@ const INTERRUPTED_PARTIAL_CHARS: usize = 2000;
 /// `AgentOptions`.
 pub struct AgentOptions {
     pub config: AgentConfig,
-    pub capabilities: Capabilities,
     /// A chat project's instructions from the node.
     pub project_instructions: Option<String>,
     /// A role from the configure line.
@@ -144,7 +142,6 @@ pub struct StreamOptions {
 /// `Agent`.
 pub struct Agent {
     weak: Weak<Agent>,
-    capabilities: RefCell<Capabilities>,
     project_instructions: Option<String>,
     role: RefCell<Option<AgentRole>>,
     config: Rc<AgentConfig>,
@@ -700,7 +697,6 @@ impl Agent {
             }
             Agent {
                 weak: weak.clone(),
-                capabilities: RefCell::new(options.capabilities),
                 project_instructions: options.project_instructions,
                 role: RefCell::new(options.role),
                 models: RefCell::new(config.models.clone()),
@@ -1089,17 +1085,6 @@ impl Agent {
         self.store.borrow().file.clone()
     }
 
-    /// The gateway's policy for this project (`capabilities`).
-    pub fn capabilities(&self) -> Capabilities {
-        self.capabilities.borrow().clone()
-    }
-
-    /// Replace the gateway's policy (`agent.capabilities = …`): a chat
-    /// reads its current one from the gateway.
-    pub fn set_capabilities(&self, capabilities: Capabilities) {
-        *self.capabilities.borrow_mut() = capabilities;
-    }
-
     /// The path guard (`guard`).
     pub fn path_guard(&self) -> Rc<PathGuard> {
         self.guard.clone()
@@ -1125,7 +1110,7 @@ impl Agent {
         self.has_ui
     }
 
-    /// `getTool`: a capability, unless the gateway's policy disables it.
+    /// `getTool`: a capability, unless the mode leaves it out.
     pub fn get_tool(&self, name: &str) -> Option<Rc<dyn Tool>> {
         if self
             .config
@@ -1133,11 +1118,6 @@ impl Agent {
             .tools
             .as_ref()
             .is_some_and(|allowed| !allowed.iter().any(|tool| tool == name))
-        {
-            return None;
-        }
-        if let Some(capability) = capability_for_tool(name)
-            && !self.capabilities.borrow().allows(capability)
         {
             return None;
         }
@@ -2749,16 +2729,7 @@ impl Agent {
             result: ToolResult::error(text),
             hook_output: None,
         };
-        let tool = self.get_tool(name);
-        if tool.is_none()
-            && let Some(capability) = capability_for_tool(name)
-            && self.tools.borrow().contains_key(name)
-        {
-            return unavailable(format!(
-                "The {capability} capability is disabled for this project; {name} is unavailable. Ask the user to enable it in the project settings if needed."
-            ));
-        }
-        let Some(tool) = tool else {
+        let Some(tool) = self.get_tool(name) else {
             return unavailable(format!("Unknown tool: {name}"));
         };
         self.run_tool(&tool, raw_args, signal, tool_call_id, on_update, options)
@@ -3067,12 +3038,8 @@ impl Agent {
         }
         // A direct core capability: the same policy chain as a ptc
         // operation, in an operation scope so the dialogs it opens name its
-        // call; typed data stays here. A core capability disabled by policy
-        // gets the same explanation as from a script.
-        let direct = self.direct_tools().iter().any(|tool| tool.name() == name)
-            || (DIRECT_CAPABILITIES.contains(&name)
-                && self.tools.borrow().contains_key(name)
-                && capability_for_tool(name).is_some());
+        // call; typed data stays here.
+        let direct = self.direct_tools().iter().any(|tool| tool.name() == name);
         if direct {
             let args = lenient_args(self.get_tool(name).as_ref(), &arguments);
             self.active_operations.borrow_mut().insert(id.to_owned());
@@ -3360,7 +3327,6 @@ mod tests {
         let store = SessionStore::open(dir.join("session"), &config.workspace).unwrap();
         let agent = Agent::new(AgentOptions {
             config,
-            capabilities: Default::default(),
             project_instructions: None,
             role: None,
             store,

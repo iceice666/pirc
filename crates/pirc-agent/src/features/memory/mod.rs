@@ -940,7 +940,6 @@ impl RecallTool {
         };
         if let Some(gateway) = gateway
             && result.1 == "not_found"
-            && agent.capabilities().allows("remote_recall")
         {
             let mut request = Map::new();
             request.insert("id".to_owned(), json!(id));
@@ -994,10 +993,7 @@ impl Tool for RecallTool {
     }
 
     fn description(&self) -> &str {
-        let chat_search = self.agent.upgrade().is_some_and(|agent| {
-            let capabilities = agent.capabilities();
-            capabilities.allows("memory_search") && capabilities.allows("remote_recall")
-        });
+        let chat_search = self.agent.upgrade().is_some();
         &self.descriptions[usize::from(chat_search)]
     }
 

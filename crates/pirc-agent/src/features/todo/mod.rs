@@ -590,7 +590,6 @@ mod tests {
         let store = SessionStore::open(dir.join("session"), &config.workspace).unwrap();
         Agent::new(AgentOptions {
             config,
-            capabilities: Default::default(),
             project_instructions: None,
             role: None,
             store,

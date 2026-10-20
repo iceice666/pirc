@@ -11,7 +11,6 @@ use std::pin::Pin;
 
 pub mod agent;
 pub mod auto_mode;
-pub mod capabilities;
 pub mod channels;
 pub mod compaction;
 pub mod config;

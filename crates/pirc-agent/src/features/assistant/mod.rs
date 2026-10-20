@@ -24,7 +24,6 @@ use super::memory::ledger::local_stamp;
 use super::memory::serialize::{entry_origin, started_capabilities, user_text};
 use crate::LocalBoxFuture;
 use crate::agent::Agent;
-use crate::capabilities::Capabilities;
 use crate::channels::{ChannelError, NodeChannels, process_gateway};
 use crate::context::PromptSection;
 use crate::feature::{BeforeStart, Feature, PromptAddition};
@@ -32,7 +31,7 @@ use crate::redact::redact_secrets;
 use crate::roles::{RoleBrief, describe_roles};
 use crate::session_store::{EntryData, SessionEntry};
 use crate::signal::AbortController;
-use crate::tools::js::{self, js_regex, locale_string_en_us};
+use crate::tools::js::{self, locale_string_en_us};
 use crate::tools::prompts::{PromptVar, tool_prompt};
 use crate::tools::result_schema::{arr, bool_, fields, int, nullable, obj, str_};
 use crate::tools::{Tool, ToolContext, ToolResult, typed};
@@ -136,50 +135,6 @@ pub fn render_memory(context: &Value) -> String {
         ));
     }
     lines.join("\n")
-}
-
-/// `text.replace(regex, replacement)` for the first match.
-fn replace_first(text: &str, regex: &js::JsRegex, replacement: &str) -> String {
-    match regex.captures(text) {
-        Some(found) => {
-            let range = found.range();
-            format!(
-                "{}{replacement}{}",
-                &text[..range.start],
-                &text[range.end..]
-            )
-        }
-        None => text.to_owned(),
-    }
-}
-
-/// `presentSection`: the frozen memory section as shown under the chat's
-/// current capability policy. The snapshot is kept as written (the policy
-/// can change later), so guidance for disabled tools is taken out each
-/// time it is shown.
-pub fn present_section(section: &str, capabilities: &Capabilities) -> String {
-    if !capabilities.allows("delegation") {
-        return replace_first(
-            section,
-            js_regex!(r"\n*## Workspaces\n[\s\S]*?(?=\n## |$)"),
-            "",
-        );
-    }
-    if !capabilities.allows("memory_search") {
-        return replace_first(
-            section,
-            js_regex!(r" Their coding sessions keep notes there \(workspace memory\)[^\n]*"),
-            "",
-        );
-    }
-    if !capabilities.allows("remote_recall") {
-        return replace_first(
-            section,
-            js_regex!(r", and open a note's sources with recall\."),
-            ".",
-        );
-    }
-    section.to_owned()
 }
 
 fn role_brief(value: &Value) -> RoleBrief {
@@ -665,9 +620,6 @@ async fn memory_section(
             return Ok(state.frozen.borrow().clone().unwrap_or_else(unavailable));
         }
     };
-    agent.set_capabilities(Capabilities::from_value(
-        context.get("capabilities").unwrap_or(&Value::Null),
-    ));
     if let Some(frozen) = state.frozen.borrow().clone() {
         return Ok(frozen);
     }
@@ -1463,12 +1415,9 @@ impl Tool for AssistantTool {
             return &self.descriptions[0];
         }
         let (recall, delegation) = self.agent.upgrade().map_or((true, true), |agent| {
-            let capabilities = agent.capabilities();
             (
-                capabilities.allows("remote_recall") && agent.get_tool("recall").is_some(),
-                capabilities.allows("delegation")
-                    && agent.config().mode().delegate
-                    && agent.get_tool(DELEGATE_TOOL).is_some(),
+                agent.get_tool("recall").is_some(),
+                agent.config().mode().delegate && agent.get_tool(DELEGATE_TOOL).is_some(),
             )
         });
         &self.descriptions[usize::from(recall) + 2 * usize::from(delegation)]
@@ -1571,7 +1520,6 @@ impl Feature for AssistantFeature {
                 }));
             };
             let section = memory_section(&self.state, agent, &gateway).await?;
-            let section = present_section(&section, &agent.capabilities());
             if section.is_empty() {
                 return Ok(None);
             }

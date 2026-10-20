@@ -1,6 +1,6 @@
 //! The gateway's SQLite database (`apps/gateway/src/database.ts`): a fresh
 //! schema (`schema.sql`) and the queries over sessions, workspaces,
-//! commands, leases and capabilities. Feature modules (devices, memory,
+//! commands and leases. Feature modules (devices, memory,
 //! delegations, ...) keep their own queries next to their logic.
 //!
 //! Queries are methods of [`Store`], implemented for [`Connection`], so a
@@ -400,122 +400,6 @@ impl Session {
     }
 }
 
-/// A chat workspace's capability policy.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Capabilities {
-    pub version: Version1,
-    pub delegation: bool,
-    pub memory_search: bool,
-    pub remote_recall: bool,
-    pub schedules: bool,
-    pub web_search: bool,
-    /// When a delegation of this chat workspace waits for the user's card.
-    #[serde(default)]
-    pub delegation_approval: DelegationApproval,
-}
-
-/// A chat workspace's delegation approval policy
-/// (docs/guides/chat-projects.md#delegation).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum DelegationApproval {
-    /// Every delegation waits for the user's card (the default, and what
-    /// existing installs keep).
-    #[default]
-    Always,
-    /// Starts at once unless the chat's context since the user's last
-    /// message holds content from outside (tool output, reports).
-    Untrusted,
-    /// Always starts at once.
-    Never,
-}
-
-/// The literal `1`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "u8", into = "u8")]
-pub struct Version1;
-
-impl TryFrom<u8> for Version1 {
-    type Error = &'static str;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        if value == 1 {
-            Ok(Self)
-        } else {
-            Err("version must be 1")
-        }
-    }
-}
-
-impl From<Version1> for u8 {
-    fn from(_: Version1) -> Self {
-        1
-    }
-}
-
-impl Default for Capabilities {
-    fn default() -> Self {
-        Self {
-            version: Version1,
-            delegation: true,
-            memory_search: true,
-            remote_recall: true,
-            schedules: true,
-            web_search: true,
-            delegation_approval: DelegationApproval::Always,
-        }
-    }
-}
-
-/// Part of a policy to change (`workspaceCapabilitiesSchema.partial()`).
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct CapabilitiesPatch {
-    /// Accepted (it can only be 1) and otherwise ignored.
-    #[serde(default, rename = "version", deserialize_with = "crate::util::present")]
-    pub _version: Option<Version1>,
-    #[serde(default, deserialize_with = "crate::util::present")]
-    pub delegation: Option<bool>,
-    #[serde(default, deserialize_with = "crate::util::present")]
-    pub memory_search: Option<bool>,
-    #[serde(default, deserialize_with = "crate::util::present")]
-    pub remote_recall: Option<bool>,
-    #[serde(default, deserialize_with = "crate::util::present")]
-    pub schedules: Option<bool>,
-    #[serde(default, deserialize_with = "crate::util::present")]
-    pub web_search: Option<bool>,
-    #[serde(default, deserialize_with = "crate::util::present")]
-    pub delegation_approval: Option<DelegationApproval>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Capability {
-    Delegation,
-    MemorySearch,
-    RemoteRecall,
-    WebSearch,
-}
-
-impl Capability {
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Delegation => "delegation",
-            Self::MemorySearch => "memory_search",
-            Self::RemoteRecall => "remote_recall",
-            Self::WebSearch => "web_search",
-        }
-    }
-
-    fn of(self, policy: &Capabilities) -> bool {
-        match self {
-            Self::Delegation => policy.delegation,
-            Self::MemorySearch => policy.memory_search,
-            Self::RemoteRecall => policy.remote_recall,
-            Self::WebSearch => policy.web_search,
-        }
-    }
-}
-
 /// A browser command, kept for idempotency.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -627,19 +511,6 @@ pub trait Store {
     /// 404 "Workspace not found".
     fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace>;
     fn find_workspace(&self, workspace_id: &str) -> ApiResult<Option<Workspace>>;
-    fn get_workspace_capabilities(&self, workspace_id: &str) -> ApiResult<Capabilities>;
-    fn patch_workspace_capabilities(
-        &self,
-        workspace_id: &str,
-        patch: &CapabilitiesPatch,
-    ) -> ApiResult<Capabilities>;
-    fn require_workspace_capability(
-        &self,
-        workspace_id: &str,
-        capability: Capability,
-    ) -> ApiResult<()>;
-    fn require_session_capability(&self, session_id: &str, capability: Capability)
-    -> ApiResult<()>;
 
     fn create_session(
         &self,
@@ -856,79 +727,6 @@ impl Store for Connection {
                 Workspace::from_row,
             )
             .optional()?)
-    }
-
-    /// Gateway-owned policy: node workspace sync never overwrites it.
-    fn get_workspace_capabilities(&self, workspace_id: &str) -> ApiResult<Capabilities> {
-        self.get_workspace(workspace_id)?;
-        let stored: Option<String> = self
-            .query_row(
-                "SELECT policy_json FROM workspace_capabilities WHERE workspace_id=?",
-                [workspace_id],
-                |row| row.get(0),
-            )
-            .optional()?;
-        match stored {
-            None => Ok(Capabilities::default()),
-            Some(json) => serde_json::from_str(&json).map_err(|error| {
-                crate::log::error(&format!("capabilities of {workspace_id}: {error}"));
-                ApiError::internal()
-            }),
-        }
-    }
-
-    fn patch_workspace_capabilities(
-        &self,
-        workspace_id: &str,
-        patch: &CapabilitiesPatch,
-    ) -> ApiResult<Capabilities> {
-        self.get_workspace(workspace_id)?;
-        let mut policy = self.get_workspace_capabilities(workspace_id)?;
-        let set = |field: &mut bool, value: Option<bool>| {
-            if let Some(value) = value {
-                *field = value;
-            }
-        };
-        set(&mut policy.delegation, patch.delegation);
-        set(&mut policy.memory_search, patch.memory_search);
-        set(&mut policy.remote_recall, patch.remote_recall);
-        set(&mut policy.schedules, patch.schedules);
-        set(&mut policy.web_search, patch.web_search);
-        if let Some(approval) = patch.delegation_approval {
-            policy.delegation_approval = approval;
-        }
-        self.execute(
-            "INSERT INTO workspace_capabilities (workspace_id,policy_json) VALUES (?,?) ON CONFLICT(workspace_id) DO UPDATE SET policy_json=excluded.policy_json",
-            params![workspace_id, json!(policy).to_string()],
-        )?;
-        Ok(policy)
-    }
-
-    fn require_workspace_capability(
-        &self,
-        workspace_id: &str,
-        capability: Capability,
-    ) -> ApiResult<()> {
-        if capability.of(&self.get_workspace_capabilities(workspace_id)?) {
-            return Ok(());
-        }
-        Err(ApiError::new(
-            403,
-            "capability_disabled",
-            format!(
-                "Capability {} is disabled for this chat workspace. Ask the user to enable it in workspace settings.",
-                capability.name()
-            ),
-        ))
-    }
-
-    fn require_session_capability(
-        &self,
-        session_id: &str,
-        capability: Capability,
-    ) -> ApiResult<()> {
-        let workspace = self.get_session(session_id)?.workspace_id;
-        self.require_workspace_capability(&workspace, capability)
     }
 
     fn create_session(
@@ -1541,6 +1339,7 @@ mod tests {
         "index.schedule_",
         "memory_proposals.",
         "index.memory_proposals_",
+        "workspace_capabilities.",
     ];
 
     #[test]
@@ -1695,62 +1494,5 @@ mod tests {
         assert_eq!(conn.get_lease(&session.id).unwrap()["expired"], false);
         conn.clear_remote_lease(&session.id).unwrap();
         assert_eq!(conn.get_lease(&session.id).unwrap(), Value::Null);
-    }
-
-    #[test]
-    fn capabilities() {
-        let db = Db::memory();
-        with_workspace(&db);
-        let conn = db.lock();
-        assert_eq!(
-            conn.get_workspace_capabilities("n1:w").unwrap(),
-            Capabilities::default()
-        );
-        let patch: CapabilitiesPatch =
-            serde_json::from_value(json!({ "web_search": false })).unwrap();
-        let policy = conn.patch_workspace_capabilities("n1:w", &patch).unwrap();
-        assert!(!policy.web_search && policy.delegation);
-        assert_eq!(
-            conn.require_workspace_capability("n1:w", Capability::WebSearch)
-                .unwrap_err()
-                .code,
-            "capability_disabled"
-        );
-        assert_eq!(
-            json!(policy),
-            json!({ "version": 1, "delegation": true, "memory_search": true,
-                "remote_recall": true, "schedules": true, "web_search": false,
-                "delegation_approval": "always" })
-        );
-        // Policies stored before the approval setting read as `always`.
-        conn.execute(
-            "UPDATE workspace_capabilities SET policy_json=? WHERE workspace_id='n1:w'",
-            [
-                json!({ "version": 1, "delegation": true, "memory_search": true,
-                "remote_recall": true, "schedules": true, "web_search": false })
-                .to_string(),
-            ],
-        )
-        .unwrap();
-        assert_eq!(
-            conn.get_workspace_capabilities("n1:w")
-                .unwrap()
-                .delegation_approval,
-            DelegationApproval::Always
-        );
-        let patch: CapabilitiesPatch =
-            serde_json::from_value(json!({ "delegation_approval": "untrusted" })).unwrap();
-        let policy = conn.patch_workspace_capabilities("n1:w", &patch).unwrap();
-        assert_eq!(policy.delegation_approval, DelegationApproval::Untrusted);
-        assert!(!policy.web_search);
-        assert!(
-            serde_json::from_value::<CapabilitiesPatch>(
-                json!({ "delegation_approval": "sometimes" })
-            )
-            .is_err()
-        );
-        assert!(serde_json::from_value::<CapabilitiesPatch>(json!({ "version": 2 })).is_err());
-        assert!(serde_json::from_value::<CapabilitiesPatch>(json!({ "other": 1 })).is_err());
-        assert!(serde_json::from_value::<CapabilitiesPatch>(json!({ "schedules": null })).is_err());
     }
 }

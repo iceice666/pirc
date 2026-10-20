@@ -497,7 +497,6 @@ pub struct TeamOptions {
     pub env: Vec<(String, String)>,
     /// Providers handed to each child on its first stdin line.
     pub models: Models,
-    pub capabilities: Option<Rc<dyn Fn() -> Value>>,
     /// The parent session's approval mode (`read-only`, `auto`,
     /// `full-access`), which children follow.
     pub approval_mode: Option<Rc<dyn Fn() -> String>>,
@@ -1111,9 +1110,6 @@ impl Team {
             "models".to_owned(),
             serde_json::to_value(&self.options.models).unwrap_or_default(),
         );
-        if let Some(capabilities) = &self.options.capabilities {
-            line.insert("capabilities".to_owned(), capabilities());
-        }
         if let Some(mode) = &self.options.approval_mode {
             line.insert("approvalMode".to_owned(), json!(mode()));
         }

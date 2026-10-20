@@ -175,18 +175,6 @@ impl App {
     }
 }
 
-/// Answer one of the gateway's own confirmations (delegations); `None`
-/// when the interaction is the node's.
-pub fn answer_gateway_interaction(
-    app: &AppState,
-    session_id: &str,
-    interaction_id: &str,
-    user: &str,
-    answer: Option<Value>,
-) -> ApiResult<Option<Value>> {
-    crate::delegations::answer(app, session_id, interaction_id, user, answer.as_ref())
-}
-
 /// Start the features' background work; fails on unusable push keys.
 pub fn start(app: &AppState) -> Result<(), String> {
     crate::push::start(app)?;

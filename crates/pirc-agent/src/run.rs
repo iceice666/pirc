@@ -11,7 +11,6 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 
 use crate::agent::{Agent, AgentOptions, NameSource};
-use crate::capabilities::Capabilities;
 use crate::channels::{NodeChannels, node_channels, process_write_lease};
 use crate::config::load_agent_config;
 use crate::roles::AgentRole;
@@ -90,7 +89,6 @@ fn string(arg: &Option<Arg>) -> Option<&str> {
 /// transport, the chat policy, project instructions and a role.
 pub struct Configure {
     pub models: Models,
-    pub capabilities: Capabilities,
     pub instructions: Option<String>,
     pub role: Option<AgentRole>,
     /// A team child follows its parent session's approval mode.
@@ -125,8 +123,6 @@ pub fn parse_configure(message: &Value) -> Result<Configure, String> {
         Some(models) => models.clone(),
     };
     let models = crate::remote::parse_models(&models)?;
-    let capabilities =
-        Capabilities::from_value(message.get("capabilities").unwrap_or(&Value::Null));
     let instructions = message
         .get("instructions")
         .and_then(Value::as_str)
@@ -158,7 +154,6 @@ pub fn parse_configure(message: &Value) -> Result<Configure, String> {
     };
     Ok(Configure {
         models,
-        capabilities,
         instructions,
         role,
         approval_mode,
@@ -278,7 +273,6 @@ async fn main(args: Vec<String>) -> Result<(), String> {
         crate::features::process_features(std::env::var("PIRC_AGENT_FEATURES").ok().as_deref())?;
     let agent = Agent::new(AgentOptions {
         config,
-        capabilities: configured.capabilities,
         project_instructions: configured.instructions.filter(|text| !text.is_empty()),
         role: configured.role,
         store,
@@ -474,11 +468,10 @@ mod tests {
     #[test]
     fn reads_the_configure_message() {
         let configure = parse_configure(&json!({ "type": "configure",
-            "capabilities": { "web_search": false }, "instructions": "Be brief",
+            "instructions": "Be brief",
             "role": { "name": "reviewer", "instructions": 3, "models": ["a/*", 1, "b/c"] } }))
         .unwrap();
         assert!(configure.models.providers.is_empty());
-        assert!(!configure.capabilities.allows("web_search"));
         assert_eq!(configure.instructions.as_deref(), Some("Be brief"));
         assert_eq!(
             configure.role,

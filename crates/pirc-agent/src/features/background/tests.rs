@@ -19,7 +19,6 @@ fn agent(dir: &std::path::Path, chat: bool) -> (Rc<Agent>, Rc<RefCell<Vec<Value>
     let sink = lines.clone();
     let agent = Agent::new(AgentOptions {
         config,
-        capabilities: Default::default(),
         project_instructions: None,
         role: None,
         store,

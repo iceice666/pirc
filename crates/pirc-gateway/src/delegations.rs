@@ -1,10 +1,8 @@
 //! Delegation (`apps/gateway/src/daemon/delegations.ts`, docs/architecture/assistant-memory.md):
 //! the assistant in a chat hands a task to a new session in one of the
 //! user's directory workspaces, or more instructions to a session it
-//! started before. The chat workspace's delegation approval policy decides
-//! whether the user approves it in the chat first, where it shows as a
-//! confirmation, or it starts at once (docs/guides/chat-projects.md). Then
-//! the gateway creates and names the session on the target node, delivers
+//! started before. It starts at once, without asking the user
+//! (plans/rewrite/decisions.md #10): the gateway creates and names the session on the target node, delivers
 //! the task as a custom message (never as the user's words), follows the
 //! session, relays the approvals it waits on to the chat, and tells the chat
 //! when the task finishes, fails or needs the user. Also its agent
@@ -21,7 +19,7 @@ use tokio::sync::mpsc;
 
 use crate::agent_ops::OpContext;
 use crate::app::{App, AppState};
-use crate::db::{Capability, DelegationApproval, Session, Store, Workspace};
+use crate::db::{Session, Store, Workspace};
 use crate::dispatch::{
     Progress, clip, deliver, is_watched_event, one_line, read_progress, redact_secrets,
     resolve_directory_workspace, start_session, workspace_online,
@@ -40,17 +38,12 @@ const RESULT_MAX_CHARS: usize = 200_000;
 const RESULT_NOTICE_CHARS: usize = 4000;
 /// One `delegation_status` read of a result.
 pub const RESULT_CHUNK_CHARS: usize = 12_000;
-const PENDING_MAX: usize = 10;
-/// Delegations started without a card that may run at once per user; more
-/// wait for the card.
-pub const AUTO_RUNNING_MAX: usize = 4;
+/// Delegations that may run at once per user (plans/rewrite/decisions.md #10).
+pub const RUNNING_MAX: usize = 4;
 /// A quote must come from one of the user's last this many messages
 /// (auto mode's classifier window).
 pub const QUOTE_MESSAGES: usize = 3;
 const QUOTE_MAX_CHARS: usize = 2000;
-/// What a chat's context may hold for `untrusted` to start a delegation at
-/// once: only the user's and the assistant's own words.
-const TRUSTED_ORIGINS: &[&str] = &["assistant", "user"];
 /// Ids of delegated sessions' dialogs relayed to the chat start with this.
 pub const RELAY_PREFIX: &str = "relay.";
 /// The chat hears about these; the user already sees an approval happen.
@@ -61,8 +54,6 @@ const NOTIFIED: &[&str] = &[
     "completed",
     "failed",
 ];
-/// The thinking levels a delegation may ask for.
-const THINKING_LEVELS: &[&str] = &["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 /// How long after a watched event the delegated session is read.
 const CHECK_DELAY: Duration = Duration::from_millis(150);
 /// Finished delegations are kept this long after their last change,
@@ -78,8 +69,6 @@ fn next_step(status: &str) -> Option<&'static str> {
         "waiting_input" => {
             "The delegated session is waiting for the user. Its approvals are shown in this chat, where they can answer them; other questions are answered in that session. Tell them."
         }
-        "rejected" => "The user declined it: do not ask again unless they want it.",
-        "expired" => "Nobody approved it in time: ask again only if it is still wanted.",
         _ => return None,
     })
 }
@@ -134,8 +123,6 @@ pub struct Delegation {
     pub result: Option<String>,
     /// The last status the chat was told about.
     pub notified_status: Option<String>,
-    /// Until when the user can approve it.
-    pub expires_at: i64,
     pub dispatched_at: Option<i64>,
     pub created_at: i64,
 }
@@ -169,7 +156,6 @@ fn row_of(row: &rusqlite::Row<'_>) -> rusqlite::Result<Delegation> {
         target_session_id: row.get("target_session_id")?,
         result: row.get("result")?,
         notified_status: row.get("notified_status")?,
-        expires_at: row.get("expires_at")?,
         dispatched_at: row.get("dispatched_at")?,
         created_at: row.get("created_at")?,
     })
@@ -194,30 +180,6 @@ fn utf16_slice(text: &str, start: usize, end: usize) -> String {
 
 fn js_trim(text: &str) -> &str {
     text.trim_matches(pirc_config::js_space)
-}
-
-/// `String(value)`.
-fn js_string(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        Value::Null => "null".into(),
-        Value::Bool(flag) => flag.to_string(),
-        Value::Number(number) => match number.as_f64() {
-            Some(float) if number.is_f64() && float.fract() == 0.0 && float.abs() < 1e21 => {
-                format!("{}", float as i64)
-            }
-            _ => number.to_string(),
-        },
-        Value::Array(items) => items
-            .iter()
-            .map(|item| match item {
-                Value::Null => String::new(),
-                other => js_string(other),
-            })
-            .collect::<Vec<_>>()
-            .join(","),
-        Value::Object(_) => "[object Object]".into(),
-    }
 }
 
 // ---------- per-gateway state ----------
@@ -436,23 +398,11 @@ fn roles(app: &App, workspace: &Workspace) -> Option<Vec<pirc_protocol::Workspac
         })
 }
 
-/// Delegations of this assistant session waiting for the user's approval,
-/// as interactions (`pendingInteractions`), then the dialogs its delegated
-/// sessions wait on, relayed.
+/// The dialogs this assistant session's delegated sessions wait on,
+/// relayed as interactions (`pendingInteractions`).
 pub fn pending_interactions(app: &App, session_id: &str) -> Vec<Value> {
     let conn = app.db.lock();
-    let pending = rows(
-        &conn,
-        "assistant_session_id=? AND status='pending_approval' AND expires_at>?",
-        &[&session_id, &now_ms()],
-    );
-    let mut out: Vec<Value> = match pending {
-        Ok(pending) => pending
-            .iter()
-            .map(|delegation| interaction_of(&conn, delegation))
-            .collect(),
-        Err(_) => Vec::new(),
-    };
+    let mut out = Vec::new();
     let active = rows(
         &conn,
         "assistant_session_id=? AND status IN ('running','waiting_input')",
@@ -625,59 +575,6 @@ fn set_relays(app: &App, delegation: &Delegation, dialogs: Vec<Value>) {
     app.sessions_changed(Some(&delegation.owner_user));
 }
 
-fn interaction_of(conn: &Connection, delegation: &Delegation) -> Value {
-    let place = label(conn, &delegation.workspace_id);
-    let followed = delegation
-        .follows
-        .as_deref()
-        .and_then(|id| row(conn, id).ok().flatten());
-    let session = followed
-        .and_then(|followed| followed.target_session_id)
-        .filter(|target| !target.is_empty())
-        .map(|target| session_name(conn, &target))
-        .unwrap_or_default();
-    let title = if session.is_empty() {
-        format!(
-            "Delegate to {place}{}?",
-            delegation
-                .role
-                .as_deref()
-                .filter(|role| !role.is_empty())
-                .map(|role| format!(" as {role}"))
-                .unwrap_or_default()
-        )
-    } else {
-        format!("Send more instructions to “{session}” ({place})?")
-    };
-    json!({
-        "id": delegation.id,
-        "rpcId": delegation.id,
-        "sessionId": delegation.assistant_session_id,
-        "runnerEpoch": 0,
-        "kind": "confirm",
-        "status": "pending",
-        "request": {
-            "method": "confirm",
-            "title": title,
-            "message": format!("{}\n\n{}", delegation.title, delegation.task),
-            "confirmLabel": "Delegate",
-            "cancelLabel": "Don't",
-            // Clients that know it offer a model picker; null is the workspace default.
-            "modelChoice": {
-                "model": delegation.model.as_ref().map(ModelRef::json),
-                "thinking": delegation.thinking,
-            },
-            // Clients that know it offer a checkbox, answered as `asUserRequest`.
-            "userRequestChoice": {
-                "label": "Treat this task as my request for auto mode",
-                "checked": delegation.as_user_request,
-            },
-        },
-        "expiresAt": delegation.expires_at,
-        "createdAt": delegation.created_at,
-    })
-}
-
 // ---------- the assistant ----------
 
 /// `delegation.create`'s arguments.
@@ -693,35 +590,6 @@ pub struct CreateArgs {
     /// Where the chat's context since the user's last message came from;
     /// `None` from an older agent (counted as untrusted).
     origins: Option<Vec<String>>,
-}
-
-/// Whether a delegation may start without the card: the chat workspace's
-/// policy, what the chat's context holds, and how many already run so.
-fn starts_at_once(
-    conn: &Connection,
-    user: &str,
-    policy: DelegationApproval,
-    origins: Option<&[String]>,
-) -> ApiResult<bool> {
-    let allowed = match policy {
-        DelegationApproval::Always => false,
-        DelegationApproval::Never => true,
-        DelegationApproval::Untrusted => origins.is_some_and(|origins| {
-            origins
-                .iter()
-                .all(|origin| TRUSTED_ORIGINS.contains(&origin.as_str()))
-        }),
-    };
-    if !allowed {
-        return Ok(false);
-    }
-    let running = rows(
-        conn,
-        "owner_user=? AND dispatch='auto' AND status IN ('running','waiting_input')",
-        &[&user],
-    )?
-    .len();
-    Ok(running < AUTO_RUNNING_MAX)
 }
 
 fn new_id(conn: &Connection) -> ApiResult<String> {
@@ -782,18 +650,14 @@ fn linked_default(app: &App, project: &str) -> ApiResult<Workspace> {
     }
 }
 
-/// Record a delegation, then start it at once when the chat workspace's
-/// policy allows, or ask the user in the chat; nothing runs before they
-/// approve.
+/// Record a delegation and start it at once: the user is not asked
+/// (plans/rewrite/decisions.md #10), but at most [`RUNNING_MAX`] run.
 fn create(
     app: &AppState,
     user: &str,
     assistant: &Session,
     input: CreateArgs,
 ) -> ApiResult<Delegation> {
-    app.db
-        .lock()
-        .require_session_capability(&assistant.id, Capability::Delegation)?;
     let task = js_trim(&redact_secrets(&input.task)).to_owned();
     if task.is_empty() {
         return Err(ApiError::new(400, "invalid_input", "task is required"));
@@ -899,21 +763,17 @@ fn create(
     }
     let delegation = {
         let conn = app.db.lock();
-        let policy = conn
-            .get_workspace_capabilities(&assistant.workspace_id)?
-            .delegation_approval;
-        let at_once = starts_at_once(&conn, user, policy, input.origins.as_deref())?;
-        let waiting = rows(
+        let running = rows(
             &conn,
-            "owner_user=? AND status='pending_approval'",
+            "owner_user=? AND status IN ('running','waiting_input')",
             &[&user],
         )?
         .len();
-        if !at_once && waiting >= PENDING_MAX {
+        if running >= RUNNING_MAX {
             return Err(ApiError::new(
                 429,
                 "too_many_requests",
-                format!("{waiting} delegations already wait for the user's approval"),
+                format!("{running} delegations already run; wait for one to finish"),
             ));
         }
         let given = input.title.as_deref().map(js_trim).unwrap_or_default();
@@ -941,17 +801,11 @@ fn create(
                 task,
                 previous.as_ref().map(|p| p.id.clone()),
                 role,
-                if at_once { "running" } else { "pending_approval" },
-                if at_once {
-                    at
-                } else {
-                    at.saturating_add(
-                        i64::try_from(app.config.delegation_ttl_ms).unwrap_or(i64::MAX),
-                    )
-                },
+                "running",
                 at,
                 at,
-                at_once.then_some("auto"),
+                at,
+                "auto",
                 input.origins.as_ref().map(|origins| json!(origins).to_string()),
                 quote,
                 quote.as_ref().map(|_| json!(input.entry_ids).to_string()),
@@ -959,176 +813,15 @@ fn create(
         )?;
         row(&conn, &id)?.ok_or_else(ApiError::internal)?
     };
-    if delegation.status == "running" {
-        publish_active(app, &assistant.id);
-        app.sessions_changed(Some(user));
-        let background = app.clone();
-        let id = delegation.id.clone();
-        tokio::spawn(async move { dispatch(&background, &id).await });
-        return Ok(delegation);
-    }
-    let interaction = interaction_of(&app.db.lock(), &delegation);
-    app.events.publish(
-        &assistant.id,
-        assistant.runner_epoch,
-        "interaction_created",
-        interaction,
-    );
+    publish_active(app, &assistant.id);
+    app.sessions_changed(Some(user));
+    let background = app.clone();
+    let id = delegation.id.clone();
+    tokio::spawn(async move { dispatch(&background, &id).await });
     Ok(delegation)
 }
 
 // ---------- the user ----------
-
-/// A model the user picked: `{provider,id}`, `provider/id`, or null/'' for the default.
-fn model_of(value: &Value) -> ApiResult<Option<ModelRef>> {
-    match value {
-        Value::Null => return Ok(None),
-        Value::String(text) if text.is_empty() => return Ok(None),
-        Value::String(text) => {
-            if let Some(slash) = text.find('/')
-                && slash > 0
-                && slash < text.len() - 1
-            {
-                return Ok(Some(ModelRef {
-                    provider: text[..slash].to_owned(),
-                    id: text[slash + 1..].to_owned(),
-                }));
-            }
-        }
-        Value::Object(object) => {
-            if let (Some(Value::String(provider)), Some(Value::String(id))) =
-                (object.get("provider"), object.get("id"))
-            {
-                return Ok(Some(ModelRef {
-                    provider: provider.clone(),
-                    id: id.clone(),
-                }));
-            }
-        }
-        _ => {}
-    }
-    Err(ApiError::new(
-        400,
-        "invalid_input",
-        "model is provider/model-id",
-    ))
-}
-
-fn check_model(app: &App, model: Option<ModelRef>) -> ApiResult<Option<ModelRef>> {
-    if let Some(model) = &model {
-        let known = app
-            .models()
-            .providers
-            .get(&model.provider)
-            .is_some_and(|provider| provider.models.iter().any(|m| m.id == model.id));
-        if !known {
-            return Err(ApiError::new(
-                400,
-                "invalid_input",
-                format!("Unknown model {}", model.label()),
-            ));
-        }
-    }
-    Ok(model)
-}
-
-fn check_thinking(thinking: Option<String>) -> ApiResult<Option<String>> {
-    if let Some(level) = &thinking
-        && !THINKING_LEVELS.contains(&level.as_str())
-    {
-        return Err(ApiError::new(
-            400,
-            "invalid_input",
-            format!("thinking is one of {}", THINKING_LEVELS.join(", ")),
-        ));
-    }
-    Ok(thinking)
-}
-
-/// The user answered a confirmation in the chat `session_id`. `None` when
-/// `interaction_id` is not a delegation of that chat, so the caller
-/// forwards the answer to the node as usual. An approval may pick the model
-/// and thinking level (`model`: `{provider,id}`, `provider/id`, or null for
-/// the default), replacing what was there.
-pub fn answer(
-    app: &AppState,
-    session_id: &str,
-    interaction_id: &str,
-    user: &str,
-    answer: Option<&Value>,
-) -> ApiResult<Option<Value>> {
-    let Some(delegation) = row(&app.db.lock(), interaction_id)? else {
-        return Ok(None);
-    };
-    if delegation.assistant_session_id != session_id {
-        return Ok(None);
-    }
-    if delegation.owner_user != user {
-        return Err(ApiError::new(
-            403,
-            "forbidden",
-            "Delegation belongs to another user",
-        ));
-    }
-    // `answer ?? {}`: a property of anything else is undefined.
-    let reply = answer.filter(|value| !value.is_null());
-    let field = |name: &str| reply.and_then(|value| value.get(name));
-    let approved = field("confirmed") == Some(&Value::Bool(true));
-    let mut model = delegation.model.clone();
-    let mut thinking = delegation.thinking.clone();
-    // Only from the user's answer, never from the assistant's arguments.
-    let as_user_request = approved && field("asUserRequest") == Some(&Value::Bool(true));
-    if approved {
-        app.db
-            .lock()
-            .require_session_capability(session_id, Capability::Delegation)?;
-        if let Some(value) = field("model") {
-            model = check_model(app, model_of(value)?)?;
-        }
-        if let Some(value) = field("thinking") {
-            thinking = check_thinking(match value {
-                Value::Null => None,
-                Value::String(text) if text.is_empty() => None,
-                other => Some(js_string(other)),
-            })?;
-        }
-    }
-    let changed = {
-        let at = now_ms();
-        app.db.lock().execute(
-            "UPDATE delegations SET status=?, dispatch=?, model_json=?, thinking=?, as_user_request=?, updated_at=? WHERE id=? AND status='pending_approval' AND expires_at>?",
-            params![
-                if approved { "running" } else { "rejected" },
-                approved.then_some("approved"),
-                model.as_ref().map(|model| model.json().to_string()),
-                thinking,
-                as_user_request,
-                at,
-                delegation.id,
-                at
-            ],
-        )?
-    };
-    if changed == 0 {
-        return Err(ApiError::new(
-            409,
-            "stale_interaction",
-            "This delegation can no longer be answered",
-        ));
-    }
-    publish_answered(app, &delegation);
-    let id = delegation.id.clone();
-    let background = app.clone();
-    if approved {
-        publish_active(app, &delegation.assistant_session_id);
-        tokio::spawn(async move { dispatch(&background, &id).await });
-    } else {
-        tokio::spawn(async move { report(&background, &id).await });
-    }
-    Ok(Some(
-        json!({ "interactionId": delegation.id, "status": "answered" }),
-    ))
-}
 
 /// The user answered, in the chat `session_id`, a dialog one of its
 /// delegated sessions waits on (`relay.<delegation>.<dialog>`). `None` when
@@ -1320,40 +1013,11 @@ pub async fn stop(app: &AppState, user: &str, id: &str) -> ApiResult<Value> {
     Ok(json!({ "status": "stopping" }))
 }
 
-/// Lapse approvals nobody gave in time.
-fn sweep(app: &AppState) {
-    let expired = match rows(
-        &app.db.lock(),
-        "status='pending_approval' AND expires_at<=?",
-        &[&now_ms()],
-    ) {
-        Ok(expired) => expired,
-        Err(_) => return,
-    };
-    for delegation in expired {
-        let changed = app.db.lock().execute(
-            "UPDATE delegations SET status='expired', updated_at=? WHERE id=? AND status='pending_approval'",
-            params![now_ms(), delegation.id],
-        );
-        if !matches!(changed, Ok(1..)) {
-            continue;
-        }
-        publish_answered(app, &delegation);
-        let background = app.clone();
-        tokio::spawn(async move { report(&background, &delegation.id).await });
-    }
-}
-
 // ---------- running it ----------
 
 fn task_message(delegation: &Delegation) -> String {
     format!(
-        "Task from the user's assistant, {} (delegation {}):\n\n{}\n\nWork on it here. When you are done, end with a short summary of what you did and anything left over: the assistant receives your final message.",
-        if delegation.dispatch.as_deref() == Some("auto") {
-            "started under the user's delegation setting without a separate approval"
-        } else {
-            "approved by the user"
-        },
+        "Task from the user's assistant, started without a separate approval (delegation {}):\n\n{}\n\nWork on it here. When you are done, end with a short summary of what you did and anything left over: the assistant receives your final message.",
         delegation.id,
         delegation.task
     )
@@ -1379,7 +1043,8 @@ async fn start_task(app: &AppState, delegation: &Delegation) -> Result<(), Strin
     let message = |error: ApiError| error.message;
     let workspace = {
         let conn = app.db.lock();
-        conn.require_session_capability(&delegation.assistant_session_id, Capability::Delegation)
+        // The chat that asked may have been deleted meanwhile.
+        conn.get_session(&delegation.assistant_session_id)
             .map_err(message)?;
         conn.get_workspace(&delegation.workspace_id)
             .map_err(message)?
@@ -1419,7 +1084,8 @@ async fn start_task(app: &AppState, delegation: &Delegation) -> Result<(), Strin
             params![target.id, at, at, delegation.id],
         )
         .map_err(|error| ApiError::from(error).message)?;
-        conn.require_session_capability(&delegation.assistant_session_id, Capability::Delegation)
+        // The chat that asked may have been deleted meanwhile.
+        conn.get_session(&delegation.assistant_session_id)
             .map_err(message)?;
     }
     let mut task = Map::new();
@@ -1800,19 +1466,6 @@ fn update_message(conn: &Connection, delegation: &Delegation) -> String {
     lines.join("\n")
 }
 
-fn publish_answered(app: &App, delegation: &Delegation) {
-    // The chat may be gone.
-    let Ok(chat) = app.db.lock().get_session(&delegation.assistant_session_id) else {
-        return;
-    };
-    app.events.publish(
-        &chat.id,
-        chat.runner_epoch,
-        "interaction_answered",
-        json!({ "interactionId": delegation.id, "interactionEpoch": 0 }),
-    );
-}
-
 /// Delete finished delegations last changed before `before` that no other
 /// delegation follows; the number deleted. One that is followed goes once
 /// the delegation following it has gone.
@@ -1831,8 +1484,8 @@ fn prune_old(app: &App) {
     }
 }
 
-/// Start following sessions (event subscription), the expiry sweep and
-/// the hourly pruning of old delegations.
+/// Start following sessions (event subscription) and the hourly pruning of
+/// old delegations.
 pub fn start(app: &AppState) {
     let (sender, mut receiver) = mpsc::unbounded_channel::<GatewayEvent>();
     // Listeners run under the hub's lock: hand the event on and return.
@@ -1853,23 +1506,16 @@ pub fn start(app: &AppState) {
             on_event(&app, &event);
         }
     });
-    let ttl = app.config.delegation_ttl_ms;
-    let period = Duration::from_millis(ttl.clamp(50, 30_000));
     let weak: Weak<App> = Arc::downgrade(app);
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(period);
+        let mut interval = tokio::time::interval(PRUNE_EVERY);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        let mut pruned: Option<tokio::time::Instant> = None;
         loop {
             interval.tick().await;
             let Some(app) = weak.upgrade() else {
                 return;
             };
-            sweep(&app);
-            if pruned.is_none_or(|at| at.elapsed() >= PRUNE_EVERY) {
-                prune_old(&app);
-                pruned = Some(tokio::time::Instant::now());
-            }
+            prune_old(&app);
         }
     });
 }
@@ -2038,7 +1684,6 @@ mod tests {
             target_session_id: None,
             result: None,
             notified_status: None,
-            expires_at: 10,
             dispatched_at: None,
             created_at: 5,
         }
@@ -2126,30 +1771,6 @@ mod tests {
     }
 
     #[test]
-    fn confirmations() {
-        let db = Db::memory();
-        let conn = db.lock();
-        let mut item = delegation();
-        item.role = Some("general".into());
-        item.status = "pending_approval".into();
-        let interaction = interaction_of(&conn, &item);
-        assert_eq!(
-            interaction.to_string(),
-            json!({
-                "id": "d01234567", "rpcId": "d01234567", "sessionId": "chat", "runnerEpoch": 0,
-                "kind": "confirm", "status": "pending",
-                "request": { "method": "confirm", "title": "Delegate to work:repo as general?",
-                    "message": "Fix it\n\nFix the test.", "confirmLabel": "Delegate",
-                    "cancelLabel": "Don't", "modelChoice": { "model": null, "thinking": null },
-                    "userRequestChoice": {
-                        "label": "Treat this task as my request for auto mode", "checked": false } },
-                "expiresAt": 10, "createdAt": 5,
-            })
-            .to_string()
-        );
-    }
-
-    #[test]
     fn arguments() {
         let create = |value: Value| parse_op("delegation.create", &value).unwrap().is_ok();
         assert!(create(json!({ "workspace": "w", "task": "" })));
@@ -2170,48 +1791,5 @@ mod tests {
         assert!(!status(json!({ "offset": 1.5 })));
         assert!(!status(json!({ "id": "" })));
         assert!(parse_op("delegation.other", &json!({})).is_none());
-    }
-
-    #[test]
-    fn model_choices() {
-        assert_eq!(model_of(&json!(null)).unwrap(), None);
-        assert_eq!(model_of(&json!("")).unwrap(), None);
-        assert_eq!(
-            model_of(&json!("gw/model/b")).unwrap(),
-            Some(ModelRef {
-                provider: "gw".into(),
-                id: "model/b".into()
-            })
-        );
-        assert_eq!(
-            model_of(&json!({ "provider": "gw", "id": "b" })).unwrap(),
-            Some(ModelRef {
-                provider: "gw".into(),
-                id: "b".into()
-            })
-        );
-        for bad in [
-            json!("gw/"),
-            json!("/b"),
-            json!("gw"),
-            json!(1),
-            json!({ "id": "b" }),
-        ] {
-            assert_eq!(
-                model_of(&bad).unwrap_err().message,
-                "model is provider/model-id"
-            );
-        }
-        assert_eq!(
-            check_thinking(Some("high".into())).unwrap(),
-            Some("high".into())
-        );
-        assert_eq!(
-            check_thinking(Some("loud".into())).unwrap_err().message,
-            "thinking is one of off, minimal, low, medium, high, xhigh, max"
-        );
-        assert_eq!(js_string(&json!(["high"])), "high");
-        assert_eq!(js_string(&json!(2)), "2");
-        assert_eq!(js_string(&json!({})), "[object Object]");
     }
 }

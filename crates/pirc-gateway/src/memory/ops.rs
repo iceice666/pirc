@@ -166,16 +166,12 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
                     "enabled": true, "user": user, "notes": null, "workspaces": null,
                 }));
             }
-            let (capabilities, memory) = {
+            let memory = {
                 let conn = app.db.lock();
-                (
-                    conn.get_workspace_capabilities(&context.workspace.id)?,
-                    super::store(app, &conn).context(user)?,
-                )
+                super::store(app, &conn).context(user)?
             };
             let mut result = Map::new();
             result.insert("enabled".into(), json!(true));
-            result.insert("capabilities".into(), json!(capabilities));
             result.extend(memory);
             result.insert(
                 "workspaces".into(),

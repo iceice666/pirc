@@ -301,21 +301,6 @@ fn renders_memory_and_workspaces() {
         workspaces,
         "## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with memory_search, and open a note's sources with recall.\n[work:test] Test on work\n[lab:x] X on lab (offline)\n  Roles:\n  - plain: (no description)"
     );
-    let section = format!("{text}\n\n{workspaces}");
-    let policy = |value: Value| Capabilities::from_value(&value);
-    assert_eq!(present_section(&section, &policy(json!({}))), section);
-    assert_eq!(
-        present_section(&section, &policy(json!({ "delegation": false }))),
-        text
-    );
-    assert!(
-        !present_section(&section, &policy(json!({ "memory_search": false })))
-            .contains("workspace memory")
-    );
-    assert!(
-        present_section(&section, &policy(json!({ "remote_recall": false })))
-            .contains("search them with memory_search.\n")
-    );
 }
 
 #[test]
@@ -331,13 +316,6 @@ fn renders_clones_by_their_repository() {
         workspaces,
         "## Workspaces\n\nThe user's repositories you can hand tasks to with delegate. Online status is as of this chat's start. Their coding sessions keep notes there (workspace memory): search them with memory_search, and open a note's sources with recall. Workspaces showing the same repository are clones of it: a search in one also finds the others' notes.\n[work:pirc] pirc on work, repository github.com/me/pirc\n[lab:pirc] pirc on lab, repository github.com/me/pirc (offline)\n[lab:notes] notes on lab"
     );
-    // Without memory_search, nothing about searching clones either.
-    let shown = present_section(
-        &workspaces,
-        &Capabilities::from_value(&json!({ "memory_search": false })),
-    );
-    assert!(!shown.contains("clones"), "{shown}");
-    assert!(shown.contains("[lab:pirc] pirc on lab, repository github.com/me/pirc (offline)"));
 }
 
 #[test]
@@ -363,19 +341,6 @@ fn renders_the_workspaces_linked_to_a_project() {
         one.contains("delegate without a workspace goes to that one."),
         "{one}"
     );
-    // Without memory_search, nothing about searching; the links stay.
-    let shown = present_section(
-        &workspaces,
-        &Capabilities::from_value(&json!({ "memory_search": false })),
-    );
-    assert!(!shown.contains("search"), "{shown}");
-    assert!(shown.contains("· linked to this project"), "{shown}");
-    // Without delegation, the whole section goes.
-    let shown = present_section(
-        &format!("## MEMORY\n\n{workspaces}"),
-        &Capabilities::from_value(&json!({ "delegation": false })),
-    );
-    assert_eq!(shown, "## MEMORY");
 }
 
 #[test]

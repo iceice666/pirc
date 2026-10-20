@@ -121,11 +121,6 @@ CREATE TABLE push_subscriptions (
 );
 CREATE INDEX push_subscriptions_owner ON push_subscriptions(owner_user);
 
--- A chat workspace's capability policy (gateway-owned; node sync never touches it).
-CREATE TABLE workspace_capabilities (
-  workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id), policy_json TEXT NOT NULL
-);
-
 -- The directory workspaces a chat project is about (docs/architecture/assistant-memory.md): a
 -- default and an ordering, never a permission. No foreign key on workspace_id: a
 -- link to a workspace that went away stays, shown as such. repo is the workspace's

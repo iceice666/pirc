@@ -657,14 +657,6 @@ impl State {
                 std::env::var("PIRC_PROJECT_TRUST").ok(),
             )),
             models: config.models.clone(),
-            capabilities: Some({
-                let weak = weak.clone();
-                Rc::new(move || {
-                    weak.upgrade()
-                        .map(|agent| agent.capabilities().to_value())
-                        .unwrap_or(Value::Null)
-                })
-            }),
             approval_mode: Some({
                 let weak = weak.clone();
                 Rc::new(move || {
