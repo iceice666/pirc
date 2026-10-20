@@ -61,12 +61,6 @@ async fn http_edges() {
             &anonymous,
         ),
         (
-            "schedules, no identity",
-            "GET",
-            "/api/schedules".to_owned(),
-            &anonymous,
-        ),
-        (
             "long memory id",
             "POST",
             format!("/api/memory/entries/{long}/forget"),
@@ -82,18 +76,6 @@ async fn http_edges() {
             "long device id",
             "DELETE",
             format!("/api/devices/{long}"),
-            &browser,
-        ),
-        (
-            "long schedule id",
-            "GET",
-            format!("/api/schedules/{long}"),
-            &browser,
-        ),
-        (
-            "long run id",
-            "POST",
-            format!("/api/schedules/s1/runs/{long}/dismiss"),
             &browser,
         ),
     ] {

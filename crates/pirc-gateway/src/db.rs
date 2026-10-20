@@ -1,7 +1,7 @@
 //! The gateway's SQLite database (`apps/gateway/src/database.ts`): a fresh
 //! schema (`schema.sql`) and the queries over sessions, workspaces,
 //! commands, leases and capabilities. Feature modules (devices, memory,
-//! schedules, ...) keep their own queries next to their logic.
+//! delegations, ...) keep their own queries next to their logic.
 //!
 //! Queries are methods of [`Store`], implemented for [`Connection`], so a
 //! transaction (which dereferences to a connection) can combine several.
@@ -493,7 +493,6 @@ pub enum Capability {
     Delegation,
     MemorySearch,
     RemoteRecall,
-    Schedules,
     WebSearch,
 }
 
@@ -503,7 +502,6 @@ impl Capability {
             Self::Delegation => "delegation",
             Self::MemorySearch => "memory_search",
             Self::RemoteRecall => "remote_recall",
-            Self::Schedules => "schedules",
             Self::WebSearch => "web_search",
         }
     }
@@ -513,7 +511,6 @@ impl Capability {
             Self::Delegation => policy.delegation,
             Self::MemorySearch => policy.memory_search,
             Self::RemoteRecall => policy.remote_recall,
-            Self::Schedules => policy.schedules,
             Self::WebSearch => policy.web_search,
         }
     }
@@ -551,12 +548,6 @@ impl Command {
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum SessionOrigin {
-    #[serde(rename_all = "camelCase")]
-    Schedule {
-        schedule_id: String,
-        title: String,
-        due_at: i64,
-    },
     #[serde(rename_all = "camelCase")]
     Delegation {
         delegation_id: String,
@@ -723,21 +714,6 @@ fn finish_deletion(conn: &Connection, session_id: &str) -> ApiResult<()> {
             [session_id],
         )?;
     }
-    // Deletion fences the final node events, so the scheduler cannot rely
-    // on an agent-stop event to settle a run. Keep its audit record and
-    // the schedule, but release the open-run guard and the dead link.
-    conn.execute(
-        "UPDATE schedule_runs SET status='failed', result='The chat was deleted.', finished_at=? WHERE session_id=? AND status IN ('running','waiting_input')",
-        params![now_ms(), session_id],
-    )?;
-    conn.execute(
-        "UPDATE schedule_runs SET session_id=NULL WHERE session_id=?",
-        [session_id],
-    )?;
-    conn.execute(
-        "DELETE FROM schedule_proposals WHERE session_id=?",
-        [session_id],
-    )?;
     conn.execute(
         "DELETE FROM delegations WHERE assistant_session_id=?",
         [session_id],
@@ -862,9 +838,7 @@ impl Store for Connection {
     }
 
     fn list_workspaces(&self) -> ApiResult<Vec<Workspace>> {
-        let mut statement = self.prepare(
-            "SELECT * FROM workspaces ORDER BY display_name",
-        )?;
+        let mut statement = self.prepare("SELECT * FROM workspaces ORDER BY display_name")?;
         let rows = statement.query_map([], Workspace::from_row)?;
         Ok(rows.collect::<Result<_, _>>()?)
     }
@@ -1075,25 +1049,10 @@ impl Store for Connection {
         Ok(session)
     }
 
-    /// Sessions a schedule or a delegation started, with what started them
-    /// (the newest when a delegation follows up in the same session).
+    /// Sessions a delegation started, with what started them (the newest
+    /// when a delegation follows up in the same session).
     fn session_origins(&self, owner_user: &str) -> ApiResult<Vec<(String, SessionOrigin)>> {
         let mut origins = Vec::new();
-        let mut scheduled = self.prepare(
-            "SELECT r.session_id, r.schedule_id, r.due_at, s.title FROM schedule_runs r JOIN schedules s ON s.id=r.schedule_id WHERE r.owner_user=? AND r.session_id IS NOT NULL ORDER BY r.created_at",
-        )?;
-        for row in scheduled.query_map([owner_user], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                SessionOrigin::Schedule {
-                    schedule_id: row.get(1)?,
-                    due_at: row.get(2)?,
-                    title: row.get(3)?,
-                },
-            ))
-        })? {
-            origins.push(row?);
-        }
         let mut delegated = self.prepare(
             "SELECT id, target_session_id, assistant_session_id, title, status FROM delegations WHERE owner_user=? AND target_session_id IS NOT NULL ORDER BY created_at",
         )?;
@@ -1575,6 +1534,11 @@ mod tests {
     const RETIRED: &[&str] = &[
         "session_deletions.workspace_id:",
         "workspace_deletions.",
+        "schedules.",
+        "schedule_runs.",
+        "schedule_proposals.",
+        "index.schedules_",
+        "index.schedule_",
     ];
 
     #[test]

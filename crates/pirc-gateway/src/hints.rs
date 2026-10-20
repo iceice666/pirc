@@ -1,5 +1,5 @@
 //! Hint frames for `/api/events` sockets that opt in (`directory=1`,
-//! `memory=1`, `schedules=1`, `sessions=1`): sent outside the session's
+//! `memory=1`, `sessions=1`): sent outside the session's
 //! sequence and never replayed, so clients that treat an unknown event as a
 //! reset are unaffected (`daemon/app.ts`).
 
@@ -71,11 +71,10 @@ impl Drop for HintGuard {
     }
 }
 
-/// The four kinds of hints.
+/// The three kinds of hints.
 pub struct Hints {
     pub directory: Arc<Listeners<()>>,
     pub memory: Arc<Listeners<String>>,
-    pub schedules: Arc<Listeners<String>>,
     pub sessions: Arc<Listeners<String>>,
 }
 
@@ -84,7 +83,6 @@ impl Hints {
         Self {
             directory: Listeners::new(),
             memory: Listeners::new(),
-            schedules: Listeners::new(),
             sessions: Listeners::new(),
         }
     }

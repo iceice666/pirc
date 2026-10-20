@@ -44,7 +44,7 @@ use crate::routes::Handled;
 use crate::util::{new_id, now_ms, present, random_bytes};
 
 /// One notification (`PushMessage`): `target` is what it opens:
-/// `{sessionId}`, `{schedules: true, scheduleId?}` or `{memory: true}`.
+/// `{sessionId}`, `{memory: true}`, or `{}` for nothing in particular.
 #[derive(Clone, Debug)]
 pub struct PushMessage {
     pub title: String,
@@ -888,7 +888,7 @@ fn push_of(app: &App) -> ApiResult<Arc<Push>> {
 
 /// A session that starts waiting for its user (a dangerous command to
 /// confirm, a question) pushes to them; the gateway's own confirmations (a
-/// delegation or schedule to approve) count too (`watchInteractions`).
+/// delegation to approve) count too (`watchInteractions`).
 fn waiting_message(
     conn: &rusqlite::Connection,
     session_id: &str,
@@ -1163,9 +1163,9 @@ async fn test_push(
             &identity.user,
             &PushMessage {
                 title: "pirc notifications work".into(),
-                body: "Scheduled runs and anything waiting for you will show up here.".into(),
+                body: "Anything waiting for you will show up here.".into(),
                 tag: "test".into(),
-                target: json!({ "schedules": true }),
+                target: json!({}),
                 interaction: None,
             },
         )
@@ -1524,7 +1524,7 @@ mod tests {
                 "me",
                 &PushMessage {
                     title: "CI check failed".into(),
-                    body: "Scheduled run: open it to read the result.".into(),
+                    body: "Finished: open it to read the result.".into(),
                     tag: "session:s1".into(),
                     target: json!({ "sessionId": "s1" }),
                     interaction: None,

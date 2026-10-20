@@ -3,13 +3,8 @@
 
 use serde_json::{Map, Value, json};
 
-pub const CAPABILITY_NAMES: [&str; 5] = [
-    "delegation",
-    "memory_search",
-    "remote_recall",
-    "schedules",
-    "web_search",
-];
+pub const CAPABILITY_NAMES: [&str; 4] =
+    ["delegation", "memory_search", "remote_recall", "web_search"];
 
 /// `Capabilities`: every flag, `false` only when the gateway said so.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,7 +53,6 @@ pub fn capability_for_tool(name: &str) -> Option<&'static str> {
     match name {
         "delegate" | "delegation_status" => Some("delegation"),
         "memory_search" => Some("memory_search"),
-        "schedule" => Some("schedules"),
         "web_search" => Some("web_search"),
         _ => None,
     }
@@ -76,9 +70,8 @@ mod tests {
         assert_eq!(
             caps.to_value(),
             json!({ "version": 1, "delegation": true, "memory_search": true,
-                "remote_recall": true, "schedules": true, "web_search": false })
+                "remote_recall": true, "web_search": false })
         );
-        assert_eq!(capability_for_tool("schedule"), Some("schedules"));
         assert_eq!(capability_for_tool("read"), None);
     }
 }

@@ -1,8 +1,8 @@
-//! Work the gateway starts in a node session on its own: a delegation or a
-//! scheduled run (`apps/gateway/src/daemon/session-dispatch.ts`). Both
-//! create and name a session on the node, deliver a custom message into it,
-//! and read the session back to learn whether it finished or waits for the
-//! user. Also the helpers both share: secret redaction
+//! Work the gateway starts in a node session on its own: a delegation
+//! (`apps/gateway/src/daemon/session-dispatch.ts`). It creates and names a
+//! session on the node, delivers a custom message into it, and reads the
+//! session back to learn whether it finished or waits for the user. Also
+//! the helpers: secret redaction
 //! (`agent/features/memory/redact.ts`) and workspace lookup by name
 //! (`resolveDirectoryWorkspace` in `daemon/delegations.ts`).
 

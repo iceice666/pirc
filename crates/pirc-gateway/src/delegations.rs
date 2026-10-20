@@ -61,7 +61,7 @@ const NOTIFIED: &[&str] = &[
     "completed",
     "failed",
 ];
-/// `THINKING_LEVELS` (`daemon/schedules.ts`).
+/// The thinking levels a delegation may ask for.
 const THINKING_LEVELS: &[&str] = &["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 /// How long after a watched event the delegated session is read.
 const CHECK_DELAY: Duration = Duration::from_millis(150);

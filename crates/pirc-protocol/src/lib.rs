@@ -112,7 +112,7 @@ mod tests {
 
     #[test]
     fn agent_ops() {
-        for op in ["memory.note", "a.b.c", "schedule.createOne", "x1.y2"] {
+        for op in ["memory.note", "a.b.c", "web.searchAll", "x1.y2"] {
             assert!(valid_agent_op(op), "{op}");
         }
         for op in [

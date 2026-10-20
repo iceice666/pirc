@@ -1085,12 +1085,8 @@ fn delivery(body: &Value) -> ApiResult<Delivery> {
             && role.len() <= 40
             && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
     });
-    let ok = [
-        "assistant-delegation",
-        "assistant-delegation-update",
-        "scheduled-run",
-    ]
-    .contains(&delivery.custom_type.as_str())
+    let ok = ["assistant-delegation", "assistant-delegation-update"]
+        .contains(&delivery.custom_type.as_str())
         && (1..=100_000).contains(&length(&delivery.content))
         && role_ok
         && delivery
@@ -1974,19 +1970,21 @@ mod tests {
         );
         assert!(interaction_answer(&json!({ "cancelled": false })).is_err());
         assert!(
-            delivery(&json!({ "customType": "scheduled-run", "content": "c",
-            "role": "reviewer", "thinking": "high" }))
+            delivery(
+                &json!({ "customType": "assistant-delegation", "content": "c",
+            "role": "reviewer", "thinking": "high" })
+            )
             .is_ok()
         );
         for bad in [
             json!({ "customType": "other", "content": "c" }),
-            json!({ "customType": "scheduled-run", "content": "" }),
-            json!({ "customType": "scheduled-run", "content": "c", "role": "Bad" }),
-            json!({ "customType": "scheduled-run", "content": "c", "thinking": "x" }),
-            json!({ "customType": "scheduled-run", "content": "c", "details": null }),
-            json!({ "customType": "scheduled-run", "content": "c", "role": null }),
-            json!({ "customType": "scheduled-run", "content": "c", "model": null }),
-            json!({ "customType": "scheduled-run", "content": "c", "thinking": null }),
+            json!({ "customType": "assistant-delegation", "content": "" }),
+            json!({ "customType": "assistant-delegation", "content": "c", "role": "Bad" }),
+            json!({ "customType": "assistant-delegation", "content": "c", "thinking": "x" }),
+            json!({ "customType": "assistant-delegation", "content": "c", "details": null }),
+            json!({ "customType": "assistant-delegation", "content": "c", "role": null }),
+            json!({ "customType": "assistant-delegation", "content": "c", "model": null }),
+            json!({ "customType": "assistant-delegation", "content": "c", "thinking": null }),
         ] {
             assert!(delivery(&bad).is_err(), "{bad}");
         }

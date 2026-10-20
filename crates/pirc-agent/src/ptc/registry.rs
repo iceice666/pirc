@@ -171,16 +171,6 @@ pub fn capability_meta(name: &str) -> Meta {
             &["approval", "child"],
         ),
         "delegation_status" => agent_data(read("delegation", &["external"])),
-        "schedule" => with_reads(
-            meta(
-                "schedule",
-                &["external", "write"],
-                "exclusive-write",
-                "action-dependent",
-                &["approval"],
-            ),
-            &["list", "result"],
-        ),
         "agent_inbox" | "board_read" => agent_data(read("team", &["read"])),
         "agent_list" | "task_list" | "task_get" => read("team", &["read"]),
         "agent_wait" => meta("team", &["read"], "read", "none", &["child"]),

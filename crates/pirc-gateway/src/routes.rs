@@ -898,7 +898,6 @@ pub async fn delete_session(
     );
     app.events.forget(&session_id);
     app.sessions_changed(Some(user));
-    app.schedules_changed(user);
     Ok(no_content())
 }
 
@@ -1010,7 +1009,7 @@ pub async fn snapshot(
         }
     }
     body.insert("session".into(), session);
-    // Confirmations the gateway itself asks for (delegations, schedules, memory).
+    // Confirmations the gateway itself asks for (delegations, memory).
     let mut interactions = match body.get("interactions") {
         Some(Value::Array(items)) => items.clone(),
         _ => Vec::new(),
@@ -1747,7 +1746,7 @@ pub async fn recording(
     Ok(response)
 }
 
-/// Routes of the gateway's features (devices, memory, schedules, push).
+/// Routes of the gateway's features (devices, memory, push).
 pub fn feature_routes() -> axum::Router<AppState> {
     crate::features::routes()
 }

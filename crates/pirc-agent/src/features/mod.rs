@@ -16,7 +16,6 @@ pub mod project_instructions;
 pub mod recap;
 pub mod role;
 pub mod sandbox;
-pub mod schedules;
 pub mod skills;
 pub mod team;
 pub mod title;
@@ -34,7 +33,6 @@ pub(crate) fn config_key(name: &str) -> Option<&'static str> {
         "skills" => Some("skills"),
         "browser" => Some("browser"),
         "web-search" => Some("webSearch"),
-        "schedules" => Some("schedules"),
         "background-task" => Some("background"),
         "agent-team" => Some("agentTeam"),
         "goal" => Some("goal"),
@@ -62,8 +60,6 @@ pub fn builtin_features() -> Vec<Rc<dyn Feature>> {
         browser::feature(),
         // Node agents with a gateway only; the gateway holds the search key.
         web_search::feature(),
-        // Node agents with a gateway only; the gateway runs the schedules.
-        schedules::feature(),
         // Node agents inside the node's OS sandbox only (PIRC_SANDBOX=srt).
         sandbox::feature(),
         background::feature(),
@@ -150,7 +146,6 @@ mod tests {
                 "recap",
                 "browser",
                 "web-search",
-                "schedules",
                 "sandbox",
                 "background-task",
                 "agent-team",

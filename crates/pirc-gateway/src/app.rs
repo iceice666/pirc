@@ -44,7 +44,7 @@ pub struct App {
     /// backends and subscription accounts.
     pub backends: Arc<BackendService>,
     pub inference: pirc_providers::Inference,
-    /// The feature modules' own state (push keys, schedulers, caches).
+    /// The feature modules' own state (push keys, caches).
     pub slots: crate::slots::Slots,
 }
 
@@ -473,11 +473,6 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/provider-auth/sessions/{id}"),
     ("DELETE", "/api/provider-auth/sessions/{id}"),
     ("POST", "/api/provider-auth/sessions/{id}/input"),
-    ("GET", "/api/schedules/{id}"),
-    ("PATCH", "/api/schedules/{id}"),
-    ("DELETE", "/api/schedules/{id}"),
-    ("POST", "/api/schedules/{id}/run"),
-    ("POST", "/api/schedules/{id}/runs/{run_id}/dismiss"),
     ("GET", "/api/memory/entries/{id}/history"),
     ("POST", "/api/memory/proposals/{id}/approve"),
     ("POST", "/api/memory/proposals/{id}/reject"),

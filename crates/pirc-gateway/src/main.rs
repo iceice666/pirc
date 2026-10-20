@@ -26,10 +26,11 @@ mod nodes;
 mod project_links;
 mod push;
 mod routes;
-mod schedules;
 mod slots;
 mod sockets;
+mod time;
 mod util;
+mod wake;
 mod web_search;
 mod ws;
 

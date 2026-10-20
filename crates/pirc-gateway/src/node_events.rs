@@ -40,10 +40,6 @@ impl App {
         }
     }
 
-    pub fn schedules_changed(&self, user: &str) {
-        self.hints.schedules.notify(&user.to_owned());
-    }
-
     /// The live activity of a session, if its node reported any.
     pub fn activity_of(&self, node_id: Option<&str>, session_id: &str) -> Option<LiveActivity> {
         let activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());

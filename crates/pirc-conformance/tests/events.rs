@@ -109,8 +109,7 @@ async fn event_stream() {
         .unwrap()
         .to_owned();
 
-    let hints =
-        format!("/api/events?sessionId={session}&directory=1&sessions=1&memory=1&schedules=1");
+    let hints = format!("/api/events?sessionId={session}&directory=1&sessions=1&memory=1");
     let mut live = api.connect(&hints, &browser).await.open();
     let mut plain = api
         .connect(&format!("/api/events?sessionId={session}"), &browser)

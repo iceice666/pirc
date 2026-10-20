@@ -982,7 +982,7 @@ async fn delegation_to_a_per_session_workspace() {
         modes.join("scratch.md"),
         "---\nlabel: Scratch\ndescription: One-off sessions in a fresh directory.\n\
          ui:\n  noun: session\nworkdir: per-session\nprompt: [base, body]\n\
-         assistant: user\ndelegate_target: true\nschedule_scope: own\n---\n\
+         assistant: user\ndelegate_target: true\n---\n\
          Work in this session's own directory.\n",
     )
     .unwrap();

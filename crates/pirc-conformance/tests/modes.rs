@@ -2,7 +2,7 @@
 //! this security scenario does not depend on platform-specific snapshots.
 
 use pirc_conformance::{Cluster, GatewayOptions, Reply, browser_headers};
-use pirc_protocol::mode::{AssistantAccess, ModeId, PromptSection, ScheduleScope, default_chat};
+use pirc_protocol::mode::{AssistantAccess, ModeId, PromptSection, default_chat};
 use serde_json::{Value, json};
 use std::time::Duration;
 
@@ -25,7 +25,6 @@ async fn custom_mode_catalog_prompt_capabilities_and_removal() {
     mode.label = "Research".into();
     mode.assistant = AssistantAccess::User;
     mode.delegate = false;
-    mode.schedule_scope = ScheduleScope::Own;
     mode.project_files = false;
     mode.project_instructions = false;
     mode.prompt = vec![PromptSection::Body];

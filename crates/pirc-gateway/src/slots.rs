@@ -32,11 +32,6 @@ impl Slots {
         let stored = self.lock().entry(TypeId::of::<T>()).or_insert(made).clone();
         stored.downcast::<T>().expect("a slot holds its own type")
     }
-
-    /// Store `value` (replacing any earlier one).
-    pub fn set<T: Any + Send + Sync>(&self, value: Arc<T>) {
-        self.lock().insert(TypeId::of::<T>(), value);
-    }
 }
 
 #[cfg(test)]
@@ -49,7 +44,5 @@ mod tests {
         assert!(slots.get::<u8>().is_none());
         assert_eq!(*slots.get_or_init(|| 7u8), 7);
         assert_eq!(*slots.get_or_init(|| 9u8), 7);
-        slots.set(Arc::new(String::from("x")));
-        assert_eq!(*slots.get::<String>().unwrap(), "x");
     }
 }

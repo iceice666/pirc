@@ -6,7 +6,7 @@
 //! another session.
 //!
 //! Each area parses and runs its own operations (`memory`, `delegations`,
-//! `schedules`, `web_search`); this module does the common checks in the TS
+//! `web_search`); this module does the common checks in the TS
 //! order: unknown session, foreign session, unknown op, invalid arguments,
 //! capability, then the op.
 
@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use crate::app::AppState;
 use crate::db::{Capability, Session, Store, Workspace};
 use crate::error::ApiError;
-use crate::{delegations, memory, schedules, web_search};
+use crate::{delegations, memory, web_search};
 
 /// Who is asking.
 pub struct OpContext {
@@ -36,7 +36,6 @@ fn agent_error(status: u16, code: &str, message: &str) -> (u16, Value) {
 enum Parsed {
     Memory(memory::Op),
     Delegation(delegations::Op),
-    Schedule(schedules::Op),
     Web(web_search::Op),
 }
 
@@ -48,17 +47,12 @@ fn parse(op: &str, args: &Value) -> Option<Result<Parsed, ()>> {
     if let Some(parsed) = delegations::parse_op(op, args) {
         return Some(parsed.map(Parsed::Delegation));
     }
-    if let Some(parsed) = schedules::parse_op(op, args) {
-        return Some(parsed.map(Parsed::Schedule));
-    }
     web_search::parse_op(op, args).map(|parsed| parsed.map(Parsed::Web))
 }
 
 fn capability(op: &str) -> Option<Capability> {
     if op.starts_with("delegation.") {
         Some(Capability::Delegation)
-    } else if op.starts_with("schedule.") {
-        Some(Capability::Schedules)
     } else {
         match op {
             "memory.search" => Some(Capability::MemorySearch),
@@ -125,7 +119,6 @@ pub async fn run(
         match parsed {
             Parsed::Memory(op) => memory::run_op(app, &context, op).await,
             Parsed::Delegation(op) => delegations::run_op(app, &context, op).await,
-            Parsed::Schedule(op) => schedules::run_op(app, &context, op).await,
             Parsed::Web(op) => web_search::run_op(app, &context, op).await,
         }
     }

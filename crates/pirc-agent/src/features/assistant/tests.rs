@@ -18,7 +18,6 @@ fn delegation_and_memory_are_independent_mode_capabilities() {
     }
     mode.assistant = pirc_protocol::mode::AssistantAccess::Full;
     mode.delegate = false;
-    mode.schedule_scope = pirc_protocol::mode::ScheduleScope::Own;
     mode.validate().unwrap();
     assert!(!permits_tool(&mode, Kind::Delegate));
     assert!(!permits_tool(&mode, Kind::Delegations));

@@ -166,11 +166,8 @@ fn open_events(
         .filter(|id| !id.is_empty())
         .ok_or_else(ApiError::invalid_input)?;
     let cursor = single(&query, "cursor")?;
-    let mut flags = [false; 4];
-    for (index, name) in ["directory", "memory", "schedules", "sessions"]
-        .iter()
-        .enumerate()
-    {
+    let mut flags = [false; 3];
+    for (index, name) in ["directory", "memory", "sessions"].iter().enumerate() {
         match single(&query, name)? {
             None => {}
             Some("1") => flags[index] = true,
@@ -232,13 +229,6 @@ fn open_events(
         hints.push(app.hints.memory.add(user.clone(), hint("memory_changed")));
     }
     if flags[2] {
-        hints.push(
-            app.hints
-                .schedules
-                .add(user.clone(), hint("schedules_changed")),
-        );
-    }
-    if flags[3] {
         hints.push(app.hints.sessions.add(user, hint("sessions_changed")));
     }
     Ok(EventSocket {

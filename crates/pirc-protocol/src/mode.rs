@@ -84,14 +84,6 @@ pub enum AssistantAccess {
     Full,
 }
 
-/// Which workspaces a session's schedules may target.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ScheduleScope {
-    Own,
-    Any,
-}
-
 /// Presentation metadata. Clients place a mode's workspaces in the Chat or
 /// Work tab by [`AssistantAccess`] (`full` is Chat), not by any field here.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,7 +103,6 @@ pub const FEATURE_NAMES: &[&str] = &[
     "skills",
     "browser",
     "webSearch",
-    "schedules",
     "background",
     "agentTeam",
     "goal",
@@ -158,7 +149,6 @@ pub const TOOL_NAMES: &[&str] = &[
     "read",
     "recall",
     "sandbox_allow_domains",
-    "schedule",
     "subagent",
     "task_create",
     "task_get",
@@ -190,7 +180,6 @@ pub struct Mode {
     pub assistant: AssistantAccess,
     pub delegate: bool,
     pub delegate_target: bool,
-    pub schedule_scope: ScheduleScope,
     pub project_instructions: bool,
     pub project_files: bool,
     pub project_config: bool,
@@ -224,7 +213,6 @@ struct ModeFields {
     delegate: bool,
     #[serde(default)]
     delegate_target: bool,
-    schedule_scope: ScheduleScope,
     #[serde(default)]
     project_instructions: bool,
     #[serde(default)]
@@ -260,7 +248,6 @@ impl<'de> Deserialize<'de> for Mode {
             assistant: raw.assistant,
             delegate: raw.delegate,
             delegate_target: raw.delegate_target,
-            schedule_scope: raw.schedule_scope,
             project_instructions: raw.project_instructions,
             project_files: raw.project_files,
             project_config: raw.project_config,
@@ -351,9 +338,6 @@ impl Mode {
         if self.project_config && !self.repository {
             return Err("project_config requires repository".into());
         }
-        if self.schedule_scope == ScheduleScope::Any && !self.delegate {
-            return Err("schedule_scope: any requires delegate".into());
-        }
         if self.projects && self.workdir == Workdir::Workspace {
             return Err("projects forbids workdir: workspace".into());
         }
@@ -389,7 +373,6 @@ pub fn default_work() -> Mode {
         assistant: AssistantAccess::User,
         delegate: false,
         delegate_target: true,
-        schedule_scope: ScheduleScope::Own,
         project_instructions: false,
         project_files: false,
         project_config: true,
@@ -427,7 +410,6 @@ pub fn default_chat() -> Mode {
         assistant: AssistantAccess::Full,
         delegate: true,
         delegate_target: false,
-        schedule_scope: ScheduleScope::Any,
         project_instructions: true,
         project_files: true,
         project_config: false,
@@ -503,10 +485,6 @@ mod tests {
         refuses(
             json!({"repository":false,"workspace_memory":false}),
             "project_config requires repository",
-        );
-        refuses(
-            json!({"schedule_scope":"any"}),
-            "schedule_scope: any requires delegate",
         );
         refuses(
             json!({"projects":true}),

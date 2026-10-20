@@ -17,7 +17,6 @@ tools: null
 assistant: full
 delegate: true
 delegate_target: false
-schedule_scope: any
 project_instructions: true
 project_files: true
 project_config: false

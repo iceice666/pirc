@@ -61,7 +61,6 @@ prompts!(
     read,
     recall,
     sandbox_allow_domains,
-    schedule,
     subagent,
     task_create,
     task_get,

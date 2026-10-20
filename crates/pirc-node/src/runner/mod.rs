@@ -1170,7 +1170,7 @@ mod tests {
             CommandPayload::ClearQueue
         );
         assert!(
-            serde_json::from_value::<Delivery>(json!({ "customType": "scheduled-run",
+            serde_json::from_value::<Delivery>(json!({ "customType": "assistant-delegation",
             "content": "c", "extra": 1 }))
             .is_err()
         );
