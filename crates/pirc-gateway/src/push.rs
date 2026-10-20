@@ -44,7 +44,8 @@ use crate::routes::Handled;
 use crate::util::{new_id, now_ms, present, random_bytes};
 
 /// One notification (`PushMessage`): `target` is what it opens:
-/// `{sessionId}`, `{memory: true}`, or `{}` for nothing in particular.
+/// `{roomId}` ([`room_target`]), `{sessionId}` (the engine), `{memory: true}`,
+/// or `{}` for nothing in particular.
 #[derive(Clone, Debug)]
 pub struct PushMessage {
     pub title: String,
@@ -54,6 +55,24 @@ pub struct PushMessage {
     pub target: Value,
     /// Exact question metadata for create/revoke pushes. Refresh hints omit the tuple.
     pub interaction: Option<InteractionPush>,
+}
+
+/// The target of a notification about a room: clients open the room
+/// (the web at `/?room=<id>`). Rooms push their own tag, `room:<id>`, so
+/// a newer notification about a room replaces the older one.
+#[allow(dead_code, reason = "room notifications start with plans 05 to 07")]
+pub fn room_message(room_id: &str, title: String, body: String) -> PushMessage {
+    PushMessage {
+        title,
+        body,
+        tag: format!("room:{room_id}"),
+        target: room_target(room_id),
+        interaction: None,
+    }
+}
+
+pub fn room_target(room_id: &str) -> Value {
+    json!({ "roomId": room_id })
 }
 
 #[derive(Clone, Debug)]
@@ -1392,6 +1411,14 @@ mod tests {
                 "t".repeat(119)
             )
         );
+        // A room's deep link.
+        let room: Value = serde_json::from_str(&payload(
+            &room_message("general", "pirc".into(), "Here".into()),
+            7,
+        ))
+        .unwrap();
+        assert_eq!(room["target"], json!({ "roomId": "general" }));
+        assert_eq!(room["tag"], "room:general");
         let revoke = PushMessage {
             title: String::new(),
             body: String::new(),

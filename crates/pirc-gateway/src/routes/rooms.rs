@@ -103,7 +103,8 @@ async fn list_rooms(
         Some(_) => return Err(ApiError::invalid_input().into()),
     };
     let rooms = app.db.lock().list_rooms(&identity.user, archived)?;
-    Ok(ok(json!({ "rooms": rooms })))
+    // Who is asking: clients tell their own messages and typing apart.
+    Ok(ok(json!({ "rooms": rooms, "user": identity.user })))
 }
 
 #[derive(Deserialize)]

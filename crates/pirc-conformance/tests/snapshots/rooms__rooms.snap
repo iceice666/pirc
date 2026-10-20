@@ -29,7 +29,8 @@ expression: t.into_value()
           "waiting": false,
           "waitingSince": null
         }
-      ]
+      ],
+      "user": "test@example.com"
     },
     "headers": {
       "content-type": "application/json"
@@ -993,7 +994,8 @@ expression: t.into_value()
           "waiting": false,
           "waitingSince": null
         }
-      ]
+      ],
+      "user": "test@example.com"
     },
     "headers": {
       "content-type": "application/json"
