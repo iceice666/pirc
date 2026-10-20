@@ -177,6 +177,8 @@ pub struct Agent {
     host: HostProfile,
     /// Replaces `config.system_prompt` (`set_base_prompt`).
     base_prompt: RefCell<Option<Vec<PromptSection>>>,
+    /// Capabilities left out until changed again (`set_hidden_tools`).
+    hidden_tools: RefCell<Vec<String>>,
     write_lease: Option<AcquireWrite>,
     steering: RefCell<Vec<QueueItem>>,
     follow_ups: RefCell<Vec<QueueItem>>,
@@ -721,6 +723,7 @@ impl Agent {
                 catalog: options.models,
                 host: options.host,
                 base_prompt: RefCell::new(None),
+                hidden_tools: RefCell::new(Vec::new()),
                 write_lease: options.acquire_write,
                 steering: RefCell::new(Vec::new()),
                 follow_ups: RefCell::new(Vec::new()),
@@ -1118,8 +1121,17 @@ impl Agent {
         self.has_ui
     }
 
-    /// `getTool`: a capability, unless the mode leaves it out.
+    /// `getTool`: a capability, unless the mode leaves it out or it is
+    /// hidden for now.
     pub fn get_tool(&self, name: &str) -> Option<Rc<dyn Tool>> {
+        if self
+            .hidden_tools
+            .borrow()
+            .iter()
+            .any(|hidden| hidden == name)
+        {
+            return None;
+        }
         if self
             .config
             .mode
@@ -2068,6 +2080,15 @@ impl Agent {
     /// call uses it.
     pub fn set_base_prompt(&self, sections: Vec<PromptSection>) {
         *self.base_prompt.borrow_mut() = Some(sections);
+    }
+
+    /// Leave these capabilities out from the next model call on, until
+    /// called again (the brain: a wake turn has tools a user turn has not,
+    /// and the other way round). A hidden capability is not offered, and a
+    /// call to it fails as for one that does not exist. Unlike the mode's
+    /// allowlist, nothing is removed for good.
+    pub fn set_hidden_tools(&self, names: Vec<String>) {
+        *self.hidden_tools.borrow_mut() = names;
     }
 
     /// The system prompt with the latest run's feature additions.

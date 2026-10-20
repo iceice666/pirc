@@ -204,6 +204,28 @@ async fn words_in_a_room_are_never_commands() {
 }
 
 #[tokio::test]
+async fn hidden_tools_are_left_out_until_shown_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let (agent, model, _) = brain(dir.path(), HostProfile::Brain, Vec::new());
+            agent.refresh_models().await;
+            agent.set_hidden_tools(vec!["web_search".to_owned()]);
+            assert!(agent.get_tool("web_search").is_none());
+            agent.say("one".to_owned(), Vec::new());
+            agent.idle().await;
+            agent.set_hidden_tools(Vec::new());
+            agent.say("two".to_owned(), Vec::new());
+            agent.idle().await;
+            let asked = model.asked.borrow();
+            assert!(asked[0].tools.is_empty(), "hidden: not offered");
+            assert_eq!(asked[1].tools, ["web_search"]);
+        })
+        .await;
+}
+
+#[tokio::test]
 async fn models_come_from_the_injected_catalog() {
     let dir = tempfile::tempdir().unwrap();
     let local = tokio::task::LocalSet::new();
