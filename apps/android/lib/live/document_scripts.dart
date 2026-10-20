@@ -1561,6 +1561,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _failInteraction(Object error) async {
     if (_disposed) return;
     ready = false;
+    modalDialogIds = const [];
     _retainLoadedHtmlImages();
     _storagePollNeeded = false;
     _storageEvents.clear();
@@ -2559,6 +2560,8 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   bool loading = false, ready = false;
+  List<String> modalDialogIds = const [];
+  bool get hasModalDialog => ready && modalDialogIds.isNotEmpty;
   NativeHtmlDocumentContent? content;
   Map<String, NativeDocumentCanvasSnapshot> canvases = const {};
   String _lastCanvases = "[]";
@@ -2725,6 +2728,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       }
     } catch (error) {
       if (!_disposed) {
+        modalDialogIds = const [];
         _retainLoadedHtmlImages();
         _storagePollNeeded = false;
         _storageEvents.clear();
@@ -2756,6 +2760,37 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   /// True prevents the native default action. Rapid taps observe prior mutations.
   Future<bool> click(String id, List<Json> controls) =>
       dispatch(id, 'click', controls);
+
+  /// Dispatches the platform's Back/Escape request to the top modal. A
+  /// cancel listener may keep it open; the platform request is still consumed.
+  Future<void> requestModalClose() {
+    if (_disposed || !ready || !hasModalDialog) return Future.value();
+    final generation = _formActionGeneration;
+    _pendingEvents++;
+    final operation = _tail.then((_) async {
+      try {
+        if (_disposed ||
+            !ready ||
+            !_attached ||
+            generation != _formActionGeneration ||
+            !hasModalDialog) {
+          return;
+        }
+        await _run(
+          '__pircDocument.requestTopModalClose()',
+          expectedActionGeneration: generation,
+        );
+      } catch (error) {
+        await _failInteraction(error);
+      } finally {
+        _pendingEvents--;
+        if (!_disposed && _pendingEvents == 0) notifyListeners();
+        _schedule();
+      }
+    });
+    _tail = operation;
+    return operation;
+  }
 
   Future<bool> dispatchDetailed(
     String id,
@@ -2937,6 +2972,15 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     final decoded = obj(jsonDecode(snapshot));
     final issues = _validateResult(decoded);
     _acceptStyles(decoded);
+    final rawModalDialogs = decoded['modalDialogIds'] ?? const [];
+    if (rawModalDialogs is! List ||
+        rawModalDialogs.length > 64 ||
+        rawModalDialogs.any(
+          (id) => id is! String || !RegExp(r'^pirc-[1-9][0-9]*$').hasMatch(id),
+        )) {
+      throw FormatException(tr('Invalid modal dialog state.'));
+    }
+    modalDialogIds = List<String>.unmodifiable(rawModalDialogs.cast<String>());
     final target = decoded['fragmentTargetId'];
     if (target != null &&
         (target is! String ||
@@ -3052,6 +3096,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    modalDialogIds = const [];
     if (!_startupFinished.isCompleted) _startupFinished.complete();
     _cancelLayoutWaits();
     _layoutCapture = null;

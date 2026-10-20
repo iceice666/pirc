@@ -292,9 +292,13 @@ class NativeAbsoluteEntry {
   const NativeAbsoluteEntry({
     required this.spec,
     required this.child,
+    this.isModal = false,
+    this.modalOrder = 0,
     this.overflowHitTest,
     this.staticMarker,
   });
+  final bool isModal;
+  final int modalOrder;
   final GlobalKey? staticMarker;
   final NativeAbsolutePositionSpec spec;
   final Widget child;
@@ -317,6 +321,8 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
            for (final item in positioned)
              _AbsoluteItem(
                spec: item.spec,
+               isModal: item.isModal,
+               modalOrder: item.modalOrder,
                staticMarker: item.staticMarker,
                overflowHitTest: item.overflowHitTest,
                child: item.child,
@@ -354,16 +360,25 @@ class NativeDocumentAbsoluteLayer extends MultiChildRenderObjectWidget {
 class _AbsoluteItem extends SingleChildRenderObjectWidget {
   const _AbsoluteItem({
     required this.spec,
+    required this.isModal,
+    required this.modalOrder,
     required this.staticMarker,
     required this.overflowHitTest,
     required super.child,
   });
   final NativeAbsolutePositionSpec spec;
+  final bool isModal;
+  final int modalOrder;
   final GlobalKey? staticMarker;
   final bool Function(RenderBox, BoxHitTestResult, Offset)? overflowHitTest;
   @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderAbsoluteItem(spec, overflowHitTest, staticMarker);
+  RenderObject createRenderObject(BuildContext context) => _RenderAbsoluteItem(
+    spec,
+    overflowHitTest,
+    staticMarker,
+    isModal,
+    modalOrder,
+  );
   @override
   void updateRenderObject(
     BuildContext context,
@@ -371,6 +386,8 @@ class _AbsoluteItem extends SingleChildRenderObjectWidget {
   ) {
     renderObject
       ..spec = spec
+      ..isModal = isModal
+      ..modalOrder = modalOrder
       ..staticMarker = staticMarker
       ..overflowHitTest = overflowHitTest
       ..markNeedsLayout();
@@ -379,7 +396,15 @@ class _AbsoluteItem extends SingleChildRenderObjectWidget {
 
 class _RenderAbsoluteItem extends RenderProxyBox
     implements NativeDocumentPositioningBasis, NativeDocumentFixedSurface {
-  _RenderAbsoluteItem(this.spec, this.overflowHitTest, this.staticMarker);
+  _RenderAbsoluteItem(
+    this.spec,
+    this.overflowHitTest,
+    this.staticMarker,
+    this.isModal,
+    this.modalOrder,
+  );
+  bool isModal;
+  int modalOrder;
   GlobalKey? staticMarker;
   Offset usedOffset = Offset.zero;
   NativeAbsolutePositionSpec spec;
@@ -862,9 +887,13 @@ class RenderNativeDocumentPositioningViewport extends RenderProxyBox {
     }
     final order = {for (var i = 0; i < result.length; i++) result[i]: i};
     result.sort((a, b) {
-      final z = (a as _RenderAbsoluteItem).spec.zIndex.compareTo(
-        (b as _RenderAbsoluteItem).spec.zIndex,
-      );
+      final left = a as _RenderAbsoluteItem;
+      final right = b as _RenderAbsoluteItem;
+      final modal = left.modalOrder.compareTo(right.modalOrder);
+      if (modal != 0) return modal;
+      final z = left.modalOrder > 0
+          ? 0
+          : left.spec.zIndex.compareTo(right.spec.zIndex);
       return z == 0 ? order[a]!.compareTo(order[b]!) : z;
     });
     return result;
@@ -884,6 +913,12 @@ class RenderNativeDocumentPositioningViewport extends RenderProxyBox {
       Offset.zero & size,
       (context, offset) {
         for (final child in items) {
+          if ((child as _RenderAbsoluteItem).isModal) {
+            context.canvas.drawRect(
+              offset & size,
+              Paint()..color = const Color(0x1a000000),
+            );
+          }
           final translation = MatrixUtils.getAsTranslation(
             child.getTransformTo(this),
           );
@@ -898,7 +933,12 @@ class RenderNativeDocumentPositioningViewport extends RenderProxyBox {
 
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
-    for (final child in _positioned.reversed) {
+    final positioned = _positioned;
+    final topModal = positioned
+        .where((child) => (child as _RenderAbsoluteItem).isModal)
+        .lastOrNull;
+    for (final child
+        in topModal == null ? positioned.reversed : <RenderBox>[topModal]) {
       final hit = result.addWithPaintTransform(
         transform: child.getTransformTo(this),
         position: position,
@@ -922,6 +962,11 @@ class RenderNativeDocumentPositioningViewport extends RenderProxyBox {
         }
         node = node.parent;
       }
+      return true;
+    }
+    if (topModal != null) {
+      // Modal backdrops absorb all pointer input outside the top dialog.
+      result.add(BoxHitTestEntry(this, position));
       return true;
     }
     return super.hitTestChildren(result, position: position);

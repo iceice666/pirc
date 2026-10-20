@@ -1183,15 +1183,23 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     }
     _beginFocusRevealSuppression(desired, preventScroll, isCurrent: isCurrent);
     desired.requestFocus();
-    final context = desired.context;
-    if (!preventScroll && context != null) {
-      unawaited(
-        Scrollable.ensureVisible(
-          context,
-          duration: Duration.zero,
-          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-        ),
-      );
+    if (!preventScroll) {
+      // Closing a dialog can dispose the old focused control during this same
+      // frame. Ancestor lookup on its deactivated Element is unsafe. Resolve
+      // the live focus context after the tree has finalized instead.
+      final target = desired;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !isCurrent() || !target.hasFocus) return;
+        final liveContext = target.context;
+        if (liveContext == null || !liveContext.mounted) return;
+        unawaited(
+          Scrollable.ensureVisible(
+            liveContext,
+            duration: Duration.zero,
+            alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+          ),
+        );
+      });
     }
   }
 
@@ -4031,6 +4039,14 @@ class _NativeHtmlFactory extends WidgetFactory {
   ) => [
     for (final item in _absoluteChildren[host] ?? const [])
       NativeAbsoluteEntry(
+        isModal: item.tree.element.attributes.containsKey(
+          'data-pirc-dialog-modal',
+        ),
+        modalOrder:
+            int.tryParse(
+              item.tree.element.attributes['data-pirc-dialog-modal'] ?? '',
+            ) ??
+            0,
         spec: NativeAbsolutePositionSpec.parse(
           _positionedStyles(item.tree, item.styles),
           fontSize:

@@ -10,12 +10,17 @@ are available from Git through Historical records, not repeated here.
 
 ## Remaining work, in priority order
 
-- [ ] **Native dialog presentation:** dialog form closing and explicit `open`
-      attribute visibility, nonmodal `show()` and bounded initial/restored focus
-      now work through the script/native host. Complete `showModal()`, the native
-      top layer/backdrop, inert background, focus trapping, Escape/Back
-      cancellation. Nonmodal `requestClose()` now has a cancelable close-request
-      gate; modal and platform close requests remain unfinished.
+- [ ] **Native dialog presentation:** dialog form closing, explicit `open`,
+      nonmodal `show()` and `requestClose()`, and the common `showModal()` path
+      now work through the script/native host. Modal dialogs paint above fixed
+      content with a backdrop, block background taps and root scrolling, and
+      consume Escape/Android Back through a cancelable close request. Local
+      widget and script tests cover focus, close, reopen and canceled Back.
+      A matched Roboto fixture now gives the same 89.6 CSS px dialog width in
+      Flutter and Chromium 153; the Flutter box remains 1 CSS px taller in the
+      tested button-only case. Check author CSS
+      that overrides modal positioning, nested modal stacking, focus/semantics
+      isolation and light-dismiss `closedby` behavior on devices.
       Extend default dialog positioning beyond block-only flow to mixed inline
       runs and flex/grid static-position rectangles. Modern invoker and
       `closedby` light-dismiss behavior and dialog task-source scheduling still need
@@ -439,11 +444,10 @@ assert both observed orders separately and compare their payloads; they do not
 claim event-loop parity. The [HTML Standard's dialog algorithms](https://html.spec.whatwg.org/multipage/interactive-elements.html)
 use distinct task sources for those notifications. Native validation feedback
 paint can obscure a different area than Chromium's popup; invalid-state geometry
-and behavior are checked, but that covered pixel is not a parity claim. Modal
-presentation, default dialog UA layouts beyond the supported block-only gate
-and the remaining APIs listed above are still unfinished. `showModal()` is not
-installed, so its presence does not
-falsely advertise modality to capability checks. This increment is not complete
+and behavior are checked, but that covered pixel is not a parity claim. The
+subsequent common `showModal()` implementation is summarized at the top of this
+plan; default dialog UA layouts beyond the supported block-only gate and the
+remaining APIs are still unfinished. These gates do not establish complete
 dialog support or physical Android acceptance.
 
 Nonmodal `show()` now fires a cancelable trusted opening `beforetoggle`, respects

@@ -1010,21 +1010,47 @@
       dialogReturnValues.set(this, String(value));
     }
     show() { return showDocumentDialog(this); }
+    showModal() { return showModalDocumentDialog(this); }
     close(value) { return closeDocumentDialog(this, value); }
     requestClose(value) { return requestCloseDocumentDialog(this, value); }
   }
 
   function showDocumentDialog(element) {
     if (!(element instanceof PircHTMLDialogElement)) throw new TypeError('Illegal invocation');
+    if (activeState?.modalDialogs.includes(element)) {
+      throw pickerException('InvalidStateError',
+        "The dialog is already open as a modal dialog, and therefore cannot be opened as a non-modal dialog.");
+    }
     if (element.hasAttribute('open')) return;
+    openDocumentDialog(element, false);
+  }
+
+  function showModalDocumentDialog(element) {
+    if (!(element instanceof PircHTMLDialogElement)) throw new TypeError('Illegal invocation');
+    const state = activeState;
+    if (!state || !element.isConnected || element.ownerDocument !== state.document) {
+      throw pickerException('InvalidStateError', 'The element is not in a Document.');
+    }
+    if (element.hasAttribute('open')) {
+      if (state.modalDialogs.includes(element)) return;
+      throw pickerException('InvalidStateError',
+        "The dialog is already open as a non-modal dialog, and therefore cannot be opened as a modal dialog.");
+    }
+    openDocumentDialog(element, true);
+  }
+
+  function openDocumentDialog(element, modal) {
     const before = new PircToggleEvent('beforetoggle', {
       oldState: 'closed', newState: 'open', cancelable: true
     });
     defineEventMember(before, 'isTrusted', true);
     if (!element.dispatchEvent(before) || element.hasAttribute('open')) return;
+    if (modal && (!activeState || !element.isConnected ||
+        element.ownerDocument !== activeState.document)) return;
     queueDetailsToggle(element, 'closed', 'open');
-    element.setAttribute('open', '');
     const state = activeState;
+    if (modal && state) state.modalDialogs.push(element);
+    element.setAttribute('open', '');
     dialogPreviousFocus.set(element, state ? state.activeElement : null);
     if (!state || !element.isConnected || element.ownerDocument !== state.document) return;
     // Chromium 153 delegates to an eligible autofocus descendant first, then
@@ -1045,10 +1071,13 @@
 
   function cleanupDocumentDialog(element) {
     if (!isOwnedDialog(element)) return;
+    const state = activeState;
+    const modalIndex = state.modalDialogs.indexOf(element);
+    if (modalIndex >= 0) state.modalDialogs.splice(modalIndex, 1);
     dialogCloseEpochs.set(element, (dialogCloseEpochs.get(element) || 0) + 1);
     if (closingDialogs.has(element)) return;
     dialogPreviousFocus.delete(element);
-    const state = activeState, focused = state.activeElement;
+    const focused = state.activeElement;
     if (focused && isInside(focused, element)) {
       // As with close(), hidden focus is dropped at a later rendering opportunity.
       scheduleTimer('timeout', () => {
@@ -1063,6 +1092,8 @@
     if (!state || state.cloningSnapshot || !isOwnedNode(root, state)) return;
     for (const dialog of [root, ...Array.from(root.querySelectorAll?.('dialog') || [])]) {
       if (!isOwnedDialog(dialog)) continue;
+      const modalIndex = state.modalDialogs.indexOf(dialog);
+      if (modalIndex >= 0) state.modalDialogs.splice(modalIndex, 1);
       dialogCloseEpochs.set(dialog, (dialogCloseEpochs.get(dialog) || 0) + 1);
       dialogPreviousFocus.delete(dialog);
     }
@@ -1133,6 +1164,10 @@
       element.dispatchEvent(before);
       if (!element.hasAttribute('open')) return;
       element.removeAttribute('open');
+      if (state) {
+        const modalIndex = state.modalDialogs.indexOf(element);
+        if (modalIndex >= 0) state.modalDialogs.splice(modalIndex, 1);
+      }
       if (converted !== undefined) dialogReturnValues.set(element, converted);
       queueDetailsToggle(element, 'open', 'closed');
       const previouslyFocused = dialogPreviousFocus.get(element);
@@ -3978,6 +4013,8 @@
         hasHiddenOrInertAncestor(element)) {
       return false;
     }
+    const topModal = state.modalDialogs[state.modalDialogs.length - 1];
+    if (topModal && !isInside(element, topModal)) return false;
 
     const tag = String(element.localName || '').toLowerCase();
     if (tag === 'input') {
@@ -4876,6 +4913,14 @@
     const cloneAndSerialize = function() {
       const snapshotDocument = state.document.cloneNode(true);
       synchronizeFormState(state.document, snapshotDocument);
+      for (const element of snapshotDocument.querySelectorAll('[data-pirc-dialog-modal]'))
+        element.removeAttribute('data-pirc-dialog-modal');
+      for (const dialog of state.modalDialogs) {
+        if (!dialog.isConnected || !dialog.hasAttribute('open')) continue;
+        const id = ensureElementId(dialog);
+        const copy = snapshotDocument.querySelector('[data-pirc-script-id="' + id + '"]');
+        if (copy) copy.setAttribute('data-pirc-dialog-modal', String(state.modalDialogs.indexOf(dialog) + 1));
+      }
       const scripts = snapshotDocument.querySelectorAll('script');
       for (const script of scripts)
         script.remove();
@@ -4973,6 +5018,9 @@
       }) : null,
       documentBaseURL: activeState && activeState.document ? currentDocumentBaseUrl() : null,
       fragmentTargetId: activeState?.fragmentTarget ? ensureElementId(activeState.fragmentTarget) : null,
+      modalDialogIds: activeState ? activeState.modalDialogs
+        .filter(dialog => dialog.isConnected && dialog.hasAttribute('open'))
+        .map(ensureElementId) : [],
       fragmentTargetReady: activeState?.domContentLoaded === true && !activeState.fragmentAncestorTask,
       fragmentAncestorsRevealed: activeState?.fragmentAncestorsRevealed === true,
       initialRootScrollOverride: activeState?.initialRootScrollOverride === true,
@@ -5714,6 +5762,7 @@
       document: null,
       window: null,
       activeElement: null,
+      modalDialogs: [],
       elementIds: new WeakMap(),
       elementsById: new Map(),
       inlineHandlers: new WeakMap(),
@@ -6038,6 +6087,18 @@
     const request = input && typeof input === 'object' ? input : {};
     advanceClock(request.now);
     return response({ now: state.now });
+  }
+
+  function requestTopModalClose() {
+    const state = activeState;
+    const top = state?.modalDialogs[state.modalDialogs.length - 1];
+    if (!top || !top.isConnected || !top.hasAttribute('open'))
+      return response({modalCloseRequested: false});
+    // A platform close request obeys closedby. The IDL requestClose() method
+    // separately force-enables its own request, including closedby=none.
+    if (String(top.getAttribute('closedby') || '').toLowerCase() !== 'none')
+      requestCloseDocumentDialog(top);
+    return response({modalCloseRequested: true});
   }
 
   function completeImageResource(state, id, completion) {
@@ -6593,6 +6654,7 @@
     pump: pump,
     continueAnimationFrame: continueAnimationFrame,
     snapshot: snapshot,
+    requestTopModalClose: requestTopModalClose,
     filePickerResult: filePickerResult,
     completeResource: completeResource,
     restoreControls: function(input) {

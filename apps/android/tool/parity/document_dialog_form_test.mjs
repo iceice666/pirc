@@ -81,12 +81,8 @@ test('dialog constructor, return-value conversion and explicit display limits', 
     () => vm.runInContext('document.getElementById("d").returnValue=Symbol()', c),
     /Symbol/,
   );
-  assert.throws(
-    () => vm.runInContext('document.getElementById("d").showModal()', c),
-    /not a function/i,
-  );
   assert.equal(vm.runInContext('document.getElementById("d").open', c), false);
-  assert.equal(vm.runInContext('typeof document.getElementById("d").showModal', c), 'undefined');
+  assert.equal(vm.runInContext('typeof document.getElementById("d").showModal', c), 'function');
   assert.equal(vm.runInContext('typeof document.getElementById("d").show', c), 'function');
   assert.equal(vm.runInContext('window.HTMLDialogElement === HTMLDialogElement', c), true);
 });

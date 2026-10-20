@@ -697,15 +697,22 @@ class _Cascade {
   NativeDocumentStylesResult apply() {
     if (engine.dialogDefaults) {
       for (final element in document.querySelectorAll('dialog')) {
+        final modal = element.attributes.containsKey('data-pirc-dialog-modal');
         final defaults = <String, String>{
           'display': element.attributes.containsKey('open') ? 'block' : 'none',
-          'position': 'absolute',
+          'position': modal ? 'fixed' : 'absolute',
           'left': '0px',
           'right': '0px',
-          'top': 'auto',
-          'bottom': 'auto',
+          'top': modal ? '0px' : 'auto',
+          'bottom': modal ? '0px' : 'auto',
           'width': 'fit-content',
           'height': 'fit-content',
+          if (modal) ...{
+            'max-width':
+                '${(engine.viewportWidth - 32).clamp(0, double.infinity)}px',
+            'max-height':
+                '${(engine.viewportHeight - 32).clamp(0, double.infinity)}px',
+          },
           'color': 'CanvasText',
           'background-color': tr("Canvas"),
           for (final side in ['top', 'right', 'bottom', 'left']) ...{

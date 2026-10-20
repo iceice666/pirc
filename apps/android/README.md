@@ -118,8 +118,13 @@ phone/tablet, DPR and theme profiles. Its independent reference is recreated by
 `node apps/android/tool/parity/capture_document_dialog_show_chromium153.mjs`;
 `document_dialog_show_test.mjs` checks 24 synchronous/settled opening/focus cases.
 The fixture retains and explicitly asserts the 16 CSS px default-paragraph
-margin-collapse difference. `showModal()` is not installed; modality, broader
-UA layout/focus delegates and platform close requests remain in the mobile plan.
+margin-collapse difference. `document_dialog_modal_test.mjs` and
+`test/document_live_runtime_dialog_modal_test.dart` cover common `showModal()`
+state, native backdrop/centering, blocked background taps, Escape/Android Back
+and cancelable requests in phone/tablet light/dark profiles. The script test
+also checks `closedby=none` and rejects forged native top-layer markers.
+Broader UA layout/focus delegates and the remaining modal differences are listed
+in the mobile plan.
 The tests keep the observed close/toggle task-order difference explicit.
 Validation popup paint has separate visual acceptance; an obscured pixel is not compared as background.
 
@@ -129,7 +134,7 @@ sizing, UA border/padding/color, CSSOM insets, Open/Close and authored color upd
 Recreate its independent browser reference with
 `node apps/android/tool/parity/capture_document_dialog_layout_chromium153.mjs`.
 Mixed inline/flex/grid static positions, embedded Markdown defaults and modal
-presentation remain in the mobile plan. `test/loading_spinner_test.dart` verifies
+size differences remain in the mobile plan. `test/loading_spinner_test.dart` verifies
 actual loader rotation and suspension on hidden/reduced-motion surfaces.
 
 `test/document_live_runtime_dialog_request_close_test.dart` checks cancelable
@@ -138,9 +143,9 @@ close and native focus restoration at eight viewport/theme/DPR profiles.
 Recreate its independent Chromium 153 reference with
 `node apps/android/tool/parity/capture_document_dialog_request_close_chromium153.mjs`;
 `document_dialog_request_close_test.mjs` compares 44 synchronous/settled API,
-reentrancy and handler-attribute/IDL cases. Modal/platform dismissal, complete
-handler compilation semantics and the explicit pointer close/toggle task-source
-difference remain in the mobile plan.
+reentrancy and handler-attribute/IDL cases. Basic modal/platform dismissal is
+covered by the modal tests above. Complete handler compilation semantics and
+the explicit pointer close/toggle task-source difference remain in the mobile plan.
 
 Terminal controls support two-finger font zoom, Ctrl+plus/minus and Ctrl+0.
 Mobile clients also show a Termux-style extra-key strip with one-shot Ctrl/Alt;

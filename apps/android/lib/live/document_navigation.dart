@@ -463,6 +463,11 @@ class NativeDocumentHostState extends State<NativeDocumentHost> {
   Future<void> back() async {
     final window = windows.active;
     if (window == null || window.closing) return;
+    final scripts = window.currentDocument?.scripts;
+    if (scripts?.hasModalDialog == true) {
+      await scripts!.requestModalClose();
+      return;
+    }
     if (!window.canBack) {
       if (window.canReturnToSource &&
           window.index < 0 &&
@@ -680,6 +685,11 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
       return;
     }
     final window = widget.windows.active;
+    final scripts = window?.currentDocument?.scripts;
+    if (scripts?.hasModalDialog == true) {
+      await scripts!.requestModalClose();
+      return;
+    }
     if (window?.canBack == true) {
       final revision = widget.windows.selectionRevision;
       final result = await window!.traverseHistory(window.index - 1);
@@ -1320,7 +1330,9 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
         final independentVisible =
             window?.independentApp == true && current?.appRoute != null;
         return PopScope(
-          canPop: widget.managed || window?.canBack != true,
+          canPop:
+              widget.managed ||
+              (window?.canBack != true && window?.currentDocument == null),
           onPopInvokedWithResult: (popped, _) {
             if (!widget.managed && !popped) _back();
           },
@@ -2197,7 +2209,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         primary: const Color(0xff005fcc),
       ),
     );
-    return ColoredBox(
+    final page = ColoredBox(
       color: Colors.white,
       child: Theme(
         data: pageTheme,
@@ -2236,6 +2248,9 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
                     child: SingleChildScrollView(
                       key: ObjectKey(document),
                       controller: document.scroll,
+                      physics: scripts?.hasModalDialog == true
+                          ? const NeverScrollableScrollPhysics()
+                          : null,
                       child: document.content.isHtml
                           ? _buildContent(
                               document,
@@ -2252,6 +2267,15 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
           ),
         ),
       ),
+    );
+    return CallbackShortcuts(
+      bindings: _scripts?.hasModalDialog == true
+          ? {
+              const SingleActivator(LogicalKeyboardKey.escape): () =>
+                  unawaited(_scripts!.requestModalClose()),
+            }
+          : const {},
+      child: page,
     );
   }
 
@@ -2353,6 +2377,15 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       );
     }
     final styled = html.parse(content.text);
+    if (_scripts?.ready != true || _scripts?.content == null) {
+      // Only the VM snapshot may nominate a top-layer dialog. Ignore markup
+      // that tries to supply the renderer's private marker directly.
+      for (final element in styled.querySelectorAll(
+        '[data-pirc-dialog-modal]',
+      )) {
+        element.attributes.remove('data-pirc-dialog-modal');
+      }
+    }
     if (_scripts == null) {
       var sequence = 0;
       for (final element in styled.querySelectorAll('*')) {

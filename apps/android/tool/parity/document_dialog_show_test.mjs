@@ -77,5 +77,5 @@ test('dialog.show uses a branded receiver and returns undefined', () => {
   );
   assert.equal(vm.runInContext('document.getElementById("dialog").show()', c), undefined);
   assert.equal(vm.runInContext('document.getElementById("dialog").show()', c), undefined);
-  assert.equal(vm.runInContext('typeof HTMLDialogElement.prototype.showModal', c), 'undefined');
+  assert.equal(vm.runInContext('typeof HTMLDialogElement.prototype.showModal', c), 'function');
 });
