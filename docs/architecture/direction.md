@@ -55,7 +55,7 @@ Discord 的形狀：一個 server（你的 gateway）、很多頻道。
 | 為什麼掛著    | 當初的脈絡                                                                 |
 | 誰開的 / 來處 | `user`（你說的）或 `tool:<source>`（它從 email、Moodle、workspace 推導的） |
 | 開在哪個房間  | 房間；可為空（跨房間）                                                     |
-| 時間錨        | 可選。deadline、約定時間                                                   |
+| 時間錨        | 可選。deadline、約定時間，或週期（「每週三 18:00」）                       |
 | 下次該看什麼  | 可選。self-wake 的線索：「去看他的 dotfiles」、「查 Moodle 有沒有新公告」  |
 | 狀態          | 開啟 / 已了結（含原因）                                                    |
 
@@ -70,6 +70,8 @@ Discord 的形狀：一個 server（你的 gateway）、很多頻道。
 - **永遠在 prompt 裡**，因為它天生小（一個人同時掛著的事不會超過幾十件）。超過上限時，最老的、沒有時間錨的降到「事實」層（2.4），不是丟掉。
 
 **提醒是什麼**：一個帶時間錨的未了結的事 + self-wake（2.6）。「週三開會」不是 schedule；schedule 退成實作細節。
+
+**週期性的事**（每週三 18:00 開會）是**一個**常駐的未了結的事，帶 recurrence；每次到點產生一個 wake，時間錨顯示「下次」。它不會每次到點就自然了結再重掛——了結只有你說不用了、或 recurrence 到期。
 
 ### 2.4 三層記憶
 
@@ -195,6 +197,7 @@ Discord 的形狀：一個 server（你的 gateway）、很多頻道。
 概念層級，不是 mock。
 
 - **一個 server、一個房間列表。** 依最後活動排序，有未讀標記，有「它在等你回話」標記。沒有 Chat / Work 的頂層二分。
+- **你的訊息可以拆著送**。一則話拆成幾則短訊息是常態；每則一送就出現在房間，但它等你停下來（沒按鍵、沒送出約 3 秒）才把這一批當一次發言來想。沒有倒數；它的 presence 在真的開始想才變。細節在 [decisions.md](../../plans/rewrite/decisions.md) #16。
 - **訊息列**是 Discord 式的：頭像、名字、時間、內容。每張面孔有自己的頭像和名字（2.8）；他們的訊息和你的訊息長得一樣。沒有 bubble。面孔之間的交辦（「`@SlimeOS PM` 看看 PR#123」）是一則普通訊息，不是系統事件。
 - **成員列表**：房間右側（或一個 tab）列出這個房間有哪些面孔、各自的 presence。這是「有多個人」的感覺來源，也是你找人的地方。
 - **討論串**：面孔每叫一次工人，那則交辦訊息下就挂一個討論串（Discord thread），**不論一個工人還是一群**。工人的進度、工人之間的對話都在這裡：每個工人一個名字和狀態點，你可以進去看、插話。工人再叫工人（若開放，見開放決定 12）時，在同一個討論串裡縮排，不再開一層。房間本身只顯示「進行中（3 人）」和最後面孔帶回來的結論。這是引擎蓋和房間之間的中間層：比引擎蓋好讀，比房間吵。
@@ -230,22 +233,24 @@ Discord 的形狀：一個 server（你的 gateway）、很多頻道。
 
 ## 6. 開放的決定
 
-拆 plan 前要定的：
+2026-10-20 全部定了；內容在 [plans/rewrite/decisions.md](../../plans/rewrite/decisions.md)。保留編號給後面的 plan 引用：
 
-1. **「往外送」在 git 上的歸類**：哪些 git / gh 子命令是 action；allowlist 裡已經有的網域是否也要分讀寫（可能做不到，接受）。
-2. **Open loop 的 prompt 上限**和降級規則（幾十件？降級到事實層的條件？）。
-3. **Self-wake 的配額預設值**（每日次數、並發、每來源 cadence）。
-4. **「值得說」的預設**：哪些 wake 結果預設出聲、哪些預設無聲。
-5. **Per-person 記憶 store 的形狀**：一個 ledger 還是依房間標籤；和今天 `memory_records` 的關係（同一張表、多一個 scope？）。
-6. **來源憑證的 UI**：和 model backend 一樣在 Settings 裡，用同樣的 management grant；是否需要 per-source 的「暫停」。
-7. **Node 能力宣告的 schema**，以及「閒」怎麼量。
-8. **研究模式瀏覽器**的精確邊界（localhost 例外、檔案下載算不算 action）。
-9. **面孔的粒度**：每個專案一張是預設；要不要允許一個專案多張（PM / 設計師 / QA）？多張時誰回話的規則會變複雜。
-10. **工人能不能再叫工人**（工人的工人）：今天 subagent / team 可以，但巢狀深度、配額和誰負責回報沒有定。討論串的展示已經假定允許（縮排），但要不要開放是另一件事。
-11. **主持人搬家的判斷**：「聊太久」的門檻（訊息數、時間、話題偏離原房間的程度）由頭腦判斷還是給一個可調的規則。
+1. ~~「往外送」在 git 上的歸類~~ 已定：push / send-email、gh 的建立/合併/留言/發布、`gh api` 非 GET、套件 publish、帶 body 或非 GET 的 curl/wget 到非 localhost。allowlist 不分讀寫，接受。
+2. ~~Open loop 的 prompt 上限~~ 已定：40 件；無時間錨、最久沒提的先降；有時間錨不降。
+3. ~~Self-wake 的配額預設值~~ 已定：每日 24 次、同時 2 個研究；email 5 分、行事曆 15 分、瀏覽器來源 60 分、workspace 一日一次。
+4. ~~「值得說」的預設~~ 已定：時間錨永遠說；來源事件碰到既有 open loop 或房間訂閱才說；自排回頭看有發現才說。
+5. ~~Per-person 記憶 store 的形狀~~ 已定：同一張 `memory_records` 加 `scope`，room/face 是標籤。
+6. ~~來源憑證的 UI~~ 已定：與 model backend 同頁、同 grant，有 per-source 暫停。
+7. ~~Node 能力宣告的 schema~~ 已定：os / arch / gpus / browser / terminals / sandbox / workspaces / load；閒 = running < max。
+8. ~~研究模式瀏覽器的邊界~~ 已定：localhost 例外不含私網；click / type / 下載 / 送表單在非 localhost 都是 action。
+9. ~~面孔的粒度~~ 已定：預設一張，schema 允許多張但第一版無建立 UI；回話：@ > 話題上一個開口的 > 專案預設 > 主持人。
+10. ~~工人能不能再叫工人~~ 已定：可以，深度 1，配額 4，最上層回報，討論串縮排。
+11. ~~主持人搬家的判斷~~ 已定：頭腦判斷 + 護欄（同話題 ≥15 則且命中另一房間範圍；一天一次）。
 12. ~~面孔的設定在哪裡~~ 已定：成員列表，點進去設（第 4 節）。
-13. **人的 loop 跑在 gateway 的資源邊界**：它沒有沙箱，但它跑 model 請求、讀 connectors；需要什麼限制（記憶體、並發 wake、單一 turn 時間）？
-14. **遷移**：現有的 chats / projects / sessions / schedules 怎麼變成房間和未了結的事；哪些舊物件保留到引擎蓋、哪些封存。
+13. ~~人的 loop 的資源邊界~~ 已定：全域一次一個 turn，user 搶先 wake，單 turn 10 分鐘。頭腦要不要 script runtime 仍待決。
+14. ~~遷移~~ 已定：完全從零，舊 DB 原地不動不讀。
+15. **週期性的未了結的事**（2.3）已定：一個常駐 loop 帶 recurrence。
+16. **Typing debounce**（第 4 節）已定：gateway 側，停下 3 秒才開 turn；跑 turn 中合成一次 steer；wake 在窗內讓路。
 
 ## 7. 不在範圍內
 
