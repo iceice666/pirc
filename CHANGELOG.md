@@ -4,8 +4,14 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Added
+
+- Android terminal pinch and Ctrl-key zoom, plus mobile extra keys.
+
 ### Fixed
 
+- Android notices use the available width, and terminal keyboard changes preserve glyph caches.
+- Android interactive dialogs support cancelable close requests and correctly replace their event handlers.
 - Android running and stopping indicators animate consistently, and supported document dialogs use browser default sizing and placement.
 - Android interactive nonmodal dialogs can open and restore native control focus when closed.
 - Android scripted dialog forms close locally and preserve return values, validation and input state across view replacement.

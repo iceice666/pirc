@@ -702,6 +702,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
                   ),
                   const SizedBox(width: 6),
                   Flexible(
+                    fit: detail.isEmpty ? FlexFit.tight : FlexFit.loose,
                     child: Text(
                       name,
                       maxLines: 1,
@@ -734,8 +735,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
                         ),
                       ),
                     ),
-                  ] else
-                    const Spacer(),
+                  ],
                   if (!phone) ...[
                     const SizedBox(width: 6),
                     Text(

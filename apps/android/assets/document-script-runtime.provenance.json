@@ -32,7 +32,7 @@
   },
   "nativeMutationPatches": {
     "source": "apps/android/tool/parity/document_linkedom_mutation_patches.json",
-    "sha256": "9f7fc81593be37750f1f9bb99c6a6bbadc049b2354bc2375c8d2fc0dc52fcfa3"
+    "sha256": "5a2eb2c027b1cf270e3d3080649e98493be89cdbfeac0f1964634c3ee483c65c"
   },
   "nativeResizeObserver": {
     "helperSha256": "ee102a0c0a95f3f8ced8fe139cd6b9f0c796eda5cd629e2e8c2a815a7625a791"

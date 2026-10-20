@@ -14,11 +14,13 @@ are available from Git through Historical records, not repeated here.
       attribute visibility, nonmodal `show()` and bounded initial/restored focus
       now work through the script/native host. Complete `showModal()`, the native
       top layer/backdrop, inert background, focus trapping, Escape/Back
-      cancellation and `requestClose()`.
+      cancellation. Nonmodal `requestClose()` now has a cancelable close-request
+      gate; modal and platform close requests remain unfinished.
       Extend default dialog positioning beyond block-only flow to mixed inline
       runs and flex/grid static-position rectangles. Modern invoker and
-      `closedby` behavior, event-handler attribute/IDL replacement and dialog
-      task-source scheduling still need coverage. `alert`/`confirm`/`prompt`
+      `closedby` light-dismiss behavior and dialog task-source scheduling still need
+      coverage. Dialog handler attribute/IDL replacement has a bounded gate below.
+      `alert`/`confirm`/`prompt`
       remain explicit unsupported APIs; do not replace them with async booleans.
 - [ ] **Dynamic content compatibility:** wider synchronous DOM write/read layout,
       broader DOM APIs, Canvas font/ink coverage, inline-fragment measurements
@@ -57,11 +59,51 @@ are available from Git through Historical records, not repeated here.
       Context inspector later or never. A dedicated release key is configured in
       origin's Actions secrets and Release setup passed on 2026-10-19. CI keeps
       the preview application ID; migrating from the old debug-signed beta needs
-      uninstall/reinstall. Local preview builds still use the local debug key.
+      uninstall/reinstall. Default local builds use the debug key unless release
+      credentials are supplied;
+      update-compatible verification APKs use the existing Release identity.
+
+## Current local verification additions
+
+Title-only system notices now use the remaining row width, instead of sharing it
+with an empty spacer. The reported `Stopped after 200 turns` text is checked
+with Roboto at 320/390/768 CSS px, light/dark themes and 1/1.3 font scale. The old
+layout fails six of these twelve cases. The web's single-line/long-text ellipsis
+policy is retained; this does not certify every system notice layout.
+
+Terminal glyph styles and colors remain stable through keyboard viewport changes
+and unrelated conversation ticks. xterm 4.0.0 compares these objects by identity;
+recreating either clears its paragraph cache. A controlled 3,000-line ANSI/CJK
+replay plus 48 animated keyboard/output frames previously recreated both objects
+48 times and now retains one of each. Local widget-test timings are diagnostic,
+not physical-device FPS evidence. Font/theme/scale changes still invalidate the
+right caches. Lease-generation changes resynchronize size and clear virtual
+modifiers; unchanged controller state and visibility do not restart resize work.
+
+Terminal zoom uses actual font metrics, grid reflow and the existing debounced PTY
+resize. Two-finger pinch, Ctrl+plus/minus (including numpad) and Ctrl+0 are local
+shortcuts, bounded to 8–32 logical px; they do not send shortcut characters to the
+shell. One-finger history scrolling and terminal connection identity are retained.
+Zoom is retained per mounted terminal tab; process-restart preference persistence
+is not implemented.
+
+Mobile terminals have two rows of Escape, Tab, slash, hyphen, Control, Alt,
+directional, Home/End and Page Up/Down keys. Control/Alt apply to the next user
+key/IME commit and then release; they do not modify terminal replies, replay or
+clipboard paste. The native input connection remains focused across helper-key
+taps. Lost control disables the keys and clears modifiers. Short viewports use a
+scrollable single row; extremely short (<64 logical px after padding) viewports
+prioritize the terminal surface and omit the helper row. Large font scales use
+horizontal scrolling rather than clipping labels. Dedicated gates cover emitted
+VT sequences, modifier consumption, paste, lease loss and small-height layouts.
+Actual OEM keyboard/CJK composing, sustained-output stress, latency and gesture
+feel still require the physical acceptance above. The existing reconnect replay
+replaces the terminal view/input connection; keyboard restoration across that
+replacement is not covered by the helper-key input-retention gate.
 
 ## Deferred presentation and compatibility boundaries
 
-The local App branch is integrated with origin/main `105871d7` (0.9.1, node
+The local App branch is integrated with origin/main `1451e202` (0.9.1, node
 protocol 13). Its gateway-owned modes and delegation approvals are included;
 those new features still need the real-account/device acceptance listed above.
 The frozen visual corpus is web revision `bd3d909`. Small visual differences,
@@ -384,8 +426,9 @@ claim event-loop parity. The [HTML Standard's dialog algorithms](https://html.sp
 use distinct task sources for those notifications. Native validation feedback
 paint can obscure a different area than Chromium's popup; invalid-state geometry
 and behavior are checked, but that covered pixel is not a parity claim. Modal
-presentation, default dialog UA layout and the remaining APIs listed above
-are still unfinished. `showModal()` is not installed, so its presence does not
+presentation, default dialog UA layouts beyond the supported block-only gate
+and the remaining APIs listed above are still unfinished. `showModal()` is not
+installed, so its presence does not
 falsely advertise modality to capability checks. This increment is not complete
 dialog support or physical Android acceptance.
 
@@ -443,6 +486,36 @@ static positions, general normal-flow fit-content sizing and embedded Markdown
 UA dialog presentation remain unfinished. The block marker path is gated out
 when its formatting-context evidence is missing. The existing default-paragraph
 font-relative margin difference and broader focus/event-loop limits above remain.
+
+Nonmodal `requestClose()` now fires a trusted, non-bubbling cancelable `cancel`
+and closes through the internal algorithm only when accepted. Cancellation
+preserves the return value, edited controls and current focus. Argument conversion
+precedes state checks; disconnected/closed dialogs do not receive requests;
+`closedby="none"` does not suppress an explicit request. Removed/reinserted dialog
+subtrees invalidate the old pending request and focus restoration target.
+Reentrant requests use the captured Chromium close-watcher enable lifetime and
+pending return value, including distinct default/none versus any/closerequest
+behavior. This is not a public `CloseWatcher` implementation or platform dismissal.
+
+`oncancel`, `onclose`, `onbeforetoggle` and `ontoggle` now share their HTML-attribute
+and IDL listener slot. Replacing a function preserves listener order, including
+replacement during dispatch; `null` removes the slot, and a subsequent assignment
+registers a new one. Returning `false` cancels cancelable events. Attr.value,
+set/removeAttributeNode and toggleAttribute mutations use the same private DOM
+reaction, without reattaching callbacks during snapshot decoration. The shared
+`ontoggle` path also retains existing details disclosure behavior.
+
+The independently captured `document-dialog-request-close-chromium153.json`
+contains 44 synchronous/settled API and event-handler cases plus eight
+phone/tablet, DPR 1/3 and light/dark interaction profiles. The shipped-bundle Node
+gate checks those states; the real Flutter workspace gate checks all 56 native
+interaction snapshots, retained CJK/emoji input, native input/button focus, no
+navigation, one engine and clean retirement. The existing pointer close/toggle
+order difference is explicitly asserted in both orders, not normalized away.
+General event-handler compilation scopes, lazy syntax-error handling and unusual
+non-callable callback objects are not certified. Full focus-event behavior for
+arbitrary DOM removal/reparenting and a browser rendering-task scheduler remain
+outside this gate, as do modal, Escape/Back and physical-device acceptance.
 
 Tool-running and background-stopping loader icons now share the web's continuous
 one-second rotation. The memory loader retains its size and uses the same native

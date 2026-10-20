@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:xterm/xterm.dart';
+import 'terminal_input.dart';
 import 'gateway.dart';
 
 String terminalError(Object error, String fallback) => switch (error) {
@@ -180,6 +180,7 @@ class NativeTerminalSession extends ChangeNotifier {
     subscription = controller.gateway.events.listen(frame);
     controller.addListener(controlChanged);
     held = controller.control['held'] == true;
+    controlGeneration = controller.control['generation'];
     unawaited(connect());
   }
   final LiveController controller;
@@ -187,7 +188,7 @@ class NativeTerminalSession extends ChangeNotifier {
   final String session;
   final String? origin, client;
   final void Function(int?) onExit;
-  late Terminal terminal;
+  late NativeTerminalInput terminal;
   late final StreamSubscription<Json> subscription;
   static int serial = 0;
   String tag = '';
@@ -199,14 +200,15 @@ class NativeTerminalSession extends ChangeNotifier {
       visible = false,
       held = false;
   int attempts = 0;
+  dynamic controlGeneration;
   Timer? retry, resizeTimer;
   bool get valid =>
       !disposed &&
       session == controller.sessionId &&
       origin == controller.origin &&
       client == controller.clientId;
-  Terminal makeTerminal() => Terminal(
-    maxLines: 5000,
+  NativeTerminalInput makeTerminal() => NativeTerminalInput(
+    onModifiersChanged: emit,
     onOutput: input,
     onResize: (_, _, _, _) => scheduleResize(),
   );
@@ -366,6 +368,7 @@ class NativeTerminalSession extends ChangeNotifier {
   }
 
   void setVisible(bool value) {
+    if (visible == value) return;
     visible = value;
     if (value) scheduleResize();
   }
@@ -379,12 +382,18 @@ class NativeTerminalSession extends ChangeNotifier {
       return;
     }
     final value = controller.control['held'] == true;
-    if (value && !held) {
+    final generation = controller.control['generation'];
+    if (value == held && generation == controlGeneration) return;
+    if (value && (!held || generation != controlGeneration)) {
       if (notice.startsWith('Take control')) notice = '';
       sentSize = '';
       scheduleResize();
     }
+    if (!value || generation != controlGeneration) {
+      terminal.clearModifiers(notify: false);
+    }
     held = value;
+    controlGeneration = generation;
     emit();
   }
 

@@ -838,7 +838,8 @@
   // including setAttributeNode, Attr.value, fragments and parser insertions.
   const detailsSeen = new WeakSet();
   const detailsToggleTasks = new WeakMap();
-  const detailsToggleHandlers = new WeakMap();
+  const dialogEventHandlerTypes = new Set(['toggle', 'beforetoggle', 'cancel', 'close']);
+  const dialogEventHandlers = new WeakMap();
 
   class PircToggleEvent extends GlobalEvent {
     constructor(type, init) {
@@ -923,19 +924,35 @@
     }
   }
 
-  function setDetailsToggleHandler(element, callback) {
-    const previous = detailsToggleHandlers.get(element);
-    if (previous) element.removeEventListener('toggle', previous.listener);
+  // Event-handler attributes and IDL properties share one listener slot. Replacing
+  // its callback preserves registration order, including during event dispatch.
+  function setDialogEventHandler(element, type, callback) {
+    let handlers = dialogEventHandlers.get(element);
+    if (!handlers) {
+      handlers = new Map();
+      dialogEventHandlers.set(element, handlers);
+    }
+    const previous = handlers.get(type);
     if (typeof callback !== 'function') {
-      detailsToggleHandlers.delete(element);
+      if (previous) element.removeEventListener(type, previous.listener);
+      handlers.delete(type);
       return;
     }
-    const listener = function(event) {
-      try { callback.call(element, event); }
-      catch (error) { diagnostic('script.toggle_handler_error', 'error', exceptionMessage(error)); }
+    if (previous) {
+      previous.callback = callback;
+      return;
+    }
+    const record = {callback, listener: null};
+    record.listener = function(event) {
+      try {
+        if (record.callback.call(element, event) === false && event.cancelable)
+          event.preventDefault();
+      } catch (error) {
+        diagnostic('script.' + type + '_handler_error', 'error', exceptionMessage(error));
+      }
     };
-    detailsToggleHandlers.set(element, {callback, listener});
-    element.addEventListener('toggle', listener);
+    handlers.set(type, record);
+    element.addEventListener(type, record.listener);
   }
 
   Object.defineProperties(HTMLDetailsElement.prototype, {
@@ -949,20 +966,36 @@
         this.setAttribute('name', String(value));
       }}
   });
-  Object.defineProperty(HTMLElement.prototype, 'ontoggle', {
-    configurable: true, enumerable: true,
-    get() { return detailsToggleHandlers.get(this)?.callback || null; },
-    set(value) { setDetailsToggleHandler(this, value); }
-  });
+  for (const type of dialogEventHandlerTypes) {
+    Object.defineProperty(HTMLElement.prototype, 'on' + type, {
+      configurable: true, enumerable: true,
+      get() { return dialogEventHandlers.get(this)?.get(type)?.callback || null; },
+      set(value) { setDialogEventHandler(this, type, value); }
+    });
+  }
   pircDetailsReactions = {
-    attributeChanged: detailsAttributeChanged,
-    inserted: root => initializeDetails(root, false)
+    attributeChanged(element, name, oldValue, newValue) {
+      detailsAttributeChanged(element, name, oldValue, newValue);
+      if (activeState && !activeState.cloningSnapshot &&
+          element.ownerDocument === activeState.document &&
+          String(name).startsWith('on') &&
+          dialogEventHandlerTypes.has(String(name).slice(2))) {
+        if (newValue === null) removeInlineHandler(element, name);
+        else installInlineHandler(element, name, newValue, true);
+      }
+      if (name === 'open' && oldValue !== null && newValue === null)
+        cleanupDocumentDialog(element);
+    },
+    inserted: root => initializeDetails(root, false),
+    removed: root => documentDialogTreeRemoved(root)
   };
 
-  // Dialog form closing is local DOM state, never a navigation request. Modal
-  // display still requires a native top layer; do not emulate it as a div.
+  // Dialog closing is local DOM state, never a navigation request. Modal display
+  // still requires a native top layer; do not emulate it as a div.
   const dialogReturnValues = new WeakMap();
   const closingDialogs = new WeakSet();
+  const dialogCloseRequests = new WeakMap();
+  const dialogCloseEpochs = new WeakMap();
   const dialogPreviousFocus = new WeakMap();
   class PircHTMLDialogElement extends HTMLElement {
     constructor(ownerDocument, localName = 'dialog') {
@@ -978,6 +1011,7 @@
     }
     show() { return showDocumentDialog(this); }
     close(value) { return closeDocumentDialog(this, value); }
+    requestClose(value) { return requestCloseDocumentDialog(this, value); }
   }
 
   function showDocumentDialog(element) {
@@ -1001,6 +1035,86 @@
       candidates[0] || element;
     if (isFocusableHTMLElement(control, state)) focusElement(control);
     else if (state.activeElement) blurElement(state.activeElement);
+  }
+
+  function isOwnedDialog(element) {
+    const state = activeState;
+    return state && !state.cloningSnapshot && element instanceof PircHTMLDialogElement &&
+      element.ownerDocument === state.document;
+  }
+
+  function cleanupDocumentDialog(element) {
+    if (!isOwnedDialog(element)) return;
+    dialogCloseEpochs.set(element, (dialogCloseEpochs.get(element) || 0) + 1);
+    if (closingDialogs.has(element)) return;
+    dialogPreviousFocus.delete(element);
+    const state = activeState, focused = state.activeElement;
+    if (focused && isInside(focused, element)) {
+      // As with close(), hidden focus is dropped at a later rendering opportunity.
+      scheduleTimer('timeout', () => {
+        if (activeState === state && state.activeElement === focused &&
+            !isFocusableHTMLElement(focused, state)) blurElement(focused);
+      }, 0, []);
+    }
+  }
+
+  function documentDialogTreeRemoved(root) {
+    const state = activeState;
+    if (!state || state.cloningSnapshot || !isOwnedNode(root, state)) return;
+    for (const dialog of [root, ...Array.from(root.querySelectorAll?.('dialog') || [])]) {
+      if (!isOwnedDialog(dialog)) continue;
+      dialogCloseEpochs.set(dialog, (dialogCloseEpochs.get(dialog) || 0) + 1);
+      dialogPreviousFocus.delete(dialog);
+    }
+    // A removed focus target must not regain focus just because its DOM subtree
+    // is synchronously reinserted. Native widgets also retire their old target.
+    const focused = state.activeElement;
+    if (focused && isInside(focused, root)) {
+      state.activeElement = null;
+      state.focusTransitionVersion++;
+      emitScriptFocusAction('blur', focused, false);
+    }
+  }
+
+  function requestCloseDocumentDialog(element, value) {
+    if (!(element instanceof PircHTMLDialogElement)) throw new TypeError('Illegal invocation');
+    let converted;
+    if (value !== undefined) {
+      if (typeof value === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
+      converted = String(value);
+    }
+    const state = activeState;
+    if (!element.hasAttribute('open') || !element.isConnected || !state ||
+        element.ownerDocument !== state.document) return;
+    let request = dialogCloseRequests.get(element);
+    if (!request) {
+      request = {dispatching: false, enabled: false, value: undefined};
+      dialogCloseRequests.set(element, request);
+    }
+    request.value = converted;
+    request.enabled = true;
+    if (request.dispatching) {
+      // The nested method's force-enable lifetime ends before the outer watcher
+      // resumes. Nonmodal closedby=none then disables its close action again.
+      request.enabled = false;
+      return;
+    }
+    request.dispatching = true;
+    const epoch = dialogCloseEpochs.get(element) || 0;
+    try {
+      const cancel = new GlobalEvent('cancel', {bubbles: false, cancelable: true});
+      defineEventMember(cancel, 'isTrusted', true);
+      const accepted = element.dispatchEvent(cancel);
+      const closedBy = String(element.getAttribute('closedby') || '').toLowerCase();
+      if (accepted && activeState === state && element.isConnected &&
+          (dialogCloseEpochs.get(element) || 0) === epoch &&
+          (request.enabled || closedBy === 'any' || closedBy === 'closerequest'))
+        closeDocumentDialog(element, request.value);
+    } finally {
+      request.dispatching = false;
+      request.enabled = false;
+      dialogCloseRequests.delete(element);
+    }
   }
 
   function closeDocumentDialog(element, value) {
@@ -1095,8 +1209,8 @@
     const previous = handlers.get(key);
     if (key === 'onformdata')
       setFormDataHandler(element, null);
-    if (key === 'ontoggle')
-      setDetailsToggleHandler(element, null);
+    if (dialogEventHandlerTypes.has(key.slice(2)))
+      setDialogEventHandler(element, key.slice(2), null);
     if (previous) {
       if (previous.listener)
         element.removeEventListener(previous.type, previous.listener);
@@ -1127,7 +1241,7 @@
     }
     const previous = handlers.get(key);
     if (previous && previous.code === code &&
-        (!['onformdata', 'ontoggle'].includes(key) || !attributeChanged))
+        (!(key === 'onformdata' || dialogEventHandlerTypes.has(eventType)) || !attributeChanged))
       return;
     if (previous && previous.listener)
       element.removeEventListener(previous.type, previous.listener);
@@ -1145,11 +1259,13 @@
       handlers.delete(key);
       if (key === 'onformdata')
         setFormDataHandler(element, null);
+      if (dialogEventHandlerTypes.has(eventType))
+        setDialogEventHandler(element, eventType, null);
       return;
     }
 
-    if (key === 'ontoggle') {
-      setDetailsToggleHandler(element, handler);
+    if (dialogEventHandlerTypes.has(eventType)) {
+      setDialogEventHandler(element, eventType, handler);
       handlers.set(key, {type: eventType, code: code, listener: null});
       return;
     }
@@ -4148,7 +4264,7 @@
     patchFocusWindowHooks(activeState && activeState.window);
 
     for (const type of focusEventTypes) {
-      if (type === 'visibilitychange' || type === 'toggle') continue;
+      if (type === 'visibilitychange' || dialogEventHandlerTypes.has(type)) continue;
       const property = 'on' + type;
       Object.defineProperty(HTMLElement.prototype, property, {
         configurable: true,
@@ -4562,7 +4678,7 @@
           clearOnclickPropertyOverride(this);
         clearPointerPropertyOverride(this, normalized);
         if (hadAttribute) clearImagePropertyOverride(this, normalized);
-        if (!['onformdata', 'ontoggle'].includes(normalized) || hadAttribute)
+        if (!(normalized === 'onformdata' || dialogEventHandlerTypes.has(normalized.slice(2))) || hadAttribute)
           removeInlineHandler(this, normalized);
       }
       return result;

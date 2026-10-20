@@ -1,5 +1,5 @@
 {
-  "description": "Applied after verifying the unchanged LinkeDOM 0.18.13 upstream checksum. Corrects native MutationObserver records and details attribute/insertion reactions.",
+  "description": "Applied after verifying the unchanged LinkeDOM 0.18.13 upstream checksum. Corrects native MutationObserver records, details attribute/insertion reactions and dialog cleanup on attribute/removal mutations.",
   "patches": [
     {
       "name": "mutation-record-targets-and-types",
@@ -44,7 +44,7 @@
     {
       "name": "details-insertion-reactions",
       "before": "const moCallback = (element, parentNode, oldPreviousSibling, oldNextSibling) => {",
-      "after": "const moCallback = (...args) => {\n  moCallbackWithRecords(...args);\n  if (!args[1] && pircDetailsReactions) pircDetailsReactions.inserted(args[0]);\n};\nconst moCallbackWithRecords = (element, parentNode, oldPreviousSibling, oldNextSibling) => {"
+      "after": "const moCallback = (...args) => {\n  moCallbackWithRecords(...args);\n  if (pircDetailsReactions) {\n    if (args[1]) pircDetailsReactions.removed(args[0]);\n    else pircDetailsReactions.inserted(args[0]);\n  }\n};\nconst moCallbackWithRecords = (element, parentNode, oldPreviousSibling, oldNextSibling) => {"
     }
   ]
 }

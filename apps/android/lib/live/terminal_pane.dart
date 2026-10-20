@@ -8,6 +8,7 @@ import 'gateway.dart';
 import 'common.dart';
 import 'web_controls.dart';
 import 'terminal_state.dart';
+import 'terminal_keys.dart';
 
 class TerminalPane extends StatefulWidget {
   const TerminalPane({super.key, required this.controller, this.touch});
@@ -387,6 +388,7 @@ class _TerminalPaneState extends State<TerminalPane> {
                           controller: widget.controller,
                           info: terminal,
                           tabLabel: '${terminal['title']} ${index + 1}',
+                          touch: touch,
                           visible: active && terminal['id'] == state.current,
                           onExit: (code) =>
                               state.exited('${terminal['id']}', code),
@@ -410,7 +412,9 @@ class NativeTerminalView extends StatefulWidget {
     required this.tabLabel,
     required this.visible,
     required this.onExit,
+    this.touch,
   });
+  final bool? touch;
   final LiveController controller;
   final Json info;
   final String tabLabel;
@@ -428,10 +432,91 @@ class _NativeTerminalViewState extends State<NativeTerminalView>
     onExit: (code) => widget.onExit(code),
   );
   final focus = FocusNode();
+  double _fontSize = 12.5, _pinchStartSize = 12.5;
+
+  void _setFontSize(double value) {
+    final next = value.clamp(8.0, 32.0);
+    if ((next - _fontSize).abs() < .1) return;
+    setState(() {
+      _fontSize = next;
+      _cachedStyle = null;
+    });
+  }
+
+  KeyEventResult _zoomKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (!HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (const [
+      LogicalKeyboardKey.equal,
+      LogicalKeyboardKey.add,
+      LogicalKeyboardKey.numpadAdd,
+    ].contains(key)) {
+      _setFontSize(_fontSize + 1);
+    } else if (const [
+      LogicalKeyboardKey.minus,
+      LogicalKeyboardKey.numpadSubtract,
+    ].contains(key)) {
+      _setFontSize(_fontSize - 1);
+    } else if (key == LogicalKeyboardKey.digit0) {
+      _setFontSize(12.5);
+    } else {
+      return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
+  }
+
+  Widget? _cachedKeys;
+  Object? _keysStamp;
+
+  Widget _terminalKeys(bool compact) {
+    final terminal = session.terminal;
+    final enabled =
+        widget.visible &&
+        session.foreground &&
+        session.ready &&
+        !session.exited &&
+        widget.controller.control['held'] == true &&
+        widget.controller.control['generation'] != null;
+    final stamp = (
+      terminal,
+      enabled,
+      compact,
+      terminal.controlArmed,
+      terminal.altArmed,
+    );
+    if (_cachedKeys == null || stamp != _keysStamp) {
+      _keysStamp = stamp;
+      _cachedKeys = NativeTerminalKeys(
+        terminal: terminal,
+        enabled: enabled,
+        compact: compact,
+        focusNode: focus,
+      );
+    }
+    return _cachedKeys!;
+  }
+
+  TerminalStyle? _cachedStyle;
+  TextScaler? _metricsScaler;
+  double? _metricsDpr;
+  Map<String, Color>? _themeColors;
+  TerminalTheme? _cachedTerminalTheme;
+
+  void _fontsChanged() {
+    if (mounted) setState(() => _cachedStyle = null);
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    PaintingBinding.instance.systemFonts.addListener(_fontsChanged);
     session.setVisible(widget.visible);
     if (widget.visible) requestFocus();
   }
@@ -456,9 +541,74 @@ class _NativeTerminalViewState extends State<NativeTerminalView>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    PaintingBinding.instance.systemFonts.removeListener(_fontsChanged);
     session.dispose();
     focus.dispose();
     super.dispose();
+  }
+
+  TerminalStyle _terminalTextStyle(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    if (_cachedStyle != null &&
+        scaler == _metricsScaler &&
+        dpr == _metricsDpr) {
+      return _cachedStyle!;
+    }
+    // Keep xterm's glyph cache across keyboard metrics and unrelated chat ticks.
+    // xterm 4 compares these style/theme objects by identity before invalidating.
+    final metrics = TextPainter(
+      text: TextSpan(
+        text: 'W',
+        style: TextStyle(fontFamily: 'monospace', fontSize: _fontSize),
+      ),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+    )..layout();
+    final lineHeight =
+        ((metrics.height * dpr).ceil() * 1.15).floor() /
+        dpr /
+        scaler.scale(_fontSize);
+    metrics.dispose();
+    _metricsScaler = scaler;
+    _metricsDpr = dpr;
+    return _cachedStyle = TerminalStyle(
+      fontSize: _fontSize,
+      height: lineHeight,
+    );
+  }
+
+  TerminalTheme _terminalColors(BuildContext context) {
+    final p = palette(context);
+    if (_cachedTerminalTheme != null && mapEquals(_themeColors, p.values)) {
+      return _cachedTerminalTheme!;
+    }
+    _themeColors = Map.of(p.values);
+    return _cachedTerminalTheme = TerminalTheme(
+      cursor: p['accent.default'],
+      selection: p['accent.soft'],
+      foreground: p['code.text'],
+      background: p['code.bg'],
+      black: const Color(0xff2e3436),
+      red: const Color(0xffcc0000),
+      green: const Color(0xff4e9a06),
+      yellow: const Color(0xffc4a000),
+      blue: const Color(0xff3465a4),
+      magenta: const Color(0xff75507b),
+      cyan: const Color(0xff06989a),
+      white: const Color(0xffd3d7cf),
+      brightBlack: const Color(0xff555753),
+      brightRed: const Color(0xffef2929),
+      brightGreen: const Color(0xff8ae234),
+      brightYellow: const Color(0xfffce94f),
+      brightBlue: const Color(0xff729fcf),
+      brightMagenta: const Color(0xffad7fa8),
+      brightCyan: const Color(0xff34e2e2),
+      brightWhite: const Color(0xffeeeeec),
+      searchHitBackground: p['accent.soft'],
+      searchHitBackgroundCurrent: p['accent.soft'],
+      searchHitForeground: p['code.text'],
+    );
   }
 
   @override
@@ -466,112 +616,97 @@ class _NativeTerminalViewState extends State<NativeTerminalView>
     animation: session,
     builder: (context, _) {
       final p = palette(context);
-      // xterm.js rounds natural glyph height before applying lineHeight;
-      // Flutter's TextStyle.height instead multiplies fontSize.
-      final scaler = MediaQuery.textScalerOf(context);
-      final dpr = MediaQuery.devicePixelRatioOf(context);
-      final metrics = TextPainter(
-        text: const TextSpan(
-          text: 'W',
-          style: TextStyle(fontFamily: 'monospace', fontSize: 12.5),
-        ),
-        textDirection: TextDirection.ltr,
-        textScaler: scaler,
-      )..layout();
-      final lineHeight =
-          ((metrics.height * dpr).ceil() * 1.15).floor() /
-          dpr /
-          scaler.scale(12.5);
-      metrics.dispose();
+      final style = _terminalTextStyle(context);
+      final terminalTheme = _terminalColors(context);
       return Semantics(
         role: SemanticsRole.tabPanel,
         label: widget.tabLabel,
         child: Container(
           color: p['code.bg'],
           padding: const EdgeInsets.fromLTRB(8, 6, 4, 4),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: ListenableBuilder(
-                  listenable: focus,
-                  builder: (context, _) => Semantics(
-                    label: 'Terminal input',
-                    textField: true,
-                    enabled: true,
-                    focusable: true,
-                    focused: focus.hasFocus,
-                    onTap: () {
-                      if (widget.visible) focus.requestFocus();
-                    },
-                    child: TerminalView(
-                      session.terminal,
-                      key: ObjectKey(session.terminal),
-                      focusNode: focus,
-                      autoResize: widget.visible,
-                      padding: EdgeInsets.zero,
-                      textStyle: TerminalStyle(
-                        fontSize: 12.5,
-                        height: lineHeight,
+          child: LayoutBuilder(
+            builder: (context, bounds) => Column(
+              children: [
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: ListenableBuilder(
+                          listenable: focus,
+                          builder: (context, _) => Semantics(
+                            label: 'Terminal input',
+                            textField: true,
+                            enabled: true,
+                            focusable: true,
+                            focused: focus.hasFocus,
+                            onTap: () {
+                              if (widget.visible) focus.requestFocus();
+                            },
+                            child: GestureDetector(
+                              key: const ValueKey('terminal-zoom-surface'),
+                              onScaleStart: (_) => _pinchStartSize = _fontSize,
+                              onScaleUpdate: (details) {
+                                if (details.pointerCount >= 2) {
+                                  _setFontSize(_pinchStartSize * details.scale);
+                                }
+                              },
+                              child: TerminalView(
+                                session.terminal,
+                                key: ObjectKey(session.terminal),
+                                focusNode: focus,
+                                onKeyEvent: _zoomKey,
+                                autoResize: widget.visible,
+                                padding: EdgeInsets.zero,
+                                textStyle: style,
+                                textScaler: MediaQuery.textScalerOf(context),
+                                keyboardAppearance: Theme.of(
+                                  context,
+                                ).brightness,
+                                theme: terminalTheme,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      textScaler: MediaQuery.textScalerOf(context),
-                      keyboardAppearance: Theme.of(context).brightness,
-                      theme: TerminalTheme(
-                        cursor: p['accent.default'],
-                        selection: p['accent.soft'],
-                        foreground: p['code.text'],
-                        background: p['code.bg'],
-                        black: const Color(0xff2e3436),
-                        red: const Color(0xffcc0000),
-                        green: const Color(0xff4e9a06),
-                        yellow: const Color(0xffc4a000),
-                        blue: const Color(0xff3465a4),
-                        magenta: const Color(0xff75507b),
-                        cyan: const Color(0xff06989a),
-                        white: const Color(0xffd3d7cf),
-                        brightBlack: const Color(0xff555753),
-                        brightRed: const Color(0xffef2929),
-                        brightGreen: const Color(0xff8ae234),
-                        brightYellow: const Color(0xfffce94f),
-                        brightBlue: const Color(0xff729fcf),
-                        brightMagenta: const Color(0xffad7fa8),
-                        brightCyan: const Color(0xff34e2e2),
-                        brightWhite: const Color(0xffeeeeec),
-                        searchHitBackground: p['accent.soft'],
-                        searchHitBackgroundCurrent: p['accent.soft'],
-                        searchHitForeground: p['code.text'],
-                      ),
-                    ),
+                      if (session.notice.isNotEmpty)
+                        Positioned(
+                          right: 8,
+                          bottom: 6,
+                          child: Container(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.sizeOf(context).width - 48,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: p['web.bg-layer'],
+                              borderRadius: BorderRadius.circular(999),
+                              boxShadow: pircShadow(context, card: true),
+                            ),
+                            child: Text(
+                              session.notice,
+                              style: webText(
+                                context,
+                                size: 12,
+                                color: 'text.secondary',
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-              ),
-              if (session.notice.isNotEmpty)
-                Positioned(
-                  right: 8,
-                  bottom: 6,
-                  child: Container(
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.sizeOf(context).width - 48,
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: p['web.bg-layer'],
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: pircShadow(context, card: true),
-                    ),
-                    child: Text(
-                      session.notice,
-                      style: webText(
-                        context,
-                        size: 12,
-                        color: 'text.secondary',
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+                if (bounds.maxHeight >= 64 &&
+                    (widget.touch ??
+                        [
+                          TargetPlatform.android,
+                          TargetPlatform.iOS,
+                        ].contains(defaultTargetPlatform)))
+                  _terminalKeys(bounds.maxHeight < 180),
+              ],
+            ),
           ),
         ),
       );
