@@ -5,6 +5,7 @@
 import { request } from './http';
 import type { LoopLine } from './loops';
 import type { RememberedLine } from './memory';
+import type { WakeLine } from './wakes';
 
 export interface Room {
   id: string;
@@ -56,6 +57,8 @@ export interface RoomMessage {
     memory?: RememberedLine;
     /** A line saying what happened to an open loop (plan 04): undone from the line. */
     loop?: LoopLine;
+    /** A line saying pirc will come back (plan 05), which Cancel calls off. */
+    wake?: WakeLine;
   };
   threadId: string | null;
   createdAt: number;
@@ -129,7 +132,8 @@ export interface RoomEvent {
     | 'room_read'
     | 'room_typing'
     | 'brain_presence'
-    | 'loop_changed';
+    | 'loop_changed'
+    | 'wake_changed';
   roomId: string;
   epoch: number;
   sequence: number;
@@ -204,7 +208,8 @@ export function connectRooms(options: {
         typeof frame?.type === 'string' &&
         (frame.type.startsWith('room_') ||
           frame.type === 'brain_presence' ||
-          frame.type === 'loop_changed')
+          frame.type === 'loop_changed' ||
+          frame.type === 'wake_changed')
       ) {
         if (frame.sequence > 0) cursor = `${frame.epoch}:${frame.sequence}`;
         options.onEvent(frame as RoomEvent);

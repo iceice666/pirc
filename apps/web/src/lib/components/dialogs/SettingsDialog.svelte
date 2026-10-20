@@ -3,6 +3,7 @@
     { id: 'general', label: 'General' },
     { id: 'memory', label: 'Memory' },
     { id: 'loops', label: 'Open loops' },
+    { id: 'wakes', label: 'Wakes' },
     { id: 'models', label: 'Models' },
     { id: 'devices', label: 'Devices' },
     { id: 'about', label: 'About' },
@@ -20,6 +21,7 @@
   import MemorySettings from '../MemorySettings.svelte';
   import NotificationSettings from '../NotificationSettings.svelte';
   import PairedDevices from '../PairedDevices.svelte';
+  import WakesSettings from '../WakesSettings.svelte';
 
   interface Props {
     open: boolean;
@@ -118,6 +120,15 @@
         hidden={settingsTab !== 'loops'}
       >
         <LoopsSettings disabled={app.usingDemo} />
+      </div>
+
+      <div
+        role="tabpanel"
+        id="settings-panel-wakes"
+        aria-labelledby="settings-tab-wakes"
+        hidden={settingsTab !== 'wakes'}
+      >
+        <WakesSettings disabled={app.usingDemo} />
       </div>
 
       <div

@@ -1,0 +1,195 @@
+<script lang="ts">
+  /**
+   * Wakes (plans/rewrite/05-self-wake.md): when pirc wakes up on its own, and how
+   * each wake went. Most leave nothing in the room; this is where they show.
+   * Settings holds the list until the engine pages do (plan 11).
+   */
+  import { onMount } from 'svelte';
+  import { ApiError } from '../http';
+  import { rooms } from '../rooms.svelte';
+  import { ago } from '../time';
+  import { watch } from '../watch.svelte';
+  import { describeOutcome, describeTrigger, wakesApi, type Wake } from '../wakes';
+
+  interface Props {
+    disabled?: boolean;
+  }
+
+  let { disabled = false }: Props = $props();
+
+  /** Ended wakes listed at most. */
+  const ENDED_PAGE = 30;
+
+  let coming: Wake[] = $state([]);
+  let ended: Wake[] = $state([]);
+  let today = $state({ used: 0, limit: 24 });
+  let loading = $state(true);
+  let busy = $state('');
+  let error = $state('');
+  let alive = true;
+
+  const roomName = (id: string) => `#${rooms.rooms.find((room) => room.id === id)?.name ?? id}`;
+  const message = (cause: unknown) =>
+    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+
+  async function load() {
+    try {
+      const list = await wakesApi.list('all', ENDED_PAGE);
+      if (!alive) return;
+      coming = list.wakes.filter((wake) => wake.outcome === null);
+      ended = list.wakes.filter((wake) => wake.outcome !== null);
+      today = list.today;
+      error = '';
+    } catch (cause) {
+      if (alive) error = message(cause);
+    } finally {
+      if (alive) loading = false;
+    }
+  }
+
+  async function cancel(wake: Wake) {
+    if (busy) return;
+    busy = wake.id;
+    error = '';
+    try {
+      await wakesApi.cancel(wake.id);
+      await load();
+    } catch (cause) {
+      if (alive) error = message(cause);
+    } finally {
+      busy = '';
+    }
+  }
+
+  onMount(() => {
+    if (disabled) loading = false;
+    else void load();
+    return () => {
+      alive = false;
+    };
+  });
+  // Wakes start, end and are scheduled in the rooms while this is open.
+  watch(
+    () => rooms.wakesRevision,
+    () => {
+      if (!disabled) void load();
+    },
+  );
+</script>
+
+<section class="settings-section" aria-labelledby="wakes-title">
+  <h3 id="wakes-title">Wakes</h3>
+  <p>
+    pirc wakes up on its own when an open loop's time comes, the day before a deadline, or when it
+    said it would come back to something. Awake, it only reads and remembers; it speaks in the room
+    only when something is worth saying. At most {today.limit} a day.
+  </p>
+
+  {#if disabled}
+    <p role="status">Wakes are unavailable in demo mode.</p>
+  {:else if loading}
+    <p role="status">Loading wakes…</p>
+  {:else}
+    {#if error}<p class="wakes-error" role="alert">{error}</p>{/if}
+    <p class="wakes-today">Today: {today.used} of {today.limit}</p>
+    {#if coming.length}
+      <ul class="wakes-list" aria-label="Coming wakes">
+        {#each coming as wake (wake.id)}
+          <li>
+            <div class="wakes-row">
+              <div class="wakes-text">
+                <span>{describeTrigger(wake)}</span>
+                <small class="wakes-next">{describeOutcome(wake)} · {roomName(wake.roomId)}</small>
+              </div>
+              {#if !wake.startedAt}
+                <button
+                  class="button ghost small"
+                  type="button"
+                  disabled={!!busy}
+                  onclick={() => cancel(wake)}>Cancel</button
+                >
+              {/if}
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p>
+        Nothing coming. pirc wakes for open loops with a time, and when it says it will come back.
+      </p>
+    {/if}
+
+    {#if ended.length}
+      <details class="wakes-ended">
+        <summary>Recent wakes · {ended.length}</summary>
+        <ul class="wakes-list" aria-label="Recent wakes">
+          {#each ended as wake (wake.id)}
+            <li>
+              <div class="wakes-text">
+                <span>{describeTrigger(wake)}</span>
+                <small
+                  >{describeOutcome(wake)} · {roomName(wake.roomId)} · {ago(
+                    wake.endedAt ?? wake.scheduledAt,
+                  )}</small
+                >
+              </div>
+            </li>
+          {/each}
+        </ul>
+      </details>
+    {/if}
+  {/if}
+</section>
+
+<style>
+  .wakes-error {
+    color: var(--danger);
+  }
+  .wakes-today {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .wakes-list {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .wakes-list > li {
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-subtle);
+  }
+  .wakes-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px 12px;
+  }
+  .wakes-text {
+    display: flex;
+    flex: 1 1 240px;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  small {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .wakes-next {
+    color: var(--accent);
+  }
+  .wakes-ended {
+    margin-top: 10px;
+  }
+  .wakes-ended summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 13px;
+  }
+</style>

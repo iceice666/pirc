@@ -4,6 +4,7 @@
   import { lineAction } from '../../loops';
   import { describeOrigin, forgetRemembered } from '../../memory';
   import { roomsApi, type RoomMessage } from '../../rooms';
+  import { wakesApi } from '../../wakes';
 
   interface Props {
     message: RoomMessage;
@@ -76,6 +77,27 @@
     }
   }
 
+  /** pirc said it would come back: Cancel calls it off, once. */
+  const wakeLine = $derived(
+    message.body.wake?.event === 'scheduled' ? message.body.wake : undefined,
+  );
+  let wakeDone = $state(false);
+
+  async function cancelWake() {
+    if (!wakeLine || forgetting) return;
+    forgetting = true;
+    forgetError = '';
+    try {
+      // The gateway says so in the room.
+      await wakesApi.cancel(wakeLine.id);
+      wakeDone = true;
+    } catch (cause) {
+      forgetError = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+    } finally {
+      forgetting = false;
+    }
+  }
+
   async function dontKeep() {
     if (!remembered || forgetting) return;
     forgetting = true;
@@ -106,6 +128,12 @@
       >
       <button type="button" class="link" disabled={forgetting} onclick={dontKeep}>Don't keep</button
       >
+    {:else if wakeLine}
+      <span>{message.body.text ?? ''}</span>
+      {#if !wakeDone}
+        <button type="button" class="link" disabled={forgetting} onclick={cancelWake}>Cancel</button
+        >
+      {/if}
     {:else if loopAction}
       <span>{message.body.text ?? ''}</span>
       {#if !loopDone}

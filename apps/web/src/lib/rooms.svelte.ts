@@ -43,6 +43,8 @@ export class RoomsState {
   thinking = $state<Record<string, string[]>>({});
   /** Bumped whenever an open loop changes (plan 04), for lists that show them. */
   loopsRevision = $state(0);
+  /** Bumped whenever a wake changes (plan 05), for lists that show them. */
+  wakesRevision = $state(0);
 
   #stream: RoomStream | undefined;
   #lastTyping = 0;
@@ -229,6 +231,9 @@ export class RoomsState {
         break;
       case 'loop_changed':
         this.loopsRevision++;
+        break;
+      case 'wake_changed':
+        this.wakesRevision++;
         break;
       case 'room_changed': {
         const room: Room = event.data.room;
