@@ -260,11 +260,6 @@ pub fn js_trim(text: &str) -> &str {
     text.trim_matches(js_space)
 }
 
-/// `text.split(/\s+/).length` of a trimmed, non-empty text.
-pub fn field_count(text: &str) -> usize {
-    text.split(js_space).filter(|part| !part.is_empty()).count()
-}
-
 /// `parseInt(text, 10)`: `None` for `NaN`.
 fn parse_int(text: &str) -> Option<f64> {
     let text = js_trim(text);

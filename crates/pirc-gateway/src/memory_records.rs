@@ -890,6 +890,10 @@ fn record_hit(conn: &Connection, row: &Map<String, Value>) -> Value {
         if let Some(room_id) = row.get("room_id").filter(|room| room.is_string()) {
             hit.insert("roomId".into(), room_id.clone());
         }
+        // A demoted open loop (plans/rewrite/04-open-loops.md).
+        if let Some(loop_id) = row.get("open_loop_id").filter(|id| id.is_string()) {
+            hit.insert("openLoopId".into(), loop_id.clone());
+        }
     } else {
         hit.insert("kind".into(), json!("workspace"));
         hit.insert(

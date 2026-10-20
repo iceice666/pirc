@@ -44,7 +44,12 @@ expression: stable(t.into_value())
         "memory_search",
         "recall_note",
         "save_preference",
-        "forget"
+        "forget",
+        "open_loop",
+        "close_loop",
+        "touch_loop",
+        "update_loop",
+        "reopen_loop"
       ]
     },
     "step": "the first call's tools and preferences"
@@ -117,6 +122,10 @@ expression: stable(t.into_value())
       [
         "memory:preferences",
         "memory"
+      ],
+      [
+        "loops",
+        "loops"
       ],
       [
         "memory:recalled",

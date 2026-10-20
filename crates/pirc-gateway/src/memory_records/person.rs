@@ -54,6 +54,9 @@ pub struct Fact {
     pub face_id: Option<String>,
     pub source_entry_ids: Value,
     pub created_at: i64,
+    /// The open loop it was, when one was demoted into it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub open_loop_id: Option<String>,
 }
 
 impl Fact {
@@ -69,6 +72,7 @@ impl Fact {
                 .get::<_, Option<String>>("source_entry_ids_json")?
                 .map_or(json!([]), |ids| safe_json(&ids, json!([]))),
             created_at: row.get::<_, Option<i64>>("created_at")?.unwrap_or(0),
+            open_loop_id: row.get("open_loop_id")?,
         })
     }
 }
@@ -193,6 +197,34 @@ pub fn forget(conn: &Connection, user: &str, id: &str, actor: &str) -> ApiResult
         )?;
         get(conn, user, id)
     })
+}
+
+/// Take back a fact the gateway made from something it still keeps (a
+/// demoted open loop, reopened): the row, its index terms and its log go,
+/// with no tombstone, since nobody asked to forget the text.
+pub fn retire(conn: &Connection, user: &str, id: &str) -> ApiResult<()> {
+    atomic(conn, |conn| {
+        get(conn, user, id)?;
+        conn.execute(
+            "DELETE FROM memory_records WHERE node_id=? AND ledger_key=? AND id=?",
+            params![NODE, LEDGER, id],
+        )?;
+        index::delete_record(conn, NODE, LEDGER, id)?;
+        conn.execute(
+            "DELETE FROM memory_log WHERE entry_id=? AND owner_user=?",
+            [id, user],
+        )?;
+        Ok(())
+    })
+}
+
+/// Mark a new fact as a demoted open loop's.
+pub fn link_open_loop(conn: &Connection, id: &str, loop_id: &str) -> ApiResult<()> {
+    conn.execute(
+        "UPDATE memory_records SET open_loop_id=? WHERE node_id=? AND ledger_key=? AND id=?",
+        params![loop_id, NODE, LEDGER, id],
+    )?;
+    Ok(())
 }
 
 /// A fact's logged changes, newest first.

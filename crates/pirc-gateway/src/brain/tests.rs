@@ -640,3 +640,87 @@ async fn preferences_and_forgetting_need_the_persons_words() {
         ("forgotten", "")
     );
 }
+
+#[tokio::test]
+async fn the_brain_opens_a_loop_and_has_it_in_front_of_it() {
+    let h = harness();
+    let model = Scripted::new(vec![
+        Answer::Call(
+            "open_loop",
+            json!({ "what": "Team meeting", "anchor": { "cron": "0 18 * * 3" } }),
+        ),
+        Answer::Call(
+            "open_loop",
+            json!({ "what": "Dentist", "anchor": { "at": "2001-01-01T10:00" } }),
+        ),
+        Answer::Words("I'll keep it in mind."),
+    ]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    say(&h.app, "we meet every Wednesday at 18:00", true);
+    until("the turn", || finished(&h.app)).await;
+    let asked = model.asked();
+    assert!(asked[0].system_prompt.contains("## Open loops"));
+    assert!(asked[0].system_prompt.contains("(none)"));
+    assert!(tool_results(&asked[2]).contains("That time has passed"));
+    let open = loops::list_open(&h.app.db.lock()).unwrap();
+    assert_eq!(open.len(), 1);
+    assert_eq!(
+        (
+            open[0].origin.as_str(),
+            open[0].user.as_str(),
+            open[0].room_id.as_deref()
+        ),
+        ("user", ME, Some(GENERAL_ROOM_ID))
+    );
+    let line = host_messages(&h.app)
+        .into_iter()
+        .find(|message| message.kind == "line")
+        .unwrap();
+    assert!(
+        line.body["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("Holding on to: Team meeting (next Wed "),
+        "{}",
+        line.body
+    );
+    assert_eq!(
+        line.body["loop"],
+        json!({ "id": open[0].id, "event": "opened" })
+    );
+
+    // The next turn has it in front of it, and closes it.
+    {
+        let mut answers = model.answers.lock().unwrap();
+        *answers = vec![
+            Answer::Call(
+                "close_loop",
+                json!({ "id": open[0].id, "reason": "The team stopped meeting" }),
+            ),
+            Answer::Words("Closed."),
+        ];
+    }
+    say(&h.app, "we stopped meeting", true);
+    until("the second turn", || {
+        turns(&h.app).len() == 2 && finished(&h.app)
+    })
+    .await;
+    let asked = model.asked();
+    assert!(
+        asked[3].system_prompt.contains(&format!(
+            "- [{}] Team meeting · from user · next Wed ",
+            open[0].id
+        )),
+        "{}",
+        asked[3].system_prompt
+    );
+    let closed = loops::get(&h.app.db.lock(), &open[0].id).unwrap();
+    assert_eq!(
+        closed.closed_reason.as_deref(),
+        Some("The team stopped meeting")
+    );
+    assert!(host_messages(&h.app).iter().any(|message| {
+        message.body["text"] == "Closed: Team meeting (The team stopped meeting)"
+            && message.body["loop"]["event"] == "closed"
+    }));
+}

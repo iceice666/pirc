@@ -16,6 +16,7 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 use tokio::sync::Notify;
 
+use super::loop_tools::LoopsFeature;
 use super::memory::{BrainPromoter, MemoryFeature, RoomMemory};
 use super::store::{brain_dir, room_dir};
 use super::ui::BrainUi;
@@ -91,6 +92,9 @@ impl RoomAgent {
                 Rc::new(MemoryFeature {
                     memory: memory.clone(),
                     runtime: runtime.clone(),
+                }),
+                Rc::new(LoopsFeature {
+                    memory: memory.clone(),
                 }),
             ],
             acquire_write: None,

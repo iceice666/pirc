@@ -11,8 +11,11 @@
 //! - [`identity`]: `SOUL.md`, `CHAT.md` and `brain.json`.
 //! - [`turn`]: a room's agent, its streamed reply, its input.
 //! - [`store`]: the rooms' conversations on disk and the turn records.
+//! - [`loops`]: the open loops, always in its prompt.
 
 pub mod identity;
+mod loop_tools;
+pub mod loops;
 mod memory;
 mod scheduler;
 pub mod store;

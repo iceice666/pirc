@@ -42,8 +42,18 @@ use crate::memory::text::clip;
 use crate::memory_records::person::{self, NewFact};
 use crate::memory_records::{self, Scopes};
 
-/// The tools that write memory: their results are not where a memory came from.
-const WRITING_TOOLS: [&str; 3] = ["remember", "save_preference", "forget"];
+/// The tools that write memory or open loops: their results are not where
+/// a memory came from.
+const WRITING_TOOLS: [&str; 8] = [
+    "remember",
+    "save_preference",
+    "forget",
+    "open_loop",
+    "close_loop",
+    "touch_loop",
+    "update_loop",
+    "reopen_loop",
+];
 /// A quote must come from people's last this many messages.
 const QUOTE_MESSAGES: usize = 3;
 /// Facts recalled before a turn, at most, and their length.
@@ -55,8 +65,8 @@ const RECALL_BUDGET_MS: u128 = 200;
 /// A room's memory: who is talking there, for the tools, the promoter and
 /// the prompt.
 pub struct RoomMemory {
-    app: AppState,
-    room_id: String,
+    pub(super) app: AppState,
+    pub(super) room_id: String,
     /// The people of the room's latest turn, in the order they spoke.
     speakers: RefCell<Vec<String>>,
 }
@@ -81,7 +91,7 @@ impl RoomMemory {
 
     /// Whom a memory without a quote belongs to: the turn's first speaker,
     /// else whoever spoke last in the room.
-    fn owner(&self) -> Option<String> {
+    pub(super) fn owner(&self) -> Option<String> {
         if let Some(first) = self.speakers.borrow().first() {
             return Some(first.clone());
         }
@@ -280,7 +290,7 @@ struct MemoryTool {
     parameters: Map<String, Value>,
 }
 
-fn object(properties: Value, required: &[&str]) -> Map<String, Value> {
+pub(super) fn object(properties: Value, required: &[&str]) -> Map<String, Value> {
     let Value::Object(schema) = json!({
         "type": "object",
         "properties": properties,
@@ -594,7 +604,7 @@ fn hit_line(hit: &Value) -> String {
 
 /// Where what the brain knows now came from: `user` when only people's
 /// messages came since the last one, else the latest tool result's origin.
-fn origin_now(branch: &[SessionEntry], running: &[String]) -> String {
+pub(super) fn origin_now(branch: &[SessionEntry], running: &[String]) -> String {
     let origins = current_origins(branch, running, &WRITING_TOOLS);
     let tools: Vec<&String> = origins
         .iter()
@@ -625,7 +635,7 @@ fn origin_now(branch: &[SessionEntry], running: &[String]) -> String {
 
 /// The ids of this turn's entries so far: the last user message and what
 /// came after it.
-fn turn_entry_ids(branch: &[SessionEntry]) -> Vec<String> {
+pub(super) fn turn_entry_ids(branch: &[SessionEntry]) -> Vec<String> {
     let start = branch
         .iter()
         .rposition(|entry| matches!(entry.data, EntryData::Message(AgentMessage::User { .. })))

@@ -30,7 +30,7 @@ use tokio::task::JoinHandle;
 
 use super::store::{Outcome, TurnStore};
 use super::turn::{RoomAgent, compose, post_line};
-use super::{Command, identity, memory, presence};
+use super::{Command, identity, loops, memory, presence};
 use crate::app::AppState;
 use crate::db::rooms::{Pending, RoomInputStore, RoomStore};
 use crate::rooms::TYPING_TTL_MS;
@@ -255,11 +255,13 @@ impl Scheduler {
         room.progress.reset_turn();
         let speakers = speakers(batches);
         let mut prompt = identity::sections(&self.config_dir, &room_row);
-        prompt.extend(memory::sections(
-            &self.app,
-            &speakers,
-            &memory::without_names(&text, &speakers),
-        ));
+        // Preferences, open loops, then what may be remembered: recall
+        // looks for what was said and what the loops are about.
+        let (open_loops, about) = loops::section(&self.app);
+        let said = memory::without_names(&text, &speakers);
+        let mut remembered = memory::sections(&self.app, &speakers, &format!("{said}\n{about}"));
+        remembered.insert(1.min(remembered.len()), open_loops);
+        prompt.extend(remembered);
         room.memory.set_speakers(speakers);
         room.agent.set_base_prompt(prompt);
         room.agent.refresh_models().await;

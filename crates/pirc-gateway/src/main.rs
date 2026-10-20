@@ -138,6 +138,8 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
     let app = app::App::new(config, db, backends, catalog);
     // Everything that can refuse to start does so before the port is bound.
     features::start(&app)?;
+    // Open loops' time anchors come whether or not the brain runs.
+    brain::loops::start_timer(&app);
     if app.config.brain_enabled {
         brain::Brain::start(&app)?;
     } else {

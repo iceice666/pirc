@@ -1,0 +1,496 @@
+---
+source: crates/pirc-conformance/tests/brain_loops.rs
+expression: stable(t.into_value())
+---
+[
+  {
+    "observed": [
+      {
+        "body": {
+          "loop": {
+            "event": "opened",
+            "id": "<loop:1>"
+          },
+          "text": "Holding on to: Team meeting (next <weekday> <local-time> (UTC), repeats `0 18 * * 3`)"
+        },
+        "kind": "line"
+      },
+      {
+        "loop_changed": [
+          "Team meeting",
+          "open"
+        ]
+      },
+      {
+        "body": {
+          "text": "I'll keep it in mind."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "a loop, and the line that says so"
+  },
+  {
+    "observed": {
+      "loops": [
+        "## Open loops",
+        "",
+        "It is <weekday> <local-time> (UTC) now. These are the things still open between you and the people here: always in front of you until they are closed. Open one with `open_loop` when something stays unresolved or someone asks to be reminded (\"remind me about the meeting on Wednesday\"), with a time anchor when it has a time (`at`, or `cron` when it repeats; `autoClose` when the time is the thing itself, like a meeting or a deadline). Use `touch_loop` when one comes up, `update_loop` when it changes, and `close_loop` with the reason once it is resolved or someone says it no longer matters; `reopen_loop` when they say it is not done. `from` says where each came from: only `user` is the people's own word. Past 40, the ones without a time that were mentioned least recently go to memory.",
+        "",
+        "(none)"
+      ],
+      "toolResult": [
+        "Opened [<loop:1>] Team meeting (from user; next <weekday> <local-time> (UTC), repeats `0 18 * * 3`)"
+      ],
+      "tools": [
+        "recall",
+        "remember",
+        "memory_search",
+        "recall_note",
+        "save_preference",
+        "forget",
+        "open_loop",
+        "close_loop",
+        "touch_loop",
+        "update_loop",
+        "reopen_loop"
+      ]
+    },
+    "step": "the first call: no loops yet, and the tools"
+  },
+  {
+    "body": {
+      "limit": 40,
+      "loops": [
+        {
+          "anchor": {
+            "cron": "0 18 * * 3",
+            "nextAt": "<epoch-ms>",
+            "zone": "UTC"
+          },
+          "closedAt": null,
+          "closedReason": null,
+          "createdAt": "<epoch-ms>",
+          "dueAt": "<epoch-ms>",
+          "faceId": "host",
+          "id": "<loop:1>",
+          "lastTouchedAt": "<epoch-ms>",
+          "nextCheck": null,
+          "origin": "user",
+          "roomId": "general",
+          "sourceEntryIds": [
+            "<entry:1>",
+            "<entry:2>"
+          ],
+          "status": "open",
+          "user": "test@example.com",
+          "what": "Team meeting",
+          "why": "they meet every week"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/loops",
+    "status": 200,
+    "step": "the open loops"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "loop": {
+            "event": "opened",
+            "id": "<loop:2>"
+          },
+          "text": "Holding on to: Read chapter 7 of the networking book"
+        },
+        "kind": "line"
+      },
+      {
+        "loop_changed": [
+          "Read chapter 7 of the networking book",
+          "open"
+        ]
+      },
+      {
+        "body": {
+          "text": "Noted."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "a loop after a tool result"
+  },
+  {
+    "observed": [
+      "## Open loops",
+      "",
+      "It is <weekday> <local-time> (UTC) now. These are the things still open between you and the people here: always in front of you until they are closed. Open one with `open_loop` when something stays unresolved or someone asks to be reminded (\"remind me about the meeting on Wednesday\"), with a time anchor when it has a time (`at`, or `cron` when it repeats; `autoClose` when the time is the thing itself, like a meeting or a deadline). Use `touch_loop` when one comes up, `update_loop` when it changes, and `close_loop` with the reason once it is resolved or someone says it no longer matters; `reopen_loop` when they say it is not done. `from` says where each came from: only `user` is the people's own word. Past 40, the ones without a time that were mentioned least recently go to memory.",
+      "- [<loop:1>] Team meeting (why: they meet every week) · from user · next <weekday> <local-time> (UTC), repeats `0 18 * * 3`"
+    ],
+    "step": "in front of it in the next turn"
+  },
+  {
+    "observed": 41,
+    "step": "forty-one open"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "loop": {
+            "event": "demoted",
+            "id": "<loop:2>"
+          },
+          "text": "This sat untouched for a while, so I put it in memory: Read chapter 7 of the networking book"
+        },
+        "kind": "line"
+      },
+      {
+        "loop_changed": [
+          "Read chapter 7 of the networking book",
+          "closed"
+        ]
+      },
+      {
+        "body": {
+          "text": "Sure."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "the next turn demotes one"
+  },
+  {
+    "observed": 40,
+    "step": "forty open"
+  },
+  {
+    "body": {
+      "records": [
+        {
+          "content": "Read chapter 7 of the networking book",
+          "date": "<local-time>",
+          "id": "<fact:1>",
+          "kind": "fact",
+          "openLoopId": "<loop:2>",
+          "origin": "tool:memory_search",
+          "relevance": "medium",
+          "roomId": "general",
+          "status": "active"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/records?q=networking chapter",
+    "status": 200,
+    "step": "a fact now, with its origin"
+  },
+  {
+    "body": {
+      "loop": {
+        "anchor": null,
+        "closedAt": null,
+        "closedReason": null,
+        "createdAt": "<epoch-ms>",
+        "dueAt": null,
+        "faceId": "host",
+        "id": "<loop:2>",
+        "lastTouchedAt": "<epoch-ms>",
+        "nextCheck": null,
+        "origin": "tool:memory_search",
+        "roomId": "general",
+        "sourceEntryIds": [
+          "<entry:3>",
+          "<entry:4>",
+          "<entry:5>",
+          "<entry:6>"
+        ],
+        "status": "open",
+        "user": "test@example.com",
+        "what": "Read chapter 7 of the networking book",
+        "why": ""
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/loops/:id",
+    "status": 200,
+    "step": "not done yet"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "loop": {
+            "event": "reopened",
+            "id": "<loop:2>"
+          },
+          "text": "Open again: Read chapter 7 of the networking book"
+        },
+        "kind": "line"
+      }
+    ],
+    "step": "said in the room"
+  },
+  {
+    "body": {
+      "records": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/memory/records?q=networking chapter",
+    "status": 200,
+    "step": "and no longer a fact"
+  },
+  {
+    "observed": {
+      "lines": [
+        {
+          "body": {
+            "loop": {
+              "event": "opened",
+              "id": "<loop:3>"
+            },
+            "text": "Holding on to: Stretch (next <weekday> <local-time> (UTC), repeats `* * * * * *` until <weekday> <local-time> (UTC))"
+          },
+          "kind": "line"
+        },
+        {
+          "body": {
+            "loop": {
+              "event": "closed",
+              "id": "<loop:3>"
+            },
+            "text": "Closed: Stretch (it does not come again)"
+          },
+          "kind": "line"
+        }
+      ],
+      "movedOn": true
+    },
+    "step": "it moves on, then ends"
+  },
+  {
+    "body": {
+      "loop": {
+        "anchor": {
+          "cron": "0 18 * * 3",
+          "nextAt": "<epoch-ms>",
+          "zone": "UTC"
+        },
+        "closedAt": "<epoch-ms>",
+        "closedReason": "not needed any more",
+        "createdAt": "<epoch-ms>",
+        "dueAt": null,
+        "faceId": "host",
+        "id": "<loop:1>",
+        "lastTouchedAt": "<epoch-ms>",
+        "nextCheck": null,
+        "origin": "user",
+        "roomId": "general",
+        "sourceEntryIds": [
+          "<entry:1>",
+          "<entry:2>"
+        ],
+        "status": "closed",
+        "user": "test@example.com",
+        "what": "Team meeting",
+        "why": "they meet every week"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/loops/:id",
+    "status": 200,
+    "step": "not needed"
+  },
+  {
+    "observed": [
+      {
+        "loop_changed": [
+          "Stretch",
+          "closed"
+        ]
+      },
+      {
+        "body": {
+          "loop": {
+            "event": "closed",
+            "id": "<loop:1>"
+          },
+          "text": "Closed: Team meeting (not needed any more)"
+        },
+        "kind": "line"
+      }
+    ],
+    "step": "said in the room"
+  },
+  {
+    "body": {
+      "limit": 40,
+      "loops": [
+        {
+          "anchor": {
+            "cron": "0 18 * * 3",
+            "nextAt": "<epoch-ms>",
+            "zone": "UTC"
+          },
+          "closedAt": "<epoch-ms>",
+          "closedReason": "not needed any more",
+          "createdAt": "<epoch-ms>",
+          "dueAt": null,
+          "faceId": "host",
+          "id": "<loop:1>",
+          "lastTouchedAt": "<epoch-ms>",
+          "nextCheck": null,
+          "origin": "user",
+          "roomId": "general",
+          "sourceEntryIds": [
+            "<entry:1>",
+            "<entry:2>"
+          ],
+          "status": "closed",
+          "user": "test@example.com",
+          "what": "Team meeting",
+          "why": "they meet every week"
+        },
+        {
+          "anchor": {
+            "cron": "* * * * * *",
+            "nextAt": "<epoch-ms>",
+            "until": "<epoch-ms>",
+            "zone": "UTC"
+          },
+          "closedAt": "<epoch-ms>",
+          "closedReason": "recurrence_ended",
+          "createdAt": "<epoch-ms>",
+          "dueAt": null,
+          "faceId": "host",
+          "id": "<loop:3>",
+          "lastTouchedAt": "<epoch-ms>",
+          "nextCheck": null,
+          "origin": "user",
+          "roomId": "general",
+          "sourceEntryIds": [
+            "<entry:7>",
+            "<entry:8>"
+          ],
+          "status": "closed",
+          "user": "test@example.com",
+          "what": "Stretch",
+          "why": ""
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/loops?status=closed&limit=2",
+    "status": 200,
+    "step": "the latest closed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "No open loop <loop:4>"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/loops/<loop:4>",
+    "status": 404,
+    "step": "an unknown loop"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/loops/:id",
+    "status": 400,
+    "step": "nothing to change"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/loops/:id",
+    "status": 400,
+    "step": "an unknown field"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "That time has passed"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/loops/:id",
+    "status": 400,
+    "step": "a time that has passed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "loop_closed",
+        "message": "<loop:1> is closed; reopen it first"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/loops/:id",
+    "status": 409,
+    "step": "a closed loop's time"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/loops?status=nope",
+    "status": 400,
+    "step": "a status that is not one"
+  }
+]
