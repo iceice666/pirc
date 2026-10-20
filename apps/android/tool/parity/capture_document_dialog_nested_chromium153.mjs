@@ -12,7 +12,7 @@ try {
     throw new Error(`Expected pinned Chromium 153, got ${browser.version()}`);
   const page=await browser.newPage({viewport:{width:390,height:796}});
   await page.route('**/*',route=>route.abort());
-  await page.setContent(`<!doctype html><style>
+  const html=`<!doctype html><style>
     body { background:white; }
     dialog { background:white; width:160px; height:120px; }
     #first { z-index:9999; } #second { z-index:-1; }
@@ -25,7 +25,8 @@ try {
     for(const id of Object.keys(clicks))
       document.getElementById(id).addEventListener('click',()=>clicks[id]++);
     first.showModal();second.showModal();
-  </script>`);
+  </script>`;
+  await page.setContent(html);
   const snapshot=()=>page.evaluate(()=>({
     modalIds:[...document.querySelectorAll(':modal')].map(x=>x.id),
     activeElement:document.activeElement.id,
@@ -61,10 +62,34 @@ try {
   const afterFirstClick=await snapshot();
   await page.mouse.click(20,200);
   const afterBothBackdrops=await snapshot();
+  const touchContext=await browser.newContext({
+    viewport:{width:390,height:796},hasTouch:true,isMobile:true,
+  });
+  const touchPage=await touchContext.newPage();
+  await touchPage.route('**/*',route=>route.abort());
+  await touchPage.setContent(html);
+  const touchSnapshot=()=>touchPage.evaluate(()=>({
+    modalIds:[...document.querySelectorAll(':modal')].map(x=>x.id),
+    activeElement:document.activeElement.id,
+    clicks:{...window.clicks},
+  }));
+  const touchOne=await touchPage.locator('#one').boundingBox();
+  const touchX=touchOne.x+touchOne.width/2;
+  const touchY=touchOne.y+touchOne.height/2;
+  const touch={initial:await touchSnapshot()};
+  await touchPage.touchscreen.tap(touchX,touchY);
+  touch.blockedFirstClick=await touchSnapshot();
+  await touchPage.touchscreen.tap(20,200);
+  touch.afterTopBackdrop=await touchSnapshot();
+  await touchPage.touchscreen.tap(touchX,touchY);
+  touch.afterFirstClick=await touchSnapshot();
+  await touchPage.touchscreen.tap(20,200);
+  touch.afterBothBackdrops=await touchSnapshot();
+  await touchContext.close();
   const fixture={
     oracle:'Dedicated Playwright-pinned Chromium Headless Shell; no external requests or daily Chrome profile.',
     browserVersion:browser.version(),viewport:{width:390,height:796},
-    backdropPixel,initial,blockedScriptFocus,tabFocusSequence,
+    backdropPixel,initial,blockedScriptFocus,tabFocusSequence,touch,
     blockedFirstClick,afterTopBackdrop,
     afterFirstClick,afterBothBackdrops,
   };

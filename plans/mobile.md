@@ -36,8 +36,12 @@ are available from Git through Historical records, not repeated here.
       accessibility combinations remain unverified. Chromium 153 visits a body
       focus sentinel between Tab cycles with a single-control dialog, while
       Flutter loops on that control. After light-dismissing the final dialog,
-      Chromium leaves that dialog element focused while Flutter's script focus
-      drops to body. Tablet/dark nested-modal visuals also remain unverified.
+      Chromium mouse input leaves that dialog element focused while Flutter
+      drops to body. On phone touch input both end at body, but dismissing the
+      upper modal focuses the lower dialog in Chromium and its first button in
+      Flutter: touch compatibility mouse events retarget after the upper dialog
+      closes. The separate touch fixture and widget gate assert this difference;
+      tablet/dark nested-modal visuals remain unverified.
       Extend default dialog positioning beyond block-only flow to mixed inline
       runs and flex/grid static-position rectangles. Modern invoker and
       dialog task-source scheduling still need coverage. Dialog handler
@@ -52,8 +56,13 @@ are available from Git through Historical records, not repeated here.
       and incomplete `<html>` markup before parser scripts run. Connected
       `DocumentFragment` insertion now processes moved children so dynamic
       scripts execute once; scripts parsed via `insertAdjacentHTML()` remain
-      inert even after moving. A pinned Chromium 153 fixture and runtime tests
-      cover this behavior. Ten fixed Chromium 153 document-tree cases and four
+      inert even after moving. `Range.createContextualFragment()` now parses
+      ordinary HTML containers and table rows; connected scripts and click
+      handlers work through the native document host at phone/tablet widths.
+      Its SVG context still produces HTML-namespace children instead of SVG
+      children, an explicit remaining difference. Pinned Chromium 153 fixtures,
+      runtime tests and a Flutter widget gate cover the supported behavior.
+      Ten fixed Chromium 153 document-tree cases and four
       phone/tablet modal geometry cases cover the prior offset-packet crash.
       Less common HTML5 tree-builder recovery, such as duplicate head/body
       tags and malformed table nesting,

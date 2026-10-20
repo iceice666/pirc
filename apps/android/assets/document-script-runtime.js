@@ -43935,6 +43935,25 @@ function createPircDocumentLayout(options) {
       });
     }
 
+    // LinkeDOM treats a selected Element as the owner document here and throws.
+    // Parse ordinary HTML fragments without innerHTML's inert-script wrapper:
+    // scripts from Range.createContextualFragment become executable only after
+    // the caller connects the returned fragment, matching Chromium.
+    const originalCreateContextualFragment = Range.prototype.createContextualFragment;
+    Range.prototype.createContextualFragment = function(markup) {
+      const state = activeState;
+      const context = this.commonAncestorContainer;
+      const ownerDocument = context?.nodeType === 9 ? context : context?.ownerDocument;
+      if (!state || ownerDocument !== state.document)
+        return originalCreateContextualFragment.call(this, markup);
+      const parser = ownerDocument.createElement('');
+      originalInnerHtml.set.call(parser, String(markup));
+      const fragment = ownerDocument.createDocumentFragment();
+      while (parser.firstChild)
+        fragment.appendChild(parser.firstChild);
+      return fragment;
+    };
+
     const originalInsertBefore = ParentNode.prototype.insertBefore;
     ParentNode.prototype.insertBefore = function(node, before) {
       const state = activeState;

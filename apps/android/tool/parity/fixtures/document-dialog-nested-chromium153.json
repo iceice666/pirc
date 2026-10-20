@@ -33,6 +33,63 @@
     "",
     "two"
   ],
+  "touch": {
+    "initial": {
+      "modalIds": [
+        "first",
+        "second"
+      ],
+      "activeElement": "two",
+      "clicks": {
+        "outside": 0,
+        "one": 0,
+        "two": 0
+      }
+    },
+    "blockedFirstClick": {
+      "modalIds": [
+        "first",
+        "second"
+      ],
+      "activeElement": "two",
+      "clicks": {
+        "outside": 0,
+        "one": 0,
+        "two": 1
+      }
+    },
+    "afterTopBackdrop": {
+      "modalIds": [
+        "first"
+      ],
+      "activeElement": "first",
+      "clicks": {
+        "outside": 0,
+        "one": 0,
+        "two": 1
+      }
+    },
+    "afterFirstClick": {
+      "modalIds": [
+        "first"
+      ],
+      "activeElement": "one",
+      "clicks": {
+        "outside": 0,
+        "one": 1,
+        "two": 1
+      }
+    },
+    "afterBothBackdrops": {
+      "modalIds": [],
+      "activeElement": "",
+      "clicks": {
+        "outside": 0,
+        "one": 1,
+        "two": 1
+      }
+    }
+  },
   "blockedFirstClick": {
     "modalIds": [
       "first",

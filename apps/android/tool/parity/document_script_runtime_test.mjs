@@ -19,6 +19,14 @@ const fragmentWebFixture = JSON.parse(readFileSync(
   'utf8',
 ));
 assert.equal(fragmentWebFixture.browserVersion, '153.0.8010.12');
+const contextualFragmentWebFixture = JSON.parse(readFileSync(
+  new URL(
+    './fixtures/document-contextual-fragment-chromium153.json',
+    import.meta.url,
+  ),
+  'utf8',
+));
+assert.equal(contextualFragmentWebFixture.browserVersion, '153.0.8010.12');
 
 function createRuntime() {
   const context = vm.createContext({});
@@ -1187,6 +1195,73 @@ test('dynamically inserted classic external scripts execute after host completio
   assert.equal(vm.runInContext('window.changedCurrentScript', context), true);
   assert.deepEqual(Array.from(vm.runInContext('window.dynamicScriptEvents', context)), ['load']);
   assert.equal(vm.runInContext('document.readyState', context), 'complete');
+});
+
+test('Range.createContextualFragment connects ordinary HTML scripts and handlers like Chromium', () => {
+  const context = createRuntime();
+  invoke(context, 'init', {
+    hostLayout: true,
+    url: 'https://example.test/page',
+    html: '<div id="host"></div>'
+  });
+  const markup = '<script>window.fragmentRuns += 1<' + '/script>' +
+    '<button id="fragment-button" onclick="window.fragmentRuns += 10">Go</button>';
+  const actual = jsonEvaluate(context, `(() => {
+    const host = document.querySelector('#host');
+    const range = document.createRange();
+    range.selectNodeContents(host);
+    window.fragmentRuns = 0;
+    const fragment = range.createContextualFragment(${JSON.stringify(markup)});
+    const beforeConnect = window.fragmentRuns;
+    host.appendChild(fragment);
+    const afterConnect = window.fragmentRuns;
+    document.querySelector('#fragment-button').click();
+    const afterClick = window.fragmentRuns;
+    const script = host.querySelector('script');
+    script.remove();
+    host.appendChild(script);
+    return {
+      beforeConnect, afterConnect, afterClick,
+      afterMove: window.fragmentRuns,
+      rangeContextTag: range.commonAncestorContainer.localName,
+      fragmentEmptied: fragment.childNodes.length === 0,
+    };
+  })()`);
+  assert.deepEqual(actual, contextualFragmentWebFixture.html);
+});
+
+test('Range.createContextualFragment parses ordinary table rows like Chromium', () => {
+  const context = createRuntime();
+  invoke(context, 'init', {
+    hostLayout: true,
+    url: 'https://example.test/page',
+    html: '<table><tbody id="host"></tbody></table>'
+  });
+  const actual = jsonEvaluate(context, `(() => {
+    const host = document.querySelector('#host');
+    const range = document.createRange();
+    range.selectNodeContents(host);
+    const child = range.createContextualFragment('<tr><td>Cell</td></tr>').firstChild;
+    return { tag: child.localName, namespace: child.namespaceURI, text: child.textContent };
+  })()`);
+  assert.deepEqual(actual, contextualFragmentWebFixture.table);
+});
+
+test('SVG contextual fragment namespace is an explicit unsupported difference', () => {
+  const context = createRuntime();
+  invoke(context, 'init', {
+    hostLayout: true,
+    url: 'https://example.test/page',
+    html: '<svg id="host" xmlns="http://www.w3.org/2000/svg"></svg>'
+  });
+  const actual = jsonEvaluate(context, `(() => {
+    const range = document.createRange();
+    range.selectNodeContents(document.querySelector('#host'));
+    const child = range.createContextualFragment('<circle cx="10" cy="10" r="5"/>').firstChild;
+    return { tag: child.localName, namespace: child.namespaceURI };
+  })()`);
+  assert.equal(actual.tag, contextualFragmentWebFixture.svg.tag);
+  assert.notEqual(actual.namespace, contextualFragmentWebFixture.svg.namespace);
 });
 
 test('scripts in a connected DocumentFragment execute once after insertion', () => {
