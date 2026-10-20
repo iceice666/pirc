@@ -46,7 +46,7 @@
 | ---- | --------------------------------------------------------------------------------------------------- |
 | 02   | ~~頭腦用 direct tools 還是受限 script runtime~~ 已定（2026-10-20 spike）：direct tools              |
 | 03   | 偏好確認由頭腦判斷還是程式碼判斷                                                                    |
-| 04   | 「事情本身是時間」用 `auto_close` flag 還是頭腦判斷                                                 |
+| 04   | ~~「事情本身是時間」用 `auto_close` flag 還是頭腦判斷~~ 已定（2026-10-20）：anchor 上的 flag        |
 | 07   | 「Allow again in this session」for `unsandboxed_bash` / `Outbound`（existing-plans §7.2）           |
 | 08   | research profile 是 mode 檔還是 task policy（existing-plans §7.1）；`scratch.md` 升格預設檔（§7.3） |
 | 09   | 第一版來源範圍（email IMAP + CalDAV + 研究瀏覽器；OAuth 第二步）                                    |

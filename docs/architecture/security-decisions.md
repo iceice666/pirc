@@ -50,7 +50,7 @@ A node-local proxy guarding every browser connection was considered but not impl
 
 ## Memory writes without approval
 
-Decision (direction §2.4, [plans/rewrite/03-memory.md](../../plans/rewrite/03-memory.md)): the brain writes facts without asking. Safety rests on origin tagging and visibility, not review: the gateway computes each fact's origin (`user`, `tool:<name>`, `om:promoted`) from the room's conversation, the room shows a line for every fact and preference written, and **Don't keep** forgets it. Preferences, which are in every prompt, and forgetting need a quote of the person's own words, checked by code against their last three messages. Node sessions never reach the household's memory.
+Decision (direction §2.4, [plans/rewrite/03-memory.md](../../plans/rewrite/03-memory.md)): the brain writes facts without asking. Safety rests on origin tagging and visibility, not review: the gateway computes each fact's origin (`user`, `tool:<name>`, `om:promoted`) from the room's conversation, the room shows a line for every fact and preference written, and **Don't keep** forgets it. Preferences, which are in every prompt, and forgetting need a quote of the person's own words, checked by code against their last three messages. Node sessions never reach the household's memory. Open loops ([plans/rewrite/04-open-loops.md](../../plans/rewrite/04-open-loops.md)) follow the same rules: opened and closed without approval, each said in the room with an undo, their origin computed by code; a `tool:*` loop never authorizes an action on its own.
 
 Residual risk, accepted:
 

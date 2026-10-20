@@ -23,7 +23,7 @@
 - [ ] Kotlin 傳輸層抽離 domain（`GatewayBridge` 拆 transport / domain）；domain 重寫。
 - [ ] Dart app state 與導航重寫；房間列表、訊息列、成員、討論串、引擎蓋 tab。
 - [ ] 通知與快速回覆改房間；UnifiedPush 註冊不變。
-- [ ] 設定頁整理；來源 / 面孔頁。從 [03](03-memory.md) 來的：`live/attention.dart` / `memory_settings.dart` 還讀舊的 `/api/memory`（`user`/`notes`）與 `/api/memory/entries/:id/*`，要改成 `/api/memory/preferences`（偏好：remove / forget / restore / history）與 `/api/memory/records`（事實：瀏覽、搜尋、`DELETE`），房間 line 的 `body.memory` 加「Don't keep」；相關測試與 `tool/parity/capture_web.mjs` 一起改。
+- [ ] 設定頁整理；來源 / 面孔頁。從 [03](03-memory.md) 來的：`live/attention.dart` / `memory_settings.dart` 還讀舊的 `/api/memory`（`user`/`notes`）與 `/api/memory/entries/:id/*`，要改成 `/api/memory/preferences`（偏好：remove / forget / restore / history）與 `/api/memory/records`（事實：瀏覽、搜尋、`DELETE`），房間 line 的 `body.memory` 加「Don't keep」；相關測試與 `tool/parity/capture_web.mjs` 一起改。從 [04](04-open-loops.md) 來的：open loops 清單（`GET /api/loops`、`PATCH /api/loops/:id`）與房間 line 的 `body.loop {id, event}`（opened/reopened → 「Don't keep」、closed/demoted → 「Not done yet」），rooms 事件流的 `loop_changed`。
 - [ ] parity fixtures 重擷取；timeline Kotlin port 跑新 golden cases。從 [00](00-demolition.md) 留下來的：`settings-matrix.json`（`assistant` tab、memory proposals、`/api/assistant/{node,prompts}`、chat node）及讀它的 `tool/parity/capture_{settings,notification}_matrix_{web.mjs,test.dart}`、`compare_settings_matrix.mjs`、`notification-matrix.json`，都 pin 在已不存在的 web revision `bd3d909`，重擷取前要改 pin 並拿掉退場的 tab 與 API；`app-document-routes.json` 等相鄰的 app-document fixture 也 pin 在同一個 revision。
 - [ ] 刪 00 沒刪乾淨的舊畫面與測試。
 - [ ] `flutter analyze`、unit/widget suite、Kotlin unit tests；integration tests 中綁舊導航的改寫。

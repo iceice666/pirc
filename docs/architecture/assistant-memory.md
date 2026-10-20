@@ -1,6 +1,6 @@
 # Memory, repositories and delegation
 
-This reference describes the current Rust contracts. For session compaction and local repository handoffs, see [observational memory](observational-memory.md); for prompt composition, see [prompt context](prompt-context.md). Configuration and user workflows are in [Gateway and node](../development/gateway-and-node.md). The design is [direction §2.4](direction.md) and [plans/rewrite/03-memory.md](../../plans/rewrite/03-memory.md).
+This reference describes the current Rust contracts. For session compaction and local repository handoffs, see [observational memory](observational-memory.md); for prompt composition, see [prompt context](prompt-context.md). Configuration and user workflows are in [Gateway and node](../development/gateway-and-node.md). The design is [direction §2.3–2.4](direction.md), [plans/rewrite/03-memory.md](../../plans/rewrite/03-memory.md) and [04-open-loops.md](../../plans/rewrite/04-open-loops.md).
 
 ## Three layers
 
@@ -8,13 +8,13 @@ The brain (the agent the gateway runs, [prompt context](prompt-context.md)) has 
 
 | Layer                                       | Storage                                                               | Readers and writers                                                                                                                         |
 | ------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Open loops                                  | (plan 04)                                                             |                                                                                                                                             |
+| Open loops (`open_loops`)                   | Gateway SQLite, the household's                                       | In every brain prompt. The brain opens, touches, changes and closes them without approval; the person closes or reopens them                |
 | Facts (`memory_records`, `person`)          | Gateway SQLite, per person                                            | The brain writes them without approval (`remember`, observational-memory promotion); it and the person search them; the person forgets them |
 | Preferences (`preferences`)                 | Gateway SQLite, per person                                            | In every brain prompt. The brain saves one only with a quote of the person's words; the person removes, restores and forgets them           |
 | Repository notes (`memory_records`, `repo`) | Node workspace-memory ledger, mirrored to the gateway                 | Main coding sessions in that repository; the brain searches the mirror                                                                      |
 | Session observations/reflections            | The session's ledger (node session, or the brain's room conversation) | The session's memory workers; recall reads retained branch sources                                                                          |
 
-Prompts hold only the bounded layers: preferences (`PIRC_MEMORY_USER_CHARS`, default 2,000 characters per person; one entry at most 1,000) and, from plan 04, open loops. Facts are many and stay out of the prompt; before each turn the brain's host searches them with what people just said and puts the closest six (300 characters each, with their origin) in a "You may remember" section. A recall that takes over 200 ms is left out and logged.
+Prompts hold only the bounded layers: preferences (`PIRC_MEMORY_USER_CHARS`, default 2,000 characters per person; one entry at most 1,000) and open loops (at most 40, see below). Facts are many and stay out of the prompt; before each turn the brain's host searches them with what people just said and puts the closest six (300 characters each, with their origin) in a "You may remember" section. A recall that takes over 200 ms is left out and logged.
 
 ### Who a memory belongs to and where it came from
 
@@ -33,7 +33,19 @@ Forgetting a fact or preference (the person's **Forget** or **Don't keep**, or t
 
 Remove (preferences only) is reversible: the preference leaves the prompt and comes back with Restore.
 
+### Open loops
+
+An open loop is something still open between the brain and the people: "wants to tune the laptop's power policy", "team meeting every Wednesday at 18:00", "HW3 is due on 10/24". It is not a todo (a run's progress), a fact or a schedule. The brain opens one when something stays unresolved or someone asks to be reminded (`open_loop`), marks it mentioned (`touch_loop`), changes it (`update_loop`), closes it with a reason once it is resolved or someone says it no longer matters (`close_loop`), and opens a closed one again (`reopen_loop`). No approval: opening, closing and reopening are said in the room as lines carrying `{id, event}`, with **Don't keep** (closes it, "not needed any more") on an opening and **Not done yet** (reopens it) on a closing. Each loop records what, why, its room and face, an optional "next check" clue for the self-wake of plan 05, its owner (the turn's first speaker) and its origin, which code computes exactly as for facts (`user`, or `tool:<name>` when a tool result came since the person spoke).
+
+All open loops of the household are in every brain prompt (`loops`, after the preferences), those whose time comes soonest first, then the most recently mentioned, with the time now so the brain can anchor new ones. Recall searches with what was said plus what the open loops are about. Past 40 open, the ones **without** a time anchor that were mentioned least recently are demoted before the prompt is built: closed as `demoted` and written as a fact of their owner's with the loop's origin, its source entries and `openLoopId`, said in the loop's room ("This sat untouched for a while, so I put it in memory: …"). Anchored loops are never demoted. Reopening a demoted loop takes that fact back (no tombstone).
+
+A **time anchor** is one time `{at, zone, autoClose}` or a recurrence `{cron, zone, until?}` (`crates/pirc-gateway/src/time/cron.rs`; `zone` defaults to `PIRC_TIMEZONE`). A gateway timer fires them whether or not the brain runs: a time with `autoClose` (the time is the thing itself: a meeting, a deadline) closes the loop as `elapsed` with a line; one without is marked `passed` and waits for the people; a recurrence moves to its next time (`nextAt`, once from now after a suspended machine) and closes as `recurrence_ended` after `until`. Plan 05 wakes the brain at these points. The only ways a loop closes are the brain's judgement, the person's word, and its time.
+
+A `tool:*` loop may lead to a read-only wake or a reminder, but never authorizes an action on its own (plans 06 and 07 will accept only `user` loops or quotes as grounds).
+
 ### Routes
+
+`GET /api/loops?status=open|closed|all&limit=` lists open loops (all, in prompt order) or the latest closed ones (`limit` 1–200, default 50), with the limit 40. `PATCH /api/loops/:id` takes `{status: "closed", reason?}` (default reason "not needed any more"), `{status: "open"}` or `{anchor: {...} | null}` (an open loop's; `409 loop_closed` otherwise); a changed time is checked like the brain's (`400` "That time has passed"). Every change is sent on the rooms' stream as `loop_changed {loop}`. Replies are `no-store`.
 
 `GET /api/memory` and `/api/memory/preferences` (the preferences page: active, removed, usage, room names), `GET …/preferences/:id/history`, `POST …/preferences/:id/{remove,forget,restore}`; `GET /api/memory/records?scope=person|repo|all&q=&limit=` (newest first, or search), `GET /api/memory/records/:id` and `…/history` (household facts), `DELETE /api/memory/records/:id` (forget a household fact). Replies are `no-store`; device tokens may use them.
 

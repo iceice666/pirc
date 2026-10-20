@@ -129,6 +129,7 @@ A reply streams into one message per assistant reply (`body.streaming: true` unt
 - `GET /api/brain/prompts` returns `{prompts: {soul, chat}}`, each `{text, writable, reason?, path, maxChars}`; `PUT /api/brain/prompts/:name` (`soul` or `chat`) with `{text}` writes one (empty text removes the file; `409 read_only` for a store link, symlink or unwritable file). The next turn reads it.
 - `GET /api/brain/turns?room=<id>&limit=<1-100>` lists a room's latest turns, newest first: `{id, roomId, kind, messageIds, startedAt, endedAt, outcome, error, usage}`, `outcome` one of `done`, `failed`, `aborted`, `timeout`, `preempted`, `interrupted` (open at a restart) or `null` while it runs.
 - `GET /api/brain/context?room=<id>` returns the context snapshot of the brain's latest model call in the room, or `null`.
+- `GET /api/loops?status=open|closed|all&limit=<1-200>` lists the open loops (plans/rewrite/04-open-loops.md) as the prompt orders them, or the latest closed ones: `{loops, limit}`, each `{id, user, roomId, faceId, what, why, origin, anchor, nextCheck, status, closedReason, closedAt, createdAt, lastTouchedAt, sourceEntryIds, dueAt}`. `PATCH /api/loops/:id` with `{status: "closed", reason?}`, `{status: "open"}` or `{anchor}` (`{at, zone?, autoClose?}`, `{cron, zone?, until?}` or `null`) changes one and says so in its room; the rooms' stream carries `loop_changed {loop}`. See [assistant memory](../architecture/assistant-memory.md#open-loops).
 
 ### Engine
 

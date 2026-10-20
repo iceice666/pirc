@@ -42,17 +42,21 @@ open_loops(id, room_id NULL, face_id NULL, what, why, origin 'user'|'tool:<src>'
 
 ## 工作項目
 
-- [ ] schema + `brain/loops.rs`（store、不變量、降級、recurrence 推進）。
-- [ ] 工具與 prompt 文案（`prompts/tools/open_loop.md` 等）。
-- [ ] `brain/turn.rs`：投影 section；03 的自動撿取 query 納入 loops 的 `what`。
-- [ ] API：`GET /api/loops?status=`、`PATCH /api/loops/:id`（close / reopen / anchor）；事件 `loop_changed`。
-- [ ] Web：房間 line；面孔頁 / 引擎蓋的 loops 清單（10 之前掛 Settings）；時間錨顯示「下次」。
-- [ ] conformance：`brain_loops.rs`：掛上 → line；40+1 → 最老無錨的降級且可搜到可撈回；週期錨 `next_at` 推進與 `until` 了結；`tool:*` loop 的 origin 保留到降級後。
+- [x] schema + `brain/loops.rs`（store、不變量、降級、recurrence 推進）。（2026-10-20）`pirc.sqlite` schema 4（`db/migrations/4-open-loops.sql`）：`open_loops` 加兩欄 **`owner_user`**（turn 的第一位發話者，降級寫進誰的事實）與 **`due_at`**（anchor 下一次到點，計時器只查這欄）；`memory_records.open_loop_id`（降級來的事實）。id 是 `l` + 8 hex。同一件事（忽略大小寫與空白）再開 = touch 原來那條。anchor：`{at, zone, autoClose, passed?}` 或 `{cron, zone, until?, nextAt}`（`time/cron.rs`，zone 預設 `PIRC_TIMEZONE`）；過去的時間、`until` 過了、在 `until` 前不會到、`autoClose` 配 cron 都拒絕。計時器（`wake/timer.rs` 的 `DeadlineTimer`，`main.rs` 不論 `PIRC_BRAIN` 都啟動）：`autoClose` → `elapsed` + line；沒 flag → 標 `passed` 等人；recurrence → 推進（機器睡過頭只補一次）或 `recurrence_ended` + line；失敗退避 60 s。05 的 wake 掛在 `Fired::Passed`/`Advanced`。降級：超過 40 → 無錨、`last_touched_at` 最舊的先降（同一 transaction），寫成 owner 的事實（content 為「what (why)」、origin 照抄、source = loop id + entries、`open_loop_id`）；被 tombstone 擋的文字就只關不寫。`reopen` 把那條事實收回（`person::retire`：刪列、索引、log，**不** tombstone）。
+- [x] 工具與 prompt 文案（`prompts/tools/open_loop.md` 等）。（2026-10-20）`brain/loop_tools.rs`：`open_loop {what, why?, anchor?, next_check?, room?}`、`close_loop {id, reason}`、`touch_loop`、`update_loop {id, what?, why?, anchor?|null, next_check?|null}`、`reopen_loop`。**與設計的差異**：工具說明照 03 的做法寫在 Rust 裡（gateway 不用 `pirc-agent/prompts/tools/`）；文案、line、section 都是英文（同 03 的 `## Preferences` / `## You may remember`），section 標題是 `## Open loops` 而非「還掛著的事」。origin 用 03 的 `origin_now`（loop 工具加進 `WRITING_TOOLS`，它們的結果不算來處）。line：開 `Holding on to: …（next …）`、關 `Closed: … (reason)`、降級 `This sat untouched for a while, so I put it in memory: …`、重開 `Open again: …`，`body.loop {id, event}`；touch/update 不出 line。
+- [x] `brain/turn.rs`：投影 section；03 的自動撿取 query 納入 loops 的 `what`。（2026-10-20）在 `scheduler.rs` 開 turn 時組（`loops::section`）：先降級、再列出，順序 preferences → `loops` → recalled。section 開頭帶**現在時間**（頭腦本來不知道今天幾號，開時間錨需要）；每條「[id] what (why) · from origin · next/due … · next check …」，有錨的近者先、再依 `last_touched_at`。自動撿取的 query = 這批話 + 所有 open loop 的 `what`。steer 不重算（同 03）。
+- [x] API：`GET /api/loops?status=`、`PATCH /api/loops/:id`（close / reopen / anchor）；事件 `loop_changed`。（2026-10-20）`routes/loops.rs`：`?status=open|closed|all&limit=`（closed 預設 50、上限 200），回 `{loops, limit: 40}`；PATCH 收 `{status:"closed", reason?}`（預設「not needed any more」）、`{status:"open"}`、`{anchor}` 三擇一，關/開在 loop 的房間出 line（房間封存了就 #general）。`loop_changed {loop}` 走 rooms 事件流（loop 的房間）。`no-store`、`PARAM_ROUTES` 都加了。
+- [x] Web：房間 line；面孔頁 / 引擎蓋的 loops 清單（10 之前掛 Settings）；時間錨顯示「下次」。（2026-10-20）`lib/loops.ts`；房間 line：opened/reopened 有「Don't keep」、closed/demoted 有「Not done yet」（按一次就收起）；Settings → **Open loops**（`LoopsSettings.svelte`）：開著的（下次時間用 anchor 的 zone 顯示、來處、why、next check、Not needed）與最近關的 20 條（原因、Not done yet），`loop_changed` 時重載。Android 留給 [12](12-android.md)（已記在該 plan）。
+- [x] conformance：`brain_loops.rs`：掛上 → line；40+1 → 最老無錨的降級且可搜到可撈回；週期錨 `next_at` 推進與 `until` 了結；`tool:*` loop 的 origin 保留到降級後。（2026-10-20）另含 prompt 的 section 與工具清單、使用者從 web 關、最近關的清單、錯誤路徑（未知 id 404、空 body / 未知欄位 400、過去的時間 400、關掉的 loop 改時間 409、壞 status 400）。recurrence 用每秒的 `* * * * * *` 與 3 秒後的 `until` 真的跑計時器。`brain`、`brain_memory` 快照跟著新工具與 section 更新。
 
 ## 驗證
 
 - `cargo test -p pirc-gateway loops`、conformance `brain_loops`。
 - 手動：「每週三 18:00 開會」→ loop 顯示下次時間；「那個不用記了」→ 了結 line。
+
+**結果（2026-10-20）**：`cargo test -p pirc-gateway` 127 passed（新增 `brain::loops::tests` 4 個：anchor 檢查與文字、開/去重/改/關/重開、到點的 elapsed/passed/推進/until 了結、40+1 降級成可搜的事實帶 `tool:*` origin 與 loop id、重開收回事實；`brain::tests::the_brain_opens_a_loop_and_has_it_in_front_of_it`；schema 1→4 遷移測試）。`cargo clippy --workspace --all-targets`、`cargo fmt --all --check` 乾淨。conformance（`target/release`，`--no-fail-fast`）：全綠，只有 `node_browser` 4 個照舊失敗（這個沙箱的 Chromium）；`brain_loops`+`brain`+`brain_memory`+`rooms`+`memory`+`http` 連跑 8 次都綠。web：vitest 44 files / 317 tests、`svelte-check` 0 錯誤、prettier 乾淨。gateway release 15.32 MiB（預算 16 MiB，03 時 13.33 MiB）：**多出的約 2 MiB 是 `chrono-tz` 的時區轉換表**——`time/cron.rs` 之前沒有呼叫者，被 linker 丟掉，現在 anchor 要算各時區的時間就進來了；剩約 0.68 MiB 餘裕。**手動真模型測試沒做**：沙箱連不到 provider，要使用者自己跑。
+
+與設計的差異（除上面各項）：`room?` 參數只接受存在且未封存的房間，line 出在說話的房間；`CHANGELOG.md` 照 01–03 留給 [13](13-docs.md)。
 
 ## 文件
 
@@ -60,5 +64,7 @@ open_loops(id, room_id NULL, face_id NULL, what, why, origin 'user'|'tool:<src>'
 
 ## 實作前待決
 
-- 「事情本身是時間」的判斷交給頭腦還是用 anchor 上的 flag（`auto_close: bool`，開 loop 時由頭腦設）？建議 flag，可預測。
+- 「事情本身是時間」的判斷交給頭腦還是用 anchor 上的 flag（`auto_close: bool`，開 loop 時由頭腦設）？建議 flag，可預測。→ **已定（2026-10-20，使用者）：anchor 上的 `auto_close` flag。**
 - 週期 loop 的 wake 要不要在到點前提醒（「明天 18:00 開會」）：這是 05 「值得說」的一部分，這裡只存 anchor。
+
+**2026-10-20 使用者同意動工。**

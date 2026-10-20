@@ -48,7 +48,7 @@ wake_quota(day, count)   -- 或由 wakes 聚合
 - [ ] scheduler 的 wake 分支與 preemption；每日配額（zone 用 `PIRC_TIMEZONE`）。
 - [ ] wake turn 的 prompt 與 `speak` 工具；無聲回合的落地與引擎蓋可見。
 - [ ] 「值得說」預設寫成 CHAT.md 的預設段落（可被偏好覆蓋），不是硬編碼。
-- [ ] 時間錨觸發（含 04 的 recurrence 推進與 `auto_close`）；deadline 前一天的派生。
+- [ ] 時間錨觸發（含 04 的 recurrence 推進與 `auto_close`）；deadline 前一天的派生。從 [04](04-open-loops.md) 來的：時間錨已由 gateway 的計時器處理（`brain/loops.rs` `start_timer` → `fire`：`autoClose` 了結為 `elapsed`、無 flag 的標 `passed`、recurrence 推進 `nextAt` 或以 `recurrence_ended` 了結），wake 掛在 `fire` 的 `Fired::Passed` / `Fired::Advanced` 那裡；下一個時刻在 `open_loops.due_at`（不是 `anchor_json.next_at`），anchor 的鍵是 `autoClose` / `nextAt`。
 - [ ] API：`GET /api/wakes?room=`、`DELETE /api/wakes/:id`；事件 `wake_changed`；push 走 room deep link。
 - [ ] Web：房間 line「我晚點會回來看」+ 取消；引擎蓋的 wakes 頁。
 - [ ] conformance：`brain_wake.rs`（fake LLM、可調時鐘）：錨到點 → wake → `speak`；無聲回合房間無訊息；配額 24 → 第 25 次 `quota`；user 訊息搶先 → `preempted` 重排；wake 期間呼叫寫入工具不存在。

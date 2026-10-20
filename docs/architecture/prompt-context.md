@@ -16,9 +16,10 @@ The same agent loop (`crates/pirc-agent`) runs in two hosts, and each puts its s
 | `room`               | built-in: the room's name and how batches read                                        | always present                                            |
 | `chat-md`            | `CHAT.md` in the gateway's `PIRC_CONFIG_DIR`                                          | left out                                                  |
 | `memory:preferences` | built-in: the turn's people's preferences (`crates/pirc-gateway/src/brain/memory.rs`) | always present (says none yet)                            |
+| `loops`              | built-in: the time now and every open loop (`crates/pirc-gateway/src/brain/loops.rs`) | always present (says none)                                |
 | `memory:recalled`    | built-in: "You may remember", the facts closest to what was said                      | left out when nothing matches, or recall took over 200 ms |
 
-Each file is at most 8000 characters. The brain gets no AGENTS.md, skills, hooks, capability index or working directory: it has no workspace, and its tools (`web_search` with `EXA_API_KEY`; `remember`, `memory_search`, `recall_note`, `save_preference`, `forget` and observational memory's `recall`, plan 03) are direct tools. The memory sections come last, so the persona and rules stay a stable prefix ([assistant memory](assistant-memory.md)). `GET /api/brain/prompts` and `PUT /api/brain/prompts/:name` read and write the files unless they are read-only (a Nix store link, a symlink or file permissions).
+Each file is at most 8000 characters. The brain gets no AGENTS.md, skills, hooks, capability index or working directory: it has no workspace, and its tools (`web_search` with `EXA_API_KEY`; `remember`, `memory_search`, `recall_note`, `save_preference`, `forget` and observational memory's `recall`, plan 03; `open_loop`, `close_loop`, `touch_loop`, `update_loop`, `reopen_loop`, plan 04) are direct tools. The memory and loop sections come last, so the persona and rules stay a stable prefix ([assistant memory](assistant-memory.md)). `GET /api/brain/prompts` and `PUT /api/brain/prompts/:name` read and write the files unless they are read-only (a Nix store link, a symlink or file permissions).
 
 ## Section and snapshot contracts
 

@@ -37,6 +37,12 @@ preference budget. The memory routes moved: `/api/memory/entries/:id/*` is
 The Android app's memory settings still read the old shape until
 plans/rewrite/12-android.md.
 
+The brain keeps open loops (plans/rewrite/04-open-loops.md). On first start
+`pirc.sqlite` migrates to schema 4: the `open_loops` table, and
+`memory_records.open_loop_id` for facts that were demoted loops. An older
+gateway refuses schema 4. The routes are `/api/loops` and
+`/api/loops/:id`; the rooms' stream gains `loop_changed`.
+
 ## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13
