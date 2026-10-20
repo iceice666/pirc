@@ -1,7 +1,6 @@
 /**
  * The assistant's memory, held by the gateway (docs/architecture/assistant-memory.md): USER
- * entries (who you are; changed only with your approval), the assistant's
- * MEMORY notes, and its USER proposals waiting for you.
+ * entries (who you are) and the assistant's MEMORY notes.
  */
 import { request } from './http';
 
@@ -13,7 +12,6 @@ export interface MemorySources {
   entryIds?: string[];
   /** Your exact words the change rests on. */
   quote?: string;
-  proposalId?: string;
 }
 
 export interface MemoryEntry {
@@ -26,22 +24,6 @@ export interface MemoryEntry {
   sources: MemorySources;
   createdAt: number;
   updatedAt: number;
-}
-
-export interface MemoryProposal {
-  id: string;
-  action: 'add' | 'replace' | 'remove';
-  targetId: string | null;
-  targetRevision: number | null;
-  content: string | null;
-  quote: string;
-  sources: MemorySources;
-  sessionId: string;
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: number;
-  decidedAt: number | null;
-  /** The USER entry it changes, as it is now. */
-  target: { id: string; content: string; revision: number } | null;
 }
 
 export interface MemoryVersion {
@@ -60,8 +42,7 @@ export interface MemoryView {
   user: MemoryEntry[];
   notes: MemoryEntry[];
   removed: MemoryEntry[];
-  proposals: MemoryProposal[];
-  /** Names of the chats entries and proposals came from, by id. */
+  /** Names of the chats entries came from, by id. */
   sessions: Record<string, string>;
 }
 
@@ -78,13 +59,6 @@ export const memoryApi = {
   history: async (entryId: string) =>
     (await noStore<{ versions: MemoryVersion[] }>(`/api/memory/entries/${part(entryId)}/history`))
       .versions,
-  /** `targetRevision`: the version of the changed entry you were shown. */
-  approve: (proposalId: string, targetRevision?: number) =>
-    change(
-      `/api/memory/proposals/${part(proposalId)}/approve`,
-      targetRevision === undefined ? {} : { targetRevision },
-    ),
-  reject: (proposalId: string) => change(`/api/memory/proposals/${part(proposalId)}/reject`),
   forget: (entryId: string) => change(`/api/memory/entries/${part(entryId)}/forget`),
   /** Bring back a removed entry, or restore an earlier version. */
   restore: (entryId: string, revision?: number) =>

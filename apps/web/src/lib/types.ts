@@ -51,30 +51,17 @@ export interface ModeInfo {
   features_on: string[];
   /** `null`: the node's normal tools. */
   tools: string[] | null;
-  /** `full`: the personal assistant (Chat tab); `user`: the user's own work (Work tab). */
-  assistant: 'user' | 'full';
-  delegate: boolean;
   delegate_target: boolean;
-  schedule_scope: 'own' | 'any';
-  project_instructions: boolean;
-  project_files: boolean;
   project_config: boolean;
   workspace_memory: boolean;
   repository: boolean;
   recap: boolean;
-  delete_sessions: boolean;
-  projects: boolean;
 }
 
 export interface Workspace {
   id: string;
   hostId: string;
   displayName: string;
-  /**
-   * Legacy, derived from the mode's workdir (`per-session` → `chat`). Read only
-   * as a fallback when the catalog lacks the workspace's mode (older gateways).
-   */
-  kind?: 'directory' | 'chat';
   /** The workspace's mode id (absent from older gateways). */
   mode?: string;
   /** False when its mode is missing from the catalog: history is read-only, no new sessions. */
@@ -83,8 +70,6 @@ export interface Workspace {
   color?: string;
   defaults: WorkspaceDefaults;
   activeSessionCount?: number;
-  /** A chat project whose deletion did not finish: deleting it again finishes it. */
-  deleting?: boolean;
 }
 
 export interface NodeSummary {
@@ -113,22 +98,20 @@ export interface SessionSummary {
   pendingInteractionCount?: number;
   /** Holds the write lease on its workspace right now (only one session at a time may write). */
   writeLease?: boolean;
-  /** A scheduled run or a delegated task started it. */
+  /** A delegated task started it. */
   origin?: SessionOrigin;
 }
 
-export type SessionOrigin =
-  | { kind: 'schedule'; scheduleId: string; title: string; dueAt: number }
-  | {
-      kind: 'delegation';
-      delegationId: string;
-      title: string;
-      fromSessionId: string;
-      /** The delegation's status; absent from older gateways. */
-      status?: DelegationStatus;
-      /** A confirm it waits on, relayed to the chat that started it (answer it there). */
-      approval?: RelayedApproval;
-    };
+export type SessionOrigin = {
+  kind: 'delegation';
+  delegationId: string;
+  title: string;
+  fromSessionId: string;
+  /** The delegation's status; absent from older gateways. */
+  status?: DelegationStatus;
+  /** A confirm it waits on, relayed to the chat that started it (answer it there). */
+  approval?: RelayedApproval;
+};
 
 /** A delegated session's pending confirm, as the chat that started it holds it. */
 export interface RelayedApproval {
@@ -267,19 +250,6 @@ export interface ConfirmInteraction extends InteractionBase {
   kind: 'confirm';
   confirmLabel?: string;
   cancelLabel?: string;
-  /**
-   * A delegation: the user picks the model and thinking level it runs on.
-   * Holds the assistant's suggestion; null is the workspace default.
-   */
-  modelChoice?: {
-    model: { provider: string; id: string } | null;
-    thinking: ThinkingLevel | null;
-  };
-  /**
-   * A delegation: a checkbox that counts the task as the user's own request
-   * for the delegated run's auto mode (that run only).
-   */
-  userRequestChoice?: { label: string; checked: boolean };
   /**
    * A delegated session's confirm, relayed to the chat that started it. Its
    * id starts with `relay.`; answering needs no control lease.
@@ -479,6 +449,12 @@ export interface ProviderAuthSession {
   expiresAt: number;
 }
 
+export type NewWorkspace =
+  /** A workspace in a catalog mode; `path` iff the mode's workdir is `workspace`. */
+  | { nodeId: string; mode: string; displayName: string; path?: string }
+  /** Older gateways: an existing directory. */
+  | { nodeId: string; path: string; displayName: string };
+
 export interface CreateSessionInput {
   workspaceId: string;
   modelId?: string;
@@ -513,15 +489,7 @@ export interface CommandReceipt {
 }
 
 export type InteractionAnswer =
-  | {
-      action: 'answer';
-      value: string | string[] | boolean;
-      /** With a confirm that offers `modelChoice`: what the user picked (null = default). */
-      model?: { provider: string; id: string } | null;
-      thinking?: ThinkingLevel | null;
-      /** With a confirm that offers `userRequestChoice`: whether it was ticked. */
-      asUserRequest?: boolean;
-    }
+  | { action: 'answer'; value: string | string[] | boolean }
   | { action: 'cancel' };
 
 export interface EventEnvelope<T extends GatewayEvent = GatewayEvent> {

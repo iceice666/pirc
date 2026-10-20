@@ -1,8 +1,7 @@
 <script lang="ts">
   /**
-   * Push notifications (docs/guides/schedules.md): turn them on for this
-   * browser, see every place that gets them (browsers and paired phones),
-   * remove one, and send a test.
+   * Push notifications: turn them on for this browser, see every place that
+   * gets them (browsers and paired phones), remove one, and send a test.
    */
   import { onMount } from 'svelte';
   import { ApiError } from '../http';
@@ -79,10 +78,7 @@
 
 <section class="settings-section" aria-labelledby="notifications-title">
   <h3 id="notifications-title">Notifications</h3>
-  <p>
-    Scheduled runs, sessions waiting for your answer, finished delegations and memory changes to
-    approve. Each schedule chooses which of its runs notify.
-  </p>
+  <p>Sessions waiting for your answer and finished delegations.</p>
 
   {#if status === 'loading'}
     <p role="status">Checking notifications…</p>

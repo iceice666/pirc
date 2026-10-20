@@ -1,5 +1,5 @@
 import type { PanelState } from './panel-api';
-import { LEGACY_CHAT, LEGACY_DIRECTORY } from './modes';
+import { LEGACY_DIRECTORY } from './modes';
 import type {
   ModeInfo,
   ModelOption,
@@ -39,15 +39,10 @@ export const demoPanelState: PanelState = {
 };
 
 /**
- * The gateway's mode catalog: the two defaults and the guide's scratch
- * example (one-off jobs on a coding node, each session in its own directory).
+ * The gateway's mode catalog: the default and the guide's scratch example
+ * (one-off jobs on a coding node, each session in its own directory).
  */
 export const demoModes: ModeInfo[] = [
-  {
-    ...LEGACY_CHAT,
-    description: "The personal assistant's chats and projects.",
-    features_off: ['goal', 'todo', 'agentTeam', 'background'],
-  },
   { ...LEGACY_DIRECTORY, description: 'Coding sessions in a repository.' },
   {
     ...LEGACY_DIRECTORY,
@@ -67,7 +62,6 @@ export const demoWorkspaces: Workspace[] = [
     id: 'ws-pirc',
     hostId: 'homolab',
     displayName: 'pirc',
-    kind: 'directory',
     mode: 'directory',
     canonicalPath: '~/code/pirc',
     defaults: { modelId: 'claude-sonnet', thinkingLevel: 'high' },
@@ -77,34 +71,15 @@ export const demoWorkspaces: Workspace[] = [
     id: 'ws-dotfiles',
     hostId: 'homolab',
     displayName: 'Dotfiles',
-    kind: 'directory',
     mode: 'directory',
     canonicalPath: '~/dotfiles',
     defaults: { modelId: 'claude-sonnet', thinkingLevel: 'medium' },
   },
   {
-    // The gateway derives `kind: chat` from the per-session workdir; it is still Work.
     id: 'ws-gpu',
     hostId: 'homolab',
     displayName: 'GPU jobs',
-    kind: 'chat',
     mode: 'scratch',
-    defaults: {},
-  },
-  {
-    id: 'home:chats',
-    hostId: 'home',
-    displayName: 'Chats',
-    kind: 'chat',
-    mode: 'chat',
-    defaults: {},
-  },
-  {
-    id: 'home:notes',
-    hostId: 'home',
-    displayName: 'Home server notes',
-    kind: 'chat',
-    mode: 'chat',
     defaults: {},
   },
 ];
@@ -116,13 +91,6 @@ export const demoNodes: NodeSummary[] = [
     lastSeenAt: Date.now(),
     workspaces: [],
     modes: ['directory', 'scratch'],
-  },
-  {
-    id: 'home',
-    connectedAt: Date.now(),
-    lastSeenAt: Date.now(),
-    workspaces: [],
-    modes: ['chat'],
   },
 ];
 
@@ -171,20 +139,6 @@ export const demoSessions: SessionSummary[] = [
       fromSessionId: 'chat-auth',
     },
   },
-  ...[1, 2, 3].map((day) => ({
-    id: `session-digest-${day}`,
-    workspaceId: 'ws-dotfiles',
-    name: `Nightly flake update #${day}`,
-    lastActivityAt: new Date(Date.now() - day * 86_400_000 - 3_600_000).toISOString(),
-    runStatus: 'succeeded' as const,
-    runnerStatus: 'stopped' as const,
-    origin: {
-      kind: 'schedule' as const,
-      scheduleId: 'sch-flake',
-      title: 'Nightly flake update',
-      dueAt: Date.now() - day * 86_400_000,
-    },
-  })),
   {
     id: 'session-render',
     workspaceId: 'ws-gpu',
@@ -193,20 +147,6 @@ export const demoSessions: SessionSummary[] = [
     runStatus: 'succeeded',
     runnerStatus: 'stopped',
     preview: 'Saved cover.png.',
-  },
-  {
-    id: 'chat-auth',
-    workspaceId: 'home:chats',
-    name: 'Explain Authelia forward-auth',
-    lastActivityAt: new Date(Date.now() - 7_200_000).toISOString(),
-    runnerStatus: 'stopped',
-  },
-  {
-    id: 'chat-backup',
-    workspaceId: 'home:notes',
-    name: 'Backup rotation policy',
-    lastActivityAt: new Date(Date.now() - 5 * 86_400_000).toISOString(),
-    runnerStatus: 'stopped',
   },
 ];
 

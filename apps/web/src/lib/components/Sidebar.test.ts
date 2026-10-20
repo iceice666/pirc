@@ -23,7 +23,6 @@ const handlers = {
   onselect: vi.fn(),
   onnew: vi.fn(),
   onaddworkspace: vi.fn(),
-  onaddproject: vi.fn(),
   onopenworkspace: vi.fn(),
   onclose: vi.fn(),
   onsettings: vi.fn(),
@@ -38,11 +37,6 @@ beforeEach(() => {
     session('c', 'Gamma', { settled: true }),
   ];
   app.activeSessionId = 'a';
-  app.memoryPending = 0;
-  app.memoryProposals = [];
-  app.missedRuns = [];
-  app.schedules = [];
-  app.mode = 'chat';
   app.view = 'session';
   app.workspaceViewId = undefined;
   target = document.createElement('div');
@@ -70,14 +64,6 @@ const names = () =>
   );
 
 describe('Sidebar', () => {
-  const chatWorkspaces = () => {
-    app.nodes = [{ id: 'node' } as never, { id: 'home' } as never];
-    app.workspaces = [
-      { id: 'node:ws', hostId: 'node', displayName: 'Project' } as never,
-      { id: 'home:chats', hostId: 'home', displayName: 'Chats', kind: 'chat' } as never,
-      { id: 'home:trip', hostId: 'home', displayName: 'Trip', kind: 'chat' } as never,
-    ];
-  };
   const text = (selector: string) => target.querySelector(selector)?.textContent ?? '';
   const namesIn = (label: string) =>
     Array.from(target.querySelectorAll(`[aria-label="${label}"] .session-name`)).map(
@@ -121,24 +107,15 @@ describe('Sidebar', () => {
     expect(handlers.onnew).toHaveBeenCalledWith('node:ws');
   });
 
-  it('answers sessions, missed runs and memory proposals under "Needs you"', () => {
-    const decideMissed = vi.spyOn(app, 'decideMissed').mockResolvedValue();
-    const decideProposal = vi.spyOn(app, 'decideProposal').mockResolvedValue();
+  it('answers sessions under "Needs you"', () => {
     app.sessions = [session('w', 'Waiter', { runStatus: 'waiting_input' })];
-    const schedule = { id: 's1', title: 'Backup', timezone: 'UTC' } as never;
-    app.missedRuns = [{ schedule, run: { id: 'run1', dueAt: 0 } as never }];
-    const proposal = { id: 'p1', action: 'add', content: 'Likes tea', target: null } as never;
-    app.memoryProposals = [proposal];
     render();
-    const buttons = (kind: string) =>
-      Array.from(target.querySelectorAll<HTMLButtonElement>(`[data-kind="${kind}"] .pill-button`));
-    buttons('session')[0]!.click();
+    const buttons = Array.from(
+      target.querySelectorAll<HTMLButtonElement>('[data-kind="session"] .pill-button'),
+    );
+    expect(buttons.map((b) => b.textContent)).toEqual(['Reply']);
+    buttons[0]!.click();
     expect(handlers.onselect).toHaveBeenCalledWith('w');
-    expect(buttons('missed').map((b) => b.textContent)).toEqual(['Allow & run', 'Dismiss']);
-    buttons('missed')[0]!.click();
-    expect(decideMissed).toHaveBeenCalledWith('s1', 'run1', true);
-    buttons('memory')[1]!.click();
-    expect(decideProposal).toHaveBeenCalledWith(proposal, false);
   });
 
   it('allows or denies a delegated session\'s relayed confirm from "Needs you"', () => {
@@ -175,7 +152,7 @@ describe('Sidebar', () => {
     expect(handlers.onselect).toHaveBeenCalledWith('w');
   });
 
-  it('searches every session of the mode, whatever its workspace', () => {
+  it('searches every session, whatever its workspace', () => {
     render();
     const search = target.querySelector<HTMLInputElement>('.search input')!;
     search.value = 'a';
@@ -247,106 +224,48 @@ describe('Sidebar', () => {
     expect(document.activeElement).toBe(menu);
   });
 
-  it('opens the schedules page and settings from the footer', () => {
-    const onschedules = vi.fn();
-    const reactive = reactiveProps({ open: false, ...handlers, onschedules });
-    component = mount(Sidebar, { target, props: reactive });
-    flushSync();
-    target.querySelector<HTMLButtonElement>('.schedules-entry')!.click();
-    expect(onschedules).toHaveBeenCalled();
-    target.querySelector<HTMLButtonElement>('.settings-entry:not(.schedules-entry)')!.click();
+  it('opens settings from the footer', () => {
+    render();
+    target.querySelector<HTMLButtonElement>('.settings-entry')!.click();
     expect(handlers.onsettings).toHaveBeenCalled();
   });
 
-  it('starts new sessions from a dialog when no node hosts chats', () => {
+  it('starts new sessions from a dialog outside a workspace page', () => {
     render();
     const button = target.querySelector<HTMLButtonElement>('.new-session')!;
     expect(button.textContent).toContain('New session');
     button.click();
     expect(handlers.onnew).toHaveBeenCalledWith();
-    expect(target.querySelector('[aria-label="Chats"]')).toBeNull();
-  });
-
-  it('lists projects as rows and top-level chats when a chat node is connected', () => {
-    chatWorkspaces();
-    app.sessions = [
-      session('a', 'Alpha', { unread: true }),
-      session('t', 'Top chat', { workspaceId: 'home:chats' }),
-      session('d', 'Done chat', { workspaceId: 'home:chats', settled: true }),
-      session('p', 'Planning', { workspaceId: 'home:trip' }),
-      session('u', 'Packing', { workspaceId: 'home:trip', unread: true }),
-    ];
-    render();
-    // New chat opens a top-level chat right away, like ChatGPT's.
-    const button = target.querySelector<HTMLButtonElement>('.new-session')!;
-    expect(button.textContent).toContain('New chat');
-    button.click();
-    expect(handlers.onnew).toHaveBeenCalledWith('home:chats');
-    expect(namesIn('Chats')).toEqual(['Top chat']);
-    // A project is one row; only its unread chat shows under it.
-    expect(text('[aria-label="Projects"]')).toContain('Trip');
-    expect(namesIn('Projects')).toEqual(['Packing']);
-    // Chat mode shows no work sessions.
-    expect(names()).not.toContain('Alpha');
-    target
-      .querySelector<HTMLButtonElement>('[aria-label="Projects"] .workspace-heading button')!
-      .click();
-    expect(handlers.onopenworkspace).toHaveBeenCalledWith('home:trip');
-    target.querySelector<HTMLButtonElement>('[aria-label="All chats and their settings"]')!.click();
-    expect(handlers.onopenworkspace).toHaveBeenLastCalledWith('home:chats');
-    target.querySelector<HTMLButtonElement>('[aria-label="New project"]')!.click();
-    expect(handlers.onaddproject).toHaveBeenCalledWith('home');
-    target.querySelector<HTMLButtonElement>('[aria-label="New chat in Trip"]')!.click();
-    expect(handlers.onnew).toHaveBeenLastCalledWith('home:trip');
-    // Work lists the directory workspaces, never chats.
-    Array.from(target.querySelectorAll<HTMLButtonElement>('.mode-switch button'))
-      .find((button) => button.textContent?.includes('Work'))!
-      .click();
-    flushSync();
-    expect(app.mode).toBe('work');
-    expect(target.querySelector('[aria-label="home"]')).toBeNull();
-    expect(names()).toEqual(['Alpha']);
   });
 
   describe('with the mode catalog', () => {
     beforeEach(() => {
       app.modeCatalog = demoModes;
       app.nodes = [
-        { id: 'home', modes: ['chat'] } as never,
         { id: 'node', modes: ['directory', 'scratch'] } as never,
-        // Accepts only the assistant's mode: no Work workspaces there.
-        { id: 'lab', modes: ['chat'] } as never,
+        // Accepts no mode the catalog knows: no workspaces there.
+        { id: 'lab', modes: ['unknown'] } as never,
       ];
       app.workspaces = [
-        { id: 'home:chats', hostId: 'home', displayName: 'Chats', kind: 'chat', mode: 'chat' },
-        { id: 'home:trip', hostId: 'home', displayName: 'Trip', kind: 'chat', mode: 'chat' },
         { id: 'node:ws', hostId: 'node', displayName: 'Project', mode: 'directory' },
-        // The gateway derives `kind: chat` from scratch's per-session workdir.
-        { id: 'node:gpu', hostId: 'node', displayName: 'GPU jobs', kind: 'chat', mode: 'scratch' },
+        { id: 'node:gpu', hostId: 'node', displayName: 'GPU jobs', mode: 'scratch' },
         // Its mode left the catalog.
         { id: 'node:old', hostId: 'node', displayName: 'Old', mode: 'review', available: false },
       ].map((workspace) => ({ defaults: {}, ...workspace })) as never;
       app.sessions = [
-        session('t', 'Top chat', { workspaceId: 'home:chats' }),
-        session('p', 'Planning chat', { workspaceId: 'home:trip', unread: true }),
         session('g', 'Render image', { workspaceId: 'node:gpu', unread: true }),
         session('o', 'Old review', { workspaceId: 'node:old', unread: true }),
       ];
     });
 
-    it("places workspaces by their mode's assistant access, not the legacy kind", () => {
+    it('lists every workspace under its node', () => {
       render();
-      expect(text('[aria-label="Projects"]')).toContain('Trip');
-      expect(text('[aria-label="Projects"]')).not.toContain('GPU jobs');
-      app.setMode('work');
-      flushSync();
       const node = text('[aria-label="node"]');
       expect(node).toContain('Project');
       expect(node).toContain('GPU jobs');
       expect(node).toContain('Old');
       expect(node).toContain('read-only');
-      // Nodes accepting only the assistant's mode host no Work workspaces.
-      expect(target.querySelector('[aria-label="home"]')).toBeNull();
+      // Nodes accepting no known mode host no workspaces.
       expect(target.querySelector('[aria-label="lab"]')).toBeNull();
       const gpu = target.querySelector<HTMLButtonElement>(
         '[aria-label="New session in GPU jobs"]',
@@ -358,13 +277,12 @@ describe('Sidebar', () => {
       expect(
         target.querySelector<HTMLButtonElement>('[aria-label="New session in Old"]')!.disabled,
       ).toBe(true);
-      // Scratch sessions are settled, not deleted.
+      // Sessions are settled, not deleted.
       expect(namesIn('node')).toContain('Render image');
       expect(target.querySelector('[aria-label="Delete Render image"]')).toBeNull();
     });
 
-    it('searches the sessions of the tab the mode puts them in', async () => {
-      app.mode = 'work';
+    it('searches the sessions of every workspace', () => {
       render();
       const input = target.querySelector<HTMLInputElement>('.search input')!;
       // Every name has a space.
@@ -372,9 +290,6 @@ describe('Sidebar', () => {
       input.dispatchEvent(new Event('input', { bubbles: true }));
       flushSync();
       expect(namesIn('Search results')).toEqual(['Render image', 'Old review']);
-      app.setMode('chat');
-      flushSync();
-      expect(namesIn('Search results')).toEqual(['Top chat', 'Planning chat']);
     });
   });
 });

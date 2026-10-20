@@ -21,20 +21,11 @@ const directory: Workspace = {
   displayName: 'Code',
   defaults: { modelId: 'gpt-x' },
 };
-const project: Workspace = {
-  id: 'home:trip',
-  hostId: 'home',
-  displayName: 'Trip',
-  kind: 'chat',
-  defaults: {},
-};
-
-/** Scratch: one directory per session, no repository; legacy `kind` says chat. */
+/** Scratch: one directory per session, no repository. */
 const scratch: Workspace = {
   id: 'node:gpu',
   hostId: 'node',
   displayName: 'GPU jobs',
-  kind: 'chat',
   mode: 'scratch',
   defaults: {},
 };
@@ -46,51 +37,33 @@ const onnew = vi.fn();
 
 beforeEach(() => {
   app.demo = undefined;
-  app.nodes = [{ id: 'node' } as never, { id: 'home' } as never];
-  app.workspaces = [directory, project];
+  app.nodes = [{ id: 'node' } as never];
+  app.workspaces = [directory];
   app.sessions = [
     session('a', 'Alpha', { unread: true }),
     session('b', 'Beta', { pinned: true, writeLease: true }),
     session('c', 'Gamma', { settled: true }),
-    session('o', 'Elsewhere', { workspaceId: 'home:trip' }),
+    session('o', 'Elsewhere', { workspaceId: 'node:gpu' }),
   ];
   target = document.createElement('div');
   document.body.append(target);
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) =>
-      String(url).endsWith('/instructions')
-        ? new Response(JSON.stringify({ instructions: { text: 'Be brief', maxChars: 8000 } }))
-        : String(url).endsWith('/links')
-          ? new Response(JSON.stringify({ links: [] }))
-          : String(url).endsWith('/files')
-            ? new Response(JSON.stringify({ files: [], maxFiles: 50, maxBytes: 1024 }))
-            : String(url).endsWith('/project-config')
-              ? new Response(
-                  JSON.stringify({
-                    project: {
-                      hooks: { sessionStart: [{ command: 'make setup', timeoutMs: 10000 }] },
-                      env: {},
-                      allowedPaths: [],
-                      hash: 'a'.repeat(64),
-                      trustedHash: null,
-                      trusted: false,
-                      empty: false,
-                    },
-                  }),
-                )
-              : new Response(
-                  JSON.stringify({
-                    capabilities: {
-                      version: 1,
-                      delegation: true,
-                      memory_search: true,
-                      remote_recall: true,
-                      schedules: true,
-                      web_search: true,
-                    },
-                  }),
-                ),
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            project: {
+              hooks: { sessionStart: [{ command: 'make setup', timeoutMs: 10000 }] },
+              env: {},
+              allowedPaths: [],
+              hash: 'a'.repeat(64),
+              trustedHash: null,
+              trusted: false,
+              empty: false,
+            },
+          }),
+        ),
     ),
   );
 });
@@ -151,22 +124,6 @@ describe('WorkspacePage', () => {
     expect(names()).toEqual(['Gamma']);
   });
 
-  it('folds the runs of one schedule into a row that expands', () => {
-    const origin = { kind: 'schedule' as const, scheduleId: 's1', title: 'Digest', dueAt: 0 };
-    app.sessions = [
-      session('x', 'Digest #2', { origin, unread: true }),
-      session('a', 'Alpha'),
-      session('y', 'Digest #1', { origin }),
-    ];
-    render(directory);
-    expect(names()).toEqual(['Digest', 'Alpha']);
-    const fold = target.querySelector<HTMLButtonElement>('.fold .row-main')!;
-    expect(fold.textContent).toContain('2 runs');
-    fold.click();
-    flushSync();
-    expect(names()).toEqual(['Digest', 'Digest #2', 'Digest #1', 'Alpha']);
-  });
-
   it('pins, settles and renames from the list', async () => {
     const update = vi.spyOn(app, 'updateSession').mockResolvedValue();
     render(directory);
@@ -184,14 +141,13 @@ describe('WorkspacePage', () => {
   });
 
   it("shows a directory workspace's facts and project config under Settings", async () => {
-    render(directory);
+    const props = render(directory);
     tab('Settings').click();
     flushSync();
     const facts = target.querySelector('.facts')!.textContent!;
     expect(facts).toContain('node · online');
     expect(facts).toContain('Held by “Beta”');
     expect(facts).toContain('gpt-x');
-    expect(target.querySelector('textarea')).toBeNull();
     await flush();
     expect(fetch).toHaveBeenCalledWith(
       '/api/workspaces/node%3Aws/project-config',
@@ -199,76 +155,15 @@ describe('WorkspacePage', () => {
     );
     expect(target.textContent).toContain('make setup');
     expect(target.textContent).toContain('Not trusted');
-  });
-
-  it("edits a chat project's instructions and capabilities under Settings", async () => {
-    const props = render(project);
-    expect(tab('Chats')).toBeDefined();
-    expect(names()).toEqual(['Elsewhere']);
-    tab('Settings').click();
-    flushSync();
-    await flush();
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/workspaces/home%3Atrip/instructions',
-      expect.anything(),
-    );
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/workspaces/home%3Atrip/capabilities',
-      expect.anything(),
-    );
-    expect(fetch).toHaveBeenCalledWith('/api/workspaces/home%3Atrip/links', expect.anything());
-    expect(fetch).toHaveBeenCalledWith('/api/workspaces/home%3Atrip/files', expect.anything());
-    expect(target.textContent).toContain('Project files');
-    expect(target.querySelector('textarea')!.value).toBe('Be brief');
-    expect(target.querySelectorAll('[role="switch"]')).toHaveLength(5);
-    // The directory workspaces it can be linked to.
-    const choices = [...target.querySelectorAll('.link-choice')].map((item) => item.textContent);
-    expect(choices).toHaveLength(1);
-    expect(choices[0]).toContain(directory.displayName);
     // Another page starts on its list again.
-    props.workspace = directory;
+    props.workspace = scratch;
     flushSync();
     expect(tab('Sessions').getAttribute('aria-selected')).toBe('true');
   });
 
-  it('offers to finish a deletion that did not finish, and nothing else', () => {
-    render({ ...project, deleting: true });
-    const buttons = [...target.querySelectorAll('button')];
-    expect(buttons.find((item) => item.textContent?.includes('Finish deleting'))?.disabled).toBe(
-      false,
-    );
-    expect(buttons.find((item) => item.textContent?.includes('New chat'))?.disabled).toBe(true);
-    tab('Settings').click();
-    flushSync();
-    expect(target.textContent).toContain('Settings are gone');
-    expect(target.querySelector('textarea')).toBeNull();
-  });
-
-  it('offers to delete a chat project, not the top-level chats or a directory', async () => {
-    const deleteButton = () =>
-      [...target.querySelectorAll('button')].find((item) =>
-        item.textContent?.includes('Delete project…'),
-      );
-    const props = render(project);
-    tab('Settings').click();
-    flushSync();
-    await flush();
-    expect(deleteButton()?.disabled).toBe(false);
-    props.workspace = { ...project, id: 'home:chats', displayName: 'Chats' };
-    flushSync();
-    tab('Settings').click();
-    flushSync();
-    expect(deleteButton()).toBeUndefined();
-    props.workspace = directory;
-    flushSync();
-    tab('Settings').click();
-    flushSync();
-    expect(deleteButton()).toBeUndefined();
-  });
-
-  it("shows a scratch workspace's capabilities only, whatever its legacy kind", async () => {
+  it("shows a scratch workspace's capabilities only", async () => {
     app.modeCatalog = demoModes;
-    app.workspaces = [directory, project, scratch];
+    app.workspaces = [directory, scratch];
     app.sessions = [session('g', 'Render', { workspaceId: scratch.id })];
     render(scratch);
     expect(target.querySelector('.page-title small')!.textContent).toBe('Scratch · node');
@@ -287,21 +182,7 @@ describe('WorkspacePage', () => {
     expect(facts).toContain('node · online');
     // No shared directory: no write lease.
     expect(facts).not.toContain('Write lease');
-    expect(target.querySelector('textarea')).toBeNull();
-    expect(target.textContent).not.toContain('Delete project');
     expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it('links a project to every workspace that takes delegated work', async () => {
-    app.modeCatalog = demoModes;
-    app.workspaces = [{ ...directory, mode: 'directory' }, { ...project, mode: 'chat' }, scratch];
-    render({ ...project, mode: 'chat' });
-    tab('Settings').click();
-    flushSync();
-    await flush();
-    const choices = [...target.querySelectorAll('.link-choice')].map((item) => item.textContent);
-    expect(choices).toHaveLength(2);
-    expect(choices.join()).toContain('GPU jobs');
   });
 
   it('keeps a workspace whose mode is gone read-only', async () => {

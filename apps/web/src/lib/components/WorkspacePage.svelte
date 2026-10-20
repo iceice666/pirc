@@ -1,14 +1,10 @@
 <script lang="ts">
   import {
-    Trash2,
     Archive,
     ArchiveRestore,
-    ChevronDown,
-    Clock,
     Folder,
     Forward,
     Lock,
-    MessageSquare,
     PanelLeftOpen,
     Pencil,
     Pin,
@@ -16,21 +12,14 @@
     Search,
     SquarePen,
   } from '@lucide/svelte';
-  import DeleteChatDialog from './dialogs/DeleteChatDialog.svelte';
-  import DeleteProjectDialog from './dialogs/DeleteProjectDialog.svelte';
   import { tick } from 'svelte';
   import { rovingFocus } from '../a11y';
   import { app } from '../app.svelte';
-  import { isTopLevelChats } from '../chats';
-  import { capitalized, isAssistant, isReadOnly } from '../modes';
+  import { capitalized, isReadOnly } from '../modes';
   import { shortAgo } from '../time';
   import type { SessionSummary, Workspace } from '../types';
   import { watch } from '../watch.svelte';
-  import { foldRecent, isRunning, needsInput, pinnedFirst } from '../work';
-  import ProjectFiles from './ProjectFiles.svelte';
-  import ProjectInstructions from './ProjectInstructions.svelte';
-  import ProjectLinks from './ProjectLinks.svelte';
-  import ProjectSettings from './ProjectSettings.svelte';
+  import { isRunning, needsInput, pinnedFirst } from '../work';
   import ProjectTrust from './ProjectTrust.svelte';
 
   interface Props {
@@ -55,21 +44,14 @@
 
   /** What this workspace can do; the page shows only that. */
   const mode = $derived(app.modeOf(workspace));
-  /** The assistant's chats or one of its projects. */
-  const chat = $derived(isAssistant(mode));
-  const topLevel = $derived(isTopLevelChats(workspace, app.modeCatalog));
   const online = $derived(app.workspaceOnline(workspace));
   /** Its mode left the catalog: the history stays readable, nothing new starts. */
   const readOnly = $derived(isReadOnly(workspace));
-  /** An unfinished deletion: nothing but finishing it works. */
-  const deleting = $derived(!!workspace.deleting);
-  /** What a project can be linked to: workspaces taking delegated work. */
-  const directories = $derived(app.workspaces.filter((item) => app.modeOf(item).delegate_target));
   const noun = $derived(mode.ui.noun);
   const subtitle = $derived(
     [
-      chat ? (topLevel ? 'Chats' : 'Project') : mode.repository ? 'Workspace' : mode.label,
-      chat ? '' : workspace.hostId,
+      mode.repository ? 'Workspace' : mode.label,
+      workspace.hostId,
       online ? '' : 'offline',
       readOnly ? 'read-only' : '',
     ]
@@ -97,23 +79,14 @@
     query ? all.filter((session) => session.name.toLowerCase().includes(query.toLowerCase())) : all,
   );
   const settledCount = $derived(matching.filter((session) => session.settled).length);
-  /** Pinned first, then by activity, with the runs of one schedule folded into one row. */
+  /** Pinned first, then by activity. */
   const rows = $derived(
-    foldRecent(pinnedFirst(matching.filter((session) => showDone || query || !session.settled))),
+    pinnedFirst(matching.filter((session) => showDone || query || !session.settled)),
   );
-  let openFolds = $state(new Set<string>());
-  function toggleIn(set: Set<string>, id: string) {
-    const next = new Set(set);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    return next;
-  }
   const running = $derived(all.filter(isRunning).length);
   const unread = $derived(all.filter((session) => session.unread).length);
   const leaseHolder = $derived(all.find((session) => session.writeLease));
 
-  let deletingChat: SessionSummary | undefined = $state();
-  let deletingProject: Workspace | undefined = $state();
   let renamingId: string | undefined = $state();
   let renameValue = $state('');
   let renameInput: HTMLInputElement | undefined = $state();
@@ -151,9 +124,7 @@
         onclick={onexpand}><PanelLeftOpen size={19} /></button
       >
     {/if}
-    <span class="page-icon">
-      {#if chat}<MessageSquare size={18} />{:else}<Folder size={18} />{/if}
-    </span>
+    <span class="page-icon"><Folder size={18} /></span>
     <div class="page-title">
       <h1 id="workspace-title">{workspace.displayName}</h1>
       <small>{subtitle}</small>
@@ -161,7 +132,7 @@
     <button
       class="button dark new-in"
       type="button"
-      disabled={!online || deleting || readOnly}
+      disabled={!online || readOnly}
       onclick={() => onnew(workspace.id)}><SquarePen size={15} /> New {noun}</button
     >
   </header>
@@ -192,20 +163,6 @@
 
   <div class="page-scroll">
     <div class="page-body">
-      {#if deleting}
-        <div class="deleting" role="status">
-          <p>
-            This project's deletion did not finish: its chats accept no more work. Finish deleting
-            it once the chat node is connected.
-          </p>
-          <button
-            class="button dark"
-            type="button"
-            disabled={app.usingDemo || !online}
-            onclick={() => (deletingProject = workspace)}>Finish deleting…</button
-          >
-        </div>
-      {/if}
       {#if readOnly}
         <p class="note" role="status">
           This workspace's mode is no longer available on the gateway: its {noun}s are read-only.
@@ -230,32 +187,8 @@
             {/if}
           </div>
           <ul class="session-rows">
-            {#each rows as item (item.kind === 'session' ? item.session.id : `fold:${item.scheduleId}`)}
-              {#if item.kind === 'session'}{@render row(item.session, false)}{:else}
-                {@const expanded = openFolds.has(item.scheduleId)}
-                <li class="session-row fold">
-                  <button
-                    class="row-main"
-                    type="button"
-                    aria-expanded={expanded}
-                    onclick={() => (openFolds = toggleIn(openFolds, item.scheduleId))}
-                  >
-                    <span
-                      class="status-dot"
-                      class:unread={item.sessions.some((session) => session.unread)}
-                    ></span>
-                    <span class="origin-icon" title="Scheduled"><Clock size={13} /></span>
-                    <span class="row-name">{item.title}</span>
-                    <small class="fold-count">{item.sessions.length} runs</small>
-                    <span class="chevron" class:collapsed={!expanded}
-                      ><ChevronDown size={13} /></span
-                    >
-                  </button>
-                </li>
-                {#if expanded}
-                  {#each item.sessions as session (session.id)}{@render row(session, true)}{/each}
-                {/if}
-              {/if}
+            {#each rows as session (session.id)}
+              {@render row(session)}
             {:else}
               <li class="empty-note">
                 {#if query}Nothing matches.{:else if settledCount}Every {noun} here is done.{:else}No
@@ -266,101 +199,50 @@
         </div>
       {:else}
         <div id="workspace-panel-settings" role="tabpanel" aria-labelledby="workspace-tab-settings">
-          {#if deleting}
-            <p class="note">Settings are gone with the project's deletion.</p>
-          {:else}
-            {#if mode.project_instructions || mode.project_files}
-              {#if app.usingDemo}
-                <p class="note">Project instructions and files are unavailable in demo mode.</p>
-              {:else if !online}
-                <p class="note">
-                  The project's node is offline: its instructions and files can be changed once it
-                  is back.
-                </p>
-              {:else}
-                {#if mode.project_instructions}<ProjectInstructions
-                    workspaceId={workspace.id}
-                  />{/if}
-                {#if mode.project_files}<ProjectFiles workspaceId={workspace.id} />{/if}
+          <section class="settings-section">
+            <h3>Workspace</h3>
+            <dl class="facts">
+              <div>
+                <dt>Device</dt>
+                <dd>{workspace.hostId} · {online ? 'online' : 'offline'}</dd>
+              </div>
+              <div>
+                <dt>Sessions</dt>
+                <dd>
+                  {all.length}{#if running}
+                    · {running} running{/if}{#if unread}
+                    · {unread} unread{/if}
+                </dd>
+              </div>
+              {#if mode.workdir === 'workspace'}
+                <div>
+                  <dt>Write lease</dt>
+                  <dd>{leaseHolder ? `Held by “${leaseHolder.name}”` : 'Free'}</dd>
+                </div>
               {/if}
-            {/if}
-            {#if mode.projects && !topLevel}
-              <ProjectLinks
-                workspaceId={workspace.id}
-                workspaces={directories}
-                online={(item) => app.workspaceOnline(item)}
-                disabled={app.usingDemo}
-              />
-            {/if}
-            {#if chat}
-              <ProjectSettings workspaceId={workspace.id} disabled={app.usingDemo} />
+              {#if workspace.defaults.modelId}
+                <div>
+                  <dt>Default model</dt>
+                  <dd>{workspace.defaults.modelId}</dd>
+                </div>
+              {/if}
+              {#if workspace.defaults.thinkingLevel}
+                <div>
+                  <dt>Default thinking</dt>
+                  <dd>{workspace.defaults.thinkingLevel}</dd>
+                </div>
+              {/if}
+            </dl>
+          </section>
+          {#if mode.project_config}
+            {#if app.usingDemo}
+              <p class="note">The project config is unavailable in demo mode.</p>
+            {:else if !online}
+              <p class="note">
+                The workspace's node is offline: its project config can be reviewed once it is back.
+              </p>
             {:else}
-              <section class="settings-section">
-                <h3>Workspace</h3>
-                <dl class="facts">
-                  <div>
-                    <dt>Device</dt>
-                    <dd>{workspace.hostId} · {online ? 'online' : 'offline'}</dd>
-                  </div>
-                  <div>
-                    <dt>Sessions</dt>
-                    <dd>
-                      {all.length}{#if running}
-                        · {running} running{/if}{#if unread}
-                        · {unread} unread{/if}
-                    </dd>
-                  </div>
-                  {#if mode.workdir === 'workspace'}
-                    <div>
-                      <dt>Write lease</dt>
-                      <dd>{leaseHolder ? `Held by “${leaseHolder.name}”` : 'Free'}</dd>
-                    </div>
-                  {/if}
-                  {#if workspace.defaults.modelId}
-                    <div>
-                      <dt>Default model</dt>
-                      <dd>{workspace.defaults.modelId}</dd>
-                    </div>
-                  {/if}
-                  {#if workspace.defaults.thinkingLevel}
-                    <div>
-                      <dt>Default thinking</dt>
-                      <dd>{workspace.defaults.thinkingLevel}</dd>
-                    </div>
-                  {/if}
-                </dl>
-              </section>
-            {/if}
-            {#if mode.project_config}
-              {#if app.usingDemo}
-                <p class="note">The project config is unavailable in demo mode.</p>
-              {:else if !online}
-                <p class="note">
-                  The workspace's node is offline: its project config can be reviewed once it is
-                  back.
-                </p>
-              {:else}
-                <ProjectTrust workspaceId={workspace.id} />
-              {/if}
-            {/if}
-            {#if mode.projects && !topLevel}
-              <section class="settings-section">
-                <h3>Delete project</h3>
-                <p class="note">
-                  Deletes the project, its chats and what they wrote to memory. You see what goes
-                  and what stays before anything is deleted.
-                </p>
-                <button
-                  class="button ghost danger"
-                  type="button"
-                  disabled={app.usingDemo || !online}
-                  onclick={() => (deletingProject = workspace)}
-                  ><Trash2 size={15} /> Delete project…</button
-                >
-                {#if !online && !app.usingDemo}
-                  <p class="note">Connect the chat node to delete this project.</p>
-                {/if}
-              </section>
+              <ProjectTrust workspaceId={workspace.id} />
             {/if}
           {/if}
         </div>
@@ -369,11 +251,9 @@
   </div>
 </section>
 
-{#snippet row(session: SessionSummary, nested: boolean)}
+{#snippet row(session: SessionSummary)}
   <li
     class="session-row"
-    style:--action-count={mode.delete_sessions ? 4 : 3}
-    class:nested
     class:settled={session.settled}
     class:unread={session.unread}
     class:renaming={renamingId === session.id}
@@ -417,10 +297,7 @@
           title={status(session) || undefined}
           aria-hidden="true"
         ></span>
-        {#if session.origin?.kind === 'schedule'}<span
-            class="origin-icon"
-            title="Scheduled: {session.origin.title}"><Clock size={13} /></span
-          >{:else if session.origin?.kind === 'delegation'}<span
+        {#if session.origin?.kind === 'delegation'}<span
             class="origin-icon"
             title="Delegated: {session.origin.title}"><Forward size={13} /></span
           >{/if}
@@ -452,14 +329,6 @@
               size={14}
             />{/if}</button
         >
-        {#if mode.delete_sessions}
-          <button
-            type="button"
-            aria-label="Delete {session.name}"
-            title="Delete {noun}"
-            onclick={() => (deletingChat = session)}><Trash2 size={14} /></button
-          >
-        {/if}
         <button
           type="button"
           aria-label="Rename {session.name}"
@@ -470,9 +339,6 @@
     {/if}
   </li>
 {/snippet}
-
-<DeleteChatDialog bind:session={deletingChat} />
-<DeleteProjectDialog bind:workspace={deletingProject} />
 
 <style>
   .workspace-page {
@@ -660,24 +526,6 @@
     color: var(--muted);
     font-size: 11px;
   }
-  .session-row.nested {
-    margin-left: 20px;
-  }
-  .session-row.fold:hover .row-main,
-  .session-row.fold:focus-within .row-main {
-    padding-right: 12px;
-  }
-  .session-row.fold .row-main small {
-    display: inline;
-  }
-  .chevron {
-    display: grid;
-    color: var(--muted);
-    transition: transform 0.18s var(--ease);
-  }
-  .chevron.collapsed {
-    transform: rotate(-90deg);
-  }
   .status-dot {
     flex: none;
     width: 7px;
@@ -756,20 +604,6 @@
   .row-rename input:focus {
     border-color: var(--accent);
   }
-  .button.danger {
-    color: var(--danger);
-  }
-  .deleting {
-    margin: 12px;
-    padding: 12px 14px;
-    border-radius: var(--radius-md);
-    background: var(--bg-subtle);
-  }
-  .deleting p {
-    margin: 0 0 10px;
-    color: var(--danger);
-    font-size: 14px;
-  }
   .empty-note,
   .note {
     margin: 12px;
@@ -799,18 +633,6 @@
   .page-body :global(.settings-section label) {
     color: var(--text-2);
     font-size: 13px;
-  }
-  .page-body :global(.settings-section textarea) {
-    padding: 10px 12px;
-    border: 0;
-    border-radius: var(--radius-md);
-    outline: 0;
-    background: var(--bg-subtle);
-    font-size: 14px;
-    line-height: 1.5;
-  }
-  .page-body :global(.settings-section textarea:focus) {
-    box-shadow: inset 0 0 0 1px var(--accent);
   }
   .facts {
     display: grid;

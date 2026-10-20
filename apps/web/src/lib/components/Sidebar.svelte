@@ -1,12 +1,8 @@
 <script lang="ts">
   import {
-    Trash2,
     Archive,
     ArchiveRestore,
-    Brain,
-    CalendarClock,
     ChevronLeft,
-    Clock,
     Command,
     Ellipsis,
     Folder,
@@ -19,20 +15,16 @@
     Plus,
     Search,
     Settings,
-    Settings2,
     SquarePen,
     X,
   } from '@lucide/svelte';
-  import DeleteChatDialog from './dialogs/DeleteChatDialog.svelte';
   import { tick } from 'svelte';
   import { app, type InboxItem } from '../app.svelte';
-  import { chatNodeIds, topLevelChats } from '../chats';
-  import { isReadOnly, tabOf, workNodes } from '../modes';
-  import { formatWall, until } from '../schedules';
+  import { isReadOnly, workNodes } from '../modes';
   import { shortAgo } from '../time';
   import type { DelegationStatus, SessionSummary, Workspace } from '../types';
   import { watch } from '../watch.svelte';
-  import { isRunning, pinnedFirst, sidebarSessions } from '../work';
+  import { isRunning, sidebarSessions } from '../work';
 
   interface Props {
     open?: boolean;
@@ -41,17 +33,11 @@
     oncollapse: () => void;
     onselect: (id: string) => void;
     onnew: (workspaceId?: string) => void;
-    /** Open a project's or workspace's page: all its sessions and its settings. */
+    /** Open a workspace's page: all its sessions and its settings. */
     onopenworkspace: (workspaceId: string) => void;
     onaddworkspace: (nodeId: string) => void;
-    /** New chat project on the chat node. */
-    onaddproject: (nodeId: string) => void;
     onclose: () => void;
     onsettings: () => void;
-    /** Show the schedules page. */
-    onschedules?: () => void;
-    /** Review memory changes in Settings. */
-    onmemory?: () => void;
   }
 
   let {
@@ -62,11 +48,8 @@
     onnew,
     onopenworkspace,
     onaddworkspace,
-    onaddproject,
     onclose,
     onsettings,
-    onschedules,
-    onmemory,
   }: Props = $props();
 
   const DELEGATION_STATUS: Record<DelegationStatus, string> = {
@@ -77,51 +60,28 @@
   };
   const nodes = $derived(app.nodes);
   const catalog = $derived(app.modeCatalog);
-  /** Nodes that can host Work workspaces (those accepting a non-assistant mode). */
-  const deviceNodes = $derived(workNodes(nodes, catalog, chatNodeIds(app.workspaces, catalog)));
+  /** Nodes that can host workspaces (those accepting a mode the catalog knows). */
+  const deviceNodes = $derived(workNodes(nodes, catalog));
   const sessions = $derived(app.sessions);
   /** The open session, unless a page covers it. */
   const activeSessionId = $derived(app.view === 'session' ? app.activeSessionId : undefined);
-  /** The project or workspace whose page is showing. */
+  /** The workspace whose page is showing. */
   const pageId = $derived(app.view === 'workspace' ? app.workspaceViewId : undefined);
   const onrename = (id: string, name: string) => app.updateSession(id, { name });
   const onpin = (id: string, pinned: boolean) => app.updateSession(id, { pinned });
   const onsettle = (id: string, settled: boolean) => app.updateSession(id, { settled });
 
-  /** Chats: the assistant's chats and projects, like the ChatGPT and Claude web apps. */
-  const chats = $derived(topLevelChats(app.workspaces, catalog));
-  const projects = $derived(
-    app.workspaces.filter(
-      (workspace) => tabOf(workspace, catalog) === 'chat' && workspace !== chats,
-    ),
-  );
   const workspaceById = $derived(new Map(app.workspaces.map((item) => [item.id, item])));
-  /** Without a chat node there are no chats: only Work. */
-  const mode = $derived(chats ? app.mode : 'work');
 
   let query = $state('');
-  let deletingChat: SessionSummary | undefined = $state();
   let renamingId: string | undefined = $state();
   let renameValue = $state('');
   let renameInput: HTMLInputElement | undefined = $state();
 
-  // ── Chat mode ──
-  /** Top-level chats, pinned first, then by activity; settled ones are on the Chats page. */
-  const topChats = $derived(
-    chats
-      ? pinnedFirst(
-          sessions.filter((session) => session.workspaceId === chats.id && !session.settled),
-        )
-      : [],
-  );
-
-  // ── Work mode ──
-  /** Every workspace not the assistant's: repositories, scratch, unavailable ones. */
-  const directoryWorkspaces = $derived(app.workspaces.filter((w) => tabOf(w, catalog) === 'work'));
   /** Devices with their workspaces (connected devices without any too), online first. */
   const hosts = $derived.by(() => {
     const ids = [
-      ...new Set([...directoryWorkspaces.map((w) => w.hostId), ...deviceNodes.map((n) => n.id)]),
+      ...new Set([...app.workspaces.map((w) => w.hostId), ...deviceNodes.map((n) => n.id)]),
     ];
     const online = (id: string) => nodes.some((node) => node.id === id);
     return ids
@@ -129,30 +89,24 @@
       .map((id) => ({
         id,
         online: online(id),
-        workspaces: directoryWorkspaces.filter((w) => w.hostId === id),
+        workspaces: app.workspaces.filter((w) => w.hostId === id),
       }));
   });
   const inbox = $derived(app.inbox);
 
-  /** Searching lists every matching session of the mode, whatever its workspace. */
+  /** Searching lists every matching session, whatever its workspace. */
   const results = $derived.by(() => {
     if (!query) return [];
     const needle = query.toLowerCase();
-    return sessions.filter((session) => {
-      const workspace = workspaceById.get(session.workspaceId);
-      return (
-        !!workspace &&
-        tabOf(workspace, catalog) === mode &&
-        session.name.toLowerCase().includes(needle)
-      );
-    });
+    return sessions.filter(
+      (session) =>
+        workspaceById.has(session.workspaceId) && session.name.toLowerCase().includes(needle),
+    );
   });
   /** New session: straight into the workspace whose page is open, else a dialog to pick one. */
   const pageWorkspace = $derived(pageId ? workspaceById.get(pageId) : undefined);
   const newSessionTarget = $derived(
-    pageWorkspace && tabOf(pageWorkspace, catalog) === 'work' && !isReadOnly(pageWorkspace)
-      ? pageWorkspace
-      : undefined,
+    pageWorkspace && !isReadOnly(pageWorkspace) ? pageWorkspace : undefined,
   );
 
   const unreadIn = (workspaceId: string) =>
@@ -199,12 +153,6 @@
       }
     },
   );
-
-  function nextRunText() {
-    const next = app.nextSchedule;
-    if (!next?.nextRunAt) return '';
-    return `${next.title} · ${until(next.nextRunAt)}`;
-  }
 </script>
 
 {#if open}<button
@@ -218,7 +166,6 @@
   class:open
   class:collapsed
   class="sidebar"
-  data-mode={mode}
   aria-label="Sessions"
   inert={collapsed && !open}
 >
@@ -241,48 +188,18 @@
       onclick={onclose}><X size={19} /></button
     >
   </div>
-  {#if chats}
-    <div class="mode-switch" role="group" aria-label="Sidebar mode">
-      <button
-        type="button"
-        class:chosen={mode === 'chat'}
-        aria-pressed={mode === 'chat'}
-        onclick={() => app.setMode('chat')}>Chat</button
-      >
-      <button
-        type="button"
-        class:chosen={mode === 'work'}
-        aria-pressed={mode === 'work'}
-        onclick={() => app.setMode('work')}
-        >Work{#if app.inbox.length && mode !== 'work'}<span
-            class="attention-dot"
-            title="{app.inbox.length} waiting for you"
-          ></span>{/if}</button
-      >
-    </div>
-  {/if}
-  {#if mode === 'chat' && chats}
-    <button
-      class="new-session"
-      type="button"
-      onclick={() => onnew(chats.id)}
-      disabled={!app.acceptsSessions(chats)}
-      ><SquarePen size={16} /> New {app.modeOf(chats).ui.noun}</button
-    >
-  {:else}
-    <button
-      class="new-session"
-      type="button"
-      onclick={() => (newSessionTarget ? onnew(newSessionTarget.id) : onnew())}
-      ><SquarePen size={16} /> New {newSessionTarget
-        ? app.modeOf(newSessionTarget).ui.noun
-        : 'session'}</button
-    >
-  {/if}
+  <button
+    class="new-session"
+    type="button"
+    onclick={() => (newSessionTarget ? onnew(newSessionTarget.id) : onnew())}
+    ><SquarePen size={16} /> New {newSessionTarget
+      ? app.modeOf(newSessionTarget).ui.noun
+      : 'session'}</button
+  >
   <label class="search">
     <Search size={16} />
     <span class="sr-only">Search sessions</span>
-    <input bind:value={query} placeholder={mode === 'chat' ? 'Search chats' : 'Search sessions'} />
+    <input bind:value={query} placeholder="Search sessions" />
   </label>
 
   <div class="sidebar-scroll">
@@ -292,45 +209,6 @@
         <div class="session-list">
           {#each results as session (session.id)}{@render sessionRow(session, true)}{:else}
             <p class="empty-note">Nothing matches.</p>
-          {/each}
-        </div>
-      </section>
-    {:else if mode === 'chat' && chats}
-      <section class="list-section" aria-label="Projects">
-        <div class="section-heading">
-          <strong>Projects</strong>
-          <button
-            class="heading-action"
-            type="button"
-            onclick={() => onaddproject(chats.hostId)}
-            disabled={!app.workspaceOnline(chats)}
-            aria-label="New project"><Plus size={15} /></button
-          >
-        </div>
-        <div class="workspace-list">
-          {#each projects as project (project.id)}
-            {@render workspaceRow(project, false)}
-          {:else}
-            <p class="empty-note">Group related chats into a project.</p>
-          {/each}
-        </div>
-      </section>
-      <section class="list-section" aria-label="Chats">
-        <div class="section-heading">
-          <strong>Chats</strong>
-          {#if !app.workspaceOnline(chats)}<small>offline</small>{/if}
-          <button
-            class="heading-action"
-            class:current={pageId === chats.id}
-            type="button"
-            title="All chats and their settings"
-            aria-label="All chats and their settings"
-            onclick={() => onopenworkspace(chats.id)}><Settings2 size={14} /></button
-          >
-        </div>
-        <div class="session-list">
-          {#each topChats as session (session.id)}
-            {@render sessionRow(session, false)}
           {/each}
         </div>
       </section>
@@ -361,7 +239,7 @@
           </div>
           <div class="workspace-list">
             {#each host.workspaces as workspace (workspace.id)}
-              {@render workspaceRow(workspace, true)}
+              {@render workspaceRow(workspace)}
             {:else}
               <p class="empty-note">No workspaces yet.</p>
             {/each}
@@ -374,19 +252,6 @@
   </div>
 
   <div class="sidebar-footer">
-    {#if mode === 'work'}
-      <button
-        class="settings-entry schedules-entry"
-        class:current={app.view === 'schedules'}
-        type="button"
-        onclick={onschedules}
-      >
-        <CalendarClock size={17} />
-        <span class="entry-text"
-          ><span>Schedules</span>{#if nextRunText()}<small>Next: {nextRunText()}</small>{/if}</span
-        >
-      </button>
-    {/if}
     <button class="settings-entry" type="button" onclick={onsettings}>
       <Settings size={17} />
       <span>Settings</span>
@@ -403,11 +268,11 @@
   onclick={() => (open = true)}><ChevronLeft size={22} /></button
 >
 
-<!-- A project or workspace: one row that opens its page, with its unread sessions under it. -->
-{#snippet workspaceRow(workspace: Workspace, work: boolean)}
-  {@const list = sidebarSessions(sessions, workspace.id, activeSessionId, work)}
+<!-- A workspace: one row that opens its page, with its unread sessions under it. -->
+{#snippet workspaceRow(workspace: Workspace)}
+  {@const list = sidebarSessions(sessions, workspace.id, activeSessionId, true)}
   {@const unread = unreadIn(workspace.id)}
-  {@const running = work ? runningIn(workspace.id) : 0}
+  {@const running = runningIn(workspace.id)}
   {@const online = app.workspaceOnline(workspace)}
   {@const noun = app.modeOf(workspace).ui.noun}
   <section class="workspace-group">
@@ -419,10 +284,9 @@
       >
         <Folder size={15} />
         <strong>{workspace.displayName}</strong>
-        {#if !online && !work}<small>· offline</small>{/if}
         {#if isReadOnly(workspace)}<small>· read-only</small>{/if}
         <span class="workspace-meta">
-          {#if work && sessions.some((s) => s.writeLease && s.workspaceId === workspace.id)}<span
+          {#if sessions.some((s) => s.writeLease && s.workspaceId === workspace.id)}<span
               class="lease-lock"
               role="img"
               aria-label="A session holds the write lease"
@@ -451,106 +315,49 @@
 {/snippet}
 
 {#snippet inboxRow(item: InboxItem)}
+  {@const session = item.session}
+  {@const approval = session.origin?.kind === 'delegation' ? session.origin.approval : undefined}
+  {@const answering = !!approval && app.answeringInteractionIds.includes(approval.interactionId)}
   <div class="inbox-item" data-kind={item.kind}>
-    {#if item.kind === 'session'}
-      {@const session = item.session}
-      {@const approval =
-        session.origin?.kind === 'delegation' ? session.origin.approval : undefined}
-      {@const answering =
-        !!approval && app.answeringInteractionIds.includes(approval.interactionId)}
-      <button class="inbox-main" type="button" onclick={() => onselect(session.id)}>
-        <span class="status-dot waiting"></span>
-        <span class="inbox-text">
-          <strong>{session.name}</strong>
-          {#if approval}<small class="inbox-approval" title={approval.message ?? approval.title}
-              >{approval.title}</small
-            >{/if}
-          <small
-            >{session.origin
-              ? `${session.origin.kind === 'schedule' ? 'Scheduled' : 'Delegated'} · ${session.origin.title}`
-              : (workspaceById.get(session.workspaceId)?.displayName ?? '')} · waiting for you</small
-          >
-        </span>
-      </button>
-      <div class="inbox-actions">
-        {#if approval}
-          <!-- Answered in the chat that delegated it, without its control lease. -->
-          <button
-            type="button"
-            class="pill-button primary"
-            disabled={answering}
-            onclick={() => app.answerApproval(approval, true)}>Allow</button
-          >
-          <button
-            type="button"
-            class="pill-button"
-            disabled={answering}
-            onclick={() => app.answerApproval(approval, false)}>Deny</button
-          >
-        {/if}
-        <button type="button" class="pill-button" onclick={() => onselect(session.id)}>Reply</button
+    <button class="inbox-main" type="button" onclick={() => onselect(session.id)}>
+      <span class="status-dot waiting"></span>
+      <span class="inbox-text">
+        <strong>{session.name}</strong>
+        {#if approval}<small class="inbox-approval" title={approval.message ?? approval.title}
+            >{approval.title}</small
+          >{/if}
+        <small
+          >{session.origin
+            ? `Delegated · ${session.origin.title}`
+            : (workspaceById.get(session.workspaceId)?.displayName ?? '')} · waiting for you</small
         >
-      </div>
-    {:else if item.kind === 'missed'}
-      <div class="inbox-main">
-        <span class="inbox-icon"><Clock size={14} /></span>
-        <span class="inbox-text">
-          <strong>{item.schedule.title}</strong>
-          <small>Missed · {formatWall(item.run.dueAt, item.schedule.timezone)}</small>
-        </span>
-      </div>
-      <div class="inbox-actions">
+      </span>
+    </button>
+    <div class="inbox-actions">
+      {#if approval}
+        <!-- Answered in the chat that delegated it, without its control lease. -->
         <button
           type="button"
           class="pill-button primary"
-          onclick={() => app.decideMissed(item.schedule.id, item.run.id, true)}
-          >Allow &amp; run</button
+          disabled={answering}
+          onclick={() => app.answerApproval(approval, true)}>Allow</button
         >
         <button
           type="button"
           class="pill-button"
-          onclick={() => app.decideMissed(item.schedule.id, item.run.id, false)}>Dismiss</button
+          disabled={answering}
+          onclick={() => app.answerApproval(approval, false)}>Deny</button
         >
-      </div>
-    {:else}
-      {@const proposal = item.proposal}
-      <button class="inbox-main" type="button" onclick={onmemory}>
-        <span class="inbox-icon"><Brain size={14} /></span>
-        <span class="inbox-text">
-          <strong
-            >{proposal.action === 'add'
-              ? 'Remember'
-              : proposal.action === 'remove'
-                ? 'Forget'
-                : 'Update memory'}</strong
-          >
-          <small title={proposal.content ?? proposal.target?.content ?? ''}
-            >{proposal.content ?? proposal.target?.content ?? ''}</small
-          >
-        </span>
-      </button>
-      <div class="inbox-actions">
-        <button
-          type="button"
-          class="pill-button primary"
-          onclick={() => app.decideProposal(proposal, true)}>Approve</button
-        >
-        <button
-          type="button"
-          class="pill-button"
-          onclick={() => app.decideProposal(proposal, false)}>Reject</button
-        >
-      </div>
-    {/if}
+      {/if}
+      <button type="button" class="pill-button" onclick={() => onselect(session.id)}>Reply</button>
+    </div>
   </div>
 {/snippet}
 
 {#snippet sessionRow(session: SessionSummary, showWorkspace: boolean)}
   {@const workspace = workspaceById.get(session.workspaceId)}
-  {@const deletable = !!app.modeOf(workspace)?.delete_sessions}
   <div
     class="session-item"
-    style:--action-count={deletable ? 4 : 3}
     class:active={session.id === activeSessionId}
     class:settled={session.settled}
     class:unread={session.unread}
@@ -600,10 +407,7 @@
               ? 'Working'
               : (session.runStatus ?? session.runnerStatus)}
         ></span>
-        {#if session.origin?.kind === 'schedule'}<span
-            class="origin-icon"
-            title="Scheduled: {session.origin.title}"><Clock size={13} /></span
-          >{:else if session.origin?.kind === 'delegation'}<span
+        {#if session.origin?.kind === 'delegation'}<span
             class="origin-icon"
             title="Delegated: {session.origin.title}{session.origin.status
               ? ` (${DELEGATION_STATUS[session.origin.status]})`
@@ -656,14 +460,6 @@
               size={14}
             />{/if}</button
         >
-        {#if deletable}
-          <button
-            type="button"
-            aria-label="Delete {session.name}"
-            title="Delete {app.modeOf(workspace)?.ui.noun ?? 'chat'}"
-            onclick={() => (deletingChat = session)}><Trash2 size={14} /></button
-          >
-        {/if}
         <button
           type="button"
           aria-label="Rename {session.name}"
@@ -674,8 +470,6 @@
     {/if}
   </div>
 {/snippet}
-
-<DeleteChatDialog bind:session={deletingChat} />
 
 <style>
   /* ───────────── Left sidebar ───────────── */
@@ -735,44 +529,6 @@
   .mobile-close,
   .mobile-menu {
     display: none;
-  }
-  /* Chat / Work */
-  .mode-switch {
-    flex: none;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2px;
-    margin: 0 12px 10px;
-    padding: 3px;
-    border-radius: var(--radius-md);
-    background: var(--bg-hover);
-  }
-  .mode-switch button {
-    position: relative;
-    height: 30px;
-    border: 0;
-    border-radius: calc(var(--radius-md) - 2px);
-    color: var(--muted);
-    background: transparent;
-    font-size: 13px;
-    font-weight: 500;
-  }
-  .mode-switch button:hover:not(.chosen) {
-    color: var(--ink);
-  }
-  .mode-switch button.chosen {
-    color: var(--ink);
-    background: var(--bg-layer);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
-  }
-  .attention-dot {
-    position: absolute;
-    top: 8px;
-    margin-left: 4px;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--warning);
   }
   .new-session {
     flex: none;
@@ -884,8 +640,7 @@
     letter-spacing: 0;
     text-transform: none;
   }
-  .heading-action:hover:not(:disabled),
-  .heading-action.current {
+  .heading-action:hover:not(:disabled) {
     color: var(--ink);
     background: var(--bg-hover);
   }
@@ -1247,11 +1002,6 @@
   .inbox-main .status-dot {
     margin-left: 0;
   }
-  .inbox-icon {
-    flex: none;
-    display: grid;
-    color: var(--warning);
-  }
   .inbox-text {
     min-width: 0;
     display: grid;
@@ -1339,21 +1089,9 @@
     font-size: 14px;
     text-align: left;
   }
-  .settings-entry:hover,
-  .settings-entry.current {
+  .settings-entry:hover {
     color: var(--ink);
     background: var(--bg-hover);
-  }
-  .entry-text {
-    min-width: 0;
-    display: grid;
-  }
-  .entry-text small {
-    overflow: hidden;
-    color: var(--muted);
-    font-size: 11.5px;
-    white-space: nowrap;
-    text-overflow: ellipsis;
   }
   .sidebar-scrim {
     display: none;
@@ -1375,7 +1113,6 @@
         visibility 0.22s;
     }
     .sidebar-collapse,
-    .mode-switch,
     .mobile-close,
     .sidebar-footer {
       display: none;

@@ -1,7 +1,6 @@
 /**
- * Session lists: the sidebar's rows under each project and workspace, and the
- * project and workspace pages, where repeated runs of one schedule fold into
- * one row. Pure functions, shared by the components and tests.
+ * Session lists: the sidebar's rows under each workspace, and the workspace
+ * pages. Pure functions, shared by the components and tests.
  */
 import type { ConversationMessage, SessionSummary, ToolCall } from './types';
 
@@ -13,57 +12,13 @@ export const isRunning = (session: SessionSummary) =>
 
 export const needsInput = (session: SessionSummary) => session.runStatus === 'waiting_input';
 
-export type RecentRow =
-  | { kind: 'session'; session: SessionSummary }
-  | {
-      kind: 'schedule';
-      scheduleId: string;
-      title: string;
-      /** Newest first. */
-      sessions: SessionSummary[];
-    };
-
-/**
- * Sessions in list order (pinned first, then by activity), with every session
- * a schedule started folded into one row where its newest run appears.
- */
-export function foldRecent(sessions: SessionSummary[]): RecentRow[] {
-  const rows: RecentRow[] = [];
-  const folds = new Map<string, Extract<RecentRow, { kind: 'schedule' }>>();
-  for (const session of sessions) {
-    const origin = session.origin;
-    if (origin?.kind !== 'schedule' || session.pinned) {
-      rows.push({ kind: 'session', session });
-      continue;
-    }
-    const fold = folds.get(origin.scheduleId);
-    if (fold) fold.sessions.push(session);
-    else {
-      const row = {
-        kind: 'schedule' as const,
-        scheduleId: origin.scheduleId,
-        title: origin.title,
-        sessions: [session],
-      };
-      folds.set(origin.scheduleId, row);
-      rows.push(row);
-    }
-  }
-  // A schedule with a single run reads better as the session itself.
-  return rows.map((row) =>
-    row.kind === 'schedule' && row.sessions.length === 1
-      ? { kind: 'session', session: row.sessions[0]! }
-      : row,
-  );
-}
-
 /** Pinned first, keeping the gateway's order (by activity) otherwise. */
 export function pinnedFirst(sessions: SessionSummary[]): SessionSummary[] {
   return [...sessions.filter((item) => item.pinned), ...sessions.filter((item) => !item.pinned)];
 }
 
 /**
- * The sessions the sidebar lists under a project or workspace row: the unread
+ * The sessions the sidebar lists under a workspace row: the unread
  * ones, and the open one so you can see where you are. The page lists the rest.
  * `skipWaiting`: Work's "Needs you" already lists sessions waiting for an answer.
  */

@@ -17,7 +17,6 @@
   import { app } from '../app.svelte';
   import type { ThinkingLevel } from '../types';
   import { modelKey } from '../types';
-  import ApprovalModeControl from './ApprovalModeControl.svelte';
   import ComposerSelect from './ComposerSelect.svelte';
   import GoalDock from './GoalDock.svelte';
   import DockSection from './DockSection.svelte';
@@ -266,7 +265,6 @@
           onselect={(level) => app.changeThinking(level as ThinkingLevel)}
         />
       </div>
-      <ApprovalModeControl />
       <span class="spacer"></span>
       {#if active && !showStopPrimary}
         <!-- While typing mid-run, stopping stays one click away beside send. -->

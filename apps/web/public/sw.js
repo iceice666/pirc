@@ -110,10 +110,6 @@ function targetUrl(target, interaction) {
     }
     return url.pathname + url.search;
   }
-  if (target?.schedules)
-    return target.scheduleId
-      ? `/?open=schedules&schedule=${encodeURIComponent(target.scheduleId)}`
-      : '/?open=schedules';
   if (target?.memory) return '/?open=memory';
   return '/';
 }

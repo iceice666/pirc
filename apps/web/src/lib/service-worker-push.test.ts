@@ -140,7 +140,7 @@ function serviceWorkerHarness(
 
 const tuple = {
   sessionId: 'session:one',
-  interactionId: 'memory:p1:0',
+  interactionId: 'ask:q1:0',
   interactionEpoch: '0',
 };
 
@@ -150,8 +150,8 @@ it('keeps a late created push suppressed after its exact revocation arrived firs
   await worker.push({
     kind: 'interaction_created',
     ...tuple,
-    title: 'Approve memory?',
-    body: 'New proposal',
+    title: 'Continue?',
+    body: 'The agent asks',
   });
 
   expect(worker.shown).toEqual([]);
@@ -159,7 +159,7 @@ it('keeps a late created push suppressed after its exact revocation arrived firs
 
 it('closes only the notification for the answered tuple and never shows a revoke', async () => {
   const worker = serviceWorkerHarness();
-  const other = { ...tuple, interactionId: 'memory:p2:0' };
+  const other = { ...tuple, interactionId: 'ask:q2:0' };
   await worker.push({ kind: 'interaction_created', ...tuple, title: 'Question one' });
   await worker.push({ kind: 'interaction_created', ...other, title: 'Question two' });
   await worker.push({ kind: 'interaction_answered', ...tuple, title: '', body: '' });
@@ -188,7 +188,7 @@ it('serializes a revoke that arrives while the created notification is being sho
   const creating = worker.startPush({
     kind: 'interaction_created',
     ...tuple,
-    title: 'Approve memory?',
+    title: 'Continue?',
   });
   await worker.notificationShowStarted;
   const answering = worker.startPush({
@@ -208,7 +208,7 @@ it('serializes a revoke that arrives while the created notification is being sho
 
 it('forwards the exact interaction identity when its notification is clicked', async () => {
   const worker = serviceWorkerHarness();
-  await worker.push({ kind: 'interaction_created', ...tuple, title: 'Approve memory?' });
+  await worker.push({ kind: 'interaction_created', ...tuple, title: 'Continue?' });
   const data = worker.shown[0]!.options.data;
 
   await worker.clickNotification(data);
@@ -220,12 +220,12 @@ it('forwards the exact interaction identity when its notification is clicked', a
 
 it('keeps the exact interaction tuple in the URL when a click opens a new window', async () => {
   const worker = serviceWorkerHarness({ noClients: true });
-  await worker.push({ kind: 'interaction_created', ...tuple, title: 'Approve memory?' });
+  await worker.push({ kind: 'interaction_created', ...tuple, title: 'Continue?' });
   const data = worker.shown[0]!.options.data;
 
   await worker.clickNotification(data);
 
   expect(worker.openedWindows).toEqual([
-    '/?session=session%3Aone&interactionId=memory%3Ap1%3A0&interactionEpoch=0',
+    '/?session=session%3Aone&interactionId=ask%3Aq1%3A0&interactionEpoch=0',
   ]);
 });

@@ -216,22 +216,22 @@ describe('session event reducer', () => {
     expect(state.cursor).toBe(wire.cursor);
   });
 
-  it('applies memory interaction events immediately and requests snapshot reconciliation', () => {
+  it('applies interaction events immediately and requests snapshot reconciliation', () => {
     const requested = normalizeEvent({
       sessionId: 's1',
       epoch: 'epoch-a',
       sequence: 2,
       type: 'interaction_created',
       data: {
-        id: 'memory:p1:0',
+        id: 'interaction:q0',
         runnerEpoch: 0,
         kind: 'confirm',
         status: 'pending',
         request: {
-          title: 'Add USER memory?',
-          message: 'Proposed memory:\nLikes tea.',
-          confirmLabel: 'Approve',
-          cancelLabel: 'Reject',
+          title: 'Continue?',
+          message: 'The agent asks.',
+          confirmLabel: 'Yes',
+          cancelLabel: 'No',
         },
       },
     });
@@ -240,11 +240,11 @@ describe('session event reducer', () => {
       epoch: 'epoch-a',
       sequence: 3,
       type: 'interaction_answered',
-      data: { interactionId: 'memory:p1:0', interactionEpoch: 0 },
+      data: { interactionId: 'interaction:q0', interactionEpoch: 0 },
     });
 
     let state = reduceEvent(fromSnapshot(snapshot), requested);
-    expect(state.interactions.map((item) => item.id)).toEqual(['memory:p1:0']);
+    expect(state.interactions.map((item) => item.id)).toEqual(['interaction:q0']);
     expect(state.needsSnapshot).toBe(true);
 
     state = reduceEvent(state, answered);
@@ -254,11 +254,11 @@ describe('session event reducer', () => {
 
   it('keeps epoch-less legacy removals for snapshot reconciliation', () => {
     const interaction = {
-      id: 'memory:p1:0',
+      id: 'interaction:q1',
       runnerEpoch: '5',
       kind: 'confirm' as const,
       status: 'pending' as const,
-      title: 'Proposal',
+      title: 'Continue?',
     };
     const state = fromSnapshot({ ...snapshot, interactions: [interaction] });
     const legacyAnswered = normalizeEvent({

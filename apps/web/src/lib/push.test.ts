@@ -128,8 +128,6 @@ describe('where a notification leads', () => {
   it('reads targets from links', () => {
     const at = (query: string) => targetFromUrl(new URL(`https://pirc.example/${query}`));
     expect(at('?session=s%201')).toEqual({ sessionId: 's 1' });
-    expect(at('?open=schedules&schedule=s1')).toEqual({ schedules: true, scheduleId: 's1' });
-    expect(at('?open=schedules')).toEqual({ schedules: true });
     expect(at('?open=memory')).toEqual({ memory: true });
     expect(at('')).toBeUndefined();
   });
@@ -148,16 +146,6 @@ describe('where a notification leads', () => {
     expect(
       interactionFromUrl(new URL('https://pirc.example/?session=s1&interactionId=q1')),
     ).toBeUndefined();
-  });
-
-  it('shows the schedules page, focused on the one it was about', async () => {
-    app.demo = undefined;
-    await app.openTarget({ schedules: true, scheduleId: 's9' });
-    expect(app.view).toBe('schedules');
-    expect(app.requestedTarget).toBeUndefined();
-    expect(app.scheduleFocus).toBe('s9');
-    app.view = 'session';
-    app.scheduleFocus = undefined;
   });
 
   it('opens the memory in Settings', async () => {

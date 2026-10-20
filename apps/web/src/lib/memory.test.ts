@@ -86,22 +86,6 @@ describe('MemorySettings', () => {
       ],
       notes: [entry('n1', 'm5pro holds the pirc repo.', { revision: 2 })],
       removed: [entry('n2', 'Old note.', { status: 'removed' })],
-      proposals: [
-        {
-          id: 'p1',
-          action: 'replace',
-          targetId: 'u1',
-          targetRevision: 1,
-          content: 'Prefers very short answers.',
-          quote: 'even shorter please',
-          sources: { sessionId: 's1' },
-          sessionId: 's1',
-          status: 'pending',
-          createdAt: Date.now(),
-          decidedAt: null,
-          target: { id: 'u1', content: 'Prefers short answers.', revision: 1 },
-        },
-      ],
       sessions: { s1: 'Trip planning' },
     };
     vi.stubGlobal(
@@ -134,15 +118,10 @@ describe('MemorySettings', () => {
               ],
             }),
           );
-        if (method === 'POST') {
-          if (url.includes('/approve') || url.includes('/reject'))
-            view = { ...view, proposals: [] };
-          if (url.includes('/forget')) view = { ...view, notes: [] };
-        }
+        if (method === 'POST' && url.includes('/forget')) view = { ...view, notes: [] };
         return new Response(JSON.stringify(view), { status: 200 });
       }),
     );
-    app.memoryPending = 0;
     target = document.createElement('div');
     document.body.append(target);
   });
@@ -153,34 +132,17 @@ describe('MemorySettings', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows what waits for approval and what is remembered, with its provenance', async () => {
+  it('shows what is remembered, with its provenance', async () => {
     const onopenchat = vi.fn();
     component = mount(MemorySettings, { target, props: { onopenchat } });
     await flush();
     expect(calls[0]).toMatchObject({ url: '/api/memory', method: 'GET' });
-    const waiting = target.querySelector('[aria-label="Waiting for you"]')!;
-    expect(waiting.textContent).toContain('Change: Prefers very short answers.');
-    expect(waiting.textContent).toContain('Now: Prefers short answers.');
-    expect(waiting.textContent).toContain('You said “even shorter please”');
     expect(row('m5pro').textContent).toContain('From the assistant');
-    expect(row('Prefers short answers.', 'About you').textContent).toContain(
-      'you said “keep it short”',
-    );
+    const about = row('Prefers short answers.', 'About you');
+    expect(about.textContent).toContain('you said “keep it short”');
     expect(target.textContent).toContain('USER 20/2,000 characters');
-    expect(app.memoryPending).toBe(1);
-    button('Trip planning', waiting).click();
+    button('Trip planning', about).click();
     expect(onopenchat).toHaveBeenCalledWith('s1');
-
-    // Approving sends the version of the entry that was on screen.
-    button('Approve').click();
-    await flush();
-    expect(lastChange()).toMatchObject({
-      url: '/api/memory/proposals/p1/approve',
-      method: 'POST',
-      body: { targetRevision: 1 },
-    });
-    expect(target.querySelector('[aria-label="Waiting for you"]')).toBeNull();
-    expect(app.memoryPending).toBe(0);
   });
 
   it('forgets only after a second click, and restores earlier versions', async () => {

@@ -6,7 +6,6 @@ import {
   piPartialMessage,
   toolResultFields,
 } from './pi-messages';
-import type { NewWorkspace } from './chats';
 import { ApiError, request } from './http';
 import { uuid } from './id';
 import { getClientId } from './storage';
@@ -30,6 +29,7 @@ import type {
   InteractionAnswer,
   ModeInfo,
   ModelOption,
+  NewWorkspace,
   NodeSummary,
   PendingInteraction,
   QueueItem,
@@ -82,13 +82,6 @@ function sessionSummary(raw: any): SessionSummary {
 }
 
 function sessionOrigin(raw: any): SessionOrigin | undefined {
-  if (raw?.kind === 'schedule' && typeof raw.scheduleId === 'string')
-    return {
-      kind: 'schedule',
-      scheduleId: raw.scheduleId,
-      title: String(raw.title ?? ''),
-      dueAt: Number(raw.dueAt) || 0,
-    };
   if (raw?.kind === 'delegation' && typeof raw.fromSessionId === 'string')
     return {
       kind: 'delegation',
@@ -165,32 +158,6 @@ function interaction(raw: any): PendingInteraction {
       kind: 'confirm',
       ...(typeof request.confirmLabel === 'string' ? { confirmLabel: request.confirmLabel } : {}),
       ...(typeof request.cancelLabel === 'string' ? { cancelLabel: request.cancelLabel } : {}),
-      ...(request.modelChoice && typeof request.modelChoice === 'object'
-        ? {
-            modelChoice: {
-              model:
-                typeof request.modelChoice.model?.provider === 'string' &&
-                typeof request.modelChoice.model?.id === 'string'
-                  ? {
-                      provider: request.modelChoice.model.provider,
-                      id: request.modelChoice.model.id,
-                    }
-                  : null,
-              thinking:
-                typeof request.modelChoice.thinking === 'string'
-                  ? request.modelChoice.thinking
-                  : null,
-            },
-          }
-        : {}),
-      ...(request.userRequestChoice && typeof request.userRequestChoice.label === 'string'
-        ? {
-            userRequestChoice: {
-              label: request.userRequestChoice.label,
-              checked: request.userRequestChoice.checked === true,
-            },
-          }
-        : {}),
       ...(typeof request.relayed?.sessionId === 'string'
         ? {
             relayed: {
@@ -519,14 +486,7 @@ export const api = {
       answer.action === 'cancel'
         ? { cancelled: true }
         : typeof answer.value === 'boolean'
-          ? {
-              confirmed: answer.value,
-              ...(answer.value && answer.model !== undefined ? { model: answer.model } : {}),
-              ...(answer.value && answer.thinking !== undefined
-                ? { thinking: answer.thinking }
-                : {}),
-              ...(answer.value && answer.asUserRequest ? { asUserRequest: true } : {}),
-            }
+          ? { confirmed: answer.value }
           : Array.isArray(answer.value)
             ? { value: answer.value.join(', '), values: answer.value }
             : { value: answer.value };
@@ -783,10 +743,8 @@ export function connectEvents(options: {
    * session's sequence, so they never move the cursor.
    */
   onDirectory?: () => void;
-  /** Your assistant memory changed (`memory=1`), for example a new proposal to approve. */
+  /** Your assistant memory changed (`memory=1`). */
   onMemory?: () => void;
-  /** Your schedules or their runs changed (`schedules=1`). */
-  onSchedules?: () => void;
   /** A run started or ended, or a write lease changed hands, in any of your sessions (`sessions=1`). */
   onSessions?: () => void;
 }): EventConnection {
@@ -803,7 +761,6 @@ export function connectEvents(options: {
     if (cursor) query.set('cursor', cursor);
     if (options.onDirectory) query.set('directory', '1');
     if (options.onMemory) query.set('memory', '1');
-    if (options.onSchedules) query.set('schedules', '1');
     if (options.onSessions) query.set('sessions', '1');
     // Handlers act only for the current socket: a replaced socket's late
     // error/close must not close or reschedule its successor.
@@ -824,10 +781,6 @@ export function connectEvents(options: {
         }
         if (raw?.type === 'memory_changed') {
           options.onMemory?.();
-          return;
-        }
-        if (raw?.type === 'schedules_changed') {
-          options.onSchedules?.();
           return;
         }
         if (raw?.type === 'sessions_changed') {

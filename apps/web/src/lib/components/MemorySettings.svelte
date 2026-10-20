@@ -1,8 +1,7 @@
 <script lang="ts">
   /**
-   * The assistant's memory (docs/architecture/assistant-memory.md): approve or reject what it
-   * proposes to remember about you, review its notes and their history,
-   * restore earlier versions, and forget entries for good.
+   * The assistant's memory (docs/architecture/assistant-memory.md): review what it
+   * remembers and its history, restore earlier versions, and forget entries for good.
    */
   import { onMount } from 'svelte';
   import { app } from '../app.svelte';
@@ -12,7 +11,6 @@
     describeVersion,
     memoryApi,
     type MemoryEntry,
-    type MemoryProposal,
     type MemoryVersion,
     type MemoryView,
   } from '../memory';
@@ -21,7 +19,7 @@
 
   interface Props {
     disabled?: boolean;
-    /** Open the chat an entry or proposal came from. */
+    /** Open the chat an entry came from. */
     onopenchat?: (sessionId: string) => void;
   }
 
@@ -38,18 +36,12 @@
   let versions: MemoryVersion[] = $state([]);
   let alive = true;
 
-  const ACTION: Record<MemoryProposal['action'], string> = {
-    add: 'Remember',
-    replace: 'Change',
-    remove: 'Forget',
-  };
   const number = (value: number) => value.toLocaleString();
   const message = (cause: unknown) =>
     cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
 
   function show(next: MemoryView) {
     view = next;
-    app.memoryPending = next.proposals.length;
     confirming = undefined;
     const listed = [...next.user, ...next.notes, ...next.removed];
     if (historyFor && !listed.some((entry) => entry.id === historyFor)) historyFor = undefined;
@@ -111,7 +103,7 @@
       alive = false;
     };
   });
-  // Changes from chats (a new proposal, a note) arrive while this is open.
+  // Changes from chats (a new note) arrive while this is open.
   watch(
     () => app.memoryRevision,
     () => {
@@ -124,9 +116,8 @@
   <h3 id="memory-title">Memory</h3>
   <p>
     What your assistant remembers across chats. <strong>USER</strong> is what you told it about
-    yourself and changes only when you approve. <strong>MEMORY</strong> holds the assistant's own notes.
-    New chats start with both; open chats keep what they started with. USER also reaches every new coding
-    session on every node, so approve only what should apply everywhere.
+    yourself. <strong>MEMORY</strong> holds the assistant's own notes. New chats start with both; open
+    chats keep what they started with. USER also reaches every new coding session on every node.
   </p>
 
   {#if disabled}
@@ -142,55 +133,11 @@
         )}/{number(view.usage.note.max)} characters
       </p>
 
-      {#if view.proposals.length}
-        <h4>Waiting for you</h4>
-        <ul class="memory-list" aria-label="Waiting for you">
-          {#each view.proposals as proposal (proposal.id)}
-            <li class="proposal">
-              <div class="memory-row">
-                <div class="memory-text">
-                  <span
-                    ><strong>{ACTION[proposal.action]}:</strong>
-                    {proposal.content ?? proposal.target?.content ?? ''}</span
-                  >
-                  {#if proposal.action === 'replace' && proposal.target}
-                    <small>Now: {proposal.target.content}</small>
-                  {/if}
-                  <small
-                    >You said “{proposal.quote}” · {@render chat(proposal.sessionId)} · {ago(
-                      proposal.createdAt,
-                    )}</small
-                  >
-                </div>
-                <div class="memory-actions">
-                  <button
-                    class="button dark small"
-                    type="button"
-                    disabled={!!busy}
-                    onclick={() =>
-                      act(proposal.id, () =>
-                        memoryApi.approve(proposal.id, proposal.target?.revision),
-                      )}>Approve</button
-                  >
-                  <button
-                    class="button ghost small"
-                    type="button"
-                    disabled={!!busy}
-                    onclick={() => act(proposal.id, () => memoryApi.reject(proposal.id))}
-                    >Reject</button
-                  >
-                </div>
-              </div>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-
       <h4>About you · USER</h4>
       {#if view.user.length}
         {@render entries(view.user, 'About you')}
       {:else}
-        <p>Nothing yet. When you tell the assistant about yourself, it asks you here first.</p>
+        <p>Nothing yet.</p>
       {/if}
 
       <h4>The assistant's notes · MEMORY</h4>
@@ -209,9 +156,8 @@
 
       <p class="memory-fine-print">
         Forget erases an entry with all its versions and keeps the same text from being saved again;
-        rewordings are not caught. The chats it came from stay on the chat node, chats and coding
-        sessions already started keep the USER they started with, and repositories keep their own
-        workspace memory.
+        rewordings are not caught. Chats and coding sessions already started keep the USER they
+        started with, and repositories keep their own workspace memory.
       </p>
     {/if}
   {/if}
@@ -331,10 +277,6 @@
     padding: 8px 10px;
     border-radius: var(--radius-sm);
     background: var(--bg-subtle);
-  }
-  .memory-list > li.proposal {
-    border: 1px solid var(--line);
-    background: transparent;
   }
   .memory-row {
     display: flex;

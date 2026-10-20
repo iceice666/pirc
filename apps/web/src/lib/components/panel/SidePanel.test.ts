@@ -19,10 +19,8 @@ afterEach(async () => {
 
 function render(workspaceId: string) {
   app.workspaces = [
-    { id: 'home:chats', hostId: 'home', displayName: 'Chats', kind: 'chat' } as never,
     { id: 'node:ws', hostId: 'node', displayName: 'Project' } as never,
-    // `kind` is the legacy derivation from the per-session workdir.
-    { id: 'node:gpu', hostId: 'node', displayName: 'GPU', kind: 'chat', mode: 'scratch' } as never,
+    { id: 'node:gpu', hostId: 'node', displayName: 'GPU', mode: 'scratch' } as never,
     { id: 'node:checkout', hostId: 'node', displayName: 'Checkout', mode: 'plain' } as never,
   ];
   app.sessionState = { session: { id: 's', workspaceId } } as never;
@@ -36,13 +34,6 @@ function render(workspaceId: string) {
     active: tabs.find((tab) => tab.classList.contains('active'))?.getAttribute('title'),
   };
 }
-
-it('shows chats their files, memory, tasks and browser but no Git or terminal', () => {
-  const chat = render('home:chats');
-  expect(chat.labels).toEqual(['Files', 'Memory', 'Context', 'Tasks', 'Browser']);
-  // A hidden tab that was selected falls back to Files.
-  expect(chat.active).toBe('Files');
-});
 
 it('keeps every tab for directory workspaces', () => {
   const directory = render('node:ws');
@@ -59,10 +50,13 @@ it('keeps every tab for directory workspaces', () => {
 });
 
 it('shows Git only with a repository and the terminal only in a workspace directory', () => {
-  const plain: ModeInfo = { ...demoModes[1]!, id: 'plain', repository: false };
+  const plain: ModeInfo = { ...demoModes[0]!, id: 'plain', repository: false };
   app.modeCatalog = [...demoModes, plain];
   // Scratch: one directory per session, no repository.
-  expect(render('node:gpu').labels).toEqual(['Files', 'Memory', 'Context', 'Tasks', 'Browser']);
+  const scratch = render('node:gpu');
+  expect(scratch.labels).toEqual(['Files', 'Memory', 'Context', 'Tasks', 'Browser']);
+  // A hidden tab that was selected falls back to Files.
+  expect(scratch.active).toBe('Files');
   unmount(component!);
   target!.remove();
   // A workspace directory that is not a repository keeps its terminal.

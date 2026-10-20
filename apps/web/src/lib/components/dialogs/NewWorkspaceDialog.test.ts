@@ -18,9 +18,6 @@ beforeEach(() => {
     this.open = false;
     this.dispatchEvent(new Event('close'));
   };
-  app.workspaces = [
-    { id: 'home:chats', hostId: 'home', displayName: 'Chats', kind: 'chat', mode: 'chat' },
-  ] as Workspace[];
   target = document.createElement('div');
   document.body.append(target);
 });
@@ -30,7 +27,6 @@ afterEach(async () => {
   target.remove();
   app.modeCatalog = [];
   app.nodes = [];
-  app.workspaces = [];
   oncreated.mockReset();
   vi.restoreAllMocks();
 });
@@ -57,17 +53,17 @@ const options = (label: string) =>
   [...(field(label)?.querySelectorAll('option') ?? [])].map((item) => item.value);
 
 describe('NewWorkspaceDialog', () => {
-  it("offers the node's Work modes and asks for a path only for a workspace directory", async () => {
+  it("offers the node's modes and asks for a path only for a workspace directory", async () => {
     app.modeCatalog = demoModes;
     app.nodes = [
-      { id: 'home', modes: ['chat'] } as never,
-      { id: 'gpu', modes: ['chat', 'directory', 'scratch'] } as never,
+      { id: 'home', modes: ['unknown'] } as never,
+      { id: 'gpu', modes: ['unknown', 'directory', 'scratch'] } as never,
     ];
     const create = vi
       .spyOn(app, 'createWorkspace')
       .mockResolvedValue({ id: 'gpu:jobs' } as Workspace);
     show('gpu');
-    // The chat-only node hosts no Work workspaces; the assistant's mode is not offered.
+    // A node with no mode the catalog knows hosts no workspaces; unknown modes are not offered.
     expect(options('Device')).toEqual(['gpu']);
     expect(options('Mode')).toEqual(['directory', 'scratch']);
     // A repository mode first: it asks for an existing directory.
@@ -92,7 +88,7 @@ describe('NewWorkspaceDialog', () => {
     expect(oncreated).toHaveBeenCalledWith('gpu:jobs');
   });
 
-  it('hides the mode choice with one Work mode and sends it with the path', async () => {
+  it('hides the mode choice with one mode and sends it with the path', async () => {
     app.modeCatalog = demoModes;
     app.nodes = [{ id: 'work', modes: ['directory'] } as never];
     const create = vi
@@ -119,8 +115,7 @@ describe('NewWorkspaceDialog', () => {
       .spyOn(app, 'createWorkspace')
       .mockResolvedValue({ id: 'work:pirc' } as Workspace);
     show('work');
-    // The chat node (hosting the top-level chats) is left out.
-    expect(options('Device')).toEqual(['work']);
+    expect(options('Device')).toEqual(['home', 'work']);
     expect(field('Mode')).toBeUndefined();
     type('Workspace name', 'pirc');
     type('Existing directory on that device', '~/code/pirc');

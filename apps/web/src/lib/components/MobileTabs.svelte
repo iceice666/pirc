@@ -1,30 +1,20 @@
 <script lang="ts">
-  import { CalendarClock, MessageSquare, Settings, SquareTerminal } from '@lucide/svelte';
+  import { Settings, SquareTerminal } from '@lucide/svelte';
   import { app } from '../app.svelte';
 
-  type Tab = 'chat' | 'work' | 'schedules' | 'settings';
+  type Tab = 'work' | 'settings';
 
   interface Props {
     current: Tab;
-    /** Chat is offered only when a node hosts chats. */
-    chats: boolean;
     onpick: (tab: Tab) => void;
   }
 
-  let { current, chats, onpick }: Props = $props();
+  let { current, onpick }: Props = $props();
   const waiting = $derived(app.inbox.length);
 </script>
 
-<!-- The phone's bottom navigation (desktop has the sidebar's switch and footer instead). -->
+<!-- The phone's bottom navigation (desktop has the sidebar's footer instead). -->
 <nav class="mobile-tabs" aria-label="Sections">
-  {#if chats}
-    <button
-      type="button"
-      aria-current={current === 'chat' ? 'page' : undefined}
-      class:chosen={current === 'chat'}
-      onclick={() => onpick('chat')}><MessageSquare size={20} /><span>Chat</span></button
-    >
-  {/if}
   <button
     type="button"
     aria-current={current === 'work' ? 'page' : undefined}
@@ -36,12 +26,6 @@
           aria-label="{waiting} waiting for you">{waiting}</span
         >{/if}</span
     ><span>Work</span></button
-  >
-  <button
-    type="button"
-    aria-current={current === 'schedules' ? 'page' : undefined}
-    class:chosen={current === 'schedules'}
-    onclick={() => onpick('schedules')}><CalendarClock size={20} /><span>Schedules</span></button
   >
   <button
     type="button"

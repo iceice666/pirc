@@ -44,35 +44,34 @@ const workspace: Workspace = {
   id: 'w1',
   hostId: 'host',
   displayName: 'Workspace',
-  kind: 'directory',
   defaults: {},
 };
 
-const memoryProposal = normalizeEvent({
+const questionCreated = normalizeEvent({
   sessionId: 's1',
   epoch: 'demo-epoch',
   sequence: 2,
   type: 'interaction_created',
   data: {
-    id: 'memory:p1:0',
+    id: 'interaction:q0',
     runnerEpoch: 0,
     kind: 'confirm',
     status: 'pending',
     request: {
-      title: 'Add USER memory?',
-      message: 'Proposed memory:\nLikes tea.',
-      confirmLabel: 'Approve',
-      cancelLabel: 'Reject',
+      title: 'Continue?',
+      message: 'The agent asks.',
+      confirmLabel: 'Yes',
+      cancelLabel: 'No',
     },
   },
 });
-if (memoryProposal.event.type !== 'interaction_updated')
-  throw new Error('Expected a memory proposal interaction.');
-const proposalInteraction = memoryProposal.event.interaction;
+if (questionCreated.event.type !== 'interaction_updated')
+  throw new Error('Expected an interaction.');
+const questionInteraction = questionCreated.event.interaction;
 
 it('keeps a newer interaction when a legacy removal has no row epoch', () => {
   const session = { ...demoSnapshot.session, id: 's-legacy-event' };
-  const newer = { ...proposalInteraction, id: 'interaction:reused', runnerEpoch: '5' };
+  const newer = { ...questionInteraction, id: 'interaction:reused', runnerEpoch: '5' };
   const state = fromSnapshot(snapshotFor(session, [newer]));
   const legacyRemoval = normalizeEvent({
     sessionId: session.id,
@@ -304,28 +303,28 @@ describe('app asynchronous refreshes', () => {
   it.each([
     {
       name: 'an approval while an older snapshot is loading',
-      initial: [proposalInteraction],
+      initial: [questionInteraction],
       incoming: normalizeEvent({
         sessionId: 's1',
         epoch: 'demo-epoch',
         sequence: 3,
         type: 'interaction_answered',
         data: {
-          interactionId: 'memory:p1:0',
-          interactionEpoch: proposalInteraction.runnerEpoch,
+          interactionId: 'interaction:q0',
+          interactionEpoch: questionInteraction.runnerEpoch,
         },
       }),
-      stale: [proposalInteraction],
+      stale: [questionInteraction],
       fresh: [],
       expected: [],
     },
     {
-      name: 'a new proposal while an older snapshot is loading',
+      name: 'a new question while an older snapshot is loading',
       initial: [],
-      incoming: memoryProposal,
+      incoming: questionCreated,
       stale: [],
-      fresh: [proposalInteraction],
-      expected: ['memory:p1:0'],
+      fresh: [questionInteraction],
+      expected: ['interaction:q0'],
     },
   ])('$name', async ({ initial, incoming, stale, fresh, expected }) => {
     app.demo = undefined;
@@ -346,7 +345,7 @@ describe('app asynchronous refreshes', () => {
     app.sessionState = reduceEvent(app.sessionState!, incoming);
     if (app.sessionState.needsSnapshot) void app.refreshSnapshot();
     expect(app.sessionState.interactions.map((item) => item.id)).toEqual(
-      incoming.event.type === 'interaction_removed' ? [] : ['memory:p1:0'],
+      incoming.event.type === 'interaction_removed' ? [] : ['interaction:q0'],
     );
 
     first.resolve(snapshotFor(session, stale));
@@ -393,19 +392,19 @@ describe('app asynchronous refreshes', () => {
 
     oldSnapshot.resolve(snapshotFor(oldSession));
     await oldRefresh;
-    newRefresh.resolve(snapshotFor(newSession, [proposalInteraction]));
+    newRefresh.resolve(snapshotFor(newSession, [questionInteraction]));
     await Promise.resolve();
     await Promise.resolve();
 
     expect(app.activeSessionId).toBe(newSession.id);
     expect(app.sessionState?.session.id).toBe(newSession.id);
-    expect(app.sessionState?.interactions.map((item) => item.id)).toEqual(['memory:p1:0']);
+    expect(app.sessionState?.interactions.map((item) => item.id)).toEqual(['interaction:q0']);
   });
 
   it('confirms a stale answer as handled only after the exact question disappears from a fresh snapshot', async () => {
     app.demo = undefined;
     const session = { ...demoSnapshot.session, id: 's-answer' };
-    const interaction = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '4' };
+    const interaction = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '4' };
     app.activeSessionId = session.id;
     app.sessionState = {
       ...fromSnapshot(snapshotFor(session, [interaction])),
@@ -426,7 +425,7 @@ describe('app asynchronous refreshes', () => {
   it('keeps a conflicting answer available when the exact question is still pending', async () => {
     app.demo = undefined;
     const session = { ...demoSnapshot.session, id: 's-answer' };
-    const interaction = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '4' };
+    const interaction = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '4' };
     app.activeSessionId = session.id;
     app.sessionState = {
       ...fromSnapshot(snapshotFor(session, [interaction])),
@@ -448,7 +447,7 @@ describe('app asynchronous refreshes', () => {
   it('does not claim an answer was handled when the authoritative check fails', async () => {
     app.demo = undefined;
     const session = { ...demoSnapshot.session, id: 's-answer' };
-    const interaction = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '4' };
+    const interaction = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '4' };
     app.activeSessionId = session.id;
     app.sessionState = {
       ...fromSnapshot(snapshotFor(session, [interaction])),
@@ -469,8 +468,8 @@ describe('app asynchronous refreshes', () => {
   it('recognizes a stale card callback after remote removal without touching a reused id', async () => {
     app.demo = undefined;
     const session = { ...demoSnapshot.session, id: 's-answer' };
-    const oldQuestion = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '4' };
-    const newQuestion = { ...proposalInteraction, id: oldQuestion.id, runnerEpoch: '5' };
+    const oldQuestion = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '4' };
+    const newQuestion = { ...questionInteraction, id: oldQuestion.id, runnerEpoch: '5' };
     app.activeSessionId = session.id;
     app.sessionState = fromSnapshot(snapshotFor(session, [oldQuestion]));
     const oldState = app.sessionState;
@@ -508,7 +507,7 @@ describe('app asynchronous refreshes', () => {
   it('reports a duplicate callback as processing instead of submitting twice', async () => {
     app.demo = undefined;
     const session = { ...demoSnapshot.session, id: 's-answer' };
-    const interaction = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '4' };
+    const interaction = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '4' };
     app.activeSessionId = session.id;
     app.sessionState = {
       ...fromSnapshot(snapshotFor(session, [interaction])),
@@ -538,8 +537,8 @@ describe('app asynchronous refreshes', () => {
   it('answers a relayed confirm without holding the control lease', async () => {
     app.demo = undefined;
     const session = { ...demoSnapshot.session, id: 's-chat' };
-    const relayed = { ...proposalInteraction, id: 'relay.d1.interaction_1', runnerEpoch: '0' };
-    const local = { ...proposalInteraction, id: 'interaction:q1', runnerEpoch: '0' };
+    const relayed = { ...questionInteraction, id: 'relay.d1.interaction_1', runnerEpoch: '0' };
+    const local = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '0' };
     app.activeSessionId = session.id;
     app.sessionState = {
       ...fromSnapshot(snapshotFor(session, [relayed, local])),
@@ -602,13 +601,5 @@ describe('app asynchronous refreshes', () => {
     await app.answerApproval(approval, false);
     expect(app.pageError).toBe('Already answered');
     expect(app.answeringInteractionIds).toEqual([]);
-  });
-
-  it('reports why a delegation could not be stopped', async () => {
-    app.demo = undefined;
-    const stop = vi.spyOn(api, 'stopDelegation').mockResolvedValueOnce({ status: 'stopping' });
-    await expect(app.stopDelegation('d1')).resolves.toBeUndefined();
-    stop.mockRejectedValueOnce(new ApiError('Another device controls it', 409, 'conflict'));
-    await expect(app.stopDelegation('d1')).resolves.toBe('Another device controls it');
   });
 });

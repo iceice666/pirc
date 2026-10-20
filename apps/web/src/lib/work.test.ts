@@ -4,7 +4,6 @@ import {
   blockingSession,
   effectiveTools,
   operationsSummary,
-  foldRecent,
   summarizeRun,
   sidebarSessions,
   timelineItems,
@@ -19,39 +18,6 @@ const session = (id: string, extra: Partial<SessionSummary> = {}): SessionSummar
   runnerStatus: 'ready',
   ...extra,
 });
-const scheduled = (scheduleId: string) => ({
-  origin: { kind: 'schedule' as const, scheduleId, title: `Schedule ${scheduleId}`, dueAt: 0 },
-});
-
-describe('foldRecent', () => {
-  it('folds runs of one schedule where its newest run is', () => {
-    const rows = foldRecent([
-      session('a'),
-      session('s1', scheduled('x')),
-      session('b'),
-      session('s2', scheduled('x')),
-      session('t1', scheduled('y')),
-    ]);
-    expect(rows.map((row) => (row.kind === 'session' ? row.session.id : row.title))).toEqual([
-      'a',
-      'Schedule x',
-      'b',
-      't1',
-    ]);
-    const fold = rows[1]!;
-    expect(fold.kind === 'schedule' && fold.sessions.map((s) => s.id)).toEqual(['s1', 's2']);
-  });
-
-  it('keeps a pinned run on its own row', () => {
-    const rows = foldRecent([
-      session('s1', { ...scheduled('x'), pinned: true }),
-      session('s2', scheduled('x')),
-      session('s3', scheduled('x')),
-    ]);
-    expect(rows.map((row) => row.kind)).toEqual(['session', 'schedule']);
-  });
-});
-
 describe('sidebarSessions', () => {
   const sessions = [
     session('read'),

@@ -4,11 +4,7 @@
  * the UI sends. Components read it directly instead of receiving it as props.
  */
 import { api, connectEvents, ApiError, type EventConnection } from './api';
-import type { NewWorkspace } from './chats';
-import { isReadOnly, modeOf, tabOf } from './modes';
-import { memoryApi, type MemoryProposal } from './memory';
-import { projectDeletionApi, type ProjectMemoryDecision } from './project-deletion';
-import { schedulesApi, type Schedule, type ScheduleRun } from './schedules';
+import { isReadOnly, modeOf } from './modes';
 import {
   interactionFromUrl,
   isPushInteraction,
@@ -22,15 +18,7 @@ import { GOAL_WIDGET, parseGoalWidget } from './goal';
 import { PanelStateResource } from './panel-state.svelte';
 import { fromSnapshot, reduceEvent } from './state';
 import { uuid } from './id';
-import {
-  getClientId,
-  loadDraft,
-  loadLayout,
-  pruneDrafts,
-  removeDraft,
-  saveDraft,
-  saveLayout,
-} from './storage';
+import { getClientId, loadDraft, pruneDrafts, removeDraft, saveDraft } from './storage';
 import { needsInput } from './work';
 import { parseTodoWidget, TODO_WIDGET } from './todo';
 import type {
@@ -42,6 +30,7 @@ import type {
   InteractionAnswer,
   ModeInfo,
   ModelOption,
+  NewWorkspace,
   NodeSummary,
   QueueItem,
   RelayedApproval,
@@ -54,19 +43,11 @@ import { isRelayed, modelKey } from './types';
 
 export type Upload = Attachment & { preview?: string; uploading?: boolean };
 
-/**
- * The sidebar's two lists: the assistant's chats, or the agents' work. A
- * workspace's mode decides its list (`tabOf`).
- */
-export type SidebarMode = 'chat' | 'work';
-/** What the main column shows: a session, the schedules, or a project's or workspace's page. */
-export type MainView = 'session' | 'schedules' | 'workspace';
+/** What the main column shows: a session, or a workspace's page. */
+export type MainView = 'session' | 'workspace';
 
 /** Something waiting for you, shown under "Needs you". */
-export type InboxItem =
-  | { kind: 'session'; id: string; session: SessionSummary }
-  | { kind: 'missed'; id: string; schedule: Schedule; run: ScheduleRun }
-  | { kind: 'memory'; id: string; proposal: MemoryProposal };
+export type InboxItem = { kind: 'session'; id: string; session: SessionSummary };
 
 /** Side-panel refresh signals: a `panel_changed` event, or the end of a run. */
 export type PanelSignal = { type: 'changed'; sections: string[] } | { type: 'run-finished' };
@@ -100,32 +81,16 @@ class AppState {
   nodes = $state.raw<NodeSummary[]>([]);
   /** The gateway's workspace modes (empty from older gateways: the legacy `kind` decides). */
   modeCatalog = $state.raw<ModeInfo[]>([]);
-  /** USER changes the assistant proposed that wait for your approval. */
-  memoryPending = $state(0);
   /** Bumped whenever the gateway says your memory changed; open memory views reload. */
   memoryRevision = $state(0);
-  /** Scheduled runs waiting for you: missed ones to allow, ones waiting for an answer. */
-  scheduleAttention = $state(0);
-  /** Bumped whenever the gateway says your schedules changed; open schedule views reload. */
-  scheduleRevision = $state(0);
   /**
    * A place in Settings to show (the memory), asked for by a notification or
    * a `?open=` link (App opens Settings on it, then clears it).
    */
   requestedTarget = $state<Exclude<PushTarget, { sessionId: string }> | undefined>();
-  /** The schedule a notification was about; the Schedules page opens it once. */
-  scheduleFocus = $state<string | undefined>();
   sessions = $state.raw<SessionSummary[]>([]);
-  /** Your schedules (the Schedules entry shows the next run). */
-  schedules = $state.raw<Schedule[]>([]);
-  /** Missed scheduled runs waiting for you to allow or dismiss them. */
-  missedRuns = $state.raw<Array<{ schedule: Schedule; run: ScheduleRun }>>([]);
-  /** USER memory changes the assistant proposed, waiting for your approval. */
-  memoryProposals = $state.raw<MemoryProposal[]>([]);
-  /** Chat or Work; remembered. */
-  mode = $state<SidebarMode>(loadLayout('workMode', false) ? 'work' : 'chat');
   view = $state<MainView>('session');
-  /** The project or workspace whose page is showing (view `workspace`). */
+  /** The workspace whose page is showing (view `workspace`). */
   workspaceViewId = $state<string>();
   models = $state.raw<ModelOption[]>([]);
   activeSessionId = $state<string>();
@@ -202,7 +167,6 @@ class AppState {
   thinking = $derived<ThinkingLevel>(this.#sessionState?.thinkingLevel ?? 'medium');
   /** The session's approval mode as its node last reported it (undefined: unknown). */
   approvalMode = $derived<ApprovalMode | undefined>(this.#sessionState?.approvalMode);
-  defaultApprovalMode = $derived<ApprovalMode | undefined>(this.#sessionState?.defaultApprovalMode);
   todo = $derived(parseTodoWidget(this.#sessionState?.widgets?.[TODO_WIDGET]));
   goal = $derived(parseGoalWidget(this.#sessionState?.widgets?.[GOAL_WIDGET]));
   statusLine = $derived([
@@ -216,8 +180,6 @@ class AppState {
   pendingInteractions = $derived(
     this.#sessionState?.interactions.filter((item) => item.status === 'pending') ?? [],
   );
-  /** Delegations the open chat started that still run or wait for you. */
-  delegations = $derived(this.#sessionState?.delegations ?? []);
   /** Commands need a live connection and the control lease. */
   canCommand = $derived(this.hasControl && this.connection === 'connected');
   #historyRevision = 0;
@@ -232,9 +194,9 @@ class AppState {
       this.#sessionState?.runnerStatus !== 'starting',
   );
 
-  /** Everything waiting for you: questions, missed runs, memory proposals. */
-  inbox = $derived<InboxItem[]>([
-    ...this.sessions
+  /** Everything waiting for you: sessions with a question. */
+  inbox = $derived<InboxItem[]>(
+    this.sessions
       .filter(
         (session) =>
           needsInput(session) ||
@@ -242,45 +204,15 @@ class AppState {
           (session.origin?.kind === 'delegation' && !!session.origin.approval),
       )
       .map((session) => ({ kind: 'session' as const, id: `session:${session.id}`, session })),
-    ...this.missedRuns.map(({ schedule, run }) => ({
-      kind: 'missed' as const,
-      id: `run:${run.id}`,
-      schedule,
-      run,
-    })),
-    ...this.memoryProposals.map((proposal) => ({
-      kind: 'memory' as const,
-      id: `memory:${proposal.id}`,
-      proposal,
-    })),
-  ]);
-  /** The soonest run of an active schedule. */
-  nextSchedule = $derived(
-    this.schedules
-      .filter((schedule) => schedule.status === 'active' && schedule.nextRunAt)
-      .sort((a, b) => a.nextRunAt! - b.nextRunAt!)[0],
   );
 
-  setMode(mode: SidebarMode) {
-    this.mode = mode;
-    saveLayout('workMode', mode === 'work');
-  }
-
-  /** Show the schedules in the main column, optionally opening one. */
-  showSchedules(scheduleId?: string) {
-    if (scheduleId) this.scheduleFocus = scheduleId;
-    this.view = 'schedules';
-  }
-
   /**
-   * Show a project's or workspace's page: its sessions and its settings. The
-   * open session stays connected behind it, so going back is instant.
+   * Show a workspace's page: its sessions and its settings. The open session
+   * stays connected behind it, so going back is instant.
    */
   showWorkspace(workspaceId: string) {
     const workspace = this.workspaces.find((item) => item.id === workspaceId);
     if (!workspace) return;
-    // The sidebar shows the list the page belongs to.
-    this.setMode(tabOf(workspace, this.modeCatalog));
     this.workspaceViewId = workspaceId;
     this.view = 'workspace';
     this.#address(`?workspace=${encodeURIComponent(workspaceId)}`);
@@ -345,10 +277,8 @@ class AppState {
         const linkedSessionId = linkedTarget.sessionId;
         if (this.sessions.some((session) => session.id === linkedSessionId))
           this.activeSessionId = linkedSessionId;
-      } else if (linkedTarget) this.#request(linkedTarget);
+      } else if (linkedTarget) this.requestedTarget = linkedTarget;
       pruneDrafts(this.sessions.map((session) => session.id));
-      void this.refreshMemory();
-      void this.refreshSchedules();
     } catch (error) {
       if (import.meta.env.DEV) {
         const demo = await import('./mock');
@@ -366,11 +296,10 @@ class AppState {
         this.pageError = errorMessage(error, 'Unable to connect to the gateway.');
       }
     }
-    // A project or workspace page the address names stays in front of the session behind it.
+    // A workspace page the address names stays in front of the session behind it.
     const page = new URL(location.href).searchParams.get('workspace');
     const pageWorkspace = page ? this.workspaces.find((item) => item.id === page) : undefined;
     if (pageWorkspace) {
-      this.setMode(tabOf(pageWorkspace, this.modeCatalog));
       this.workspaceViewId = pageWorkspace.id;
       this.view = 'workspace';
     }
@@ -424,18 +353,6 @@ class AppState {
     }
   }
 
-  /** USER proposals waiting for you ("Needs you"). */
-  async refreshMemory() {
-    if (this.demo) return;
-    try {
-      const { proposals } = await memoryApi.view();
-      this.memoryProposals = proposals.filter((proposal) => proposal.status === 'pending');
-      this.memoryPending = this.memoryProposals.length;
-    } catch {
-      /* keep the last list */
-    }
-  }
-
   #sessionsTimer: ReturnType<typeof setTimeout> | undefined;
   /** Runs start and end in bursts: one reload per burst. */
   #sessionsChanged() {
@@ -445,51 +362,18 @@ class AppState {
     }, 250);
   }
 
-  /** Answer a memory proposal from "Needs you". */
-  async decideProposal(proposal: MemoryProposal, approve: boolean) {
-    if (this.demo) return;
-    try {
-      const view = approve
-        ? await memoryApi.approve(proposal.id, proposal.target?.revision)
-        : await memoryApi.reject(proposal.id);
-      this.memoryProposals = view.proposals.filter((item) => item.status === 'pending');
-      this.memoryPending = this.memoryProposals.length;
-      this.memoryRevision++;
-    } catch (error) {
-      this.pageError = errorMessage(error, 'The memory change could not be answered.');
-      void this.refreshMemory();
-    }
-  }
-
-  /** Allow (run now) or dismiss a missed scheduled run. */
-  async decideMissed(scheduleId: string, runId: string, allow: boolean) {
-    if (this.demo) return;
-    try {
-      if (allow) await schedulesApi.run(scheduleId, runId);
-      else await schedulesApi.dismiss(scheduleId, runId);
-      this.missedRuns = this.missedRuns.filter((item) => item.run.id !== runId);
-    } catch (error) {
-      this.pageError = errorMessage(
-        error,
-        allow ? 'The run could not be started.' : 'The run could not be dismissed.',
-      );
-    }
-    this.scheduleRevision++;
-    void this.refreshSchedules();
-  }
-
   /** Show what a notification points at. */
   async openTarget(target: PushTarget | undefined) {
     if (!target) return;
     if ('sessionId' in target) {
-      // A session a scheduled run just started may be new to this list.
+      // A session a delegation just started may be new to this list.
       if (!this.sessions.some((session) => session.id === target.sessionId))
         await this.refreshSessions();
       if (this.sessions.some((session) => session.id === target.sessionId))
         await this.openSession(target.sessionId);
       return;
     }
-    this.#request(target);
+    this.requestedTarget = target;
   }
 
   /** Open an exact-question notification and check its status against a fresh snapshot. */
@@ -544,37 +428,6 @@ class AppState {
     }
   }
 
-  #request(target: Exclude<PushTarget, { sessionId: string }>) {
-    // Schedules have their own page; memory still lives in Settings.
-    if ('schedules' in target) this.showSchedules(target.scheduleId);
-    else this.requestedTarget = target;
-  }
-
-  /** Your schedules, and their missed runs ("Needs you"). */
-  async refreshSchedules() {
-    if (this.demo) return;
-    try {
-      const { schedules } = await schedulesApi.list();
-      this.schedules = schedules;
-      this.scheduleAttention = schedules.reduce((sum, item) => sum + item.attention, 0);
-      // Runs waiting for an answer show as their session; missed ones have no session.
-      const details = await Promise.all(
-        schedules
-          .filter((schedule) => schedule.attention > 0)
-          .map((schedule) => schedulesApi.get(schedule.id).catch(() => undefined)),
-      );
-      this.missedRuns = details.flatMap((detail) =>
-        detail
-          ? detail.runs
-              .filter((run) => run.status === 'missed')
-              .map((run) => ({ schedule: detail.schedule, run }))
-          : [],
-      );
-    } catch {
-      /* keep the last lists */
-    }
-  }
-
   /** Start again if the first start could not reach the gateway. Returns whether it did. */
   retryBootstrap(): boolean {
     if (!this.#bootstrapFailed || this.loading) return false;
@@ -592,13 +445,11 @@ class AppState {
     void this.refreshControl();
     void this.refreshNodes();
     void this.refreshSessions();
-    void this.refreshMemory();
-    void this.refreshSchedules();
     // A short switch away is covered by the stream's cursor replay.
     if (hiddenFor >= RESUME_SNAPSHOT_AFTER) void this.refreshSnapshot();
   }
 
-  /** `show: false` connects the session behind the page on screen (a project page, the schedules). */
+  /** `show: false` connects the session behind the page on screen (a workspace page). */
   async openSession(id: string, { show = true }: { show?: boolean } = {}) {
     if (show) {
       this.view = 'session';
@@ -662,12 +513,6 @@ class AppState {
           onMemory: () => {
             if (seq !== this.#openSeq) return;
             this.memoryRevision++;
-            void this.refreshMemory();
-          },
-          onSchedules: () => {
-            if (seq !== this.#openSeq) return;
-            this.scheduleRevision++;
-            void this.refreshSchedules();
           },
           onSessions: () => {
             if (seq !== this.#openSeq) return;
@@ -676,7 +521,6 @@ class AppState {
           onEvent: (event) => {
             if (seq === this.#openSeq && event.event.type === 'session_deleted') {
               this.removeSession(id);
-              void this.refreshMemory();
               return;
             }
             const current = this.sessionState;
@@ -773,35 +617,6 @@ class AppState {
       if (session) this.showWorkspace(session.workspaceId);
     }
     removeDraft(id);
-  }
-
-  async deleteSession(id: string) {
-    if (!this.demo) await api.deleteSession(id);
-    this.removeSession(id);
-    this.memoryRevision++;
-    await this.refreshMemory();
-  }
-
-  /**
-   * Delete a chat project with its chats (docs/guides/chat-projects.md). The
-   * page it was on goes back to the open session, or the one behind it.
-   */
-  async deleteProject(workspaceId: string, decisions: ProjectMemoryDecision[]) {
-    if (!this.demo) await projectDeletionApi.delete(workspaceId, decisions);
-    for (const session of this.sessions.filter((item) => item.workspaceId === workspaceId))
-      this.removeSession(session.id);
-    this.workspaces = this.workspaces.filter((item) => item.id !== workspaceId);
-    if (this.workspaceViewId === workspaceId) {
-      this.workspaceViewId = undefined;
-      this.view = 'session';
-      this.#address(
-        this.activeSessionId ? `?session=${encodeURIComponent(this.activeSessionId)}` : '?',
-      );
-    }
-    this.memoryRevision++;
-    this.scheduleRevision++;
-    // Each keeps its last list on failure: the deletion itself is done.
-    void Promise.all([this.refreshNodes(), this.refreshMemory(), this.refreshSchedules()]);
   }
 
   /** Rename, pin or settle from the sidebar. Applied at once and rolled back on failure. */
@@ -1208,17 +1023,6 @@ class AppState {
     void this.refreshSessions();
   }
 
-  /** Stop a delegation the open chat started; resolves to the error to show, if any. */
-  async stopDelegation(delegationId: string): Promise<string | undefined> {
-    if (this.demo) return undefined;
-    try {
-      await api.stopDelegation(delegationId);
-      return undefined;
-    } catch (error) {
-      return errorMessage(error, 'The delegation could not be stopped.');
-    }
-  }
-
   async uploadFiles(files: ArrayLike<File>) {
     // Stored on the node that runs the session's agent: images ride in the
     // model's context, other files are copied into the workspace for tools.
@@ -1311,40 +1115,6 @@ class AppState {
       } catch (error) {
         this.pageError = errorMessage(error, 'Thinking level could not be changed.');
       }
-    }
-  }
-
-  /**
-   * Switch this session's approval mode. Unlike the model it is not kept for
-   * the next prompt: the mode shown is always the one in effect, so it needs
-   * this browser's control. The caller confirms `full-access` first.
-   */
-  async changeApprovalMode(mode: ApprovalMode) {
-    const state = this.sessionState;
-    if (!state || state.approvalMode === mode) return;
-    if (this.demo) {
-      this.sessionState = { ...state, approvalMode: mode };
-      return;
-    }
-    if (!this.activeSessionId || !this.hasControl || !state.control.generation) {
-      this.pageError = 'Take control of this session to change its approval mode.';
-      return;
-    }
-    const sessionId = this.activeSessionId;
-    try {
-      const receipt = await api.command(sessionId, {
-        commandId: uuid(),
-        kind: 'set_approval_mode',
-        controlGeneration: state.control.generation,
-        approvalMode: mode,
-      });
-      if (receipt.status !== 'accepted')
-        throw new Error(receipt.message ?? 'The agent did not accept the approval mode.');
-      const current = this.sessionState;
-      if (current && this.activeSessionId === sessionId)
-        this.sessionState = { ...current, approvalMode: mode };
-    } catch (error) {
-      this.pageError = errorMessage(error, 'Approval mode could not be changed.');
     }
   }
 

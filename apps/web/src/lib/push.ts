@@ -1,7 +1,6 @@
 /**
- * Push notifications on this browser (docs/guides/schedules.md): scheduled
- * runs, sessions waiting for you, delegations and memory proposals. The
- * gateway encrypts each message for this browser's subscription; the
+ * Push notifications on this browser: sessions waiting for you and
+ * delegations. The gateway encrypts each message for this browser's subscription; the
  * service worker (`public/sw.js`) shows it and opens what it points at.
  */
 import { request } from './http';
@@ -17,10 +16,7 @@ export interface PushPlace {
 }
 
 /** What a notification opens (the `target` of a push). */
-export type PushTarget =
-  | { sessionId: string }
-  | { schedules: true; scheduleId?: string }
-  | { memory: true };
+export type PushTarget = { sessionId: string } | { memory: true };
 
 /** Exact question identity carried by an interaction notification click. */
 export interface PushInteraction {
@@ -179,10 +175,6 @@ export function targetFromUrl(url: URL): PushTarget | undefined {
   const session = url.searchParams.get('session');
   if (session) return { sessionId: session };
   const open = url.searchParams.get('open');
-  if (open === 'schedules') {
-    const schedule = url.searchParams.get('schedule');
-    return schedule ? { schedules: true, scheduleId: schedule } : { schedules: true };
-  }
   if (open === 'memory') return { memory: true };
   return undefined;
 }

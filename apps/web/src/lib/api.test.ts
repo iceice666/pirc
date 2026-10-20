@@ -190,30 +190,6 @@ it('normalizes all answered interactions with their row epoch', () => {
   });
 });
 
-it('sends the delegation checkbox only when an approval ticks it', async () => {
-  const bodies: any[] = [];
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (_url: string, init: RequestInit) => {
-      bodies.push(JSON.parse(init.body as string));
-      return new Response(null, { status: 204 });
-    }),
-  );
-  await api.answerInteraction('s', 'd1', { action: 'answer', value: true, asUserRequest: true }, 1);
-  await api.answerInteraction(
-    's',
-    'd1',
-    { action: 'answer', value: false, asUserRequest: true },
-    1,
-  );
-  await api.answerInteraction('s', 'd1', { action: 'answer', value: true }, 1);
-  expect(bodies.map((body) => body.answer)).toEqual([
-    { confirmed: true, asUserRequest: true },
-    { confirmed: false },
-    { confirmed: true },
-  ]);
-});
-
 it('sends an approval mode and reads it from events', async () => {
   const { bodies } = mockCommands();
   await api.command('s', {

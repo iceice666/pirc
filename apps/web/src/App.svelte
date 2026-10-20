@@ -2,7 +2,6 @@
   import {
     ArrowDown,
     CircleAlert,
-    Clock,
     CloudOff,
     Forward,
     Download,
@@ -21,20 +20,15 @@
   import { fade } from 'svelte/transition';
   import { app } from './lib/app.svelte';
   import Composer from './lib/components/Composer.svelte';
-  import DelegationStrip from './lib/components/DelegationStrip.svelte';
   import InteractionCard from './lib/components/InteractionCard.svelte';
   import { isRelayed } from './lib/types';
   import JobsMenu from './lib/components/JobsMenu.svelte';
   import Message from './lib/components/Message.svelte';
   import MobileTabs from './lib/components/MobileTabs.svelte';
   import RunCard from './lib/components/RunCard.svelte';
-  import SchedulesPage from './lib/components/SchedulesPage.svelte';
   import WorkspacePage from './lib/components/WorkspacePage.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
-  import { topLevelChats } from './lib/chats';
-  import { isAssistant } from './lib/modes';
   import { timelineItems } from './lib/work';
-  import NewProjectDialog from './lib/components/dialogs/NewProjectDialog.svelte';
   import NewSessionDialog from './lib/components/dialogs/NewSessionDialog.svelte';
   import NewWorkspaceDialog from './lib/components/dialogs/NewWorkspaceDialog.svelte';
   import SettingsDialog, { type SettingsTab } from './lib/components/dialogs/SettingsDialog.svelte';
@@ -84,7 +78,7 @@
   let panelTab: PanelTab = $state('files');
   let settingsOpen = $state(false);
   let settingsTab: SettingsTab = $state('general');
-  // A notification or a `?open=` link asked for the memory (schedules have their own page).
+  // A notification or a `?open=` link asked for the memory.
   $effect(() => {
     const target = app.requestedTarget;
     if (!target) return;
@@ -92,52 +86,29 @@
     settingsOpen = true;
     app.requestedTarget = undefined;
   });
-  /** The project or workspace whose page is showing, if it still exists. */
+  /** The workspace whose page is showing, if it still exists. */
   const pageWorkspace = $derived(
     app.view === 'workspace'
       ? app.workspaces.find((workspace) => workspace.id === app.workspaceViewId)
       : undefined,
   );
   /** A page in the main column (not a conversation): the phone keeps its bottom tabs. */
-  const onPage = $derived(app.view === 'schedules' || !!pageWorkspace);
+  const onPage = $derived(!!pageWorkspace);
   // A page replaces the phone's list.
   $effect(() => {
     if (onPage) sidebarOpen = false;
   });
-  const hasChats = $derived(!!topLevelChats(app.workspaces, app.modeCatalog));
-  /** The open session is one of the assistant's chats: no engineering chrome. */
-  const chatSession = $derived(isAssistant(app.modeOf(app.activeWorkspace)));
   const origin = $derived(
     app.sessions.find((item) => item.id === sessionState?.session.id)?.origin,
   );
-  const mobileTab = $derived(
-    settingsOpen
-      ? 'settings'
-      : sidebarOpen
-        ? hasChats
-          ? app.mode
-          : 'work'
-        : app.view === 'schedules'
-          ? 'schedules'
-          : hasChats
-            ? app.mode
-            : 'work',
-  );
-  function pickTab(tab: 'chat' | 'work' | 'schedules' | 'settings') {
+  const mobileTab = $derived(settingsOpen ? 'settings' : 'work');
+  function pickTab(tab: 'work' | 'settings') {
     if (tab === 'settings') {
       settingsTab = 'general';
       settingsOpen = true;
-    } else if (tab === 'schedules') {
-      app.showSchedules();
-      sidebarOpen = false;
-    } else {
-      app.setMode(tab);
-      sidebarOpen = true;
-    }
+    } else sidebarOpen = true;
   }
   let newSessionOpen = $state(false);
-  let newProjectOpen = $state(false);
-  let newProjectNodeId = $state('');
   let newWorkspaceOpen = $state(false);
   let newWorkspaceNodeId = $state('');
   let creatingSession = false;
@@ -423,12 +394,6 @@
     sidebarOpen = false;
   }
 
-  function showNewProject(nodeId: string) {
-    newProjectNodeId = nodeId;
-    newProjectOpen = true;
-    sidebarOpen = false;
-  }
-
   /** With a workspace (its `+` button, or one just added) the session is created right away. */
   async function showNewSession(workspaceId?: string) {
     if (!workspaceId) {
@@ -470,19 +435,10 @@
     onselect={openSession}
     onnew={showNewSession}
     onaddworkspace={showNewWorkspace}
-    onaddproject={showNewProject}
     onclose={() => (sidebarOpen = false)}
     onopenworkspace={openWorkspace}
     onsettings={() => {
       settingsTab = 'general';
-      settingsOpen = true;
-    }}
-    onschedules={() => {
-      app.showSchedules();
-      sidebarOpen = false;
-    }}
-    onmemory={() => {
-      settingsTab = 'memory';
       settingsOpen = true;
     }}
   />
@@ -493,13 +449,7 @@
     class="workspace"
     inert={sidebarOpen && viewportWidth <= 650}
   >
-    {#if app.view === 'schedules'}
-      <SchedulesPage
-        {sidebarCollapsed}
-        onexpand={() => (sidebarCollapsed = false)}
-        onopenchat={openSession}
-      />
-    {:else if pageWorkspace}
+    {#if pageWorkspace}
       <WorkspacePage
         workspace={pageWorkspace}
         {sidebarCollapsed}
@@ -538,15 +488,7 @@
             >
           </div>
           <h1>{sessionState.session.name}</h1>
-          {#if origin?.kind === 'schedule'}
-            <button
-              class="origin-chip"
-              type="button"
-              title="Open the schedule"
-              onclick={() => app.showSchedules(origin.scheduleId)}
-              ><Clock size={13} /><span>Scheduled · {origin.title}</span></button
-            >
-          {:else if origin?.kind === 'delegation'}
+          {#if origin?.kind === 'delegation'}
             <button
               class="origin-chip"
               type="button"
@@ -568,7 +510,7 @@
           {/if}
         </div>
         <div class="topbar-actions">
-          {#if !chatSession}<JobsMenu />{/if}
+          <JobsMenu />
           <span
             class:offline={connection === 'offline'}
             class:reconnecting={connection === 'reconnecting'}
@@ -582,7 +524,7 @@
             <button class="button takeover" type="button" onclick={() => app.takeControl()}
               ><ShieldCheck size={15} /> Take control</button
             >
-          {:else if !chatSession}
+          {:else}
             <span class="control-pill"><ShieldCheck size={14} /> In control</span>
           {/if}
           <button
@@ -661,11 +603,6 @@
                   onopen={openSession}
                 />
               {/each}
-              <DelegationStrip
-                delegations={app.delegations}
-                onopen={openSession}
-                onstop={(id) => app.stopDelegation(id)}
-              />
               {#if unseenContent && !following}
                 <div class="jump-latest">
                   <button
@@ -737,14 +674,9 @@
   nodeId={newWorkspaceNodeId}
   oncreated={(workspaceId) => showNewSession(workspaceId)}
 />
-<NewProjectDialog
-  bind:open={newProjectOpen}
-  nodeId={newProjectNodeId}
-  oncreated={(workspaceId) => showNewSession(workspaceId)}
-/>
 <NewSessionDialog bind:open={newSessionOpen} />
 {#if sidebarOpen || onPage}
-  <MobileTabs current={mobileTab} chats={hasChats} onpick={pickTab} />
+  <MobileTabs current={mobileTab} onpick={pickTab} />
 {/if}
 
 {#if updateRegistration}

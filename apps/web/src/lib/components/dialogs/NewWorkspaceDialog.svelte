@@ -1,9 +1,9 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { app } from '../../app.svelte';
-  import { chatNodeIds, type NewWorkspace } from '../../chats';
   import { creatableModes, workNodes } from '../../modes';
   import { errorMessage } from '../../errors';
+  import type { NewWorkspace } from '../../types';
   import Modal from './Modal.svelte';
   import { watch } from '../../watch.svelte';
 
@@ -18,12 +18,12 @@
   let { open = $bindable(), nodeId, oncreated }: Props = $props();
 
   const catalog = $derived(app.modeCatalog);
-  // Only nodes accepting a Work mode; chat projects have their own dialog.
-  const deviceNodes = $derived(workNodes(app.nodes, catalog, chatNodeIds(app.workspaces, catalog)));
+  // Only nodes accepting a mode the catalog knows.
+  const deviceNodes = $derived(workNodes(app.nodes, catalog));
 
   let chosenNode = $state('');
   let chosenMode = $state('');
-  /** The node's Work modes; none from an older gateway (then a path makes a directory). */
+  /** The node's modes; none from an older gateway (then a path makes a directory). */
   const modes = $derived(
     creatableModes(
       deviceNodes.find((node) => node.id === chosenNode),
@@ -132,9 +132,7 @@
   {:else}
     <p>Each {mode?.ui.noun ?? 'session'} gets its own new directory on that device.</p>
   {/if}
-  {#if !deviceNodes.length}<p role="alert">
-      No device can host workspaces: the chat node holds chats and projects only.
-    </p>{/if}
+  {#if !deviceNodes.length}<p role="alert">No device can host workspaces.</p>{/if}
   {#if error}<p role="alert">{error}</p>{/if}
   <footer>
     <button class="button ghost" type="button" onclick={() => (open = false)}>Cancel</button>

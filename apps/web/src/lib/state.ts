@@ -168,8 +168,8 @@ export function reduceEvent(
               item.id === event.interaction.id ? event.interaction : item,
             )
           : [...state.interactions, event.interaction],
-        // Memory proposals are sent as incremental interaction events, but a
-        // concurrent snapshot may have been captured before this event. Keep
+        // Interactions are sent as incremental events, but a concurrent
+        // snapshot may have been captured before this event. Keep
         // the immediate update and ask the app to reconcile with a fresh view.
         needsSnapshot: true,
       };
