@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -29,6 +30,7 @@ class WorkPanel extends StatelessWidget {
   final void Function(Widget) onOpen;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final c = controller;
     if (kind == 'context') {
       return ContextPane(controller: c, onFile: onFile ?? (_) {});
@@ -116,78 +118,81 @@ class _DocumentPaneState extends State<DocumentPane> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                '${versions[selected].split('\n').first.replaceFirst(RegExp(r'^#+\s*'), '').trim()} · v${selected + 1}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  '${versions[selected].split('\n').first.replaceFirst(RegExp(r'^#+\s*'), '').trim()} · v${selected + 1}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
-          ),
-          IconButton(
-            tooltip: '分享',
-            icon: const Icon(LucideIcons.share2, size: 18),
-            onPressed: () => guarded(context, () async {
-              await widget.controller.gateway.call('share', {
-                'text': versions[selected],
-              });
-            }),
-          ),
-          PopupMenuButton<int>(
-            tooltip: '閱讀版本',
-            onSelected: select,
-            itemBuilder: (_) => [
-              for (var i = 0; i < versions.length; i++)
-                PopupMenuItem(value: i, child: Text('v${i + 1}')),
-            ],
-          ),
-          IconButton(
-            tooltip: '複製',
-            onPressed: () =>
-                Clipboard.setData(ClipboardData(text: versions[selected])),
-            icon: const Icon(LucideIcons.copy),
-          ),
-        ],
-      ),
-      if (selected < versions.length - 1)
-        TextButton(
-          onPressed: () => select(versions.length - 1),
-          child: Text('已有 v${versions.length} · 切換新版'),
-        ),
-      if (widget.controller.messages.any(
-        (m) => m['id'] == widget.messageId && m['partial'] == true,
-      ))
-        const Padding(
-          padding: EdgeInsets.all(8),
-          child: Text('仍在生成 · 保留目前閱讀內容，完成後可切換新版'),
-        ),
-      if (widget.controller.messages.any(
-        (m) => m['id'] == widget.messageId && m['error'] != null,
-      ))
-        const Padding(
-          padding: EdgeInsets.all(8),
-          child: Text('生成遇到問題 · 目前顯示最後可讀內容'),
-        ),
-      Expanded(
-        child: ListView(
-          key: const Key('live-reader'),
-          controller: scroll,
-          padding: const EdgeInsets.all(24),
-          children: [
-            RichTextBody(
-              versions[selected],
-              reader: true,
-              gateway: widget.controller.gateway,
+            IconButton(
+              tooltip: tr("分享"),
+              icon: const Icon(LucideIcons.share2, size: 18),
+              onPressed: () => guarded(context, () async {
+                await widget.controller.gateway.call('share', {
+                  'text': versions[selected],
+                });
+              }),
+            ),
+            PopupMenuButton<int>(
+              tooltip: tr("閱讀版本"),
+              onSelected: select,
+              itemBuilder: (_) => [
+                for (var i = 0; i < versions.length; i++)
+                  PopupMenuItem(value: i, child: Text('v${i + 1}')),
+              ],
+            ),
+            IconButton(
+              tooltip: tr("複製"),
+              onPressed: () =>
+                  Clipboard.setData(ClipboardData(text: versions[selected])),
+              icon: const Icon(LucideIcons.copy),
             ),
           ],
         ),
-      ),
-    ],
-  );
+        if (selected < versions.length - 1)
+          TextButton(
+            onPressed: () => select(versions.length - 1),
+            child: Text(tr("已有 v{0} · 切換新版", [versions.length])),
+          ),
+        if (widget.controller.messages.any(
+          (m) => m['id'] == widget.messageId && m['partial'] == true,
+        ))
+          Padding(
+            padding: EdgeInsets.all(8),
+            child: Text(tr("仍在生成 · 保留目前閱讀內容，完成後可切換新版")),
+          ),
+        if (widget.controller.messages.any(
+          (m) => m['id'] == widget.messageId && m['error'] != null,
+        ))
+          Padding(
+            padding: EdgeInsets.all(8),
+            child: Text(tr("生成遇到問題 · 目前顯示最後可讀內容")),
+          ),
+        Expanded(
+          child: ListView(
+            key: const Key('live-reader'),
+            controller: scroll,
+            padding: const EdgeInsets.all(24),
+            children: [
+              RichTextBody(
+                versions[selected],
+                reader: true,
+                gateway: widget.controller.gateway,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }

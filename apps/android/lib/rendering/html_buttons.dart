@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -79,8 +80,9 @@ class NativeHtmlButtonState extends ChangeNotifier {
   final bool enhanceMarkdown;
   String defaultCaption(NativeHtmlButtonType type) => switch (type) {
     NativeHtmlButtonType.submit =>
-      locale.languageCode == 'zh' ? '提交' : 'Submit',
-    NativeHtmlButtonType.reset => locale.languageCode == 'zh' ? '重設' : 'Reset',
+      locale.languageCode == 'zh' ? tr("提交") : tr("Submit"),
+    NativeHtmlButtonType.reset =>
+      locale.languageCode == 'zh' ? tr("重設") : tr("Reset"),
     NativeHtmlButtonType.button => '',
   };
   final Map<String, dom.Element> _submitters = {};
@@ -107,7 +109,7 @@ class NativeHtmlButtonState extends ChangeNotifier {
 
   String annotateHtml(String source) {
     if (source != _source) {
-      throw ArgumentError('Expected the original button fragment');
+      throw ArgumentError(tr("Expected the original button fragment"));
     }
     return _html;
   }
@@ -322,12 +324,12 @@ class NativeHtmlButtonState extends ChangeNotifier {
       if (_disposed) return false;
       // The web mutates textContent, so input value labels remain unchanged.
       if (!button.input) {
-        _display[key] = 'Copied';
+        _display[key] = tr("Copied");
         notifyListeners();
         _timers.add(
           Timer(const Duration(milliseconds: 1400), () {
             if (_disposed) return;
-            _display[key] = 'Copy';
+            _display[key] = tr("Copy");
             notifyListeners();
           }),
         );
@@ -419,76 +421,79 @@ class _NativeHtmlButtonWidgetState extends State<NativeHtmlButtonWidget> {
   }
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.state,
-    builder: (context, _) {
-      final replacement = widget.state.displayText(widget.button.key);
-      return Semantics(
-        button: true,
-        enabled: enabled,
-        label: widget.button.contentName
-            ? replacement ?? widget.button.label
-            : widget.button.label,
-        excludeSemantics: true,
-        onTap: enabled ? trigger : null,
-        child: Focus(
-          canRequestFocus: false,
-          skipTraversal: true,
-          onKeyEvent: (_, event) {
-            if (!enabled) return KeyEventResult.ignored;
-            if (event.logicalKey == LogicalKeyboardKey.enter &&
-                event is KeyDownEvent) {
-              trigger();
-              return KeyEventResult.handled;
-            }
-            if (event.logicalKey == LogicalKeyboardKey.space) {
-              if (event is KeyDownEvent) spacePressed = true;
-              if (event is KeyUpEvent && spacePressed) {
-                spacePressed = false;
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return ListenableBuilder(
+      listenable: widget.state,
+      builder: (context, _) {
+        final replacement = widget.state.displayText(widget.button.key);
+        return Semantics(
+          button: true,
+          enabled: enabled,
+          label: widget.button.contentName
+              ? replacement ?? widget.button.label
+              : widget.button.label,
+          excludeSemantics: true,
+          onTap: enabled ? trigger : null,
+          child: Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onKeyEvent: (_, event) {
+              if (!enabled) return KeyEventResult.ignored;
+              if (event.logicalKey == LogicalKeyboardKey.enter &&
+                  event is KeyDownEvent) {
                 trigger();
+                return KeyEventResult.handled;
               }
-              return KeyEventResult.handled;
-            }
-            return KeyEventResult.ignored;
-          },
-          child: FocusableActionDetector(
-            focusNode: focusNode,
-            enabled: enabled,
-            onShowFocusHighlight: (value) {
-              setState(() => highlightFocus = value);
+              if (event.logicalKey == LogicalKeyboardKey.space) {
+                if (event is KeyDownEvent) spacePressed = true;
+                if (event is KeyUpEvent && spacePressed) {
+                  spacePressed = false;
+                  trigger();
+                }
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
             },
-            onFocusChange: (value) {
-              if (!value) spacePressed = false;
-            },
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: enabled
-                  ? () {
-                      focusNode.requestFocus();
-                      trigger();
-                    }
-                  : null,
-              child: CustomPaint(
-                foregroundPainter: _ButtonFramePainter(
-                  color: Theme.of(
-                    context,
-                  ).extension<PircColors>()!['accent.default'],
-                  focused: highlightFocus,
-                  nativeAppearance: widget.button.nativeAppearance,
-                  dark: Theme.of(context).brightness == Brightness.dark,
-                  disabled: widget.button.disabled,
-                  input: widget.button.input,
+            child: FocusableActionDetector(
+              focusNode: focusNode,
+              enabled: enabled,
+              onShowFocusHighlight: (value) {
+                setState(() => highlightFocus = value);
+              },
+              onFocusChange: (value) {
+                if (!value) spacePressed = false;
+              },
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: enabled
+                    ? () {
+                        focusNode.requestFocus();
+                        trigger();
+                      }
+                    : null,
+                child: CustomPaint(
+                  foregroundPainter: _ButtonFramePainter(
+                    color: Theme.of(
+                      context,
+                    ).extension<PircColors>()!['accent.default'],
+                    focused: highlightFocus,
+                    nativeAppearance: widget.button.nativeAppearance,
+                    dark: Theme.of(context).brightness == Brightness.dark,
+                    disabled: widget.button.disabled,
+                    input: widget.button.input,
+                  ),
+                  child: widget.button.disabled && !widget.button.input
+                      ? Opacity(opacity: 0.45, child: widget.child)
+                      : widget.child,
                 ),
-                child: widget.button.disabled && !widget.button.input
-                    ? Opacity(opacity: 0.45, child: widget.child)
-                    : widget.child,
               ),
             ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
 class _ButtonFramePainter extends CustomPainter {
@@ -552,25 +557,27 @@ class NativeHtmlButtonContent extends StatelessWidget {
   final BuildTree tree;
   final Widget child;
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: state,
-    builder: (context, _) {
-      final replacement = state.displayText(button.key);
-      return replacement == null
-          ? child
-          : IntrinsicWidth(
-              child: Text(
-                replacement,
-                // The HTML resolver has already applied the platform scaler.
-                textScaler: TextScaler.noScaling,
-                textWidthBasis: TextWidthBasis.longestLine,
-                style: tree.inheritanceResolvers
-                    .resolve(context)
-                    .prepareTextStyle(),
-              ),
-            );
-    },
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return ListenableBuilder(
+      listenable: state,
+      builder: (context, _) {
+        final replacement = state.displayText(button.key);
+        return replacement == null
+            ? child
+            : IntrinsicWidth(
+                child: Text(
+                  replacement,
+                  textScaler: TextScaler.noScaling,
+                  textWidthBasis: TextWidthBasis.longestLine,
+                  style: tree.inheritanceResolvers
+                      .resolve(context)
+                      .prepareTextStyle(),
+                ),
+              );
+      },
+    );
+  }
 }
 
 bool _labelable(dom.Element element) =>

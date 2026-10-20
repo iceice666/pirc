@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   /**
    * The assistant's memory (docs/architecture/assistant-memory.md): approve or reject what it
    * proposes to remember about you, review its notes and their history,
@@ -38,14 +40,14 @@
   let versions: MemoryVersion[] = $state([]);
   let alive = true;
 
-  const ACTION: Record<MemoryProposal['action'], string> = {
-    add: 'Remember',
-    replace: 'Change',
-    remove: 'Forget',
-  };
+  const ACTION: Record<MemoryProposal['action'], string> = $derived({
+    add: tr('Remember'),
+    replace: tr('Change'),
+    remove: tr('Forget'),
+  });
   const number = (value: number) => value.toLocaleString();
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : tr('Unable to reach the gateway. Try again.');
 
   function show(next: MemoryView) {
     view = next;
@@ -121,30 +123,35 @@
 </script>
 
 <section class="settings-section" aria-labelledby="memory-title">
-  <h3 id="memory-title">Memory</h3>
+  <h3 id="memory-title">{tr('Memory')}</h3>
   <p>
-    What your assistant remembers across chats. <strong>USER</strong> is what you told it about
-    yourself and changes only when you approve. <strong>MEMORY</strong> holds the assistant's own notes.
-    New chats start with both; open chats keep what they started with. USER also reaches every new coding
-    session on every node, so approve only what should apply everywhere.
+    {tr('What your assistant remembers across chats.')} <strong>{tr('USER')}</strong>
+    {tr('is what you told it about yourself and changes only when you approve.')}
+    <strong>{tr('MEMORY')}</strong>
+    {tr(
+      "holds the assistant's own notes. New chats start with both; open chats keep what they started with. USER also reaches every new coding session on every node, so approve only what should apply everywhere.",
+    )}
   </p>
 
   {#if disabled}
-    <p role="status">Memory is unavailable in demo mode.</p>
+    <p role="status">{tr('Memory is unavailable in demo mode.')}</p>
   {:else if loading}
-    <p role="status">Loading memory…</p>
+    <p role="status">{tr('Loading memory…')}</p>
   {:else}
     {#if error}<p class="memory-error" role="alert">{error}</p>{/if}
     {#if view}
       <p class="memory-usage">
-        USER {number(view.usage.user.used)}/{number(view.usage.user.max)} characters · MEMORY {number(
-          view.usage.note.used,
-        )}/{number(view.usage.note.max)} characters
+        {tr('USER {0}/{1} characters · MEMORY {2}/{3} characters', [
+          number(view.usage.user.used),
+          number(view.usage.user.max),
+          number(view.usage.note.used),
+          number(view.usage.note.max),
+        ])}
       </p>
 
       {#if view.proposals.length}
-        <h4>Waiting for you</h4>
-        <ul class="memory-list" aria-label="Waiting for you">
+        <h4>{tr('Waiting for you')}</h4>
+        <ul class="memory-list" aria-label={tr('Waiting for you')}>
           {#each view.proposals as proposal (proposal.id)}
             <li class="proposal">
               <div class="memory-row">
@@ -154,12 +161,11 @@
                     {proposal.content ?? proposal.target?.content ?? ''}</span
                   >
                   {#if proposal.action === 'replace' && proposal.target}
-                    <small>Now: {proposal.target.content}</small>
+                    <small>{tr('Now: {0}', [proposal.target.content])}</small>
                   {/if}
                   <small
-                    >You said “{proposal.quote}” · {@render chat(proposal.sessionId)} · {ago(
-                      proposal.createdAt,
-                    )}</small
+                    >{tr('You said “{0}” ·', [proposal.quote])}
+                    {@render chat(proposal.sessionId)} · {ago(proposal.createdAt)}</small
                   >
                 </div>
                 <div class="memory-actions">
@@ -170,14 +176,14 @@
                     onclick={() =>
                       act(proposal.id, () =>
                         memoryApi.approve(proposal.id, proposal.target?.revision),
-                      )}>Approve</button
+                      )}>{tr('Approve')}</button
                   >
                   <button
                     class="button ghost small"
                     type="button"
                     disabled={!!busy}
                     onclick={() => act(proposal.id, () => memoryApi.reject(proposal.id))}
-                    >Reject</button
+                    >{tr('Reject')}</button
                   >
                 </div>
               </div>
@@ -186,32 +192,33 @@
         </ul>
       {/if}
 
-      <h4>About you · USER</h4>
+      <h4>{tr('About you · USER')}</h4>
       {#if view.user.length}
         {@render entries(view.user, 'About you')}
       {:else}
-        <p>Nothing yet. When you tell the assistant about yourself, it asks you here first.</p>
+        <p>
+          {tr('Nothing yet. When you tell the assistant about yourself, it asks you here first.')}
+        </p>
       {/if}
 
-      <h4>The assistant's notes · MEMORY</h4>
+      <h4>{tr("The assistant's notes · MEMORY")}</h4>
       {#if view.notes.length}
         {@render entries(view.notes, "The assistant's notes")}
       {:else}
-        <p>No notes yet.</p>
+        <p>{tr('No notes yet.')}</p>
       {/if}
 
       {#if view.removed.length}
         <details class="memory-removed">
-          <summary>Removed · {view.removed.length}</summary>
+          <summary>{tr('Removed · {0}', [view.removed.length])}</summary>
           {@render entries(view.removed, 'Removed')}
         </details>
       {/if}
 
       <p class="memory-fine-print">
-        Forget erases an entry with all its versions and keeps the same text from being saved again;
-        rewordings are not caught. The chats it came from stay on the chat node, chats and coding
-        sessions already started keep the USER they started with, and repositories keep their own
-        workspace memory.
+        {tr(
+          'Forget erases an entry with all its versions and keeps the same text from being saved again; rewordings are not caught. The chats it came from stay on the chat node, chats and coding sessions already started keep the USER they started with, and repositories keep their own workspace memory.',
+        )}
       </p>
     {/if}
   {/if}
@@ -223,7 +230,7 @@
       >{view.sessions[sessionId]}</button
     >
   {:else}
-    a chat that is gone
+    {tr('a chat that is gone')}
   {/if}
 {/snippet}
 
@@ -236,9 +243,9 @@
             <span>{entry.content}</span>
             <small
               >{describeOrigins(entry.origins)}{#if entry.sources.quote}
-                — you said “{entry.sources.quote}”{/if} · {@render chat(entry.sources.sessionId)} · {ago(
-                entry.updatedAt,
-              )}</small
+                {tr('— you said “{0}”', [entry.sources.quote])}{/if} · {@render chat(
+                entry.sources.sessionId,
+              )} · {ago(entry.updatedAt)}</small
             >
           </div>
           <div class="memory-actions">
@@ -247,14 +254,15 @@
                 class="button ghost small"
                 type="button"
                 disabled={!!busy}
-                onclick={() => act(entry.id, () => memoryApi.restore(entry.id))}>Restore</button
+                onclick={() => act(entry.id, () => memoryApi.restore(entry.id))}
+                >{tr('Restore')}</button
               >
             {:else}
               <button
                 class="button ghost small"
                 type="button"
                 aria-expanded={historyFor === entry.id}
-                onclick={() => toggleHistory(entry)}>History</button
+                onclick={() => toggleHistory(entry)}>{tr('History')}</button
               >
             {/if}
             {#if confirming === entry.id}
@@ -263,25 +271,25 @@
                 type="button"
                 disabled={!!busy}
                 onclick={() => act(entry.id, () => memoryApi.forget(entry.id))}
-                >Forget for good</button
+                >{tr('Forget for good')}</button
               >
               <button
                 class="button ghost small"
                 type="button"
-                onclick={() => (confirming = undefined)}>Cancel</button
+                onclick={() => (confirming = undefined)}>{tr('Cancel')}</button
               >
             {:else}
               <button
                 class="button ghost small"
                 type="button"
                 disabled={!!busy}
-                onclick={() => (confirming = entry.id)}>Forget</button
+                onclick={() => (confirming = entry.id)}>{tr('Forget')}</button
               >
             {/if}
           </div>
         </div>
         {#if historyFor === entry.id}
-          <ol class="memory-history" aria-label="History">
+          <ol class="memory-history" aria-label={tr('History')}>
             {#each versions as version (version.revision)}
               <li>
                 <small>{describeVersion(version, view?.sessions ?? {})} · {ago(version.at)}</small>
@@ -293,7 +301,7 @@
                     disabled={!!busy}
                     onclick={() =>
                       act(entry.id, () => memoryApi.restore(entry.id, version.revision))}
-                    >Restore this</button
+                    >{tr('Restore this')}</button
                   >
                 {/if}
               </li>

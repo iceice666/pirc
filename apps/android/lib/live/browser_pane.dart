@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -80,7 +81,7 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
     final value = keys.text;
     if (value == '\u200b') return;
     if (value.isEmpty) {
-      unawaited(state.send({'type': 'key', 'key': 'Backspace'}));
+      unawaited(state.send({'type': 'key', 'key': tr("Backspace")}));
     } else {
       final text = value.startsWith('\u200b') ? value.substring(1) : value;
       if (text.isNotEmpty) {
@@ -103,17 +104,17 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
     }
     final key = event.logicalKey, keyboard = HardwareKeyboard.instance;
     final special = <LogicalKeyboardKey, String>{
-      LogicalKeyboardKey.enter: 'Enter',
-      LogicalKeyboardKey.tab: 'Tab',
-      LogicalKeyboardKey.backspace: 'Backspace',
-      LogicalKeyboardKey.delete: 'Delete',
-      LogicalKeyboardKey.escape: 'Escape',
+      LogicalKeyboardKey.enter: tr("Enter"),
+      LogicalKeyboardKey.tab: tr("Tab"),
+      LogicalKeyboardKey.backspace: tr("Backspace"),
+      LogicalKeyboardKey.delete: tr("Delete"),
+      LogicalKeyboardKey.escape: tr("Escape"),
       LogicalKeyboardKey.arrowUp: 'ArrowUp',
       LogicalKeyboardKey.arrowDown: 'ArrowDown',
       LogicalKeyboardKey.arrowLeft: 'ArrowLeft',
       LogicalKeyboardKey.arrowRight: 'ArrowRight',
-      LogicalKeyboardKey.home: 'Home',
-      LogicalKeyboardKey.end: 'End',
+      LogicalKeyboardKey.home: tr("Home"),
+      LogicalKeyboardKey.end: tr("End"),
       LogicalKeyboardKey.pageUp: 'PageUp',
       LogicalKeyboardKey.pageDown: 'PageDown',
       for (final (i, k) in [
@@ -130,7 +131,7 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
         LogicalKeyboardKey.f11,
         LogicalKeyboardKey.f12,
       ].indexed)
-        k: 'F${i + 1}',
+        k: "F${i + 1}",
     };
     final chord =
         keyboard.isControlPressed ||
@@ -282,18 +283,18 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
   String get statusLabel {
     if (state.userMode) {
       return state.view?['agentWaiting'] == true
-          ? 'Agent is waiting for you'
-          : 'You are in control';
+          ? tr("Agent is waiting for you")
+          : tr("You are in control");
     }
     if (state.view?['action'] != null) return '${state.view!['action']}';
-    return state.view?['active'] == true ? 'Agent' : 'No browser open';
+    return state.view?['active'] == true ? tr("Agent") : tr("No browser open");
   }
 
   double toolbarWidth(double available) {
     if (!state.userMode && state.view?['active'] != true) return available;
     final painter = TextPainter(
       text: TextSpan(
-        text: state.userMode ? 'Return control' : 'Take over',
+        text: state.userMode ? tr("Return control") : tr("Take over"),
         style: text(13, weight: FontWeight.w500),
       ),
       textDirection: TextDirection.ltr,
@@ -355,8 +356,8 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
                       ? LucideIcons.square
                       : LucideIcons.circle,
                   state.view?['recording'] != null
-                      ? 'Stop recording'
-                      : 'Record video',
+                      ? tr("Stop recording")
+                      : tr("Record video"),
                   state.hasControl
                       ? () => state.act({
                           'type': 'record',
@@ -371,14 +372,14 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
               ],
               icon(
                 LucideIcons.history,
-                'Activity and replay',
+                tr("Activity and replay"),
                 state.toggleLog,
                 active: state.showLog,
               ),
               if (state.userMode || state.view?['active'] == true) ...[
                 const SizedBox(width: 4),
                 button(
-                  state.userMode ? 'Return control' : 'Take over',
+                  state.userMode ? tr("Return control") : tr("Take over"),
                   state.hasControl
                       ? () => state.act({
                           'type': state.userMode ? 'release' : 'takeover',
@@ -402,10 +403,10 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
         width: b.maxWidth,
         fit: BoxFit.fitWidth,
         semanticLabel: state.view?['title'] == null
-            ? 'Browser'
+            ? tr("Browser")
             : 'Browser: ${state.view!['title']}',
         errorBuilder: (_, _, _) =>
-            statusText('Unable to display browser frame.'),
+            statusText(tr("Unable to display browser frame.")),
       );
       image = Container(
         key: const ValueKey('browser-live-screen'),
@@ -445,7 +446,11 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
     children: [
       Row(
         children: [
-          icon(LucideIcons.arrowLeft, 'Previous step', () => state.step(-1)),
+          icon(
+            LucideIcons.arrowLeft,
+            tr("Previous step"),
+            () => state.step(-1),
+          ),
           const SizedBox(width: 4),
           Expanded(
             child: Tooltip(
@@ -461,14 +466,17 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
             ),
           ),
           const SizedBox(width: 4),
-          icon(LucideIcons.arrowRight, 'Next step', () => state.step(1)),
+          icon(LucideIcons.arrowRight, tr("Next step"), () => state.step(1)),
           const SizedBox(width: 4),
-          button('Live', state.live),
+          button(tr("Live"), state.live),
         ],
       ),
       const SizedBox(height: 6),
       if (state.replayImage == null)
-        Align(alignment: Alignment.centerLeft, child: statusText('Loading…'))
+        Align(
+          alignment: Alignment.centerLeft,
+          child: statusText(tr("Loading…")),
+        )
       else
         ClipRRect(
           borderRadius: BorderRadius.circular(8),
@@ -476,350 +484,174 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
             state.replayImage!,
             fit: BoxFit.fitWidth,
             width: double.infinity,
-            semanticLabel: 'Browser at this step',
+            semanticLabel: tr("Browser at this step"),
           ),
         ),
     ],
   );
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (state.unavailable.isNotEmpty)
-          empty(
-            state.unavailable,
-            detail:
-                'Install Chromium on the node or set PIRC_BROWSER_EXECUTABLE.',
-          )
-        else ...[
-          toolbar(),
-          if (state.view?['handoff'] != null)
-            Semantics(
-              liveRegion: true,
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: palette(context)['accent.soft'],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text.rich(
-                  TextSpan(
-                    children: [
-                      const TextSpan(
-                        text: 'The agent needs you: ',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      TextSpan(text: '${state.view!['handoff']}'),
-                    ],
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (state.unavailable.isNotEmpty)
+            empty(
+              state.unavailable,
+              detail: tr(
+                "Install Chromium on the node or set PIRC_BROWSER_EXECUTABLE.",
+              ),
+            )
+          else ...[
+            toolbar(),
+            if (state.view?['handoff'] != null)
+              Semantics(
+                liveRegion: true,
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
                   ),
-                  style: text(13).copyWith(height: 1.45),
+                  decoration: BoxDecoration(
+                    color: palette(context)['accent.soft'],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: tr("The agent needs you: "),
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        TextSpan(text: '${state.view!['handoff']}'),
+                      ],
+                    ),
+                    style: text(13).copyWith(height: 1.45),
+                  ),
                 ),
               ),
-            ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              children: [
-                for (final (i, k, l) in [
-                  (LucideIcons.arrowLeft, 'back', 'Back'),
-                  (LucideIcons.arrowRight, 'forward', 'Forward'),
-                  (LucideIcons.rotateCw, 'reload', 'Reload'),
-                ]) ...[
-                  icon(
-                    i,
-                    l,
-                    state.canDrive ? () => state.act({'type': k}) : null,
-                  ),
-                  const SizedBox(width: 4),
-                ],
-                Expanded(
-                  child: Container(
-                    height: 28,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: palette(context)['web.bg-layer'],
-                      border: Border.all(color: palette(context)['web.line']),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: TextField(
-                      controller: address,
-                      focusNode: addressFocus,
-                      readOnly: !state.hasControl,
-                      keyboardType: TextInputType.url,
-                      textInputAction: TextInputAction.go,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      onChanged: (v) => state.urlDraft = v,
-                      onSubmitted: (_) => state.navigate(),
-                      textAlignVertical: TextAlignVertical.center,
-                      style: text(
-                        MediaQuery.sizeOf(context).width <= 650 ||
-                                [
-                                  TargetPlatform.android,
-                                  TargetPlatform.iOS,
-                                ].contains(Theme.of(context).platform)
-                            ? 16
-                            : 12.5,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: state.hasControl
-                            ? 'Enter a URL to open it yourself'
-                            : 'Address',
-                        hintStyle: text(
-                          MediaQuery.sizeOf(context).width <= 650 ? 16 : 12.5,
-                          color: 'text.muted',
-                        ),
-                        isCollapsed: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                        ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (rows(state.view?['tabs']).length > 1)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
+            Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Row(
                 children: [
-                  for (final tab in rows(state.view?['tabs']))
-                    Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: Tooltip(
-                        message: '${tab['url']}',
-                        child: InkWell(
-                          onTap: state.canDrive
-                              ? () => state.act({
-                                  'type': 'tab',
-                                  'index': tab['index'],
-                                })
-                              : null,
-                          child: Opacity(
-                            opacity: state.canDrive ? 1 : .45,
-                            child: Container(
-                              height: 24,
-                              constraints: const BoxConstraints(maxWidth: 160),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: tab['active'] == true
-                                    ? palette(context)['web.bg-active']
-                                    : null,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Center(
-                                widthFactor: 1,
-                                child: Text(
-                                  '${tab['title'] ?? ''}'.isNotEmpty
-                                      ? '${tab['title']}'
-                                      : '${tab['url'] ?? ''}'.isNotEmpty
-                                      ? '${tab['url']}'
-                                      : 'New tab',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: text(
-                                    12,
-                                    color: tab['active'] == true
-                                        ? 'text.primary'
-                                        : 'text.secondary',
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                  for (final (i, k, l) in [
+                    (LucideIcons.arrowLeft, 'back', tr("Back")),
+                    (LucideIcons.arrowRight, 'forward', tr("Forward")),
+                    (LucideIcons.rotateCw, 'reload', tr("Reload")),
+                  ]) ...[
+                    icon(
+                      i,
+                      l,
+                      state.canDrive ? () => state.act({'type': k}) : null,
                     ),
-                ],
-              ),
-            ),
-          if (state.canDrive && state.replayIndex == null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
-              child: Wrap(
-                spacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Semantics(
-                    toggled: touchDrag,
-                    child: button(
-                      touchDrag ? 'Touch: drag' : 'Touch: scroll',
-                      () => setState(() => touchDrag = !touchDrag),
-                      primary: touchDrag,
-                    ),
-                  ),
-                  Text(
-                    touchDrag
-                        ? 'Drag objects · tap to type'
-                        : 'Swipe to scroll · tap to type',
-                    style: text(12, color: 'text.muted'),
-                  ),
-                ],
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-            child: Stack(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (state.replayIndex != null)
-                      replay()
-                    else if (state.image != null)
-                      liveImage()
-                    else if (state.view?['active'] == true)
-                      statusText('Waiting for the first frame…')
-                    else
-                      empty(
-                        'The agent opens a browser when it uses web tools. You can watch it here, take over to log in or fill forms, and record videos.',
-                      ),
-                    if (state.notice.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          state.notice,
-                          style: text(12, color: 'text.secondary'),
-                        ),
-                      ),
+                    const SizedBox(width: 4),
                   ],
-                ),
-                if (state.image != null && state.replayIndex == null)
-                  Positioned(
-                    left: 0,
-                    bottom: 0,
-                    width: 1,
-                    height: 1,
-                    child: Opacity(
-                      opacity: 0,
-                      child: Focus(
-                        onKeyEvent: keyDown,
-                        child: TextField(
-                          controller: keys,
-                          focusNode: keyFocus,
-                          readOnly: !state.canDrive,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) {
-                            if (state.canDrive) {
-                              state.send({'type': 'key', 'key': 'Enter'});
-                            }
-                          },
-                          decoration: const InputDecoration(
-                            labelText: 'Type into the browser',
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
+                  Expanded(
+                    child: Container(
+                      height: 28,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: palette(context)['web.bg-layer'],
+                        border: Border.all(color: palette(context)['web.line']),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: TextField(
+                        controller: address,
+                        focusNode: addressFocus,
+                        readOnly: !state.hasControl,
+                        keyboardType: TextInputType.url,
+                        textInputAction: TextInputAction.go,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        onChanged: (v) => state.urlDraft = v,
+                        onSubmitted: (_) => state.navigate(),
+                        textAlignVertical: TextAlignVertical.center,
+                        style: text(
+                          MediaQuery.sizeOf(context).width <= 650 ||
+                                  [
+                                    TargetPlatform.android,
+                                    TargetPlatform.iOS,
+                                  ].contains(Theme.of(context).platform)
+                              ? 16
+                              : 12.5,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: state.hasControl
+                              ? tr("Enter a URL to open it yourself")
+                              : tr("Address"),
+                          hintStyle: text(
+                            MediaQuery.sizeOf(context).width <= 650 ? 16 : 12.5,
+                            color: 'text.muted',
                           ),
+                          isCollapsed: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
                         ),
                       ),
                     ),
                   ),
-              ],
-            ),
-          ),
-          if (state.showLog)
-            Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: palette(context)['web.line']),
-                ),
+                ],
               ),
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-              child: Semantics(
-                label: 'Browser activity',
-                container: true,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+            ),
+            if (rows(state.view?['tabs']).length > 1)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
                   children: [
-                    if (state.recordings.isNotEmpty) ...[
-                      heading('Recordings'),
-                      for (final path in state.recordings)
-                        NativeRecordingPlayer(
-                          key: ValueKey(
-                            '${state.origin}:${state.client}:${state.session}:$path',
-                          ),
-                          gateway: widget.controller.gateway,
-                          session: state.session!,
-                          path: path,
-                        ),
-                    ],
-                    heading('Activity'),
-                    if (state.log.isEmpty) statusText('Nothing yet.'),
-                    for (final entry in state.log.reversed)
-                      Tooltip(
-                        message: '${entry['url']}',
-                        child: InkWell(
-                          onTap: entry['image'] == true
-                              ? () => state.openReplay(entry)
-                              : null,
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            key: ValueKey('browser-log-${entry['index']}'),
-                            decoration: BoxDecoration(
-                              color: state.replayIndex == entry['index']
-                                  ? palette(context)['web.bg-hover']
-                                  : null,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 4,
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                              textBaseline: TextBaseline.alphabetic,
-                              children: [
-                                Flexible(
-                                  flex: 2,
-                                  child: Text(
-                                    time(entry['at']),
-                                    style: text(12, color: 'text.muted')
-                                        .copyWith(
-                                          fontFeatures: const [
-                                            FontFeature.tabularFigures(),
-                                          ],
-                                        ),
-                                  ),
+                    for (final tab in rows(state.view?['tabs']))
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Tooltip(
+                          message: '${tab['url']}',
+                          child: InkWell(
+                            onTap: state.canDrive
+                                ? () => state.act({
+                                    'type': 'tab',
+                                    'index': tab['index'],
+                                  })
+                                : null,
+                            child: Opacity(
+                              opacity: state.canDrive ? 1 : .45,
+                              child: Container(
+                                height: 24,
+                                constraints: const BoxConstraints(
+                                  maxWidth: 160,
                                 ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '${entry['actor']}',
-                                  style: text(
-                                    11,
-                                    color: entry['actor'] == 'user'
-                                        ? 'status.warning'
-                                        : 'accent.default',
-                                  ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
                                 ),
-                                const SizedBox(width: 6),
-                                Expanded(
+                                decoration: BoxDecoration(
+                                  color: tab['active'] == true
+                                      ? palette(context)['web.bg-active']
+                                      : null,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Center(
+                                  widthFactor: 1,
                                   child: Text(
-                                    '${entry['action']}',
+                                    '${tab['title'] ?? ''}'.isNotEmpty
+                                        ? '${tab['title']}'
+                                        : '${tab['url'] ?? ''}'.isNotEmpty
+                                        ? '${tab['url']}'
+                                        : tr("New tab"),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: text(
                                       12,
-                                      color: entry['image'] == true
+                                      color: tab['active'] == true
                                           ? 'text.primary'
                                           : 'text.secondary',
                                     ),
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
                           ),
                         ),
@@ -827,11 +659,196 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
                   ],
                 ),
               ),
+            if (state.canDrive && state.replayIndex == null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                child: Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Semantics(
+                      toggled: touchDrag,
+                      child: button(
+                        touchDrag ? 'Touch: drag' : 'Touch: scroll',
+                        () => setState(() => touchDrag = !touchDrag),
+                        primary: touchDrag,
+                      ),
+                    ),
+                    Text(
+                      touchDrag
+                          ? tr("Drag objects · tap to type")
+                          : tr("Swipe to scroll · tap to type"),
+                      style: text(12, color: 'text.muted'),
+                    ),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              child: Stack(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (state.replayIndex != null)
+                        replay()
+                      else if (state.image != null)
+                        liveImage()
+                      else if (state.view?['active'] == true)
+                        statusText(tr("Waiting for the first frame…"))
+                      else
+                        empty(
+                          tr(
+                            "The agent opens a browser when it uses web tools. You can watch it here, take over to log in or fill forms, and record videos.",
+                          ),
+                        ),
+                      if (state.notice.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            state.notice,
+                            style: text(12, color: 'text.secondary'),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (state.image != null && state.replayIndex == null)
+                    Positioned(
+                      left: 0,
+                      bottom: 0,
+                      width: 1,
+                      height: 1,
+                      child: Opacity(
+                        opacity: 0,
+                        child: Focus(
+                          onKeyEvent: keyDown,
+                          child: TextField(
+                            controller: keys,
+                            focusNode: keyFocus,
+                            readOnly: !state.canDrive,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) {
+                              if (state.canDrive) {
+                                state.send({'type': 'key', 'key': tr("Enter")});
+                              }
+                            },
+                            decoration: InputDecoration(
+                              labelText: tr("Type into the browser"),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
+            if (state.showLog)
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: palette(context)['web.line']),
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                child: Semantics(
+                  label: tr("Browser activity"),
+                  container: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (state.recordings.isNotEmpty) ...[
+                        heading(tr("Recordings")),
+                        for (final path in state.recordings)
+                          NativeRecordingPlayer(
+                            key: ValueKey(
+                              '${state.origin}:${state.client}:${state.session}:$path',
+                            ),
+                            gateway: widget.controller.gateway,
+                            session: state.session!,
+                            path: path,
+                          ),
+                      ],
+                      heading(tr("Activity")),
+                      if (state.log.isEmpty) statusText(tr("Nothing yet.")),
+                      for (final entry in state.log.reversed)
+                        Tooltip(
+                          message: '${entry['url']}',
+                          child: InkWell(
+                            onTap: entry['image'] == true
+                                ? () => state.openReplay(entry)
+                                : null,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              key: ValueKey('browser-log-${entry['index']}'),
+                              decoration: BoxDecoration(
+                                color: state.replayIndex == entry['index']
+                                    ? palette(context)['web.bg-hover']
+                                    : null,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 4,
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.baseline,
+                                textBaseline: TextBaseline.alphabetic,
+                                children: [
+                                  Flexible(
+                                    flex: 2,
+                                    child: Text(
+                                      time(entry['at']),
+                                      style: text(12, color: 'text.muted')
+                                          .copyWith(
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
+                                          ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '${entry['actor']}',
+                                    style: text(
+                                      11,
+                                      color: entry['actor'] == 'user'
+                                          ? 'status.warning'
+                                          : 'accent.default',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      '${entry['action']}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: text(
+                                        12,
+                                        color: entry['image'] == true
+                                            ? 'text.primary'
+                                            : 'text.secondary',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ],
-      ],
-    ),
-  );
+      ),
+    );
+  }
+
   Widget heading(String value) => Padding(
     padding: const EdgeInsets.fromLTRB(2, 8, 2, 4),
     child: Text(

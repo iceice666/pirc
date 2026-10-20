@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/widgets.dart';
 import 'package:qr/qr.dart';
 
@@ -136,9 +137,10 @@ class PairingQr extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final modules = pairingQrModules(data);
     return Semantics(
-      label: 'Pairing QR code',
+      label: tr("Pairing QR code"),
       image: true,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),

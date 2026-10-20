@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:html/dom.dart' as dom;
 
 enum NativeHtmlMediaKind { audio, video }
@@ -232,9 +233,9 @@ String? _unsafeMediaUrl(
       caseSensitive: false,
     );
     if (mime.hasMatch(canonical)) return null;
-    return 'Only data:$dataMimeCategory/* URLs are allowed here.';
+    return tr("Only data:{0}/* URLs are allowed here.", [dataMimeCategory]);
   }
-  return 'The $scheme: URL scheme is not allowed for native media.';
+  return tr("The {0}: URL scheme is not allowed for native media.", [scheme]);
 }
 
 String _trimUrlControls(String value) => value

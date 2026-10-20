@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'timeline_model.dart';
 
 /// Parses Mermaid 11.17.2 timeline tokens into a native source-order model.
@@ -11,8 +12,8 @@ NativeMermaidTimelineDiagram parseNativeMermaidTimeline(String source) {
       .replaceAll(RegExp(r'^\s*%%(?!\{)[^\n]+\n?', multiLine: true), '')
       .trimLeft();
   if (processedForSize.length > 50000) {
-    throw const FormatException(
-      'Mermaid timeline exceeds the default 50000 character limit',
+    throw FormatException(
+      tr("Mermaid timeline exceeds the default 50000 character limit"),
     );
   }
   final parser = _TimelineParser(normalized);
@@ -58,7 +59,7 @@ class _TimelineParser {
   static final _period = RegExp(r'[^#:\n]+');
 
   Never invalid(String message, [int? atLine]) => throw FormatException(
-    'Invalid Mermaid timeline at line ${atLine ?? line}: $message',
+    tr("Invalid Mermaid timeline at line {0}: {1}", [atLine ?? line, message]),
   );
 
   NativeMermaidTimelineDiagram parse() {
@@ -68,11 +69,14 @@ class _TimelineParser {
 
       final tokenLine = line;
       if (source.startsWith('%%{', cursor)) {
-        invalid('Mermaid configuration directives are unsupported', tokenLine);
+        invalid(
+          tr("Mermaid configuration directives are unsupported"),
+          tokenLine,
+        );
       }
 
       if (!headerSeen && source.startsWith('---', cursor)) {
-        invalid('YAML frontmatter is unsupported', tokenLine);
+        invalid(tr("YAML frontmatter is unsupported"), tokenLine);
       }
 
       if (_consumeComment()) continue;
@@ -97,7 +101,7 @@ class _TimelineParser {
       }
 
       if (!headerSeen) {
-        invalid('Expected timeline header', tokenLine);
+        invalid(tr("Expected timeline header"), tokenLine);
       }
 
       final titleMatch = _title.matchAsPrefix(source, cursor);
@@ -130,7 +134,7 @@ class _TimelineParser {
         _consumeTo(accDescriptionMultilineMatch.end);
         final end = source.indexOf('}', cursor);
         if (end < 0) {
-          invalid('Unterminated accDescr block', tokenLine);
+          invalid(tr("Unterminated accDescr block"), tokenLine);
         }
         accessibleDescription = _normalizeDescription(
           source.substring(cursor, end),
@@ -157,7 +161,7 @@ class _TimelineParser {
       final eventMatch = _event.matchAsPrefix(source, cursor);
       if (eventMatch != null) {
         if (tasks.isEmpty) {
-          invalid('Event has no preceding period', tokenLine);
+          invalid(tr("Event has no preceding period"), tokenLine);
         }
         final token = source.substring(cursor, eventMatch.end);
         tasks.last.events.add(
@@ -189,13 +193,15 @@ class _TimelineParser {
       // timeline token. Keep context on following lines, as the Web error
       // surface intentionally displays only the first line of the exception.
       throw FormatException(
-        'Parse error on line $tokenLine:\n'
-        'Unexpected token "${source[cursor]}"',
+        tr("Parse error on line {0}:\nUnexpected token \"{1}\"", [
+          tokenLine,
+          source[cursor],
+        ]),
       );
     }
 
     if (!headerSeen) {
-      throw const FormatException('Missing Mermaid timeline header');
+      throw FormatException(tr("Missing Mermaid timeline header"));
     }
 
     return NativeMermaidTimelineDiagram(

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   /**
    * Background work at a glance, in the top bar (Codex's "Running N terminals",
    * DeepSeek Harness's job list): a quiet trigger that shows only while the
@@ -84,12 +86,12 @@
     const session = sessionId;
     if (!id) return false;
     if (app.usingDemo) {
-      output = '$ bun run dev\n  VITE ready in 412 ms\n  ➜  Local: http://localhost:5173/';
+      output = tr('$ bun run dev\n  VITE ready in 412 ms\n  ➜  Local: http://localhost:5173/');
       return false;
     }
     const result = await outputLoader.run(
       (signal) => panelApi.backgroundOutput(session, id, 200, signal),
-      'Output unavailable.',
+      tr('Output unavailable.'),
     );
     if (!result || expanded !== id || sessionId !== session) return false;
     // Measured after the await: the element may belong to a task shown since.
@@ -116,7 +118,7 @@
       const { task: next } = await panelApi.stopBackground(session, task.id, generation);
       if (session === sessionId) app.panel.updateTask(next);
     } catch (cause) {
-      if (session === sessionId) stopError = errorMessage(cause, 'Could not stop the task.');
+      if (session === sessionId) stopError = errorMessage(cause, tr('Could not stop the task.'));
     }
   }
   function clearFinished() {
@@ -127,9 +129,10 @@
   function detail(task: BackgroundTask) {
     if (task.status === 'running') return task.tty ? 'tty' : '';
     if (task.status === 'stopping') return 'stopping';
-    if (task.status === 'completed') return task.exitCode ? `exit ${task.exitCode}` : 'done';
+    if (task.status === 'completed')
+      return task.exitCode ? tr('exit {0}', [task.exitCode]) : 'done';
     if (task.status === 'failed')
-      return task.exitCode != null ? `exit ${task.exitCode}` : (task.error ?? 'failed');
+      return task.exitCode != null ? tr('exit {0}', [task.exitCode]) : (task.error ?? 'failed');
     return task.status.replace('_', ' ');
   }
   const dot = (task: BackgroundTask) =>
@@ -186,8 +189,8 @@
   });
   let label = $derived(
     liveCount
-      ? `${liveCount} running`
-      : `${finished.length} background task${finished.length === 1 ? '' : 's'}`,
+      ? tr('{0} running', [liveCount])
+      : tr('{0} background task{1}', [finished.length, finished.length === 1 ? '' : 's']),
   );
   // A ticking clock for durations, only while the list is visible.
   $effect(() => {
@@ -232,13 +235,13 @@
       type="button"
       aria-expanded={open}
       aria-haspopup="true"
-      aria-label="{label}. Show background jobs"
-      title="Background jobs"
+      aria-label={tr('{0}. Show background jobs', [label])}
+      title={tr('Background jobs')}
       onclick={toggleOpen}
     >
       {#if liveCount}<span class="state-dot ongoing" aria-hidden="true"></span>{/if}
       <span class="jobs-count">{liveCount || finished.length}</span>
-      <span class="jobs-label">{liveCount ? 'running' : 'finished'}</span>
+      <span class="jobs-label">{liveCount ? tr('running') : tr('finished')}</span>
       <ChevronDown size={12} />
     </button>
 
@@ -247,12 +250,12 @@
         class="jobs-popover"
         role="dialog"
         aria-modal="false"
-        aria-label="Background jobs"
+        aria-label={tr('Background jobs')}
         bind:this={popover}
         use:rovingFocus={{ selector: 'button', orientation: 'vertical', wrap: false }}
       >
         {#if liveTasks.length || agents.length}
-          <div class="jobs-section">Running</div>
+          <div class="jobs-section">{tr('Running')}</div>
         {/if}
         {#each liveTasks as task (task.id)}
           {@render taskRow(task, true)}
@@ -284,9 +287,11 @@
               <span class="section-chevron" class:open={finishedOpen || !liveCount}
                 ><ChevronRight size={12} /></span
               >
-              Finished {finished.length}
+              {tr('Finished {0}', [finished.length])}
             </button>
-            <button class="jobs-section-toggle" type="button" onclick={clearFinished}>Clear</button>
+            <button class="jobs-section-toggle" type="button" onclick={clearFinished}
+              >{tr('Clear')}</button
+            >
           </div>
           {#if finishedOpen || !liveCount}
             {#each finished as task (task.id)}
@@ -323,15 +328,15 @@
           class="job-stop touch-target"
           class:armed={armed === task.id}
           type="button"
-          aria-label={armed === task.id ? 'Confirm stop' : `Stop ${task.id}`}
-          title={armed === task.id ? 'Click again to stop' : 'Stop task'}
+          aria-label={armed === task.id ? tr('Confirm stop') : tr('Stop {0}', [task.id])}
+          title={armed === task.id ? tr('Click again to stop') : tr('Stop task')}
           onclick={() => pressStop(task)}
         >
           <Square size={9} fill="currentColor" />
-          {#if armed === task.id}<span>Stop</span>{/if}
+          {#if armed === task.id}<span>{tr('Stop')}</span>{/if}
         </button>
       {:else if task.status === 'stopping'}
-        <span class="job-stop pending" role="img" aria-label="Stopping"
+        <span class="job-stop pending" role="img" aria-label={tr('Stopping')}
           ><LoaderCircle class="spin" size={12} /></span
         >
       {/if}

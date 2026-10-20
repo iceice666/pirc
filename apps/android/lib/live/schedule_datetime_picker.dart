@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'schedule_picker_value.dart';
@@ -68,7 +69,7 @@ class _ScheduleDateTimePickerState extends State<ScheduleDateTimePicker> {
       if (key.currentState?.commit() == false) valid = false;
     }
     if (!valid) {
-      setState(() => error = 'Enter a valid date and time.');
+      setState(() => error = tr("Enter a valid date and time."));
       return;
     }
     Navigator.pop(context, value.wallTime);
@@ -76,6 +77,7 @@ class _ScheduleDateTimePickerState extends State<ScheduleDateTimePicker> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final dark = Theme.of(context).brightness == Brightness.dark;
     final foreground = dark ? const Color(0xffe6e1e9) : const Color(0xff1d1b20);
     final action = dark ? const Color(0xffb3c5ff) : const Color(0xff4b6197);
@@ -114,8 +116,8 @@ class _ScheduleDateTimePickerState extends State<ScheduleDateTimePicker> {
                   child: Semantics(
                     namesRoute: true,
                     header: true,
-                    child: const Text(
-                      'Set date and time',
+                    child: Text(
+                      tr("Set date and time"),
                       style: TextStyle(fontSize: 22, height: 1.3),
                     ),
                   ),
@@ -127,7 +129,7 @@ class _ScheduleDateTimePickerState extends State<ScheduleDateTimePicker> {
                     1,
                     12,
                     (v) => value = value.withMonth(v),
-                    labels: months,
+                    labels: months.map((value) => tr(value)).toList(),
                   ),
                   const SizedBox(width: 16),
                   wheel(
@@ -193,10 +195,10 @@ class _ScheduleDateTimePickerState extends State<ScheduleDateTimePicker> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: Row(
                     children: [
-                      button('Clear', () => Navigator.pop(context, '')),
+                      button(tr("Clear"), () => Navigator.pop(context, '')),
                       const Spacer(),
-                      button('Cancel', () => Navigator.pop(context)),
-                      button('Set', accept),
+                      button(tr("Cancel"), () => Navigator.pop(context)),
+                      button(tr("Set"), accept),
                     ],
                   ),
                 ),
@@ -291,89 +293,94 @@ class _DateTimeWheelState extends State<_DateTimeWheel> {
   }
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: 180,
-    child: Stack(
-      children: [
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 66,
-          bottom: 66,
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border.symmetric(
-                  horizontal: BorderSide(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? const Color(0xff938f99)
-                        : const Color(0xff626169),
-                    width: 1.5,
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return SizedBox(
+      height: 180,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 66,
+            bottom: 66,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.symmetric(
+                    horizontal: BorderSide(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xff938f99)
+                          : const Color(0xff626169),
+                      width: 1.5,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-        ListWheelScrollView.useDelegate(
-          controller: scroll,
-          itemExtent: 60,
-          diameterRatio: 100,
-          perspective: .0001,
-          physics: const FixedExtentScrollPhysics(),
-          overAndUnderCenterOpacity: .45,
-          onSelectedItemChanged: (index) {
-            dirty = false;
-            focus.unfocus();
-            widget.onChanged(index + widget.min);
-          },
-          childDelegate: ListWheelChildBuilderDelegate(
-            childCount: widget.max - widget.min + 1,
-            builder: (context, index) {
-              final value = index + widget.min;
-              if (value == widget.value) {
-                return Center(
-                  child: TextField(
-                    key: ValueKey('schedule-picker-${widget.name}'),
-                    controller: text,
-                    onChanged: (_) => dirty = true,
-                    focusNode: focus,
-                    textAlign: TextAlign.center,
-                    style: DefaultTextStyle.of(context).style,
-                    keyboardType: widget.labels == null
-                        ? TextInputType.number
-                        : TextInputType.text,
-                    inputFormatters: widget.labels == null
-                        ? [FilteringTextInputFormatter.digitsOnly]
-                        : null,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => commit(),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                      semanticCounterText: widget.name,
+          ListWheelScrollView.useDelegate(
+            controller: scroll,
+            itemExtent: 60,
+            diameterRatio: 100,
+            perspective: .0001,
+            physics: const FixedExtentScrollPhysics(),
+            overAndUnderCenterOpacity: .45,
+            onSelectedItemChanged: (index) {
+              dirty = false;
+              focus.unfocus();
+              widget.onChanged(index + widget.min);
+            },
+            childDelegate: ListWheelChildBuilderDelegate(
+              childCount: widget.max - widget.min + 1,
+              builder: (context, index) {
+                final value = index + widget.min;
+                if (value == widget.value) {
+                  return Center(
+                    child: TextField(
+                      key: ValueKey('schedule-picker-${widget.name}'),
+                      controller: text,
+                      onChanged: (_) => dirty = true,
+                      focusNode: focus,
+                      textAlign: TextAlign.center,
+                      style: DefaultTextStyle.of(context).style,
+                      keyboardType: widget.labels == null
+                          ? TextInputType.number
+                          : TextInputType.text,
+                      inputFormatters: widget.labels == null
+                          ? [FilteringTextInputFormatter.digitsOnly]
+                          : null,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => commit(),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                        ),
+                        semanticCounterText: tr(widget.name),
+                      ),
                     ),
+                  );
+                }
+                return Semantics(
+                  button: true,
+                  label: '${tr(widget.name)} ${display(value)}',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => scroll.animateToItem(
+                      index,
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOut,
+                    ),
+                    child: Center(child: Text(display(value))),
                   ),
                 );
-              }
-              return Semantics(
-                button: true,
-                label: '${widget.name} ${display(value)}',
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => scroll.animateToItem(
-                    index,
-                    duration: const Duration(milliseconds: 150),
-                    curve: Curves.easeOut,
-                  ),
-                  child: Center(child: Text(display(value))),
-                ),
-              );
-            },
+              },
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }

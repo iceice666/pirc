@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:ui' show FontVariation, SemanticsRole;
 import 'package:flutter/material.dart';
@@ -29,10 +30,10 @@ String _workspaceRequestError(Object error) {
   if (error is PlatformException) {
     final match = RegExp(r'^HTTP_(\d{3})$').firstMatch(error.code);
     if (match != null) {
-      return error.message ?? 'Request failed (${match.group(1)})';
+      return error.message ?? tr("Request failed ({0})", [match.group(1)]);
     }
   }
-  return 'Unable to reach the gateway. Try again.';
+  return tr("Unable to reach the gateway. Try again.");
 }
 
 class _WorkspaceSettingsScope {
@@ -438,14 +439,16 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
       Align(
         alignment: Alignment.centerLeft,
         child: WebButton(
-          'Retry',
+          tr("Retry"),
           disabledOpacity: .5,
           onPressed: loading.contains(kind) ? null : () => load(kind),
         ),
       ),
     if (saving.contains(kind) && kind != 'instructions')
       paragraph(
-        kind == 'capabilities' ? 'Saving project capabilities…' : 'Saving…',
+        kind == 'capabilities'
+            ? tr("Saving project capabilities…")
+            : tr("Saving…"),
         status: true,
       )
     else if (statuses[kind] != null)
@@ -455,7 +458,7 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
     key: const ValueKey('project-capabilities-group'),
     container: true,
     explicitChildNodes: true,
-    label: 'Allowed assistant features',
+    label: tr("Allowed assistant features"),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -463,7 +466,7 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
           padding: const EdgeInsets.fromLTRB(2, 16, 2, 8),
           child: ExcludeSemantics(
             child: Text(
-              'Allowed assistant features',
+              tr("Allowed assistant features"),
               style: webText(
                 context,
                 size: 13,
@@ -472,12 +475,12 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
             ),
           ),
         ),
-        for (final e in const {
-          'delegation': 'Delegation',
-          'memory_search': 'Memory search',
-          'remote_recall': 'Remote recall',
-          'schedules': 'Schedules',
-          'web_search': 'Web search',
+        for (final e in {
+          'delegation': tr("Delegation"),
+          'memory_search': tr("Memory search"),
+          'remote_recall': tr("Remote recall"),
+          'schedules': tr("Schedules"),
+          'web_search': tr("Web search"),
         }.entries)
           capabilityToggle(e.key, e.value, cap),
         delegationApprovalSelect(cap),
@@ -504,11 +507,11 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
         children: [
           Row(
             children: [
-              Expanded(child: Text('Delegation approval', style: text)),
+              Expanded(child: Text(tr("Delegation approval"), style: text)),
               const SizedBox(width: 12),
               Flexible(
                 child: Semantics(
-                  label: 'Delegation approval',
+                  label: tr("Delegation approval"),
                   enabled: enabled,
                   child: Opacity(
                     opacity: enabled ? 1 : .5,
@@ -525,7 +528,7 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                             DropdownMenuItem(
                               value: e.key,
                               child: Text(
-                                e.value,
+                                tr(e.value),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -533,9 +536,15 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                         onChanged: enabled
                             ? (next) {
                                 if (next == null || next == value) return;
-                                mutate('capabilities', {
-                                  'capabilities': {'delegation_approval': next},
-                                }, 'Project capabilities saved.');
+                                mutate(
+                                  'capabilities',
+                                  {
+                                    'capabilities': {
+                                      'delegation_approval': next,
+                                    },
+                                  },
+                                  tr("Project capabilities saved."),
+                                );
                               }
                             : null,
                       ),
@@ -546,17 +555,19 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
             ],
           ),
           if (capabilities['delegation'] != true)
-            paragraph('Applies only while delegation is allowed.')
+            paragraph(tr("Applies only while delegation is allowed."))
           else if (value == 'untrusted')
             paragraph(
-              'Outside content: web pages, search, browser, memory search, and delegation reports since your last message.',
+              tr(
+                "Outside content: web pages, search, browser, memory search, and delegation reports since your last message.",
+              ),
             )
           else if (value == 'never')
             Padding(
               key: const ValueKey('delegation-approval-warning'),
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                delegationApprovalNeverWarning,
+                tr(delegationApprovalNeverWarning),
                 style: webText(
                   context,
                   size: 13,
@@ -574,7 +585,7 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
     final enabled = !saving.contains('capabilities');
     void toggle() => mutate('capabilities', {
       'capabilities': {key: !value},
-    }, 'Project capabilities saved.');
+    }, tr("Project capabilities saved."));
     return Semantics(
       label: label,
       toggled: value,
@@ -669,16 +680,19 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
   );
   Widget facts(Json w, List<Json> sessions, Json? lease) {
     final values = <(String, String)>[
-      ('Device', '${w['hostId']} · ${online ? 'online' : 'offline'}'),
+      (tr("Device"), '${w['hostId']} · ${online ? 'online' : 'offline'}'),
       (
-        'Sessions',
+        tr("Sessions"),
         '${sessions.length}${sessions.any(isWorking) ? ' · ${sessions.where(isWorking).length} running' : ''}${sessions.any((s) => s['unread'] == true) ? ' · ${sessions.where((s) => s['unread'] == true).length} unread' : ''}',
       ),
-      ('Write lease', lease == null ? 'Free' : 'Held by “${lease['name']}”'),
+      (
+        tr("Write lease"),
+        lease == null ? tr("Free") : tr("Held by “{0}”", [lease['name']]),
+      ),
       if ('${obj(w['defaults'])['modelId'] ?? ''}'.isNotEmpty)
-        ('Default model', '${obj(w['defaults'])['modelId']}'),
+        (tr("Default model"), '${obj(w['defaults'])['modelId']}'),
       if ('${obj(w['defaults'])['thinkingLevel'] ?? ''}'.isNotEmpty)
-        ('Default thinking', '${obj(w['defaults'])['thinkingLevel']}'),
+        (tr("Default thinking"), '${obj(w['defaults'])['thinkingLevel']}'),
     ];
     return Padding(
       padding: const EdgeInsets.only(top: 12),
@@ -702,11 +716,16 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
           Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
-              "The project's node is offline: its ${mode.projectInstructions && mode.projectFiles
-                  ? 'instructions and files'
-                  : mode.projectInstructions
-                  ? 'instructions'
-                  : 'files'} can be changed once it is back.",
+              tr(
+                "The project's node is offline: its {0} can be changed once it is back.",
+                [
+                  mode.projectInstructions && mode.projectFiles
+                      ? 'instructions and files'
+                      : mode.projectInstructions
+                      ? 'instructions'
+                      : 'files',
+                ],
+              ),
               style: webText(
                 context,
                 size: 13,
@@ -715,18 +734,24 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
             ),
           )
         else if (mode.projectInstructions) ...[
-          heading('Project instructions'),
+          heading(tr("Project instructions")),
           paragraph(
-            "Instructions for every $noun in this project. Only you can change them: the assistant cannot edit them. They are kept on the project's node, and each $noun keeps the instructions it started with, so a change reaches new ${noun}s only.",
+            tr(
+              "Instructions for every {0} in this project. Only you can change them: the assistant cannot edit them. They are kept on the project's node, and each {1} keeps the instructions it started with, so a change reaches new {2}s only.",
+              [noun, noun, noun],
+            ),
           ),
           if (loading.contains('instructions'))
-            paragraph('Loading project instructions…', status: true),
+            paragraph(tr("Loading project instructions…"), status: true),
           if (data.containsKey('instructions')) ...[
             WorkspaceInstructionsEditor(
               controller: instructions,
               enabled: !saving.contains('instructions'),
               tooLong: instructions.text.length > maxChars,
-              count: '${instructions.text.length} / $maxChars characters',
+              count: tr("{0} / {1} characters", [
+                instructions.text.length,
+                maxChars,
+              ]),
               onChanged: (_) {
                 _instructionEditRevision++;
                 setState(() {});
@@ -737,7 +762,10 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
               children: [
                 Expanded(
                   child: Text(
-                    '${instructions.text.length} / $maxChars characters',
+                    tr("{0} / {1} characters", [
+                      instructions.text.length,
+                      maxChars,
+                    ]),
                     style:
                         webText(
                           context,
@@ -760,7 +788,7 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                 ),
                 const SizedBox(width: 12),
                 WebButton(
-                  saving.contains('instructions') ? 'Saving…' : 'Save',
+                  saving.contains('instructions') ? tr("Saving…") : tr("Save"),
                   key: const ValueKey('workspace-instructions-save'),
                   backgroundColor: palette(context)['web.bg-hover'],
                   disabledOpacity: .5,
@@ -772,7 +800,10 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                       : () => mutate(
                           'instructions',
                           {'text': instructions.text},
-                          'Project instructions saved. New ${noun}s in this project will use them.',
+                          tr(
+                            "Project instructions saved. New {0}s in this project will use them.",
+                            [noun],
+                          ),
                         ),
                 ),
               ],
@@ -791,14 +822,17 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
           workspaceId: '${w['id']}',
         ),
         sectionDivider(),
-        heading('Delete project'),
+        heading(tr("Delete project")),
         paragraph(
-          'Deletes the project, its ${noun}s and what they wrote to memory. You see what goes and what stays before anything is deleted.',
+          tr(
+            "Deletes the project, its {0}s and what they wrote to memory. You see what goes and what stays before anything is deleted.",
+            [noun],
+          ),
         ),
         Align(
           alignment: Alignment.centerLeft,
           child: WebButton(
-            'Delete project…',
+            tr("Delete project…"),
             key: const ValueKey('project-delete-open'),
             danger: true,
             icon: LucideIcons.trash2,
@@ -808,18 +842,20 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                 : null,
           ),
         ),
-        if (!online) paragraph('Connect the chat node to delete this project.'),
+        if (!online)
+          paragraph(tr("Connect the chat node to delete this project.")),
       ],
     ];
   }
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final w = widget.workspace;
     final mode = widget.controller.catalog.of(w);
     final top = widget.controller.catalog.topChats(w);
     if ((mode.assistant || mode.projects) && w['deleting'] == true) {
-      return paragraph("Settings are gone with the project's deletion.");
+      return paragraph(tr("Settings are gone with the project's deletion."));
     }
     final sessions = widget.controller.sessions
         .where((s) => s['workspaceId'] == w['id'])
@@ -837,19 +873,24 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
         if (mode.assistant) ...[
           ...projectWidgets,
           if (online && projectWidgets.isNotEmpty) sectionDivider(),
-          heading('Project capabilities'),
+          heading(tr("Project capabilities")),
           paragraph(
-            'Choose which assistant features this ${mode.noun} workspace may use. All capabilities are allowed by default. Changes are saved to and enforced by the gateway, not just hidden in this browser.',
+            tr(
+              "Choose which assistant features this {0} workspace may use. All capabilities are allowed by default. Changes are saved to and enforced by the gateway, not just hidden in this browser.",
+              [mode.noun],
+            ),
           ),
           paragraph(
-            'This is not a sandbox: these settings do not isolate files, shell commands, or network access. They do not revoke data already in a conversation or stop work already running.',
+            tr(
+              "This is not a sandbox: these settings do not isolate files, shell commands, or network access. They do not revoke data already in a conversation or stop work already running.",
+            ),
           ),
           if (loading.contains('capabilities'))
-            paragraph('Loading project capabilities…', status: true),
+            paragraph(tr("Loading project capabilities…"), status: true),
           if (cap != null) capabilityGroup(cap),
           ...feedback('capabilities'),
         ] else ...[
-          heading('Workspace'),
+          heading(tr("Workspace")),
           facts(w, sessions, lease),
           if (projectWidgets.isNotEmpty) ...[
             if (online) sectionDivider(),
@@ -861,7 +902,9 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
               Padding(
                 padding: const EdgeInsets.all(12),
                 child: Text(
-                  "The workspace's node is offline: its project config can be reviewed once it is back.",
+                  tr(
+                    "The workspace's node is offline: its project config can be reviewed once it is back.",
+                  ),
                   style: webText(
                     context,
                     size: 13,
@@ -870,34 +913,42 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                 ),
               )
             else ...[
-              heading('Project config'),
+              heading(tr("Project config")),
               paragraph(
-                "A repository's .pirc/config.json can run hook commands, set environment variables for every command the agent runs, add writable paths, and choose the model new sessions use. The workspace ignores these values until you trust them. If the repository changes them later, they are ignored again until you trust the new values.",
+                tr(
+                  "A repository's .pirc/config.json can run hook commands, set environment variables for every command the agent runs, add writable paths, and choose the model new sessions use. The workspace ignores these values until you trust them. If the repository changes them later, they are ignored again until you trust the new values.",
+                ),
               ),
               if (loading.contains('project-config'))
-                paragraph('Loading project config…', status: true),
+                paragraph(tr("Loading project config…"), status: true),
               if (project != null) ...[
                 if (project['error'] != null)
                   paragraph(
-                    'The project config is invalid and is not used: ${project['error']}',
+                    tr("The project config is invalid and is not used: {0}", [
+                      project['error'],
+                    ]),
                   )
                 else if (project['empty'] == true)
                   paragraph(
-                    "This workspace's project config sets no hooks, environment, allowed paths or default model.",
+                    tr(
+                      "This workspace's project config sets no hooks, environment, allowed paths or default model.",
+                    ),
                   )
                 else ...[
                   paragraph(
                     project['trusted'] == true
-                        ? 'Trusted'
+                        ? tr("Trusted")
                         : project['trustedHash'] != null
-                        ? 'Changed since trusted: ignored until you trust it again'
-                        : 'Not trusted: ignored',
+                        ? tr(
+                            "Changed since trusted: ignored until you trust it again",
+                          )
+                        : tr("Not trusted: ignored"),
                     weight: FontWeight.w600,
                   ),
                   if (obj(
                     project['hooks'],
                   ).values.any((v) => rows(v).isNotEmpty)) ...[
-                    subheading('Hooks'),
+                    subheading(tr("Hooks")),
                     for (final (index, e)
                         in obj(project['hooks']).entries
                             .where((e) => rows(e.value).isNotEmpty)
@@ -913,12 +964,14 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                           children: [
                             TextSpan(
                               text:
-                                  const {
-                                    'sessionStart': 'When a session starts',
-                                    'beforePrompt': 'Before each prompt',
-                                    'beforeTool': 'Before a tool runs',
-                                    'afterTool': 'After a tool runs',
-                                    'agentSettled': 'When the agent settles',
+                                  {
+                                    'sessionStart': tr("When a session starts"),
+                                    'beforePrompt': tr("Before each prompt"),
+                                    'beforeTool': tr("Before a tool runs"),
+                                    'afterTool': tr("After a tool runs"),
+                                    'agentSettled': tr(
+                                      "When the agent settles",
+                                    ),
                                   }[e.key] ??
                                   e.key,
                               style: webText(
@@ -950,8 +1003,8 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                                   color: 'text.muted',
                                 ).copyWith(height: kTextHeightNone),
                                 children: [
-                                  const TextSpan(
-                                    text: 'Only for tools matching ',
+                                  TextSpan(
+                                    text: tr("Only for tools matching "),
                                   ),
                                   TextSpan(
                                     text: '${hook['matcher']}',
@@ -968,7 +1021,7 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                     ],
                   ],
                   if (obj(project['env']).isNotEmpty) ...[
-                    subheading('Environment'),
+                    subheading(tr("Environment")),
                     code(
                       obj(
                         project['env'],
@@ -977,12 +1030,12 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                   ],
                   if (project['allowedPaths'] is List &&
                       (project['allowedPaths'] as List).isNotEmpty) ...[
-                    subheading('Allowed paths'),
+                    subheading(tr("Allowed paths")),
                     code((project['allowedPaths'] as List).join('\n')),
                   ],
                   if ('${defaultModel['provider'] ?? ''}'.isNotEmpty &&
                       '${defaultModel['id'] ?? ''}'.isNotEmpty) ...[
-                    subheading('Default model'),
+                    subheading(tr("Default model")),
                     code(
                       '${defaultModel['provider']}/${defaultModel['id']}'
                       '${defaultModel['thinking'] == null ? '' : ' (thinking ${defaultModel['thinking']})'}',
@@ -1000,7 +1053,7 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                           '${project['hash'] ?? ''}'.isNotEmpty &&
                           project['empty'] != true)
                         WebButton(
-                          'Trust',
+                          tr("Trust"),
                           primary: true,
                           disabledOpacity: .5,
                           onPressed: saving.contains('project-config')
@@ -1008,19 +1061,23 @@ class _WorkspaceSettingsState extends State<WorkspaceSettings> {
                               : () => mutate(
                                   'project-config',
                                   {'trusted': true, 'hash': project['hash']},
-                                  'Trusted. New sessions in this workspace use these hooks, environment, paths and default model.',
+                                  tr(
+                                    "Trusted. New sessions in this workspace use these hooks, environment, paths and default model.",
+                                  ),
                                 ),
                         ),
                       if (project['trustedHash'] != null)
                         WebButton(
-                          'Revoke trust',
+                          tr("Revoke trust"),
                           disabledOpacity: .5,
                           onPressed: saving.contains('project-config')
                               ? null
                               : () => mutate(
                                   'project-config',
                                   {'trusted': false},
-                                  'Trust revoked. New sessions ignore them.',
+                                  tr(
+                                    "Trust revoked. New sessions ignore them.",
+                                  ),
                                 ),
                         ),
                     ],

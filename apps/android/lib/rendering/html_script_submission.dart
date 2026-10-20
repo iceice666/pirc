@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -24,19 +25,19 @@ NativeHtmlFormSubmission decodeScriptFormSubmission(
   String string(String key, [String fallback = '']) {
     final value = action[key];
     if (value == null) return fallback;
-    if (value is! String) throw FormatException('Invalid form $key.');
+    if (value is! String) throw FormatException(tr("Invalid form {0}.", [key]));
     return value;
   }
 
   final rawEntries = action['entries'];
   if (rawEntries is! List || rawEntries.length > 10000) {
-    throw const FormatException('Invalid form entries.');
+    throw FormatException(tr("Invalid form entries."));
   }
   final entries = <NativeHtmlFormEntry>[];
   var inlineBytesRemaining = _maxInlineFileBytes;
   for (final raw in rawEntries) {
     if (raw is! Map || raw['name'] is! String) {
-      throw const FormatException('Invalid form entry.');
+      throw FormatException(tr("Invalid form entry."));
     }
     final name = raw['name'] as String;
     final hasFile = raw.containsKey('file');
@@ -44,7 +45,7 @@ NativeHtmlFormSubmission decodeScriptFormSubmission(
     final hasValue = raw.containsKey('value');
     if ((hasFile && (hasInlineFile || hasValue)) ||
         (hasInlineFile && hasValue)) {
-      throw const FormatException('Invalid form entry.');
+      throw FormatException(tr("Invalid form entry."));
     }
 
     if (hasInlineFile) {
@@ -54,7 +55,7 @@ NativeHtmlFormSubmission decodeScriptFormSubmission(
           inlineFile['type'] is! String ||
           inlineFile['lastModified'] is! int ||
           inlineFile['bytesBase64'] is! String) {
-        throw const FormatException('Invalid inline file.');
+        throw FormatException(tr("Invalid inline file."));
       }
       final bytes = _decodeInlineFileBytes(
         inlineFile['bytesBase64'] as String,
@@ -91,7 +92,7 @@ NativeHtmlFormSubmission decodeScriptFormSubmission(
           (reference.containsKey('type') && reference['type'] is! String) ||
           (reference.containsKey('lastModified') &&
               reference['lastModified'] is! int)) {
-        throw const FormatException('Invalid selected-file reference.');
+        throw FormatException(tr("Invalid selected-file reference."));
       }
       final file = resolveFile(
         reference['controlId'] as String,
@@ -99,9 +100,7 @@ NativeHtmlFormSubmission decodeScriptFormSubmission(
         reference['index'] as int,
       );
       if (file == null) {
-        throw const FormatException(
-          'The selected file is no longer available.',
-        );
+        throw FormatException(tr("The selected file is no longer available."));
       }
 
       final hasName = reference.containsKey('name');
@@ -122,7 +121,7 @@ NativeHtmlFormSubmission decodeScriptFormSubmission(
     }
 
     if (raw['value'] is! String) {
-      throw const FormatException('Invalid form value.');
+      throw FormatException(tr("Invalid form value."));
     }
     entries.add(NativeHtmlFormEntry(name, raw['value'] as String));
   }
@@ -146,7 +145,7 @@ Uint8List _decodeInlineFileBytes(String encoded, int maximumBytes) {
   if (encoded.length > maximumEncodedLength ||
       encoded.length % 4 != 0 ||
       !_base64Pattern.hasMatch(encoded)) {
-    throw const FormatException('Invalid inline file bytes.');
+    throw FormatException(tr("Invalid inline file bytes."));
   }
 
   final padding = encoded.endsWith('==')
@@ -156,12 +155,12 @@ Uint8List _decodeInlineFileBytes(String encoded, int maximumBytes) {
       : 0;
   final expectedLength = (encoded.length ~/ 4) * 3 - padding;
   if (expectedLength > maximumBytes) {
-    throw const FormatException('Inline files exceed the 2 MiB limit.');
+    throw FormatException(tr("Inline files exceed the 2 MiB limit."));
   }
 
   final bytes = base64.decode(encoded);
   if (bytes.length != expectedLength || base64.encode(bytes) != encoded) {
-    throw const FormatException('Invalid inline file bytes.');
+    throw FormatException(tr("Invalid inline file bytes."));
   }
   return Uint8List.fromList(bytes);
 }

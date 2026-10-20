@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -53,7 +54,7 @@ NativeMermaidXYChartDiagram parseNativeMermaidXYChart(String source) {
       ).firstMatch(statement);
       if (header == null) {
         throw FormatException(
-          'Expected xychart-beta header, found: $statement',
+          tr("Expected xychart-beta header, found: {0}", [statement]),
           source,
           index + 1,
         );
@@ -116,7 +117,7 @@ NativeMermaidXYChartDiagram parseNativeMermaidXYChart(String source) {
           linesInDescription.add(row.substring(0, close));
           if (row.substring(close + 1).trim().isNotEmpty) {
             throw FormatException(
-              'Unexpected text after accDescr block',
+              tr("Unexpected text after accDescr block"),
               source,
               index + 1,
             );
@@ -127,7 +128,7 @@ NativeMermaidXYChartDiagram parseNativeMermaidXYChart(String source) {
         linesInDescription.add(row);
       }
       if (!closed) {
-        throw FormatException('Unclosed accDescr block', source, index + 1);
+        throw FormatException(tr("Unclosed accDescr block"), source, index + 1);
       }
       accessibleDescription = linesInDescription.join('\n').trim();
       continue;
@@ -140,7 +141,7 @@ NativeMermaidXYChartDiagram parseNativeMermaidXYChart(String source) {
     if (xAxisMatch != null) {
       if (sawXAxis) {
         throw FormatException(
-          'Duplicate x-axis declaration',
+          tr("Duplicate x-axis declaration"),
           source,
           index + 1,
         );
@@ -161,7 +162,7 @@ NativeMermaidXYChartDiagram parseNativeMermaidXYChart(String source) {
     if (yAxisMatch != null) {
       if (sawYAxis) {
         throw FormatException(
-          'Duplicate y-axis declaration',
+          tr("Duplicate y-axis declaration"),
           source,
           index + 1,
         );
@@ -202,30 +203,32 @@ NativeMermaidXYChartDiagram parseNativeMermaidXYChart(String source) {
     }
 
     throw FormatException(
-      'Unsupported or invalid native XY chart statement: $statement',
+      tr("Unsupported or invalid native XY chart statement: {0}", [statement]),
       source,
       index + 1,
     );
   }
 
-  if (!sawHeader) throw const FormatException('Expected xychart-beta header');
+  if (!sawHeader) throw FormatException(tr("Expected xychart-beta header"));
   if (series.isEmpty) {
-    throw const FormatException(
-      'No Plot to render, please provide a plot with some data',
+    throw FormatException(
+      tr("No Plot to render, please provide a plot with some data"),
     );
   }
   if (xAxis.type == NativeMermaidXYAxisType.band &&
       xAxis.explicitlySet &&
       xAxis.categories.isEmpty) {
-    throw const FormatException(
-      'A categorical x-axis needs at least one category',
+    throw FormatException(
+      tr("A categorical x-axis needs at least one category"),
     );
   }
   if (xAxis.type == NativeMermaidXYAxisType.band) {
     for (final plot in series) {
       if (plot.values.length < xAxis.categories.length) {
-        throw const FormatException(
-          'Native XY chart does not support a series shorter than its category axis',
+        throw FormatException(
+          tr(
+            "Native XY chart does not support a series shorter than its category axis",
+          ),
         );
       }
     }
@@ -316,7 +319,9 @@ NativeMermaidXYChartAxis _parseAxis(
     );
   }
   throw FormatException(
-    '${isXAxis ? 'x-axis' : 'y-axis'} accepts a title, numeric range, or x-axis categories',
+    tr("{0} accepts a title, numeric range, or x-axis categories", [
+      isXAxis ? 'x-axis' : 'y-axis',
+    ]),
     source,
     line,
   );
@@ -333,7 +338,7 @@ NativeMermaidXYChartAxis _parseAxis(
       close < open ||
       sourceText.substring(close + 1).trim().isNotEmpty) {
     throw FormatException(
-      'A bar or line plot requires a bracketed data list',
+      tr("A bar or line plot requires a bracketed data list"),
       source,
       line,
     );
@@ -350,7 +355,7 @@ NativeMermaidXYChartAxis _parseAxis(
   for (final item in _splitCommaSeparated(data, source, line)) {
     if (item.trim().isEmpty) {
       throw FormatException(
-        'An XY chart data list cannot contain an empty value',
+        tr("An XY chart data list cannot contain an empty value"),
         source,
         line,
       );
@@ -360,7 +365,7 @@ NativeMermaidXYChartAxis _parseAxis(
     ).firstMatch(item);
     if (match == null) {
       throw FormatException(
-        'Invalid XY chart datum: ${item.trim()}',
+        tr("Invalid XY chart datum: {0}", [item.trim()]),
         source,
         line,
       );
@@ -370,7 +375,11 @@ NativeMermaidXYChartAxis _parseAxis(
     labels.add(labelText == null ? null : _decodeText(labelText, source, line));
   }
   if (values.isEmpty) {
-    throw FormatException('XY chart data list cannot be empty', source, line);
+    throw FormatException(
+      tr("XY chart data list cannot be empty"),
+      source,
+      line,
+    );
   }
   final anyLabel = labels.any((label) => label != null && label.isNotEmpty);
   return (title, values, anyLabel ? labels : null);
@@ -379,7 +388,7 @@ NativeMermaidXYChartAxis _parseAxis(
 List<String> _parseCategoryList(String sourceText, String source, int line) {
   if (!sourceText.endsWith(']')) {
     throw FormatException(
-      'An x-axis category list must end with ]',
+      tr("An x-axis category list must end with ]"),
       source,
       line,
     );
@@ -391,7 +400,11 @@ List<String> _parseCategoryList(String sourceText, String source, int line) {
     line,
   ).map((value) => _decodeText(value, source, line)).toList(growable: false);
   if (categories.any((value) => value.isEmpty)) {
-    throw FormatException('x-axis categories cannot be empty', source, line);
+    throw FormatException(
+      tr("x-axis categories cannot be empty"),
+      source,
+      line,
+    );
   }
   return categories;
 }
@@ -416,7 +429,7 @@ List<String> _parseCategoryList(String sourceText, String source, int line) {
       return (decoded, trimmed.substring(i + 1));
     }
   }
-  throw FormatException('Unclosed quoted text', source, line);
+  throw FormatException(tr("Unclosed quoted text"), source, line);
 }
 
 String _decodeText(
@@ -428,7 +441,7 @@ String _decodeText(
   final text = value.trim();
   if (text.isEmpty) {
     if (allowEmpty) return '';
-    throw FormatException('Expected non-empty text', source, line);
+    throw FormatException(tr("Expected non-empty text"), source, line);
   }
   if (text.startsWith('"')) {
     try {
@@ -437,10 +450,14 @@ String _decodeText(
     } on FormatException {
       // Report one stable parser error below.
     }
-    throw FormatException('Invalid quoted text', source, line);
+    throw FormatException(tr("Invalid quoted text"), source, line);
   }
   if (text.contains('"') || text.contains('[') || text.contains(']')) {
-    throw FormatException('Unsupported XY chart label syntax', source, line);
+    throw FormatException(
+      tr("Unsupported XY chart label syntax"),
+      source,
+      line,
+    );
   }
   return text;
 }
@@ -464,7 +481,7 @@ List<String> _splitCommaSeparated(String value, String source, int line) {
     }
   }
   if (insideQuote) {
-    throw FormatException('Unclosed quote in XY chart list', source, line);
+    throw FormatException(tr("Unclosed quote in XY chart list"), source, line);
   }
   result.add(value.substring(start));
   return result;
@@ -474,7 +491,7 @@ double _parseFiniteNumber(String value, String source, int line) {
   final number = double.tryParse(value);
   if (number == null || !number.isFinite) {
     throw FormatException(
-      'Expected a finite numeric value, found: $value',
+      tr("Expected a finite numeric value, found: {0}", [value]),
       source,
       line,
     );
@@ -510,7 +527,7 @@ NativeMermaidXYChartConfig _parseInit(
   final terminator = line.lastIndexOf('}%%');
   if (colon < 0 || terminator <= colon) {
     throw FormatException(
-      'Invalid XY chart init directive',
+      tr("Invalid XY chart init directive"),
       source,
       lineNumber,
     );
@@ -518,7 +535,7 @@ NativeMermaidXYChartConfig _parseInit(
   final decoded = jsonDecode(line.substring(colon + 1, terminator).trim());
   if (decoded is! Map<String, dynamic>) {
     throw FormatException(
-      'XY chart init directive must contain an object',
+      tr("XY chart init directive must contain an object"),
       source,
       lineNumber,
     );
@@ -527,7 +544,7 @@ NativeMermaidXYChartConfig _parseInit(
   if (xy == null) return current;
   if (xy is! Map<String, dynamic>) {
     throw FormatException(
-      'xyChart init configuration must be an object',
+      tr("xyChart init configuration must be an object"),
       source,
       lineNumber,
     );
@@ -625,7 +642,7 @@ NativeMermaidXYChartAxisConfig _parseAxisConfig(
   if (raw == null) return current;
   if (raw is! Map<String, dynamic>) {
     throw FormatException(
-      'XY chart axis config must be an object',
+      tr("XY chart axis config must be an object"),
       source,
       line,
     );
@@ -705,7 +722,7 @@ double _configNumber(
   if (value == null) return fallback;
   if (value is! num || !value.toDouble().isFinite) {
     throw FormatException(
-      'XY chart config $key must be a finite number',
+      tr("XY chart config {0} must be a finite number", [key]),
       source,
       line,
     );
@@ -724,7 +741,7 @@ bool _configBool(
   if (value == null) return fallback;
   if (value is! bool) {
     throw FormatException(
-      'XY chart config $key must be a boolean',
+      tr("XY chart config {0} must be a boolean", [key]),
       source,
       line,
     );

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   /**
    * The session goal, docked on top of the composer above the task list.
    * Collapsed, the header shows the objective, its phase and the rounds used;
@@ -24,10 +26,13 @@
   let running = $derived(goal.phase === 'active' && !goal.disarmed);
   let phaseLabel = $derived(
     goal.disarmed
-      ? 'Waiting for resume'
-      : { active: 'Active', paused: 'Paused', blocked: 'Blocked', complete: 'Complete' }[
-          goal.phase
-        ],
+      ? tr('Waiting for resume')
+      : {
+          active: tr('Active'),
+          paused: tr('Paused'),
+          blocked: tr('Blocked'),
+          complete: tr('Complete'),
+        }[goal.phase],
   );
   let dot = $derived(
     running
@@ -44,7 +49,7 @@
   );
 </script>
 
-<DockSection label="Goal" class="goal-dock" bind:expanded ontoggle={persist}>
+<DockSection label={tr('Goal')} class="goal-dock" bind:expanded ontoggle={persist}>
   {#snippet head()}
     <span class="todo-lead">
       {#if running}<span class="state-dot ongoing" aria-hidden="true"></span>{:else}<Target
@@ -53,18 +58,18 @@
     </span>
     <span class="dock-title" class:active={running}>{goal.objective}</span>
     <span class="goal-phase phase-{goal.phase}" class:disarmed={goal.disarmed}>{phaseLabel}</span>
-    <span class="todo-progress" title="Continuation rounds">
+    <span class="todo-progress" title={tr('Continuation rounds')}>
       {goal.rounds}{goal.maxRounds === undefined ? '' : `/${goal.maxRounds}`}
     </span>
   {/snippet}
   {#snippet actions()}
     {#if running}
       <button class="dock-action" type="button" {disabled} onclick={() => onaction('pause')}
-        >Pause</button
+        >{tr('Pause')}</button
       >
     {:else if canResume}
       <button class="dock-action" type="button" {disabled} onclick={() => onaction('resume')}
-        >Resume</button
+        >{tr('Resume')}</button
       >
     {/if}
   {/snippet}

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import { ApiError } from '../http';
   import { instructionsApi } from '../capabilities';
 
@@ -17,7 +19,7 @@
   let reload = $state(0);
   let generation = 0;
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : tr('Unable to reach the gateway. Try again.');
   const tooLong = $derived(text.length > maxChars);
   const changed = $derived(text.trim() !== saved);
 
@@ -60,7 +62,7 @@
       const response = await instructionsApi.update(workspaceId, text);
       if (current !== generation) return;
       text = saved = response.instructions.text;
-      status = 'Project instructions saved. New chats in this project will use them.';
+      status = tr('Project instructions saved. New chats in this project will use them.');
     } catch (cause) {
       if (current === generation) error = message(cause);
     } finally {
@@ -70,40 +72,41 @@
 </script>
 
 <section class="settings-section">
-  <h3>Project instructions</h3>
+  <h3>{tr('Project instructions')}</h3>
   <p>
-    Instructions for every chat in this project. Only you can change them: the assistant cannot edit
-    them. They are kept on the project's node, and each chat keeps the instructions it started with,
-    so a change reaches new chats only.
+    {tr(
+      "Instructions for every chat in this project. Only you can change them: the assistant cannot edit them. They are kept on the project's node, and each chat keeps the instructions it started with, so a change reaches new chats only.",
+    )}
   </p>
   {#if loading}
-    <p role="status">Loading project instructions…</p>
+    <p role="status">{tr('Loading project instructions…')}</p>
   {:else if loaded}
     <form onsubmit={save}>
       <label class="instructions">
-        <span>Instructions</span>
+        <span>{tr('Instructions')}</span>
         <textarea
           bind:value={text}
           rows="8"
           disabled={saving}
           aria-invalid={tooLong}
           aria-describedby="project-instructions-count"
-          placeholder="For example: answer in French, and keep trip plans on a budget."
+          placeholder={tr('For example: answer in French, and keep trip plans on a budget.')}
         ></textarea>
       </label>
       <div class="row">
         <span id="project-instructions-count" class:over={tooLong}
-          >{text.length} / {maxChars} characters</span
+          >{tr('{0} / {1} characters', [text.length, maxChars])}</span
         >
         <button class="button" type="submit" disabled={saving || tooLong || !changed}
-          >{saving ? 'Saving…' : 'Save'}</button
+          >{saving ? tr('Saving…') : tr('Save')}</button
         >
       </div>
     </form>
   {/if}
   {#if error}
     <p role="alert">{error}</p>
-    {#if !loaded}<button class="button ghost" type="button" onclick={() => reload++}>Retry</button
+    {#if !loaded}<button class="button ghost" type="button" onclick={() => reload++}
+        >{tr('Retry')}</button
       >{/if}
   {/if}
   <p role="status">{status}</p>

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:csslib/parser.dart' as css_parser;
@@ -242,12 +243,13 @@ class NativeHtmlControlBoxStyle {
     );
     if (paddingLengths.hasPercentages && availableWidth == null) {
       layoutDiagnostics.add(
-        const NativeHtmlControlBoxDiagnostic(
+        NativeHtmlControlBoxDiagnostic(
           code: 'unresolved-percentage',
           property: 'padding',
           value: '%',
-          message:
-              'Percentage padding needs a finite containing block width; zero is used.',
+          message: tr(
+            "Percentage padding needs a finite containing block width; zero is used.",
+          ),
         ),
       );
     }
@@ -381,8 +383,9 @@ class NativeHtmlControlBoxStyle {
           code: 'unresolved-percentage',
           property: property,
           value: length.toString(),
-          message:
-              'A finite containing block is required; the intrinsic size is used.',
+          message: tr(
+            "A finite containing block is required; the intrinsic size is used.",
+          ),
         ),
       );
     }
@@ -631,7 +634,7 @@ class _ControlBoxStyleBuilder {
         'invalid-declaration',
         property,
         '',
-        'The declaration has no value.',
+        tr("The declaration has no value."),
       );
       return;
     }
@@ -808,7 +811,7 @@ class _ControlBoxStyleBuilder {
           'unsupported-value',
           property,
           valueText,
-          'Expected content-box or border-box.',
+          tr("Expected content-box or border-box."),
         );
       } else {
         _offer(property, sizing, declaration.important);
@@ -843,7 +846,7 @@ class _ControlBoxStyleBuilder {
         'unsupported-value',
         property,
         _expressionText(expression),
-        'Expected one to four lengths.',
+        tr("Expected one to four lengths."),
       );
       return null;
     }
@@ -878,7 +881,7 @@ class _ControlBoxStyleBuilder {
           'unsupported-value',
           property,
           text,
-          'Expected a single CSS length.',
+          tr("Expected a single CSS length."),
         );
       }
       return null;
@@ -907,7 +910,7 @@ class _ControlBoxStyleBuilder {
             'unsupported-value',
             property,
             text,
-            'Percentages are not valid for this property.',
+            tr("Percentages are not valid for this property."),
           );
         }
         return null;
@@ -935,7 +938,7 @@ class _ControlBoxStyleBuilder {
             'unsupported-unit',
             property,
             text,
-            'This CSS length unit is not supported.',
+            tr("This CSS length unit is not supported."),
           );
         }
         return null;
@@ -952,7 +955,7 @@ class _ControlBoxStyleBuilder {
           'unsupported-value',
           property,
           text,
-          'This CSS value is not a supported length.',
+          tr("This CSS value is not a supported length."),
         );
       }
       return null;
@@ -963,7 +966,7 @@ class _ControlBoxStyleBuilder {
           'invalid-value',
           property,
           text,
-          'Negative lengths are invalid here.',
+          tr("Negative lengths are invalid here."),
         );
       }
       return null;
@@ -1004,7 +1007,7 @@ class _ControlBoxStyleBuilder {
           'unsupported-css-wide-keyword',
           property,
           keyword,
-          'CSS-wide border values require parent box values.',
+          tr("CSS-wide border values require parent box values."),
         );
         return null;
       }
@@ -1014,7 +1017,7 @@ class _ControlBoxStyleBuilder {
         'unsupported-value',
         property,
         _expressionText(expression),
-        'Expected a border width, style, and color.',
+        tr("Expected a border width, style, and color."),
       );
       return null;
     }
@@ -1038,7 +1041,7 @@ class _ControlBoxStyleBuilder {
             'invalid-value',
             property,
             text,
-            'Border width is repeated.',
+            tr("Border width is repeated."),
           );
           return null;
         }
@@ -1056,7 +1059,7 @@ class _ControlBoxStyleBuilder {
             'invalid-value',
             property,
             text,
-            'Border style is repeated.',
+            tr("Border style is repeated."),
           );
           return null;
         }
@@ -1070,7 +1073,7 @@ class _ControlBoxStyleBuilder {
             'invalid-value',
             property,
             text,
-            'Border color is repeated.',
+            tr("Border color is repeated."),
           );
           return null;
         }
@@ -1081,7 +1084,7 @@ class _ControlBoxStyleBuilder {
         'unsupported-value',
         property,
         text,
-        'This border component is unsupported.',
+        tr("This border component is unsupported."),
       );
       return null;
     }
@@ -1105,7 +1108,7 @@ class _ControlBoxStyleBuilder {
           'unsupported-value',
           property,
           word,
-          'Unknown CSS border style.',
+          tr("Unknown CSS border style."),
         );
       }
       return null;
@@ -1124,7 +1127,9 @@ class _ControlBoxStyleBuilder {
       'unsupported-border-style',
       property,
       word,
-      'Flutter control borders support solid/none; this style is approximated as solid.',
+      tr(
+        "Flutter control borders support solid/none; this style is approximated as solid.",
+      ),
     );
     return _ParsedBorderStyle(word);
   }
@@ -1136,7 +1141,7 @@ class _ControlBoxStyleBuilder {
         'unsupported-value',
         property,
         _expressionText(expression),
-        'Expected one to four border styles.',
+        tr("Expected one to four border styles."),
       );
       return null;
     }
@@ -1156,7 +1161,7 @@ class _ControlBoxStyleBuilder {
         'unsupported-value',
         property,
         _expressionText(expression),
-        'Expected one to four colors.',
+        tr("Expected one to four colors."),
       );
       return null;
     }
@@ -1191,7 +1196,7 @@ class _ControlBoxStyleBuilder {
             'unsupported-color',
             property,
             text,
-            'Hex colors must contain 3, 4, 6, or 8 digits.',
+            tr("Hex colors must contain 3, 4, 6, or 8 digits."),
           );
         }
         return null;
@@ -1232,7 +1237,7 @@ class _ControlBoxStyleBuilder {
           'unsupported-color',
           property,
           text,
-          'This CSS color is not supported by the local color parser.',
+          tr("This CSS color is not supported by the local color parser."),
         );
       }
       return null;
@@ -1248,7 +1253,7 @@ class _ControlBoxStyleBuilder {
             'unsupported-value',
             property,
             _expressionText(expression),
-            'A border-radius value can contain one slash.',
+            tr("A border-radius value can contain one slash."),
           );
           return null;
         }
@@ -1281,7 +1286,7 @@ class _ControlBoxStyleBuilder {
         'unsupported-value',
         property,
         _expressionText(expression),
-        'Expected one or two radius lengths.',
+        tr("Expected one or two radius lengths."),
       );
       return null;
     }
@@ -1313,7 +1318,7 @@ class _ControlBoxStyleBuilder {
         'unsupported-value',
         property,
         '',
-        'Expected one to four radius lengths.',
+        tr("Expected one to four radius lengths."),
       );
       return null;
     }

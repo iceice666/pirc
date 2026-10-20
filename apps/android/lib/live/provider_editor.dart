@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -136,8 +137,9 @@ class _ProviderEditorState extends State<ProviderEditor> {
       apiKey.clear();
       if (!same) {
         connectionChanged = true;
-        formError =
-            'The gateway connection changed. Close and reopen backend settings.';
+        formError = tr(
+          "The gateway connection changed. Close and reopen backend settings.",
+        );
       } else {
         _loadPresets();
       }
@@ -159,8 +161,9 @@ class _ProviderEditorState extends State<ProviderEditor> {
       testResult = null;
       if (hadIdentity) {
         connectionChanged = true;
-        formError =
-            'The gateway connection changed. Close and reopen backend settings.';
+        formError = tr(
+          "The gateway connection changed. Close and reopen backend settings.",
+        );
       } else {
         presets = [];
         presetsUnavailable = false;
@@ -434,8 +437,11 @@ class _ProviderEditorState extends State<ProviderEditor> {
         discovery = (
           ok: true,
           text: found.isEmpty
-              ? 'The endpoint lists no models. Add model IDs manually.'
-              : 'Found ${found.length} model${found.length == 1 ? '' : 's'}. Select the ones to use.',
+              ? tr("The endpoint lists no models. Add model IDs manually.")
+              : tr("Found {0} model{1}. Select the ones to use.", [
+                  found.length,
+                  found.length == 1 ? '' : 's',
+                ]),
         );
       });
     } catch (error) {
@@ -478,7 +484,10 @@ class _ProviderEditorState extends State<ProviderEditor> {
       final ok = result['ok'] == true;
       final message = ok
           ? _str(result['message'])
-          : safeBackendText(result['message'], 'The connection test failed.');
+          : safeBackendText(
+              result['message'],
+              tr("The connection test failed."),
+            );
       setState(() => testResult = (ok: ok, message: message));
     } catch (error) {
       if (_currentAction(token, owner, host, client)) {
@@ -612,15 +621,18 @@ class _ProviderEditorState extends State<ProviderEditor> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final colors = palette(context), edit = editingId, catalogId = savedPreset;
     final allChoices = choices, visibleChoices = shown, chosenIds = selected;
     final serviceOptions = <_Option>[
-      const _Option('', 'Custom endpoint'),
+      _Option('', tr("Custom endpoint")),
       for (final p in presets)
         _Option(
           _str(p['id']),
           _str(p['name']).isEmpty ? _str(p['id']) : _str(p['name']),
-          p['catalog'] == true ? 'Cloud service catalog' : 'Local server',
+          p['catalog'] == true
+              ? tr("Cloud service catalog")
+              : tr("Local server"),
         ),
     ];
     return Container(
@@ -636,7 +648,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
           Padding(
             padding: const EdgeInsets.only(top: 20),
             child: Text(
-              edit == null ? 'New backend' : 'Edit $edit',
+              edit == null ? tr("New backend") : tr("Edit {0}", [edit]),
               style: webText(
                 context,
                 size: 14,
@@ -646,24 +658,33 @@ class _ProviderEditorState extends State<ProviderEditor> {
           ),
           if (edit == null) ...[
             _selectField(
-              'Service',
+              tr("Service"),
               presetId,
               serviceOptions,
               _choosePreset,
               busy,
             ),
             if (presetsUnavailable)
-              const AssistantParagraph(
-                'Service presets are unavailable. Enter the endpoint details manually.',
+              AssistantParagraph(
+                tr(
+                  "Service presets are unavailable. Enter the endpoint details manually.",
+                ),
                 live: true,
               ),
           ],
           if (catalogId != null)
             AssistantParagraph(
-              "Uses pi-ai's ${_str(preset?['name']).isEmpty ? catalogId : _str(preset?['name'])} catalog. Known models keep their limits and request compatibility.",
+              tr(
+                "Uses pi-ai's {0} catalog. Known models keep their limits and request compatibility.",
+                [
+                  _str(preset?['name']).isEmpty
+                      ? catalogId
+                      : _str(preset?['name']),
+                ],
+              ),
             ),
           _field(
-            'Backend ID',
+            tr("Backend ID"),
             id,
             disabled: edit != null || busy,
             key: 'provider-editor-id',
@@ -672,17 +693,17 @@ class _ProviderEditorState extends State<ProviderEditor> {
           _selectField(
             'API',
             api,
-            const [
-              _Option('openai-completions', 'OpenAI-compatible chat'),
-              _Option('openai-chat', 'OpenAI chat (legacy)'),
-              _Option('openai-responses', 'OpenAI Responses'),
-              _Option('anthropic-messages', 'Anthropic Messages'),
+            [
+              _Option('openai-completions', tr("OpenAI-compatible chat")),
+              _Option('openai-chat', tr("OpenAI chat (legacy)")),
+              _Option('openai-responses', tr("OpenAI Responses")),
+              _Option('anthropic-messages', tr("Anthropic Messages")),
             ],
             _setApi,
             busy || catalogId != null,
           ),
           _field(
-            'Base URL',
+            tr("Base URL"),
             baseUrl,
             hint: 'http://localhost:11434/v1',
             keyboardType: TextInputType.url,
@@ -692,13 +713,13 @@ class _ProviderEditorState extends State<ProviderEditor> {
             onChanged: (_) => setState(() => testResult = null),
           ),
           _field(
-            'API key (optional)',
+            tr("API key (optional)"),
             apiKey,
             hint: edit != null
-                ? 'Leave blank to keep saved key'
+                ? tr("Leave blank to keep saved key")
                 : (preset?['keyless'] == true
-                      ? 'Not needed for a local server'
-                      : 'Leave blank for a no-key endpoint'),
+                      ? tr("Not needed for a local server")
+                      : tr("Leave blank for a no-key endpoint")),
             keyboardType: TextInputType.visiblePassword,
             obscureText: true,
             disabled: busy || clearKey,
@@ -707,7 +728,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
           ),
           if (edit != null)
             _checkbox(
-              'Remove the saved API key',
+              tr("Remove the saved API key"),
               clearKey,
               _setClearKey,
               busy,
@@ -715,7 +736,9 @@ class _ProviderEditorState extends State<ProviderEditor> {
             ),
           if (catalogId == null)
             _checkbox(
-              'OpenCode compatibility (session routing + pirc User-Agent; automatic for opencode.ai/zen and opencode.ai/inference)',
+              tr(
+                "OpenCode compatibility (session routing + pirc User-Agent; automatic for opencode.ai/zen and opencode.ai/inference)",
+              ),
               opencodeGo,
               _setGo,
               busy,
@@ -724,7 +747,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
           Padding(
             padding: const EdgeInsets.only(top: 16, bottom: 10),
             child: Text(
-              'Models',
+              tr("Models"),
               style: webText(
                 context,
                 size: 13,
@@ -738,8 +761,8 @@ class _ProviderEditorState extends State<ProviderEditor> {
             children: [
               AssistantButton(
                 checking == _Check.discover
-                    ? 'Fetching models…'
-                    : 'Fetch models from endpoint',
+                    ? tr("Fetching models…")
+                    : tr("Fetch models from endpoint"),
                 onPressed: busy || baseUrl.text.trim().isEmpty
                     ? null
                     : _discover,
@@ -773,12 +796,12 @@ class _ProviderEditorState extends State<ProviderEditor> {
                         child: _field(
                           '',
                           filter,
-                          hint: 'Filter ${allChoices.length} models',
+                          hint: tr("Filter {0} models", [allChoices.length]),
                           onChanged: (_) => setState(() {}),
                         ),
                       ),
                       AssistantButton(
-                        'Select shown',
+                        tr("Select shown"),
                         onPressed: busy ? null : _selectShown,
                       ),
                     ],
@@ -787,10 +810,10 @@ class _ProviderEditorState extends State<ProviderEditor> {
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 240),
                     child: visibleChoices.isEmpty
-                        ? const Align(
+                        ? Align(
                             alignment: Alignment.centerLeft,
                             child: AssistantParagraph(
-                              'No models match the filter.',
+                              tr("No models match the filter."),
                             ),
                           )
                         : SingleChildScrollView(
@@ -813,8 +836,8 @@ class _ProviderEditorState extends State<ProviderEditor> {
           if (models.isEmpty)
             AssistantParagraph(
               allChoices.isNotEmpty
-                  ? 'Select at least one model above, or add a model ID.'
-                  : 'Fetch the endpoint’s models, or add a model ID.',
+                  ? tr("Select at least one model above, or add a model ID.")
+                  : tr("Fetch the endpoint’s models, or add a model ID."),
             )
           else
             Padding(
@@ -832,7 +855,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
               builder: (context, constraints) {
                 final measure = TextPainter(
                   text: TextSpan(
-                    text: 'Add model',
+                    text: tr("Add model"),
                     style: webText(context, size: 14, weight: FontWeight.w500),
                   ),
                   textDirection: Directionality.of(context),
@@ -853,7 +876,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
                       child: Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: _field(
-                          'Model ID',
+                          tr("Model ID"),
                           manualId,
                           disabled: busy,
                           key: 'provider-editor-manual-model-id',
@@ -863,7 +886,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
                       ),
                     ),
                     AssistantButton(
-                      'Add model',
+                      tr("Add model"),
                       onPressed:
                           busy ||
                               manualId.text.trim().isEmpty ||
@@ -885,7 +908,9 @@ class _ProviderEditorState extends State<ProviderEditor> {
               children: [
                 if (models.length > 1) _testModelSelect(),
                 AssistantButton(
-                  checking == _Check.test ? 'Testing…' : 'Test connection',
+                  checking == _Check.test
+                      ? tr("Testing…")
+                      : tr("Test connection"),
                   onPressed:
                       busy || models.isEmpty || baseUrl.text.trim().isEmpty
                       ? null
@@ -914,8 +939,10 @@ class _ProviderEditorState extends State<ProviderEditor> {
           if (formError != null)
             AssistantParagraph(formError!, error: true, live: true),
           if (connectionChanged)
-            const AssistantParagraph(
-              'The gateway connection changed. Close and reopen backend settings before continuing.',
+            AssistantParagraph(
+              tr(
+                "The gateway connection changed. Close and reopen backend settings before continuing.",
+              ),
               error: true,
               live: true,
             ),
@@ -926,12 +953,12 @@ class _ProviderEditorState extends State<ProviderEditor> {
               runSpacing: 8,
               children: [
                 AssistantButton(
-                  'Save backend',
+                  tr("Save backend"),
                   primary: true,
                   onPressed: busy || !ready ? null : _save,
                 ),
                 AssistantButton(
-                  'Cancel editing',
+                  tr("Cancel editing"),
                   onPressed: widget.locked ? null : widget.onCancel,
                 ),
               ],
@@ -1139,7 +1166,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
             ),
             const SizedBox(width: 8),
             AssistantButton(
-              'Remove ${model.id}',
+              tr("Remove {0}", [model.id]),
               onPressed: busy ? null : () => _remove(model),
             ),
           ],
@@ -1176,7 +1203,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
                         ),
                         const SizedBox(width: 5),
                         Text(
-                          'Details',
+                          tr("Details"),
                           style: webText(
                             context,
                             size: 13,
@@ -1203,14 +1230,14 @@ class _ProviderEditorState extends State<ProviderEditor> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _field(
-                          'Display name',
+                          tr("Display name"),
                           model.nameController,
                           disabled: busy,
                           key: 'provider-model-${model.id}-name',
                           onChanged: (_) => setState(() {}),
                         ),
                         _field(
-                          'Context window (tokens)',
+                          tr("Context window (tokens)"),
                           model.contextController,
                           hint: '200000',
                           keyboardType: const TextInputType.numberWithOptions(
@@ -1223,7 +1250,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
                           onChanged: (_) => setState(() {}),
                         ),
                         _field(
-                          'Maximum output tokens',
+                          tr("Maximum output tokens"),
                           model.maxController,
                           hint: '32000',
                           keyboardType: const TextInputType.numberWithOptions(
@@ -1236,14 +1263,14 @@ class _ProviderEditorState extends State<ProviderEditor> {
                           onChanged: (_) => setState(() {}),
                         ),
                         _checkbox(
-                          'Supports reasoning',
+                          tr("Supports reasoning"),
                           model.reasoning ?? false,
                           (value) => setState(() => model.reasoning = value),
                           busy,
                           colors,
                         ),
                         _checkbox(
-                          'Supports image input',
+                          tr("Supports image input"),
                           model.input?.contains('image') ?? false,
                           (value) => setState(
                             () => model.input = value
@@ -1280,7 +1307,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Test with',
+          tr("Test with"),
           style: webText(
             context,
             size: 13,
@@ -1292,7 +1319,7 @@ class _ProviderEditorState extends State<ProviderEditor> {
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 240),
           child: _Select(
-            label: 'Test with',
+            label: tr("Test with"),
             value: value,
             options: options,
             onSelect: _setTestModel,
@@ -1397,6 +1424,7 @@ class _SelectState extends State<_Select> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final colors = palette(context);
     var current = _Option(widget.value, widget.label);
     for (final option in widget.options) {
@@ -1530,6 +1558,7 @@ class _Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final colors = palette(context);
     final lineHeight = MediaQuery.textScalerOf(context).scale(16) * 18 / 16;
     return Padding(

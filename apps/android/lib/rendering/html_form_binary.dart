@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -85,7 +86,9 @@ NativeHtmlEncodedBody nativeHtmlFormDataEncode(
       _validateBoundary(selectedBoundary);
       return _encodeMultipart(ordered, selectedBoundary);
     default:
-      throw UnsupportedError('Unsupported HTML form encoding: $enctype');
+      throw UnsupportedError(
+        tr("Unsupported HTML form encoding: {0}", [enctype]),
+      );
   }
 }
 
@@ -242,7 +245,7 @@ void _validateBoundary(String boundary) {
     throw ArgumentError.value(
       boundary,
       'boundary',
-      'Must be a 1–70 character multipart boundary.',
+      tr("Must be a 1–70 character multipart boundary."),
     );
   }
 }

@@ -1,4 +1,6 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'common.dart';
 import 'composer_select.dart';
 import 'gateway.dart';
@@ -28,10 +30,12 @@ class ApprovalModeControl extends StatelessWidget {
     if (mode == 'full-access') {
       final allowed = await confirm(
         context,
-        'Give this session full access?',
-        "The agent will run every command, script and file change without asking you, including ones auto mode would stop as dangerous (deleting files, force-pushing, changing the system).\n\nYour deny-list still asks, writes still take the workspace's write lease, and the node's OS sandbox stays as it is. Teammates and subagents of this session follow it; delegated sessions do not.",
-        action: 'Allow full access',
-        cancelLabel: 'Cancel',
+        tr("Give this session full access?"),
+        tr(
+          "The agent will run every command, script and file change without asking you, including ones auto mode would stop as dangerous (deleting files, force-pushing, changing the system).\n\nYour deny-list still asks, writes still take the workspace's write lease, and the node's OS sandbox stays as it is. Teammates and subagents of this session follow it; delegated sessions do not.",
+        ),
+        action: tr("Allow full access"),
+        cancelLabel: tr("Cancel"),
       );
       if (!allowed || !context.mounted) return;
     }
@@ -48,28 +52,37 @@ class ApprovalModeControl extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: controller,
-    builder: (context, _) {
-      final mode = controller.approvalMode;
-      if (mode == null) return const SizedBox.shrink();
-      return ComposerSelect(
-        label: 'Approval mode',
-        value: mode,
-        disabled: !controller.canControl,
-        foregroundColorKey: mode == 'full-access'
-            ? 'status.danger'
-            : 'text.secondary',
-        options: [
-          for (final entry in approvalModeLabels.entries)
-            ComposerOption(
-              entry.key,
-              entry.value,
-              '${_details[entry.key]}${entry.key == controller.state['defaultApprovalMode'] ? ' · default' : ''}',
-            ),
-        ],
-        onSelect: (value) => _select(context, value),
-      );
-    },
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final mode = controller.approvalMode;
+        if (mode == null) return const SizedBox.shrink();
+        return ComposerSelect(
+          label: tr("Approval mode"),
+          value: mode,
+          disabled: !controller.canControl,
+          foregroundColorKey: mode == 'full-access'
+              ? 'status.danger'
+              : 'text.secondary',
+          options: [
+            for (final entry in approvalModeLabels.entries)
+              ComposerOption(
+                entry.key,
+                tr(entry.value),
+                '${tr(_details[entry.key]!)}${entry.key == controller.state['defaultApprovalMode'] ? tr(' · default') : ''}',
+                entry.key == 'full-access'
+                    ? LucideIcons.shieldAlert
+                    : entry.key == 'auto'
+                    ? LucideIcons.shieldCheck
+                    : LucideIcons.hand,
+                entry.key == 'full-access',
+              ),
+          ],
+          onSelect: (value) => _select(context, value),
+        );
+      },
+    );
+  }
 }

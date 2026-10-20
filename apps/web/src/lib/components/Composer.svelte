@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import {
     ArrowUp,
     CornerDownRight,
@@ -40,14 +42,14 @@
         detail: model.provider,
       })),
   );
-  const thinkingOptions = [
-    { value: 'off', label: 'No thinking' },
-    { value: 'minimal', label: 'Minimal' },
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'xhigh', label: 'Extra high' },
-  ];
+  const thinkingOptions = $derived([
+    { value: 'off', label: tr('No thinking') },
+    { value: 'minimal', label: tr('Minimal') },
+    { value: 'low', label: tr('Low') },
+    { value: 'medium', label: tr('Medium') },
+    { value: 'high', label: tr('High') },
+    { value: 'xhigh', label: tr('Extra high') },
+  ]);
 
   let fileInput: HTMLInputElement | undefined = $state();
   let queueExpanded = $state(true);
@@ -75,12 +77,12 @@
   });
   let placeholder = $derived(
     connection === 'offline'
-      ? 'Offline draft — it will stay on this device'
+      ? tr('Offline draft — it will stay on this device')
       : !hasControl
-        ? 'Take control to send a message'
+        ? tr('Take control to send a message')
         : mode === 'steer'
-          ? 'Steer the current run…'
-          : 'Tell the agent what to work on…',
+          ? tr('Steer the current run…')
+          : tr('Tell the agent what to work on…'),
   );
 
   /**
@@ -138,23 +140,26 @@
         />{/if}
       {#if app.todo}<TodoDock list={app.todo} />{/if}
       {#if queue.length > 0}
-        <DockSection label="Queued messages" class="queue-dock" bind:expanded={queueExpanded}>
+        <DockSection label={tr('Queued messages')} class="queue-dock" bind:expanded={queueExpanded}>
           {#snippet head()}
             <ListOrdered size={14} />
-            <span class="dock-title">{queue.length} queued</span>
+            <span class="dock-title">{tr('{0} queued', [queue.length])}</span>
           {/snippet}
           {#snippet actions()}
             <button
               class="dock-action"
               type="button"
               onclick={() => app.clearQueue()}
-              disabled={!hasControl}>Clear</button
+              disabled={!hasControl}>{tr('Clear')}</button
             >
           {/snippet}
           <ol class="dock-list">
             {#each queue as item (item.id)}
               <li>
-                <span class="queue-dock-kind" title={item.kind === 'steer' ? 'Steer' : 'Follow up'}>
+                <span
+                  class="queue-dock-kind"
+                  title={item.kind === 'steer' ? tr('Steer') : tr('Follow up')}
+                >
                   {#if item.kind === 'steer'}<Navigation size={13} />{:else}<CornerDownRight
                       size={13}
                     />{/if}
@@ -165,8 +170,8 @@
                   type="button"
                   onclick={() => app.sendQueuedNow(item)}
                   disabled={!hasControl || busy}
-                  aria-label="Send now: {item.content}"
-                  title="Send now — interrupts the current step"
+                  aria-label={tr('Send now: {0}', [item.content])}
+                  title={tr('Send now — interrupts the current step')}
                 >
                   <SendHorizontal size={14} />
                 </button>
@@ -182,17 +187,18 @@
     {#if app.approvalMode === 'full-access'}
       <!-- Persistent while it lasts (security audit L14). -->
       <div class="full-access-note" role="status">
-        Full access: the agent runs commands and changes files without asking. Only your deny-list
-        still asks.
+        {tr(
+          'Full access: the agent runs commands and changes files without asking. Only your deny-list still asks.',
+        )}
       </div>
     {/if}
     {#if connection === 'offline'}
       <div class="offline-note">
-        You’re offline. This draft is saved locally and will never be sent automatically.
+        {tr('You’re offline. This draft is saved locally and will never be sent automatically.')}
       </div>
     {/if}
     {#if attachments.length}
-      <div class="attachment-strip" role="group" aria-label="Attachments">
+      <div class="attachment-strip" role="group" aria-label={tr('Attachments')}>
         {#each attachments as attachment (attachment.id)}
           <div class="attachment-preview">
             {#if attachment.preview}<img
@@ -201,18 +207,18 @@
               />{:else if attachment.kind === 'file'}<FileIcon size={22} />{:else}<Image
                 size={22}
               />{/if}
-            <span>{attachment.uploading ? 'Uploading…' : attachment.name}</span>
+            <span>{attachment.uploading ? tr('Uploading…') : attachment.name}</span>
             {#if attachment.uploading}<LoaderCircle class="spin" size={15} />{:else}<button
                 class="touch-target"
                 type="button"
-                aria-label="Remove {attachment.name}"
+                aria-label={tr('Remove {0}', [attachment.name])}
                 onclick={() => app.removeUpload(attachment.id)}><X size={14} /></button
               >{/if}
           </div>
         {/each}
       </div>
     {/if}
-    <label class="sr-only" for="prompt">Message</label>
+    <label class="sr-only" for="prompt">{tr('Message')}</label>
     <textarea
       id="prompt"
       bind:this={textarea}
@@ -243,15 +249,15 @@
       <button
         class="icon-button"
         type="button"
-        title="Attach files"
-        aria-label="Attach files"
+        title={tr('Attach files')}
+        aria-label={tr('Attach files')}
         onclick={() => fileInput?.click()}
       >
         <Paperclip size={18} />
       </button>
       <div class="model-select">
         <ComposerSelect
-          label="Model"
+          label={tr('Model')}
           value={app.selectedModel}
           options={modelOptions}
           disabled={active}
@@ -260,7 +266,7 @@
       </div>
       <div class="thinking-select">
         <ComposerSelect
-          label="Reasoning effort"
+          label={tr('Reasoning effort')}
           value={app.thinking}
           options={thinkingOptions}
           onselect={(level) => app.changeThinking(level as ThinkingLevel)}
@@ -275,8 +281,8 @@
           type="button"
           onclick={() => app.stopRun()}
           disabled={!hasControl || stopping}
-          aria-label="Stop run"
-          title="Stop run"
+          aria-label={tr('Stop run')}
+          title={tr('Stop run')}
         >
           <Square size={11} fill="currentColor" />
         </button>
@@ -287,8 +293,8 @@
           type="button"
           onclick={() => app.stopRun()}
           disabled={!hasControl || stopping}
-          aria-label={stopping ? 'Stopping run' : 'Stop run'}
-          title={stopping ? 'Stopping…' : 'Stop run'}
+          aria-label={stopping ? tr('Stopping run') : tr('Stop run')}
+          title={stopping ? tr('Stopping…') : tr('Stop run')}
         >
           {#if stopping}<LoaderCircle class="spin" size={18} />{:else}<Square
               size={13}
@@ -301,8 +307,8 @@
           type="button"
           onclick={() => app.sendCommand(mode)}
           disabled={!canSubmit}
-          aria-label="Send message"
-          title="Send message"
+          aria-label={tr('Send message')}
+          title={tr('Send message')}
         >
           {#if busy}<LoaderCircle class="spin" size={18} />{:else}<ArrowUp
               size={19}

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   /**
    * One live terminal. xterm.js is loaded on first use (it is large); the
    * socket reconnects with backoff and the gateway replays scrollback, so the
@@ -137,7 +139,7 @@
     xterm.open(host);
     xterm.onData((data) => {
       if (!hasControl) {
-        notice = 'Take control of the session to type here.';
+        notice = tr('Take control of the session to type here.');
         return;
       }
       send({ type: 'input', data });

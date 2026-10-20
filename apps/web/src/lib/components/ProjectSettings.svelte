@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import { ApiError } from '../http';
   import {
     capabilitiesApi,
@@ -20,7 +22,7 @@
   let reload = $state(0);
   let generation = 0;
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : tr('Unable to reach the gateway. Try again.');
 
   $effect(() => {
     const id = workspaceId;
@@ -78,7 +80,7 @@
       const response = await capabilitiesApi.update(workspaceId, update);
       if (current !== generation) return;
       capabilities = response.capabilities;
-      status = 'Project capabilities saved.';
+      status = tr('Project capabilities saved.');
     } catch (cause) {
       if (current === generation) error = message(cause);
     } finally {
@@ -88,23 +90,25 @@
 </script>
 
 <section class="settings-section">
-  <h3>Project capabilities</h3>
+  <h3>{tr('Project capabilities')}</h3>
   <p>
-    Choose which assistant features this chat workspace may use. All capabilities are allowed by
-    default. Changes are saved to and enforced by the gateway, not just hidden in this browser.
+    {tr(
+      'Choose which assistant features this chat workspace may use. All capabilities are allowed by default. Changes are saved to and enforced by the gateway, not just hidden in this browser.',
+    )}
   </p>
   <p>
-    This is not a sandbox: these settings do not isolate files, shell commands, or network access.
-    They do not revoke data already in a conversation or stop work already running.
+    {tr(
+      'This is not a sandbox: these settings do not isolate files, shell commands, or network access. They do not revoke data already in a conversation or stop work already running.',
+    )}
   </p>
   {#if disabled}
-    <p>Project capabilities are unavailable in demo mode.</p>
+    <p>{tr('Project capabilities are unavailable in demo mode.')}</p>
   {:else}
     {#if loading}
-      <p role="status">Loading project capabilities…</p>
+      <p role="status">{tr('Loading project capabilities…')}</p>
     {:else if capabilities}
       <fieldset disabled={saving} aria-busy={saving}>
-        <legend>Allowed assistant features</legend>
+        <legend>{tr('Allowed assistant features')}</legend>
         {#each Object.entries(CAPABILITY_LABELS) as [key, label] (key)}
           <label class="capability-toggle">
             <span>{label}</span>
@@ -117,7 +121,7 @@
           </label>
         {/each}
         <label class="capability-toggle">
-          <span>Delegation approval</span>
+          <span>{tr('Delegation approval')}</span>
           <select
             value={approval}
             disabled={!capabilities.delegation}
@@ -129,16 +133,18 @@
           </select>
         </label>
         {#if !capabilities.delegation}
-          <p class="hint">Applies only while delegation is allowed.</p>
+          <p class="hint">{tr('Applies only while delegation is allowed.')}</p>
         {:else if approval === 'untrusted'}
           <p class="hint">
-            Outside content: web pages, search, browser, memory search, and delegation reports since
-            your last message.
+            {tr(
+              'Outside content: web pages, search, browser, memory search, and delegation reports since your last message.',
+            )}
           </p>
         {:else if approval === 'never'}
           <p class="hint warning">
-            A prompt injection in content the assistant reads can then start work in your workspaces
-            without asking.
+            {tr(
+              'A prompt injection in content the assistant reads can then start work in your workspaces without asking.',
+            )}
           </p>
         {/if}
       </fieldset>
@@ -146,10 +152,10 @@
     {#if error}
       <p role="alert">{error}</p>
       {#if !capabilities}<button class="button ghost" type="button" onclick={() => reload++}
-          >Retry</button
+          >{tr('Retry')}</button
         >{/if}
     {/if}
-    <p role="status">{saving ? 'Saving project capabilities…' : status}</p>
+    <p role="status">{saving ? tr('Saving project capabilities…') : status}</p>
   {/if}
 </section>
 

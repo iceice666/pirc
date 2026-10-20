@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:ui' show SemanticsRole;
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -106,11 +107,11 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
     final r = state.runtime;
     final phase = r['phase'];
     final busy = phase != null && phase != '';
-    const labels = {
-      'starting': 'Starting consolidation',
-      'observer': 'Observing recent turns',
-      'reflector': 'Reflecting on observations',
-      'dropper': 'Pruning low-value observations',
+    final labels = {
+      'starting': tr("Starting consolidation"),
+      'observer': tr("Observing recent turns"),
+      'reflector': tr("Reflecting on observations"),
+      'dropper': tr("Pruning low-value observations"),
     };
     return Wrap(
       spacing: 6,
@@ -123,15 +124,15 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
             working: true,
           )
         else if (r['autoCompacting'] == true)
-          chip('Compacting', icon: LucideIcons.loaderCircle, working: true)
+          chip(tr("Compacting"), icon: LucideIcons.loaderCircle, working: true)
         else
           chip(
             widget.controller.panelData.value?['agentRunning'] == true
-                ? 'Idle'
-                : 'Agent stopped',
+                ? tr("Idle")
+                : tr("Agent stopped"),
             icon: LucideIcons.brain,
           ),
-        if (state.memory?['passive'] == true) chip('Passive'),
+        if (state.memory?['passive'] == true) chip(tr("Passive")),
       ],
     );
   }
@@ -160,10 +161,10 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
             runSpacing: 6,
             children: [
               for (final item in [
-                ('reflections', 'Reflections'),
-                ('active', 'Active obs.'),
-                ('dropped', 'Dropped'),
-                ('compactions', 'Compactions'),
+                ('reflections', tr("Reflections")),
+                ('active', tr("Active obs.")),
+                ('dropped', tr("Dropped")),
+                ('compactions', tr("Compactions")),
               ])
                 Container(
                   key: ValueKey('memory-stat-${item.$1}'),
@@ -210,10 +211,10 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
       child: Column(
         children: [
           for (final (index, item) in [
-            ('observation', 'Next observation'),
-            ('reflection', 'Next reflection'),
-            ('compaction', 'Next compaction'),
-            ('activePool', 'Active observation pool'),
+            ('observation', tr("Next observation")),
+            ('reflection', tr("Next reflection")),
+            ('compaction', tr("Next compaction")),
+            ('activePool', tr("Active observation pool")),
           ].indexed) ...[
             if (index > 0) const SizedBox(height: 8),
             meter(item.$2, obj(thresholds[item.$1])),
@@ -287,7 +288,7 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
   }
 
   Widget filters() => Semantics(
-    label: 'Observation filter',
+    label: tr("Observation filter"),
     container: true,
     child: Container(
       padding: const EdgeInsets.all(2),
@@ -393,7 +394,11 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
     final id = '${item['id']}', open = state.expanded.contains(id);
     final dim = reflection ? item['visible'] != true : item['dropped'] == true;
     final metadata = reflection
-        ? ' · ${(item['supportingObservationIds'] as List? ?? []).length} sources · ${memoryTokens(item['tokenCount'] as num? ?? 0)} tok${item['visible'] != true ? ' · not in context' : ''}'
+        ? tr(" · {0} sources · {1} tok{2}", [
+            (item['supportingObservationIds'] as List? ?? []).length,
+            memoryTokens(item['tokenCount'] as num? ?? 0),
+            item['visible'] != true ? ' · not in context' : '',
+          ])
         : ' · ${item['timestamp']}${item['dropped'] == true ? ' · dropped' : ''}';
     return Opacity(
       opacity: dim ? .55 : 1,
@@ -418,7 +423,7 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
                         WidgetSpan(
                           alignment: PlaceholderAlignment.middle,
                           child: Tooltip(
-                            message: '${item['relevance']} relevance',
+                            message: tr("{0} relevance", [item['relevance']]),
                             child: Padding(
                               padding: const EdgeInsets.only(
                                 right: 6,
@@ -501,7 +506,7 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
       height: kTextHeightNone,
     );
     final headingWidth = measureText('OBSERVATIONS', headingStyle);
-    final filtersWidth = ['Active', 'All', 'Dropped']
+    final filtersWidth = [tr("Active"), tr("All"), tr("Dropped")]
         .map((label) => measureText(label, filterStyle))
         .fold(0.0, (a, b) => a + b);
     // Three 16px button paddings, two 2px gaps, and 2px group padding.
@@ -514,98 +519,110 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: state,
-    builder: (context, _) {
-      final panel = widget.controller.panelData, memory = state.memory;
-      final now =
-          (widget.clock?.call() ?? DateTime.now()).millisecondsSinceEpoch;
-      final lastErrors = obj(state.runtime['lastErrors']);
-      final limited = rows(
-        state.runtime['rateLimited'],
-      ).where((r) => (r['until'] as num? ?? 0) > now);
-      final children = <Widget>[
-        if (panel.error != null && panel.value == null)
-          errors([Text(panel.error!)])
-        else if (panel.value == null)
-          empty('Loading…')
-        else if (memory == null)
-          empty('Memory state is unavailable for this session.')
-        else if (memory['enabled'] != true)
-          empty('Observational memory is disabled in this workspace’s config.')
-        else ...[
-          status(),
-          stats(),
-          meters(),
-          if (lastErrors.isNotEmpty || limited.isNotEmpty)
-            errors([
-              for (final e in lastErrors.entries)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Icon(
-                      LucideIcons.circleAlert,
-                      size: 13,
-                      color: palette(context)['status.danger'],
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(child: Text(normal('${e.key}: ${e.value}'))),
-                  ],
-                ),
-              for (final r in limited)
-                Text('${r['model']} rate-limited until ${time(r['until'])}'),
-            ]),
-          group(
-            'Reflections',
-            Text(
-              '${state.reflections.length}',
-              style: text(11.5, color: 'text.muted', weight: FontWeight.w500),
-            ),
-          ),
-          if (state.reflections.isEmpty)
-            empty('No reflections yet.')
-          else
-            entries(state.reflections, true),
-          group('Observations', filters()),
-          if (state.observations.isEmpty)
-            empty('Nothing here yet.')
-          else
-            entries(state.observations, false),
-        ],
-      ];
-      return LayoutBuilder(
-        builder: (context, bounds) {
-          final viewportWidth = bounds.maxWidth;
-          final contentWidth = math.max(0.0, viewportWidth - 24).toDouble();
-          final headerWidth = observationsHeaderWidth();
-          final listWidth = math
-              .max(viewportWidth, headerWidth + 24)
-              .toDouble();
-          return SingleChildScrollView(
-            key: const ValueKey('memory-pane-horizontal-scroll'),
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: listWidth,
-              child: ListView(
-                clipBehavior: Clip.none,
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-                children: [
-                  for (final (i, w) in children.indexed) ...[
-                    if (i > 0) SizedBox(width: contentWidth, height: 8),
-                    SizedBox(
-                      width:
-                          w.key == const ValueKey('memory-group-observations')
-                          ? math.max(contentWidth, headerWidth).toDouble()
-                          : contentWidth,
-                      child: w,
-                    ),
-                  ],
-                ],
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return AnimatedBuilder(
+      animation: state,
+      builder: (context, _) {
+        final panel = widget.controller.panelData, memory = state.memory;
+        final now =
+            (widget.clock?.call() ?? DateTime.now()).millisecondsSinceEpoch;
+        final lastErrors = obj(state.runtime['lastErrors']);
+        final limited = rows(
+          state.runtime['rateLimited'],
+        ).where((r) => (r['until'] as num? ?? 0) > now);
+        final children = <Widget>[
+          if (panel.error != null && panel.value == null)
+            errors([Text(panel.error!)])
+          else if (panel.value == null)
+            empty(tr("Loading…"))
+          else if (memory == null)
+            empty(tr("Memory state is unavailable for this session."))
+          else if (memory['enabled'] != true)
+            empty(
+              tr(
+                "Observational memory is disabled in this workspace’s config.",
+              ),
+            )
+          else ...[
+            status(),
+            stats(),
+            meters(),
+            if (lastErrors.isNotEmpty || limited.isNotEmpty)
+              errors([
+                for (final e in lastErrors.entries)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Icon(
+                        LucideIcons.circleAlert,
+                        size: 13,
+                        color: palette(context)['status.danger'],
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(child: Text(normal('${e.key}: ${e.value}'))),
+                    ],
+                  ),
+                for (final r in limited)
+                  Text(
+                    tr("{0} rate-limited until {1}", [
+                      r['model'],
+                      time(r['until']),
+                    ]),
+                  ),
+              ]),
+            group(
+              tr("Reflections"),
+              Text(
+                '${state.reflections.length}',
+                style: text(11.5, color: 'text.muted', weight: FontWeight.w500),
               ),
             ),
-          );
-        },
-      );
-    },
-  );
+            if (state.reflections.isEmpty)
+              empty(tr("No reflections yet."))
+            else
+              entries(state.reflections, true),
+            group(tr("Observations"), filters()),
+            if (state.observations.isEmpty)
+              empty(tr("Nothing here yet."))
+            else
+              entries(state.observations, false),
+          ],
+        ];
+        return LayoutBuilder(
+          builder: (context, bounds) {
+            final viewportWidth = bounds.maxWidth;
+            final contentWidth = math.max(0.0, viewportWidth - 24).toDouble();
+            final headerWidth = observationsHeaderWidth();
+            final listWidth = math
+                .max(viewportWidth, headerWidth + 24)
+                .toDouble();
+            return SingleChildScrollView(
+              key: const ValueKey('memory-pane-horizontal-scroll'),
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: listWidth,
+                child: ListView(
+                  clipBehavior: Clip.none,
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                  children: [
+                    for (final (i, w) in children.indexed) ...[
+                      if (i > 0) SizedBox(width: contentWidth, height: 8),
+                      SizedBox(
+                        width:
+                            w.key == const ValueKey('memory-group-observations')
+                            ? math.max(contentWidth, headerWidth).toDouble()
+                            : contentWidth,
+                        child: w,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 }

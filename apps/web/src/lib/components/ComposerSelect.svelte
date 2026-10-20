@@ -1,11 +1,19 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import { Check, ChevronDown } from '@lucide/svelte';
-  import { tick } from 'svelte';
+  import { tick, type Component } from 'svelte';
 
   interface Props {
     label: string;
     value: string;
-    options: Array<{ value: string; label: string; detail?: string }>;
+    options: Array<{
+      value: string;
+      label: string;
+      detail?: string;
+      icon?: Component<{ size?: number }>;
+      warning?: boolean;
+    }>;
     disabled?: boolean;
     onselect: (value: string) => void;
   }
@@ -88,7 +96,7 @@
     aria-label={`${label}: ${selected?.label ?? value}`}
     aria-haspopup="menu"
     aria-expanded={open}
-    title={disabled ? `${label} cannot be changed during a run` : label}
+    title={disabled ? tr('{0} cannot be changed during a run', [label]) : label}
     onclick={() => (open ? close() : show())}
     onkeydown={(event) => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -97,6 +105,7 @@
       }
     }}
   >
+    {#if selected?.icon}<selected.icon size={15} />{/if}
     <span>{selected?.label ?? (value || label)}</span>
     <ChevronDown size={13} />
   </button>
@@ -110,11 +119,13 @@
           aria-checked={option.value === value}
           tabindex={option.value === value ? 0 : -1}
           class="selector-option"
+          class:warning={option.warning}
           onclick={() => {
             close(true);
             if (option.value !== value) onselect(option.value);
           }}
         >
+          {#if option.icon}<option.icon size={18} />{/if}
           <span class="selector-option-text">
             <span>{option.label}</span>
             {#if option.detail}<small>{option.detail}</small>{/if}
@@ -206,7 +217,14 @@
   .selector-option:focus {
     background: var(--bg-hover);
   }
+  .selector-option.warning {
+    color: var(--danger);
+  }
+  .selector-option :global(svg) {
+    flex-shrink: 0;
+  }
   .selector-option-text {
+    flex: 1;
     display: grid;
     gap: 3px;
     overflow-wrap: anywhere;

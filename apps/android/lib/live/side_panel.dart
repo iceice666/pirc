@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'dart:ui' show SemanticsRole;
 import 'package:flutter/foundation.dart';
@@ -63,6 +64,7 @@ class _NativeSidePanelState extends State<NativeSidePanel> {
             (t.$1 != 'git' || widget.git) &&
             (t.$1 != 'terminals' || widget.terminal),
       )
+      .map((t) => (t.$1, tr(t.$2), t.$3))
       .toList();
   @override
   void initState() {
@@ -125,6 +127,7 @@ class _NativeSidePanelState extends State<NativeSidePanel> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final colors = palette(context);
     final touch =
         widget.touch ??
@@ -134,7 +137,7 @@ class _NativeSidePanelState extends State<NativeSidePanel> {
         ].contains(defaultTargetPlatform);
     final phone = MediaQuery.sizeOf(context).width <= 650;
     return Semantics(
-      label: 'Session side panel',
+      label: tr("Session side panel"),
       container: true,
       child: Material(
         color: colors[widget.overlay ? 'web.bg-layer' : 'web.bg-sidebar'],
@@ -337,7 +340,7 @@ class _NativeSidePanelState extends State<NativeSidePanel> {
                           return KeyEventResult.handled;
                         },
                         child: Semantics(
-                          label: 'Resize side panel',
+                          label: tr("Resize side panel"),
                           value: '${widget.width.round()}',
                           increasedValue:
                               '${(widget.width + 16).clamp(280, widget.maxWidth).round()}',
@@ -346,7 +349,9 @@ class _NativeSidePanelState extends State<NativeSidePanel> {
                           onIncrease: () => resize(widget.width + 16),
                           onDecrease: () => resize(widget.width - 16),
                           child: Tooltip(
-                            message: 'Drag to resize · double-click to reset',
+                            message: tr(
+                              "Drag to resize · double-click to reset",
+                            ),
                             child: MouseRegion(
                               cursor: SystemMouseCursors.resizeColumn,
                               onEnter: (_) => setState(() => hover = true),

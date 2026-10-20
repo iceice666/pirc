@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -115,7 +116,7 @@ class NativeAppSurfaceState extends State<NativeAppSurface> {
       throw ArgumentError.value(
         widget.activeIdentity,
         'activeIdentity',
-        'The active surface identity must be retained.',
+        tr("The active surface identity must be retained."),
       );
     }
   }
@@ -162,12 +163,15 @@ class NativeAppSurfaceState extends State<NativeAppSurface> {
   }
 
   @override
-  Widget build(BuildContext context) => Stack(
-    fit: StackFit.expand,
-    children: [
-      for (final entry in _slots.entries) _buildSlot(entry.key, entry.value),
-    ],
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (final entry in _slots.entries) _buildSlot(entry.key, entry.value),
+      ],
+    );
+  }
 
   Widget _buildSlot(Object identity, _NativeAppSurfaceSlot slot) {
     final active = identity == widget.activeIdentity;

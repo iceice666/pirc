@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 // D3 Sankey breadth/relaxation logic adapted from d3-sankey 0.12.3.
 // Copyright 2015 Mike Bostock; BSD-3-Clause, see D3_SANKEY_LICENSE.txt.
 import 'dart:math' as math;
@@ -130,7 +131,7 @@ NativeSankeyLayout layoutNativeMermaidSankey(
   String suffix = '',
 }) {
   if (diagram.nodes.isEmpty || diagram.flows.isEmpty) {
-    throw const FormatException('Sankey needs at least one node and flow.');
+    throw FormatException(tr("Sankey needs at least one node and flow."));
   }
   final nodes = [for (final node in diagram.nodes) _Node(node)];
   final byId = {for (final node in nodes) node.input.id: node};
@@ -140,7 +141,10 @@ NativeSankeyLayout layoutNativeMermaidSankey(
     final target = byId[flow.targetId];
     if (source == null || target == null) {
       throw FormatException(
-        'Sankey flow ${flow.sourceId} → ${flow.targetId} references a missing node.',
+        tr("Sankey flow {0} → {1} references a missing node.", [
+          flow.sourceId,
+          flow.targetId,
+        ]),
       );
     }
     final link = _Flow(flow, source, target);
@@ -165,7 +169,7 @@ NativeSankeyLayout layoutNativeMermaidSankey(
 
   final layerCount = nodes.map((node) => node.depth).reduce(math.max) + 1;
   if (layerCount < 2) {
-    throw const FormatException('Sankey layout needs at least two layers.');
+    throw FormatException(tr("Sankey layout needs at least two layers."));
   }
   final horizontalScale = (_extentWidth - _nodeWidth) / (layerCount - 1);
   final columns = List<List<_Node>?>.filled(layerCount, null);
@@ -178,8 +182,10 @@ NativeSankeyLayout layoutNativeMermaidSankey(
     (columns[node.layer] ??= <_Node>[]).add(node);
   }
   if (columns.any((column) => column == null || column.isEmpty)) {
-    throw const FormatException(
-      'Sankey source has an empty intermediate layer, which d3-sankey cannot lay out.',
+    throw FormatException(
+      tr(
+        "Sankey source has an empty intermediate layer, which d3-sankey cannot lay out.",
+      ),
     );
   }
   final completeColumns = columns.cast<List<_Node>>();
@@ -194,8 +200,10 @@ NativeSankeyLayout layoutNativeMermaidSankey(
     verticalScale = math.min(verticalScale, scale);
   }
   if (!verticalScale.isFinite) {
-    throw const FormatException(
-      'Sankey has only zero-valued flows; the pinned D3 layout produces non-finite geometry.',
+    throw FormatException(
+      tr(
+        "Sankey has only zero-valued flows; the pinned D3 layout produces non-finite geometry.",
+      ),
     );
   }
   for (final column in completeColumns) {
@@ -275,7 +283,7 @@ NativeSankeyLayout layoutNativeMermaidSankey(
       !bounds.top.isFinite ||
       !bounds.right.isFinite ||
       !bounds.bottom.isFinite) {
-    throw const FormatException('Sankey layout produced invalid geometry.');
+    throw FormatException(tr("Sankey layout produced invalid geometry."));
   }
   // Mermaid's setupGraphViewbox uses SVGElement.getBBox() with zero padding.
   // SVG getBBox excludes stroke width, so link strokes do not enlarge the viewBox.
@@ -367,7 +375,7 @@ void _computeDepths(List<_Node> nodes) {
   var depth = 0;
   while (current.isNotEmpty) {
     if (depth++ > nodes.length) {
-      throw const FormatException('Sankey contains a circular link.');
+      throw FormatException(tr("Sankey contains a circular link."));
     }
     final next = <_Node>{};
     for (final node in current) {
@@ -385,7 +393,7 @@ void _computeHeights(List<_Node> nodes) {
   var height = 0;
   while (current.isNotEmpty) {
     if (height++ > nodes.length) {
-      throw const FormatException('Sankey contains a circular link.');
+      throw FormatException(tr("Sankey contains a circular link."));
     }
     final next = <_Node>{};
     for (final node in current) {

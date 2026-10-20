@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   /**
    * Add or edit an API-key / custom-endpoint backend: start from a known
    * service preset, pick models from pi-ai's catalog or the endpoint's own
@@ -117,7 +119,7 @@
   function safeError(cause: unknown) {
     return cause instanceof ApiError
       ? cause.message
-      : 'The gateway could not be reached. Check the connection and try again.';
+      : tr('The gateway could not be reached. Check the connection and try again.');
   }
 
   function freeId(base: string) {
@@ -192,8 +194,11 @@
       discovery = {
         ok: true,
         text: list.length
-          ? `Found ${list.length} model${list.length === 1 ? '' : 's'}. Select the ones to use.`
-          : 'The endpoint lists no models. Add model IDs manually.',
+          ? tr('Found {0} model{1}. Select the ones to use.', [
+              list.length,
+              list.length === 1 ? '' : 's',
+            ])
+          : tr('The endpoint lists no models. Add model IDs manually.'),
       };
     } catch (cause) {
       if (alive) discovery = { ok: false, text: safeError(cause) };
@@ -260,20 +265,20 @@
   }}
   autocomplete="off"
 >
-  <h4>{editingId ? `Edit ${editingId}` : 'New backend'}</h4>
+  <h4>{editingId ? tr('Edit {0}', [editingId]) : tr('New backend')}</h4>
   {#if !editingId}
     <label
-      ><span>Service</span><select
+      ><span>{tr('Service')}</span><select
         value={presetId}
         disabled={busy}
         onchange={(event) => choosePreset(event.currentTarget.value)}
-        ><option value="">Custom endpoint</option>
-        {#if presets.some((item) => item.catalog)}<optgroup label="Cloud services"
+        ><option value="">{tr('Custom endpoint')}</option>
+        {#if presets.some((item) => item.catalog)}<optgroup label={tr('Cloud services')}
             >{#each presets.filter((item) => item.catalog) as item (item.id)}<option value={item.id}
                 >{item.name}</option
               >{/each}</optgroup
           >{/if}
-        {#if presets.some((item) => !item.catalog)}<optgroup label="Local servers"
+        {#if presets.some((item) => !item.catalog)}<optgroup label={tr('Local servers')}
             >{#each presets.filter((item) => !item.catalog) as item (item.id)}<option
                 value={item.id}>{item.name}</option
               >{/each}</optgroup
@@ -281,30 +286,32 @@
       ></label
     >
     {#if presetsUnavailable}<small
-        >Service presets are unavailable. Enter the endpoint details manually.</small
+        >{tr('Service presets are unavailable. Enter the endpoint details manually.')}</small
       >{/if}
   {/if}
   {#if savedPreset}<p class="hint">
-      Uses pi-ai's {presetName} catalog. Known models keep their limits and request compatibility.
+      {tr("Uses pi-ai's {0} catalog. Known models keep their limits and request compatibility.", [
+        presetName,
+      ])}
     </p>{/if}
   <label
-    ><span>Backend ID</span><input
+    ><span>{tr('Backend ID')}</span><input
       bind:value={providerId}
       required
       disabled={!!editingId || busy}
     /></label
   >
   <label
-    ><span>API</span><select bind:value={providerApi} disabled={busy || !!savedPreset}
-      ><option value="openai-completions">OpenAI-compatible chat</option><option value="openai-chat"
-        >OpenAI chat (legacy)</option
-      ><option value="openai-responses">OpenAI Responses</option><option value="anthropic-messages"
-        >Anthropic Messages</option
+    ><span>{tr('API')}</span><select bind:value={providerApi} disabled={busy || !!savedPreset}
+      ><option value="openai-completions">{tr('OpenAI-compatible chat')}</option><option
+        value="openai-chat">{tr('OpenAI chat (legacy)')}</option
+      ><option value="openai-responses">{tr('OpenAI Responses')}</option><option
+        value="anthropic-messages">{tr('Anthropic Messages')}</option
       ></select
     ></label
   >
   <label
-    ><span>Base URL</span><input
+    ><span>{tr('Base URL')}</span><input
       type="url"
       bind:value={baseUrl}
       placeholder="http://localhost:11434/v1"
@@ -313,34 +320,35 @@
     /></label
   >
   <label
-    ><span>API key (optional)</span><input
+    ><span>{tr('API key (optional)')}</span><input
       type="password"
       bind:value={apiKey}
       autocomplete="new-password"
       disabled={busy || clearKey}
       placeholder={editingId
-        ? 'Leave blank to keep saved key'
+        ? tr('Leave blank to keep saved key')
         : preset?.keyless
-          ? 'Not needed for a local server'
-          : 'Leave blank for a no-key endpoint'}
+          ? tr('Not needed for a local server')
+          : tr('Leave blank for a no-key endpoint')}
     /></label
   >
   {#if editingId}<label class="backend-checkbox"
       ><input type="checkbox" bind:checked={clearKey} disabled={busy} /><span
-        >Remove the saved API key</span
+        >{tr('Remove the saved API key')}</span
       ></label
     >{/if}
   {#if !savedPreset}<label class="backend-checkbox"
       ><input type="checkbox" bind:checked={opencodeGo} disabled={busy} /><span
-        >OpenCode compatibility (session routing + pirc User-Agent; automatic for opencode.ai/zen
-        and opencode.ai/inference)</span
+        >{tr(
+          'OpenCode compatibility (session routing + pirc User-Agent; automatic for opencode.ai/zen and opencode.ai/inference)',
+        )}</span
       ></label
     >{/if}
 
-  <h5>Models</h5>
+  <h5>{tr('Models')}</h5>
   <div class="backend-actions">
     <button class="button ghost" type="button" disabled={busy || !baseUrl.trim()} onclick={discover}
-      >{checking === 'discover' ? 'Fetching models…' : 'Fetch models from endpoint'}</button
+      >{checking === 'discover' ? tr('Fetching models…') : tr('Fetch models from endpoint')}</button
     >
   </div>
   {#if discovery}<p class:backend-error={!discovery.ok} role="status">{discovery.text}</p>{/if}
@@ -352,14 +360,14 @@
           class="filter"
           type="search"
           bind:value={filter}
-          placeholder={`Filter ${choices.length} models`}
-          aria-label="Filter models"
+          placeholder={tr('Filter {0} models', [choices.length])}
+          aria-label={tr('Filter models')}
         />
         <button class="button ghost" type="button" disabled={busy} onclick={selectShown}
-          >Select shown</button
+          >{tr('Select shown')}</button
         >
       </div>
-      <ul class="choices" aria-label="Available models">
+      <ul class="choices" aria-label={tr('Available models')}>
         {#each shown as model (model.id)}
           <li>
             <label class="backend-checkbox"
@@ -372,13 +380,13 @@
               ></label
             >
           </li>
-        {:else}<li><small>No models match the filter.</small></li>{/each}
+        {:else}<li><small>{tr('No models match the filter.')}</small></li>{/each}
       </ul>
     </div>
   {/if}
 
   {#if models.length}
-    <ul class="selected" aria-label="Selected models">
+    <ul class="selected" aria-label={tr('Selected models')}>
       {#each models as model (model.id)}
         <li>
           <div class="model-head">
@@ -389,15 +397,15 @@
               class="button ghost"
               type="button"
               disabled={busy}
-              onclick={() => toggle(model, false)}>Remove {model.id}</button
+              onclick={() => toggle(model, false)}>{tr('Remove {0}', [model.id])}</button
             >
           </div>
           <details>
-            <summary>Details</summary>
+            <summary>{tr('Details')}</summary>
             <fieldset disabled={busy}>
-              <label><span>Display name</span><input bind:value={model.name} /></label>
+              <label><span>{tr('Display name')}</span><input bind:value={model.name} /></label>
               <label
-                ><span>Context window (tokens)</span><input
+                ><span>{tr('Context window (tokens)')}</span><input
                   type="number"
                   min="1"
                   step="1"
@@ -406,7 +414,7 @@
                 /></label
               >
               <label
-                ><span>Maximum output tokens</span><input
+                ><span>{tr('Maximum output tokens')}</span><input
                   type="number"
                   min="1"
                   step="1"
@@ -419,14 +427,14 @@
                   type="checkbox"
                   checked={model.reasoning ?? false}
                   onchange={(event) => (model.reasoning = event.currentTarget.checked)}
-                /><span>Supports reasoning</span></label
+                /><span>{tr('Supports reasoning')}</span></label
               >
               <label class="backend-checkbox"
                 ><input
                   type="checkbox"
                   checked={model.input?.includes('image') ?? false}
                   onchange={(event) => setImage(model, event.currentTarget.checked)}
-                /><span>Supports image input</span></label
+                /><span>{tr('Supports image input')}</span></label
               >
             </fieldset>
           </details>
@@ -435,13 +443,13 @@
     </ul>
   {:else}<p class="hint">
       {choices.length
-        ? 'Select at least one model above, or add a model ID.'
-        : 'Fetch the endpoint’s models, or add a model ID.'}
+        ? tr('Select at least one model above, or add a model ID.')
+        : tr('Fetch the endpoint’s models, or add a model ID.')}
     </p>{/if}
 
   <div class="backend-actions manual">
     <label
-      ><span>Model ID</span><input
+      ><span>{tr('Model ID')}</span><input
         bind:value={manualId}
         disabled={busy}
         onkeydown={(event) => {
@@ -455,13 +463,13 @@
       class="button ghost"
       type="button"
       disabled={busy || !manualId.trim() || selected.has(manualId.trim())}
-      onclick={addManual}>Add model</button
+      onclick={addManual}>{tr('Add model')}</button
     >
   </div>
 
   <div class="backend-actions">
     {#if models.length > 1}<label class="inline"
-        ><span>Test with</span><select bind:value={testModel} disabled={busy}
+        ><span>{tr('Test with')}</span><select bind:value={testModel} disabled={busy}
           >{#each models as model (model.id)}<option value={model.id}
               >{model.name || model.id}</option
             >{/each}</select
@@ -471,7 +479,7 @@
       class="button ghost"
       type="button"
       disabled={busy || !models.length || !baseUrl.trim()}
-      onclick={test}>{checking === 'test' ? 'Testing…' : 'Test connection'}</button
+      onclick={test}>{checking === 'test' ? tr('Testing…') : tr('Test connection')}</button
     >
   </div>
   {#if testResult}<p
@@ -479,13 +487,14 @@
       class:backend-ok={testResult.ok}
       role="status"
     >
-      {testResult.ok ? `Connected. ${testResult.message}` : testResult.message}
+      {testResult.ok ? tr('Connected. {0}', [testResult.message]) : testResult.message}
     </p>{/if}
 
   <div class="backend-actions">
-    <button class="button primary" type="submit" disabled={busy || !ready}>Save backend</button
+    <button class="button primary" type="submit" disabled={busy || !ready}
+      >{tr('Save backend')}</button
     ><button class="button ghost" type="button" disabled={locked} onclick={oncancel}
-      >Cancel editing</button
+      >{tr('Cancel editing')}</button
     >
   </div>
 </form>

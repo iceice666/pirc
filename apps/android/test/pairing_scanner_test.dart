@@ -54,7 +54,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      find.text('這不是 pirc 配對 QR code，請掃描網頁「設定 → 裝置」顯示的配對碼。'),
+      find.text(
+        "This is not a pirc pairing QR code. Scan the pairing code shown under “Settings → Devices” on the web.",
+      ),
       findsOneWidget,
     );
     expect(results, isEmpty);
@@ -103,21 +105,26 @@ void main() {
     await _openScanner(tester);
 
     expect(platform.startCalls, 1);
-    expect(find.text('需要相機權限才能掃描'), findsOneWidget);
-    expect(find.text('只在掃描配對碼時使用相機。你也可以返回並貼上配對連結。'), findsOneWidget);
-    expect(find.text('重試'), findsOneWidget);
-    expect(find.text('前往系統設定'), findsOneWidget);
+    expect(find.text("Camera permission is required to scan."), findsOneWidget);
+    expect(
+      find.text(
+        "The camera is used only to scan pairing codes. You can also go back and paste the pairing link.",
+      ),
+      findsOneWidget,
+    );
+    expect(find.text("Retry"), findsOneWidget);
+    expect(find.text("Open system settings"), findsOneWidget);
 
-    await tester.tap(find.text('前往系統設定'));
+    await tester.tap(find.text("Open system settings"));
     await tester.pumpAndSettle();
     expect(gateway.calls, ['appSettings']);
 
-    await tester.tap(find.text('重試'));
+    await tester.tap(find.text("Retry"));
     await tester.pumpAndSettle();
     expect(platform.startCalls, 2);
-    expect(find.text('需要相機權限才能掃描'), findsNothing);
+    expect(find.text("Camera permission is required to scan."), findsNothing);
 
-    await tester.tap(find.byTooltip('取消掃描'));
+    await tester.tap(find.byTooltip("Cancel scan"));
     await tester.pumpAndSettle();
     expect(results, [null]);
   });
@@ -138,7 +145,7 @@ void main() {
       expect(platform.stopCalls, 0);
       expect(platform.disposeCalls, 0);
 
-      await tester.tap(find.byTooltip('取消掃描'));
+      await tester.tap(find.byTooltip("Cancel scan"));
       await tester.pump();
       expect(results, [null]);
       expect(platform.stopCalls, 0);
@@ -165,7 +172,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(platform.startCalls, 1);
 
-    await tester.tap(find.byTooltip('取消掃描'));
+    await tester.tap(find.byTooltip("Cancel scan"));
     await tester.pump();
     expect(results, [null]);
 
@@ -185,7 +192,7 @@ void main() {
     expect(platform.stopCalls, 1);
     expect(platform.disposeCalls, 1);
 
-    await tester.tap(find.byTooltip('取消掃描'));
+    await tester.tap(find.byTooltip("Cancel scan"));
     await tester.pumpAndSettle();
     expect(results, [null, null]);
     expect(platform.stopCalls, 2);
@@ -208,7 +215,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(platform.startCalls, 2);
 
-    await tester.tap(find.byTooltip('取消掃描'));
+    await tester.tap(find.byTooltip("Cancel scan"));
     await tester.pumpAndSettle();
     expect(results, [null]);
     expect(platform.stopCalls, 2);

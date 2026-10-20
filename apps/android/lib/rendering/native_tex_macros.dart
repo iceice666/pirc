@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 // ignore_for_file: implementation_imports
 
 import 'package:flutter_math_fork/src/ast/nodes/space.dart';
@@ -92,7 +93,7 @@ GreenNode _handleDefinition(TexParser parser, FunctionContext context) {
 
   final nameToken = expander.popToken();
   if (_invalidControlSequenceTokens.contains(nameToken.text)) {
-    throw ParseException('Expected a control sequence', nameToken);
+    throw ParseException(tr("Expected a control sequence"), nameToken);
   }
 
   var parameterCount = 0;
@@ -116,20 +117,20 @@ GreenNode _handleDefinition(TexParser parser, FunctionContext context) {
       final number = _singleDigit(numberToken.text);
       if (number == null || number == 0) {
         throw ParseException(
-          'Invalid argument number "${numberToken.text}"',
+          tr("Invalid argument number \"{0}\"", [numberToken.text]),
           numberToken,
         );
       }
       if (number != parameterCount + 1) {
         throw ParseException(
-          'Argument number "${numberToken.text}" out of order',
+          tr("Argument number \"{0}\" out of order", [numberToken.text]),
           numberToken,
         );
       }
       parameterCount++;
       delimiters.add(<String>[]);
     } else if (token.text == 'EOF') {
-      throw ParseException('Expected a macro definition', token);
+      throw ParseException(tr("Expected a macro definition"), token);
     } else {
       delimiters[parameterCount].add(token.text);
     }
@@ -149,7 +150,7 @@ GreenNode _handleDefinition(TexParser parser, FunctionContext context) {
       .toList(growable: false);
   final definition = MacroDefinition((context) {
     if (context is! MacroExpander) {
-      throw StateError('Expected flutter_math_fork MacroExpander context.');
+      throw StateError(tr("Expected flutter_math_fork MacroExpander context."));
     }
 
     final args = _consumeDefinitionArguments(
@@ -200,7 +201,7 @@ GreenNode _handlePrefix(TexParser parser, FunctionContext context) {
   final token = parser.fetch();
   final rewritten = _globalPrefixMap[token.text];
   if (rewritten == null) {
-    throw ParseException('Invalid token after macro prefix', token);
+    throw ParseException(tr("Invalid token after macro prefix"), token);
   }
 
   if (context.funcName == r'\global' ||
@@ -212,7 +213,7 @@ GreenNode _handlePrefix(TexParser parser, FunctionContext context) {
 
   final result = parser.parseFunction(null, null, null);
   if (result == null) {
-    throw ParseException('Invalid token after macro prefix', token);
+    throw ParseException(tr("Invalid token after macro prefix"), token);
   }
   return result;
 }
@@ -234,7 +235,7 @@ List<List<Token>> _consumeDefinitionArguments(
     final actual = expander.popToken();
     if (actual.text != expected) {
       throw ParseException(
-        'Use of the macro does not match its definition',
+        tr("Use of the macro does not match its definition"),
         actual,
       );
     }
@@ -272,8 +273,9 @@ List<Token> _consumeMacroArgument(
     final token = expander.popToken();
     if (token.text == 'EOF') {
       throw ParseException(
-        'Unexpected end of input in a macro argument, '
-        "expected '${delimiter[matched]}'",
+        tr("Unexpected end of input in a macro argument, expected '{0}'", [
+          delimiter[matched],
+        ]),
         token,
       );
     }
@@ -352,8 +354,9 @@ List<Token> _consumeBraceDelimitedArgument(
       }
     } else if (token.text == 'EOF') {
       throw ParseException(
-        'Unexpected end of input in a macro argument, '
-        "expected '${delimiter[matched]}'",
+        tr("Unexpected end of input in a macro argument, expected '{0}'", [
+          delimiter[matched],
+        ]),
         token,
       );
     }
@@ -409,7 +412,7 @@ List<Token> _substituteParameters(
     }
     if (index == 0) {
       throw ParseException(
-        'Incomplete placeholder at end of macro body',
+        tr("Incomplete placeholder at end of macro body"),
         tokens[index],
       );
     }
@@ -427,7 +430,7 @@ List<Token> _substituteParameters(
     if (argumentNumber == null ||
         argumentNumber < 1 ||
         argumentNumber > args.length) {
-      throw ParseException('Not a valid argument number', placeholder);
+      throw ParseException(tr("Not a valid argument number"), placeholder);
     }
     tokens.replaceRange(
       placeholderIndex,
@@ -473,7 +476,7 @@ List<Token> _expandReplacement(TexParser parser, List<Token> replacement) {
           token.text.startsWith('\\') &&
           !expander.isDefined(token.text)) {
         throw ParseException(
-          'Undefined control sequence: ${token.text}',
+          tr("Undefined control sequence: {0}", [token.text]),
           token,
         );
       }

@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 /**
  * Push notifications on this browser (docs/guides/schedules.md): scheduled
  * runs, sessions waiting for you, delegations and memory proposals. The
@@ -98,26 +99,26 @@ const base64Url = (value: string) => {
 function browserName(): string {
   const agent = navigator.userAgent;
   const browser = /Firefox\//.test(agent)
-    ? 'Firefox'
+    ? tr('Firefox')
     : /Edg\//.test(agent)
-      ? 'Edge'
+      ? tr('Edge')
       : /Chrome\//.test(agent)
-        ? 'Chrome'
+        ? tr('Chrome')
         : /Safari\//.test(agent)
-          ? 'Safari'
-          : 'Browser';
+          ? tr('Safari')
+          : tr('Browser');
   const system = /Android/.test(agent)
-    ? 'Android'
+    ? tr('Android')
     : /iPhone|iPad/.test(agent)
       ? 'iOS'
       : /Mac OS X/.test(agent)
         ? 'macOS'
         : /Windows/.test(agent)
-          ? 'Windows'
+          ? tr('Windows')
           : /Linux/.test(agent)
-            ? 'Linux'
+            ? tr('Linux')
             : '';
-  return system ? `${browser} on ${system}` : browser;
+  return system ? tr('{0} on {1}', [browser, system]) : browser;
 }
 
 /**

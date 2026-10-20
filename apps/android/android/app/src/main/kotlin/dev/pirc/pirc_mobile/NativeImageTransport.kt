@@ -80,7 +80,7 @@ class NativeImageTransport internal constructor(
                     }
                     url = target
                 } else {
-                    check(response.isSuccessful) { "Image request failed (${response.code})" }
+                    check(response.isSuccessful) { NativeI18n.text("Image request failed ({0})", response.code) }
                     val body = response.body
                     check(body.contentLength() <= limit) { "Image exceeds 32 MiB" }
                     val out = ByteArrayOutputStream()

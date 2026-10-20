@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   /**
    * The agent's task list, docked on top of the composer (as in Codex and
    * DeepSeek Harness). Collapsed, the header names the task in progress and
@@ -24,8 +26,8 @@
     active.length
       ? active[0]!.text + (active.length > 1 ? ` +${active.length - 1}` : '')
       : allDone
-        ? 'All tasks completed'
-        : 'Tasks',
+        ? tr('All tasks completed')
+        : tr('Tasks'),
   );
 
   /** Items have no id; key by text (numbered when repeated) so rows follow reorders. */
@@ -38,21 +40,25 @@
     });
   });
 
-  const label: Record<TodoItem['status'], string> = {
-    completed: 'Completed',
-    in_progress: 'In progress',
-    pending: 'Pending',
-  };
+  const label: Record<TodoItem['status'], string> = $derived({
+    completed: tr('Completed'),
+    in_progress: tr('In progress'),
+    pending: tr('Pending'),
+  });
 </script>
 
-<DockSection label="Tasks" class="todo-dock" bind:expanded ontoggle={persist}>
+<DockSection label={tr('Tasks')} class="todo-dock" bind:expanded ontoggle={persist}>
   {#snippet head()}
     <span class="todo-lead">
       {#if active.length}<span class="state-dot ongoing" aria-hidden="true"
         ></span>{:else}<ListChecks size={14} />{/if}
     </span>
     <span class="dock-title" class:active={active.length > 0}>{headline}</span>
-    <span class="todo-progress" role="img" aria-label="{list.done} of {list.total} completed">
+    <span
+      class="todo-progress"
+      role="img"
+      aria-label={tr('{0} of {1} completed', [list.done, list.total])}
+    >
       <span class="todo-meter"
         ><span style:width="{list.total ? (list.done / list.total) * 100 : 0}%"></span></span
       >
@@ -73,7 +79,7 @@
         ></span>
         <span class="todo-text">{item.text}</span>
         {#if item.category}<span class="todo-tag">{item.category}</span>{/if}
-        {#if item.blocked}<span class="todo-tag blocked">blocked</span>{/if}
+        {#if item.blocked}<span class="todo-tag blocked">{tr('blocked')}</span>{/if}
       </li>
     {/each}
   </ol>

@@ -519,7 +519,7 @@ void main() {
     await t.pumpAndSettle();
     await clickSubmit(t);
 
-    await t.tap(find.byTooltip('重新載入'));
+    await t.tap(find.byTooltip("Reload"));
     await t.pumpAndSettle();
 
     expect(gateway.calls, hasLength(2));
@@ -546,9 +546,9 @@ void main() {
     );
     await t.pumpAndSettle();
     await clickSubmit(t);
-    expect(find.text('重試'), findsOneWidget);
+    expect(find.text("Retry"), findsOneWidget);
 
-    await t.tap(find.text('重試'));
+    await t.tap(find.text("Retry"));
     await t.pumpAndSettle();
 
     expect(gateway.calls, hasLength(2));

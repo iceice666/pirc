@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/services.dart';
 
 /// Numeric editing values accepted by the browser number control. A trailing
@@ -15,9 +16,9 @@ num? providerNumber(String text) {
 String? providerTokenError(String text) {
   if (text.isEmpty) return null;
   final value = providerNumber(text);
-  if (value == null) return 'Enter a number.';
-  if (value < 1) return 'Enter a value greater than or equal to 1.';
-  if (value % 1 != 0) return 'Enter a whole number.';
+  if (value == null) return tr("Enter a number.");
+  if (value < 1) return tr("Enter a value greater than or equal to 1.");
+  if (value % 1 != 0) return tr("Enter a whole number.");
   return null;
 }
 
@@ -27,8 +28,8 @@ String? providerUrlError(String input) {
   var value = input
       .replaceAll(RegExp(r'[\r\n]'), '')
       .replaceAll(RegExp(r'^[\t\f ]+|[\t\f ]+$'), '');
-  if (value.isEmpty) return 'Enter a URL.';
-  const invalid = 'Enter a valid URL.';
+  if (value.isEmpty) return tr("Enter a URL.");
+  final invalid = tr("Enter a valid URL.");
   final scheme = RegExp(r'^([a-zA-Z][a-zA-Z0-9+.-]*):').firstMatch(value);
   if (scheme == null) return invalid;
   final protocol = scheme.group(1)!.toLowerCase();

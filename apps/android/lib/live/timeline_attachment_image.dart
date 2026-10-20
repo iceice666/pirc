@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -86,7 +87,7 @@ class _TimelineAttachmentImageState extends State<TimelineAttachmentImage> {
         _resolveNetwork(source, ticket);
         return;
       } else {
-        throw const FormatException('Unsupported image URL');
+        throw FormatException(tr("Unsupported image URL"));
       }
       final svg = mime.toLowerCase().split(';').first == 'image/svg+xml';
       Size natural;
@@ -171,6 +172,7 @@ class _TimelineAttachmentImageState extends State<TimelineAttachmentImage> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final natural = _natural;
     if (natural == null && !_failed) return const SizedBox.shrink();
     Widget content;

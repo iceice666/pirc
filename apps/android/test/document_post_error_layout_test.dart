@@ -111,7 +111,7 @@ void main() {
       expect(window.currentDocument, same(postDocument));
       expect(gateway.calls.map((call) => call['method']), ['POST', 'GET']);
       expect(find.text('ERR_CACHE_MISS'), findsOneWidget);
-      expect(find.text('確認重新提交表單'), findsOneWidget);
+      expect(find.text("Confirm form resubmission"), findsOneWidget);
       expect(find.text('POST_ONLY_CONTENT_SENTINEL'), findsNothing);
       expect(find.text('GET_ONLY_CONTENT'), findsNothing);
       expect(find.byType(NativeHtmlTextFieldWidget), findsNothing);
@@ -152,7 +152,9 @@ void main() {
             );
             expect(oldFocus.hasFocus, isFalse, reason: variant);
 
-            final heading = tester.widget<Text>(find.text('確認重新提交表單'));
+            final heading = tester.widget<Text>(
+              find.text("Confirm form resubmission"),
+            );
             expect(
               heading.style?.color,
               brightness == Brightness.dark

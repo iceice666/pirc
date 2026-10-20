@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -115,6 +116,7 @@ class _SessionRowState extends State<SessionRow> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final w =
         widget.controller.workspaces
             .where((w) => w['id'] == s['workspaceId'])
@@ -260,8 +262,10 @@ class _SessionRowState extends State<SessionRow> {
                                       Padding(
                                         padding: const EdgeInsets.only(left: 6),
                                         child: Tooltip(
-                                          message:
-                                              'The delegated task $delegationStatus',
+                                          message: tr(
+                                            "The delegated task {0}",
+                                            [delegationStatus],
+                                          ),
                                           child: Container(
                                             padding: const EdgeInsets.symmetric(
                                               horizontal: 6,
@@ -273,8 +277,8 @@ class _SessionRowState extends State<SessionRow> {
                                             ),
                                             child: Text(
                                               origin['status'] == 'completed'
-                                                  ? 'Done'
-                                                  : 'Failed',
+                                                  ? tr("Done")
+                                                  : tr("Failed"),
                                               style: webText(
                                                 context,
                                                 size: 11,
@@ -391,7 +395,7 @@ class _SessionRowState extends State<SessionRow> {
                               const SizedBox(width: 2),
                               WebIconButton(
                                 LucideIcons.trash2,
-                                'Delete ${s['name']}',
+                                tr("Delete {0}", [s['name']]),
                                 size: widget.page
                                     ? 28
                                     : phone
@@ -421,7 +425,7 @@ class _SessionRowState extends State<SessionRow> {
                             const SizedBox(width: 2),
                             WebIconButton(
                               LucideIcons.pencil,
-                              'Rename ${s['name']}',
+                              tr("Rename {0}", [s['name']]),
                               size: widget.page
                                   ? 28
                                   : phone
@@ -433,7 +437,7 @@ class _SessionRowState extends State<SessionRow> {
                           ] else if (showMore)
                             WebIconButton(
                               LucideIcons.ellipsis,
-                              'Actions for ${s['name']}',
+                              tr("Actions for {0}", [s['name']]),
                               size: 36,
                               iconSize: 16,
                               onPressed: _reveal,
@@ -456,48 +460,54 @@ class StatusDot extends StatelessWidget {
   final Json session;
   final double size;
   @override
-  Widget build(BuildContext context) => Tooltip(
-    message: isWaiting(session)
-        ? 'Needs input'
-        : isWorking(session)
-        ? 'Working'
-        : '${session['runStatus'] ?? 'idle'}',
-    child: Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color:
-            !isWaiting(session) &&
-                !isWorking(session) &&
-                session['unread'] != true
-            ? Colors.transparent
-            : palette(context)[isWaiting(session)
-                  ? 'status.warning'
-                  : isWorking(session)
-                  ? 'accent.default'
-                  : session['unread'] == true
-                  ? 'accent.default'
-                  : 'line.strong'],
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Tooltip(
+      message: isWaiting(session)
+          ? tr("Needs input")
+          : isWorking(session)
+          ? tr("Working")
+          : '${session['runStatus'] ?? 'idle'}',
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color:
+              !isWaiting(session) &&
+                  !isWorking(session) &&
+                  session['unread'] != true
+              ? Colors.transparent
+              : palette(context)[isWaiting(session)
+                    ? 'status.warning'
+                    : isWorking(session)
+                    ? 'accent.default'
+                    : session['unread'] == true
+                    ? 'accent.default'
+                    : 'line.strong'],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _UnreadDot extends StatelessWidget {
   const _UnreadDot();
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'Unread',
-    child: Container(
-      width: 6,
-      height: 6,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: palette(context)['accent.default'],
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Semantics(
+      label: tr("Unread"),
+      child: Container(
+        width: 6,
+        height: 6,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: palette(context)['accent.default'],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _DeleteChat extends StatefulWidget {
@@ -512,54 +522,66 @@ class _DeleteChatState extends State<_DeleteChat> {
   bool busy = false;
   String? error;
   @override
-  Widget build(BuildContext context) => WebDialog(
-    title: 'Delete chat?',
-    busy: busy,
-    actions: [
-      WebButton(
-        'Cancel',
-        onPressed: busy ? null : () => Navigator.pop(context, false),
-      ),
-      WebButton(
-        busy ? 'Deleting…' : 'Delete chat and memories',
-        primary: true,
-        danger: true,
-        onPressed: busy
-            ? null
-            : () async {
-                setState(() {
-                  busy = true;
-                  error = null;
-                });
-                try {
-                  await widget.controller.deleteChat('${widget.session['id']}');
-                  if (context.mounted) Navigator.pop(context, true);
-                } catch (e) {
-                  if (mounted) {
-                    setState(() {
-                      busy = false;
-                      error = LiveController.describe(e);
-                    });
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return WebDialog(
+      title: tr("Delete chat?"),
+      busy: busy,
+      actions: [
+        WebButton(
+          tr("Cancel"),
+          onPressed: busy ? null : () => Navigator.pop(context, false),
+        ),
+        WebButton(
+          busy ? tr("Deleting…") : tr("Delete chat and memories"),
+          primary: true,
+          danger: true,
+          onPressed: busy
+              ? null
+              : () async {
+                  setState(() {
+                    busy = true;
+                    error = null;
+                  });
+                  try {
+                    await widget.controller.deleteChat(
+                      '${widget.session['id']}',
+                    );
+                    if (context.mounted) Navigator.pop(context, true);
+                  } catch (e) {
+                    if (mounted) {
+                      setState(() {
+                        busy = false;
+                        error = LiveController.describe(e);
+                      });
+                    }
                   }
-                }
-              },
-      ),
-    ],
-    children: [
-      Text(
-        '“${widget.session['name']}” will be permanently deleted, including its messages and chat files.',
-      ),
-      const SizedBox(height: 12),
-      const Text(
-        'This also deletes USER memories and MEMORY notes created by this chat, and its pending memory proposals.',
-        style: TextStyle(fontWeight: FontWeight.w600),
-      ),
-      const Text('Memories created by other chats are kept.'),
-      const SizedBox(height: 12),
-      const Text(
-        'Copies already present in other chats are not erased. Any running reply will stop. This cannot be undone.',
-      ),
-      if (error != null) WebNotice(error!, error: true),
-    ],
-  );
+                },
+        ),
+      ],
+      children: [
+        Text(
+          tr(
+            "“{0}” will be permanently deleted, including its messages and chat files.",
+            [widget.session['name']],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          tr(
+            "This also deletes USER memories and MEMORY notes created by this chat, and its pending memory proposals.",
+          ),
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        Text(tr("Memories created by other chats are kept.")),
+        const SizedBox(height: 12),
+        Text(
+          tr(
+            "Copies already present in other chats are not erased. Any running reply will stop. This cannot be undone.",
+          ),
+        ),
+        if (error != null) WebNotice(error!, error: true),
+      ],
+    );
+  }
 }

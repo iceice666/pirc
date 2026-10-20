@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -19,12 +20,13 @@ class MobileTabs extends StatelessWidget {
   final ValueChanged<String> onPick;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final colors = Theme.of(context).extension<PircColors>()!;
     final tabs = [
-      if (chats) ('chat', 'Chat', LucideIcons.messageSquare),
-      ('work', 'Work', LucideIcons.squareTerminal),
-      ('schedules', 'Schedules', LucideIcons.calendarClock),
-      ('settings', 'Settings', LucideIcons.settings),
+      if (chats) ('chat', tr("Chat"), LucideIcons.messageSquare),
+      ('work', tr("Work"), LucideIcons.squareTerminal),
+      ('schedules', tr("Schedules"), LucideIcons.calendarClock),
+      ('settings', tr("Settings"), LucideIcons.settings),
     ];
     final available = MediaQuery.sizeOf(context).width;
     final minimum = <double>[];
@@ -110,7 +112,9 @@ class MobileTabs extends StatelessWidget {
                                         top: -5,
                                         right: -9,
                                         child: Semantics(
-                                          label: '$waiting waiting for you',
+                                          label: tr("{0} waiting for you", [
+                                            waiting,
+                                          ]),
                                           child: Container(
                                             constraints: const BoxConstraints(
                                               minWidth: 16,

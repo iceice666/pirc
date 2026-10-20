@@ -11,6 +11,8 @@
 </script>
 
 <script lang="ts">
+  import { tr, i18n, languages } from '../../i18n.svelte';
+
   import { X } from '@lucide/svelte';
   import { rovingFocus } from '../../a11y';
   import { app } from '../../app.svelte';
@@ -44,11 +46,14 @@
 <Modal bind:open labelledby="settings-title" class="settings">
   <header>
     <div>
-      <span class="eyebrow">pirc</span>
-      <h2 id="settings-title">Settings</h2>
+      <span class="eyebrow">{tr('pirc')}</span>
+      <h2 id="settings-title">{tr('Settings')}</h2>
     </div>
-    <button class="icon-button" type="button" aria-label="Close" onclick={() => (open = false)}
-      ><X size={19} /></button
+    <button
+      class="icon-button"
+      type="button"
+      aria-label={tr('Close')}
+      onclick={() => (open = false)}><X size={19} /></button
     >
   </header>
 
@@ -56,7 +61,7 @@
     <div
       class="settings-nav"
       role="tablist"
-      aria-label="Settings categories"
+      aria-label={tr('Settings categories')}
       aria-orientation="vertical"
       use:rovingFocus={{ selector: '[role="tab"]', orientation: 'vertical', activate: true }}
     >
@@ -70,9 +75,9 @@
           tabindex={settingsTab === tab.id ? 0 : -1}
           class:chosen={settingsTab === tab.id}
           onclick={() => (settingsTab = tab.id)}
-          >{tab.label}{#if tab.id === 'memory' && app.memoryPending}<span
+          >{tr(tab.label)}{#if tab.id === 'memory' && app.memoryPending}<span
               class="tab-count"
-              aria-label="{app.memoryPending} waiting">{app.memoryPending}</span
+              aria-label={tr('{0} waiting', [app.memoryPending])}>{app.memoryPending}</span
             >{/if}</button
         >
       {/each}
@@ -87,24 +92,45 @@
         hidden={settingsTab !== 'general'}
       >
         <section class="settings-section">
-          <h3>Sessions</h3>
+          <h3>{tr('Language')}</h3>
+          <label class="settings-row">
+            <span>{tr('Interface language')}</span>
+            <select
+              value={i18n.language}
+              onchange={(event) => i18n.setLanguage(event.currentTarget.value)}
+            >
+              {#each languages as language}
+                <option value={language.value}>{language.label}</option>
+              {/each}
+            </select>
+          </label>
+        </section>
+
+        <section class="settings-section">
+          <h3>{tr('Sessions')}</h3>
           <label class="settings-toggle">
-            <span>Show done sessions</span>
+            <span>{tr('Show done sessions')}</span>
             <input type="checkbox" bind:checked={showSettled} />
           </label>
           <p>
-            Settled (done) sessions are hidden from project and workspace pages unless this is on.
-            Project and workspace settings are on their own pages.
+            {tr(
+              'Settled (done) sessions are hidden from project and workspace pages unless this is on. Project and workspace settings are on their own pages.',
+            )}
           </p>
         </section>
 
         <NotificationSettings disabled={app.usingDemo} />
 
         <section class="settings-section">
-          <h3>Layout</h3>
+          <h3>{tr('Layout')}</h3>
           <div class="settings-row">
-            <span>Restore the sidebar and side panel to their default size and visibility.</span>
-            <button class="button ghost" type="button" onclick={onresetlayout}>Reset</button>
+            <span
+              >{tr(
+                'Restore the sidebar and side panel to their default size and visibility.',
+              )}</span
+            >
+            <button class="button ghost" type="button" onclick={onresetlayout}>{tr('Reset')}</button
+            >
           </div>
         </section>
       </div>
@@ -149,7 +175,7 @@
         hidden={settingsTab !== 'devices'}
       >
         <section class="settings-section">
-          <h3>Nodes</h3>
+          <h3>{tr('Nodes')}</h3>
           {#if app.nodes.length}
             <ul class="settings-devices">
               {#each app.nodes as node (node.id)}
@@ -157,17 +183,18 @@
                   <span class="online-dot"></span>
                   <strong>{node.id}</strong>
                   <small
-                    >{node.workspaces.length} workspace{node.workspaces.length === 1
-                      ? ''
-                      : 's'}</small
+                    >{tr('{0} workspace{1}', [
+                      node.workspaces.length,
+                      node.workspaces.length === 1 ? '' : tr('s'),
+                    ])}</small
                   >
                 </li>
               {/each}
             </ul>
           {:else}
-            <p>No nodes online.</p>
+            <p>{tr('No nodes online.')}</p>
           {/if}
-          <p>{app.nodes.length} online</p>
+          <p>{tr('{0} online', [app.nodes.length])}</p>
         </section>
 
         <PairedDevices disabled={app.usingDemo} />
@@ -180,9 +207,9 @@
         hidden={settingsTab !== 'about'}
       >
         <section class="settings-section">
-          <h3>This browser</h3>
+          <h3>{tr('This browser')}</h3>
           <div class="settings-row">
-            <span>Client ID</span>
+            <span>{tr('Client ID')}</span>
             <code>{app.clientId}</code>
           </div>
         </section>

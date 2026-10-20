@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -135,7 +136,7 @@ class GitState extends ChangeNotifier {
     final result = await read(
       statusRead,
       'status',
-      'Unable to read Git status.',
+      tr("Unable to read Git status."),
     );
     if (result == null) return;
     status = result;
@@ -152,7 +153,7 @@ class GitState extends ChangeNotifier {
     final result = await read(
       historyRead,
       'log?skip=${reset ? 0 : commits.length}&limit=50',
-      'Unable to load history.',
+      tr("Unable to load history."),
     );
     if (result == null) return;
     commits = reset
@@ -167,7 +168,7 @@ class GitState extends ChangeNotifier {
     final result = await read(
       historyRead,
       'log?skip=0&limit=50',
-      'Unable to load history.',
+      tr("Unable to load history."),
     );
     if (result == null) return;
     final page = rows(result['commits']),
@@ -191,7 +192,7 @@ class GitState extends ChangeNotifier {
     final result = await read(
       diffRead,
       'diff?path=${enc('${file['path']}')}${staged ? '&staged=1' : ''}${file['worktree'] == '?' ? '&untracked=1' : ''}',
-      'Unable to load diff.',
+      tr("Unable to load diff."),
     );
     if (result != null) {
       diff = result;
@@ -205,7 +206,7 @@ class GitState extends ChangeNotifier {
     final result = await read(
       commitRead,
       'commits/${enc('${item['sha']}')}',
-      'Unable to load commit.',
+      tr("Unable to load commit."),
     );
     if (result != null) {
       commit = result;

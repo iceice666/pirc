@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -45,6 +46,7 @@ class _WorkspaceInstructionsEditorState
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final platform = Theme.of(context).platform;
     final touch =
         (platform == TargetPlatform.android ||
@@ -61,7 +63,7 @@ class _WorkspaceInstructionsEditorState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Instructions',
+            tr("Instructions"),
             style: webText(
               context,
               size: 13,
@@ -70,7 +72,7 @@ class _WorkspaceInstructionsEditorState
           ),
           const SizedBox(height: 6),
           Semantics(
-            label: 'Instructions',
+            label: tr("Instructions"),
             hint: widget.count,
             validationResult: widget.tooLong
                 ? SemanticsValidationResult.invalid
@@ -102,8 +104,9 @@ class _WorkspaceInstructionsEditorState
                           decoration: InputDecoration(
                             isDense: true,
                             filled: false,
-                            hintText:
-                                'For example: answer in French, and keep trip plans on a budget.',
+                            hintText: tr(
+                              "For example: answer in French, and keep trip plans on a budget.",
+                            ),
                             hintStyle: webText(
                               context,
                               size: fontSize,

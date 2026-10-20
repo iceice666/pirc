@@ -1,3 +1,5 @@
+import '../../l10n/app_i18n.dart';
+
 /// A point or class style understood by Mermaid 11.17.2 quadrant charts.
 ///
 /// Colors retain their authored hex spelling (with or without `#`) and
@@ -135,23 +137,29 @@ class NativeMermaidQuadrantDiagram {
   final String accessibleDescription;
 
   String get semanticsLabel {
-    final parts = <String>['Quadrant chart'];
+    final parts = <String>[tr("Quadrant chart")];
     if (accessibleTitle.isNotEmpty) parts.add(accessibleTitle);
     if (accessibleDescription.isNotEmpty) parts.add(accessibleDescription);
     if ((title ?? '').isNotEmpty) parts.add(title!);
     if (xAxisLeftText.isNotEmpty || xAxisRightText.isNotEmpty) {
       parts.add(
-        'X axis: $xAxisLeftText${xAxisRightText.isEmpty ? '' : ' to $xAxisRightText'}',
+        tr("X axis: {0}{1}", [
+          xAxisLeftText,
+          xAxisRightText.isEmpty ? '' : ' to $xAxisRightText',
+        ]),
       );
     }
     if (yAxisBottomText.isNotEmpty || yAxisTopText.isNotEmpty) {
       parts.add(
-        'Y axis: $yAxisBottomText${yAxisTopText.isEmpty ? '' : ' to $yAxisTopText'}',
+        tr("Y axis: {0}{1}", [
+          yAxisBottomText,
+          yAxisTopText.isEmpty ? '' : ' to $yAxisTopText',
+        ]),
       );
     }
     for (var i = 0; i < quadrants.length; i++) {
       final label = quadrants[i];
-      if (label.isNotEmpty) parts.add('Quadrant ${i + 1}: $label');
+      if (label.isNotEmpty) parts.add(tr("Quadrant {0}: {1}", [i + 1, label]));
     }
     for (final point in points) {
       parts.add('${point.label}: ${point.x}, ${point.y}');

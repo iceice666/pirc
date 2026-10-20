@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -20,22 +21,25 @@ class ComposerAttachmentStrip extends StatelessWidget {
   final ValueChanged<Json> onRemove;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    key: const Key('composer-attachments-strip'),
-    height: 60,
-    child: ListView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      children: [
-        for (final attachment in attachments)
-          _ComposerAttachmentChip(
-            key: ValueKey(attachment['id'] ?? attachment['name']),
-            attachment: attachment,
-            onRemove: () => onRemove(attachment),
-          ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return SizedBox(
+      key: const Key('composer-attachments-strip'),
+      height: 60,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        children: [
+          for (final attachment in attachments)
+            _ComposerAttachmentChip(
+              key: ValueKey(attachment['id'] ?? attachment['name']),
+              attachment: attachment,
+              onRemove: () => onRemove(attachment),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ComposerAttachmentChip extends StatelessWidget {
@@ -50,6 +54,7 @@ class _ComposerAttachmentChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final colors = palette(context);
     final name = '${attachment['name'] ?? 'File'}';
     final pending = attachment['uploading'] == true;
@@ -57,7 +62,7 @@ class _ComposerAttachmentChip extends StatelessWidget {
     final bytes = attachment['previewBytes'];
     final thumbnailWidth = bytes is Uint8List && bytes.isNotEmpty ? 36.0 : 22.0;
     final label = TextPainter(
-      text: TextSpan(text: pending ? 'Uploading…' : name, style: style),
+      text: TextSpan(text: pending ? tr("Uploading…") : name, style: style),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
       maxLines: 1,
@@ -123,7 +128,7 @@ class _ComposerAttachmentChip extends StatelessWidget {
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                pending ? 'Uploading…' : name,
+                pending ? tr("Uploading…") : name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: style,
@@ -141,7 +146,7 @@ class _ComposerAttachmentChip extends StatelessWidget {
               )
             else
               IconButton(
-                tooltip: 'Remove $name',
+                tooltip: tr("Remove {0}", [name]),
                 onPressed: onRemove,
                 icon: const Icon(LucideIcons.x, size: 14),
                 style: IconButton.styleFrom(
@@ -169,6 +174,7 @@ class _AttachmentThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final image = attachment['kind'] == 'image';
     final bytes = attachment['previewBytes'];
     if (bytes is! Uint8List || bytes.isEmpty) {

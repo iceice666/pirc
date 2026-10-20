@@ -73,7 +73,9 @@ void main() {
       await t.pumpAndSettle();
       expect(find.text('報告 · v1'), findsOneWidget);
       expect(t.widget<ListView>(view).controller!.offset, offset);
-      await t.tap(find.text('已有 v2 · 切換新版'));
+      await t.tap(
+        find.text("Version v2 is available · Switch to the new version"),
+      );
       await t.pumpAndSettle();
       expect(find.text('報告 · v2'), findsOneWidget);
       expect(t.widget<ListView>(view).controller!.offset, 0);

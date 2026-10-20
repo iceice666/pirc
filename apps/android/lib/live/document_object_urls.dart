@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -143,10 +144,10 @@ class NativeDocumentObjectUrlBinding {
   bool get current => isCurrent();
   Future<NativeDocumentBlob> read(String url) async {
     if (!current || !url.startsWith('blob:')) {
-      throw StateError('Object URL document is unavailable.');
+      throw StateError(tr("Object URL document is unavailable."));
     }
     final value = await readBytes(url);
-    if (!current) throw StateError('Object URL document changed.');
+    if (!current) throw StateError(tr("Object URL document changed."));
     return NativeDocumentBlob.fromBridge(url, value);
   }
 }
@@ -182,13 +183,15 @@ class NativeDocumentBlobNavigationSource {
     if (creatorOrigin == null ||
         requestedOrigin == null ||
         creatorOrigin != requestedOrigin) {
-      throw const FormatException(
-        'Object URL does not belong to its creator origin.',
+      throw FormatException(
+        tr("Object URL does not belong to its creator origin."),
       );
     }
     final captured = _initialBlob;
     if (captured != null && captured.url == url.split('#').first) {
-      if (!binding.current) throw StateError('Object URL document changed.');
+      if (!binding.current) {
+        throw StateError(tr("Object URL document changed."));
+      }
       // Activation captured this immutable Blob before a subsequent revoke.
       // Only the initial load may use it; reload still consults the live URL.
       _initialBlob = null;

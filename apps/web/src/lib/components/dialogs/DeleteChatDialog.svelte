@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   import { app } from '../../app.svelte';
   import { errorMessage } from '../../errors';
   import type { SessionSummary } from '../../types';
@@ -27,7 +29,10 @@
       open = false;
       session = undefined;
     } catch (cause) {
-      error = errorMessage(cause, 'Could not delete this chat. Reconnect the chat node and retry.');
+      error = errorMessage(
+        cause,
+        tr('Could not delete this chat. Reconnect the chat node and retry.'),
+      );
       open = true;
     } finally {
       busy = false;
@@ -36,25 +41,32 @@
 </script>
 
 <Modal bind:open labelledby="delete-chat-title">
-  <header><h2 id="delete-chat-title">Delete chat?</h2></header>
-  <p>“{session?.name}” will be permanently deleted, including its messages and chat files.</p>
+  <header><h2 id="delete-chat-title">{tr('Delete chat?')}</h2></header>
   <p>
-    <strong
-      >This also deletes USER memories and MEMORY notes created by this chat, and its pending memory
-      proposals.</strong
-    > Memories created by other chats are kept.
+    {tr('“{0}” will be permanently deleted, including its messages and chat files.', [
+      session?.name,
+    ])}
   </p>
   <p>
-    Copies already present in other chats are not erased. Any running reply will stop. This cannot
-    be undone.
+    <strong
+      >{tr(
+        'This also deletes USER memories and MEMORY notes created by this chat, and its pending memory proposals.',
+      )}</strong
+    >
+    {tr('Memories created by other chats are kept.')}
+  </p>
+  <p>
+    {tr(
+      'Copies already present in other chats are not erased. Any running reply will stop. This cannot be undone.',
+    )}
   </p>
   {#if error}<p role="alert">{error}</p>{/if}
   <footer>
     <button class="button ghost" type="button" disabled={busy} onclick={() => (open = false)}
-      >Cancel</button
+      >{tr('Cancel')}</button
     >
     <button class="button dark" type="button" disabled={busy} onclick={remove}
-      >{busy ? 'Deleting…' : 'Delete chat and memories'}</button
+      >{busy ? tr('Deleting…') : tr('Delete chat and memories')}</button
     >
   </footer>
 </Modal>

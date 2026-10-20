@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -222,7 +223,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     final value = snapshot['stylesheets'];
     if (value == null) return;
     if (value is! Map) {
-      throw const FormatException('Invalid stylesheet snapshot.');
+      throw FormatException(tr("Invalid stylesheet snapshot."));
     }
     final model = _documentStyles ??= NativeDynamicDocumentStyles();
     final descriptor = obj(value);
@@ -250,7 +251,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         ready &&
         !_cancelledResourceRequests.contains(requestId) &&
         _currentStyleRequests.contains(requestId);
-    if (!current()) throw StateError('Stylesheet document changed.');
+    if (!current()) throw StateError(tr("Stylesheet document changed."));
     final model = _documentStyles!;
     var loaded = model.takeSeed(requestId);
     if (loaded == null) {
@@ -266,9 +267,10 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         isCurrent: current,
         resolve: (reference, base) async =>
             '${await gateway.call('resolveDocumentUrl', {'reference': reference, 'baseUrl': base})}',
-        fetch: (_, _) async => throw StateError('Stylesheet options required.'),
+        fetch: (_, _) async =>
+            throw StateError(tr("Stylesheet options required.")),
         fetchWithOptions: (reference, base, options) async {
-          if (!current()) throw StateError('Stylesheet document changed.');
+          if (!current()) throw StateError(tr("Stylesheet document changed."));
           final response = obj(
             await gateway.call('documentScriptResource', {
               'id': identity,
@@ -276,7 +278,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
               'request': {...options.arguments(reference), 'id': requestId},
             }),
           );
-          if (!current()) throw StateError('Stylesheet document changed.');
+          if (!current()) throw StateError(tr("Stylesheet document changed."));
           return nativeStylesheetResponse(response);
         },
       );
@@ -295,7 +297,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
             );
     }
     if (!current() || !model.complete(requestId, loaded)) {
-      throw StateError('Stylesheet response is stale.');
+      throw StateError(tr("Stylesheet response is stale."));
     }
     return {
       'id': requestId,
@@ -372,27 +374,25 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     for (final result in responses) {
       final rawCancelled = result['resourceCancellations'] ?? const [];
       if (rawCancelled is! List || rawCancelled.length > 256) {
-        throw const FormatException('Invalid document cancellation batch.');
+        throw FormatException(tr("Invalid document cancellation batch."));
       }
       for (final id in rawCancelled) {
         if (id is! String ||
             !RegExp(
               r'^(script|fetch|image|stylesheet)-[1-9][0-9]{0,15}$',
             ).hasMatch(id)) {
-          throw const FormatException(
-            'Invalid document resource cancellation.',
-          );
+          throw FormatException(tr("Invalid document resource cancellation."));
         }
         cancelled.add(id);
       }
       final raw = result['resourceRequests'];
       if (raw == null) continue;
       if (raw is! List || raw.length > 128) {
-        throw const FormatException('Invalid document resource batch.');
+        throw FormatException(tr("Invalid document resource batch."));
       }
       for (final item in raw) {
         if (item is! Map) {
-          throw const FormatException('Invalid document resource.');
+          throw FormatException(tr("Invalid document resource."));
         }
         final request = obj(item);
         final id = request['id'];
@@ -400,12 +400,12 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
             ? RegExp(r'^(script|fetch|image|stylesheet)-(\d+)$').firstMatch(id)
             : null;
         if (match == null || request['kind'] != match.group(1)) {
-          throw const FormatException('Invalid document resource identity.');
+          throw FormatException(tr("Invalid document resource identity."));
         }
         final kind = match.group(1)!;
         final serial = int.tryParse(match.group(2)!);
         if (serial == null || serial <= 0) {
-          throw const FormatException('Invalid document resource serial.');
+          throw FormatException(tr("Invalid document resource serial."));
         }
         if (serial <= (_lastResourceId[kind] ?? 0)) continue;
         _lastResourceId[kind] = serial;
@@ -431,8 +431,8 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
             _activeResources +
             received.length >
         256) {
-      throw const FormatException(
-        'Too many pending document resources (maximum 256).',
+      throw FormatException(
+        tr("Too many pending document resources (maximum 256)."),
       );
     }
     _resourceQueue.addAll(received);
@@ -536,7 +536,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   Future<Json> _loadImageResource(int identity, Json request) async {
     final url = request['url'];
     if (url is! String || url.length > 3 * 1024 * 1024) {
-      throw const FormatException('Invalid image URL.');
+      throw FormatException(tr("Invalid image URL."));
     }
     final uri = Uri.tryParse(url);
     Uint8List bytes;
@@ -544,7 +544,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     var originClean = true;
     if (uri?.scheme == 'data') {
       final data = uri!.data;
-      if (data == null) throw const FormatException('Invalid image data URL.');
+      if (data == null) throw FormatException(tr("Invalid image data URL."));
       bytes = data.contentAsBytes();
       mime = data.mimeType;
     } else if (uri?.scheme == 'blob') {
@@ -565,13 +565,13 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
           status < 200 ||
           status >= 300 ||
           response['type'] != 'image') {
-        throw FormatException('Image request failed (HTTP $status).');
+        throw FormatException(tr("Image request failed (HTTP {0}).", [status]));
       }
       final raw = response['bodyBytes'];
       if (raw is! List ||
           raw.length > NativeDocumentImagePool.maxEncodedBytes ||
           raw.any((b) => b is! int || b < 0 || b > 255)) {
-        throw const FormatException('Invalid image resource bytes.');
+        throw FormatException(tr("Invalid image resource bytes."));
       }
       bytes = Uint8List.fromList(raw.cast<int>());
       mime = response['mimeType'] is String
@@ -580,7 +580,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       originClean = response['originClean'] == true;
     }
     if (_disposed || _id != identity || !ready) {
-      throw StateError('Image document changed.');
+      throw StateError(tr("Image document changed."));
     }
     return _imagePool.decode(
       request['id'] as String,
@@ -627,11 +627,11 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       final raw = result['focusActions'];
       if (raw == null) continue;
       if (raw is! List || raw.length > 128) {
-        throw const FormatException('Invalid document focus action batch.');
+        throw FormatException(tr("Invalid document focus action batch."));
       }
       for (final item in raw) {
         if (item is! Map) {
-          throw const FormatException('Invalid document focus action.');
+          throw FormatException(tr("Invalid document focus action."));
         }
         final action = obj(item);
         final id = action['controlId'];
@@ -643,16 +643,14 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
             order is! int ||
             order <= lastOrder ||
             order > 9007199254740991) {
-          throw const FormatException(
-            'Invalid document focus owner or options.',
-          );
+          throw FormatException(tr("Invalid document focus owner or options."));
         }
         lastOrder = order;
         received.add(action);
       }
     }
     if (received.length > 128) {
-      throw const FormatException('Too many document focus actions.');
+      throw FormatException(tr("Too many document focus actions."));
     }
     if (received.isEmpty) return;
     _lastFocusActionOrder = lastOrder;
@@ -692,11 +690,11 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       final raw = response['scrollActions'];
       if (raw == null) continue;
       if (raw is! List || raw.length > 128) {
-        throw const FormatException('Invalid document scroll action batch.');
+        throw FormatException(tr("Invalid document scroll action batch."));
       }
       for (final value in raw) {
         if (value is! Map) {
-          throw const FormatException('Invalid scroll action.');
+          throw FormatException(tr("Invalid scroll action."));
         }
         final action = obj(value);
         final id = action['actionId'];
@@ -720,14 +718,14 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
                     ).hasMatch(action['elementId'] as String))) ||
             !coordinate(action['x']) ||
             !coordinate(action['y'])) {
-          throw const FormatException('Invalid document scroll options.');
+          throw FormatException(tr("Invalid document scroll options."));
         }
         lastId = id;
         received.add(Map<String, dynamic>.unmodifiable(action));
       }
     }
     if (_scrollActions.length + received.length > 128) {
-      throw const FormatException('Too many document scroll actions.');
+      throw FormatException(tr("Too many document scroll actions."));
     }
     if (received.isEmpty) return;
     _lastScrollActionId = lastId;
@@ -788,11 +786,11 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       final raw = result['navigationActions'];
       if (raw == null) continue;
       if (raw is! List || raw.length > 128) {
-        throw const FormatException('Invalid navigation action batch.');
+        throw FormatException(tr("Invalid navigation action batch."));
       }
       for (final item in raw) {
         if (item is! Map) {
-          throw const FormatException('Invalid navigation action.');
+          throw FormatException(tr("Invalid navigation action."));
         }
         final action = obj(item);
         final kind = action['kind'];
@@ -829,7 +827,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
               action['noreferrer'] is! bool ||
               action['noopener'] is! bool ||
               action['replace'] != false) {
-            throw const FormatException('Invalid anchor activation.');
+            throw FormatException(tr("Invalid anchor activation."));
           }
           if (download != null &&
               const {'http', 'https'}.contains(parsed.scheme) &&
@@ -857,9 +855,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
                 parsed.scheme != 'blob' ||
                 _navigationOrigin(url) == null ||
                 _navigationOrigin(url) != _navigationOrigin(_locationUrl)) {
-              throw const FormatException(
-                'Invalid captured anchor Blob owner.',
-              );
+              throw FormatException(tr("Invalid captured anchor Blob owner."));
             }
             NativeDocumentBlob.fromBridge(url as String, obj(captured));
           }
@@ -872,7 +868,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
               (parsed.scheme != 'blob' && parsed.host.isEmpty) ||
               action['replace'] is! bool ||
               !const {'_self', '_blank'}.contains(action['target'])) {
-            throw const FormatException('Invalid navigation URL or target.');
+            throw FormatException(tr("Invalid navigation URL or target."));
           }
         } else if (kind == 'history') {
           final method = action['method'];
@@ -883,7 +879,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
               order < 1 ||
               order > 9007199254740991 ||
               !const {'push', 'replace', 'go', 'scroll'}.contains(method)) {
-            throw const FormatException('Invalid history action.');
+            throw FormatException(tr("Invalid history action."));
           }
           if (method == 'go') {
             final delta = action['delta'];
@@ -893,7 +889,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
                 delta > 2147483647 ||
                 delta != 0 &&
                     (index is! int || index < 0 || index > 9007199254740991)) {
-              throw const FormatException('Invalid history delta.');
+              throw FormatException(tr("Invalid history delta."));
             }
           } else {
             if (revision is! int ||
@@ -903,8 +899,8 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
                   'auto',
                   'manual',
                 }.contains(action['scrollRestoration'])) {
-              throw const FormatException(
-                'Invalid history revision or scrolling.',
+              throw FormatException(
+                tr("Invalid history revision or scrolling."),
               );
             }
             if (method != 'scroll') {
@@ -913,8 +909,8 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
                   action.containsKey('sourceScrollTop') &&
                       (action['sourceScrollTop'] is! num ||
                           !(action['sourceScrollTop'] as num).isFinite)) {
-                throw const FormatException(
-                  'Invalid initial History scroll snapshot.',
+                throw FormatException(
+                  tr("Invalid initial History scroll snapshot."),
                 );
               }
               final url = action['url'];
@@ -928,14 +924,14 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
                   action['stateGraph'] is! Map ||
                   utf8.encode(jsonEncode(action['stateGraph'])).length >
                       2 * 1024 * 1024) {
-                throw const FormatException(
-                  'Invalid history URL, key, or state.',
+                throw FormatException(
+                  tr("Invalid history URL, key, or state."),
                 );
               }
             }
           }
         } else if (kind != 'reload') {
-          throw const FormatException('Invalid navigation action kind.');
+          throw FormatException(tr("Invalid navigation action kind."));
         }
         if (action['target'] == '_blank' && !allowPopups) continue;
         received.add({...action, 'sequence': ++_formActionSerial});
@@ -949,7 +945,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     );
     if (_navigationActions.length > 128) {
       _navigationActions = const [];
-      throw const FormatException('Too many navigation actions.');
+      throw FormatException(tr("Too many navigation actions."));
     }
   }
 
@@ -960,11 +956,11 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       final raw = result['filePickerActions'];
       if (raw == null) continue;
       if (raw is! List || raw.length > _maxFilePickerActions) {
-        throw const FormatException('Invalid file picker action batch.');
+        throw FormatException(tr("Invalid file picker action batch."));
       }
       for (final item in raw) {
         if (item is! Map) {
-          throw const FormatException('Invalid file picker action.');
+          throw FormatException(tr("Invalid file picker action."));
         }
         final action = obj(item);
         final id = action['id'];
@@ -989,7 +985,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
             actionOrder is! int ||
             actionOrder <= 0 ||
             actionOrder > 9007199254740991) {
-          throw const FormatException('Invalid file picker action fields.');
+          throw FormatException(tr("Invalid file picker action fields."));
         }
 
         final normalized = <String, dynamic>{
@@ -1004,8 +1000,8 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         final duplicate = seen[id];
         if (duplicate != null) {
           if (!mapEquals(duplicate, normalized)) {
-            throw const FormatException(
-              'Conflicting duplicate file picker action.',
+            throw FormatException(
+              tr("Conflicting duplicate file picker action."),
             );
           }
           continue;
@@ -1032,7 +1028,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
 
     final available = _maxFilePickerActions - _filePickerActions.length;
     if (available <= 0) {
-      throw const FormatException('Too many pending file picker actions.');
+      throw FormatException(tr("Too many pending file picker actions."));
     }
     // One physical click can authorize only one native chooser, even if a
     // script attempted to queue several controls in the same event handler.
@@ -1106,7 +1102,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         cancelled && files != null && files.isNotEmpty ||
         error != null && error.length > 2048) {
       return Future<void>.error(
-        const FormatException('Invalid file picker result.'),
+        FormatException(tr("Invalid file picker result.")),
       );
     }
 
@@ -1283,14 +1279,14 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       final actions = result['formActions'];
       if (actions == null) continue;
       if (actions is! List || actions.length > 128) {
-        throw const FormatException('Invalid form action batch.');
+        throw FormatException(tr("Invalid form action batch."));
       }
       for (final raw in actions) {
-        if (raw is! Map) throw const FormatException('Invalid form action.');
+        if (raw is! Map) throw FormatException(tr("Invalid form action."));
         final action = obj(raw);
         if (!const {'submit', 'invalid'}.contains(action['kind']) ||
             action['formId'] is! String) {
-          throw const FormatException('Invalid form action kind or owner.');
+          throw FormatException(tr("Invalid form action kind or owner."));
         }
         received.add({...action, 'sequence': ++_formActionSerial});
       }
@@ -1314,7 +1310,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     );
     if (_formActions.length > 128) {
       _formActions = const [];
-      throw const FormatException('Too many pending form actions.');
+      throw FormatException(tr("Too many pending form actions."));
     }
   }
 
@@ -1579,7 +1575,10 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     _formActions = const [];
     _clearFocusActions();
     _clearFilePickerActions();
-    diagnostics = [...diagnostics, '文件互動未完成：${_message(error)}'];
+    diagnostics = [
+      ...diagnostics,
+      tr("文件互動未完成：{0}", [_message(error)]),
+    ];
     final id = _id;
     _id = null;
     _wake?.cancel();
@@ -1636,7 +1635,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     for (final area in ['local', 'session']) {
       final entries = state[area];
       if (entries is! List) {
-        throw const FormatException('Invalid native Storage entries.');
+        throw FormatException(tr("Invalid native Storage entries."));
       }
       for (final entry in entries) {
         if (_disposed) return;
@@ -1644,7 +1643,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
             entry.length != 2 ||
             entry[0] is! String ||
             entry[1] is! String) {
-          throw const FormatException('Invalid native Storage entry.');
+          throw FormatException(tr("Invalid native Storage entry."));
         }
         final key = entry[0] as String, value = entry[1] as String;
         await _storageCall('storageEntryBegin', {
@@ -1668,11 +1667,11 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     if (reply['state'] is Map) await _syncStorage(obj(reply['state']));
     final events = reply['events'];
     if (events != null && events is! List) {
-      throw const FormatException('Invalid native Storage events.');
+      throw FormatException(tr("Invalid native Storage events."));
     }
     if (_storageEvents.length + (events as List? ?? const []).length > 256) {
       throw StateError(
-        'Too many pending Storage events; reload this document.',
+        tr("Too many pending Storage events; reload this document."),
       );
     }
     final incoming = rows(events);
@@ -1689,7 +1688,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         );
     if (pendingUnits > 16 * 1024 * 1024) {
       throw StateError(
-        'Pending Storage event data exceeds 32 MiB; reload this document.',
+        tr("Pending Storage event data exceeds 32 MiB; reload this document."),
       );
     }
     _storageEvents.addAll(incoming);
@@ -1719,7 +1718,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     final header = await _storageCall('storageWritesBegin');
     final count = header['count'];
     if (count is! int || count < 0 || count > 256) {
-      throw const FormatException('Invalid Storage write batch.');
+      throw FormatException(tr("Invalid Storage write batch."));
     }
     final operations = <Json>[];
     for (var index = 0; index < count; index++) {
@@ -1734,7 +1733,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         final length = info['${part}Length'];
         if (length == null) continue;
         if (length is! int || length < 0 || length > 5 * 1024 * 1024) {
-          throw const FormatException('Invalid Storage write length.');
+          throw FormatException(tr("Invalid Storage write length."));
         }
         final text = StringBuffer();
         for (var offset = 0; offset < length; offset += _storageChunkChars) {
@@ -1746,7 +1745,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
           final value = chunk['text'];
           if (value is! String ||
               value.length != min(_storageChunkChars, length - offset)) {
-            throw const FormatException('Incomplete Storage write chunk.');
+            throw FormatException(tr("Incomplete Storage write chunk."));
           }
           text.write(value);
         }
@@ -1831,7 +1830,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         for (final part in ['key', 'oldValue', 'newValue', 'url']) {
           final value = metadata.remove(part);
           if (value != null && value is! String) {
-            throw const FormatException('Invalid Storage event value.');
+            throw FormatException(tr("Invalid Storage event value."));
           }
           metadata['${part}Length'] = (value as String?)?.length;
         }
@@ -1868,7 +1867,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     );
     if (_disposed) return {};
     if (state['truncated'] == true || state['error'] != null) {
-      throw StateError('Native cookie state exceeds its supported limit.');
+      throw StateError(tr("Native cookie state exceeds its supported limit."));
     }
     if (state['persistenceError'] is String) {
       throw StateError(state['persistenceError'] as String);
@@ -1884,7 +1883,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       if (batch is! List ||
           batch.length > 128 ||
           batch.any((item) => item is! Map)) {
-        throw const FormatException('Invalid document cookie writes.');
+        throw FormatException(tr("Invalid document cookie writes."));
       }
       writes.addAll(batch.map(obj));
     }
@@ -1909,12 +1908,12 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     }
     final raw = response['classicScript'];
     if (raw is! Map) {
-      throw const FormatException('Invalid classic script descriptor.');
+      throw FormatException(tr("Invalid classic script descriptor."));
     }
     final descriptor = obj(raw);
     final id = descriptor['id'];
     if (id is! int || id <= 0 || id > _maxSafeScriptId) {
-      throw const FormatException('Invalid classic script identity.');
+      throw FormatException(tr("Invalid classic script identity."));
     }
     return id;
   }
@@ -1923,11 +1922,11 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     final raw = response['frameContinuation'];
     if (raw == null) return null;
     if (raw is! Map) {
-      throw const FormatException('Invalid native animation frame descriptor.');
+      throw FormatException(tr("Invalid native animation frame descriptor."));
     }
     final id = raw['id'];
     if (id is! int || id <= 0 || id > _maxSafeScriptId) {
-      throw const FormatException('Invalid native animation frame identity.');
+      throw FormatException(tr("Invalid native animation frame identity."));
     }
     return id;
   }
@@ -1943,7 +1942,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       await _evaluate('__pircDocument.$method(${jsonEncode(arguments)})'),
     );
     if (raw is! Map) {
-      throw const FormatException('Invalid classic script control result.');
+      throw FormatException(tr("Invalid classic script control result."));
     }
     return obj(raw);
   }
@@ -2001,7 +2000,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     while (true) {
       final descriptor = current['layout'];
       if (descriptor is! Map) {
-        throw const FormatException('Missing native layout revision.');
+        throw FormatException(tr("Missing native layout revision."));
       }
       final revision = descriptor['revision'];
       final ids = descriptor['ids'];
@@ -2013,7 +2012,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
             (id) =>
                 id is! String || !RegExp(r'^pirc-[1-9][0-9]*$').hasMatch(id),
           )) {
-        throw const FormatException('Invalid native layout identity.');
+        throw FormatException(tr("Invalid native layout identity."));
       }
       layoutElementIds = Set.unmodifiable(ids.cast<String>());
       final changedRevision = layoutRevision != revision;
@@ -2179,7 +2178,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         );
       }
       if (id <= _lastClassicScriptId) {
-        throw const FormatException('Repeated classic script identity.');
+        throw FormatException(tr("Repeated classic script identity."));
       }
       if (taskCount >= _maxClassicScriptsPerTurn) {
         return _ClassicScriptDrain(
@@ -2211,7 +2210,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       }
       final source = begun['source'];
       if (begun['id'] != id || source is! String) {
-        throw const FormatException('Invalid classic script source.');
+        throw FormatException(tr("Invalid classic script source."));
       }
       // beginClassicScript is idempotent for the still-pending ID. If activity
       // changed during that platform round trip, leave it pending for a later
@@ -2228,10 +2227,10 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       final evalSource =
           '$source\n;__pircDocument.endClassicScriptTurn($id);void 0;';
       if (utf8.encode(evalSource).length > _maxClassicScriptBytes) {
-        throw const FormatException('Classic script source exceeds 4 MiB.');
+        throw FormatException(tr("Classic script source exceeds 4 MiB."));
       }
       if (id <= _lastClassicScriptId) {
-        throw const FormatException('Repeated classic script identity.');
+        throw FormatException(tr("Repeated classic script identity."));
       }
       _lastClassicScriptId = id;
       taskCount++;
@@ -2378,7 +2377,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     final focusEpoch = expectedFocusEpoch ?? _focusActionEpoch;
     final identity = _id;
     final owner = _owner;
-    if (identity == null) throw StateError('Document was closed.');
+    if (identity == null) throw StateError(tr("Document was closed."));
     if (_nativeStorage && ready) await _refreshStorage();
     if (_nativeCookies && ready) {
       final state = await _cookieState();
@@ -2633,7 +2632,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       );
       final id = opened['id'];
       if (id is! int) {
-        throw const FormatException('Invalid document script identity.');
+        throw FormatException(tr("Invalid document script identity."));
       }
       if (_disposed) {
         await _close(id);
@@ -2658,7 +2657,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
               'id': id,
               'owner': _owner,
               'sample': sample.toString(),
-              'families': const [
+              'families': [
                 'sans-serif',
                 'serif',
                 'monospace',
@@ -2666,13 +2665,13 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
                 'ui-sans-serif',
                 'ui-serif',
                 'ui-monospace',
-                'Arial',
-                'Helvetica',
-                'Helvetica Neue',
-                'Times New Roman',
-                'Courier New',
-                'Roboto',
-                'Inter',
+                tr("Arial"),
+                tr("Helvetica"),
+                tr("Helvetica Neue"),
+                tr("Times New Roman"),
+                tr("Courier New"),
+                tr("Roboto"),
+                tr("Inter"),
               ],
             }),
           );
@@ -2688,7 +2687,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
             ),
           );
           if (prepared['ok'] != true) {
-            throw const FormatException('Canvas text preparation failed.');
+            throw FormatException(tr("Canvas text preparation failed."));
           }
         } catch (error) {
           _canvasTextUnavailable = _message(error);
@@ -2736,7 +2735,9 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         _navigationActions = const [];
         _formActions = const [];
         _clearFocusActions();
-        diagnostics = ['文件腳本未完成：${_message(error)}'];
+        diagnostics = [
+          tr("文件腳本未完成：{0}", [_message(error)]),
+        ];
         final id = _id;
         _id = null;
         if (id != null) await _close(id);
@@ -2879,13 +2880,13 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     _tail = _tail.then((_) async {
       try {
         if (_disposed || !ready || (!retained && !_attached)) {
-          throw StateError('Object URL document is unavailable.');
+          throw StateError(tr("Object URL document is unavailable."));
         }
         final value = await _evaluate(
           '__pircDocument.readObjectURL(${jsonEncode(url)})',
         );
         if (_disposed || !ready || (!retained && !_attached)) {
-          throw StateError('Object URL document changed.');
+          throw StateError(tr("Object URL document changed."));
         }
         result.complete(obj(jsonDecode(value)));
       } catch (error, stack) {
@@ -2896,7 +2897,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<String> _evaluate(String source) async {
-    if (_disposed || _id == null) throw StateError('Document was closed.');
+    if (_disposed || _id == null) throw StateError(tr("Document was closed."));
     final response = obj(
       await gateway.call('documentScriptEvaluate', {
         'id': _id,
@@ -2905,7 +2906,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       }),
     );
     final value = response['value'];
-    if (value is! String) throw const FormatException('Invalid script result.');
+    if (value is! String) throw FormatException(tr("Invalid script result."));
     return value;
   }
 
@@ -2940,43 +2941,43 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     if (target != null &&
         (target is! String ||
             !RegExp(r'^pirc-[1-9][0-9]*$').hasMatch(target))) {
-      throw const FormatException('Invalid native fragment target identity.');
+      throw FormatException(tr("Invalid native fragment target identity."));
     }
     fragmentTargetId = target as String?;
     final targetReady = decoded['fragmentTargetReady'];
     if (targetReady != null && targetReady is! bool) {
-      throw const FormatException('Invalid fragment target readiness.');
+      throw FormatException(tr("Invalid fragment target readiness."));
     }
     fragmentTargetReady = targetReady as bool?;
     final ancestorsRevealed = decoded['fragmentAncestorsRevealed'];
     if (ancestorsRevealed != null && ancestorsRevealed is! bool) {
-      throw const FormatException('Invalid fragment ancestor state.');
+      throw FormatException(tr("Invalid fragment ancestor state."));
     }
     fragmentAncestorsRevealed = ancestorsRevealed == true;
     final rootOverride = decoded['initialRootScrollOverride'];
     if (rootOverride != null && rootOverride is! bool) {
-      throw const FormatException('Invalid initial root scroll override.');
+      throw FormatException(tr("Invalid initial root scroll override."));
     }
     initialRootScrollOverride = rootOverride == true;
     final markup = decoded['html'];
     if (markup is! String) {
-      throw const FormatException('Missing document HTML.');
+      throw FormatException(tr("Missing document HTML."));
     }
     final rawCanvases = decoded['canvases'] ?? const [];
     if (rawCanvases is! List || rawCanvases.length > 64) {
-      throw const FormatException('Invalid document canvases.');
+      throw FormatException(tr("Invalid document canvases."));
     }
     final encodedCanvases = jsonEncode(rawCanvases);
     Map<String, NativeDocumentCanvasSnapshot>? nextCanvases;
     if (encodedCanvases != _lastCanvases) {
       nextCanvases = {};
       for (final value in rawCanvases) {
-        if (value is! Map) throw const FormatException('Invalid canvas.');
+        if (value is! Map) throw FormatException(tr("Invalid canvas."));
         final canvas = NativeDocumentCanvasSnapshot.fromJson(
           Map<String, Object?>.from(value),
         );
         if (nextCanvases.containsKey(canvas.id)) {
-          throw const FormatException('Duplicate document canvas.');
+          throw FormatException(tr("Duplicate document canvas."));
         }
         nextCanvases[canvas.id] = canvas;
       }
@@ -2985,7 +2986,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     if (rawImages is! List ||
         rawImages.length > NativeDocumentImagePool.maxEntries ||
         rawImages.any((id) => id is! String)) {
-      throw const FormatException('Invalid document image references.');
+      throw FormatException(tr("Invalid document image references."));
     }
     final encodedHtmlImages = jsonEncode(decoded['htmlImages'] ?? const []);
     final nextHtmlImages = encodedHtmlImages == _lastHtmlImages

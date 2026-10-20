@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -42,58 +43,64 @@ class WebButton extends StatelessWidget {
   final double? disabledOpacity;
   final bool muted;
   @override
-  Widget build(BuildContext context) => Opacity(
-    opacity: onPressed == null ? (disabledOpacity ?? 1) : 1,
-    child: TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        minimumSize: Size(0, height),
-        maximumSize: Size(double.infinity, height),
-        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: const StadiumBorder(),
-        backgroundColor: primary
-            ? palette(context)[danger ? 'status.danger' : 'text.primary']
-            : backgroundColor ?? Colors.transparent,
-        disabledBackgroundColor: disabledOpacity != null
-            ? (primary
-                  ? palette(context)['text.primary']
-                  : backgroundColor ?? Colors.transparent)
-            : null,
-        foregroundColor:
-            palette(context)[primary
-                ? 'surface.page'
-                : danger
-                ? 'status.danger'
-                : muted
-                ? 'text.muted'
-                : 'text.primary'],
-        disabledForegroundColor: disabledOpacity != null
-            ? palette(context)[primary
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Opacity(
+      opacity: onPressed == null ? (disabledOpacity ?? 1) : 1,
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          minimumSize: Size(0, height),
+          maximumSize: Size(double.infinity, height),
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: const StadiumBorder(),
+          backgroundColor: primary
+              ? palette(context)[danger ? 'status.danger' : 'text.primary']
+              : backgroundColor ?? Colors.transparent,
+          disabledBackgroundColor: disabledOpacity != null
+              ? (primary
+                    ? palette(context)['text.primary']
+                    : backgroundColor ?? Colors.transparent)
+              : null,
+          foregroundColor:
+              palette(context)[primary
                   ? 'surface.page'
                   : danger
                   ? 'status.danger'
                   : muted
                   ? 'text.muted'
-                  : 'text.primary']
-            : palette(context)['text.muted'],
-        textStyle: webText(
-          context,
-          size: fontSize,
-          weight: FontWeight.w500,
-        ).copyWith(height: kTextHeightNone),
+                  : 'text.primary'],
+          disabledForegroundColor: disabledOpacity != null
+              ? palette(context)[primary
+                    ? 'surface.page'
+                    : danger
+                    ? 'status.danger'
+                    : muted
+                    ? 'text.muted'
+                    : 'text.primary']
+              : palette(context)['text.muted'],
+          textStyle: webText(
+            context,
+            size: fontSize,
+            weight: FontWeight.w500,
+          ).copyWith(height: kTextHeightNone),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 15),
+              const SizedBox(width: 7),
+            ],
+            Flexible(
+              child: Text(label, textAlign: TextAlign.center, softWrap: false),
+            ),
+          ],
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[Icon(icon, size: 15), const SizedBox(width: 7)],
-          Flexible(
-            child: Text(label, textAlign: TextAlign.center, softWrap: false),
-          ),
-        ],
-      ),
-    ),
-  );
+    );
+  }
 }
 
 class WebIconButton extends StatelessWidget {
@@ -114,21 +121,24 @@ class WebIconButton extends StatelessWidget {
   final FocusNode? focusNode;
   final bool autofocus;
   @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: label,
-    focusNode: focusNode,
-    autofocus: autofocus,
-    onPressed: onPressed,
-    icon: Icon(icon, size: iconSize),
-    style: IconButton.styleFrom(
-      minimumSize: Size(size, size),
-      maximumSize: Size(size, size),
-      padding: EdgeInsets.zero,
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      foregroundColor: palette(context)['text.muted'],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-    ),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return IconButton(
+      tooltip: label,
+      focusNode: focusNode,
+      autofocus: autofocus,
+      onPressed: onPressed,
+      icon: Icon(icon, size: iconSize),
+      style: IconButton.styleFrom(
+        minimumSize: Size(size, size),
+        maximumSize: Size(size, size),
+        padding: EdgeInsets.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: palette(context)['text.muted'],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+    );
+  }
 }
 
 class WebSearch extends StatefulWidget {
@@ -174,6 +184,7 @@ class _WebSearchState extends State<WebSearch> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final fixed = widget.fixedHeight != null;
     final size =
         widget.fontSize ?? (MediaQuery.sizeOf(context).width <= 860 ? 16 : 13);
@@ -283,74 +294,77 @@ class WebDialog extends StatelessWidget {
   final List<Widget> children, actions;
   final bool busy;
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !busy,
-    child: Dialog(
-      insetPadding: const EdgeInsets.all(16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: DefaultTextStyle(
-            style: webText(context, size: 14, color: 'text.secondary'),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (eyebrow != null)
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return PopScope(
+      canPop: !busy,
+      child: Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: DefaultTextStyle(
+              style: webText(context, size: 14, color: 'text.secondary'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (eyebrow != null)
+                              Text(
+                                eyebrow!,
+                                style: webText(
+                                  context,
+                                  size: 11,
+                                  color: 'text.muted',
+                                ),
+                              ),
                             Text(
-                              eyebrow!,
+                              title,
                               style: webText(
                                 context,
-                                size: 11,
-                                color: 'text.muted',
+                                size: 20,
+                                weight: FontWeight.w600,
                               ),
                             ),
-                          Text(
-                            title,
-                            style: webText(
-                              context,
-                              size: 20,
-                              weight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    WebIconButton(
-                      LucideIcons.x,
-                      'Close',
-                      size: 32,
-                      onPressed: busy ? null : () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                ...children,
-                const SizedBox(height: 20),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.end,
-                    children: actions,
+                      WebIconButton(
+                        LucideIcons.x,
+                        tr("Close"),
+                        size: 32,
+                        onPressed: busy ? null : () => Navigator.pop(context),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  ...children,
+                  const SizedBox(height: 20),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.end,
+                      children: actions,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class WebNotice extends StatelessWidget {
@@ -358,20 +372,23 @@ class WebNotice extends StatelessWidget {
   final String text;
   final bool error;
   @override
-  Widget build(BuildContext context) => Semantics(
-    liveRegion: true,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        text,
-        style: webText(
-          context,
-          size: 13,
-          color: error ? 'status.danger' : 'text.secondary',
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Semantics(
+      liveRegion: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          text,
+          style: webText(
+            context,
+            size: 13,
+            color: error ? 'status.danger' : 'text.secondary',
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// The web's one-second loader rotation, suspended with the visible surface.
@@ -409,12 +426,15 @@ class _WebSpinnerState extends State<WebSpinner>
   }
 
   @override
-  Widget build(BuildContext context) => RotationTransition(
-    turns: animation,
-    child: Icon(
-      LucideIcons.loaderCircle,
-      size: widget.size,
-      color: widget.color,
-    ),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return RotationTransition(
+      turns: animation,
+      child: Icon(
+        LucideIcons.loaderCircle,
+        size: widget.size,
+        color: widget.color,
+      ),
+    );
+  }
 }

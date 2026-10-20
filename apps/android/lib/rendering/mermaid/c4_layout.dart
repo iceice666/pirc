@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/painting.dart';
 import 'package:html/parser.dart' as html;
@@ -134,10 +135,10 @@ String nativeC4Stereotype(NativeC4Shape shape) {
       .replaceFirst(RegExp(r'^external_'), '')
       .replaceFirst(RegExp(r'_(db|queue)$'), '');
   final name = switch (base) {
-    'person' => 'Person',
-    'system' => 'Software System',
-    'container' => 'Container',
-    'component' => 'Component',
+    'person' => tr("Person"),
+    'system' => tr("Software System"),
+    'container' => tr("Container"),
+    'component' => tr("Component"),
     _ => base.replaceAll('_', ' '),
   };
   final tech = shape.technology ?? '';
@@ -158,7 +159,7 @@ NativeC4Layout layoutNativeMermaidC4(
       diagram.boundaries.length > 128 ||
       diagram.shapeInRow < 1 ||
       diagram.boundaryInRow < 1) {
-    throw const FormatException('C4 diagram exceeds native layout bounds.');
+    throw FormatException(tr("C4 diagram exceeds native layout bounds."));
   }
   Color color(String? value, Color fallback) =>
       resolveColor?.call(value, fallback) ?? fallback;
@@ -227,8 +228,8 @@ NativeC4Layout layoutNativeMermaidC4(
     for (var i = 0; i < groups.length; i++) {
       final boundary = groups[i];
       if (depth > 64 || !visiting.add(boundary.alias)) {
-        throw const FormatException(
-          'C4 boundaries contain a cycle or exceed nesting limits.',
+        throw FormatException(
+          tr("C4 boundaries contain a cycle or exceed nesting limits."),
         );
       }
       final fontColor = color(boundary.fontColor, const Color(0xff444444));
@@ -318,7 +319,7 @@ NativeC4Layout layoutNativeMermaidC4(
 
   drawInside('', screen, 0);
   if (nodes.values.any((n) => n.bounds.isEmpty)) {
-    throw const FormatException('C4 nodes reference an unreachable boundary.');
+    throw FormatException(tr("C4 nodes reference an unreachable boundary."));
   }
   final relations = <NativeC4RelationLayout>[];
   for (var i = 0; i < diagram.relations.length; i++) {
@@ -327,7 +328,10 @@ NativeC4Layout layoutNativeMermaidC4(
         to = nodes[rel.to];
     if (from == null || to == null) {
       throw FormatException(
-        'C4 relationship references an unknown shape: ${rel.from} → ${rel.to}.',
+        tr("C4 relationship references an unknown shape: {0} → {1}.", [
+          rel.from,
+          rel.to,
+        ]),
       );
     }
     final start =
@@ -340,8 +344,8 @@ NativeC4Layout layoutNativeMermaidC4(
         !start.dy.isFinite ||
         !end.dx.isFinite ||
         !end.dy.isFinite) {
-      throw const FormatException(
-        'C4 relationship has unsupported intersection geometry.',
+      throw FormatException(
+        tr("C4 relationship has unsupported intersection geometry."),
       );
     }
     final dynamicPrefix = diagram.kind == 'C4Dynamic' ? '${i + 1}: ' : '';

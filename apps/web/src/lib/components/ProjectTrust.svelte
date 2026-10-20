@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import { ApiError } from '../http';
   import { projectTrustApi, type ProjectConfigSummary, type ProjectHook } from '../capabilities';
 
@@ -12,15 +14,15 @@
   let reload = $state(0);
   let generation = 0;
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : tr('Unable to reach the gateway. Try again.');
 
-  const HOOK_LABELS: Record<string, string> = {
-    sessionStart: 'When a session starts',
-    beforePrompt: 'Before each prompt',
-    beforeTool: 'Before a tool runs',
-    afterTool: 'After a tool runs',
-    agentSettled: 'When the agent settles',
-  };
+  const HOOK_LABELS: Record<string, string> = $derived({
+    sessionStart: tr('When a session starts'),
+    beforePrompt: tr('Before each prompt'),
+    beforeTool: tr('Before a tool runs'),
+    afterTool: tr('After a tool runs'),
+    agentSettled: tr('When the agent settles'),
+  });
   const hookGroups = $derived(
     Object.entries(project?.hooks ?? {}).filter(([, list]) => list.length) as Array<
       [string, ProjectHook[]]
@@ -74,8 +76,8 @@
       if (current !== generation) return;
       project = response.project;
       status = trust
-        ? 'Trusted. New sessions in this workspace use these settings.'
-        : 'Trust revoked. New sessions ignore them.';
+        ? tr('Trusted. New sessions in this workspace use these settings.')
+        : tr('Trust revoked. New sessions ignore them.');
     } catch (cause) {
       if (current !== generation) return;
       error = message(cause);
@@ -94,48 +96,54 @@
 </script>
 
 <section class="settings-section">
-  <h3>Project config</h3>
+  <h3>{tr('Project config')}</h3>
   <p>
-    A repository's <code>.pirc/config.json</code> can run hook commands, set environment variables for
-    every command the agent runs, add writable paths, and choose the model your sessions are sent to.
-    Agents here ignore them until you trust them. If the repository changes them later, they are ignored
-    again until you trust the new values.
+    {tr("A repository's")} <code>.pirc/config.json</code>
+    {tr(
+      'can run hook commands, set environment variables for every command the agent runs, add writable paths, and choose the model your sessions are sent to. Agents here ignore them until you trust them. If the repository changes them later, they are ignored again until you trust the new values.',
+    )}
   </p>
   {#if loading}
-    <p role="status">Loading project config…</p>
+    <p role="status">{tr('Loading project config…')}</p>
   {:else if project}
     {#if project.error !== undefined}
-      <p class="problem">The project config is invalid and is not used: {project.error}</p>
+      <p class="problem">
+        {tr('The project config is invalid and is not used: {0}', [project.error])}
+      </p>
     {:else if project.empty}
-      <p>This workspace's project config sets no hooks, environment, allowed paths or model.</p>
+      <p>
+        {tr("This workspace's project config sets no hooks, environment, allowed paths or model.")}
+      </p>
     {:else}
       <p class="state" class:trusted={project.trusted} class:changed>
-        {#if project.trusted}Trusted{:else if changed}Changed since trusted: ignored until you trust
-          it again{:else}Not trusted: ignored{/if}
+        {#if project.trusted}{tr('Trusted')}{:else if changed}{tr(
+            'Changed since trusted: ignored until you trust it again',
+          )}{:else}{tr('Not trusted: ignored')}{/if}
       </p>
       {#if hookGroups.length}
-        <h4>Hooks</h4>
+        <h4>{tr('Hooks')}</h4>
         {#each hookGroups as [event, hooks] (event)}
           <div class="hook-group">
             <span class="hook-event">{HOOK_LABELS[event] ?? event}</span>
             {#each hooks as hook, index (index)}
               <pre>{hook.command}</pre>
-              {#if hook.matcher}<small>Only for tools matching <code>{hook.matcher}</code></small
+              {#if hook.matcher}<small
+                  >{tr('Only for tools matching')} <code>{hook.matcher}</code></small
                 >{/if}
             {/each}
           </div>
         {/each}
       {/if}
       {#if envLines}
-        <h4>Environment</h4>
+        <h4>{tr('Environment')}</h4>
         <pre>{envLines}</pre>
       {/if}
       {#if project.allowedPaths.length}
-        <h4>Allowed paths</h4>
+        <h4>{tr('Allowed paths')}</h4>
         <pre>{project.allowedPaths.join('\n')}</pre>
       {/if}
       {#if project.defaultModel}
-        <h4>Default model</h4>
+        <h4>{tr('Default model')}</h4>
         <pre>{project.defaultModel.provider}/{project.defaultModel.id}{project.defaultModel.thinking
             ? ` (thinking ${project.defaultModel.thinking})`
             : ''}</pre>
@@ -144,22 +152,23 @@
     <div class="actions">
       {#if !project.trusted && project.hash && !project.empty}
         <button class="button dark" type="button" disabled={saving} onclick={() => decide(true)}
-          >Trust</button
+          >{tr('Trust')}</button
         >
       {/if}
       {#if project.trustedHash !== null}
         <button class="button ghost" type="button" disabled={saving} onclick={() => decide(false)}
-          >Revoke trust</button
+          >{tr('Revoke trust')}</button
         >
       {/if}
     </div>
   {/if}
   {#if error}
     <p role="alert">{error}</p>
-    {#if !project}<button class="button ghost" type="button" onclick={() => reload++}>Retry</button
+    {#if !project}<button class="button ghost" type="button" onclick={() => reload++}
+        >{tr('Retry')}</button
       >{/if}
   {/if}
-  <p role="status">{saving ? 'Saving…' : status}</p>
+  <p role="status">{saving ? tr('Saving…') : status}</p>
 </section>
 
 <style>

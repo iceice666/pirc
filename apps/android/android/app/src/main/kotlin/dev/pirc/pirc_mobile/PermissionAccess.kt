@@ -14,7 +14,7 @@ class PermissionAccess(private val activity: MainActivity) {
     private val prefs = activity.getSharedPreferences("onboarding", 0)
     private var pending: MethodChannel.Result? = null
     val complete get() = prefs.getInt("version", 0) >= 1
-    fun finish() { check(prefs.edit().putInt("version", 1).commit()) { "無法保存引導狀態，請再試一次" } }
+    fun finish() { check(prefs.edit().putInt("version", 1).commit()) { NativeI18n.text("無法保存引導狀態，請再試一次") } }
     fun status(): Map<String, Any> {
         val manager = activity.getSystemService(NotificationManager::class.java)
         val appEnabled = manager.areNotificationsEnabled()
@@ -29,7 +29,7 @@ class PermissionAccess(private val activity: MainActivity) {
             "onboardingComplete" to complete, "action" to action.name)
     }
     fun notifications(result: MethodChannel.Result) {
-        if (pending != null) { result.error("BUSY", "權限視窗已開啟", null); return }
+        if (pending != null) { result.error("BUSY", NativeI18n.text("權限視窗已開啟"), null); return }
         val state = status()
         if (state["notifications"] == true) { result.success(state); return }
         if (state["action"] == NotificationAction.Request.name) {

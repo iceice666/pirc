@@ -876,3 +876,7 @@ with the dedicated Chromium 153 resize fixture at phone/tablet widths.
 against that fixture. The Android offsets integration also exercises observer
 callbacks through JavaScriptSandbox and the production native renderer. Supported
 boxes and remaining observer differences are recorded in the mobile plan.
+
+## Client language
+
+Settings → General → Language offers English and 繁體中文. English is the default and fallback; the choice is saved on this phone and also applies to native notification/overlay controls. See [localization maintenance](../../docs/development/localization.md). New conversations open locally and enter the session list only when the first message is sent.

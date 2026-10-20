@@ -112,7 +112,7 @@ void main() {
       await clickSubmit(tester);
       expect(windows.active!.currentDocument, isNot(same(retained)));
       expect(gateway.calls, hasLength(2));
-      await tester.tap(find.byTooltip('返回'));
+      await tester.tap(find.byTooltip("Back"));
       await tester.pumpAndSettle();
       expect(windows.active!.currentDocument, same(retained));
       expect(

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -217,7 +218,7 @@ class _ContextPaneState extends State<ContextPane> {
                       children: [
                         TextSpan(text: title),
                         TextSpan(
-                          text: ' ~${tokens(count)} tokens',
+                          text: tr(" ~{0} tokens", [tokens(count)]),
                           style: webText(
                             context,
                             size: 12,
@@ -240,7 +241,7 @@ class _ContextPaneState extends State<ContextPane> {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                'Frozen',
+                                tr("Frozen"),
                                 style: webText(
                                   context,
                                   size: 10,
@@ -272,6 +273,7 @@ class _ContextPaneState extends State<ContextPane> {
   );
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final snapshot = obj(value?['snapshot']),
         usage = obj(snapshot['usage']),
         model = obj(snapshot['model']);
@@ -294,11 +296,11 @@ class _ContextPaneState extends State<ContextPane> {
     return _ContextList(
       children: [
         _ContextActions(
-          'Context',
+          tr("Context"),
           18.72,
           1,
           WebButton(
-            'Refresh',
+            tr("Refresh"),
             height: 36,
             fontSize: 14,
             onPressed: loading ? null : load,
@@ -313,7 +315,8 @@ class _ContextPaneState extends State<ContextPane> {
               child: (paragraph(error!, alert: true) as _ContextBlock).child,
             ),
           ),
-        if (loading && snapshot.isEmpty) statusParagraph('Loading context…'),
+        if (loading && snapshot.isEmpty)
+          statusParagraph(tr("Loading context…")),
         if (snapshot.isNotEmpty) ...[
           if (value?['agentRunning'] != true || value?['source'] == 'snapshot')
             _ContextBlock(
@@ -328,7 +331,14 @@ class _ContextPaneState extends State<ContextPane> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    'Saved snapshot${value?['agentRunning'] != true ? ' — agent stopped' : ''}. This is the last request, not current configuration.',
+                    tr(
+                      "Saved snapshot{0}. This is the last request, not current configuration.",
+                      [
+                        value?['agentRunning'] != true
+                            ? ' — agent stopped'
+                            : '',
+                      ],
+                    ),
                     style: webText(
                       context,
                       size: 16,
@@ -342,8 +352,11 @@ class _ContextPaneState extends State<ContextPane> {
             meta: true,
           ),
           Semantics(
-            label:
-                'Context usage: ${segments.entries.map((e) => '${e.key} ${tokens(e.value)}').join(', ')}',
+            label: tr("Context usage: {0}", [
+              segments.entries
+                  .map((e) => '${e.key} ${tokens(e.value)}')
+                  .join(', '),
+            ]),
             image: true,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
@@ -394,19 +407,37 @@ class _ContextPaneState extends State<ContextPane> {
             ),
           ),
           paragraph(
-            'Estimated input: ${tokens(usage['estimatedInput'])} · Reported input: ${usage['reportedInput'] == null ? 'not available' : tokens(usage['reportedInput'])}\nContext window: ${model['contextWindow'] == null || model['contextWindow'] == 0 ? 'unknown' : tokens(model['contextWindow'])}',
+            tr(
+              "Estimated input: {0} · Reported input: {1}\nContext window: {2}",
+              [
+                tokens(usage['estimatedInput']),
+                usage['reportedInput'] == null
+                    ? 'not available'
+                    : tokens(usage['reportedInput']),
+                model['contextWindow'] == null || model['contextWindow'] == 0
+                    ? 'unknown'
+                    : tokens(model['contextWindow']),
+              ],
+            ),
             meta: true,
           ),
           paragraph(
-            'Bucket sizes are estimates${usage['reportedInput'] == null ? '' : ' scaled to reported input (including cache)'}. Memory is observations/reflections within messages, not an extra copy. System memory stays in system.',
+            tr(
+              "Bucket sizes are estimates{0}. Memory is observations/reflections within messages, not an extra copy. System memory stays in system.",
+              [
+                usage['reportedInput'] == null
+                    ? ''
+                    : ' scaled to reported input (including cache)',
+              ],
+            ),
             meta: true,
           ),
           _ContextActions(
-            'System sections',
+            tr("System sections"),
             16,
             1.33,
             WebButton(
-              'Copy all',
+              tr("Copy all"),
               height: 36,
               fontSize: 14,
               onPressed: () async {
@@ -421,13 +452,14 @@ class _ContextPaneState extends State<ContextPane> {
                     ),
                   );
                   if (mounted && revision == request) {
-                    setState(() => copied = 'Copied system prompt.');
+                    setState(() => copied = tr("Copied system prompt."));
                   }
                 } catch (_) {
                   if (mounted && revision == request) {
                     setState(
-                      () => copied =
-                          'Unable to copy. Select the expanded section text instead.',
+                      () => copied = tr(
+                        "Unable to copy. Select the expanded section text instead.",
+                      ),
                     );
                   }
                 }
@@ -553,10 +585,13 @@ class _ContextBlock extends StatelessWidget {
   final double before, after;
   final bool empty;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(top: before, bottom: after),
-    child: child,
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Padding(
+      padding: EdgeInsets.only(top: before, bottom: after),
+      child: child,
+    );
+  }
 }
 
 class _ContextActions extends StatelessWidget {
@@ -601,20 +636,23 @@ class _ContextActions extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            vertical: _contextEm(context, fontSize, marginEm),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Row(
+      children: [
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: _contextEm(context, fontSize, marginEm),
+            ),
+            child: Text(title, style: heading(context)),
           ),
-          child: Text(title, style: heading(context)),
         ),
-      ),
-      const SizedBox(width: 8),
-      button,
-    ],
-  );
+        const SizedBox(width: 8),
+        button,
+      ],
+    );
+  }
 }
 
 List<Widget> _contextFlow(
@@ -654,26 +692,27 @@ class _ContextList extends StatelessWidget {
   const _ContextList({required this.children});
   final List<Widget> children;
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, bounds) {
-      final width = (bounds.maxWidth - 24).clamp(0.0, double.infinity);
-      final extent = children
-          .whereType<_ContextActions>()
-          .map((action) => action.width(context, width))
-          .fold(width, (a, b) => a > b ? a : b);
-      // Source flex headings keep their min-content width; only overflowing
-      // action rows widen the horizontal scroll extent, not prose paragraphs.
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: extent + 24,
-          height: bounds.maxHeight,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-            children: _contextFlow(children, width, context),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return LayoutBuilder(
+      builder: (context, bounds) {
+        final width = (bounds.maxWidth - 24).clamp(0.0, double.infinity);
+        final extent = children
+            .whereType<_ContextActions>()
+            .map((action) => action.width(context, width))
+            .fold(width, (a, b) => a > b ? a : b);
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: extent + 24,
+            height: bounds.maxHeight,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+              children: _contextFlow(children, width, context),
+            ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }

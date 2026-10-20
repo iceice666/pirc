@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'requirement_model.dart';
 
 /// Parses the Mermaid 11.17.2 requirementDiagram grammar into its database
@@ -5,7 +6,7 @@ import 'requirement_model.dart';
 /// instead of being skipped.
 NativeRequirementDiagram parseNativeMermaidRequirement(String source) {
   if (source.length > 50000) {
-    throw const FormatException('Requirement diagram exceeds 50000 characters');
+    throw FormatException(tr("Requirement diagram exceeds 50000 characters"));
   }
 
   final lines = source
@@ -22,7 +23,7 @@ NativeRequirementDiagram parseNativeMermaidRequirement(String source) {
   String? accDescription;
 
   Never invalid(int line, String details) => throw FormatException(
-    'Invalid Mermaid requirement diagram at line $line: $details',
+    tr("Invalid Mermaid requirement diagram at line {0}: {1}", [line, details]),
   );
 
   void assignClasses(
@@ -38,7 +39,7 @@ NativeRequirementDiagram parseNativeMermaidRequirement(String source) {
   }
 
   void defineClass(String name, List<String> styles, int line) {
-    if (name.isEmpty) invalid(line, 'Class name cannot be empty');
+    if (name.isEmpty) invalid(line, tr("Class name cannot be empty"));
     final accumulated = classStyles.putIfAbsent(name, () => <String>[]);
     accumulated.addAll(styles);
     for (final node in [...requirements.values, ...elements.values]) {
@@ -57,13 +58,16 @@ NativeRequirementDiagram parseNativeMermaidRequirement(String source) {
     if (trimmed.isEmpty) continue;
 
     if (trimmed.startsWith('%%{')) {
-      invalid(lineNumber, 'Mermaid configuration directives are unsupported');
+      invalid(
+        lineNumber,
+        tr("Mermaid configuration directives are unsupported"),
+      );
     }
     if (_isComment(trimmed)) continue;
 
     if (!headerSeen) {
       if (trimmed.toLowerCase() != 'requirementdiagram') {
-        invalid(lineNumber, 'Expected a requirementDiagram header');
+        invalid(lineNumber, tr("Expected a requirementDiagram header"));
       }
       headerSeen = true;
       continue;
@@ -99,7 +103,10 @@ NativeRequirementDiagram parseNativeMermaidRequirement(String source) {
         final close = remainder.indexOf('}');
         if (close >= 0) {
           if (remainder.substring(close + 1).trim().isNotEmpty) {
-            invalid(lineNumber, 'Unexpected text after accDescr closing brace');
+            invalid(
+              lineNumber,
+              tr("Unexpected text after accDescr closing brace"),
+            );
           }
           parts.add(remainder.substring(0, close));
           closed = true;
@@ -109,7 +116,7 @@ NativeRequirementDiagram parseNativeMermaidRequirement(String source) {
         if (index + 1 >= lines.length) break;
         remainder = lines[++index];
       }
-      if (!closed) invalid(lineNumber, 'Unclosed accDescr block');
+      if (!closed) invalid(lineNumber, tr("Unclosed accDescr block"));
       accDescription = parts.join('\n').trim();
       continue;
     }
@@ -123,7 +130,7 @@ NativeRequirementDiagram parseNativeMermaidRequirement(String source) {
       continue;
     }
     if (RegExp(r'^direction(?:\s|$)', caseSensitive: false).hasMatch(trimmed)) {
-      invalid(lineNumber, 'Direction must be TB, BT, LR, or RL');
+      invalid(lineNumber, tr("Direction must be TB, BT, LR, or RL"));
     }
 
     _NodeHeader? requirementHeader;
@@ -157,7 +164,7 @@ NativeRequirementDiagram parseNativeMermaidRequirement(String source) {
         if (requirements.length + elements.length > 512) {
           invalid(
             lineNumber,
-            'Native requirement diagrams support at most 512 nodes',
+            tr("Native requirement diagrams support at most 512 nodes"),
           );
         }
       }
@@ -191,7 +198,7 @@ NativeRequirementDiagram parseNativeMermaidRequirement(String source) {
         if (requirements.length + elements.length > 512) {
           invalid(
             lineNumber,
-            'Native requirement diagrams support at most 512 nodes',
+            tr("Native requirement diagrams support at most 512 nodes"),
           );
         }
       }
@@ -269,7 +276,7 @@ NativeRequirementDiagram parseNativeMermaidRequirement(String source) {
       r'^(classDef|class|style)(?:\s|$)',
       caseSensitive: false,
     ).hasMatch(trimmed)) {
-      invalid(lineNumber, 'Malformed class or style statement');
+      invalid(lineNumber, tr("Malformed class or style statement"));
     }
 
     final relation = _parseRelation(trimmed, lineNumber, invalid);
@@ -277,18 +284,18 @@ NativeRequirementDiagram parseNativeMermaidRequirement(String source) {
       if (relations.length >= 1024) {
         invalid(
           lineNumber,
-          'Native requirement diagrams support at most 1024 relations',
+          tr("Native requirement diagrams support at most 1024 relations"),
         );
       }
       relations.add(relation);
       continue;
     }
 
-    invalid(lineNumber, 'Unsupported requirementDiagram statement');
+    invalid(lineNumber, tr("Unsupported requirementDiagram statement"));
   }
 
   if (!headerSeen) {
-    throw const FormatException('Missing Mermaid requirementDiagram header');
+    throw FormatException(tr("Missing Mermaid requirementDiagram header"));
   }
 
   return NativeRequirementDiagram(
@@ -326,7 +333,7 @@ _NodeHeader? _parseNodeHeader(
   final open = _findOutsideQuotes(line, '{');
   if (open < 0) return null;
   if (line.substring(open + 1).trim().isNotEmpty) {
-    invalid(lineNumber, 'Unexpected text after node opening brace');
+    invalid(lineNumber, tr("Unexpected text after node opening brace"));
   }
 
   final beforeBrace = line.substring(0, open).trimRight();
@@ -346,15 +353,15 @@ _NodeHeader? _parseNodeHeader(
   if (classSeparator >= 0) {
     final classSource = rest.substring(classSeparator + 3).trim();
     if (classSource.isEmpty) {
-      invalid(lineNumber, 'Inline class list cannot be empty');
+      invalid(lineNumber, tr("Inline class list cannot be empty"));
     }
     classes = _parseNameList(classSource, lineNumber, invalid);
     rest = rest.substring(0, classSeparator).trimRight();
   }
 
   final name = _parseIdentifier(rest, lineNumber, invalid);
-  if (name.isEmpty) invalid(lineNumber, 'Node name cannot be empty');
-  if (type == null) invalid(lineNumber, 'Unsupported requirement type');
+  if (name.isEmpty) invalid(lineNumber, tr("Node name cannot be empty"));
+  if (type == null) invalid(lineNumber, tr("Unsupported requirement type"));
   return _NodeHeader(name: name, type: type, classes: classes);
 }
 
@@ -397,7 +404,7 @@ _NamedStatement? _parseNamedStatement(
   final tail = source.substring(match.end);
   final split = _firstWhitespaceOutsideQuotes(tail);
   if (split <= 0 || split == tail.length - 1) {
-    invalid(line, '$keyword statement must have targets and a value');
+    invalid(line, tr("{0} statement must have targets and a value", [keyword]));
   }
   return _NamedStatement(
     tail.substring(0, split).trim(),
@@ -448,7 +455,10 @@ _NodeValues _readNodeBody(
     final raw = lines[index];
     final trimmed = raw.trim();
     if (trimmed.startsWith('%%{')) {
-      invalid(lineNumber, 'Mermaid configuration directives are unsupported');
+      invalid(
+        lineNumber,
+        tr("Mermaid configuration directives are unsupported"),
+      );
     }
     if (_isComment(trimmed) || trimmed.isEmpty) continue;
     if (trimmed == '}') {
@@ -464,7 +474,9 @@ _NodeValues _readNodeBody(
     }
 
     final field = RegExp(r'^([A-Za-z]+)\s*:\s*(.*)$').firstMatch(trimmed);
-    if (field == null) invalid(lineNumber, 'Expected a field or closing brace');
+    if (field == null) {
+      invalid(lineNumber, tr("Expected a field or closing brace"));
+    }
     final key = field.group(1)!.toLowerCase();
     final first = seen.add(key);
     final value = _parseFieldValue(field.group(2)!, lineNumber, invalid);
@@ -506,7 +518,10 @@ _NodeValues _readNodeBody(
           if (first) verifyMethod = parsed;
           break;
         default:
-          invalid(lineNumber, 'Unsupported requirement field "$key"');
+          invalid(
+            lineNumber,
+            tr("Unsupported requirement field \"{0}\"", [key]),
+          );
       }
     } else {
       switch (key) {
@@ -517,11 +532,11 @@ _NodeValues _readNodeBody(
           if (first) docRef = value;
           break;
         default:
-          invalid(lineNumber, 'Unsupported element field "$key"');
+          invalid(lineNumber, tr("Unsupported element field \"{0}\"", [key]));
       }
     }
   }
-  invalid(headerLine, 'Unclosed node definition');
+  invalid(headerLine, tr("Unclosed node definition"));
 }
 
 NativeRequirementRelation? _parseRelation(
@@ -546,7 +561,9 @@ NativeRequirementRelation? _parseRelation(
   cursor = _skipWhitespace(source, cursor);
 
   final relationType = _readKeyword(source, cursor, _relationshipTypes);
-  if (relationType == null) invalid(lineNumber, 'Unknown relationship type');
+  if (relationType == null) {
+    invalid(lineNumber, tr("Unknown relationship type"));
+  }
   cursor = _skipWhitespace(source, relationType.end);
 
   if (reverse) {
@@ -562,9 +579,9 @@ NativeRequirementRelation? _parseRelation(
   }
   cursor = _skipWhitespace(source, cursor);
   final right = _readIdentifier(source, cursor, lineNumber, invalid);
-  if (right == null) invalid(lineNumber, 'Relationship has no destination');
+  if (right == null) invalid(lineNumber, tr("Relationship has no destination"));
   if (source.substring(right.end).trim().isNotEmpty) {
-    invalid(lineNumber, 'Unexpected text after relationship destination');
+    invalid(lineNumber, tr("Unexpected text after relationship destination"));
   }
 
   return NativeRequirementRelation(
@@ -590,9 +607,9 @@ _IdentifierRead? _readIdentifier(
   if (cursor >= source.length) return null;
   if (source[cursor] == '"') {
     final end = source.indexOf('"', cursor + 1);
-    if (end < 0) invalid(lineNumber, 'Unclosed quoted identifier');
+    if (end < 0) invalid(lineNumber, tr("Unclosed quoted identifier"));
     final value = source.substring(cursor + 1, end);
-    if (value.isEmpty) invalid(lineNumber, 'Identifier cannot be empty');
+    if (value.isEmpty) invalid(lineNumber, tr("Identifier cannot be empty"));
     return _IdentifierRead(value, end + 1);
   }
 
@@ -637,15 +654,18 @@ String _parseIdentifier(
   if (trimmed.isEmpty) return '';
   if (trimmed.startsWith('"')) {
     if (trimmed.length < 2 || !trimmed.endsWith('"')) {
-      invalid(line, 'Unclosed quoted name');
+      invalid(line, tr("Unclosed quoted name"));
     }
     final inner = trimmed.substring(1, trimmed.length - 1);
-    if (inner.contains('"')) invalid(line, 'Unexpected quote in name');
-    if (inner.isEmpty) invalid(line, 'Name cannot be empty');
+    if (inner.contains('"')) invalid(line, tr("Unexpected quote in name"));
+    if (inner.isEmpty) invalid(line, tr("Name cannot be empty"));
     return inner;
   }
   if (!RegExp(r'^\w[^:,{}<>\-=]*$').hasMatch(trimmed)) {
-    invalid(line, 'Invalid unquoted name; quote names containing punctuation');
+    invalid(
+      line,
+      tr("Invalid unquoted name; quote names containing punctuation"),
+    );
   }
   return trimmed;
 }
@@ -661,7 +681,7 @@ List<String> _parseNameList(
     invalid,
   ).map((part) => _parseIdentifier(part, line, invalid)).toList();
   if (names.any((name) => name.isEmpty)) {
-    invalid(line, 'Name list contains an empty value');
+    invalid(line, tr("Name list contains an empty value"));
   }
   return names;
 }
@@ -681,10 +701,10 @@ List<String> _splitCommaList(
       start = index + 1;
     }
   }
-  if (inQuotes) invalid(line, 'Unclosed quoted value');
+  if (inQuotes) invalid(line, tr("Unclosed quoted value"));
   values.add(source.substring(start).trim());
   if (values.any((value) => value.isEmpty)) {
-    invalid(line, 'Comma-separated list contains an empty value');
+    invalid(line, tr("Comma-separated list contains an empty value"));
   }
   return values;
 }
@@ -700,7 +720,7 @@ List<String> _parseStyles(
     invalid,
   ).map(_normalizeCssStyle).toList();
   if (_hasUnsupportedStyleCharacters(source)) {
-    invalid(line, 'CSS style contains characters unsupported by Mermaid');
+    invalid(line, tr("CSS style contains characters unsupported by Mermaid"));
   }
   for (final style in styles) {
     for (final declaration in _splitOutsideQuotes(style, ';')) {
@@ -709,7 +729,7 @@ List<String> _parseStyles(
       if (colon <= 0 || colon == declaration.length - 1) {
         invalid(
           line,
-          'CSS style must be a non-empty property:value declaration',
+          tr("CSS style must be a non-empty property:value declaration"),
         );
       }
       final property = declaration.substring(0, colon).trim();
@@ -717,7 +737,10 @@ List<String> _parseStyles(
       if (!RegExp(r'^(?:--)?[A-Za-z_][\w-]*$').hasMatch(property) ||
           value.isEmpty ||
           RegExp(r'[{}<>\r\n]').hasMatch(value)) {
-        invalid(line, 'Invalid CSS style declaration "$declaration"');
+        invalid(
+          line,
+          tr("Invalid CSS style declaration \"{0}\"", [declaration]),
+        );
       }
     }
   }
@@ -777,17 +800,19 @@ String _parseFieldValue(
   final value = source.trim();
   if (value.startsWith('"')) {
     if (value.length < 2 || !value.endsWith('"')) {
-      invalid(line, 'Unclosed quoted field value');
+      invalid(line, tr("Unclosed quoted field value"));
     }
     final inner = value.substring(1, value.length - 1);
-    if (inner.contains('"')) invalid(line, 'Unexpected quote in field value');
+    if (inner.contains('"')) {
+      invalid(line, tr("Unexpected quote in field value"));
+    }
     return inner;
   }
   if (value.isEmpty) return '';
   if (!RegExp(r'^\w[^:,{}<>\-=]*$').hasMatch(value)) {
     invalid(
       line,
-      'Invalid unquoted field value; quote values containing punctuation',
+      tr("Invalid unquoted field value; quote values containing punctuation"),
     );
   }
   return value;
@@ -801,7 +826,9 @@ String _parseEnum(
   Never Function(int, String) invalid,
 ) {
   final result = choices[value.toLowerCase()];
-  if (result == null) invalid(line, 'Invalid $field value "$value"');
+  if (result == null) {
+    invalid(line, tr("Invalid {0} value \"{1}\"", [field, value]));
+  }
   return result;
 }
 

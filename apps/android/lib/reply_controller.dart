@@ -1,3 +1,4 @@
+import 'l10n/app_i18n.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'bridge.dart';
@@ -43,7 +44,7 @@ class ReplyController extends ChangeNotifier {
         outcomeUnknown = false;
       }
     } catch (_) {
-      error = '無法確認最新狀態，請重試';
+      error = tr("無法確認最新狀態，請重試");
     } finally {
       busy = false;
       _emit();
@@ -64,17 +65,17 @@ class ReplyController extends ChangeNotifier {
       if (latest.status != ReplyStatus.pending) return;
       if (latest.revision != confirmedRevision) {
         choice = null;
-        error = '問題已更新，請重新確認';
+        error = tr("問題已更新，請重新確認");
         return;
       }
       attempted = true;
       snapshot = await repository.answer(confirmedRevision, confirmedChoice);
     } on PlatformException catch (e) {
       outcomeUnknown = attempted && e.code != 'REJECTED';
-      error = outcomeUnknown ? '不確定是否已送達，請檢查狀態' : '問題狀態已變更，請重新整理';
+      error = outcomeUnknown ? tr("不確定是否已送達，請檢查狀態") : tr("問題狀態已變更，請重新整理");
     } catch (_) {
       outcomeUnknown = attempted;
-      error = attempted ? '不確定是否已送達，請檢查狀態' : '無法確認最新狀態，請重試';
+      error = attempted ? tr("不確定是否已送達，請檢查狀態") : tr("無法確認最新狀態，請重試");
     } finally {
       busy = false;
       _emit();

@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 /** Device tokens: pairing the native (Android) client with this gateway. */
 import { encode } from 'uqr';
 import { request } from './http';
@@ -37,7 +38,7 @@ export function qrPath(text: string): { size: number; path: string } {
   let path = '';
   data.forEach((row, y) =>
     row.forEach((dark, x) => {
-      if (dark) path += `M${x} ${y}h1v1h-1z`;
+      if (dark) path += tr('M{0} {1}h1v1h-1z', [x, y]);
     }),
   );
   return { size: data.length, path };

@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:convert';
 
 import 'quadrant_model.dart';
@@ -38,7 +39,7 @@ NativeMermaidQuadrantDiagram parseNativeMermaidQuadrant(String source) {
     if (!sawHeader) {
       if (clean != 'quadrantChart') {
         throw FormatException(
-          'Expected quadrantChart header, found: $clean',
+          tr("Expected quadrantChart header, found: {0}", [clean]),
           source,
           i + 1,
         );
@@ -49,7 +50,7 @@ NativeMermaidQuadrantDiagram parseNativeMermaidQuadrant(String source) {
 
     if (clean == 'quadrantChart') {
       throw FormatException(
-        'Unexpected second quadrantChart header',
+        tr("Unexpected second quadrantChart header"),
         source,
         i + 1,
       );
@@ -95,7 +96,7 @@ NativeMermaidQuadrantDiagram parseNativeMermaidQuadrant(String source) {
           ).trim();
           if (trailing.isNotEmpty) {
             throw FormatException(
-              'Unexpected text after accDescr block',
+              tr("Unexpected text after accDescr block"),
               source,
               i + 1,
             );
@@ -106,7 +107,7 @@ NativeMermaidQuadrantDiagram parseNativeMermaidQuadrant(String source) {
         body.add(row);
       }
       if (!closed) {
-        throw FormatException('Unclosed accDescr block', source, i + 1);
+        throw FormatException(tr("Unclosed accDescr block"), source, i + 1);
       }
       accessibleDescription = body
           .join('\n')
@@ -154,7 +155,7 @@ NativeMermaidQuadrantDiagram parseNativeMermaidQuadrant(String source) {
     }
     if (RegExp(r'^classDef\b', caseSensitive: false).hasMatch(clean)) {
       throw FormatException(
-        'classDef needs a class name and supported styles',
+        tr("classDef needs a class name and supported styles"),
         source,
         i + 1,
       );
@@ -166,13 +167,13 @@ NativeMermaidQuadrantDiagram parseNativeMermaidQuadrant(String source) {
     }
 
     throw FormatException(
-      'Unsupported or invalid native quadrant statement: $clean',
+      tr("Unsupported or invalid native quadrant statement: {0}", [clean]),
       source,
       i + 1,
     );
   }
 
-  if (!sawHeader) throw const FormatException('Expected quadrantChart header');
+  if (!sawHeader) throw FormatException(tr("Expected quadrantChart header"));
   return NativeMermaidQuadrantDiagram(
     title: title.isEmpty ? null : title,
     xAxisLeftText: xAxisLeft,
@@ -211,7 +212,7 @@ String _decodeText(String text, {required int line, bool allowEmpty = false}) {
   final value = text.trim();
   if (value.isEmpty) {
     if (allowEmpty) return '';
-    throw FormatException('Expected non-empty label text', null, line);
+    throw FormatException(tr("Expected non-empty label text"), null, line);
   }
   if (value.startsWith('"')) {
     try {
@@ -221,10 +222,10 @@ String _decodeText(String text, {required int line, bool allowEmpty = false}) {
       // Give the caller the same focused parser error used for unsupported
       // Mermaid labels below.
     }
-    throw FormatException('Invalid quoted label text', value, line);
+    throw FormatException(tr("Invalid quoted label text"), value, line);
   }
   if (value.contains('"') || value.contains('[') || value.contains(']')) {
-    throw FormatException('Unsupported label syntax', value, line);
+    throw FormatException(tr("Unsupported label syntax"), value, line);
   }
   return value;
 }
@@ -247,7 +248,7 @@ NativeMermaidQuadrantPoint _parsePoint(String line, {required int lineNumber}) {
   ).firstMatch(line);
   if (coordinate == null) {
     throw FormatException(
-      'Invalid quadrant point; expected Label: [x, y]',
+      tr("Invalid quadrant point; expected Label: [x, y]"),
       line,
       lineNumber,
     );
@@ -282,7 +283,7 @@ double _parseCoordinate(String source, {required int line}) {
     // followed by a decimal fraction. Keep out-of-range values an explicit
     // lexer-style failure rather than silently clamping them.
     throw FormatException(
-      'Lexical error on line $line. Unrecognized text.',
+      tr("Lexical error on line {0}. Unrecognized text.", [line]),
       value,
       line,
     );
@@ -299,7 +300,7 @@ NativeMermaidQuadrantStyle _parseStyles(String source, {required int line}) {
     final split = item.indexOf(':');
     if (split <= 0 || split == item.length - 1) {
       throw FormatException(
-        'Invalid quadrant point style: $item',
+        tr("Invalid quadrant point style: {0}", [item]),
         source,
         line,
       );
@@ -333,7 +334,7 @@ NativeMermaidQuadrantStyle _parseStyles(String source, {required int line}) {
         strokeWidth = value;
       default:
         throw FormatException(
-          'Unsupported quadrant style property: $key',
+          tr("Unsupported quadrant style property: {0}", [key]),
           source,
           line,
         );
@@ -351,7 +352,7 @@ void _validateHexColor(String value, {required String key, required int line}) {
   final hex = value.startsWith('#') ? value.substring(1) : value;
   if (!RegExp(r'^(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$').hasMatch(hex)) {
     throw FormatException(
-      '$key style must be a 3- or 6-digit hex color',
+      tr("{0} style must be a 3- or 6-digit hex color", [key]),
       value,
       line,
     );
@@ -366,7 +367,7 @@ NativeMermaidQuadrantConfig _parseInitDirective(
   final match = RegExp(r'^%%\{\s*init\s*:\s*(\{.*\})\s*\}%%$').firstMatch(line);
   if (match == null) {
     throw FormatException(
-      'Unsupported native Mermaid directive',
+      tr("Unsupported native Mermaid directive"),
       line,
       lineNumber,
     );
@@ -376,7 +377,7 @@ NativeMermaidQuadrantConfig _parseInitDirective(
     decoded = jsonDecode(match[1]!);
   } on FormatException {
     throw FormatException(
-      'Quadrant init directive must contain JSON',
+      tr("Quadrant init directive must contain JSON"),
       line,
       lineNumber,
     );
@@ -384,7 +385,7 @@ NativeMermaidQuadrantConfig _parseInitDirective(
   if (decoded is! Map<String, dynamic> ||
       decoded.keys.any((key) => key != 'quadrantChart')) {
     throw FormatException(
-      'Only quadrantChart init options are supported',
+      tr("Only quadrantChart init options are supported"),
       line,
       lineNumber,
     );
@@ -392,7 +393,7 @@ NativeMermaidQuadrantConfig _parseInitDirective(
   final raw = decoded['quadrantChart'];
   if (raw is! Map<String, dynamic>) {
     throw FormatException(
-      'quadrantChart init options must be an object',
+      tr("quadrantChart init options must be an object"),
       line,
       lineNumber,
     );
@@ -425,7 +426,7 @@ NativeMermaidQuadrantConfig _parseInitDirective(
       .toList();
   if (unsupported.isNotEmpty) {
     throw FormatException(
-      'Unsupported quadrantChart option: ${unsupported.first}',
+      tr("Unsupported quadrantChart option: {0}", [unsupported.first]),
       line,
       lineNumber,
     );
@@ -436,7 +437,7 @@ NativeMermaidQuadrantConfig _parseInitDirective(
     if (value == null) return fallback;
     if (value is! num || !value.isFinite || value < 0) {
       throw FormatException(
-        '$key must be a finite non-negative number',
+        tr("{0} must be a finite non-negative number", [key]),
         line,
         lineNumber,
       );
@@ -448,7 +449,11 @@ NativeMermaidQuadrantConfig _parseInitDirective(
     final value = raw[key];
     if (value == null) return fallback;
     if (value is! String || !allowed.contains(value)) {
-      throw FormatException('$key has an unsupported value', line, lineNumber);
+      throw FormatException(
+        tr("{0} has an unsupported value", [key]),
+        line,
+        lineNumber,
+      );
     }
     return value;
   }
@@ -457,7 +462,11 @@ NativeMermaidQuadrantConfig _parseInitDirective(
     final value = raw[key];
     if (value == null) return fallback;
     if (value is! bool) {
-      throw FormatException('$key must be a boolean', line, lineNumber);
+      throw FormatException(
+        tr("{0} must be a boolean", [key]),
+        line,
+        lineNumber,
+      );
     }
     return value;
   }

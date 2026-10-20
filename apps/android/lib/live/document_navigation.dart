@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:csslib/parser.dart' as css_parser;
 import 'dart:async';
 import 'dart:convert';
@@ -113,13 +114,13 @@ Future<bool> saveNativeDocumentLink(
   if (blob) {
     final scripts = document?.scripts;
     if (scripts == null) {
-      throw StateError('Object URL document is unavailable.');
+      throw StateError(tr("Object URL document is unavailable."));
     }
     final contents =
         activatedBlob ??
         NativeDocumentBlob.fromBridge(url, await scripts.readObjectURL(url));
     if (contents.url != url.split('#').first) {
-      throw const FormatException('Captured Blob URL changed.');
+      throw FormatException(tr("Captured Blob URL changed."));
     }
     if (!current()) return true;
     download = NativeDocumentDownload(
@@ -151,7 +152,7 @@ Future<bool> saveNativeDocumentLink(
         ? obj(await gateway.call('document', args))
         : await windows.responses.load(args, isCurrent: current);
     if (!current()) return true;
-    if ((response['status'] as num) >= 400) throw StateError('下載失敗，請重試。');
+    if ((response['status'] as num) >= 400) throw StateError(tr("下載失敗，請重試。"));
     download = NativeDocumentDownload.response(response, hint: link.download);
   }
   if (current()) await download.save(gateway, '${boot['pairingStamp']}');
@@ -178,7 +179,7 @@ Future<void> openNativeDocument(
     windows.captureSourceAppState();
   }
   final sourceUrl = scope.window?.current?.url ?? scope.documentUrl;
-  if (sourceUrl == null) throw StateError('Document URL is unavailable.');
+  if (sourceUrl == null) throw StateError(tr("Document URL is unavailable."));
   final window = windows.target(
     request.target,
     scope.window,
@@ -514,6 +515,7 @@ class NativeDocumentHostState extends State<NativeDocumentHost> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final ownsBack = _canHandleBack;
     return _NativeDocumentHostScope(
       state: this,
@@ -777,19 +779,19 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
           await showDialog<bool>(
             context: context,
             builder: (dialogContext) => WebDialog(
-              title: '重新送出表單？',
+              title: tr("重新送出表單？"),
               actions: [
                 WebButton(
-                  '取消',
+                  tr("取消"),
                   onPressed: () => Navigator.pop(dialogContext, false),
                 ),
                 WebButton(
-                  '重新送出',
+                  tr("重新送出"),
                   primary: true,
                   onPressed: () => Navigator.pop(dialogContext, true),
                 ),
               ],
-              children: const [Text('重新載入會再次送出這份表單。')],
+              children: [Text(tr("重新載入會再次送出這份表單。"))],
             ),
           ) ??
           false;
@@ -1277,222 +1279,229 @@ class _NativeDocumentWorkspaceState extends State<NativeDocumentWorkspace> {
         ),
       );
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.windows,
-    builder: (context, _) {
-      final windows = widget.windows;
-      final window = windows.active;
-      final current = window?.current;
-      final blockedPost = window?.historyPostResubmissionRequired == true;
-      _revealFragment(blockedPost ? null : window);
-      final liveDocuments = <(int, int)>{
-        for (final w in windows.windows)
-          for (final entry in w.history)
-            if (entry.document != null) (w.id, entry.document!.id),
-      };
-      _views.removeWhere((key, _) => !liveDocuments.contains(key));
-      _appViews.removeWhere((id, _) => !windows.windows.any((w) => w.id == id));
-      final documents = <(NativeDocumentWindow, NativeFetchedDocument)>[];
-      for (final w in windows.windows) {
-        for (final d
-            in w.history
-                .map((e) => e.document)
-                .whereType<NativeFetchedDocument>()
-                .toSet()) {
-          documents.add((w, d));
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return ListenableBuilder(
+      listenable: widget.windows,
+      builder: (context, _) {
+        final windows = widget.windows;
+        final window = windows.active;
+        final current = window?.current;
+        final blockedPost = window?.historyPostResubmissionRequired == true;
+        _revealFragment(blockedPost ? null : window);
+        final liveDocuments = <(int, int)>{
+          for (final w in windows.windows)
+            for (final entry in w.history)
+              if (entry.document != null) (w.id, entry.document!.id),
+        };
+        _views.removeWhere((key, _) => !liveDocuments.contains(key));
+        _appViews.removeWhere(
+          (id, _) => !windows.windows.any((w) => w.id == id),
+        );
+        final documents = <(NativeDocumentWindow, NativeFetchedDocument)>[];
+        for (final w in windows.windows) {
+          for (final d
+              in w.history
+                  .map((e) => e.document)
+                  .whereType<NativeFetchedDocument>()
+                  .toSet()) {
+            documents.add((w, d));
+          }
         }
-      }
-      final alive = {for (final item in documents) (item.$1.id, item.$2.id)};
-      _views.removeWhere((key, _) => !alive.contains(key));
-      final apps = windows.windows
-          .where(
-            (w) => w.independentApp && w.history.any((h) => h.appRoute != null),
-          )
-          .toList();
-      _appViews.removeWhere((id, _) => !apps.any((w) => w.id == id));
-      final independentVisible =
-          window?.independentApp == true && current?.appRoute != null;
-
-      return PopScope(
-        canPop: widget.managed || window?.canBack != true,
-        onPopInvokedWithResult: (popped, _) {
-          if (!widget.managed && !popped) _back();
-        },
-        child: Scaffold(
-          appBar: independentVisible
-              ? null
-              : PreferredSize(
-                  preferredSize: const Size.fromHeight(48),
-                  child: SafeArea(
-                    bottom: false,
-                    child: Container(
-                      constraints: const BoxConstraints(minHeight: 48),
-                      decoration: BoxDecoration(
-                        color: palette(context)['surface.page'],
-                        border: Border(
-                          bottom: BorderSide(
-                            color: palette(context)['line.default'],
-                          ),
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Row(
-                        children: [
-                          WebIconButton(
-                            LucideIcons.chevronLeft,
-                            '返回',
-                            onPressed: _back,
-                          ),
-                          WebIconButton(
-                            LucideIcons.chevronRight,
-                            '下一頁',
-                            onPressed: window?.canForward == true
-                                ? _forward
-                                : null,
-                          ),
-                          WebIconButton(
-                            window?.loading == true
-                                ? LucideIcons.x
-                                : LucideIcons.rotateCw,
-                            window?.loading == true ? '停止' : '重新載入',
-                            onPressed: window == null
-                                ? null
-                                : () => unawaited(_reload(window)),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Tooltip(
-                              message: current?.url ?? window?.sourceUrl ?? '',
-                              child: Text(
-                                current?.document?.content.title
-                                            ?.trim()
-                                            .isNotEmpty ==
-                                        true
-                                    ? current!.document!.content.title!
-                                    : current?.url ?? '網頁內容',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: webText(context),
-                              ),
+        final alive = {for (final item in documents) (item.$1.id, item.$2.id)};
+        _views.removeWhere((key, _) => !alive.contains(key));
+        final apps = windows.windows
+            .where(
+              (w) =>
+                  w.independentApp && w.history.any((h) => h.appRoute != null),
+            )
+            .toList();
+        _appViews.removeWhere((id, _) => !apps.any((w) => w.id == id));
+        final independentVisible =
+            window?.independentApp == true && current?.appRoute != null;
+        return PopScope(
+          canPop: widget.managed || window?.canBack != true,
+          onPopInvokedWithResult: (popped, _) {
+            if (!widget.managed && !popped) _back();
+          },
+          child: Scaffold(
+            appBar: independentVisible
+                ? null
+                : PreferredSize(
+                    preferredSize: const Size.fromHeight(48),
+                    child: SafeArea(
+                      bottom: false,
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 48),
+                        decoration: BoxDecoration(
+                          color: palette(context)['surface.page'],
+                          border: Border(
+                            bottom: BorderSide(
+                              color: palette(context)['line.default'],
                             ),
                           ),
-                          WebIconButton(
-                            LucideIcons.panelsTopLeft,
-                            'App 視窗',
-                            onPressed: widget.managed
-                                ? () {
-                                    final host = NativeDocumentHost.maybeOf(
-                                      context,
-                                    );
-                                    if (host != null) {
-                                      showNativeDocumentWindowManager(
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Row(
+                          children: [
+                            WebIconButton(
+                              LucideIcons.chevronLeft,
+                              tr("返回"),
+                              onPressed: _back,
+                            ),
+                            WebIconButton(
+                              LucideIcons.chevronRight,
+                              tr("下一頁"),
+                              onPressed: window?.canForward == true
+                                  ? _forward
+                                  : null,
+                            ),
+                            WebIconButton(
+                              window?.loading == true
+                                  ? LucideIcons.x
+                                  : LucideIcons.rotateCw,
+                              window?.loading == true ? tr("停止") : tr("重新載入"),
+                              onPressed: window == null
+                                  ? null
+                                  : () => unawaited(_reload(window)),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Tooltip(
+                                message:
+                                    current?.url ?? window?.sourceUrl ?? '',
+                                child: Text(
+                                  current?.document?.content.title
+                                              ?.trim()
+                                              .isNotEmpty ==
+                                          true
+                                      ? current!.document!.content.title!
+                                      : current?.url ?? tr("網頁內容"),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: webText(context),
+                                ),
+                              ),
+                            ),
+                            WebIconButton(
+                              LucideIcons.panelsTopLeft,
+                              tr("App 視窗"),
+                              onPressed: widget.managed
+                                  ? () {
+                                      final host = NativeDocumentHost.maybeOf(
                                         context,
-                                        windows,
-                                        host,
                                       );
+                                      if (host != null) {
+                                        showNativeDocumentWindowManager(
+                                          context,
+                                          windows,
+                                          host,
+                                        );
+                                      }
                                     }
-                                  }
-                                : null,
-                          ),
-                          WebIconButton(
-                            LucideIcons.x,
-                            '關閉頁面',
-                            onPressed: _closeWindow,
-                          ),
-                        ],
+                                  : null,
+                            ),
+                            WebIconButton(
+                              LucideIcons.x,
+                              tr("關閉頁面"),
+                              onPressed: _closeWindow,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-          body: Column(
-            children: [
-              if (window?.loading == true)
-                const LinearProgressIndicator(minHeight: 2),
-              if (windows.connectionError != null || window?.error != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  color: palette(context)['surface.subtle'],
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            body: Column(
+              children: [
+                if (window?.loading == true)
+                  const LinearProgressIndicator(minHeight: 2),
+                if (windows.connectionError != null || window?.error != null)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    color: palette(context)['surface.subtle'],
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          windows.connectionError ?? window!.error!,
+                          style: webText(context, color: 'status.danger'),
+                        ),
+                        if (windows.connectionError == null &&
+                            window?.mutationOutcomeUnknown == true)
+                          Text(tr("送出結果尚未確認，請先檢查伺服器狀態。")),
+                        if (windows.connectionError == null &&
+                            window?.failedRequest?.method == 'GET')
+                          WebButton(
+                            tr("重試"),
+                            onPressed: () => unawaited(_retry(window!)),
+                          ),
+                      ],
+                    ),
+                  ),
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      Text(
-                        windows.connectionError ?? window!.error!,
-                        style: webText(context, color: 'status.danger'),
-                      ),
-                      if (windows.connectionError == null &&
-                          window?.mutationOutcomeUnknown == true)
-                        const Text('送出結果尚未確認，請先檢查伺服器狀態。'),
-                      if (windows.connectionError == null &&
-                          window?.failedRequest?.method == 'GET')
-                        WebButton(
-                          '重試',
-                          onPressed: () => unawaited(_retry(window!)),
+                      if (blockedPost)
+                        const _NativeHistoryPostResubmissionPage(),
+                      for (final appWindow in apps)
+                        Offstage(
+                          offstage:
+                              appWindow != window || current?.appRoute == null,
+                          child: ExcludeFocus(
+                            excluding:
+                                appWindow != window ||
+                                current?.appRoute == null ||
+                                appWindow.closing,
+                            child: TickerMode(
+                              enabled:
+                                  appWindow == window &&
+                                  current?.appRoute != null,
+                              child: AbsorbPointer(
+                                absorbing: appWindow.closing,
+                                child: _appViews.putIfAbsent(
+                                  appWindow.id,
+                                  () => windows.appBuilder!(appWindow),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      for (final item in documents)
+                        Offstage(
+                          offstage:
+                              item.$1 != window ||
+                              item.$2 != current?.document ||
+                              blockedPost,
+                          child: TickerMode(
+                            enabled:
+                                item.$1 == window &&
+                                item.$2 == current?.document &&
+                                !blockedPost,
+                            child: ExcludeFocus(
+                              excluding:
+                                  item.$1 != window ||
+                                  item.$2 != current?.document ||
+                                  item.$1.closing ||
+                                  blockedPost,
+                              child: AbsorbPointer(
+                                absorbing: item.$1.closing || blockedPost,
+                                child: _body(item.$1, item.$2),
+                              ),
+                            ),
+                          ),
                         ),
                     ],
                   ),
                 ),
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (blockedPost) const _NativeHistoryPostResubmissionPage(),
-                    for (final appWindow in apps)
-                      Offstage(
-                        offstage:
-                            appWindow != window || current?.appRoute == null,
-                        child: ExcludeFocus(
-                          excluding:
-                              appWindow != window ||
-                              current?.appRoute == null ||
-                              appWindow.closing,
-                          child: TickerMode(
-                            enabled:
-                                appWindow == window &&
-                                current?.appRoute != null,
-                            child: AbsorbPointer(
-                              absorbing: appWindow.closing,
-                              child: _appViews.putIfAbsent(
-                                appWindow.id,
-                                () => windows.appBuilder!(appWindow),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    for (final item in documents)
-                      Offstage(
-                        offstage:
-                            item.$1 != window ||
-                            item.$2 != current?.document ||
-                            blockedPost,
-                        child: TickerMode(
-                          enabled:
-                              item.$1 == window &&
-                              item.$2 == current?.document &&
-                              !blockedPost,
-                          child: ExcludeFocus(
-                            excluding:
-                                item.$1 != window ||
-                                item.$2 != current?.document ||
-                                item.$1.closing ||
-                                blockedPost,
-                            child: AbsorbPointer(
-                              absorbing: item.$1.closing || blockedPost,
-                              child: _body(item.$1, item.$2),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
 /// Full response documents use their own default HTML typography and canvas;
@@ -2176,6 +2185,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     _scheduleNavigation();
     _scheduleScroll();
     final document = widget.document;
@@ -2266,7 +2276,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
             Text(download.name),
             const SizedBox(height: 12),
             WebButton(
-              '儲存檔案',
+              tr("儲存檔案"),
               onPressed: () => guarded(context, () async {
                 final scope = NativeDocumentScope.maybeOf(context);
                 final account = scope?.windows.accountIdentity;
@@ -2300,9 +2310,9 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       if (!document.mimeType.startsWith('text/') &&
           document.mimeType != 'application/json' &&
           !document.mimeType.endsWith('+json')) {
-        return const Padding(
+        return Padding(
           padding: EdgeInsets.all(24),
-          child: Text('此內容格式目前無法呈現。'),
+          child: Text(tr("此內容格式目前無法呈現。")),
         );
       }
       return Padding(
@@ -2336,8 +2346,9 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         padding: const EdgeInsets.all(24),
         child: Text(
           _scripts?.loading == true
-              ? '正在載入互動內容…'
-              : (_scripts?.diagnostics.join('\n') ?? '此頁面由腳本產生內容，尚未完成原生呈現。'),
+              ? tr("正在載入互動內容…")
+              : (_scripts?.diagnostics.join('\n') ??
+                    tr("此頁面由腳本產生內容，尚未完成原生呈現。")),
         ),
       );
     }
@@ -2469,7 +2480,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
         );
       } catch (_) {
         document.renderingDiagnostics.add(
-          'Document canvas color is not supported: $canvasBackground',
+          tr("Document canvas color is not supported: {0}", [canvasBackground]),
         );
       }
     }
@@ -2613,9 +2624,9 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_scripts?.loading == true)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(8),
-                  child: Text('正在載入互動內容…'),
+                  child: Text(tr("正在載入互動內容…")),
                 ),
               if (_scripts?.diagnostics.isNotEmpty == true)
                 Padding(
@@ -2750,6 +2761,7 @@ class _NativeDocumentSubmissionHostState
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final captured = NativeDocumentScope.maybeOf(context);
     return widget.builder((s) => unawaited(_submit(s, captured)));
   }
@@ -2805,87 +2817,99 @@ class _NativeHistoryPostResubmissionPage extends StatelessWidget {
   const _NativeHistoryPostResubmissionPage();
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, size) {
-      final width = size.maxWidth;
-      final height = size.maxHeight;
-      final portrait = height >= width;
-      final mobile = width <= 420 && portrait || height <= 560;
-      var top = height * .14;
-      if (mobile) top = height * .07;
-      if (width > 420 && height >= 500 && height <= 560 ||
-          width <= 414 && portrait && height >= 650) {
-        top = height * .10;
-      }
-      final maxWidth = width <= 420 && height >= 401 ? 736.0 : 600.0;
-      final wrapperWidth = width.clamp(0.0, maxWidth);
-      final side = mobile
-          ? 24.0
-          : width <= 700
-          ? wrapperWidth * .10
-          : 0.0;
-      final dark = Theme.of(context).brightness == Brightness.dark;
-      final text = dark ? const Color(0xff9aa0a6) : const Color(0xff5f6368);
-      final heading = dark ? text : const Color(0xff202124);
-      TextStyle style(double fontSize, double lineHeight, Color color) =>
-          TextStyle(
-            fontFamily: 'system-ui',
-            fontFamilyFallback: const ['PingFang TC', 'Heiti TC', 'sans-serif'],
-            fontSize: fontSize,
-            height: lineHeight / fontSize,
-            fontWeight: FontWeight.w400,
-            color: color,
-          );
-      return ColoredBox(
-        color: dark ? const Color(0xff202124) : Colors.white,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(
-            top: top,
-            bottom: portrait && height >= 400 ? 145 : 40,
-          ),
-          child: Center(
-            child: SizedBox(
-              width: wrapperWidth,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: side),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const ExcludeSemantics(
-                      child: SizedBox(
-                        width: 72,
-                        height: 72,
-                        child: CustomPaint(painter: _NativePostErrorIcon()),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return LayoutBuilder(
+      builder: (context, size) {
+        final width = size.maxWidth;
+        final height = size.maxHeight;
+        final portrait = height >= width;
+        final mobile = width <= 420 && portrait || height <= 560;
+        var top = height * .14;
+        if (mobile) top = height * .07;
+        if (width > 420 && height >= 500 && height <= 560 ||
+            width <= 414 && portrait && height >= 650) {
+          top = height * .10;
+        }
+        final maxWidth = width <= 420 && height >= 401 ? 736.0 : 600.0;
+        final wrapperWidth = width.clamp(0.0, maxWidth);
+        final side = mobile
+            ? 24.0
+            : width <= 700
+            ? wrapperWidth * .10
+            : 0.0;
+        final dark = Theme.of(context).brightness == Brightness.dark;
+        final text = dark ? const Color(0xff9aa0a6) : const Color(0xff5f6368);
+        final heading = dark ? text : const Color(0xff202124);
+        TextStyle style(double fontSize, double lineHeight, Color color) =>
+            TextStyle(
+              fontFamily: 'system-ui',
+              fontFamilyFallback: [
+                tr("PingFang TC"),
+                tr("Heiti TC"),
+                'sans-serif',
+              ],
+              fontSize: fontSize,
+              height: lineHeight / fontSize,
+              fontWeight: FontWeight.w400,
+              color: color,
+            );
+        return ColoredBox(
+          color: dark ? const Color(0xff202124) : Colors.white,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              top: top,
+              bottom: portrait && height >= 400 ? 145 : 40,
+            ),
+            child: Center(
+              child: SizedBox(
+                width: wrapperWidth,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: side),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const ExcludeSemantics(
+                        child: SizedBox(
+                          width: 72,
+                          height: 72,
+                          child: CustomPaint(painter: _NativePostErrorIcon()),
+                        ),
                       ),
-                    ),
-                    SizedBox(height: (mobile ? height * .0569 : 40) + 6),
-                    Text(
-                      '確認重新提交表單',
-                      style: style(
-                        mobile ? 22.5 : 24,
-                        mobile ? 28.125 : 30,
-                        heading,
+                      SizedBox(height: (mobile ? height * .0569 : 40) + 6),
+                      Text(
+                        tr("確認重新提交表單"),
+                        style: style(
+                          mobile ? 22.5 : 24,
+                          mobile ? 28.125 : 30,
+                          heading,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: mobile ? 15 : 16),
-                    Text(
-                      '這個網頁需要使用你先前輸入的資料才能正確顯示。你可以重新傳送這些資料，不過這麼做會重複執行這個網頁先前執行過的任何動作。',
-                      style: style(14.25, 22.9425, text),
-                    ),
-                    const SizedBox(height: 8),
-                    Text('按下重新載入按鈕，重新提交載入網頁所需的資料。', style: style(15, 24, text)),
-                    const SizedBox(height: 12),
-                    Text('ERR_CACHE_MISS', style: style(12, 24, text)),
-                    const SizedBox(height: 40),
-                  ],
+                      SizedBox(height: mobile ? 15 : 16),
+                      Text(
+                        tr(
+                          "這個網頁需要使用你先前輸入的資料才能正確顯示。你可以重新傳送這些資料，不過這麼做會重複執行這個網頁先前執行過的任何動作。",
+                        ),
+                        style: style(14.25, 22.9425, text),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        tr("按下重新載入按鈕，重新提交載入網頁所需的資料。"),
+                        style: style(15, 24, text),
+                      ),
+                      const SizedBox(height: 12),
+                      Text('ERR_CACHE_MISS', style: style(12, 24, text)),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
 /// Native line art for the browser's failed-document status icon.

@@ -1,3 +1,5 @@
+import '../l10n/app_i18n.dart';
+
 /// CSS-pixel document viewport and the host preferences exposed to page scripts.
 /// Text scaling is deliberately separate: it is not browser pinch zoom or DPR.
 class NativeDocumentEnvironment {
@@ -21,7 +23,7 @@ class NativeDocumentEnvironment {
   Map<String, dynamic> toJson() {
     for (final value in [width, height, screenWidth, screenHeight]) {
       if (!value.isFinite || value < 0 || value > 100000) {
-        throw ArgumentError('Invalid CSS-pixel document viewport.');
+        throw ArgumentError(tr("Invalid CSS-pixel document viewport."));
       }
     }
     if (!devicePixelRatio.isFinite ||
@@ -29,7 +31,7 @@ class NativeDocumentEnvironment {
         devicePixelRatio > 16 ||
         !const {'coarse', 'fine', 'none'}.contains(pointer) ||
         !const {'hover', 'none'}.contains(hover)) {
-      throw ArgumentError('Invalid document display environment.');
+      throw ArgumentError(tr("Invalid document display environment."));
     }
     return {
       'width': width,

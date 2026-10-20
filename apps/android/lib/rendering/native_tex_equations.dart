@@ -32,7 +32,7 @@ NativeTexParseResult parseNativeTex(
   final body = parser.parse();
   if (parser.macroExpander.macros.get(r'\df@tag') != null) {
     if (!settings.displayMode) {
-      throw ParseException(r'\tag works only in display equations');
+      throw ParseException(tr("\\tag works only in display equations"));
     }
     parser.equationTags.add(
       NativeTexEquationTag(content: parser.parseTag(), automatic: false),
@@ -95,12 +95,12 @@ GreenNode _numberedEquationEnvironment(TexParser raw, EnvContext context) {
     if (context.envName == 'gather' || context.envName == 'gather*') {
       return _gatherEnvironmentHandler(raw, context);
     }
-    throw ParseException('Equation tags require the native TeX parser.');
+    throw ParseException(tr("Equation tags require the native TeX parser."));
   }
   final parser = raw;
   if (!parser.settings.displayMode) {
     throw ParseException(
-      '{${context.envName}} can be used only in display mode.',
+      tr("{{0}} can be used only in display mode.", [context.envName]),
     );
   }
   final isAlign = context.envName.startsWith('align');
@@ -151,7 +151,7 @@ GreenNode _numberedEquationEnvironment(TexParser raw, EnvContext context) {
       }
     } else {
       if (cells.length != 1) {
-        throw ParseException('Too many columns in ${context.envName}');
+        throw ParseException(tr("Too many columns in {0}", [context.envName]));
       }
       children.addAll(cells.single.children);
     }
@@ -192,7 +192,7 @@ GreenNode _numberedEquationEnvironment(TexParser raw, EnvContext context) {
     final next = parser.fetch().text;
     if (next == '&') {
       if (!isAlign) {
-        throw ParseException('Too many columns in ${context.envName}');
+        throw ParseException(tr("Too many columns in {0}", [context.envName]));
       }
       parser.consume();
     } else if (next == r'\end') {
@@ -202,7 +202,9 @@ GreenNode _numberedEquationEnvironment(TexParser raw, EnvContext context) {
       break;
     } else if (next == r'\cr' && !singleRow) {
       final cr = parser.parseFunction(null, null, null);
-      if (cr is! CrNode) throw ParseException('Expected equation row break');
+      if (cr is! CrNode) {
+        throw ParseException(tr("Expected equation row break"));
+      }
       endRow();
       rowSpacings.add(cr.size ?? Measurement.zero);
       hlines.add(getHLines(parser).lastOrNull ?? MatrixSeparatorStyle.none);

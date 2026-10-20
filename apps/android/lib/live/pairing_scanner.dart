@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -60,7 +61,7 @@ class _PairingScannerPageState extends State<PairingScannerPage>
         })
         .catchError((Object _) {
           if (mounted && !_closed) {
-            setState(() => _notice = '無法開啟相機，請重試或返回貼上配對連結。');
+            setState(() => _notice = tr("無法開啟相機，請重試或返回貼上配對連結。"));
           }
         });
   }
@@ -98,7 +99,9 @@ class _PairingScannerPageState extends State<PairingScannerPage>
       }
       if (!valid) {
         if (_notice == null) {
-          setState(() => _notice = '這不是 pirc 配對 QR code，請掃描網頁「設定 → 裝置」顯示的配對碼。');
+          setState(
+            () => _notice = tr("這不是 pirc 配對 QR code，請掃描網頁「設定 → 裝置」顯示的配對碼。"),
+          );
         }
         continue;
       }
@@ -148,23 +151,25 @@ class _PairingScannerPageState extends State<PairingScannerPage>
               ),
               const SizedBox(height: 16),
               Text(
-                denied ? '需要相機權限才能掃描' : '無法開啟相機',
+                denied ? tr("需要相機權限才能掃描") : tr("無法開啟相機"),
                 style: Theme.of(context).textTheme.titleMedium,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
-                denied ? '只在掃描配對碼時使用相機。你也可以返回並貼上配對連結。' : '請確認相機可用，或返回並貼上配對連結。',
+                denied
+                    ? tr("只在掃描配對碼時使用相機。你也可以返回並貼上配對連結。")
+                    : tr("請確認相機可用，或返回並貼上配對連結。"),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              FilledButton(onPressed: _syncCamera, child: const Text('重試')),
+              FilledButton(onPressed: _syncCamera, child: Text(tr("重試"))),
               if (denied)
                 TextButton(
                   onPressed: () => guarded(context, () async {
                     await widget.gateway.call('appSettings');
                   }),
-                  child: const Text('前往系統設定'),
+                  child: Text(tr("前往系統設定")),
                 ),
             ],
           ),
@@ -174,60 +179,63 @@ class _PairingScannerPageState extends State<PairingScannerPage>
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('掃描配對碼'),
-      leading: IconButton(
-        tooltip: '取消掃描',
-        icon: const Icon(LucideIcons.x),
-        onPressed: () => Navigator.of(context).pop(),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(tr("掃描配對碼")),
+        leading: IconButton(
+          tooltip: tr("取消掃描"),
+          icon: const Icon(LucideIcons.x),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
-    ),
-    body: SafeArea(
-      child: Column(
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: MobileScanner(
-                  controller: camera,
-                  useAppLifecycleState: false,
-                  fit: BoxFit.contain,
-                  tapToFocus: true,
-                  onDetect: _detected,
-                  onDetectError: (_, _) {
-                    if (mounted && !_closed) {
-                      setState(() => _notice = '無法辨識配對碼，請重新對準。');
-                    }
-                  },
-                  errorBuilder: _error,
-                  placeholderBuilder: (context) => ColoredBox(
-                    color: palette(context)['surface.subtle'],
-                    child: const Center(child: Text('正在開啟相機…')),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: MobileScanner(
+                    controller: camera,
+                    useAppLifecycleState: false,
+                    fit: BoxFit.contain,
+                    tapToFocus: true,
+                    onDetect: _detected,
+                    onDetectError: (_, _) {
+                      if (mounted && !_closed) {
+                        setState(() => _notice = tr("無法辨識配對碼，請重新對準。"));
+                      }
+                    },
+                    errorBuilder: _error,
+                    placeholderBuilder: (context) => ColoredBox(
+                      color: palette(context)['surface.subtle'],
+                      child: Center(child: Text(tr("正在開啟相機…"))),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(
-              _notice ?? '將網頁「設定 → 裝置」的 QR code 放入畫面。',
-              textAlign: TextAlign.center,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                _notice ?? tr("將網頁「設定 → 裝置」的 QR code 放入畫面。"),
+                textAlign: TextAlign.center,
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextButton.icon(
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(LucideIcons.link),
-              label: const Text('返回貼上配對連結'),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(LucideIcons.link),
+                label: Text(tr("返回貼上配對連結")),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

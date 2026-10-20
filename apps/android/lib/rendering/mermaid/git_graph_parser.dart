@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'dart:math';
 
@@ -17,8 +18,8 @@ NativeGitGraphDiagram parseNativeMermaidGitGraph(
   Random? random,
 }) {
   if (source.length > 50000) {
-    throw const FormatException(
-      'GitGraph exceeds the default 50000 character limit.',
+    throw FormatException(
+      tr("GitGraph exceeds the default 50000 character limit."),
     );
   }
   final rng = random ?? Random(source.hashCode);
@@ -48,7 +49,9 @@ NativeGitGraphDiagram parseNativeMermaidGitGraph(
     'NORMAL' => NativeGitCommitType.normal,
     'REVERSE' => NativeGitCommitType.reverse,
     'HIGHLIGHT' => NativeGitCommitType.highlight,
-    _ => throw FormatException('Unsupported gitGraph commit type: $value'),
+    _ => throw FormatException(
+      tr("Unsupported gitGraph commit type: {0}", [value]),
+    ),
   };
 
   void appendCommit({
@@ -62,7 +65,7 @@ NativeGitGraphDiagram parseNativeMermaidGitGraph(
   }) {
     final commitId = id ?? makeId(sequence);
     if (commits.containsKey(commitId)) {
-      throw FormatException('Commit ID already exists: $commitId');
+      throw FormatException(tr("Commit ID already exists: {0}", [commitId]));
     }
     final commit = NativeGitGraphCommit(
       id: commitId,
@@ -89,14 +92,18 @@ NativeGitGraphDiagram parseNativeMermaidGitGraph(
     final lineNumber = lineIndex + 1;
     if (lines[lineIndex].trimLeft().startsWith('%%{')) {
       throw FormatException(
-        'GitGraph init directives are not supported (line $lineNumber).',
+        tr("GitGraph init directives are not supported (line {0}).", [
+          lineNumber,
+        ]),
       );
     }
     final line = _withoutComment(lines[lineIndex]).trim();
     if (line.isEmpty) continue;
     if (line.startsWith('%%{')) {
       throw FormatException(
-        'GitGraph init directives are not supported (line $lineNumber).',
+        tr("GitGraph init directives are not supported (line {0}).", [
+          lineNumber,
+        ]),
       );
     }
 
@@ -106,7 +113,9 @@ NativeGitGraphDiagram parseNativeMermaidGitGraph(
         caseSensitive: false,
       ).firstMatch(line);
       if (header == null) {
-        throw FormatException('Expected a gitGraph header (line $lineNumber).');
+        throw FormatException(
+          tr("Expected a gitGraph header (line {0}).", [lineNumber]),
+        );
       }
       final dir = header.group(1)?.toUpperCase();
       direction = switch (dir) {
@@ -123,7 +132,9 @@ NativeGitGraphDiagram parseNativeMermaidGitGraph(
       if (text.isEmpty) continue;
       if (text.startsWith('%%{')) {
         throw FormatException(
-          'GitGraph init directives are not supported (line $lineNumber).',
+          tr("GitGraph init directives are not supported (line {0}).", [
+            lineNumber,
+          ]),
         );
       }
       if (text.startsWith('%%')) continue;
@@ -154,7 +165,7 @@ NativeGitGraphDiagram parseNativeMermaidGitGraph(
       }
       if (RegExp(r'^accDescr\s*\{', caseSensitive: false).hasMatch(text)) {
         throw FormatException(
-          'Block-form accDescr is not supported (line $lineNumber).',
+          tr("Block-form accDescr is not supported (line {0}).", [lineNumber]),
         );
       }
 
@@ -302,18 +313,18 @@ NativeGitGraphDiagram parseNativeMermaidGitGraph(
         default:
           throw _lineError(
             lineNumber,
-            'Unsupported gitGraph command: $command',
+            tr("Unsupported gitGraph command: {0}", [command]),
           );
       }
 
       if (commits.length > 1000) {
-        throw _lineError(lineNumber, 'GitGraph exceeds 1000 commits.');
+        throw _lineError(lineNumber, tr("GitGraph exceeds 1000 commits."));
       }
     }
   }
 
   if (!headerSeen) {
-    throw const FormatException('Missing gitGraph header.');
+    throw FormatException(tr("Missing gitGraph header."));
   }
   final sortedBranches = branchHeads.keys.toList()
     ..sort((a, b) {
@@ -341,7 +352,7 @@ NativeGitGraphDiagram parseNativeMermaidGitGraph(
 }
 
 FormatException _lineError(int line, String message) =>
-    FormatException('$message (line $line).');
+    FormatException(tr("{0} (line {1}).", [message, line]));
 
 String _withoutComment(String input) {
   var quote = '';
@@ -420,7 +431,7 @@ List<String> _tokens(String input) {
       }
       final raw = input.substring(start, index);
       if (raw.length < 2 || raw[raw.length - 1] != quote) {
-        throw const FormatException('Unclosed quoted gitGraph value.');
+        throw FormatException(tr("Unclosed quoted gitGraph value."));
       }
       tokens.add(_decodeQuoted(raw));
       continue;
@@ -443,7 +454,7 @@ String _decodeQuoted(String value) {
     try {
       return jsonDecode(value) as String;
     } on FormatException {
-      throw const FormatException('Invalid quoted gitGraph string.');
+      throw FormatException(tr("Invalid quoted gitGraph string."));
     }
   }
   final inner = value.substring(1, value.length - 1);
@@ -456,17 +467,21 @@ Map<String, List<String>> _options(List<String> tokens, Set<String> allowed) {
     final token = tokens[index];
     final separator = token.indexOf(':');
     if (separator < 1) {
-      throw FormatException('Expected a gitGraph option, got: $token');
+      throw FormatException(
+        tr("Expected a gitGraph option, got: {0}", [token]),
+      );
     }
     final key = token.substring(0, separator).toLowerCase();
     if (!allowed.contains(key)) {
-      throw FormatException('Unsupported gitGraph option: $key');
+      throw FormatException(tr("Unsupported gitGraph option: {0}", [key]));
     }
     var value = token.substring(separator + 1);
     if (value.isEmpty) {
       index++;
       if (index >= tokens.length) {
-        throw FormatException('Missing value for gitGraph option: $key');
+        throw FormatException(
+          tr("Missing value for gitGraph option: {0}", [key]),
+        );
       }
       value = tokens[index];
     }
@@ -479,7 +494,7 @@ String? _single(Map<String, List<String>> options, String key) {
   final values = options[key];
   if (values == null) return null;
   if (values.length != 1) {
-    throw FormatException('GitGraph option repeated: $key');
+    throw FormatException(tr("GitGraph option repeated: {0}", [key]));
   }
   return values.single;
 }

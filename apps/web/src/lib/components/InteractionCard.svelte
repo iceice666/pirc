@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import { ArrowRight, CircleHelp, Clock3, X } from '@lucide/svelte';
   import { rovingFocus } from '../a11y';
   import { api } from '../api';
@@ -114,13 +116,14 @@
   <header>
     <span class="interaction-icon"><CircleHelp size={18} /></span>
     <div>
-      <span class="eyebrow">Your input is needed</span>
+      <span class="eyebrow">{tr('Your input is needed')}</span>
       <h3 id="interaction-{interaction.id}">{interaction.title}</h3>
       {#if interaction.description}<p>{interaction.description}</p>{/if}
       {#if relayed}
         <p class="relayed">
-          <span>From {relayed.sessionName} ({relayed.workspace})</span>
-          {#if onopen}<button type="button" onclick={() => onopen(relayed.sessionId)}>Open</button
+          <span>{tr('From {0} ({1})', [relayed.sessionName, relayed.workspace])}</span>
+          {#if onopen}<button type="button" onclick={() => onopen(relayed.sessionId)}
+              >{tr('Open')}</button
             >{/if}
         </p>
       {/if}
@@ -164,30 +167,31 @@
     </div>
   {:else if interaction.kind === 'input'}
     <label>
-      <span class="sr-only">Your answer</span>
+      <span class="sr-only">{tr('Your answer')}</span>
       <input
         bind:value
-        placeholder={interaction.placeholder ?? 'Type your answer…'}
+        placeholder={interaction.placeholder ?? tr('Type your answer…')}
         disabled={locked}
       />
     </label>
   {:else if interaction.kind === 'editor'}
     <label>
       <span class="field-label"
-        >Response {interaction.language ? `· ${interaction.language}` : ''}</span
+        >{tr('Response {0}', [interaction.language ? `· ${interaction.language}` : ''])}</span
       >
       <textarea class="editor" bind:value rows="8" spellcheck="false" disabled={locked}></textarea>
     </label>
   {:else if !modelChoice && !interaction.id.startsWith('memory:')}
-    <p class="confirm-copy">Choose whether the agent should continue with this action.</p>
+    <p class="confirm-copy">{tr('Choose whether the agent should continue with this action.')}</p>
   {/if}
   {#if userRequestChoice}
     <label class="user-request-choice">
       <input type="checkbox" bind:checked={asUserRequest} disabled={locked} />
       <span
         >{userRequestChoice.label}<small
-          >Auto mode then reads the task as if you had typed it in that session, so an operation the
-          task names exactly is not stopped as dangerous. Only for the run the task starts.</small
+          >{tr(
+            'Auto mode then reads the task as if you had typed it in that session, so an operation the task names exactly is not stopped as dangerous. Only for the run the task starts.',
+          )}</small
         ></span
       >
     </label>
@@ -197,7 +201,7 @@
     {#if interaction.expiresAt}
       <span class="expires"
         ><Clock3 size={14} />
-        {expired ? 'Expired' : 'Expires'}
+        {expired ? tr('Expired') : tr('Expires')}
         {new Date(interaction.expiresAt).toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
@@ -207,8 +211,8 @@
     <!-- A delegation's model sits between the expiry and the buttons; it moves above them when the card is narrow. -->
     {#if modelChoice}
       <div class="model-choice">
-        <select class="model-select" bind:value={model} disabled={locked} aria-label="Model">
-          <option value="">Default model</option>
+        <select class="model-select" bind:value={model} disabled={locked} aria-label={tr('Model')}>
+          <option value="">{tr('Default model')}</option>
           {#each models as option (modelKey(option))}
             <option value={modelKey(option)}>{option.displayName} · {option.provider}</option>
           {/each}
@@ -216,9 +220,11 @@
             <option value={model}>{JSON.parse(model).join(' / ')}</option>
           {/if}
         </select>
-        <select bind:value={thinking} disabled={locked} aria-label="Thinking">
-          <option value="">Default thinking</option>
-          {#each THINKING as level (level)}<option value={level}>Thinking: {level}</option>{/each}
+        <select bind:value={thinking} disabled={locked} aria-label={tr('Thinking')}>
+          <option value="">{tr('Default thinking')}</option>
+          {#each THINKING as level (level)}<option value={level}
+              >{tr('Thinking: {0}', [level])}</option
+            >{/each}
         </select>
       </div>
     {/if}
@@ -237,7 +243,7 @@
         disabled={locked}
       >
         <X size={15} />
-        {interaction.kind === 'confirm' ? (interaction.cancelLabel ?? 'No') : 'Cancel'}
+        {interaction.kind === 'confirm' ? (interaction.cancelLabel ?? tr('No')) : tr('Cancel')}
       </button>
       <button
         class="button dark small"
@@ -245,7 +251,9 @@
         onclick={submit}
         disabled={locked || (interaction.kind === 'select' && selected.length === 0)}
       >
-        {interaction.kind === 'confirm' ? (interaction.confirmLabel ?? 'Yes, continue') : 'Submit'}
+        {interaction.kind === 'confirm'
+          ? (interaction.confirmLabel ?? tr('Yes, continue'))
+          : tr('Submit')}
         <ArrowRight size={15} />
       </button>
     </div>

@@ -5,9 +5,17 @@ import 'common.dart';
 import 'web_controls.dart';
 
 class ComposerOption {
-  const ComposerOption(this.value, this.label, [this.detail]);
+  const ComposerOption(
+    this.value,
+    this.label, [
+    this.detail,
+    this.icon,
+    this.warning = false,
+  ]);
   final String value, label;
   final String? detail;
+  final IconData? icon;
+  final bool warning;
 }
 
 /// Native anchored selector; keeps the selected value visible and restores focus.
@@ -106,6 +114,13 @@ class _ComposerSelectState extends State<ComposerSelect> {
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
+            leadingIcon: option.icon == null
+                ? null
+                : Icon(
+                    option.icon,
+                    size: 18,
+                    color: option.warning ? colors['status.danger'] : null,
+                  ),
             trailingIcon: SizedBox(
               width: 15,
               child: option.value == widget.value
@@ -117,7 +132,14 @@ class _ComposerSelectState extends State<ComposerSelect> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(option.label, style: webText(context, size: 13)),
+                  Text(
+                    option.label,
+                    style: webText(
+                      context,
+                      size: 13,
+                      color: option.warning ? 'status.danger' : 'text.primary',
+                    ),
+                  ),
                   if (option.detail != null) ...[
                     const SizedBox(height: 3),
                     Text(
@@ -160,6 +182,14 @@ class _ComposerSelectState extends State<ComposerSelect> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (selected?.icon != null) ...[
+                Icon(
+                  selected!.icon,
+                  size: 15,
+                  color: colors[widget.foregroundColorKey],
+                ),
+                const SizedBox(width: 6),
+              ],
               Flexible(
                 child: Text(
                   selected?.label ??

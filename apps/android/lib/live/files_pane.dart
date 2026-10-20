@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:convert';
 import '../rendering/svg_dimensions.dart';
@@ -17,9 +18,11 @@ import 'web_controls.dart';
 
 String fileSize(dynamic bytes) {
   if (bytes is! num) return '';
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  if (bytes < 1024) return tr("{0} B", [bytes]);
+  if (bytes < 1024 * 1024) {
+    return tr("{0} KB", [(bytes / 1024).toStringAsFixed(1)]);
+  }
+  return tr("{0} MB", [(bytes / (1024 * 1024)).toStringAsFixed(1)]);
 }
 
 double _measurePanelText(BuildContext context, String value, TextStyle style) {
@@ -256,253 +259,272 @@ class _FilesPaneState extends State<FilesPane> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: state,
-    builder: (context, _) {
-      final file = state.file;
-      final crumbs = state.dir.isEmpty ? <String>[] : state.dir.split('/');
-      final isMarkdown =
-          file != null &&
-          RegExp(
-            r'\.(md|markdown|mdx)$',
-            caseSensitive: false,
-          ).hasMatch('${file['path']}');
-      final hasPreview =
-          file != null &&
-          file['binary'] != true &&
-          (isMarkdown || file['image'] != null);
-      final showImage =
-          file?['image'] != null && (state.rendered || file?['binary'] == true);
-      final nextImageKey = obj(file?['image'])['dataBase64'] as String?;
-      if (imageKey != nextImageKey) {
-        imageKey = nextImageKey;
-        imageSize = null;
-      }
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final rowWidth = _directoryRowsWidth(
-            state.entries,
-            math.max(0, constraints.maxWidth - 24),
-          );
-          return ListView(
-            key: const PageStorageKey('native-files-scroll'),
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-            children: [
-              if (file == null) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: Semantics(
-                        label: 'Folder',
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              crumb('workspace', '', crumbs.isEmpty),
-                              for (var i = 0; i < crumbs.length; i++) ...[
-                                const SizedBox(width: 2),
-                                Icon(
-                                  LucideIcons.chevronRight,
-                                  size: 12,
-                                  color: palette(context)['text.muted'],
-                                ),
-                                const SizedBox(width: 2),
-                                crumb(
-                                  crumbs[i],
-                                  crumbs.take(i + 1).join('/'),
-                                  i == crumbs.length - 1,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    WebIconButton(
-                      LucideIcons.refreshCw,
-                      'Refresh',
-                      size: 28,
-                      iconSize: 15,
-                      onPressed: state.loading ? null : state.reload,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (state.error != null) ...[
-                  Semantics(
-                    liveRegion: true,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: palette(context)['status.dangerSoft'],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        state.error!,
-                        style: webText(
-                          context,
-                          size: 12.5,
-                          color: 'status.danger',
-                        ).copyWith(height: 1.45),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                if (state.dir.isNotEmpty) ...[
-                  entry(
-                    '..',
-                    'dir',
-                    null,
-                    rowWidth,
-                    () => state.list(
-                      crumbs.take(crumbs.length - 1).join('/'),
-                      navigate: true,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                ],
-                for (final e in state.entries) ...[
-                  entry('${e['name']}', '${e['kind']}', e['size'], rowWidth, () {
-                    final path =
-                        '${state.dir.isEmpty ? '' : '${state.dir}/'}${e['name']}';
-                    if (e['kind'] == 'dir') {
-                      state.list(path, navigate: true);
-                    } else {
-                      state.open(FileTarget(path));
-                    }
-                  }),
-                  const SizedBox(height: 1),
-                ],
-                if (!state.loading &&
-                    state.entries.isEmpty &&
-                    state.error == null)
-                  empty('Empty folder.'),
-                if (state.truncated) empty('Showing the first 2,000 entries.'),
-              ] else ...[
-                Row(
-                  children: [
-                    WebIconButton(
-                      LucideIcons.arrowLeft,
-                      'Back to folder',
-                      size: 28,
-                      iconSize: 16,
-                      onPressed: state.closeFile,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Tooltip(
-                        message: '${file['path']}',
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(text: '${file['path']}'),
-                              if (state.line != null)
-                                TextSpan(
-                                  text:
-                                      ':${state.line}${state.endLine! > state.line! ? '-${state.endLine}' : ''}',
-                                  style: TextStyle(
-                                    color: palette(context)['text.faint'],
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return AnimatedBuilder(
+      animation: state,
+      builder: (context, _) {
+        final file = state.file;
+        final crumbs = state.dir.isEmpty ? <String>[] : state.dir.split('/');
+        final isMarkdown =
+            file != null &&
+            RegExp(
+              r'\.(md|markdown|mdx)$',
+              caseSensitive: false,
+            ).hasMatch('${file['path']}');
+        final hasPreview =
+            file != null &&
+            file['binary'] != true &&
+            (isMarkdown || file['image'] != null);
+        final showImage =
+            file?['image'] != null &&
+            (state.rendered || file?['binary'] == true);
+        final nextImageKey = obj(file?['image'])['dataBase64'] as String?;
+        if (imageKey != nextImageKey) {
+          imageKey = nextImageKey;
+          imageSize = null;
+        }
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final rowWidth = _directoryRowsWidth(
+              state.entries,
+              math.max(0, constraints.maxWidth - 24),
+            );
+            return ListView(
+              key: const PageStorageKey('native-files-scroll'),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+              children: [
+                if (file == null) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Semantics(
+                          label: tr("Folder"),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                crumb('workspace', '', crumbs.isEmpty),
+                                for (var i = 0; i < crumbs.length; i++) ...[
+                                  const SizedBox(width: 2),
+                                  Icon(
+                                    LucideIcons.chevronRight,
+                                    size: 12,
+                                    color: palette(context)['text.muted'],
                                   ),
-                                ),
-                            ],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textDirection: TextDirection.rtl,
-                          textAlign: TextAlign.left,
-                          style: webText(
-                            context,
-                            size: 13,
-                            weight: FontWeight.w600,
+                                  const SizedBox(width: 2),
+                                  crumb(
+                                    crumbs[i],
+                                    crumbs.take(i + 1).join('/'),
+                                    i == crumbs.length - 1,
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    if (hasPreview) ...[
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       WebIconButton(
-                        state.rendered ? LucideIcons.code : LucideIcons.eye,
-                        state.rendered ? 'Show source' : 'Show rendered',
+                        LucideIcons.refreshCw,
+                        tr("Refresh"),
                         size: 28,
                         iconSize: 15,
-                        onPressed: state.toggle,
+                        onPressed: state.loading ? null : state.reload,
                       ),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${fileSize(file['size'])}${showImage && imageSize != null ? ' · ${imageSize!.width.toInt()} × ${imageSize!.height.toInt()}' : ''} · modified ${modified(file['modifiedAt'])}',
-                  style: webText(
-                    context,
-                    size: 12,
-                    color: 'text.muted',
-                  ).copyWith(height: 14 / 12),
-                ),
-                const SizedBox(height: 8),
-                if (showImage)
-                  NativeFileImage(
-                    key: ValueKey(imageKey),
-                    image: obj(file['image']),
-                    alt: '${file['path']}',
-                    onSize: (size) {
-                      if (mounted && imageKey == nextImageKey) {
-                        setState(() => imageSize = size);
-                      }
-                    },
-                  )
-                else if (file['binary'] == true)
-                  empty(
-                    file['imageTooLarge'] == true
-                        ? 'Image too large to preview.'
-                        : 'Binary file — not shown.',
-                  )
-                else if (isMarkdown && state.rendered)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 2,
-                      vertical: 4,
+                  ),
+                  const SizedBox(height: 8),
+                  if (state.error != null) ...[
+                    Semantics(
+                      liveRegion: true,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette(context)['status.dangerSoft'],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          state.error!,
+                          style: webText(
+                            context,
+                            size: 12.5,
+                            color: 'status.danger',
+                          ).copyWith(height: 1.45),
+                        ),
+                      ),
                     ),
-                    child: RichTextBody(
-                      '${file['content'] ?? ''}',
-                      gateway: widget.controller.gateway,
-                      fontSize: 14,
-                      linkBase: '${file['path']}'
-                          .split('/')
-                          .take('${file['path']}'.split('/').length - 1)
-                          .join('/'),
-                      onFile: (href) {
-                        final target = parseFileTarget(href);
-                        if (target != null) state.open(target);
+                    const SizedBox(height: 8),
+                  ],
+                  if (state.dir.isNotEmpty) ...[
+                    entry(
+                      '..',
+                      'dir',
+                      null,
+                      rowWidth,
+                      () => state.list(
+                        crumbs.take(crumbs.length - 1).join('/'),
+                        navigate: true,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                  ],
+                  for (final e in state.entries) ...[
+                    entry(
+                      '${e['name']}',
+                      '${e['kind']}',
+                      e['size'],
+                      rowWidth,
+                      () {
+                        final path =
+                            '${state.dir.isEmpty ? '' : '${state.dir}/'}${e['name']}';
+                        if (e['kind'] == 'dir') {
+                          state.list(path, navigate: true);
+                        } else {
+                          state.open(FileTarget(path));
+                        }
                       },
                     ),
-                  )
-                else
-                  NativeFileSource(
-                    key: ValueKey(file['path']),
-                    file: file,
-                    line: state.line,
-                    endLine: state.endLine,
-                    focusRevision: state.focusRevision,
+                    const SizedBox(height: 1),
+                  ],
+                  if (!state.loading &&
+                      state.entries.isEmpty &&
+                      state.error == null)
+                    empty(tr("Empty folder.")),
+                  if (state.truncated)
+                    empty(tr("Showing the first 2,000 entries.")),
+                ] else ...[
+                  Row(
+                    children: [
+                      WebIconButton(
+                        LucideIcons.arrowLeft,
+                        tr("Back to folder"),
+                        size: 28,
+                        iconSize: 16,
+                        onPressed: state.closeFile,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Tooltip(
+                          message: '${file['path']}',
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(text: '${file['path']}'),
+                                if (state.line != null)
+                                  TextSpan(
+                                    text:
+                                        ':${state.line}${state.endLine! > state.line! ? '-${state.endLine}' : ''}',
+                                    style: TextStyle(
+                                      color: palette(context)['text.faint'],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textDirection: TextDirection.rtl,
+                            textAlign: TextAlign.left,
+                            style: webText(
+                              context,
+                              size: 13,
+                              weight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (hasPreview) ...[
+                        const SizedBox(width: 6),
+                        WebIconButton(
+                          state.rendered ? LucideIcons.code : LucideIcons.eye,
+                          state.rendered
+                              ? tr("Show source")
+                              : tr("Show rendered"),
+                          size: 28,
+                          iconSize: 15,
+                          onPressed: state.toggle,
+                        ),
+                      ],
+                    ],
                   ),
-                if (file['truncated'] == true &&
-                    !showImage &&
-                    file['binary'] != true) ...[
                   const SizedBox(height: 8),
-                  empty('Showing the first 1 MB.'),
+                  Text(
+                    tr("{0}{1} · modified {2}", [
+                      fileSize(file['size']),
+                      showImage && imageSize != null
+                          ? ' · ${imageSize!.width.toInt()} × ${imageSize!.height.toInt()}'
+                          : '',
+                      modified(file['modifiedAt']),
+                    ]),
+                    style: webText(
+                      context,
+                      size: 12,
+                      color: 'text.muted',
+                    ).copyWith(height: 14 / 12),
+                  ),
+                  const SizedBox(height: 8),
+                  if (showImage)
+                    NativeFileImage(
+                      key: ValueKey(imageKey),
+                      image: obj(file['image']),
+                      alt: '${file['path']}',
+                      onSize: (size) {
+                        if (mounted && imageKey == nextImageKey) {
+                          setState(() => imageSize = size);
+                        }
+                      },
+                    )
+                  else if (file['binary'] == true)
+                    empty(
+                      file['imageTooLarge'] == true
+                          ? tr("Image too large to preview.")
+                          : tr("Binary file — not shown."),
+                    )
+                  else if (isMarkdown && state.rendered)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 4,
+                      ),
+                      child: RichTextBody(
+                        '${file['content'] ?? ''}',
+                        gateway: widget.controller.gateway,
+                        fontSize: 14,
+                        linkBase: '${file['path']}'
+                            .split('/')
+                            .take('${file['path']}'.split('/').length - 1)
+                            .join('/'),
+                        onFile: (href) {
+                          final target = parseFileTarget(href);
+                          if (target != null) state.open(target);
+                        },
+                      ),
+                    )
+                  else
+                    NativeFileSource(
+                      key: ValueKey(file['path']),
+                      file: file,
+                      line: state.line,
+                      endLine: state.endLine,
+                      focusRevision: state.focusRevision,
+                    ),
+                  if (file['truncated'] == true &&
+                      !showImage &&
+                      file['binary'] != true) ...[
+                    const SizedBox(height: 8),
+                    empty(tr("Showing the first 1 MB.")),
+                  ],
                 ],
               ],
-            ],
-          );
-        },
-      );
-    },
-  );
+            );
+          },
+        );
+      },
+    );
+  }
 }
 
 class NativeFileSource extends StatefulWidget {
@@ -563,6 +585,7 @@ class _NativeFileSourceState extends State<NativeFileSource> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final source = '${widget.file['content'] ?? ''}',
         language = fileLanguage('${widget.file['path']}') ?? '';
     final colors = palette(context), scaler = MediaQuery.textScalerOf(context);
@@ -741,67 +764,75 @@ class _NativeFileImageState extends State<NativeFileImage> {
   }
 
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(12),
-      boxShadow: [
-        BoxShadow(color: palette(context)['web.line'], spreadRadius: 1),
-      ],
-    ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: CustomPaint(
-        painter: _Checkerboard(palette(context)['web.bg-hover']),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: math.max(80, MediaQuery.sizeOf(context).height - 190),
-          ),
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: LayoutBuilder(
-                builder: (context, bounds) {
-                  if (failed) {
-                    return Text(
-                      'Unable to preview ${widget.alt}.',
-                      style: webText(context, size: 13, color: 'status.danger'),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(color: palette(context)['web.line'], spreadRadius: 1),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: CustomPaint(
+          painter: _Checkerboard(palette(context)['web.bg-hover']),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: math.max(80, MediaQuery.sizeOf(context).height - 190),
+            ),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: LayoutBuilder(
+                  builder: (context, bounds) {
+                    if (failed) {
+                      return Text(
+                        tr("Unable to preview {0}.", [widget.alt]),
+                        style: webText(
+                          context,
+                          size: 13,
+                          color: 'status.danger',
+                        ),
+                      );
+                    }
+                    if (size == null || bytes == null) {
+                      return const SizedBox(height: 24);
+                    }
+                    final width = math.min(size!.width, bounds.maxWidth),
+                        height = size!.height * width / size!.width;
+                    return Center(
+                      child: SizedBox(
+                        width: width,
+                        height: height,
+                        child: isSvg
+                            ? SvgPicture.memory(
+                                bytes!,
+                                semanticsLabel: widget.alt,
+                                width: width,
+                                height: height,
+                                errorBuilder: (_, _, _) => Text(
+                                  tr("Unable to preview {0}.", [widget.alt]),
+                                ),
+                              )
+                            : Image.memory(
+                                bytes!,
+                                semanticLabel: widget.alt,
+                                width: width,
+                                height: height,
+                                fit: BoxFit.contain,
+                              ),
+                      ),
                     );
-                  }
-                  if (size == null || bytes == null) {
-                    return const SizedBox(height: 24);
-                  }
-                  final width = math.min(size!.width, bounds.maxWidth),
-                      height = size!.height * width / size!.width;
-                  return Center(
-                    child: SizedBox(
-                      width: width,
-                      height: height,
-                      child: isSvg
-                          ? SvgPicture.memory(
-                              bytes!,
-                              semanticsLabel: widget.alt,
-                              width: width,
-                              height: height,
-                              errorBuilder: (_, _, _) =>
-                                  Text('Unable to preview ${widget.alt}.'),
-                            )
-                          : Image.memory(
-                              bytes!,
-                              semanticLabel: widget.alt,
-                              width: width,
-                              height: height,
-                              fit: BoxFit.contain,
-                            ),
-                    ),
-                  );
-                },
+                  },
+                ),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _Checkerboard extends CustomPainter {

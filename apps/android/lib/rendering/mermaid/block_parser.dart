@@ -1,10 +1,11 @@
+import '../../l10n/app_i18n.dart';
 import 'block_model.dart';
 
 /// Parses a documented subset of pinned Mermaid 11.17.2 block-beta syntax.
 /// Unsupported style/class statements fail explicitly rather than being lost.
 NativeMermaidBlockDiagram parseNativeMermaidBlock(String source) {
   if (source.length > 50000) {
-    throw const FormatException('Block diagram exceeds 50000 characters.');
+    throw FormatException(tr("Block diagram exceeds 50000 characters."));
   }
   final lines = source
       .replaceAll('\r\n', '\n')
@@ -16,13 +17,13 @@ NativeMermaidBlockDiagram parseNativeMermaidBlock(String source) {
     if (line.isNotEmpty) {
       headerIndex = i;
       if (line != 'block-beta' && line != 'block') {
-        throw const FormatException('Expected a block-beta diagram header.');
+        throw FormatException(tr("Expected a block-beta diagram header."));
       }
       break;
     }
   }
   if (headerIndex < 0) {
-    throw const FormatException('Missing block-beta diagram header.');
+    throw FormatException(tr("Missing block-beta diagram header."));
   }
 
   var generatedId = 0;
@@ -67,7 +68,9 @@ int _parseContainer(
     }
     if (line == 'end') {
       if (!nested) {
-        throw FormatException('Unexpected end at line ${lineNumber + 1}.');
+        throw FormatException(
+          tr("Unexpected end at line {0}.", [lineNumber + 1]),
+        );
       }
       return lineNumber + 1;
     }
@@ -76,7 +79,9 @@ int _parseContainer(
           ? ''
           : line.substring('block:'.length).trim();
       if (rawId.contains(RegExp(r'\s')) || rawId.contains(':')) {
-        throw FormatException('Invalid block ID at line ${lineNumber + 1}.');
+        throw FormatException(
+          tr("Invalid block ID at line {0}.", [lineNumber + 1]),
+        );
       }
       final id = rawId.isEmpty ? 'generated-block-${nextGeneratedId()}' : rawId;
       final group = _BlockBuilder(
@@ -114,14 +119,16 @@ int _parseContainer(
         line.startsWith('linkStyle ') ||
         line.startsWith('interpolate ')) {
       throw FormatException(
-        'Block classes and style directives are unsupported (line ${lineNumber + 1}).',
+        tr("Block classes and style directives are unsupported (line {0}).", [
+          lineNumber + 1,
+        ]),
       );
     }
     if (line.startsWith('columns')) {
       final match = RegExp(r'^columns\s+(auto|\d+)$').firstMatch(line);
       if (match == null) {
         throw FormatException(
-          'Invalid columns setting at line ${lineNumber + 1}.',
+          tr("Invalid columns setting at line {0}.", [lineNumber + 1]),
         );
       }
       parent.columns = match.group(1) == 'auto'
@@ -132,7 +139,7 @@ int _parseContainer(
     }
     if (line.startsWith('%%{')) {
       throw FormatException(
-        'Mermaid directives are unsupported (line ${lineNumber + 1}).',
+        tr("Mermaid directives are unsupported (line {0}).", [lineNumber + 1]),
       );
     }
 
@@ -148,7 +155,7 @@ int _parseContainer(
   }
   if (nested) {
     throw FormatException(
-      'Block has no matching end (opened before line ${start + 1}).',
+      tr("Block has no matching end (opened before line {0}).", [start + 1]),
     );
   }
   return lineNumber;
@@ -172,7 +179,7 @@ void _parseNodeAndEdgeLine(
       cursor.skipWhitespace();
       if (!cursor.done && _readOperator(cursor, allowStartOnly: true) != null) {
         throw FormatException(
-          'A space block cannot be connected (line $lineNumber).',
+          tr("A space block cannot be connected (line {0}).", [lineNumber]),
         );
       }
       continue;
@@ -193,14 +200,18 @@ void _parseNodeAndEdgeLine(
       if (!operator.complete) {
         cursor.skipWhitespace();
         if (!cursor.peek('"')) {
-          throw FormatException('Incomplete block edge at line $lineNumber.');
+          throw FormatException(
+            tr("Incomplete block edge at line {0}.", [lineNumber]),
+          );
         }
         label = cursor.readQuoted();
         cursor.skipWhitespace();
         final second = _readOperator(cursor, allowStartOnly: false);
         if (second == null || !second.complete) {
           throw FormatException(
-            'Expected a complete edge after its label at line $lineNumber.',
+            tr("Expected a complete edge after its label at line {0}.", [
+              lineNumber,
+            ]),
           );
         }
         finalOperator = second.value;
@@ -209,7 +220,7 @@ void _parseNodeAndEdgeLine(
       cursor.skipWhitespace();
       if (cursor.done) {
         throw FormatException(
-          'Block edge has no destination at line $lineNumber.',
+          tr("Block edge has no destination at line {0}.", [lineNumber]),
         );
       }
       final destination = _register(
@@ -220,7 +231,9 @@ void _parseNodeAndEdgeLine(
       if (destination.shape == NativeMermaidBlockShape.space ||
           destination.shape == NativeMermaidBlockShape.composite) {
         throw FormatException(
-          'Block edges must connect ordinary nodes (line $lineNumber).',
+          tr("Block edges must connect ordinary nodes (line {0}).", [
+            lineNumber,
+          ]),
         );
       }
       final baseId = '${from.id}-${destination.id}';
@@ -283,7 +296,7 @@ _BlockBuilder _readNode(_BlockCursor cursor, int Function() nextGeneratedId) {
         }
         if (numberStart == cursor.index) {
           throw FormatException(
-            'Expected a space count at line ${cursor.line}.',
+            tr("Expected a space count at line {0}.", [cursor.line]),
           );
         }
         count = int.parse(cursor.text.substring(numberStart, cursor.index));
@@ -303,7 +316,9 @@ _BlockBuilder _readNode(_BlockCursor cursor, int Function() nextGeneratedId) {
     cursor.index++;
   }
   if (idStart == cursor.index) {
-    throw FormatException('Expected a block ID at line ${cursor.line}.');
+    throw FormatException(
+      tr("Expected a block ID at line {0}.", [cursor.line]),
+    );
   }
   final id = cursor.text.substring(idStart, cursor.index);
   var shape = NativeMermaidBlockShape.rectangle;
@@ -322,13 +337,15 @@ _BlockBuilder _readNode(_BlockCursor cursor, int Function() nextGeneratedId) {
     cursor.skipWhitespace();
     if (!cursor.peek('"')) {
       throw FormatException(
-        'Expected a quoted block label at line ${cursor.line}.',
+        tr("Expected a quoted block label at line {0}.", [cursor.line]),
       );
     }
     label = cursor.readQuoted();
     cursor.skipWhitespace();
     if (!cursor.startsWith(shapeSyntax.suffix)) {
-      throw FormatException('Unclosed block shape at line ${cursor.line}.');
+      throw FormatException(
+        tr("Unclosed block shape at line {0}.", [cursor.line]),
+      );
     }
     cursor.index += shapeSyntax.suffix.length;
   } else {
@@ -344,13 +361,15 @@ _BlockBuilder _readNode(_BlockCursor cursor, int Function() nextGeneratedId) {
       cursor.index++;
     }
     if (spanStart == cursor.index) {
-      throw FormatException('Expected a block span at line ${cursor.line}.');
+      throw FormatException(
+        tr("Expected a block span at line {0}.", [cursor.line]),
+      );
     }
     span = int.parse(cursor.text.substring(spanStart, cursor.index));
   }
   if (label.contains('<') && label.contains('>')) {
     throw FormatException(
-      'HTML block labels are not supported (line ${cursor.line}).',
+      tr("HTML block labels are not supported (line {0}).", [cursor.line]),
     );
   }
   return _BlockBuilder(
@@ -527,7 +546,7 @@ class _BlockCursor {
 
   String readQuoted() {
     if (!peek('"')) {
-      throw FormatException('Expected quoted text at line $line.');
+      throw FormatException(tr("Expected quoted text at line {0}.", [line]));
     }
     index++;
     final result = StringBuffer();
@@ -542,7 +561,7 @@ class _BlockCursor {
         result.write(char);
       }
     }
-    throw FormatException('Unclosed quoted text at line $line.');
+    throw FormatException(tr("Unclosed quoted text at line {0}.", [line]));
   }
 }
 

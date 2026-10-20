@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'journey_model.dart';
 
 /// Parses the bounded Mermaid 11.17.2 user-journey grammar used by the native
@@ -11,8 +12,8 @@ import 'journey_model.dart';
 NativeMermaidJourneyDiagram parseNativeMermaidJourney(String source) {
   final normalized = source.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   if (normalized.length > 50000) {
-    throw const FormatException(
-      'Mermaid journey exceeds the default 50000 character limit',
+    throw FormatException(
+      tr("Mermaid journey exceeds the default 50000 character limit"),
     );
   }
   final sections = <NativeMermaidJourneySection>[];
@@ -24,8 +25,9 @@ NativeMermaidJourneyDiagram parseNativeMermaidJourney(String source) {
   var currentSection = '';
   var headerSeen = false;
 
-  Never invalid(int line, String message) =>
-      throw FormatException('Parse error on line $line: $message');
+  Never invalid(int line, String message) => throw FormatException(
+    tr("Parse error on line {0}: {1}", [line, message]),
+  );
 
   final lines = normalized.split('\n');
   for (var index = 0; index < lines.length; index++) {
@@ -34,7 +36,7 @@ NativeMermaidJourneyDiagram parseNativeMermaidJourney(String source) {
     final line = sourceLine.trimLeft();
     if (line.trim().isEmpty) continue;
     if (line.startsWith('%%{')) {
-      invalid(lineNumber, 'Journey init directives are not supported');
+      invalid(lineNumber, tr("Journey init directives are not supported"));
     }
     if (line.startsWith('#') ||
         (line.startsWith('%') && !line.startsWith('%{'))) {
@@ -46,18 +48,23 @@ NativeMermaidJourneyDiagram parseNativeMermaidJourney(String source) {
       caseSensitive: false,
     ).matchAsPrefix(line);
     if (header != null) {
-      if (headerSeen) invalid(lineNumber, 'Unexpected second journey header');
+      if (headerSeen) {
+        invalid(lineNumber, tr("Unexpected second journey header"));
+      }
       if (line.substring(header.end).trim().isNotEmpty) {
-        invalid(lineNumber, 'Unexpected text after journey header');
+        invalid(lineNumber, tr("Unexpected text after journey header"));
       }
       headerSeen = true;
       continue;
     }
-    if (!headerSeen) invalid(lineNumber, 'Expected journey header');
+    if (!headerSeen) invalid(lineNumber, tr("Expected journey header"));
 
     if (RegExp(r'^title\s', caseSensitive: false).hasMatch(line)) {
       if (line.contains(';')) {
-        invalid(lineNumber, 'Semicolon-separated statements are unsupported');
+        invalid(
+          lineNumber,
+          tr("Semicolon-separated statements are unsupported"),
+        );
       }
       final token = _beforeComment(line);
       // The pinned parser's action uses substr(6), preserving extra spaces.
@@ -109,7 +116,7 @@ NativeMermaidJourneyDiagram parseNativeMermaidJourney(String source) {
           descriptionLines.add(blockLine);
         }
       }
-      if (!foundEnd) invalid(lineNumber, 'Unterminated accDescr block');
+      if (!foundEnd) invalid(lineNumber, tr("Unterminated accDescr block"));
       accessibleDescription = descriptionLines
           .join('\n')
           .trim()
@@ -119,11 +126,14 @@ NativeMermaidJourneyDiagram parseNativeMermaidJourney(String source) {
 
     if (RegExp(r'^section\s', caseSensitive: false).hasMatch(line)) {
       if (line.contains(';')) {
-        invalid(lineNumber, 'Semicolon-separated statements are unsupported');
+        invalid(
+          lineNumber,
+          tr("Semicolon-separated statements are unsupported"),
+        );
       }
       final token = _beforeComment(line);
       if (token.contains(':')) {
-        invalid(lineNumber, 'Section names cannot contain a colon');
+        invalid(lineNumber, tr("Section names cannot contain a colon"));
       }
       // The pinned Jison action uses substr(8), preserving extra spaces.
       currentSection = token.length > 8 ? token.substring(8) : '';
@@ -138,24 +148,24 @@ NativeMermaidJourneyDiagram parseNativeMermaidJourney(String source) {
     }
 
     if (line.contains(';')) {
-      invalid(lineNumber, 'Semicolon-separated statements are unsupported');
+      invalid(lineNumber, tr("Semicolon-separated statements are unsupported"));
     }
     final taskLine = _beforeComment(line);
     final colon = taskLine.indexOf(':');
-    if (colon <= 0) invalid(lineNumber, 'Expected a scored task');
+    if (colon <= 0) invalid(lineNumber, tr("Expected a scored task"));
     final label = taskLine.substring(0, colon);
-    if (label.trim().isEmpty) invalid(lineNumber, 'Task label is empty');
+    if (label.trim().isEmpty) invalid(lineNumber, tr("Task label is empty"));
     final values = taskLine.substring(colon + 1).split(':');
     final scoreText = values.first.trim();
     final score = _number(scoreText);
     if (score == null || !score.isFinite) {
-      invalid(lineNumber, 'Task score must be a finite number');
+      invalid(lineNumber, tr("Task score must be a finite number"));
     }
     final taskActors = values.length > 1
         ? values[1].split(',').map((actor) => actor.trim()).toList()
         : const <String>[];
     if (taskActors.any((actor) => actor.isEmpty)) {
-      invalid(lineNumber, 'Task actor names cannot be empty');
+      invalid(lineNumber, tr("Task actor names cannot be empty"));
     }
     actors.addAll(taskActors);
     tasks.add(
@@ -171,7 +181,7 @@ NativeMermaidJourneyDiagram parseNativeMermaidJourney(String source) {
   }
 
   if (!headerSeen) {
-    throw const FormatException('Missing Mermaid journey header');
+    throw FormatException(tr("Missing Mermaid journey header"));
   }
   final sortedActors = actors.toList()..sort();
   return NativeMermaidJourneyDiagram(

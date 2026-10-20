@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 /** Time formatting shared by the sidebar, panels and jobs menu. */
 
 type Instant = string | number | Date;
@@ -7,10 +8,10 @@ const ms = (value: Instant) => new Date(value).getTime();
 /** "just now", "5m ago", "3h ago", "2d ago", then the date (Git history). */
 export function ago(time: Instant, now = Date.now()): string {
   const seconds = Math.max(0, (now - ms(time)) / 1000);
-  if (seconds < 60) return 'just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 30 * 86_400) return `${Math.floor(seconds / 86_400)}d ago`;
+  if (seconds < 60) return tr('just now');
+  if (seconds < 3600) return tr('{0}m ago', [Math.floor(seconds / 60)]);
+  if (seconds < 86_400) return tr('{0}h ago', [Math.floor(seconds / 3600)]);
+  if (seconds < 30 * 86_400) return tr('{0}d ago', [Math.floor(seconds / 86_400)]);
   return new Date(time).toLocaleDateString();
 }
 
@@ -29,8 +30,8 @@ export function duration(start?: Instant, end?: Instant, now = Date.now()): stri
   const to = end ? ms(end) : now;
   const seconds = Math.max(0, Math.round((to - ms(start)) / 1000));
   if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+  if (seconds < 3600) return tr('{0}m {1}s', [Math.floor(seconds / 60), seconds % 60]);
+  return tr('{0}h {1}m', [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60)]);
 }
 
 /** Precise elapsed time between two instants, "420 ms", "1.2 s", "14 s" (tool calls). */
@@ -38,5 +39,7 @@ export function elapsed(start?: Instant, end?: Instant): string {
   if (!start || !end) return '';
   const delta = ms(end) - ms(start);
   if (!(delta >= 0)) return '';
-  return delta < 1000 ? `${delta} ms` : `${(delta / 1000).toFixed(delta < 10_000 ? 1 : 0)} s`;
+  return delta < 1000
+    ? tr('{0} ms', [delta])
+    : tr('{0} s', [(delta / 1000).toFixed(delta < 10_000 ? 1 : 0)]);
 }

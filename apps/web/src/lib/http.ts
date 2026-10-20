@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 /** JSON-over-fetch shared by the gateway clients (`api.ts`, `panel-api.ts`). */
 
 export class ApiError extends Error {
@@ -20,7 +21,7 @@ export interface RequestOptions {
 }
 
 const defaultMessage = (body: any, status: number): string =>
-  body?.error?.message ?? body?.message ?? `Request failed (${status})`;
+  body?.error?.message ?? body?.message ?? tr('Request failed ({0})', [status]);
 
 /**
  * Fetch `path` with the session cookie and parse the JSON reply. Non-2xx

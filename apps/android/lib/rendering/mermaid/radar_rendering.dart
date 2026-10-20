@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -153,7 +154,7 @@ NativeMermaidRadarLayout layoutNativeMermaidRadar(
 }) {
   final config = diagram.config;
   if (!width.isFinite || width <= 0) {
-    throw const FormatException('Native radar viewport width must be positive');
+    throw FormatException(tr("Native radar viewport width must be positive"));
   }
   if (!config.width.isFinite ||
       !config.height.isFinite ||
@@ -177,25 +178,25 @@ NativeMermaidRadarLayout layoutNativeMermaidRadar(
       !config.totalHeight.isFinite ||
       config.totalWidth <= 0 ||
       config.totalHeight <= 0) {
-    throw const FormatException(
-      'Native radar chart dimensions must be positive',
-    );
+    throw FormatException(tr("Native radar chart dimensions must be positive"));
   }
   if (diagram.axes.length < 3 || diagram.curves.isEmpty) {
-    throw const FormatException('Native radar chart requires axes and curves');
+    throw FormatException(tr("Native radar chart requires axes and curves"));
   }
   if (diagram.axes.length > 24 || diagram.curves.length > 12) {
-    throw const FormatException('Native radar chart exceeds its source bounds');
+    throw FormatException(tr("Native radar chart exceeds its source bounds"));
   }
   if (diagram.options.ticks < 0 || diagram.options.ticks > 32) {
-    throw const FormatException(
-      'Native radar tick count must be between 0 and 32',
+    throw FormatException(
+      tr("Native radar tick count must be between 0 and 32"),
     );
   }
   for (final curve in diagram.curves) {
     if (curve.entries.length != diagram.axes.length ||
         curve.entries.any((value) => !value.isFinite || value < 0)) {
-      throw FormatException('Radar curve ${curve.name} has invalid values');
+      throw FormatException(
+        tr("Radar curve {0} has invalid values", [curve.name]),
+      );
     }
   }
 
@@ -216,7 +217,7 @@ NativeMermaidRadarLayout layoutNativeMermaidRadar(
           .reduce((a, b) => a > b ? a : b);
   final minValue = diagram.options.min;
   if (!maxValue.isFinite || !minValue.isFinite || maxValue <= minValue) {
-    throw const FormatException('Radar max must be greater than min');
+    throw FormatException(tr("Radar max must be greater than min"));
   }
 
   final axes = <NativeMermaidRadarAxisLayout>[];
@@ -276,7 +277,11 @@ NativeMermaidRadarLayout layoutNativeMermaidRadar(
     final curve = diagram.curves[curveIndex];
     if (curve.entries.length != count) {
       throw FormatException(
-        'Radar curve ${curve.name} has ${curve.entries.length} values for $count axes',
+        tr("Radar curve {0} has {1} values for {2} axes", [
+          curve.name,
+          curve.entries.length,
+          count,
+        ]),
       );
     }
     final points = <Offset>[];
@@ -386,31 +391,34 @@ class NativeMermaidRadar extends StatelessWidget {
   final bool dark;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final candidateWidth = constraints.maxWidth;
-      final width = candidateWidth.isFinite && candidateWidth > 0
-          ? candidateWidth
-          : diagram.config.totalWidth;
-      final layout = layoutNativeMermaidRadar(
-        diagram,
-        width: width,
-        dark: dark,
-        fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
-      );
-      return Semantics(
-        container: true,
-        label: diagram.semanticsLabel,
-        child: ExcludeSemantics(
-          child: SizedBox(
-            width: layout.size.width,
-            height: layout.size.height,
-            child: CustomPaint(painter: _NativeMermaidRadarPainter(layout)),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final candidateWidth = constraints.maxWidth;
+        final width = candidateWidth.isFinite && candidateWidth > 0
+            ? candidateWidth
+            : diagram.config.totalWidth;
+        final layout = layoutNativeMermaidRadar(
+          diagram,
+          width: width,
+          dark: dark,
+          fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
+        );
+        return Semantics(
+          container: true,
+          label: diagram.semanticsLabel,
+          child: ExcludeSemantics(
+            child: SizedBox(
+              width: layout.size.width,
+              height: layout.size.height,
+              child: CustomPaint(painter: _NativeMermaidRadarPainter(layout)),
+            ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
 class _NativeMermaidRadarPainter extends CustomPainter {

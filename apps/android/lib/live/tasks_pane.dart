@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -14,6 +15,7 @@ class PanelChip extends StatelessWidget {
   final String? status, tooltip;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final p = palette(context);
     final active = [
           'running',
@@ -359,213 +361,218 @@ class _TasksPaneState extends State<TasksPane> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: state,
-    builder: (context, _) {
-      final selected = state.selected, data = state.data;
-      final now = widget.clock?.call() ?? DateTime.now();
-      final children = <Widget>[
-        if (selected != null) ...[
-          Row(
-            children: [
-              WebIconButton(
-                LucideIcons.arrowLeft,
-                'Back',
-                iconSize: 16,
-                onPressed: state.back,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  '${selected['id']}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: mono(13, weight: FontWeight.w600),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return AnimatedBuilder(
+      animation: state,
+      builder: (context, _) {
+        final selected = state.selected, data = state.data;
+        final now = widget.clock?.call() ?? DateTime.now();
+        final children = <Widget>[
+          if (selected != null) ...[
+            Row(
+              children: [
+                WebIconButton(
+                  LucideIcons.arrowLeft,
+                  tr("Back"),
+                  iconSize: 16,
+                  onPressed: state.back,
                 ),
-              ),
-              const SizedBox(width: 6),
-              PanelChip(
-                '${selected['status']}'.replaceFirst('_', ' '),
-                status: selected['status'] as String?,
-              ),
-              const SizedBox(width: 6),
-              WebIconButton(
-                LucideIcons.refreshCw,
-                'Refresh output',
-                onPressed: state.outputLoading ? null : state.refreshOutput,
-              ),
-            ],
-          ),
-          pre('${selected['command']}'),
-          if (state.outputError != null) error(state.outputError!),
-          pre(
-            state.output.isEmpty ? 'No output yet.' : state.output,
-            output: true,
-          ),
-        ] else if (widget.controller.panelData.error != null && data == null)
-          error(widget.controller.panelData.error!)
-        else if (data == null)
-          empty('Loading…')
-        else if (data['agentRunning'] != true &&
-            state.tasks.isEmpty &&
-            state.agents.isEmpty)
-          empty(
-            'The agent is not running. Background tasks, subagents and teammates appear here while it is.',
-          )
-        else ...[
-          group('Background tasks', state.tasks.length),
-          if (state.tasks.isEmpty)
-            empty('No background tasks.')
-          else
-            list([
-              for (final task in state.tasks)
-                row(
-                  LucideIcons.squareTerminal,
-                  [
-                    title('${task['command']}'),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          '${task['id']}',
-                          style: mono(
-                            11.5,
-                            color: 'text.muted',
-                            cssNormalLineHeight: true,
-                          ),
-                        ),
-                        Text(
-                          '· ${jobDuration(task, now)}'
-                          '${task['exitCode'] == null ? '' : ' · exit ${task['exitCode']}'}',
-                          style: webText(
-                            context,
-                            size: 11.5,
-                            color: 'text.muted',
-                          ).copyWith(height: kTextHeightNone),
-                        ),
-                      ],
-                    ),
-                  ],
-                  [
-                    if (task['tty'] == true) ('tty', null, null),
-                    if (task['notifyOn'] != null && task['notifyOn'] != '')
-                      (
-                        'watch ${task['matches'] ?? 0}',
-                        null,
-                        'notify_on /${task['notifyOn']}/',
-                      ),
-                    (
-                      '${task['status']}'.replaceFirst('_', ' '),
-                      task['status'] as String?,
-                      null,
-                    ),
-                  ],
-                  onTap: () => state.open(task),
-                ),
-            ]),
-          if (state.subagents.isNotEmpty) ...[
-            group('Subagents', state.subagents.length),
-            list([for (final a in state.subagents) agent(a, true)]),
-          ],
-          if (state.board.isNotEmpty) ...[
-            group('Task board', state.board.length),
-            list([
-              for (final task in state.board)
-                row(
-                  LucideIcons.listChecks,
-                  [
-                    title('#${task['id']} ${task['subject']}'),
-                    sub(
-                      '${task['owner'] == null || task['owner'] == '' ? 'unowned' : 'owner ${task['owner']}'}${(task['blockedBy'] as List? ?? []).isEmpty ? '' : ' · after ${(task['blockedBy'] as List).map((id) => '#$id').join(', ')}'}${task['blocked'] == true ? ' · blocked' : ''}',
-                    ),
-                  ],
-                  [
-                    (
-                      '${task['status']}'.replaceFirst('_', ' '),
-                      task['status'] as String?,
-                      null,
-                    ),
-                  ],
-                ),
-            ]),
-          ],
-          group('Teammates', state.teammates.length),
-          if (state.teammates.isEmpty)
-            empty('No teammates spawned.')
-          else
-            list([for (final a in state.teammates) agent(a, false)]),
-          if (state.activity.isNotEmpty) ...[
-            group('Recent team activity'),
-            list([
-              for (final event in state.activity)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${selected['id']}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: mono(13, weight: FontWeight.w600),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+                ),
+                const SizedBox(width: 6),
+                PanelChip(
+                  '${selected['status']}'.replaceFirst('_', ' '),
+                  status: selected['status'] as String?,
+                ),
+                const SizedBox(width: 6),
+                WebIconButton(
+                  LucideIcons.refreshCw,
+                  tr("Refresh output"),
+                  onPressed: state.outputLoading ? null : state.refreshOutput,
+                ),
+              ],
+            ),
+            pre('${selected['command']}'),
+            if (state.outputError != null) error(state.outputError!),
+            pre(
+              state.output.isEmpty ? tr("No output yet.") : state.output,
+              output: true,
+            ),
+          ] else if (widget.controller.panelData.error != null && data == null)
+            error(widget.controller.panelData.error!)
+          else if (data == null)
+            empty(tr("Loading…"))
+          else if (data['agentRunning'] != true &&
+              state.tasks.isEmpty &&
+              state.agents.isEmpty)
+            empty(
+              tr(
+                "The agent is not running. Background tasks, subagents and teammates appear here while it is.",
+              ),
+            )
+          else ...[
+            group(tr("Background tasks"), state.tasks.length),
+            if (state.tasks.isEmpty)
+              empty(tr("No background tasks."))
+            else
+              list([
+                for (final task in state.tasks)
+                  row(
+                    LucideIcons.squareTerminal,
+                    [
+                      title('${task['command']}'),
                       Wrap(
-                        spacing: 8,
+                        spacing: 4,
                         runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
-                            time(event['time']),
-                            style: webText(
-                              context,
-                              size: 12,
+                            '${task['id']}',
+                            style: mono(
+                              11.5,
                               color: 'text.muted',
-                            ).copyWith(height: 14 / 12),
+                              cssNormalLineHeight: true,
+                            ),
                           ),
                           Text(
-                            '${event['kind']}',
+                            '· ${jobDuration(task, now)}'
+                            '${task['exitCode'] == null ? '' : ' · exit ${task['exitCode']}'}',
                             style: webText(
                               context,
-                              size: 12,
-                              weight: FontWeight.w700,
-                            ).copyWith(height: 14 / 12),
+                              size: 11.5,
+                              color: 'text.muted',
+                            ).copyWith(height: kTextHeightNone),
                           ),
-                          if (event['from'] != null || event['to'] != null)
+                        ],
+                      ),
+                    ],
+                    [
+                      if (task['tty'] == true) ('tty', null, null),
+                      if (task['notifyOn'] != null && task['notifyOn'] != '')
+                        (
+                          tr("watch {0}", [task['matches'] ?? 0]),
+                          null,
+                          'notify_on /${task['notifyOn']}/',
+                        ),
+                      (
+                        '${task['status']}'.replaceFirst('_', ' '),
+                        task['status'] as String?,
+                        null,
+                      ),
+                    ],
+                    onTap: () => state.open(task),
+                  ),
+              ]),
+            if (state.subagents.isNotEmpty) ...[
+              group(tr("Subagents"), state.subagents.length),
+              list([for (final a in state.subagents) agent(a, true)]),
+            ],
+            if (state.board.isNotEmpty) ...[
+              group(tr("Task board"), state.board.length),
+              list([
+                for (final task in state.board)
+                  row(
+                    LucideIcons.listChecks,
+                    [
+                      title('#${task['id']} ${task['subject']}'),
+                      sub(
+                        '${task['owner'] == null || task['owner'] == '' ? 'unowned' : 'owner ${task['owner']}'}${(task['blockedBy'] as List? ?? []).isEmpty ? '' : ' · after ${(task['blockedBy'] as List).map((id) => '#$id').join(', ')}'}${task['blocked'] == true ? ' · blocked' : ''}',
+                      ),
+                    ],
+                    [
+                      (
+                        '${task['status']}'.replaceFirst('_', ' '),
+                        task['status'] as String?,
+                        null,
+                      ),
+                    ],
+                  ),
+              ]),
+            ],
+            group(tr("Teammates"), state.teammates.length),
+            if (state.teammates.isEmpty)
+              empty(tr("No teammates spawned."))
+            else
+              list([for (final a in state.teammates) agent(a, false)]),
+            if (state.activity.isNotEmpty) ...[
+              group(tr("Recent team activity")),
+              list([
+                for (final event in state.activity)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
                             Text(
-                              '${event['from'] ?? ''}${event['to'] == null ? '' : ' → ${event['to']}'}',
+                              time(event['time']),
                               style: webText(
                                 context,
                                 size: 12,
+                                color: 'text.muted',
                               ).copyWith(height: 14 / 12),
                             ),
-                        ],
-                      ),
-                      if (event['body'] != null && event['body'] != '')
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            normalText('${event['body']}'),
-                            style: webText(
-                              context,
-                              size: 12,
-                              color: 'text.secondary',
-                            ).copyWith(height: 14 / 12),
-                          ),
+                            Text(
+                              '${event['kind']}',
+                              style: webText(
+                                context,
+                                size: 12,
+                                weight: FontWeight.w700,
+                              ).copyWith(height: 14 / 12),
+                            ),
+                            if (event['from'] != null || event['to'] != null)
+                              Text(
+                                '${event['from'] ?? ''}${event['to'] == null ? '' : ' → ${event['to']}'}',
+                                style: webText(
+                                  context,
+                                  size: 12,
+                                ).copyWith(height: 14 / 12),
+                              ),
+                          ],
                         ),
-                    ],
+                        if (event['body'] != null && event['body'] != '')
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              normalText('${event['body']}'),
+                              style: webText(
+                                context,
+                                size: 12,
+                                color: 'text.secondary',
+                              ).copyWith(height: 14 / 12),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-            ]),
+              ]),
+            ],
           ],
-        ],
-      ];
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-        children: [
-          for (final (i, w) in children.indexed) ...[
-            if (i > 0) const SizedBox(height: 8),
-            w,
+        ];
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+          children: [
+            for (final (i, w) in children.indexed) ...[
+              if (i > 0) const SizedBox(height: 8),
+              w,
+            ],
           ],
-        ],
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }

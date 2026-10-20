@@ -101,12 +101,12 @@ internal class HtmlMediaPlayer(
                 )
             }
             val bytes = resource.bytes
-            require(bytes.size <= MAX_HTML_MEDIA_BYTES) { "Media exceeds the 32 MiB limit" }
+            require(bytes.size <= MAX_HTML_MEDIA_BYTES) { NativeI18n.text("Media exceeds the 32 MiB limit") }
             accountContextMutationLock.withLock { runtime.validateHtmlMediaAccess(mediaAccess) }
             ensureOpenCurrent(job, ticket)
 
             val directory = File(activity.cacheDir, "native-html-media")
-            check(directory.isDirectory || directory.mkdirs()) { "Unable to create media cache" }
+            check(directory.isDirectory || directory.mkdirs()) { NativeI18n.text("Unable to create media cache") }
             val mediaFile = File.createTempFile("html-media-", ".bin", directory)
             file = mediaFile
             withContext(Dispatchers.IO) {
@@ -177,7 +177,7 @@ internal class HtmlMediaPlayer(
             }
             createdPlayer.setOnErrorListener { _, what, extra ->
                 if (isCurrent(textureId, mediaEntry)) {
-                    mediaEntry.error = "Unable to play this media ($what/$extra)."
+                    mediaEntry.error = NativeI18n.text("Unable to play this media ({0}/{1}).", what, extra)
                     mediaEntry.prepared.completeExceptionally(IllegalStateException(mediaEntry.error))
                 }
                 true
@@ -236,7 +236,7 @@ internal class HtmlMediaPlayer(
             when (action) {
                 "status" -> Unit
                 "play" -> synchronized(foregroundLock) {
-                    check(foreground) { "HTML media cannot play while the app is backgrounded" }
+                    check(foreground) { NativeI18n.text("HTML media cannot play while the app is backgrounded") }
                     checkCurrentEntry(id, entry)
                     if (!media.isPlaying) media.start()
                 }
@@ -299,7 +299,7 @@ internal class HtmlMediaPlayer(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            throw IllegalStateException("Unable to read loaded media")
+            throw IllegalStateException(NativeI18n.text("Unable to read loaded media"))
         }
         accountContextMutationLock.withLock {
             runtime.validateHtmlMediaAccess(entry.access)
@@ -399,7 +399,7 @@ internal class HtmlMediaPlayer(
     private fun requireOwner(entry: Entry, contextId: String?) {
         val requestedOwner = contextId ?: ContextRegistry.PRIMARY_CONTEXT_ID
         if (entry.access.contextLease.contextId != requestedOwner) {
-            throw ApiException(409, "context_expired", "HTML media belongs to another native context.")
+            throw ApiException(409, "context_expired", NativeI18n.text("HTML media belongs to another native context."))
         }
     }
 
@@ -461,7 +461,7 @@ internal class HtmlMediaPlayer(
                 // MediaPlayer exposes no cancellation API for an in-flight seek. Releasing
                 // the entry is the only way to guarantee it cannot block future seeks.
                 detach(id, entry)?.let(::release)
-                throw IllegalStateException("HTML media seek timed out")
+                throw IllegalStateException(NativeI18n.text("HTML media seek timed out"))
             } catch (error: CancellationException) {
                 abandonSeek(entry, waitingFor)
                 throw error
@@ -493,7 +493,7 @@ internal class HtmlMediaPlayer(
         try {
             entry.player.seekTo(operation.position, MediaPlayer.SEEK_CLOSEST)
         } catch (_: Exception) {
-            failSeek(id, entry, operation, IllegalStateException("Unable to seek HTML media"))
+            failSeek(id, entry, operation, IllegalStateException(NativeI18n.text("Unable to seek HTML media")))
         }
     }
 

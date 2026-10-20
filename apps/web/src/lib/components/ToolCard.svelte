@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import { untrack } from 'svelte';
   import {
     BookOpen,
@@ -107,7 +109,11 @@
     (tool.input && typeof tool.input === 'object' ? tool.input : {}) as Record<string, any>,
   );
   let statusLabel = $derived(
-    tool.status === 'running' ? 'Running' : tool.status === 'failed' ? 'Failed' : 'Done',
+    tool.status === 'running'
+      ? tr('Running')
+      : tool.status === 'failed'
+        ? tr('Failed')
+        : tr('Done'),
   );
   let Icon = $derived(
     tool.name === 'ptc'
@@ -131,7 +137,11 @@
   let summary = $derived(describe(tool.name, args));
   let title = $derived(
     tool.title ??
-      (tool.name === 'ptc' ? 'Script' : tool.name === 'ptc_docs' ? 'Capability docs' : tool.name),
+      (tool.name === 'ptc'
+        ? tr('Script')
+        : tool.name === 'ptc_docs'
+          ? tr('Capability docs')
+          : tool.name),
   );
   /** A question or approval this operation waits for (the card itself sits at the bottom). */
   const waiting = $derived(
@@ -206,8 +216,8 @@
     {#if waiting}
       <span class="tool-waiting" title={waiting.title}
         ><Hand size={13} aria-hidden="true" />{waiting.kind === 'confirm'
-          ? 'Waiting for approval'
-          : 'Waiting for your answer'}</span
+          ? tr('Waiting for approval')
+          : tr('Waiting for your answer')}</span
       >
     {/if}
     {#if duration}<span class="tool-duration">{duration}</span>{/if}
@@ -226,10 +236,10 @@
     <div class="write-blocked" role="note">
       <Lock size={15} aria-hidden="true" />
       <p>
-        <strong>Write blocked.</strong>
+        <strong>{tr('Write blocked.')}</strong>
         <span
-          >“{blocked.holderName}” is writing to <code>{blocked.path}</code> right now. The agent was
-          told to wait until that run finishes.</span
+          >{tr('“{0}” is writing to', [blocked.holderName])} <code>{blocked.path}</code>
+          {tr('right now. The agent was told to wait until that run finishes.')}</span
         >
       </p>
       {#if holder && holder.id !== app.activeSessionId}
@@ -253,7 +263,7 @@
   {/if}
   {#if tool.operations?.length}
     <!-- What the script ran, each a call of its own. -->
-    <div class="tool-operations" role="list" aria-label="Operations">
+    <div class="tool-operations" role="list" aria-label={tr('Operations')}>
       {#each tool.operations as operation (operation.id)}<div role="listitem">
           <ToolCard tool={operation} nested />
         </div>{/each}
@@ -263,25 +273,25 @@
     <div class="tool-content">
       {#if tool.name === 'ptc' && typeof args.code === 'string'}
         <section class="tool-section">
-          <span class="tool-label">Script</span>
+          <span class="tool-label">{tr('Script')}</span>
           <pre><code class="hljs">{@html scriptHtml}</code></pre>
         </section>
       {/if}
       {#if tool.name === 'bash' && typeof args.command === 'string'}
         <section class="tool-section">
-          <span class="tool-label">Command</span>
+          <span class="tool-label">{tr('Command')}</span>
           <pre class="tool-command"><code class="hljs">{@html commandHtml}</code></pre>
         </section>
       {/if}
       {#if tool.name === 'write' && typeof args.content === 'string'}
         <section class="tool-section">
-          <span class="tool-label">Content</span>
+          <span class="tool-label">{tr('Content')}</span>
           <pre><code class="hljs">{@html contentHtml}</code></pre>
         </section>
       {/if}
       {#if tool.diff}
         <section class="tool-section">
-          <span class="tool-label">Diff</span>
+          <span class="tool-label">{tr('Diff')}</span>
           <pre class="tool-diff">{#each diffLines as line}<span
                 class:add={line.startsWith('+')}
                 class:del={line.startsWith('-')}
@@ -290,7 +300,7 @@
         </section>
       {:else if pendingEdits.length}
         <section class="tool-section">
-          <span class="tool-label">Edits</span>
+          <span class="tool-label">{tr('Edits')}</span>
           <pre
             class="tool-diff">{#each pendingEdits as edit}{#each String(edit.oldText ?? '').split('\n') as line}<span
                   class="del">-{line}{'\n'}</span
@@ -301,14 +311,18 @@
       {/if}
       {#if extraInput !== undefined}
         <section class="tool-section">
-          <span class="tool-label">Input</span>
+          <span class="tool-label">{tr('Input')}</span>
           <pre><code class="hljs">{@html inputHtml}</code></pre>
         </section>
       {/if}
       {#if tool.output}
         <section class="tool-section">
           <span class="tool-label"
-            >{tool.status === 'failed' ? 'Error' : tool.name === 'ptc' ? 'Result' : 'Output'}</span
+            >{tool.status === 'failed'
+              ? tr('Error')
+              : tool.name === 'ptc'
+                ? tr('Result')
+                : tr('Output')}</span
           >
           <pre class:error={tool.status === 'failed'}><code class="hljs">{@html outputHtml}</code
             ></pre>
@@ -318,14 +332,14 @@
         <section class="tool-section tool-images">
           {#each tool.images as image}<img
               src={image.url}
-              alt="Tool output"
+              alt={tr('Tool output')}
               loading="lazy"
             />{/each}
         </section>
       {/if}
       {#if !tool.output && !tool.diff && !tool.images?.length}
         <p class="tool-empty">
-          {tool.status === 'running' ? 'Waiting for output…' : 'No output returned.'}
+          {tool.status === 'running' ? tr('Waiting for output…') : tr('No output returned.')}
         </p>
       {/if}
     </div>

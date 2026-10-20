@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 // Mermaid 11.17.2 classic timeline layout port. Upstream MIT notice is in
 // MERMAID_MIT_LICENSE.txt. Paths and positions derive from the live model and
 // native text metrics; product code never reads reference fixtures or SVGs.
@@ -132,7 +133,7 @@ NativeTimelineLayout layoutNativeMermaidTimeline(
   double? svgXHeight,
 }) {
   if (!width.isFinite || width <= 0) {
-    throw const FormatException('Timeline width must be positive');
+    throw FormatException(tr("Timeline width must be positive"));
   }
   final style = TextStyle(
     fontFamily: fontFamily,
@@ -487,110 +488,117 @@ class NativeMermaidTimeline extends StatelessWidget {
   final NativeMermaidTimelineDiagram diagram;
   final bool dark;
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final typography =
-          Theme.of(context).extension<NativeTimelineTypography>() ??
-          const NativeTimelineTypography();
-      final layout = layoutNativeMermaidTimeline(
-        diagram,
-        width: constraints.maxWidth,
-        dark: dark,
-        fontFamily:
-            typography.fontFamily ??
-            Theme.of(context).textTheme.bodyMedium?.fontFamily,
-        letterSpacing: typography.letterSpacing,
-        titleFontSize: typography.titleFontSize,
-        titleLetterSpacing: typography.titleLetterSpacing,
-        svgXHeight: typography.svgXHeight,
-      );
-      return Semantics(
-        container: true,
-        label: diagram.accessibleTitle.isEmpty ? null : diagram.accessibleTitle,
-        value: diagram.accessibleDescription.isEmpty
-            ? null
-            : diagram.accessibleDescription,
-        child: Center(
-          child: SizedBox(
-            width: layout.size.width,
-            height: layout.size.height,
-            child: FittedBox(
-              child: SizedBox(
-                width: layout.viewBox.width,
-                height: layout.viewBox.height,
-                child: SelectionArea(
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: CustomPaint(
-                          painter: NativeTimelinePainter(layout),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final typography =
+            Theme.of(context).extension<NativeTimelineTypography>() ??
+            const NativeTimelineTypography();
+        final layout = layoutNativeMermaidTimeline(
+          diagram,
+          width: constraints.maxWidth,
+          dark: dark,
+          fontFamily:
+              typography.fontFamily ??
+              Theme.of(context).textTheme.bodyMedium?.fontFamily,
+          letterSpacing: typography.letterSpacing,
+          titleFontSize: typography.titleFontSize,
+          titleLetterSpacing: typography.titleLetterSpacing,
+          svgXHeight: typography.svgXHeight,
+        );
+        return Semantics(
+          container: true,
+          label: diagram.accessibleTitle.isEmpty
+              ? null
+              : diagram.accessibleTitle,
+          value: diagram.accessibleDescription.isEmpty
+              ? null
+              : diagram.accessibleDescription,
+          child: Center(
+            child: SizedBox(
+              width: layout.size.width,
+              height: layout.size.height,
+              child: FittedBox(
+                child: SizedBox(
+                  width: layout.viewBox.width,
+                  height: layout.viewBox.height,
+                  child: SelectionArea(
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: NativeTimelinePainter(layout),
+                          ),
                         ),
-                      ),
-                      for (final node in layout.nodes)
-                        for (final line in node.geometry.lines)
-                          if (line.paintText.isNotEmpty)
-                            Positioned(
-                              left:
-                                  node.position.dx +
-                                  node.geometry.textTransform.dx +
-                                  line.glyphBounds.left -
-                                  layout.viewBox.left,
-                              top:
-                                  node.position.dy +
-                                  node.geometry.textTransform.dy +
-                                  line.glyphBounds.top -
-                                  layout.viewBox.top,
-                              width: line.glyphBounds.width,
-                              height: line.glyphBounds.height,
-                              child: Baseline(
-                                baseline: line.baseline - line.glyphBounds.top,
-                                baselineType: TextBaseline.alphabetic,
-                                child: Text(
-                                  line.paintText,
-                                  softWrap: false,
-                                  overflow: TextOverflow.visible,
-                                  maxLines: 1,
-                                  textScaler: TextScaler.noScaling,
-                                  style: layout.textStyle.copyWith(
-                                    color: _brightness(
-                                      _timelineTextColor(dark),
-                                      node.event,
+                        for (final node in layout.nodes)
+                          for (final line in node.geometry.lines)
+                            if (line.paintText.isNotEmpty)
+                              Positioned(
+                                left:
+                                    node.position.dx +
+                                    node.geometry.textTransform.dx +
+                                    line.glyphBounds.left -
+                                    layout.viewBox.left,
+                                top:
+                                    node.position.dy +
+                                    node.geometry.textTransform.dy +
+                                    line.glyphBounds.top -
+                                    layout.viewBox.top,
+                                width: line.glyphBounds.width,
+                                height: line.glyphBounds.height,
+                                child: Baseline(
+                                  baseline:
+                                      line.baseline - line.glyphBounds.top,
+                                  baselineType: TextBaseline.alphabetic,
+                                  child: Text(
+                                    line.paintText,
+                                    softWrap: false,
+                                    overflow: TextOverflow.visible,
+                                    maxLines: 1,
+                                    textScaler: TextScaler.noScaling,
+                                    style: layout.textStyle.copyWith(
+                                      color: _brightness(
+                                        _timelineTextColor(dark),
+                                        node.event,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                      if (layout.title != null)
-                        Positioned(
-                          left: layout.title!.bounds.left - layout.viewBox.left,
-                          top: layout.title!.bounds.top - layout.viewBox.top,
-                          width: layout.title!.bounds.width,
-                          height: layout.title!.bounds.height,
-                          child: Baseline(
-                            baseline:
-                                layout.title!.position.dy -
-                                layout.title!.bounds.top,
-                            baselineType: TextBaseline.alphabetic,
-                            child: Text(
-                              layout.title!.text,
-                              softWrap: false,
-                              overflow: TextOverflow.visible,
-                              maxLines: 1,
-                              textScaler: TextScaler.noScaling,
-                              style: layout.title!.style,
+                        if (layout.title != null)
+                          Positioned(
+                            left:
+                                layout.title!.bounds.left - layout.viewBox.left,
+                            top: layout.title!.bounds.top - layout.viewBox.top,
+                            width: layout.title!.bounds.width,
+                            height: layout.title!.bounds.height,
+                            child: Baseline(
+                              baseline:
+                                  layout.title!.position.dy -
+                                  layout.title!.bounds.top,
+                              baselineType: TextBaseline.alphabetic,
+                              child: Text(
+                                layout.title!.text,
+                                softWrap: false,
+                                overflow: TextOverflow.visible,
+                                maxLines: 1,
+                                textScaler: TextScaler.noScaling,
+                                style: layout.title!.style,
+                              ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
 class NativeTimelinePainter extends CustomPainter {

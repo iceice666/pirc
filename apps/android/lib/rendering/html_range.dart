@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -93,7 +94,7 @@ class NativeHtmlRangeState extends ChangeNotifier {
       throw ArgumentError.value(
         sanitizedHtml,
         'sanitizedHtml',
-        'Must be the exact fragment used to create this range state.',
+        tr("Must be the exact fragment used to create this range state."),
       );
     }
     return _annotatedHtml;
@@ -476,7 +477,7 @@ class NativeHtmlRangeState extends ChangeNotifier {
 
   _RangeRecord _recordFor(String key) {
     final record = _records[key];
-    if (record == null) throw StateError('Unknown HTML range: $key');
+    if (record == null) throw StateError(tr("Unknown HTML range: {0}", [key]));
     return record;
   }
 
@@ -732,6 +733,7 @@ class NativeHtmlRangeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     if (!control.visible) return const SizedBox.shrink();
     return Align(
       alignment: Alignment.centerLeft,

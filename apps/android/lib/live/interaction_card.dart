@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -19,8 +20,10 @@ String? relayedFromLabel(Json question) {
   if (relayed['sessionId'] is! String) return null;
   final name = '${relayed['sessionName'] ?? ''}'.trim();
   final workspace = '${relayed['workspace'] ?? ''}'.trim();
-  return 'From ${name.isEmpty ? 'a delegated session' : name}'
-      '${workspace.isEmpty ? '' : ' ($workspace)'}';
+  return tr("From {0}{1}", [
+    name.isEmpty ? 'a delegated session' : name,
+    workspace.isEmpty ? '' : ' ($workspace)',
+  ]);
 }
 
 /// The web InteractionCard's presentation and local answer draft. No transport.
@@ -415,10 +418,11 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
   );
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final p = palette(context), phone = MediaQuery.sizeOf(context).width <= 650;
     final at = instant(q['expiresAt']);
     final modelOptions = <String, String>{
-      '': 'Default model',
+      '': tr("Default model"),
       for (final m in widget.models.where((m) => m['available'] == true))
         jsonEncode([m['provider'], m['id']]):
             '${m['displayName']} · ${m['provider']}',
@@ -432,7 +436,7 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
         Expanded(
           flex: 2,
           child: picker(
-            'Model',
+            tr("Model"),
             model,
             modelOptions.entries.map((e) => (e.key, e.value)).toList(),
             (v) => model = v,
@@ -440,8 +444,8 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
         ),
         const SizedBox(width: 6),
         Expanded(
-          child: picker('Thinking', thinking, [
-            ('', 'Default thinking'),
+          child: picker(tr("Thinking"), thinking, [
+            ('', tr("Default thinking")),
             for (final level in levels) (level, 'Thinking: $level'),
             if (thinking.isNotEmpty && !levels.contains(thinking))
               (thinking, 'Thinking: $thinking'),
@@ -455,13 +459,13 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
       alignment: WrapAlignment.end,
       children: [
         action(
-          q['kind'] == 'confirm' ? '${q['cancelLabel'] ?? 'No'}' : 'Cancel',
+          q['kind'] == 'confirm' ? '${q['cancelLabel'] ?? 'No'}' : tr("Cancel"),
           false,
         ),
         action(
           q['kind'] == 'confirm'
               ? '${q['confirmLabel'] ?? 'Yes, continue'}'
-              : 'Submit',
+              : tr("Submit"),
           true,
         ),
       ],
@@ -516,7 +520,7 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Your input is needed',
+                        tr("Your input is needed"),
                         style: webText(
                           context,
                           size: 12,
@@ -563,7 +567,7 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
                                       '${obj(q['relayed'])['sessionId']}',
                                     ),
                                     child: Text(
-                                      'Open',
+                                      tr("Open"),
                                       style: webText(
                                         context,
                                         size: 12,
@@ -609,14 +613,18 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
                 Padding(
                   padding: const EdgeInsets.only(top: 14, bottom: 6),
                   child: Text(
-                    'Response ${q['language'] == null ? '' : '· ${q['language']}'}',
+                    tr("Response {0}", [
+                      q['language'] == null ? '' : '· ${q['language']}',
+                    ]),
                     style: webText(context, size: 12, color: 'text.muted'),
                   ),
                 )
               else
                 const SizedBox(height: 14),
               Semantics(
-                label: q['kind'] == 'editor' ? 'Response' : 'Your answer',
+                label: q['kind'] == 'editor'
+                    ? tr("Response")
+                    : tr("Your answer"),
                 child: TextField(
                   controller: text,
                   enabled: !locked,
@@ -659,7 +667,9 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(
-                  'Choose whether the agent should continue with this action.',
+                  tr(
+                    "Choose whether the agent should continue with this action.",
+                  ),
                   style: webText(
                     context,
                     size: 13,
@@ -687,7 +697,9 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
                       style: webText(context, size: 13),
                     ),
                     subtitle: Text(
-                      'Auto mode then reads the task as if you had typed it in that session, so an operation the task names exactly is not stopped as dangerous. Only for the run the task starts.',
+                      tr(
+                        "Auto mode then reads the task as if you had typed it in that session, so an operation the task names exactly is not stopped as dangerous. Only for the run the task starts.",
+                      ),
                       style: webText(
                         context,
                         size: 12,
@@ -719,7 +731,7 @@ class _NativeInteractionCardState extends State<NativeInteractionCard> {
                         '${q['cancelLabel'] ?? 'No'}',
                         '${q['confirmLabel'] ?? 'Yes, continue'}',
                       ]
-                    : ['Cancel', 'Submit'];
+                    : [tr("Cancel"), tr("Submit")];
                 final actionWidth = labels.fold<double>(
                   6,
                   (sum, label) =>

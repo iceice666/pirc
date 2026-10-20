@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   /**
    * The delegations a chat started that still run or wait for you: one card
    * each, to open the delegated session or stop it. Not a question: the chat
@@ -30,12 +32,12 @@
 </script>
 
 {#if delegations.length}
-  <section class="delegations" aria-label="Active delegations">
+  <section class="delegations" aria-label={tr('Active delegations')}>
     {#each delegations as delegation (delegation.id)}
       <div class="delegation-card">
         <span class="delegation-icon"><Forward size={15} /></span>
         <div class="delegation-text">
-          <strong>Delegated to {delegation.workspace} — {delegation.title}</strong>
+          <strong>{tr('Delegated to {0} — {1}', [delegation.workspace, delegation.title])}</strong>
           {#if delegation.status === 'waiting_input' || delegation.dispatch === 'auto'}
             <small
               >{[
@@ -52,14 +54,14 @@
           <button
             class="button ghost small"
             type="button"
-            onclick={() => onopen(delegation.targetSessionId)}>Open</button
+            onclick={() => onopen(delegation.targetSessionId)}>{tr('Open')}</button
           >
           <button
             class="button ghost small"
             type="button"
             disabled={stopping.includes(delegation.id)}
             onclick={() => stop(delegation.id)}
-            >{stopping.includes(delegation.id) ? 'Stopping…' : 'Stop'}</button
+            >{stopping.includes(delegation.id) ? tr('Stopping…') : tr('Stop')}</button
           >
         </div>
       </div>

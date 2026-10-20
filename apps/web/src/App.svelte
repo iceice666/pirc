@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from './lib/i18n.svelte';
+
   import {
     ArrowDown,
     CircleAlert,
@@ -295,15 +297,15 @@
       if (!id || !previous || sessionState?.session.id !== announcedSession) return;
       const text = lastReply?.content.trim();
       announcement = text
-        ? `Agent replied: ${text.length > 280 ? `${text.slice(0, 280)}…` : text}`
-        : 'Agent finished a step.';
+        ? tr('Agent replied: {0}', [text.length > 280 ? `${text.slice(0, 280)}…` : text])
+        : tr('Agent finished a step.');
     },
   );
   watch(
     () => app.pendingInteractions.length,
     (count, previous) => {
       if (count > (previous ?? 0) && sessionState?.session.id === announcedSession)
-        announcement = 'The agent needs your input.';
+        announcement = tr('The agent needs your input.');
     },
   );
   let announcedSession: string | undefined;
@@ -438,7 +440,7 @@
     if (creatingSession) return;
     creatingSession = true;
     try {
-      await app.createSession(workspaceId);
+      if (await app.createSession(workspaceId)) sidebarOpen = false;
     } finally {
       creatingSession = false;
     }
@@ -450,10 +452,10 @@
 <svelte:head
   ><title
     >{pageWorkspace
-      ? `${pageWorkspace.displayName} · pirc`
+      ? tr('{0} · pirc', [pageWorkspace.displayName])
       : sessionState
-        ? `${sessionState.session.name} · pirc`
-        : 'pirc'}</title
+        ? tr('{0} · pirc', [app.isDraftSession ? tr('New session') : sessionState.session.name])
+        : tr('pirc')}</title
   ></svelte:head
 >
 
@@ -511,7 +513,7 @@
     {:else if app.loading}
       <div class="loading-state">
         <span class="large-mark"><Sparkles size={24} /></span>
-        <p>Connecting to your sessions…</p>
+        <p>{tr('Connecting to your sessions…')}</p>
       </div>
     {:else if sessionState}
       <header class="topbar">
@@ -519,8 +521,8 @@
           <button
             class="sidebar-expand icon-button"
             type="button"
-            aria-label="Show sidebar"
-            title="Show sidebar"
+            aria-label={tr('Show sidebar')}
+            title={tr('Show sidebar')}
             transition:fade={{ duration: motion(160) }}
             onclick={() => (sidebarCollapsed = false)}><PanelLeftOpen size={19} /></button
           >
@@ -530,30 +532,30 @@
             {#if app.activeWorkspace}<button
                 class="crumb"
                 type="button"
-                title="Open {app.activeWorkspace.displayName}"
+                title={tr('Open {0}', [app.activeWorkspace.displayName])}
                 onclick={() => openWorkspace(app.activeWorkspace!.id)}
                 >{app.activeWorkspace.displayName}</button
-              >{:else}<span>Workspace</span>{/if}<span>/</span><span
-              >{sessionState.session.name}</span
+              >{:else}<span>{tr('Workspace')}</span>{/if}<span>/</span><span
+              >{app.isDraftSession ? tr('New session') : sessionState.session.name}</span
             >
           </div>
-          <h1>{sessionState.session.name}</h1>
+          <h1>{app.isDraftSession ? tr('New session') : sessionState.session.name}</h1>
           {#if origin?.kind === 'schedule'}
             <button
               class="origin-chip"
               type="button"
-              title="Open the schedule"
+              title={tr('Open the schedule')}
               onclick={() => app.showSchedules(origin.scheduleId)}
-              ><Clock size={13} /><span>Scheduled · {origin.title}</span></button
+              ><Clock size={13} /><span>{tr('Scheduled · {0}', [origin.title])}</span></button
             >
           {:else if origin?.kind === 'delegation'}
             <button
               class="origin-chip"
               type="button"
-              title="Open the chat that delegated it"
+              title={tr('Open the chat that delegated it')}
               disabled={!app.sessions.some((item) => item.id === origin.fromSessionId)}
               onclick={() => openSession(origin.fromSessionId)}
-              ><Forward size={13} /><span>Delegated · {origin.title}</span></button
+              ><Forward size={13} /><span>{tr('Delegated · {0}', [origin.title])}</span></button
             >
           {/if}
           {#if sessionState.sandbox && !sessionState.sandbox.active}
@@ -562,35 +564,37 @@
               class="origin-chip unsandboxed"
               role="status"
               title={sessionState.sandbox.reason
-                ? `Not sandboxed: ${sessionState.sandbox.reason}`
-                : 'Not sandboxed'}><ShieldOff size={13} /><span>Not sandboxed</span></span
+                ? tr('Not sandboxed: {0}', [sessionState.sandbox.reason])
+                : tr('Not sandboxed')}
+              ><ShieldOff size={13} /><span>{tr('Not sandboxed')}</span></span
             >
           {/if}
         </div>
         <div class="topbar-actions">
-          {#if !chatSession}<JobsMenu />{/if}
+          {#if !chatSession && !app.isDraftSession}<JobsMenu />{/if}
           <span
             class:offline={connection === 'offline'}
             class:reconnecting={connection === 'reconnecting'}
             class="connection-pill"
           >
-            {#if connection === 'connected'}<Radio size={13} /> Live{:else if connection === 'offline'}<CloudOff
-                size={13}
-              /> Offline{:else}<RefreshCw class="spin" size={13} /> Reconnecting{/if}
+            {#if connection === 'connected'}<Radio size={13} />
+              {tr('Live')}{:else if connection === 'offline'}<CloudOff size={13} />
+              {tr('Offline')}{:else}<RefreshCw class="spin" size={13} /> {tr('Reconnecting')}{/if}
           </span>
           {#if !hasControl}
             <button class="button takeover" type="button" onclick={() => app.takeControl()}
-              ><ShieldCheck size={15} /> Take control</button
+              ><ShieldCheck size={15} /> {tr('Take control')}</button
             >
           {:else if !chatSession}
-            <span class="control-pill"><ShieldCheck size={14} /> In control</span>
+            <span class="control-pill"><ShieldCheck size={14} /> {tr('In control')}</span>
           {/if}
           <button
+            disabled={app.isDraftSession}
             bind:this={detailsToggle}
             class="icon-button details-toggle"
             type="button"
-            aria-label={detailsOpen ? 'Hide side panel' : 'Show side panel'}
-            title={detailsOpen ? 'Hide side panel' : 'Show side panel'}
+            aria-label={detailsOpen ? tr('Hide side panel') : tr('Show side panel')}
+            title={detailsOpen ? tr('Hide side panel') : tr('Show side panel')}
             aria-expanded={detailsOpen}
             onclick={() => (detailsOpen ? closePanel() : (detailsOpen = true))}
           >
@@ -603,7 +607,7 @@
         <div class="error-banner" role="alert">
           <CircleAlert size={16} /><span>{app.pageError}</span><button
             type="button"
-            aria-label="Dismiss error"
+            aria-label={tr('Dismiss error')}
             onclick={() => (app.pageError = '')}><X size={15} /></button
           >
         </div>
@@ -614,14 +618,15 @@
       {#if !hasControl}
         <div class="viewer-banner">
           <span
-            >You’re viewing this session. {sessionState.control.holderName ?? 'Another device'} currently
-            has control.</span
-          ><button type="button" onclick={() => app.takeControl()}>Take control</button>
+            >{tr('You’re viewing this session. {0} currently has control.', [
+              sessionState.control.holderName ?? tr('Another device'),
+            ])}</span
+          ><button type="button" onclick={() => app.takeControl()}>{tr('Take control')}</button>
         </div>
       {/if}
 
       <div class="content-grid">
-        <section class="conversation" aria-label="Conversation" inert={panelOverlay}>
+        <section class="conversation" aria-label={tr('Conversation')} inert={panelOverlay}>
           <div class="timeline" bind:this={timeline} onscroll={onTimelineScroll}>
             <div class="timeline-inner" use:followContent>
               {#if app.hiddenMessages > 0}
@@ -631,7 +636,7 @@
                   use:revealEarlier
                   onclick={showEarlier}
                 >
-                  Show earlier messages ({app.hiddenMessages} more)
+                  {tr('Show earlier messages ({0} more)', [app.hiddenMessages])}
                 </button>
               {/if}
               {#each visibleItems as item (item.kind === 'run' ? item.id : item.message.id)}
@@ -672,17 +677,18 @@
                     type="button"
                     transition:fade={{ duration: motion(120) }}
                     onclick={() => app.scroller?.toLatest()}
-                    ><ArrowDown size={15} /> New messages</button
+                    ><ArrowDown size={15} /> {tr('New messages')}</button
                   >
                 </div>
               {/if}
               {#if sessionState.messages.length === 0}
                 <div class="empty-conversation">
                   <span><Plus size={24} /></span>
-                  <h2>Start something useful</h2>
+                  <h2>{tr('Start something useful')}</h2>
                   <p>
-                    Describe a task, attach a reference image, or ask the agent to continue work in
-                    this workspace.
+                    {tr(
+                      'Describe a task, attach a reference image, or ask the agent to continue work in this workspace.',
+                    )}
                   </p>
                 </div>
               {/if}
@@ -692,18 +698,18 @@
           <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
         </section>
 
-        {#if panelOverlay}
+        {#if panelOverlay && !app.isDraftSession}
           <button
             class="panel-scrim"
             type="button"
             tabindex="-1"
-            aria-label="Close side panel"
+            aria-label={tr('Close side panel')}
             transition:fade={{ duration: motion(160) }}
             onclick={closePanel}
           ></button>
         {/if}
         <SidePanel
-          open={detailsOpen}
+          open={detailsOpen && !app.isDraftSession}
           bind:tab={panelTab}
           bind:resizing={panelResizing}
           width={panelShownWidth}
@@ -716,7 +722,7 @@
     {:else}
       <div class="loading-state">
         <CircleAlert size={24} />
-        <p>No session could be loaded.</p>
+        <p>{tr('No session could be loaded.')}</p>
       </div>
     {/if}
   </main>
@@ -742,7 +748,7 @@
   nodeId={newProjectNodeId}
   oncreated={(workspaceId) => showNewSession(workspaceId)}
 />
-<NewSessionDialog bind:open={newSessionOpen} />
+<NewSessionDialog bind:open={newSessionOpen} oncreated={() => (sidebarOpen = false)} />
 {#if sidebarOpen || onPage}
   <MobileTabs current={mobileTab} chats={hasChats} onpick={pickTab} />
 {/if}
@@ -750,16 +756,19 @@
 {#if updateRegistration}
   <div class="update-toast" role="status">
     <Download size={18} />
-    <div><strong>Update ready</strong><span>The page reloads; your draft is kept.</span></div>
+    <div>
+      <strong>{tr('Update ready')}</strong><span>{tr('The page reloads; your draft is kept.')}</span
+      >
+    </div>
     <button
       type="button"
       onclick={() => {
         activateUpdate(updateRegistration!);
         updateRegistration = undefined;
-      }}>Update</button
+      }}>{tr('Update')}</button
     ><button
       type="button"
-      aria-label="Dismiss update"
+      aria-label={tr('Dismiss update')}
       onclick={() => (updateRegistration = undefined)}><X size={15} /></button
     >
   </div>

@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'architecture_model.dart';
 
 /// Parses the native, intentionally bounded subset of Mermaid 11.17.2
@@ -10,8 +11,8 @@ import 'architecture_model.dart';
 NativeMermaidArchitectureDiagram parseNativeMermaidArchitecture(String source) {
   final normalized = source.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   if (normalized.length > 50000) {
-    throw const FormatException(
-      'Mermaid architecture exceeds the default 50000 character limit',
+    throw FormatException(
+      tr("Mermaid architecture exceeds the default 50000 character limit"),
     );
   }
   return _ArchitectureParser(normalized).parse();
@@ -55,24 +56,27 @@ class _ArchitectureParser {
       var line = lines[index].trim();
       if (line.isEmpty) continue;
       if (line.startsWith('%%{')) {
-        invalid('Mermaid configuration directives are unsupported', lineNumber);
+        invalid(
+          tr("Mermaid configuration directives are unsupported"),
+          lineNumber,
+        );
       }
       if (line.startsWith('---')) {
-        invalid('YAML frontmatter is unsupported', lineNumber);
+        invalid(tr("YAML frontmatter is unsupported"), lineNumber);
       }
       line = _stripComment(line).trimRight();
       if (line.isEmpty) continue;
 
       if (!headerSeen) {
         if (line != 'architecture-beta') {
-          invalid('Expected architecture-beta header', lineNumber);
+          invalid(tr("Expected architecture-beta header"), lineNumber);
         }
         headerSeen = true;
         continue;
       }
 
       if (line == 'architecture-beta') {
-        invalid('Duplicate architecture-beta header', lineNumber);
+        invalid(tr("Duplicate architecture-beta header"), lineNumber);
       }
       if (_parseTitle(line)) continue;
       if (_parseAccessibility(line, lineNumber)) continue;
@@ -97,12 +101,15 @@ class _ArchitectureParser {
       } else if (_edge.hasMatch(line)) {
         _parseEdge(line, lineNumber);
       } else {
-        invalid('Unsupported architecture statement "$line"', lineNumber);
+        invalid(
+          tr("Unsupported architecture statement \"{0}\"", [line]),
+          lineNumber,
+        );
       }
     }
 
     if (!headerSeen) {
-      throw const FormatException('Missing Mermaid architecture-beta header');
+      throw FormatException(tr("Missing Mermaid architecture-beta header"));
     }
     _validateMembershipsAndReferences();
     return NativeMermaidArchitectureDiagram(
@@ -183,14 +190,14 @@ class _ArchitectureParser {
         if (close >= 0) {
           description.write(current.substring(0, close));
           if (current.substring(close + 1).trim().isNotEmpty) {
-            invalid('Unexpected content after accDescr block', lineNumber);
+            invalid(tr("Unexpected content after accDescr block"), lineNumber);
           }
           break;
         }
         description.writeln(current);
         // A multiline block is consumed from the original source in the main
         // loop; keeping this form explicit avoids silently reinterpreting it.
-        invalid('Multiline accDescr blocks are unsupported', lineNumber);
+        invalid(tr("Multiline accDescr blocks are unsupported"), lineNumber);
       }
       accessibleDescription = description
           .toString()
@@ -234,13 +241,13 @@ class _ArchitectureParser {
   void _parseJunction(String declaration, int line) {
     var rest = declaration.trim();
     final idMatch = _id.matchAsPrefix(rest);
-    if (idMatch == null) invalid('Expected junction id', line);
+    if (idMatch == null) invalid(tr("Expected junction id"), line);
     final id = idMatch.group(0)!;
     rest = rest.substring(id.length).trim();
     String? parentId;
     if (rest.isNotEmpty) {
       final parent = _parent.firstMatch(rest);
-      if (parent == null) invalid('Malformed junction declaration', line);
+      if (parent == null) invalid(tr("Malformed junction declaration"), line);
       parentId = parent.group(1);
     }
     _register(id, 'junction', line);
@@ -257,7 +264,7 @@ class _ArchitectureParser {
   _parseDeclaration(String declaration, int line, String kind) {
     var rest = declaration.trim();
     final idMatch = _id.matchAsPrefix(rest);
-    if (idMatch == null) invalid('Expected $kind id', line);
+    if (idMatch == null) invalid(tr("Expected {0} id", [kind]), line);
     final id = idMatch.group(0)!;
     rest = rest.substring(id.length).trimLeft();
 
@@ -279,12 +286,14 @@ class _ArchitectureParser {
     if (rest.isNotEmpty) {
       final parent = _parent.firstMatch(rest);
       if (parent == null) {
-        invalid('Malformed $kind declaration for "$id"', line);
+        invalid(tr("Malformed {0} declaration for \"{1}\"", [kind, id]), line);
       }
       parentId = parent.group(1);
       rest = '';
     }
-    if (rest.isNotEmpty) invalid('Unexpected content in $kind "$id"', line);
+    if (rest.isNotEmpty) {
+      invalid(tr("Unexpected content in {0} \"{1}\"", [kind, id]), line);
+    }
     return (id: id, iconName: iconName, title: label, parentId: parentId);
   }
 
@@ -309,7 +318,7 @@ class _ArchitectureParser {
         return i;
       }
     }
-    invalid('Unterminated architecture label', line);
+    invalid(tr("Unterminated architecture label"), line);
   }
 
   String _decodeTitle(String content) {
@@ -331,7 +340,10 @@ class _ArchitectureParser {
     if (icon == null) return null;
     if (icon.contains(':')) {
       invalid(
-        'Icon "$icon" uses a namespaced icon pack; only native architecture icons are supported',
+        tr(
+          "Icon \"{0}\" uses a namespaced icon pack; only native architecture icons are supported",
+          [icon],
+        ),
         line,
       );
     }
@@ -342,7 +354,10 @@ class _ArchitectureParser {
       'internet' => NativeMermaidArchitectureIcon.internet,
       'server' => NativeMermaidArchitectureIcon.server,
       _ => throw FormatException(
-        'Invalid Mermaid architecture at line $line: unknown built-in icon "$icon" on "$ownerId"',
+        tr(
+          "Invalid Mermaid architecture at line {0}: unknown built-in icon \"{1}\" on \"{2}\"",
+          [line, icon, ownerId],
+        ),
       ),
     };
   }
@@ -362,7 +377,7 @@ class _ArchitectureParser {
     if (dash != '--') {
       final start = dash.indexOf('[');
       final end = dash.lastIndexOf(']');
-      if (start < 0 || end <= start) invalid('Malformed edge label', line);
+      if (start < 0 || end <= start) invalid(tr("Malformed edge label"), line);
       edgeTitle = _decodeTitle(dash.substring(start + 1, end));
     }
     edges.add(
@@ -380,7 +395,10 @@ class _ArchitectureParser {
       ),
     );
     if (edges.length > 500) {
-      invalid('Architecture diagram exceeds the 500 edge safety limit', line);
+      invalid(
+        tr("Architecture diagram exceeds the 500 edge safety limit"),
+        line,
+      );
     }
   }
 
@@ -393,19 +411,22 @@ class _ArchitectureParser {
     'T' => NativeMermaidArchitectureDirection.top,
     'B' => NativeMermaidArchitectureDirection.bottom,
     _ => throw FormatException(
-      'Invalid Mermaid architecture at line $line: invalid port direction "$value"',
+      tr(
+        "Invalid Mermaid architecture at line {0}: invalid port direction \"{1}\"",
+        [line, value],
+      ),
     ),
   };
 
   void _parseAlignment(String lineText, int line) {
     final match = _alignment.firstMatch(lineText);
-    if (match == null) invalid('Malformed align directive', line);
+    if (match == null) invalid(tr("Malformed align directive"), line);
     final members = match.group(2)!.trim().split(RegExp(r'[\t ]+'));
     if (members.length < 2) {
-      invalid('Align directive needs at least two members', line);
+      invalid(tr("Align directive needs at least two members"), line);
     }
     if (members.toSet().length != members.length) {
-      invalid('Align directive repeats a member', line);
+      invalid(tr("Align directive repeats a member"), line);
     }
     alignments.add(
       NativeMermaidArchitectureAlignment(
@@ -420,14 +441,19 @@ class _ArchitectureParser {
     final previous = ids[id];
     if (previous != null) {
       invalid(
-        '$kind id "$id" is already used by ${previous.kind} declared at line ${previous.line}',
+        tr("{0} id \"{1}\" is already used by {2} declared at line {3}", [
+          kind,
+          id,
+          previous.kind,
+          previous.line,
+        ]),
         line,
       );
     }
     ids[id] = (kind: kind, line: line);
     if (ids.length > 200) {
       invalid(
-        'Architecture diagram exceeds the 200 node/group safety limit',
+        tr("Architecture diagram exceeds the 200 node/group safety limit"),
         line,
       );
     }
@@ -442,7 +468,10 @@ class _ArchitectureParser {
       final parentGroup = groupById[parent];
       if (parentGroup == null) {
         invalid(
-          'Group "${group.id}" references missing parent group "$parent"',
+          tr("Group \"{0}\" references missing parent group \"{1}\"", [
+            group.id,
+            parent,
+          ]),
           group.sourceLine,
         );
       }
@@ -456,7 +485,7 @@ class _ArchitectureParser {
       while (current != null) {
         if (!visited.add(current)) {
           invalid(
-            'Group membership cycle includes "$current"',
+            tr("Group membership cycle includes \"{0}\"", [current]),
             group.sourceLine,
           );
         }
@@ -468,7 +497,10 @@ class _ArchitectureParser {
       final parent = group.parentId;
       if (parent != null && groupLines[parent]! >= group.sourceLine) {
         invalid(
-          'Parent group "$parent" must be declared before nested group "${group.id}"',
+          tr(
+            "Parent group \"{0}\" must be declared before nested group \"{1}\"",
+            [parent, group.id],
+          ),
           group.sourceLine,
         );
       }
@@ -497,24 +529,34 @@ class _ArchitectureParser {
       if (!nodeIds.contains(edge.sourceId)) {
         if (groupById.containsKey(edge.sourceId)) {
           invalid(
-            'Edge endpoint "${edge.sourceId}" is a group; edges must connect services or junctions',
+            tr(
+              "Edge endpoint \"{0}\" is a group; edges must connect services or junctions",
+              [edge.sourceId],
+            ),
             edge.sourceLine,
           );
         }
         invalid(
-          'Edge references missing service or junction "${edge.sourceId}"',
+          tr("Edge references missing service or junction \"{0}\"", [
+            edge.sourceId,
+          ]),
           edge.sourceLine,
         );
       }
       if (!nodeIds.contains(edge.targetId)) {
         if (groupById.containsKey(edge.targetId)) {
           invalid(
-            'Edge endpoint "${edge.targetId}" is a group; edges must connect services or junctions',
+            tr(
+              "Edge endpoint \"{0}\" is a group; edges must connect services or junctions",
+              [edge.targetId],
+            ),
             edge.sourceLine,
           );
         }
         invalid(
-          'Edge references missing service or junction "${edge.targetId}"',
+          tr("Edge references missing service or junction \"{0}\"", [
+            edge.targetId,
+          ]),
           edge.sourceLine,
         );
       }
@@ -523,7 +565,10 @@ class _ArchitectureParser {
       for (final member in alignment.members) {
         if (!nodeIds.contains(member)) {
           invalid(
-            'align ${alignment.direction} references unknown service or junction "$member"',
+            tr("align {0} references unknown service or junction \"{1}\"", [
+              alignment.direction,
+              member,
+            ]),
             alignment.sourceLine,
           );
         }
@@ -539,13 +584,19 @@ class _ArchitectureParser {
   ) {
     if (parentId != null && !groupById.containsKey(parentId)) {
       invalid(
-        'Node "$nodeId" references missing parent group "$parentId"',
+        tr("Node \"{0}\" references missing parent group \"{1}\"", [
+          nodeId,
+          parentId,
+        ]),
         line,
       );
     }
   }
 
   Never invalid(String message, [int? line]) => throw FormatException(
-    'Invalid Mermaid architecture${line == null ? '' : ' at line $line'}: $message',
+    tr("Invalid Mermaid architecture{0}: {1}", [
+      line == null ? '' : ' at line $line',
+      message,
+    ]),
   );
 }

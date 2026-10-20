@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'gateway.dart';
 
@@ -80,8 +81,8 @@ DateTime? instant(dynamic v) => v is num
 String elapsedMs(int? ms) => ms == null
     ? ''
     : ms < 1000
-    ? '$ms ms'
-    : '${(ms / 1000).toStringAsFixed(ms < 10000 ? 1 : 0)} s';
+    ? tr("{0} ms", [ms])
+    : tr("{0} s", [(ms / 1000).toStringAsFixed(ms < 10000 ? 1 : 0)]);
 String toolElapsed(Json tool) {
   final start = instant(tool['startedAt']), end = instant(tool['endedAt']);
   if (start == null || end == null || end.isBefore(start)) return '';
@@ -153,7 +154,9 @@ List<Json> effectiveTools(List<Json> tools) {
 ({String path, String holderName})? writeBlock(Json t) {
   if (t['status'] != 'failed') return null;
   final match = RegExp(
-    r'(\S+) is being written by session "(.+?)" \([^)]*\); wait until its run finishes',
+    tr(
+      "(\\S+) is being written by session \"(.+?)\" \\([^)]*\\); wait until its run finishes",
+    ),
   ).firstMatch(value(t, 'output'));
   return match == null ? null : (path: match[1]!, holderName: match[2]!);
 }
@@ -211,7 +214,10 @@ String clipToolText(String s) {
     RegExp(r'\B(?=(\d{3})+(?!\d))'),
     (_) => ',',
   );
-  return '${s.substring(0, 200000)}\n… $remaining more characters not shown';
+  return tr("{0}\n… {1} more characters not shown", [
+    s.substring(0, 200000),
+    remaining,
+  ]);
 }
 
 String toolLanguage(dynamic path) {

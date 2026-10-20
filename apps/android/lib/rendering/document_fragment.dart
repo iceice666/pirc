@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'package:html/parser.dart' as html;
 import 'package:html/dom.dart' as dom;
@@ -64,7 +65,7 @@ class NativeDocumentFragmentIndex {
   String? _annotatedHtml;
   String get annotatedHtml =>
       _annotatedHtml ??
-      (throw StateError('Serialize the annotated document clone directly'));
+      (throw StateError(tr("Serialize the annotated document clone directly")));
   final _ids = <String, String>{},
       _names = <String, String>{},
       _nativeIds = <String, String>{};

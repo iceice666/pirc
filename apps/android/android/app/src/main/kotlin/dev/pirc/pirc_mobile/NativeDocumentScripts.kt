@@ -128,7 +128,7 @@ internal class NativeDocumentScripts(context: Context) {
         if (closed) return unavailable("The document script engine is closed.")
         return try {
             if (!withContext(Dispatchers.IO) { JavaScriptSandbox.isSupported() }) {
-                unavailable("JavaScriptEngine is unavailable on this device.")
+                unavailable(NativeI18n.text("JavaScriptEngine is unavailable on this device."))
             } else {
                 val connected = connectedSandbox()
                 val missing = withContext(Dispatchers.IO) { missingRequiredFeatures(connected) }
@@ -139,13 +139,13 @@ internal class NativeDocumentScripts(context: Context) {
                                 JavaScriptSandbox.JS_FEATURE_PROVIDE_CONSUME_ARRAY_BUFFER,
                                 JavaScriptSandbox.JS_FEATURE_PROMISE_RETURN).all(connected::isFeatureSupported)))
                 } else {
-                    unavailable("JavaScriptEngine is missing required features: ${missing.joinToString()}.")
+                    unavailable(NativeI18n.text("JavaScriptEngine is missing required features: {0}.", missing.joinToString()))
                 }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            unavailable("JavaScriptEngine could not start on this device.")
+            unavailable(NativeI18n.text("JavaScriptEngine could not start on this device."))
         }
     }
 
@@ -172,7 +172,7 @@ internal class NativeDocumentScripts(context: Context) {
                 throw DocumentScriptException("SCRIPT_OWNER", "A script isolate already exists for this document.")
             }
             if (sessions.size + pendingCreates + closingIsolates >= MAX_ISOLATES) {
-                throw DocumentScriptException("SCRIPT_CAPACITY", "The document script isolate limit has been reached.")
+                throw DocumentScriptException("SCRIPT_CAPACITY", NativeI18n.text("The document script isolate limit has been reached."))
             }
             val id = nextAvailableIdLocked()
             reservedIds += id
@@ -290,7 +290,7 @@ internal class NativeDocumentScripts(context: Context) {
                         ensureSessionActive(session)
                         val value = await(session.isolate.evaluateJavaScriptAsync(source))
                         if (value.toByteArray(StandardCharsets.UTF_8).size > MAX_VALUE_BYTES) {
-                            throw DocumentScriptException("SCRIPT_LIMIT", "The JavaScript result exceeds 4 MiB.")
+                            throw DocumentScriptException("SCRIPT_LIMIT", NativeI18n.text("The JavaScript result exceeds 4 MiB."))
                         }
                         value
                     }
@@ -298,7 +298,7 @@ internal class NativeDocumentScripts(context: Context) {
             }
         } catch (_: TimeoutCancellationException) {
             retireAndClose(session)
-            throw DocumentScriptException("SCRIPT_TIMEOUT", "JavaScript evaluation exceeded 2 seconds; the document isolate was closed.")
+            throw DocumentScriptException("SCRIPT_TIMEOUT", NativeI18n.text("JavaScript evaluation exceeded 2 seconds; the document isolate was closed."))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
@@ -405,14 +405,14 @@ internal class NativeDocumentScripts(context: Context) {
 
     private suspend fun requireSupportedSandbox(): JavaScriptSandbox {
         if (!withContext(Dispatchers.IO) { JavaScriptSandbox.isSupported() }) {
-            throw DocumentScriptException("SCRIPT_UNSUPPORTED", "JavaScriptEngine is unavailable on this device.")
+            throw DocumentScriptException("SCRIPT_UNSUPPORTED", NativeI18n.text("JavaScriptEngine is unavailable on this device."))
         }
         val connected = connectedSandbox()
         val missing = withContext(Dispatchers.IO) { missingRequiredFeatures(connected) }
         if (missing.isNotEmpty()) {
             throw DocumentScriptException(
                 "SCRIPT_UNSUPPORTED",
-                "JavaScriptEngine is missing required features: ${missing.joinToString()}.",
+                NativeI18n.text("JavaScriptEngine is missing required features: {0}.", missing.joinToString()),
             )
         }
         return connected
@@ -557,9 +557,9 @@ internal class NativeDocumentScripts(context: Context) {
         val cause = unwrap(error)
         return when (cause) {
             is DocumentScriptException -> cause
-            is SandboxUnsupportedException -> DocumentScriptException("SCRIPT_UNSUPPORTED", "JavaScriptEngine is unavailable on this device.")
-            is SandboxDeadException -> DocumentScriptException("SCRIPT_ENGINE", "The JavaScript sandbox stopped unexpectedly.")
-            else -> DocumentScriptException("SCRIPT_EVALUATION", cause.message ?: "JavaScript evaluation failed.")
+            is SandboxUnsupportedException -> DocumentScriptException("SCRIPT_UNSUPPORTED", NativeI18n.text("JavaScriptEngine is unavailable on this device."))
+            is SandboxDeadException -> DocumentScriptException("SCRIPT_ENGINE", NativeI18n.text("The JavaScript sandbox stopped unexpectedly."))
+            else -> DocumentScriptException("SCRIPT_EVALUATION", cause.message ?: NativeI18n.text("JavaScript evaluation failed."))
         }
     }
 

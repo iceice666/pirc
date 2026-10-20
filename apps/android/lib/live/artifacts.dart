@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -78,60 +79,65 @@ class ArtifactCard extends StatelessWidget {
   final Artifact artifact;
   final VoidCallback onOpen;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 12),
-    child: Surface(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                LucideIcons.fileText,
-                size: 18,
-                color: palette(context)['accent.default'],
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '${artifact.kind} · v${artifact.version}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: palette(context)['text.muted'],
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Surface(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  LucideIcons.fileText,
+                  size: 18,
+                  color: palette(context)['accent.default'],
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${artifact.kind} · v${artifact.version}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: palette(context)['text.muted'],
+                    ),
                   ),
                 ),
+                if (artifact.status == 'generating') Text(tr("生成中…")),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              artifact.title,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+            ),
+            if (artifact.summary.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  artifact.summary,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              if (artifact.status == 'generating') const Text('生成中…'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            artifact.title,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-          ),
-          if (artifact.summary.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                artifact.summary,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+            if (artifact.status == 'failed')
+              Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(tr("生成未完成 · 可查看最後可用版本")),
+              ),
+            TextButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(LucideIcons.arrowUpRight, size: 18),
+              label: Text(
+                artifact.status == 'generating' ? tr("閱讀已產生內容") : tr("開啟成果"),
               ),
             ),
-          if (artifact.status == 'failed')
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text('生成未完成 · 可查看最後可用版本'),
-            ),
-          TextButton.icon(
-            onPressed: onOpen,
-            icon: const Icon(LucideIcons.arrowUpRight, size: 18),
-            label: Text(artifact.status == 'generating' ? '閱讀已產生內容' : '開啟成果'),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class ArtifactPane extends StatefulWidget {
@@ -280,7 +286,7 @@ class _ArtifactPaneState extends State<ArtifactPane> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '此成果類型以摘要顯示',
+              tr("此成果類型以摘要顯示"),
               style: TextStyle(color: palette(context)['text.muted']),
             ),
             const SizedBox(height: 12),
@@ -295,6 +301,7 @@ class _ArtifactPaneState extends State<ArtifactPane> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final list = versions;
     final latest = list.lastOrNull;
     final available =
@@ -318,7 +325,7 @@ class _ArtifactPaneState extends State<ArtifactPane> {
                 ),
               ),
               PopupMenuButton<int>(
-                tooltip: '成果版本',
+                tooltip: tr("成果版本"),
                 onSelected: (v) =>
                     select(list.firstWhere((a) => a.version == v)),
                 itemBuilder: (_) => [
@@ -330,13 +337,13 @@ class _ArtifactPaneState extends State<ArtifactPane> {
                 ],
               ),
               IconButton(
-                tooltip: '複製成果',
+                tooltip: tr("複製成果"),
                 onPressed: () =>
                     Clipboard.setData(ClipboardData(text: selected.shareText)),
                 icon: const Icon(LucideIcons.copy, size: 18),
               ),
               IconButton(
-                tooltip: '分享成果',
+                tooltip: tr("分享成果"),
                 onPressed: () => guarded(context, () async {
                   await widget.controller.gateway.call('share', {
                     'text': selected.shareText,
@@ -352,8 +359,8 @@ class _ArtifactPaneState extends State<ArtifactPane> {
             onPressed: () => select(latest),
             child: Text(
               latest.version > selected.version
-                  ? '已有 v${latest.version} · 切換新版'
-                  : '內容已更新 · 切換',
+                  ? tr("已有 v{0} · 切換新版", [latest.version])
+                  : tr("內容已更新 · 切換"),
             ),
           ),
         Expanded(
@@ -364,9 +371,9 @@ class _ArtifactPaneState extends State<ArtifactPane> {
             children: [
               content(),
               if (selected.status == 'generating')
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(top: 20),
-                  child: Text('仍在生成 · 新內容不會取代目前閱讀位置'),
+                  child: Text(tr("仍在生成 · 新內容不會取代目前閱讀位置")),
                 ),
               if (latest?.status == 'failed' || selected.status == 'failed')
                 TextButton(
@@ -376,20 +383,23 @@ class _ArtifactPaneState extends State<ArtifactPane> {
                       ? () => guarded(context, () async {
                           final sent = await widget.controller.sendCommand({
                             'type': 'prompt',
-                            'message':
-                                '請重試產生成果「${selected.title}」（id: ${selected.id}），以新版本保留既有內容。',
+                            'message': tr("請重試產生成果「{0}」（id: {1}），以新版本保留既有內容。", [
+                              selected.title,
+                              selected.id,
+                            ]),
                           });
                           if (context.mounted) {
                             showNotice(
                               context,
                               sent
-                                  ? '已請 agent 重試'
-                                  : widget.controller.actionError ?? '暫時無法送出',
+                                  ? tr("已請 agent 重試")
+                                  : widget.controller.actionError ??
+                                        tr("暫時無法送出"),
                             );
                           }
                         })
                       : null,
-                  child: const Text('請 agent 重試…'),
+                  child: Text(tr("請 agent 重試…")),
                 ),
               if (url != null && ['https', 'http'].contains(url.scheme))
                 TextButton.icon(
@@ -399,11 +409,11 @@ class _ArtifactPaneState extends State<ArtifactPane> {
                     });
                   }),
                   icon: const Icon(LucideIcons.externalLink, size: 16),
-                  label: const Text('在網頁開啟'),
+                  label: Text(tr("在網頁開啟")),
                 ),
               if (rows(selected.data['sources']).isNotEmpty) ...[
                 const SizedBox(height: 24),
-                const Text('來源', style: TextStyle(fontWeight: FontWeight.w600)),
+                Text(tr("來源"), style: TextStyle(fontWeight: FontWeight.w600)),
                 for (final source in rows(selected.data['sources']))
                   ListTile(
                     contentPadding: EdgeInsets.zero,

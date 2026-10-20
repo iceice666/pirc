@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import { assistantPromptsApi, type AssistantPrompt, type PromptName } from '../assistant-prompts';
   let { name, prompt, nodeId }: { name: PromptName; prompt: AssistantPrompt; nodeId: string } =
     $props();
@@ -8,7 +10,7 @@
   let saving = $state(false);
   let error = $state('');
   let status = $state('');
-  const title = $derived(name === 'soul' ? 'Soul' : 'Chat rules');
+  const title = $derived(name === 'soul' ? tr('Soul') : tr('Chat rules'));
   const changed = $derived(text.replace(/\r\n/g, '\n').trim() !== saved.text);
   const tooLong = $derived(text.length > saved.maxChars);
   async function save(event: SubmitEvent) {
@@ -20,9 +22,9 @@
     try {
       saved = (await assistantPromptsApi.update(name, text, nodeId)).prompt;
       text = saved.text;
-      status = 'Saved. Applies at the next chat agent start.';
+      status = tr('Saved. Applies at the next chat agent start.');
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Unable to save prompt.';
+      error = cause instanceof Error ? cause.message : tr('Unable to save prompt.');
       // A file may have become managed/read-only since the editor opened.
       try {
         const latest = await assistantPromptsApi.get();
@@ -41,10 +43,11 @@
   <p><code>{saved.path}</code></p>
   {#if !saved.writable}
     <p role="status">
-      {#if saved.reason === 'nix-store'}Managed by Nix: edit <code
-          >services.pirc.{name === 'soul' ? 'soulPrompt' : 'chatPrompt'}</code
-        >.{:else if saved.reason === 'symlink'}Managed symlink: edit its source file.{:else}Read-only:
-        the node does not have permission to edit this file.{/if}
+      {#if saved.reason === 'nix-store'}{tr('Managed by Nix: edit')}
+        <code>services.pirc.{name === 'soul' ? 'soulPrompt' : 'chatPrompt'}</code
+        >.{:else if saved.reason === 'symlink'}{tr(
+          'Managed symlink: edit its source file.',
+        )}{:else}{tr('Read-only: the node does not have permission to edit this file.')}{/if}
     </p>
   {/if}
   <label>
@@ -60,7 +63,7 @@
   </label>
   <div class="actions">
     <span id="{name}-prompt-count" class:over={tooLong}
-      >{text.length} / {saved.maxChars} characters</span
+      >{tr('{0} / {1} characters', [text.length, saved.maxChars])}</span
     >
     <button
       type="button"
@@ -70,10 +73,10 @@
         text = saved.text;
         error = '';
         status = '';
-      }}>Revert</button
+      }}>{tr('Revert')}</button
     >
     <button type="submit" class="button" disabled={saving || !saved.writable || !changed || tooLong}
-      >{saving ? 'Saving…' : 'Save'}</button
+      >{saving ? tr('Saving…') : tr('Save')}</button
     >
   </div>
   {#if error}<p role="alert">{error}</p>{/if}

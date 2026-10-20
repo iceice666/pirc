@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:html/parser.dart' as html;
@@ -71,15 +72,15 @@ class MermaidFlowchartGraph {
 MermaidFlowchartGraph parseNativeMermaidFlowchart(String source) {
   final statements = _statements(source);
   if (statements.isEmpty) {
-    throw const FormatException('Missing flowchart header.');
+    throw FormatException(tr("Missing flowchart header."));
   }
   final header = RegExp(
     r'^(?:flowchart|graph)\s+(TD|TB|LR|BT|RL)$',
     caseSensitive: false,
   ).firstMatch(statements.first);
   if (header == null) {
-    throw const FormatException(
-      'Expected graph/flowchart and a direction (TD, TB, LR, BT, or RL).',
+    throw FormatException(
+      tr("Expected graph/flowchart and a direction (TD, TB, LR, BT, or RL)."),
     );
   }
   final h = header.group(1)!.toUpperCase();
@@ -113,14 +114,12 @@ MermaidFlowchartGraph parseNativeMermaidFlowchart(String source) {
       }
       final name = cursor.s.substring(start, cursor.i);
       if (name.isEmpty) {
-        throw const FormatException('Expected Mermaid class name');
+        throw FormatException(tr("Expected Mermaid class name"));
       }
       assign(n.id, name);
     }
     if (nodes.length > 500) {
-      throw const FormatException(
-        'Native flowcharts support at most 500 nodes.',
-      );
+      throw FormatException(tr("Native flowcharts support at most 500 nodes."));
     }
   }
 
@@ -162,8 +161,10 @@ MermaidFlowchartGraph parseNativeMermaidFlowchart(String source) {
       r'^(subgraph|linkStyle|click|accTitle|accDescr|direction|title|flowchart-v)(?:\s|$)',
       caseSensitive: false,
     ).hasMatch(text)) {
-      throw const FormatException(
-        'This Mermaid statement is not supported by the native flowchart renderer.',
+      throw FormatException(
+        tr(
+          "This Mermaid statement is not supported by the native flowchart renderer.",
+        ),
       );
     }
     final c = _Cursor(text);
@@ -175,7 +176,7 @@ MermaidFlowchartGraph parseNativeMermaidFlowchart(String source) {
       final link = _edge(c);
       c.ws();
       if (c.end) {
-        throw const FormatException('Mermaid edge has no destination node.');
+        throw FormatException(tr("Mermaid edge has no destination node."));
       }
       final to = _node(c);
       add(to, c);
@@ -193,7 +194,7 @@ MermaidFlowchartGraph parseNativeMermaidFlowchart(String source) {
     }
   }
   if (edges.length > 500) {
-    throw const FormatException('Native flowcharts support at most 500 edges.');
+    throw FormatException(tr("Native flowcharts support at most 500 edges."));
   }
   final styledNodes = nodes.values.map((node) {
     var style = classDefinitions['default'] ?? const MermaidFlowNodeStyle();
@@ -212,9 +213,7 @@ MermaidFlowchartGraph parseNativeMermaidFlowchart(String source) {
 List<String> _styleNames(String source) {
   final names = source.split(',');
   if (names.any((name) => !RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(name))) {
-    throw const FormatException(
-      'Unsupported Mermaid style target or class name',
-    );
+    throw FormatException(tr("Unsupported Mermaid style target or class name"));
   }
   return names;
 }
@@ -225,19 +224,19 @@ MermaidFlowNodeStyle _parseFlowStyle(String source) {
   for (var i = 0; i < source.length; i++) {
     if (source[i] == '(') depth++;
     if (source[i] == ')') depth--;
-    if (depth < 0) throw const FormatException('Invalid Mermaid style');
+    if (depth < 0) throw FormatException(tr("Invalid Mermaid style"));
     if (source[i] == ',' && depth == 0) {
       entries.add(source.substring(start, i));
       start = i + 1;
     }
   }
-  if (depth != 0) throw const FormatException('Invalid Mermaid style');
+  if (depth != 0) throw FormatException(tr("Invalid Mermaid style"));
   entries.add(source.substring(start));
   var result = const MermaidFlowNodeStyle();
   for (final entry in entries) {
     final separator = entry.indexOf(':');
     if (separator < 1) {
-      throw const FormatException('Expected Mermaid style property');
+      throw FormatException(tr("Expected Mermaid style property"));
     }
     final name = entry.substring(0, separator).trim();
     final value = entry.substring(separator + 1).trim();
@@ -246,7 +245,9 @@ MermaidFlowNodeStyle _parseFlowStyle(String source) {
           ? const Color(0x00000000)
           : parseNativeMermaidStateColor(value);
       if (color == null) {
-        throw FormatException('Unsupported Mermaid style color: $value');
+        throw FormatException(
+          tr("Unsupported Mermaid style color: {0}", [value]),
+        );
       }
       result = result.merge(
         MermaidFlowNodeStyle(
@@ -259,11 +260,11 @@ MermaidFlowNodeStyle _parseFlowStyle(String source) {
       final match = RegExp(r'^(\d+(?:\.\d*)?|\.\d+)(?:px)?$').firstMatch(value);
       final width = match == null ? null : double.tryParse(match.group(1)!);
       if (width == null || !width.isFinite) {
-        throw const FormatException('Unsupported Mermaid stroke width');
+        throw FormatException(tr("Unsupported Mermaid stroke width"));
       }
       result = result.merge(MermaidFlowNodeStyle(strokeWidth: width));
     } else {
-      throw FormatException('Unsupported Mermaid node style: $name');
+      throw FormatException(tr("Unsupported Mermaid node style: {0}", [name]));
     }
   }
   return result;
@@ -534,6 +535,7 @@ class NativeMermaidFlowchart extends StatelessWidget {
   final bool dark;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final family = DefaultTextStyle.of(context).style.fontFamily;
     final graph = parseNativeMermaidFlowchart(source);
     final layout = layoutNativeMermaidFlowchart(graph, fontFamily: family);
@@ -806,7 +808,7 @@ List<String> _statements(String source) {
     if (!quote) {
       if (stack.isEmpty && !pipeLabel && x == '%' && next == '%') {
         if (RegExp(r'^%%\s*\{').hasMatch(source.substring(i))) {
-          throw const FormatException('Mermaid directives are unsupported.');
+          throw FormatException(tr("Mermaid directives are unsupported."));
         }
         while (i < source.length && source[i] != '\n') {
           i++;
@@ -834,7 +836,7 @@ List<String> _statements(String source) {
     b.write(x);
   }
   if (quote || pipeLabel || stack.isNotEmpty) {
-    throw const FormatException('Unclosed Mermaid label.');
+    throw FormatException(tr("Unclosed Mermaid label."));
   }
   flush();
   return out;
@@ -851,7 +853,7 @@ _Node _node(_Cursor c) {
     }
     c.i++;
   }
-  if (start == c.i) throw const FormatException('Expected a node ID.');
+  if (start == c.i) throw FormatException(tr("Expected a node ID."));
   final id = c.s.substring(start, c.i), endId = c.i;
   c.ws();
   var shape = MermaidFlowNodeShape.rectangle, label = id, explicit = false;
@@ -866,8 +868,8 @@ _Node _node(_Cursor c) {
       '{{',
       '(((',
     ].any((prefix) => c.s.startsWith(prefix, c.i))) {
-      throw const FormatException(
-        'This Mermaid node shape is not yet supported natively.',
+      throw FormatException(
+        tr("This Mermaid node shape is not yet supported natively."),
       );
     }
     final open = c.s[c.i],
@@ -895,7 +897,7 @@ _Node _node(_Cursor c) {
         }
         c.i++;
       }
-      if (!closed) throw const FormatException('Unclosed circle node.');
+      if (!closed) throw FormatException(tr("Unclosed circle node."));
     } else {
       shape = open == '['
           ? MermaidFlowNodeShape.rectangle
@@ -920,7 +922,7 @@ _Node _node(_Cursor c) {
         }
         c.i++;
       }
-      if (!closed) throw const FormatException('Unclosed node label.');
+      if (!closed) throw FormatException(tr("Unclosed node label."));
     }
     label = _plainLabel(label);
   } else {
@@ -959,7 +961,7 @@ _Link _edge(_Cursor c) {
     }
   }
   if (op == null) {
-    throw const FormatException('Unsupported Mermaid edge syntax.');
+    throw FormatException(tr("Unsupported Mermaid edge syntax."));
   }
   c.i += op.length;
   final style = op.startsWith('=')
@@ -998,7 +1000,7 @@ _Link _edge(_Cursor c) {
     c.i += legacy.end;
   } else {
     if (['--', '==', '-.'].contains(op)) {
-      throw const FormatException('Incomplete Mermaid edge operator.');
+      throw FormatException(tr("Incomplete Mermaid edge operator."));
     }
     c.ws();
     if (!c.end && c.s[c.i] == '|') {
@@ -1017,7 +1019,7 @@ _Link _edge(_Cursor c) {
         }
         c.i++;
       }
-      if (c.end) throw const FormatException('Unclosed edge label.');
+      if (c.end) throw FormatException(tr("Unclosed edge label."));
       label = c.s.substring(begin, c.i).trim();
       c.i++;
     }
@@ -1034,7 +1036,7 @@ String _plainLabel(String value) {
   label = label.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
   if (RegExp(r'<[^>]*>').hasMatch(label) ||
       label.contains(String.fromCharCode(96))) {
-    throw const FormatException('Unsupported Mermaid label markup.');
+    throw FormatException(tr("Unsupported Mermaid label markup."));
   }
   // Mermaid's encode/decodeEntities preprocesses #name; and #decimal; before
   // inserting the label into HTML. Flutter keeps only the decoded text.

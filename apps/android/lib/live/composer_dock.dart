@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -113,6 +114,7 @@ class _ComposerDockState extends State<ComposerDock> {
   );
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final goal = parseGoalWidget(obj(c.state['widgets'])['goal']);
     final todo = parseTodoWidget(obj(c.state['widgets'])['local-todo']);
     final queue = rows(c.state['queue']);
@@ -124,9 +126,9 @@ class _ComposerDockState extends State<ComposerDock> {
     final sections = <Widget>[
       if (goal != null)
         _DockSection(
-          label: 'Goal',
+          label: tr("Goal"),
           expanded: goalOpen,
-          onToggle: () => toggle('Goal'),
+          onToggle: () => toggle(tr("Goal")),
           title: goal.objective,
           active: goal.running,
           lead: goal.running
@@ -144,11 +146,14 @@ class _ComposerDockState extends State<ComposerDock> {
                   : 'text.muted',
               warning: goal.disarmed || goal.phase == 'blocked',
             ),
-            Tooltip(message: 'Continuation rounds', child: count(goal.count)),
+            Tooltip(
+              message: tr("Continuation rounds"),
+              child: count(goal.count),
+            ),
           ],
           action: goal.running || goal.canResume
               ? _DockAction(
-                  goal.running ? 'Pause' : 'Resume',
+                  goal.running ? tr("Pause") : tr("Resume"),
                   onPressed: c.canWrite
                       ? () => c.sendCommand({
                           'type': 'steer',
@@ -202,9 +207,9 @@ class _ComposerDockState extends State<ComposerDock> {
         ),
       if (todo != null)
         _DockSection(
-          label: 'Tasks',
+          label: tr("Tasks"),
           expanded: todoOpen,
-          onToggle: () => toggle('Tasks'),
+          onToggle: () => toggle(tr("Tasks")),
           title: todo.headline,
           active: todo.active.isNotEmpty,
           lead: todo.active.isNotEmpty
@@ -212,7 +217,7 @@ class _ComposerDockState extends State<ComposerDock> {
               : const Icon(LucideIcons.listChecks, size: 14),
           metadata: [
             Semantics(
-              label: '${todo.done} of ${todo.total} completed',
+              label: tr("{0} of {1} completed", [todo.done, todo.total]),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -263,10 +268,10 @@ class _ComposerDockState extends State<ComposerDock> {
                               ),
                               child: Semantics(
                                 label: item.status == 'completed'
-                                    ? 'Completed'
+                                    ? tr("Completed")
                                     : item.status == 'in_progress'
-                                    ? 'In progress'
-                                    : 'Pending',
+                                    ? tr("In progress")
+                                    : tr("Pending"),
                                 child: DockStateDot(item.dot),
                               ),
                             ),
@@ -336,14 +341,14 @@ class _ComposerDockState extends State<ComposerDock> {
         ),
       if (queue.isNotEmpty)
         _DockSection(
-          label: 'Queued messages',
+          label: tr("Queued messages"),
           expanded: queueOpen,
-          onToggle: () => toggle('Queued messages'),
-          title: '${queue.length} queued',
+          onToggle: () => toggle(tr("Queued messages")),
+          title: tr("{0} queued", [queue.length]),
           lead: const Icon(LucideIcons.listOrdered, size: 14),
           metadata: const [],
           action: _DockAction(
-            'Clear',
+            tr("Clear"),
             onPressed: c.canWrite
                 ? () => c.sendCommand({'type': 'clear_queue'})
                 : null,
@@ -375,8 +380,8 @@ class _ComposerDockState extends State<ComposerDock> {
                             children: [
                               Tooltip(
                                 message: item['kind'] == 'steer'
-                                    ? 'Steer'
-                                    : 'Follow up',
+                                    ? tr("Steer")
+                                    : tr("Follow up"),
                                 child: SizedBox(
                                   width: 20,
                                   height: 20,
@@ -411,7 +416,7 @@ class _ComposerDockState extends State<ComposerDock> {
                           right: 6,
                           child: WebIconButton(
                             LucideIcons.sendHorizontal,
-                            'Send now: ${item['content']}',
+                            tr("Send now: {0}", [item['content']]),
                             size: 26,
                             iconSize: 14,
                             onPressed: c.canWrite
@@ -481,19 +486,22 @@ class _DockAction extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   @override
-  Widget build(BuildContext context) => TextButton(
-    onPressed: onPressed,
-    style: TextButton.styleFrom(
-      minimumSize: const Size(0, 40),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      foregroundColor: palette(context)['text.secondary'],
-      disabledForegroundColor: palette(context)['text.faint'],
-      textStyle: webText(context, size: 12.5, color: 'text.secondary'),
-    ),
-    child: Text(label),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        minimumSize: const Size(0, 40),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        foregroundColor: palette(context)['text.secondary'],
+        disabledForegroundColor: palette(context)['text.faint'],
+        textStyle: webText(context, size: 12.5, color: 'text.secondary'),
+      ),
+      child: Text(label),
+    );
+  }
 }
 
 class _DockSection extends StatelessWidget {
@@ -515,139 +523,147 @@ class _DockSection extends StatelessWidget {
   final List<Widget> metadata;
   final Widget? action;
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 2, 6, 2),
-          child: Row(
-            children: [
-              Expanded(
-                child: Semantics(
-                  label: label,
-                  expanded: expanded,
-                  button: true,
-                  child: Tooltip(
-                    message: label,
-                    child: InkWell(
-                      onTap: onToggle,
-                      borderRadius: BorderRadius.circular(8),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 40),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: LayoutBuilder(
-                            builder: (context, bounds) {
-                              final wrap =
-                                  MediaQuery.textScalerOf(context).scale(12.5) >
-                                      18 ||
-                                  bounds.maxWidth < 220;
-                              final heading = Row(
-                                children: [
-                                  SizedBox(
-                                    width: 14,
-                                    child: IconTheme(
-                                      data: IconThemeData(
-                                        color: palette(context)['text.muted'],
-                                      ),
-                                      child: Center(child: lead),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Flexible(
-                                    fit: label == 'Queued messages'
-                                        ? FlexFit.loose
-                                        : FlexFit.tight,
-                                    child: Text(
-                                      title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: webText(
-                                        context,
-                                        size: 12.5,
-                                        weight: FontWeight.w500,
-                                        color: active
-                                            ? 'text.primary'
-                                            : 'text.secondary',
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 2, 6, 2),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Semantics(
+                    label: label,
+                    expanded: expanded,
+                    button: true,
+                    child: Tooltip(
+                      message: label,
+                      child: InkWell(
+                        onTap: onToggle,
+                        borderRadius: BorderRadius.circular(8),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 40),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: LayoutBuilder(
+                              builder: (context, bounds) {
+                                final wrap =
+                                    MediaQuery.textScalerOf(
+                                          context,
+                                        ).scale(12.5) >
+                                        18 ||
+                                    bounds.maxWidth < 220;
+                                final heading = Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 14,
+                                      child: IconTheme(
+                                        data: IconThemeData(
+                                          color: palette(context)['text.muted'],
+                                        ),
+                                        child: Center(child: lead),
                                       ),
                                     ),
-                                  ),
-                                  if (!wrap) ...[
-                                    for (final item in metadata) ...[
-                                      const SizedBox(width: 6),
-                                      item,
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      fit: label == 'Queued messages'
+                                          ? FlexFit.loose
+                                          : FlexFit.tight,
+                                      child: Text(
+                                        title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: webText(
+                                          context,
+                                          size: 12.5,
+                                          weight: FontWeight.w500,
+                                          color: active
+                                              ? 'text.primary'
+                                              : 'text.secondary',
+                                        ),
+                                      ),
+                                    ),
+                                    if (!wrap) ...[
+                                      for (final item in metadata) ...[
+                                        const SizedBox(width: 6),
+                                        item,
+                                      ],
                                     ],
-                                  ],
-                                  const SizedBox(width: 6),
-                                  Icon(
-                                    expanded
-                                        ? LucideIcons.chevronDown
-                                        : LucideIcons.chevronUp,
-                                    size: 14,
-                                    color: palette(context)['text.muted'],
-                                  ),
-                                ],
-                              );
-                              return Column(
-                                mainAxisSize: MainAxisSize.min,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  heading,
-                                  if (wrap && metadata.isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        left: 20,
-                                        top: 4,
-                                        bottom: 4,
-                                      ),
-                                      child: Wrap(
-                                        spacing: 6,
-                                        runSpacing: 4,
-                                        children: metadata,
-                                      ),
+                                    const SizedBox(width: 6),
+                                    Icon(
+                                      expanded
+                                          ? LucideIcons.chevronDown
+                                          : LucideIcons.chevronUp,
+                                      size: 14,
+                                      color: palette(context)['text.muted'],
                                     ),
-                                ],
-                              );
-                            },
+                                  ],
+                                );
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    heading,
+                                    if (wrap && metadata.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 20,
+                                          top: 4,
+                                          bottom: 4,
+                                        ),
+                                        child: Wrap(
+                                          spacing: 6,
+                                          runSpacing: 4,
+                                          children: metadata,
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              ?action,
-            ],
+                ?action,
+              ],
+            ),
           ),
         ),
-      ),
-      if (expanded) child,
-    ],
-  );
+        if (expanded) child,
+      ],
+    );
+  }
 }
 
 class DockStateDot extends StatelessWidget {
   const DockStateDot(this.state, {super.key});
   final String state;
   @override
-  Widget build(BuildContext context) => Container(
-    width: 7,
-    height: 7,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: state == 'idle'
-          ? Colors.transparent
-          : palette(context)[state == 'ongoing'
-                ? 'accent.default'
-                : state == 'done'
-                ? 'status.success'
-                : 'status.danger'],
-      border: state == 'idle'
-          ? Border.all(color: palette(context)['text.faint'], width: 1.5)
-          : null,
-    ),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Container(
+      width: 7,
+      height: 7,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: state == 'idle'
+            ? Colors.transparent
+            : palette(context)[state == 'ongoing'
+                  ? 'accent.default'
+                  : state == 'done'
+                  ? 'status.success'
+                  : 'status.danger'],
+        border: state == 'idle'
+            ? Border.all(color: palette(context)['text.faint'], width: 1.5)
+            : null,
+      ),
+    );
+  }
 }

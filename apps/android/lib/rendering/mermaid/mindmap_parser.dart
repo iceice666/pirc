@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html;
 
@@ -22,8 +23,8 @@ NativeMermaidMindmapDiagram parseNativeMermaidMindmap(String source) {
       .replaceAll(RegExp(r'^\s*%%(?!\{)[^\n]+\n?', multiLine: true), '')
       .trimLeft();
   if (processedForSize.length > 50000) {
-    throw const FormatException(
-      'Mermaid diagram exceeds the default 50000 character limit',
+    throw FormatException(
+      tr("Mermaid diagram exceeds the default 50000 character limit"),
     );
   }
 
@@ -36,8 +37,9 @@ NativeMermaidMindmapDiagram parseNativeMermaidMindmap(String source) {
   var headerSeen = false;
   var rootIndent = 0;
 
-  Never invalid(int line, String details) =>
-      throw FormatException('Invalid Mermaid mindmap at line $line: $details');
+  Never invalid(int line, String details) => throw FormatException(
+    tr("Invalid Mermaid mindmap at line {0}: {1}", [line, details]),
+  );
 
   for (var index = 0; index < lines.length; index++) {
     final lineNumber = index + 1;
@@ -45,11 +47,14 @@ NativeMermaidMindmapDiagram parseNativeMermaidMindmap(String source) {
     final trimmed = line.trim();
 
     if (RegExp(r'^\s*%%\{').hasMatch(line)) {
-      invalid(lineNumber, 'Mermaid configuration directives are unsupported');
+      invalid(
+        lineNumber,
+        tr("Mermaid configuration directives are unsupported"),
+      );
     }
 
     if (!headerSeen && trimmed == '---') {
-      invalid(lineNumber, 'YAML frontmatter is unsupported');
+      invalid(lineNumber, tr("YAML frontmatter is unsupported"));
     }
 
     if (trimmed.isEmpty || RegExp(r'^\s*%%').hasMatch(line)) continue;
@@ -58,7 +63,7 @@ NativeMermaidMindmapDiagram parseNativeMermaidMindmap(String source) {
       // preprocessDiagram removes leading comments and trimStart()s the
       // remaining source before the case-insensitive Jison header lexer runs.
       if (line.trimLeft().toLowerCase() != 'mindmap') {
-        invalid(lineNumber, 'Expected a mindmap header');
+        invalid(lineNumber, tr("Expected a mindmap header"));
       }
       headerSeen = true;
       continue;
@@ -68,22 +73,24 @@ NativeMermaidMindmapDiagram parseNativeMermaidMindmap(String source) {
     var body = line.substring(sourceIndent);
     if (body.startsWith(':::')) {
       if (nodes.isEmpty) {
-        invalid(lineNumber, 'Class directive has no preceding node');
+        invalid(lineNumber, tr("Class directive has no preceding node"));
       }
       final value = body.substring(3);
-      if (value.isEmpty) invalid(lineNumber, 'Class directive cannot be empty');
+      if (value.isEmpty) {
+        invalid(lineNumber, tr("Class directive cannot be empty"));
+      }
       nodes.last.className = _sanitizeMermaidText(value);
       continue;
     }
 
     if (body.toLowerCase().startsWith('::icon(')) {
       if (nodes.isEmpty) {
-        invalid(lineNumber, 'Icon directive has no preceding node');
+        invalid(lineNumber, tr("Icon directive has no preceding node"));
       }
       final openLength = '::icon('.length;
       final close = body.indexOf(')', openLength);
       if (close < 0 || body.substring(close + 1).trim().isNotEmpty) {
-        invalid(lineNumber, 'Malformed icon directive');
+        invalid(lineNumber, tr("Malformed icon directive"));
       }
       // Mermaid accepts an empty icon directive but its DB ignores the empty
       // value, so preserve that behavior.
@@ -118,7 +125,10 @@ NativeMermaidMindmapDiagram parseNativeMermaidMindmap(String source) {
 
     if (nodes.isNotEmpty && parentIndex < 0) {
       throw FormatException(
-        'There can be only one root. No parent could be found for ("${_sanitizeMermaidText(parsed.label)}")',
+        tr(
+          "There can be only one root. No parent could be found for (\"{0}\")",
+          [_sanitizeMermaidText(parsed.label)],
+        ),
       );
     }
 
@@ -138,10 +148,10 @@ NativeMermaidMindmapDiagram parseNativeMermaidMindmap(String source) {
   }
 
   if (!headerSeen) {
-    throw const FormatException('Missing Mermaid mindmap header');
+    throw FormatException(tr("Missing Mermaid mindmap header"));
   }
   if (nodes.isEmpty) {
-    throw const FormatException('Mindmap must contain a root node');
+    throw FormatException(tr("Mindmap must contain a root node"));
   }
 
   _assignSections(nodes);
@@ -182,7 +192,7 @@ _ParsedNodeBody _parseNodeBody(
   int lineNumber,
   Never Function(int line, String details) invalid,
 ) {
-  if (body.isEmpty) invalid(lineNumber, 'Node label cannot be empty');
+  if (body.isEmpty) invalid(lineNumber, tr("Node label cannot be empty"));
 
   final opener = _findShapeOpener(body);
   if (opener == null) {
@@ -201,10 +211,15 @@ _ParsedNodeBody _parseNodeBody(
   if (parsedLabel == null) {
     invalid(
       lineNumber,
-      'Malformed ${shape.name} node; expected closing delimiter "$closing"',
+      tr("Malformed {0} node; expected closing delimiter \"{1}\"", [
+        shape.name,
+        closing,
+      ]),
     );
   }
-  if (parsedLabel.isEmpty) invalid(lineNumber, 'Node label cannot be empty');
+  if (parsedLabel.isEmpty) {
+    invalid(lineNumber, tr("Node label cannot be empty"));
+  }
   if (sourceId.isEmpty) {
     return _ParsedNodeBody(
       nodeId: parsedLabel,

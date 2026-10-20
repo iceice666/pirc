@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -132,7 +133,7 @@ class NativeHtmlSelectState extends ChangeNotifier {
       throw ArgumentError.value(
         sanitizedHtml,
         'sanitizedHtml',
-        'Must be the exact fragment used to create this select state.',
+        tr("Must be the exact fragment used to create this select state."),
       );
     }
     return _annotatedHtml;
@@ -672,7 +673,7 @@ class NativeHtmlSelectState extends ChangeNotifier {
 
   _SelectRecord _recordFor(String key) {
     final record = _records[key];
-    if (record == null) throw StateError('Unknown HTML select: $key');
+    if (record == null) throw StateError(tr("Unknown HTML select: {0}", [key]));
     return record;
   }
 

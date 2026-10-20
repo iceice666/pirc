@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -81,7 +82,7 @@ class NativeHtmlControlState extends ChangeNotifier {
       throw ArgumentError.value(
         sanitizedHtml,
         'sanitizedHtml',
-        'Must be the exact fragment used to create this control state.',
+        tr("Must be the exact fragment used to create this control state."),
       );
     }
     return _annotatedHtml;
@@ -724,49 +725,52 @@ class _NativeHtmlControlWidgetState extends State<NativeHtmlControlWidget> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: widget.state,
-    builder: (context, child) {
-      final control = widget.control;
-      final checked = widget.state.isChecked(control.key);
-      final radio = control.type == NativeHtmlControlType.radio;
-      final disabled = control.disabled;
-      return Semantics(
-        key: ValueKey('native-html-control-${control.key}'),
-        container: true,
-        label: control.label.isEmpty ? null : control.label,
-        hint: control.hint.isEmpty ? null : control.hint,
-        checked: checked,
-        enabled: !disabled,
-        inMutuallyExclusiveGroup: radio,
-        focusable: !disabled && widget.state.isTabStop(control.key),
-        focused: _focusNode.hasFocus,
-        onTap: disabled
-            ? null
-            : () {
-                widget.state.activateControl(control.key);
-                _focusNode.requestFocus();
-              },
-        child: Focus(
-          focusNode: _focusNode,
-          canRequestFocus: !disabled && control.visible,
-          skipTraversal: radio && !widget.state.isTabStop(control.key),
-          onKeyEvent: _handleKey,
-          child: GestureDetector(
-            excludeFromSemantics: true,
-            behavior: HitTestBehavior.opaque,
-            onTap: disabled
-                ? null
-                : () {
-                    _focusNode.requestFocus();
-                    widget.state.activateControl(control.key);
-                  },
-            child: _flowBox(context, checked, _focusNode.hasFocus),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return AnimatedBuilder(
+      animation: widget.state,
+      builder: (context, child) {
+        final control = widget.control;
+        final checked = widget.state.isChecked(control.key);
+        final radio = control.type == NativeHtmlControlType.radio;
+        final disabled = control.disabled;
+        return Semantics(
+          key: ValueKey('native-html-control-${control.key}'),
+          container: true,
+          label: control.label.isEmpty ? null : control.label,
+          hint: control.hint.isEmpty ? null : control.hint,
+          checked: checked,
+          enabled: !disabled,
+          inMutuallyExclusiveGroup: radio,
+          focusable: !disabled && widget.state.isTabStop(control.key),
+          focused: _focusNode.hasFocus,
+          onTap: disabled
+              ? null
+              : () {
+                  widget.state.activateControl(control.key);
+                  _focusNode.requestFocus();
+                },
+          child: Focus(
+            focusNode: _focusNode,
+            canRequestFocus: !disabled && control.visible,
+            skipTraversal: radio && !widget.state.isTabStop(control.key),
+            onKeyEvent: _handleKey,
+            child: GestureDetector(
+              excludeFromSemantics: true,
+              behavior: HitTestBehavior.opaque,
+              onTap: disabled
+                  ? null
+                  : () {
+                      _focusNode.requestFocus();
+                      widget.state.activateControl(control.key);
+                    },
+              child: _flowBox(context, checked, _focusNode.hasFocus),
+            ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 
   Widget _flowBox(BuildContext context, bool checked, bool focused) {
     const size = 13.0;

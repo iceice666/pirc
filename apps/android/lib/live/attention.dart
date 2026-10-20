@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'gateway.dart';
@@ -8,7 +9,7 @@ String attentionRequestError(Object error) {
   if (error is PlatformException) {
     final status = RegExp(r'^HTTP_(\d{3})$').firstMatch(error.code);
     if (status != null) {
-      return error.message ?? 'Request failed (${status.group(1)})';
+      return error.message ?? tr("Request failed ({0})", [status.group(1)]);
     }
   }
   return LiveController.describe(error);
@@ -278,10 +279,10 @@ class AttentionState extends ChangeNotifier {
 
 String untilRun(num at, {DateTime? now}) {
   final delta = at - (now ?? DateTime.now()).millisecondsSinceEpoch;
-  if (delta < 60000) return 'in under a minute';
-  if (delta < 3600000) return 'in ${(delta / 60000).round()}m';
-  if (delta < 86400000) return 'in ${(delta / 3600000).round()}h';
-  return 'in ${(delta / 86400000).round()}d';
+  if (delta < 60000) return tr("in under a minute");
+  if (delta < 3600000) return tr("in {0}m", [(delta / 60000).round()]);
+  if (delta < 86400000) return tr("in {0}h", [(delta / 3600000).round()]);
+  return tr("in {0}d", [(delta / 86400000).round()]);
 }
 
 String describeOrigins(dynamic value) {
@@ -290,20 +291,20 @@ String describeOrigins(dynamic value) {
       .where((o) => o.startsWith('tool:'))
       .map(
         (o) => o == 'tool:bash:network'
-            ? 'bash fetching from the network'
+            ? tr("bash fetching from the network")
             : o.substring(5),
       );
   final custom = origins
       .where((o) => o.startsWith('custom:'))
       .map((o) => o.substring(7));
   final parts = [
-    if (origins.contains('user')) 'your words',
-    if (origins.contains('assistant')) 'the assistant',
-    if (tools.isNotEmpty) 'tool output (${tools.join(', ')})',
-    if (custom.isNotEmpty) '${custom.join(', ')} messages',
-    if (origins.contains('unknown')) 'an unknown source',
+    if (origins.contains('user')) tr("your words"),
+    if (origins.contains('assistant')) tr("the assistant"),
+    if (tools.isNotEmpty) tr("tool output ({0})", [tools.join(', ')]),
+    if (custom.isNotEmpty) tr("{0} messages", [custom.join(', ')]),
+    if (origins.contains('unknown')) tr("an unknown source"),
   ];
-  return parts.isEmpty ? '' : 'From ${parts.join(', ')}';
+  return parts.isEmpty ? '' : tr("From {0}", [parts.join(', ')]);
 }
 
 String describeVersion(Json version, Json sessions) {
@@ -312,18 +313,18 @@ String describeVersion(Json version, Json sessions) {
       ? sessions[actor.substring(8)]
       : null;
   final who = actor.startsWith('session:')
-      ? 'the assistant${name != null ? ' ($name)' : ''}'
+      ? tr("the assistant{0}", [name != null ? ' ($name)' : ''])
       : 'you';
   final op =
-      const {
-        'add': 'Added',
-        'replace': 'Changed',
-        'remove': 'Removed',
-        'restore': 'Restored',
-        'forget': 'Forgotten',
+      {
+        'add': tr("Added"),
+        'replace': tr("Changed"),
+        'remove': tr("Removed"),
+        'restore': tr("Restored"),
+        'forget': tr("Forgotten"),
       }[version['op']] ??
       version['op'];
-  return '$op by $who';
+  return tr("{0} by {1}", [op, who]);
 }
 
 /// Compare decoded JSON independent of object key insertion order. History

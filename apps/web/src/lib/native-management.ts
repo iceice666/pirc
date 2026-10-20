@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 import { request } from './http';
 
 export type NativeManagementStatus =
@@ -38,7 +39,7 @@ export function timestampMillis(value: string | number): number {
 
 /** Pick only the fields the consent screen needs from the response. */
 function nativeManagementRequest(value: unknown): NativeManagementRequest {
-  if (!value || typeof value !== 'object') throw new Error('Invalid management request');
+  if (!value || typeof value !== 'object') throw new Error(tr('Invalid management request'));
   const raw = value as Record<string, unknown>;
   const expiresAt = raw.expiresAt;
   const serverNow = raw.serverNow;
@@ -56,12 +57,12 @@ function nativeManagementRequest(value: unknown): NativeManagementRequest {
     !Number.isFinite(timestampMillis(expiresAt)) ||
     !Number.isFinite(timestampMillis(serverNow))
   )
-    throw new Error('Invalid management request');
+    throw new Error(tr('Invalid management request'));
 
   return {
     id: raw.id,
     status: raw.status as NativeManagementStatus,
-    deviceName: (raw.deviceName as string | undefined)?.trim() || 'A device',
+    deviceName: (raw.deviceName as string | undefined)?.trim() || tr('A device'),
     capabilities: raw.capabilities as NativeManagementCapability[],
     expiresAt,
     serverNow,

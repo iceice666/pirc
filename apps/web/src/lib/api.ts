@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 import {
   interleave,
   piHistory,
@@ -52,7 +53,7 @@ export { ApiError } from './http';
 function safeBackendMessage(body: any, status: number): string {
   return safeBackendText(
     body?.error?.message,
-    `Backend request failed (${status}). Check your settings and try again.`,
+    tr('Backend request failed ({0}). Check your settings and try again.', [status]),
   );
 }
 
@@ -141,7 +142,7 @@ function interaction(raw: any): PendingInteraction {
     id: raw.id,
     runnerEpoch: String(raw.runnerEpoch),
     ...(typeof request.toolCallId === 'string' ? { toolCallId: request.toolCallId } : {}),
-    title: request.title ?? 'The agent needs your input',
+    title: request.title ?? tr('The agent needs your input'),
     description: request.message,
     ...(typeof raw.expiresAt === 'number' ? { expiresAt: iso(raw.expiresAt) } : {}),
     status: raw.status ?? 'pending',
@@ -344,7 +345,7 @@ export const backendApi = {
     });
     return result.ok
       ? result
-      : { ...result, message: safeBackendText(result.message, 'The connection test failed.') };
+      : { ...result, message: safeBackendText(result.message, tr('The connection test failed.')) };
   },
   setDefault: (model: BackendSettingsSnapshot['defaultModel'] | null) =>
     backendRequest<BackendSettingsSnapshot>('/api/providers/default-model', {
@@ -434,10 +435,10 @@ export const api = {
           commandId: uuid(),
         });
         if (receipt.status !== 'accepted')
-          throw new Error(receipt.message ?? 'Session settings were not accepted.');
+          throw new Error(receipt.message ?? tr('Session settings were not accepted.'));
       };
       if (input.modelId) {
-        if (!input.provider) throw new Error('The selected model has no provider.');
+        if (!input.provider) throw new Error(tr('The selected model has no provider.'));
         await applySetting({ kind: 'set_model' });
       }
       if (input.thinkingLevel) await applySetting({ kind: 'set_thinking' });

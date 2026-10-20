@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 // Shape geometry ported from Mermaid 11.17.2 (MIT), classic mindmap renderer.
 // Source: rendering-elements/shapes/{defaultMindmapNode,circle,squareRect,
 // roundedRect,cloud,bang,hexagon}.ts. Layout is computed from real labels;
@@ -110,10 +111,10 @@ NativeMermaidMindmapLayout layoutNativeMermaidMindmap(
   double letterSpacing = 0,
 }) {
   if (!letterSpacing.isFinite) {
-    throw const FormatException('Mindmap font tracking must be finite');
+    throw FormatException(tr("Mindmap font tracking must be finite"));
   }
   if (!width.isFinite || width <= 0) {
-    throw const FormatException('Mindmap viewport width must be positive');
+    throw FormatException(tr("Mindmap viewport width must be positive"));
   }
   final shapes = <({TextSpan label, Size size, Path path, Rect bounds})>[];
   for (final node in diagram.nodes) {
@@ -461,7 +462,9 @@ TextSpan _label(String source, TextStyle style) {
       'del' || 's' => const TextStyle(decoration: TextDecoration.lineThrough),
       'span' || 'p' => const TextStyle(),
       _ => throw FormatException(
-        'Native mindmap label element ${node.localName} is not yet supported',
+        tr("Native mindmap label element {0} is not yet supported", [
+          node.localName,
+        ]),
       ),
     };
     final inline = _inlineStyle(node.attributes['style']);
@@ -529,7 +532,7 @@ TextStyle _inlineStyle(String? declarations) {
         );
       default:
         throw FormatException(
-          'Native mindmap label CSS $property is not yet supported',
+          tr("Native mindmap label CSS {0} is not yet supported", [property]),
         );
     }
   }
@@ -568,60 +571,65 @@ class NativeMermaidMindmap extends StatelessWidget {
   final NativeMermaidMindmapDiagram diagram;
   final bool dark;
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final layout = layoutNativeMermaidMindmap(
-        diagram,
-        width: constraints.maxWidth,
-        dark: dark,
-        fontFamily:
-            Theme.of(
-              context,
-            ).extension<NativeMindmapTypography>()?.fontFamily ??
-            Theme.of(context).textTheme.bodyMedium?.fontFamily,
-        letterSpacing:
-            Theme.of(
-              context,
-            ).extension<NativeMindmapTypography>()?.labelLetterSpacing ??
-            0,
-      );
-      return Center(
-        child: SizedBox(
-          width: layout.size.width,
-          height: layout.size.height,
-          child: FittedBox(
-            fit: BoxFit.contain,
-            child: SizedBox(
-              width: layout.viewBox.width,
-              height: layout.viewBox.height,
-              child: SelectionArea(
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: CustomPaint(painter: NativeMindmapPainter(layout)),
-                    ),
-                    for (final node in layout.nodes)
-                      Positioned(
-                        left: node.labelBounds.left - layout.viewBox.left,
-                        top: node.labelBounds.top - layout.viewBox.top,
-                        width: node.labelSize.width,
-                        height: node.labelSize.height,
-                        child: Text.rich(
-                          node.label,
-                          textScaler: TextScaler.noScaling,
-                          textAlign: TextAlign.center,
-                          textDirection: TextDirection.ltr,
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final layout = layoutNativeMermaidMindmap(
+          diagram,
+          width: constraints.maxWidth,
+          dark: dark,
+          fontFamily:
+              Theme.of(
+                context,
+              ).extension<NativeMindmapTypography>()?.fontFamily ??
+              Theme.of(context).textTheme.bodyMedium?.fontFamily,
+          letterSpacing:
+              Theme.of(
+                context,
+              ).extension<NativeMindmapTypography>()?.labelLetterSpacing ??
+              0,
+        );
+        return Center(
+          child: SizedBox(
+            width: layout.size.width,
+            height: layout.size.height,
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: SizedBox(
+                width: layout.viewBox.width,
+                height: layout.viewBox.height,
+                child: SelectionArea(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: NativeMindmapPainter(layout),
                         ),
                       ),
-                  ],
+                      for (final node in layout.nodes)
+                        Positioned(
+                          left: node.labelBounds.left - layout.viewBox.left,
+                          top: node.labelBounds.top - layout.viewBox.top,
+                          width: node.labelSize.width,
+                          height: node.labelSize.height,
+                          child: Text.rich(
+                            node.label,
+                            textScaler: TextScaler.noScaling,
+                            textAlign: TextAlign.center,
+                            textDirection: TextDirection.ltr,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
 class NativeMindmapPainter extends CustomPainter {

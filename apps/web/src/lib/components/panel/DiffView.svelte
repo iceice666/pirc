@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   /** Unified diff renderer: file headers, hunk headers, and +/- lines with gutters. */
   interface Props {
     diff: string;
@@ -56,11 +58,11 @@
 </script>
 
 {#if !diff.trim()}
-  <p class="panel-empty">No changes.</p>
+  <p class="panel-empty">{tr('No changes.')}</p>
 {:else}
   <!-- A scrollable region (keyboard-scrollable via tabindex); lines read as plain text. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <div class="diff" role="region" aria-label="Diff" tabindex="0">
+  <div class="diff" role="region" aria-label={tr('Diff')} tabindex="0">
     {#each shown as line, index (index)}
       {#if line.kind === 'file'}
         <div class="diff-file">{line.text}</div>
@@ -75,10 +77,10 @@
             aria-hidden="true">{line.new ?? ''}</span
           ><span class="sign"
             >{#if line.kind === 'add'}<span aria-hidden="true">+</span><span class="sr-only"
-                >Added:
+                >{tr('Added:')}
               </span>{:else if line.kind === 'del'}<span aria-hidden="true">−</span><span
                 class="sr-only"
-                >Removed:
+                >{tr('Removed:')}
               </span>{/if}</span
           ><code>{line.text}</code>
         </div>
@@ -86,11 +88,12 @@
     {/each}
     {#if shown.length < lines.length}
       <button class="diff-more" type="button" onclick={() => (limit += PAGE * 2)}
-        >Show {Math.min(PAGE * 2, lines.length - shown.length).toLocaleString()} more lines ({(
-          lines.length - shown.length
-        ).toLocaleString()} hidden)</button
+        >{tr('Show {0} more lines ({1} hidden)', [
+          Math.min(PAGE * 2, lines.length - shown.length).toLocaleString(),
+          (lines.length - shown.length).toLocaleString(),
+        ])}</button
       >
-    {:else if truncated}<div class="diff-meta">Diff truncated at 1 MB.</div>{/if}
+    {:else if truncated}<div class="diff-meta">{tr('Diff truncated at 1 MB.')}</div>{/if}
   </div>
 {/if}
 

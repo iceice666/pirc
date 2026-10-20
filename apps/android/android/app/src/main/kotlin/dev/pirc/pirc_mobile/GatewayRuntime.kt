@@ -83,20 +83,20 @@ suspend fun answerGeneration(interactionId: String, acquire: suspend () -> Long)
  * The answer endpoint validates the active runner and control generation. */
 fun checkedAnswer(before: SessionState, interactionId: String, epoch: String, data: Map<*, *>, now: Long = System.currentTimeMillis()): InteractionAnswer {
     val question = before.interactions.find { it.id == interactionId }
-        ?: throw ApiException(409, "stale", "問題已不存在，請重新整理")
+        ?: throw ApiException(409, "stale", NativeI18n.text("問題已不存在，請重新整理"))
     if (question.status != "pending" || question.runnerEpoch != epoch ||
-        (question.expiresAt != null && question.expiresAt!! <= now)) throw ApiException(409, "stale", "問題已處理或過期")
+        (question.expiresAt != null && question.expiresAt!! <= now)) throw ApiException(409, "stale", NativeI18n.text("問題已處理或過期"))
     return when {
         data["cancelled"] == true -> InteractionAnswer.Cancel
         question.kind == "confirm" -> {
-            val confirmed = data["confirmed"] as? Boolean ?: throw ApiException(400, "invalid_answer", "請選擇確認或拒絕")
+            val confirmed = data["confirmed"] as? Boolean ?: throw ApiException(400, "invalid_answer", NativeI18n.text("請選擇確認或拒絕"))
             val choice = if (confirmed && question.modelChoice != null && (data.containsKey("model") || data.containsKey("thinking"))) {
                 val model = data["model"]
                 if (model != null && (model !is Map<*, *> || model["provider"] !is String || model["id"] !is String))
-                    throw ApiException(400, "invalid_answer", "Invalid model choice")
+                    throw ApiException(400, "invalid_answer", NativeI18n.text("Invalid model choice"))
                 val thinking = data["thinking"]
                 if (thinking != null && thinking !in listOf("off", "minimal", "low", "medium", "high", "xhigh", "max"))
-                    throw ApiException(400, "invalid_answer", "Invalid thinking choice")
+                    throw ApiException(400, "invalid_answer", NativeI18n.text("Invalid thinking choice"))
                 buildJsonObject { put("model", model.json()); put("thinking", thinking.json()) }
             } else null
             val asUserRequest = confirmed && question.userRequestChoice != null && data["asUserRequest"] == true
@@ -109,11 +109,11 @@ fun checkedAnswer(before: SessionState, interactionId: String, epoch: String, da
         }
         question.kind == "select" -> {
             val values = (data["values"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
-            if (values.isEmpty() || values.distinct().size != values.size || (!question.multiple && values.size != 1) || values.any { v -> question.options.none { it.value == v } }) throw ApiException(400, "invalid_answer", "選项已變更，請重新選擇")
+            if (values.isEmpty() || values.distinct().size != values.size || (!question.multiple && values.size != 1) || values.any { v -> question.options.none { it.value == v } }) throw ApiException(400, "invalid_answer", NativeI18n.text("選项已變更，請重新選擇"))
             InteractionAnswer.Choices(values)
         }
-        question.kind in listOf("input", "editor") -> InteractionAnswer.Text(data["value"] as? String ?: throw ApiException(400, "invalid_answer", "請輸入答案"))
-        else -> throw ApiException(400, "invalid_answer", "此問題類型尚不支援")
+        question.kind in listOf("input", "editor") -> InteractionAnswer.Text(data["value"] as? String ?: throw ApiException(400, "invalid_answer", NativeI18n.text("請輸入答案")))
+        else -> throw ApiException(400, "invalid_answer", NativeI18n.text("此問題類型尚不支援"))
     }
 }
 
@@ -128,7 +128,7 @@ fun answerReconciliation(
     now: Long = System.currentTimeMillis(),
 ): AnswerReconciliation {
     if (before.session.id != sessionId)
-        throw ApiException(409, "session_changed", "對話已變更，請重新檢查問題")
+        throw ApiException(409, "session_changed", NativeI18n.text("對話已變更，請重新檢查問題"))
     val question = before.interactions.firstOrNull {
         it.id == interactionId && it.runnerEpoch == epoch
     }
@@ -139,7 +139,7 @@ fun answerReconciliation(
 
 fun requirePairingStamp(expected: String?, actual: String?) {
     if (expected.isNullOrBlank() || expected != actual)
-        throw ApiException(409, "account_changed", "配對帳戶已變更，請重新檢查問題")
+        throw ApiException(409, "account_changed", NativeI18n.text("配對帳戶已變更，請重新檢查問題"))
 }
 
 /** Uses the existing Android authentication, HTTP client, reducer and event resumption. */
@@ -182,7 +182,7 @@ class GatewayRuntime private constructor(val context: Context) {
             val stamp = ensurePairingStamp()
             managementSession = current to NativeManagementSession(current,
                 { method, path, body -> requestWithApi(current, method, path, body) },
-                { validatePairingStamp(stamp); if (activeApi !== current) throw ApiException(409, "account_changed", "配對已變更，請重試") },
+                { validatePairingStamp(stamp); if (activeApi !== current) throw ApiException(409, "account_changed", NativeI18n.text("配對已變更，請重試")) },
             )
         }
         managementSession!!.second
@@ -244,7 +244,7 @@ class GatewayRuntime private constructor(val context: Context) {
     private fun rotatePairingStamp(): String {
         val stamp = UUID.randomUUID().toString()
         if (!pairingIdentity.edit().putString("stamp", stamp).commit())
-            throw ApiException(503, "account_changed", "無法保存配對狀態，請稍後再試")
+            throw ApiException(503, "account_changed", NativeI18n.text("無法保存配對狀態，請稍後再試"))
         return stamp
     }
     private fun ensurePairingStamp(): String =
@@ -254,7 +254,7 @@ class GatewayRuntime private constructor(val context: Context) {
         requirePairingStamp(expected, if (pairing == null) null else ensurePairingStamp())
     }
     suspend fun api(): PircApi = activeApi ?: withContext(Dispatchers.IO) {
-        credentials.load()?.let { connectedApi(it) } ?: throw ApiException(401, "unpaired", "請先配對此裝置")
+        credentials.load()?.let { connectedApi(it) } ?: throw ApiException(401, "unpaired", NativeI18n.text("請先配對此裝置"))
     }.also { activeApi = it }
 
     suspend fun boot(): Map<String, Any?> = answerLock.withLock {
@@ -275,7 +275,7 @@ class GatewayRuntime private constructor(val context: Context) {
     }
     suspend fun openContext(contextId: String, pairingStamp: String): Map<String, Any?> = answerLock.withLock {
         val pairing = withContext(Dispatchers.IO) { credentials.load() }
-            ?: throw ApiException(401, "unpaired", "請先配對此裝置")
+            ?: throw ApiException(401, "unpaired", NativeI18n.text("請先配對此裝置"))
         val currentStamp = ensurePairingStamp()
         requirePairingStamp(pairingStamp, currentStamp)
         if (contexts.currentPairingStamp() != currentStamp) {
@@ -285,9 +285,9 @@ class GatewayRuntime private constructor(val context: Context) {
         val lease = try {
             contexts.openContext(contextId, currentStamp)
         } catch (e: ContextRegistryException) {
-            throw ApiException(409, "context_expired", e.message ?: "此原生視窗已關閉")
+            throw ApiException(409, "context_expired", e.message ?: NativeI18n.text("此原生視窗已關閉"))
         } catch (e: IllegalStateException) {
-            throw ApiException(409, "context_invalid", e.message ?: "無法開啟原生視窗")
+            throw ApiException(409, "context_invalid", e.message ?: NativeI18n.text("無法開啟原生視窗"))
         }
         mapOf(
             "contextId" to lease.contextId,
@@ -422,7 +422,7 @@ class GatewayRuntime private constructor(val context: Context) {
     private fun contextLease(contextId: String?): ContextRegistry.Lease = try {
         contexts.requireContext(contextId)
     } catch (e: ContextRegistryException) {
-        throw ApiException(409, "context_expired", e.message ?: "此原生視窗已關閉")
+        throw ApiException(409, "context_expired", e.message ?: NativeI18n.text("此原生視窗已關閉"))
     }
     private fun contextLeaseIsCurrent(lease: ContextRegistry.Lease): Boolean = contexts.isCurrent(lease)
     private fun emitToSubscriber(
@@ -467,7 +467,7 @@ class GatewayRuntime private constructor(val context: Context) {
             val text = response.body?.string().orEmpty()
             val json = runCatching { PircJson.parseToJsonElement(text) }.getOrNull()
             if (!response.isSuccessful) throw api.failure(response, text)
-            if (response.code == 204) null else json?.wire() ?: throw ApiException(502, "bad_reply", "伺服器回傳的內容不是 JSON，請檢查 gateway 與反向代理")
+            if (response.code == 204) null else json?.wire() ?: throw ApiException(502, "bad_reply", NativeI18n.text("伺服器回傳的內容不是 JSON，請檢查 gateway 與反向代理"))
         }
     }
     internal suspend fun documentStorageState(
@@ -481,11 +481,11 @@ class GatewayRuntime private constructor(val context: Context) {
             val pairing = credentials.load()
             val stamp = pairing?.let { ensurePairingStamp() }
             if (principal.pairingStamp != stamp) {
-                throw ApiException(409, "account_changed", "Browser storage account changed; reload the document.")
+                throw ApiException(409, "account_changed", NativeI18n.text("Browser storage account changed; reload the document."))
             }
             val lease = contextLease(principal.contextId)
             if (!contextLeaseIsCurrent(lease) || lease.pairingStamp != stamp) {
-                throw ApiException(409, "context_expired", "The browser storage context is no longer current.")
+                throw ApiException(409, "context_expired", NativeI18n.text("The browser storage context is no longer current."))
             }
             documentStorage.state(principal, documentUrl, operations, knownRevision, expectedGeneration)
         }
@@ -495,7 +495,7 @@ class GatewayRuntime private constructor(val context: Context) {
         open: Boolean, key: String, openerKey: String?, expectedStamp: String,
     ) = withContext(Dispatchers.IO) {
         answerLock.withLock {
-            credentials.load() ?: throw ApiException(401, "unpaired", "請先配對此裝置")
+            credentials.load() ?: throw ApiException(401, "unpaired", NativeI18n.text("請先配對此裝置"))
             requirePairingStamp(expectedStamp, ensurePairingStamp())
             if (open) documentStorage.openWindow(expectedStamp, key, openerKey)
             else documentStorage.closeWindow(expectedStamp, key)
@@ -514,29 +514,29 @@ class GatewayRuntime private constructor(val context: Context) {
         val pairing = withContext(Dispatchers.IO) { credentials.load() }
         val stamp = pairing?.let { ensurePairingStamp() }
         if (principal.pairingStamp != stamp) {
-            throw ApiException(409, "account_changed", "Cookie account changed; reload the document.")
+            throw ApiException(409, "account_changed", NativeI18n.text("Cookie account changed; reload the document."))
         }
         val lease = contextLease(principal.contextId)
         if (!contextLeaseIsCurrent(lease) || lease.pairingStamp != principal.pairingStamp) {
-            throw ApiException(409, "context_expired", "This native context is no longer current.")
+            throw ApiException(409, "context_expired", NativeI18n.text("This native context is no longer current."))
         }
         val url = documentUrl.toHttpUrlOrNull()
-            ?: throw ApiException(400, "cookie_document", "Cookies require an HTTP document.")
+            ?: throw ApiException(400, "cookie_document", NativeI18n.text("Cookies require an HTTP document."))
         if (NativeScriptResourceTransport.originForDocument(url.toString()) != principal.documentOrigin) {
-            throw ApiException(400, "cookie_document", "Cookie document origin changed.")
+            throw ApiException(400, "cookie_document", NativeI18n.text("Cookie document origin changed."))
         }
         require(writes.size <= 256) { "Too many cookie writes" }
         val jar = withContext(Dispatchers.IO) { documentCookies.bind(principal.pairingStamp) }!!
         for (write in writes) {
             val writeUrl = (write["url"] as? String)?.toHttpUrlOrNull()
-                ?: throw ApiException(400, "cookie_document", "Invalid cookie write URL.")
+                ?: throw ApiException(400, "cookie_document", NativeI18n.text("Invalid cookie write URL."))
             if (NativeScriptResourceTransport.originForDocument(writeUrl.toString()) != principal.documentOrigin) {
-                throw ApiException(400, "cookie_document", "Cookie write origin changed.")
+                throw ApiException(400, "cookie_document", NativeI18n.text("Cookie write origin changed."))
             }
-            val line = write["line"] as? String ?: throw ApiException(400, "cookie_document", "Invalid cookie assignment.")
+            val line = write["line"] as? String ?: throw ApiException(400, "cookie_document", NativeI18n.text("Invalid cookie assignment."))
             require(line.length <= 4096) { "Cookie assignment is too long" }
             val generation = (write["generation"] as? Number)?.toLong()
-                ?: throw ApiException(400, "cookie_document", "Cookie scope generation is required.")
+                ?: throw ApiException(400, "cookie_document", NativeI18n.text("Cookie scope generation is required."))
             jar.setDocumentCookie(writeUrl, line, expectedGeneration = generation)
         }
         jar.exportScriptState(url) + mapOf("persistenceError" to documentCookies.persistenceError)
@@ -552,10 +552,10 @@ class GatewayRuntime private constructor(val context: Context) {
         topLevelUrl: String?,
     ): Map<String, Any?> = answerLock.withLock {
         withContext(Dispatchers.IO) {
-            credentials.load() ?: throw ApiException(401, "unpaired", "請先配對此裝置")
+            credentials.load() ?: throw ApiException(401, "unpaired", NativeI18n.text("請先配對此裝置"))
             requirePairingStamp(expectedStamp, ensurePairingStamp())
             val url = NativeDocumentTransport(null).resolveUrl(source, baseUrl).toHttpUrlOrNull()
-                ?: throw ApiException(400, "cookie_document", "Cookie request requires HTTP.")
+                ?: throw ApiException(400, "cookie_document", NativeI18n.text("Cookie request requires HTTP."))
             val jar = documentCookies.bind(expectedStamp)!!
             val initiator = nativeCookieContextUrl(initiatorUrl, url.takeIf { resourceType == "document" })
             val header = jar.requestHeader(url, CookieRequestContext(
@@ -585,7 +585,7 @@ class GatewayRuntime private constructor(val context: Context) {
         topLevelUrl: String? = null,
     ): Map<String, Any?> = withContext(Dispatchers.IO) {
         val captured = answerLock.withLock {
-            val current = credentials.load() ?: throw ApiException(401, "unpaired", "請先配對此裝置")
+            val current = credentials.load() ?: throw ApiException(401, "unpaired", NativeI18n.text("請先配對此裝置"))
             requirePairingStamp(pairingStamp, ensurePairingStamp())
             current to documentCookies.bind(pairingStamp)
         }
@@ -624,7 +624,7 @@ class GatewayRuntime private constructor(val context: Context) {
             val pairing = credentials.load()
             val stamp = pairing?.let { ensurePairingStamp() }
             if (principal.pairingStamp != stamp) {
-                throw ApiException(409, "account_changed", "配對帳戶已變更，請重新載入文件")
+                throw ApiException(409, "account_changed", NativeI18n.text("配對帳戶已變更，請重新載入文件"))
             }
             if (contexts.currentPairingStamp() != stamp) {
                 closeAllContexts(releaseLeases = true)
@@ -632,7 +632,7 @@ class GatewayRuntime private constructor(val context: Context) {
             }
             val lease = contextLease(principal.contextId)
             if (!contextLeaseIsCurrent(lease) || lease.pairingStamp != stamp) {
-                throw ApiException(409, "context_expired", "This native context is no longer current.")
+                throw ApiException(409, "context_expired", NativeI18n.text("This native context is no longer current."))
             }
             ScriptResourceAccess(pairing, stamp, lease, documentCookies.bind(stamp))
         }
@@ -661,10 +661,10 @@ class GatewayRuntime private constructor(val context: Context) {
             if (currentPairing != access.pairing || currentStamp != access.pairingStamp ||
                 principal.pairingStamp != currentStamp
             ) {
-                throw ApiException(409, "account_changed", "配對帳戶已變更，請重新載入文件")
+                throw ApiException(409, "account_changed", NativeI18n.text("配對帳戶已變更，請重新載入文件"))
             }
             if (!contextLeaseIsCurrent(access.contextLease)) {
-                throw ApiException(409, "context_expired", "This native context is no longer current.")
+                throw ApiException(409, "context_expired", NativeI18n.text("This native context is no longer current."))
             }
         }
         response
@@ -685,7 +685,7 @@ class GatewayRuntime private constructor(val context: Context) {
         val sourceOrigin = NativeScriptResourceTransport.originForDocument(documentUrl, blobCreatorUrl)
         val principal = answerLock.withLock {
             val pairing = credentials.load()
-                ?: throw ApiException(401, "unpaired", "請先配對此裝置")
+                ?: throw ApiException(401, "unpaired", NativeI18n.text("請先配對此裝置"))
             val stamp = ensurePairingStamp()
             requirePairingStamp(expectedPairingStamp, stamp)
             if (contexts.currentPairingStamp() != stamp) {
@@ -694,7 +694,7 @@ class GatewayRuntime private constructor(val context: Context) {
             }
             val lease = contextLease(contextId)
             if (!contextLeaseIsCurrent(lease) || lease.pairingStamp != stamp) {
-                throw ApiException(409, "context_expired", "This native window is no longer current.")
+                throw ApiException(409, "context_expired", NativeI18n.text("This native window is no longer current."))
             }
             NativeDocumentScripts.ResourcePrincipal(
                 documentUrl = documentUrl,
@@ -712,7 +712,7 @@ class GatewayRuntime private constructor(val context: Context) {
         expectedPairingStamp: String,
     ): HtmlMediaAccess = answerLock.withLock {
         val pairing = withContext(Dispatchers.IO) { credentials.load() }
-            ?: throw ApiException(401, "unpaired", "請先配對此裝置")
+            ?: throw ApiException(401, "unpaired", NativeI18n.text("請先配對此裝置"))
         val currentStamp = ensurePairingStamp()
         requirePairingStamp(expectedPairingStamp, currentStamp)
         if (contexts.currentPairingStamp() != currentStamp) {
@@ -721,7 +721,7 @@ class GatewayRuntime private constructor(val context: Context) {
         }
         val lease = contextLease(contextId)
         if (lease.pairingStamp != currentStamp) {
-            throw ApiException(409, "context_expired", "This native context is no longer current.")
+            throw ApiException(409, "context_expired", NativeI18n.text("This native context is no longer current."))
         }
         HtmlMediaAccess(pairing, currentStamp, lease, withContext(Dispatchers.IO) { documentCookies.bind(currentStamp) })
     }
@@ -730,14 +730,14 @@ class GatewayRuntime private constructor(val context: Context) {
     internal suspend fun validateHtmlMediaAccess(access: HtmlMediaAccess) = answerLock.withLock {
         val currentPairing = withContext(Dispatchers.IO) { credentials.load() }
         if (currentPairing != access.pairing) {
-            throw ApiException(409, "account_changed", "配對帳戶已變更，請重新檢查問題")
+            throw ApiException(409, "account_changed", NativeI18n.text("配對帳戶已變更，請重新檢查問題"))
         }
         requirePairingStamp(
             access.pairingStamp,
             if (currentPairing == access.pairing) ensurePairingStamp() else null,
         )
         if (!contextLeaseIsCurrent(access.contextLease)) {
-            throw ApiException(409, "context_expired", "This native context is no longer current.")
+            throw ApiException(409, "context_expired", NativeI18n.text("This native context is no longer current."))
         }
     }
 
@@ -762,14 +762,14 @@ class GatewayRuntime private constructor(val context: Context) {
             )
         }
         val status = (response["status"] as? Number)?.toInt()
-            ?: throw IllegalStateException("Media response did not include an HTTP status")
+            ?: throw IllegalStateException(NativeI18n.text("Media response did not include an HTTP status"))
         if (status !in 200..299) {
-            throw ApiException(status, "media_http_error", "Media request failed with HTTP $status")
+            throw ApiException(status, "media_http_error", NativeI18n.text("Media request failed with HTTP {0}", status))
         }
         val bytes = response["bytes"] as? ByteArray
-            ?: throw IllegalStateException("Media response did not include bytes")
+            ?: throw IllegalStateException(NativeI18n.text("Media response did not include bytes"))
         if (bytes.size > MAX_HTML_MEDIA_BYTES) {
-            throw IllegalArgumentException("Media exceeds the 32 MiB limit")
+            throw IllegalArgumentException(NativeI18n.text("Media exceeds the 32 MiB limit"))
         }
         validateHtmlMediaAccess(access)
         val headers = (response["headersRelevant"] as? Map<*, *>)
@@ -799,7 +799,7 @@ class GatewayRuntime private constructor(val context: Context) {
         } else {
             require(crossOrigin in setOf("", "anonymous", "use-credentials")) { "Invalid image crossorigin" }
             val sourceOrigin = documentUrl?.let { NativeScriptResourceTransport.originForDocument(it) }
-                ?: throw IllegalArgumentException("A CORS image requires its document URL")
+                ?: throw IllegalArgumentException(NativeI18n.text("A CORS image requires its document URL"))
             val response = NativeScriptResourceTransport(captured.first,
                 responseLimit = 32 * 1024 * 1024, cookies = captured.third).load(
                 sourceOrigin,
@@ -810,8 +810,8 @@ class GatewayRuntime private constructor(val context: Context) {
                 initiatorUrl = documentUrl,
                 topLevelUrl = documentUrl,
             )
-            require(response.status in 200..299) { "Image request failed (${response.status})" }
-            mapOf("bytes" to (response.body ?: error("Image response has no bytes")),
+            require(response.status in 200..299) { NativeI18n.text("Image request failed ({0})", response.status) }
+            mapOf("bytes" to (response.body ?: error(NativeI18n.text("Image response has no bytes"))),
                 "mimeType" to response.mimeType,
                 "nativeCookieRequestKey" to response.nativeCookieRequestKey,
                 "nativeSetCookieProcessed" to response.nativeSetCookieProcessed)
@@ -820,7 +820,7 @@ class GatewayRuntime private constructor(val context: Context) {
             val currentPairing = credentials.load()
             val currentStamp = currentPairing?.let { ensurePairingStamp() }
             check(currentPairing == captured.first && currentStamp == captured.second &&
-                documentCookies.bind(currentStamp) === captured.third) { "Image connection changed" }
+                documentCookies.bind(currentStamp) === captured.third) { NativeI18n.text("Image connection changed") }
         }
         image
     }
@@ -839,14 +839,14 @@ class GatewayRuntime private constructor(val context: Context) {
 
     suspend fun snapshotForInteraction(id: String): Pair<SessionState, String> = answerLock.withLock {
         val pairing = withContext(Dispatchers.IO) { credentials.load() }
-            ?: throw ApiException(401, "unpaired", "請先配對此裝置")
+            ?: throw ApiException(401, "unpaired", NativeI18n.text("請先配對此裝置"))
         snapshot(id) to ensurePairingStamp()
     }
 
     /** Run a short local notification update atomically with pair/unpair changes. */
     suspend fun withCurrentPairingStamp(action: (String) -> Unit) = answerLock.withLock {
         withContext(Dispatchers.IO) { credentials.load() }
-            ?: throw ApiException(401, "unpaired", "請先配對此裝置")
+            ?: throw ApiException(401, "unpaired", NativeI18n.text("請先配對此裝置"))
         action(ensurePairingStamp())
     }
 
@@ -1086,7 +1086,7 @@ class GatewayRuntime private constructor(val context: Context) {
     }
     suspend fun generation(id: String, commandApi: PircApi? = null): Long {
         val lease = lease(id, acquire = true, commandApi = commandApi)
-        if (lease["held"] != true) throw ApiException(409, "lost_control", "控制權在其他裝置，請先明確取得控制權")
+        if (lease["held"] != true) throw ApiException(409, "lost_control", NativeI18n.text("控制權在其他裝置，請先明確取得控制權"))
         return lease["generation"] as Long
     }
     fun unknownCommand(id: String) = uncertain.contains("command:$id") || uncertain.contains("command-stop:$id")
@@ -1113,7 +1113,7 @@ class GatewayRuntime private constructor(val context: Context) {
     private suspend fun deliverCommand(id: String, payload: Map<*, *>, commandId: String, stopping: Boolean, api: PircApi, expectedStamp: String): Map<String, Any?> {
         fun currentPairing() = expectedStamp == pairingIdentity.getString("stamp", null)
         requirePairingStamp(expectedStamp, pairingIdentity.getString("stamp", null))
-        if (unknownCommand(id) && payload["type"] != "stop") throw ApiException(409, "outcome_unknown", "先前送出結果不明，請先檢查對話並確認繼續")
+        if (unknownCommand(id) && payload["type"] != "stop") throw ApiException(409, "outcome_unknown", NativeI18n.text("先前送出結果不明，請先檢查對話並確認繼續"))
         val generation = generation(id, commandApi = api)
         requirePairingStamp(expectedStamp, pairingIdentity.getString("stamp", null))
         val key = if (stopping) "command-stop:$id" else "command:$id"
@@ -1155,20 +1155,20 @@ class GatewayRuntime private constructor(val context: Context) {
         // Check the durable marker before reading the question. If the prior
         // POST was accepted, a fresh snapshot may no longer contain it; the
         // caller still needs the explicit reconciliation action in that case.
-        if (uncertain.getBoolean(key, false)) throw ApiException(409, "outcome_unknown", "先前回答結果不明，請檢查最新狀態，不可重送")
+        if (uncertain.getBoolean(key, false)) throw ApiException(409, "outcome_unknown", NativeI18n.text("先前回答結果不明，請檢查最新狀態，不可重送"))
         val before = snapshot(id)
         val answer = checkedAnswer(before, interactionId, epoch, data)
         val generation = answerGeneration(interactionId) { generation(id) }
         // Persist before the POST: process death must not turn uncertainty into a retry.
         if (!uncertain.edit().putBoolean(key, true).commit())
-            throw ApiException(503, "outcome_unknown", "無法保存回答狀態，回答未送出；請檢查最新狀態")
+            throw ApiException(503, "outcome_unknown", NativeI18n.text("無法保存回答狀態，回答未送出；請檢查最新狀態"))
         try {
             api().answer(id, interactionId, local.clientId, generation, answer)
             if (!uncertain.edit().remove(key).commit())
-                throw ApiException(503, "outcome_unknown", "回答可能已收到，請檢查最新狀態")
+                throw ApiException(503, "outcome_unknown", NativeI18n.text("回答可能已收到，請檢查最新狀態"))
         } catch (e: ApiException) {
             if (e.status in 400..499 && !uncertain.edit().remove(key).commit())
-                throw ApiException(503, "outcome_unknown", "回答未送出但無法保存狀態，請檢查最新狀態")
+                throw ApiException(503, "outcome_unknown", NativeI18n.text("回答未送出但無法保存狀態，請檢查最新狀態"))
             throw e
         }
         snapshot(id).wire()
@@ -1180,9 +1180,9 @@ class GatewayRuntime private constructor(val context: Context) {
      */
     suspend fun answerRelayed(chatId: String, interactionId: String, pairingStamp: String, confirmed: Boolean): Map<String, Any?> {
         if (!isRelayedInteraction(interactionId))
-            throw ApiException(400, "invalid_answer", "Not a relayed approval")
+            throw ApiException(400, "invalid_answer", NativeI18n.text("Not a relayed approval"))
         val question = snapshot(chatId).interactions.find { it.id == interactionId }
-            ?: throw ApiException(409, "stale", "問題已不存在，請重新整理")
+            ?: throw ApiException(409, "stale", NativeI18n.text("問題已不存在，請重新整理"))
         return answer(chatId, interactionId, question.runnerEpoch, pairingStamp, mapOf("confirmed" to confirmed))
     }
     /** `POST /api/delegations/:id/stop`; no lease. */
@@ -1195,7 +1195,7 @@ class GatewayRuntime private constructor(val context: Context) {
         val before = snapshot(id)
         val result = answerReconciliation(before, id, interactionId, epoch)
         if (!uncertain.edit().remove("$id:$interactionId:$epoch").commit())
-            throw ApiException(503, "outcome_unknown", "無法保存最新回答狀態，請稍後再檢查")
+            throw ApiException(503, "outcome_unknown", NativeI18n.text("無法保存最新回答狀態，請稍後再檢查"))
         mapOf(
             "sessionId" to id,
             "status" to if (result.pending) "pending" else "resolved",
@@ -1212,7 +1212,7 @@ class GatewayRuntime private constructor(val context: Context) {
         val api = api()
         if (!contextLeaseIsCurrent(contextLease)) {
             socketTokens.remove(key, token)
-            throw ApiException(409, "context_expired", "此原生視窗已關閉")
+            throw ApiException(409, "context_expired", NativeI18n.text("此原生視窗已關閉"))
         }
         val socket = api.client.newBuilder().readTimeout(0, java.util.concurrent.TimeUnit.MILLISECONDS)
             .pingInterval(25, java.util.concurrent.TimeUnit.SECONDS).build()
@@ -1245,9 +1245,9 @@ class GatewayRuntime private constructor(val context: Context) {
     }
     fun sendSocket(tag: String, data: Map<*, *>, contextId: String? = null) {
         val context = contextLease(contextId)
-        check(contextLeaseIsCurrent(context)) { "此原生視窗已關閉" }
+        check(contextLeaseIsCurrent(context)) { NativeI18n.text("此原生視窗已關閉") }
         val key = SocketKey(context.contextId, tag)
-        check(sockets[key]?.send(data.json().toString()) == true) { "Socket 已斷線" }
+        check(sockets[key]?.send(data.json().toString()) == true) { NativeI18n.text("Socket 已斷線") }
     }
     fun closeSocket(tag: String, contextId: String? = null) {
         val context = contextLease(contextId)

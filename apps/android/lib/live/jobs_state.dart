@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'gateway.dart';
@@ -8,11 +9,11 @@ String jobDetail(Json task) => switch (task['status']) {
   'stopping' => 'stopping',
   'completed' =>
     task['exitCode'] != null && task['exitCode'] != 0
-        ? 'exit ${task['exitCode']}'
+        ? tr("exit {0}", [task['exitCode']])
         : 'done',
   'failed' =>
     task['exitCode'] != null
-        ? 'exit ${task['exitCode']}'
+        ? tr("exit {0}", [task['exitCode']])
         : '${task['error'] ?? 'failed'}',
   _ => '${task['status'] ?? ''}'.replaceFirst('_', ' '),
 };
@@ -206,7 +207,7 @@ class JobsState extends ChangeNotifier {
       return changed;
     } catch (error) {
       if (_valid(scope) && read == _outputRead) {
-        outputError = 'Output unavailable. $error';
+        outputError = tr("Output unavailable. {0}", [error]);
         _notify();
       }
       return false;
@@ -262,7 +263,9 @@ class JobsState extends ChangeNotifier {
       }
       if (expanded == id) unawaited(loadOutput());
     } catch (error) {
-      if (_valid(scope)) stopError = 'Could not stop the task. $error';
+      if (_valid(scope)) {
+        stopError = tr("Could not stop the task. {0}", [error]);
+      }
     } finally {
       if (_valid(scope)) {
         stopping = null;

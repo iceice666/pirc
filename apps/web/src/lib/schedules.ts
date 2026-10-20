@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 /**
  * Scheduled tasks, held by the gateway (docs/guides/schedules.md): a prompt that runs in
  * a new session at set times. Runs the gateway could not start on time are
@@ -171,28 +172,29 @@ export function describeCron(expression: string): string {
   const [minute, hour, day, month, weekday] = fields as [string, string, string, string, string];
   const every = /^\*\/(\d+)$/;
   if (hour === '*' && day === '*' && month === '*' && weekday === '*') {
-    if (minute === '*') return 'Every minute';
+    if (minute === '*') return tr('Every minute');
     const step = every.exec(minute);
-    if (step) return `Every ${step[1]} minutes`;
-    if (plainNumber.test(minute)) return `Every hour at :${two(minute)}`;
+    if (step) return tr('Every {0} minutes', [step[1]]);
+    if (plainNumber.test(minute)) return tr('Every hour at :{0}', [two(minute)]);
     return expression;
   }
   if (!plainNumber.test(minute) || month !== '*') return expression;
   const hourStep = every.exec(hour);
   if (hourStep && day === '*' && weekday === '*')
-    return `Every ${hourStep[1]} hours at :${two(minute)}`;
+    return tr('Every {0} hours at :{1}', [hourStep[1], two(minute)]);
   if (!plainNumber.test(hour)) return expression;
   const time = `${two(hour)}:${two(minute)}`;
-  if (day === '*' && weekday === '*') return `Every day at ${time}`;
+  if (day === '*' && weekday === '*') return tr('Every day at {0}', [time]);
   if (day === '*') {
-    if (weekday === '1-5') return `Weekdays at ${time}`;
-    if (weekday === '0,6' || weekday === '6,0') return `Weekends at ${time}`;
+    if (weekday === '1-5') return tr('Weekdays at {0}', [time]);
+    if (weekday === '0,6' || weekday === '6,0') return tr('Weekends at {0}', [time]);
     const days = weekday.split(',');
     if (days.every((d) => /^[0-7]$/.test(d)))
-      return `Every ${days.map((d) => DAYS[Number(d) % 7]).join(', ')} at ${time}`;
+      return tr('Every {0} at {1}', [days.map((d) => tr(DAYS[Number(d) % 7]!)).join(', '), time]);
     return expression;
   }
-  if (weekday === '*' && plainNumber.test(day)) return `Monthly on day ${Number(day)} at ${time}`;
+  if (weekday === '*' && plainNumber.test(day))
+    return tr('Monthly on day {0} at {1}', [Number(day), time]);
   return expression;
 }
 
@@ -200,8 +202,8 @@ export function describeCron(expression: string): string {
 export function describeWhen(schedule: Pick<Schedule, 'cron' | 'runAt' | 'timezone'>): string {
   if (schedule.cron !== null) return `${describeCron(schedule.cron)} (${schedule.timezone})`;
   return schedule.runAt !== null
-    ? `Once at ${formatWall(schedule.runAt, schedule.timezone)} (${schedule.timezone})`
-    : 'Never';
+    ? tr('Once at {0} ({1})', [formatWall(schedule.runAt, schedule.timezone), schedule.timezone])
+    : tr('Never');
 }
 
 export const RUN_LABELS: Record<RunStatus, string> = {
@@ -226,8 +228,8 @@ export const CRON_PRESETS: Array<{ label: string; cron: string }> = [
 /** "in 5m", "in 3h", "in 2d" (the next run). */
 export function until(at: number, now = Date.now()): string {
   const delta = at - now;
-  if (delta < 60_000) return 'in under a minute';
-  if (delta < 3_600_000) return `in ${Math.round(delta / 60_000)}m`;
-  if (delta < 86_400_000) return `in ${Math.round(delta / 3_600_000)}h`;
-  return `in ${Math.round(delta / 86_400_000)}d`;
+  if (delta < 60_000) return tr('in under a minute');
+  if (delta < 3_600_000) return tr('in {0}m', [Math.round(delta / 60_000)]);
+  if (delta < 86_400_000) return tr('in {0}h', [Math.round(delta / 3_600_000)]);
+  return tr('in {0}d', [Math.round(delta / 86_400_000)]);
 }

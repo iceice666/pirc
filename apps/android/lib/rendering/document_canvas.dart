@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -323,6 +324,7 @@ class NativeDocumentCanvas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     return _NativeDocumentCanvasLayout(
       intrinsicSize: Size(snapshot.width, snapshot.height),
       width: width,
@@ -573,7 +575,7 @@ class _NativeCanvasDecoder {
       if (!period.isFinite || period <= 0) {
         _invalid(
           'commands[$index].state.lineDash',
-          'The dash pattern period must be finite and greater than zero.',
+          tr("The dash pattern period must be finite and greater than zero."),
         );
       }
       final smallestDash = pattern
@@ -593,14 +595,16 @@ class _NativeCanvasDecoder {
         if (!length.isFinite) {
           _invalid(
             'commands[$index].state.lineDash',
-            'Dashed strokes with unbounded path lengths are unsupported.',
+            tr("Dashed strokes with unbounded path lengths are unsupported."),
           );
         }
         if (length <= 0) continue;
         if (smallestDash < length * 1e-15) {
           _invalid(
             'commands[$index].state.lineDash',
-            'Dash lengths are too small relative to the path for safe native rendering.',
+            tr(
+              "Dash lengths are too small relative to the path for safe native rendering.",
+            ),
           );
         }
         final periodCount = length / period;
@@ -608,7 +612,10 @@ class _NativeCanvasDecoder {
             periodCount > remainingBudget / pattern.length) {
           throw NativeDocumentCanvasException(
             'canvas-dash-limit',
-            'Dashed stroke at commands[$index] exceeds the native generation budget of $maxGeneratedDashSegments segments.',
+            tr(
+              "Dashed stroke at commands[{0}] exceeds the native generation budget of {1} segments.",
+              [index, maxGeneratedDashSegments],
+            ),
           );
         }
         final periods = periodCount.ceil();
@@ -616,7 +623,10 @@ class _NativeCanvasDecoder {
         if (work > remainingBudget) {
           throw NativeDocumentCanvasException(
             'canvas-dash-limit',
-            'Dashed stroke at commands[$index] exceeds the native generation budget of $maxGeneratedDashSegments segments.',
+            tr(
+              "Dashed stroke at commands[{0}] exceeds the native generation budget of {1} segments.",
+              [index, maxGeneratedDashSegments],
+            ),
           );
         }
         remainingBudget -= work;
@@ -631,7 +641,7 @@ class _NativeCanvasDecoder {
     if (rawArgs is! List<Object?>) {
       throw NativeDocumentCanvasException(
         'invalid-command',
-        'commands[$index].args must be an array.',
+        tr("commands[{0}].args must be an array.", [index]),
       );
     }
     final args = List<Object?>.unmodifiable(rawArgs);
@@ -664,7 +674,7 @@ class _NativeCanvasDecoder {
     if (alpha < 0 || alpha > 1) {
       throw NativeDocumentCanvasException(
         'invalid-state',
-        '$prefix.globalAlpha must be in the range 0 to 1.',
+        tr("{0}.globalAlpha must be in the range 0 to 1.", [prefix]),
       );
     }
     final blendMode = _blendMode(
@@ -688,7 +698,7 @@ class _NativeCanvasDecoder {
     if (lineWidth < 0 || miterLimit < 0) {
       throw NativeDocumentCanvasException(
         'invalid-state',
-        '$prefix line width and miter limit must be non-negative.',
+        tr("{0} line width and miter limit must be non-negative.", [prefix]),
       );
     }
     final lineDash = _numberList(
@@ -699,7 +709,7 @@ class _NativeCanvasDecoder {
     if (lineDash.any((value) => value < 0)) {
       throw NativeDocumentCanvasException(
         'invalid-state',
-        '$prefix.lineDash values must be non-negative.',
+        tr("{0}.lineDash values must be non-negative.", [prefix]),
       );
     }
     final lineDashOffset = _optionalNumber(
@@ -723,7 +733,10 @@ class _NativeCanvasDecoder {
       'high' => ui.FilterQuality.high,
       final value => throw NativeDocumentCanvasException(
         'invalid-state',
-        '$prefix.imageSmoothingQuality must be low, medium, or high (got "$value").',
+        tr(
+          "{0}.imageSmoothingQuality must be low, medium, or high (got \"{1}\").",
+          [prefix, value],
+        ),
       ),
     };
     final lineCap = switch (_optionalString(
@@ -736,7 +749,7 @@ class _NativeCanvasDecoder {
       'square' => StrokeCap.square,
       final value => throw NativeDocumentCanvasException(
         'unsupported-line-cap',
-        'Unsupported Canvas line cap "$value".',
+        tr("Unsupported Canvas line cap \"{0}\".", [value]),
       ),
     };
     final lineJoin = switch (_optionalString(
@@ -749,7 +762,7 @@ class _NativeCanvasDecoder {
       'bevel' => StrokeJoin.bevel,
       final value => throw NativeDocumentCanvasException(
         'unsupported-line-join',
-        'Unsupported Canvas line join "$value".',
+        tr("Unsupported Canvas line join \"{0}\".", [value]),
       ),
     };
     final fontSource = _optionalString(
@@ -772,7 +785,7 @@ class _NativeCanvasDecoder {
     }.contains(textAlign)) {
       throw NativeDocumentCanvasException(
         'unsupported-text-align',
-        'Unsupported Canvas text alignment "$textAlign".',
+        tr("Unsupported Canvas text alignment \"{0}\".", [textAlign]),
       );
     }
     final textBaseline = _optionalString(
@@ -790,7 +803,7 @@ class _NativeCanvasDecoder {
     }.contains(textBaseline)) {
       throw NativeDocumentCanvasException(
         'unsupported-text-baseline',
-        'Unsupported Canvas text baseline "$textBaseline".',
+        tr("Unsupported Canvas text baseline \"{0}\".", [textBaseline]),
       );
     }
     final textBaselineOffset = source.containsKey('textBaselineOffset')
@@ -810,7 +823,7 @@ class _NativeCanvasDecoder {
       'inherit' => TextDirection.ltr,
       final value => throw NativeDocumentCanvasException(
         'unsupported-text-direction',
-        'Unsupported Canvas text direction "$value".',
+        tr("Unsupported Canvas text direction \"{0}\".", [value]),
       ),
     };
     final path = source.containsKey('path')
@@ -820,7 +833,7 @@ class _NativeCanvasDecoder {
     if (rawClips is! List<Object?> || rawClips.length > 32) {
       throw NativeDocumentCanvasException(
         'invalid-state',
-        '$prefix.clips must be an array containing at most 32 clips.',
+        tr("{0}.clips must be an array containing at most 32 clips.", [prefix]),
       );
     }
     final clips = <NativeDocumentCanvasClip>[];
@@ -834,7 +847,7 @@ class _NativeCanvasDecoder {
       if (rule != 'nonzero' && rule != 'evenodd') {
         throw NativeDocumentCanvasException(
           'unsupported-fill-rule',
-          'Unsupported Canvas clip fill rule "$rule".',
+          tr("Unsupported Canvas clip fill rule \"{0}\".", [rule]),
         );
       }
       clips.add(
@@ -943,19 +956,21 @@ class _NativeCanvasDecoder {
       default:
         throw NativeDocumentCanvasException(
           'unsupported-canvas-operation',
-          'Canvas command "$op" is not supported by the native painter.',
+          tr("Canvas command \"{0}\" is not supported by the native painter.", [
+            op,
+          ]),
         );
     }
   }
 
   List<NativeDocumentCanvasPathSegment> _path(Object? raw, String path) {
     if (raw is! List<Object?>) {
-      _invalid(path, 'Path must be an array of captured path segments.');
+      _invalid(path, tr("Path must be an array of captured path segments."));
     }
     if (raw.length > NativeDocumentCanvasSnapshot.maxPathSegmentsPerPath ||
         pathSegmentCount + raw.length >
             NativeDocumentCanvasSnapshot.maxPathSegments) {
-      _invalid(path, 'Canvas snapshot exceeds a path segment limit.');
+      _invalid(path, tr("Canvas snapshot exceeds a path segment limit."));
     }
     pathSegmentCount += raw.length;
     final segments = <NativeDocumentCanvasPathSegment>[];
@@ -964,7 +979,10 @@ class _NativeCanvasDecoder {
       final op = _readString(source['op'], '$path[$i].op');
       final rawArgs = source['args'];
       if (rawArgs is! List<Object?>) {
-        _invalid('$path[$i].args', 'Path segment arguments must be an array.');
+        _invalid(
+          '$path[$i].args',
+          tr("Path segment arguments must be an array."),
+        );
       }
       final args = List<Object?>.unmodifiable(rawArgs);
       final transform = _transform(source['transform'], '$path[$i].transform');
@@ -981,13 +999,13 @@ class _NativeCanvasDecoder {
       if (expectedLength == null) {
         throw NativeDocumentCanvasException(
           'unsupported-canvas-path-operation',
-          'Canvas path operation "$op" is not supported.',
+          tr("Canvas path operation \"{0}\" is not supported.", [op]),
         );
       }
       if (!expectedLength.contains(args.length)) {
         _invalid(
           '$path[$i].args',
-          'Invalid argument count for path operation "$op".',
+          tr("Invalid argument count for path operation \"{0}\".", [op]),
         );
       }
       for (
@@ -1001,7 +1019,7 @@ class _NativeCanvasDecoder {
           if (value is! bool) {
             _invalid(
               '$path[$i].args[$argumentIndex]',
-              'The anticlockwise argument must be boolean.',
+              tr("The anticlockwise argument must be boolean."),
             );
           }
         } else {
@@ -1011,7 +1029,7 @@ class _NativeCanvasDecoder {
       if ((op == 'arc' && _numberAt(args, 2) < 0) ||
           (op == 'ellipse' &&
               (_numberAt(args, 2) < 0 || _numberAt(args, 3) < 0))) {
-        _invalid('$path[$i].args', 'Arc radii must be non-negative.');
+        _invalid('$path[$i].args', tr("Arc radii must be non-negative."));
       }
       segments.add(
         NativeDocumentCanvasPathSegment._(
@@ -1027,7 +1045,10 @@ class _NativeCanvasDecoder {
   NativeDocumentCanvasTransform _transform(Object? raw, String path) {
     final values = _numberList(raw, path, expectedLength: 6);
     if (values.any((value) => value.abs() > 1e9)) {
-      _invalid(path, 'Transform values exceed the native coordinate limit.');
+      _invalid(
+        path,
+        tr("Transform values exceed the native coordinate limit."),
+      );
     }
     return NativeDocumentCanvasTransform._(List.unmodifiable(values));
   }
@@ -1041,7 +1062,7 @@ class _NativeCanvasDecoder {
     if (type != 'linear' && type != 'radial') {
       throw NativeDocumentCanvasException(
         'unsupported-canvas-style',
-        'Canvas paint style "$type" is not supported.',
+        tr("Canvas paint style \"{0}\" is not supported.", [type]),
       );
     }
     final args = _numberList(
@@ -1050,14 +1071,14 @@ class _NativeCanvasDecoder {
       expectedLength: type == 'linear' ? 4 : 6,
     );
     if (type == 'radial' && (args[2] < 0 || args[5] < 0)) {
-      _invalid('$path.args', 'Radial gradient radii must be non-negative.');
+      _invalid('$path.args', tr("Radial gradient radii must be non-negative."));
     }
     final transform = _transform(source['transform'], '$path.transform');
     final rawStops = source['stops'];
     if (rawStops is! List<Object?> || rawStops.length > 1024) {
       _invalid(
         '$path.stops',
-        'A gradient must contain at most 1024 color stops.',
+        tr("A gradient must contain at most 1024 color stops."),
       );
     }
     final stops = <NativeDocumentCanvasColorStop>[];
@@ -1067,7 +1088,7 @@ class _NativeCanvasDecoder {
       if (offset < 0 || offset > 1) {
         _invalid(
           '$path.stops[$i].offset',
-          'Gradient offsets must be in the range 0 to 1.',
+          tr("Gradient offsets must be in the range 0 to 1."),
         );
       }
       stops.add(
@@ -1097,7 +1118,9 @@ class _NativeCanvasDecoder {
     if (match == null) {
       throw NativeDocumentCanvasException(
         'unsupported-canvas-font',
-        'Canvas font "$source" cannot be parsed by the native text painter.',
+        tr("Canvas font \"{0}\" cannot be parsed by the native text painter.", [
+          source,
+        ]),
       );
     }
     final prefix = source.trim().substring(0, match.start).trim().toLowerCase();
@@ -1106,7 +1129,10 @@ class _NativeCanvasDecoder {
         .any((token) => token.isNotEmpty && token != 'normal')) {
       throw NativeDocumentCanvasException(
         'unsupported-canvas-font',
-        'Canvas font "$source" uses a font feature outside the native text subset.',
+        tr(
+          "Canvas font \"{0}\" uses a font feature outside the native text subset.",
+          [source],
+        ),
       );
     }
     final style = switch (match.group(1)?.toLowerCase()) {
@@ -1127,7 +1153,7 @@ class _NativeCanvasDecoder {
       '900' => FontWeight.w900,
       final value => throw NativeDocumentCanvasException(
         'unsupported-canvas-font',
-        'Canvas font weight "$value" is unsupported.',
+        tr("Canvas font weight \"{0}\" is unsupported.", [value]),
       ),
     };
     final number = double.parse(match.group(3)!);
@@ -1145,14 +1171,16 @@ class _NativeCanvasDecoder {
     if (!size.isFinite || size <= 0 || size > 4096) {
       throw NativeDocumentCanvasException(
         'unsupported-canvas-font',
-        'Canvas font size in "$source" is outside the supported range.',
+        tr("Canvas font size in \"{0}\" is outside the supported range.", [
+          source,
+        ]),
       );
     }
     final families = _splitFontFamilies(match.group(5)!);
     if (families.isEmpty) {
       throw NativeDocumentCanvasException(
         'unsupported-canvas-font',
-        'Canvas font "$source" has no font family.',
+        tr("Canvas font \"{0}\" has no font family.", [source]),
       );
     }
     final familyText = families.first.trim();
@@ -1187,7 +1215,10 @@ class _NativeCanvasDecoder {
     if (parsed != null) return parsed;
     throw NativeDocumentCanvasException(
       'unsupported-canvas-color',
-      'Canvas color "$value" at $path is not supported by the native color parser.',
+      tr(
+        "Canvas color \"{0}\" at {1} is not supported by the native color parser.",
+        [value, path],
+      ),
     );
   }
 
@@ -1221,7 +1252,10 @@ class _NativeCanvasDecoder {
       'luminosity' => ui.BlendMode.luminosity,
       final value => throw NativeDocumentCanvasException(
         'unsupported-canvas-composite-operation',
-        'Canvas composite operation "$value" at $path is unsupported.',
+        tr("Canvas composite operation \"{0}\" at {1} is unsupported.", [
+          value,
+          path,
+        ]),
       ),
     };
     return mode;
@@ -1917,7 +1951,7 @@ void _validateRule(Object? raw, String path) {
   if (raw != 'nonzero' && raw != 'evenodd') {
     throw NativeDocumentCanvasException(
       'unsupported-fill-rule',
-      'Unsupported Canvas fill rule "$raw" at $path.',
+      tr("Unsupported Canvas fill rule \"{0}\" at {1}.", [raw, path]),
     );
   }
 }
@@ -1926,7 +1960,7 @@ void _requireNumericArgs(List<Object?> args, int count, String path) {
   if (args.length != count) {
     throw NativeDocumentCanvasException(
       'invalid-command',
-      '$path must contain exactly $count numbers.',
+      tr("{0} must contain exactly {1} numbers.", [path, count]),
     );
   }
   for (var i = 0; i < args.length; i++) {
@@ -1985,7 +2019,7 @@ Map<String, Object?> _readMap(Object? value, String path) {
   if (value is! Map) {
     throw NativeDocumentCanvasException(
       'invalid-snapshot',
-      '$path must be an object.',
+      tr("{0} must be an object.", [path]),
     );
   }
   final result = <String, Object?>{};
@@ -1993,7 +2027,7 @@ Map<String, Object?> _readMap(Object? value, String path) {
     if (entry.key is! String) {
       throw NativeDocumentCanvasException(
         'invalid-snapshot',
-        '$path has a non-string object key.',
+        tr("{0} has a non-string object key.", [path]),
       );
     }
     result[entry.key as String] = entry.value;
@@ -2005,7 +2039,7 @@ String _readString(Object? value, String path) {
   if (value is String) return value;
   throw NativeDocumentCanvasException(
     'invalid-snapshot',
-    '$path must be a string.',
+    tr("{0} must be a string.", [path]),
   );
 }
 
@@ -2017,7 +2051,7 @@ bool _optionalBool(Object? value, bool fallback, String path) {
   if (value is bool) return value;
   throw NativeDocumentCanvasException(
     'invalid-state',
-    '$path must be a boolean.',
+    tr("{0} must be a boolean.", [path]),
   );
 }
 
@@ -2025,14 +2059,14 @@ double _readNumber(Object? value, String path) {
   if (value is! num) {
     throw NativeDocumentCanvasException(
       'invalid-snapshot',
-      '$path must be a finite number.',
+      tr("{0} must be a finite number.", [path]),
     );
   }
   final result = value.toDouble();
   if (!result.isFinite || result.abs() > 1e9) {
     throw NativeDocumentCanvasException(
       'invalid-snapshot',
-      '$path is outside the finite coordinate limit.',
+      tr("{0} is outside the finite coordinate limit.", [path]),
     );
   }
   return result;
@@ -2050,14 +2084,14 @@ List<double> _numberList(
   if (raw is! List<Object?>) {
     throw NativeDocumentCanvasException(
       'invalid-snapshot',
-      '$path must be a number array.',
+      tr("{0} must be a number array.", [path]),
     );
   }
   if ((expectedLength != null && raw.length != expectedLength) ||
       (maxLength != null && raw.length > maxLength)) {
     throw NativeDocumentCanvasException(
       'invalid-snapshot',
-      '$path has an invalid number of items.',
+      tr("{0} has an invalid number of items.", [path]),
     );
   }
   return List.generate(

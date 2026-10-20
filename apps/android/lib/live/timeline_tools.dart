@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -16,22 +17,25 @@ class TimelineStatus extends StatelessWidget {
   const TimelineStatus(this.status, {super.key});
   final String status;
   @override
-  Widget build(BuildContext context) => Tooltip(
-    message: status == 'running'
-        ? 'Running'
-        : status == 'failed'
-        ? 'Failed'
-        : 'Done',
-    child: status == 'running'
-        ? WebSpinner(size: 15, color: palette(context)['accent.default'])
-        : Icon(
-            status == 'failed' ? LucideIcons.circleAlert : LucideIcons.check,
-            size: 15,
-            color: palette(
-              context,
-            )[status == 'failed' ? 'status.danger' : 'status.success'],
-          ),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Tooltip(
+      message: status == 'running'
+          ? tr("Running")
+          : status == 'failed'
+          ? tr("Failed")
+          : tr("Done"),
+      child: status == 'running'
+          ? WebSpinner(size: 15, color: palette(context)['accent.default'])
+          : Icon(
+              status == 'failed' ? LucideIcons.circleAlert : LucideIcons.check,
+              size: 15,
+              color: palette(
+                context,
+              )[status == 'failed' ? 'status.danger' : 'status.success'],
+            ),
+    );
+  }
 }
 
 class TimelineImages extends StatelessWidget {
@@ -47,25 +51,28 @@ class TimelineImages extends StatelessWidget {
   final Gateway? gateway;
   final bool retainOnSourceChange;
   @override
-  Widget build(BuildContext context) => TimelineImageWrap(
-    children: [
-      for (final (index, entry) in images.indexed)
-        ViewportImageGate(
-          key: ValueKey(
-            retainOnSourceChange
-                ? index
-                : (index, entry['url'], entry['base64']),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return TimelineImageWrap(
+      children: [
+        for (final (index, entry) in images.indexed)
+          ViewportImageGate(
+            key: ValueKey(
+              retainOnSourceChange
+                  ? index
+                  : (index, entry['url'], entry['base64']),
+            ),
+            preloadDistance: 1500,
+            placeholder: const SizedBox.shrink(),
+            builder: (_) => TimelineAttachmentImage(
+              entry: entry,
+              label: label,
+              gateway: gateway,
+            ),
           ),
-          preloadDistance: 1500,
-          placeholder: const SizedBox.shrink(),
-          builder: (_) => TimelineAttachmentImage(
-            entry: entry,
-            label: label,
-            gateway: gateway,
-          ),
-        ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 class TimelineRun extends StatefulWidget {
@@ -86,6 +93,7 @@ class _TimelineRunState extends State<TimelineRun> {
   bool open = false, toggled = false;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final summary = RunSummary(widget.tools), p = palette(context);
     if (!toggled) open = summary.status == 'failed' || widget.forceOpen;
     if (widget.forceOpen) {
@@ -105,8 +113,10 @@ class _TimelineRunState extends State<TimelineRun> {
           size: 13,
           weight: FontWeight.w500,
         ).copyWith(height: kTextHeightNone);
-        final metaText =
-            '${summary.count} tools${seconds.isEmpty ? '' : ' · $seconds'}';
+        final metaText = tr("{0} tools{1}", [
+          summary.count,
+          seconds.isEmpty ? '' : ' · $seconds',
+        ]);
         final metaStyle = webText(
           context,
           size: 12,
@@ -277,8 +287,9 @@ class _TimelineRunState extends State<TimelineRun> {
                               if (blocked) ...[
                                 const SizedBox(width: 8),
                                 Tooltip(
-                                  message:
-                                      'A write was blocked by another session',
+                                  message: tr(
+                                    "A write was blocked by another session",
+                                  ),
                                   child: Icon(
                                     LucideIcons.lock,
                                     size: 13,
@@ -389,6 +400,7 @@ class _TimelineToolState extends State<TimelineTool> {
   );
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final t = widget.tool,
         a = toolArgs(t['input']),
         p = palette(context),
@@ -427,17 +439,17 @@ class _TimelineToolState extends State<TimelineTool> {
         ? <Widget>[]
         : <Widget>[
             if (name == 'bash' && a['command'] is String)
-              section('Command', snippet(a['command'], language: 'bash')),
+              section(tr("Command"), snippet(a['command'], language: 'bash')),
             if (name == 'write' && a['content'] is String)
               section(
-                'Content',
+                tr("Content"),
                 snippet(clipToolText(a['content']), language: language),
               ),
             if (value(t, 'diff').isNotEmpty)
-              section('Diff', diff(value(t, 'diff')))
+              section(tr("Diff"), diff(value(t, 'diff')))
             else if (name == 'edit' && rows(a['edits']).isNotEmpty)
               section(
-                'Edits',
+                tr("Edits"),
                 diff(
                   rows(a['edits'])
                       .map(
@@ -449,7 +461,7 @@ class _TimelineToolState extends State<TimelineTool> {
               ),
             if (operations.isNotEmpty)
               section(
-                'Operations',
+                tr("Operations"),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -466,7 +478,7 @@ class _TimelineToolState extends State<TimelineTool> {
               ),
             if (extra != null)
               section(
-                'Input',
+                tr("Input"),
                 snippet(
                   inputText(extra),
                   language: extra is String ? '' : 'json',
@@ -474,7 +486,7 @@ class _TimelineToolState extends State<TimelineTool> {
               ),
             if (value(t, 'output').isNotEmpty)
               section(
-                t['status'] == 'failed' ? 'Error' : 'Output',
+                t['status'] == 'failed' ? tr("Error") : tr("Output"),
                 snippet(
                   clipToolText(value(t, 'output')),
                   language: name == 'read' && t['status'] != 'failed'
@@ -486,7 +498,7 @@ class _TimelineToolState extends State<TimelineTool> {
             if (rows(t['images']).isNotEmpty)
               TimelineImages(
                 rows(t['images']),
-                label: 'Tool output',
+                label: tr("Tool output"),
                 gateway: widget.controller.gateway,
                 retainOnSourceChange: true,
               ),
@@ -495,8 +507,8 @@ class _TimelineToolState extends State<TimelineTool> {
                 rows(t['images']).isEmpty)
               Text(
                 t['status'] == 'running'
-                    ? 'Waiting for output…'
-                    : 'No output returned.',
+                    ? tr("Waiting for output…")
+                    : tr("No output returned."),
                 style: webText(context, size: 12, color: 'text.muted'),
               ),
           ];
@@ -581,10 +593,10 @@ class _TimelineToolState extends State<TimelineTool> {
                           child: Text(
                             summary.isEmpty
                                 ? t['status'] == 'running'
-                                      ? 'Running'
+                                      ? tr("Running")
                                       : t['status'] == 'failed'
-                                      ? 'Failed'
-                                      : 'Done'
+                                      ? tr("Failed")
+                                      : tr("Done")
                                 : summary,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -656,7 +668,7 @@ class _TimelineToolState extends State<TimelineTool> {
                           TextSpan(
                             children: [
                               TextSpan(
-                                text: 'Write blocked. ',
+                                text: tr("Write blocked. "),
                                 style: webText(
                                   context,
                                   size: 13,
@@ -664,8 +676,10 @@ class _TimelineToolState extends State<TimelineTool> {
                                 ),
                               ),
                               TextSpan(
-                                text:
-                                    '“${blocked.holderName}” is writing to ${blocked.path} right now. The agent was told to wait until that run finishes.',
+                                text: tr(
+                                  "“{0}” is writing to {1} right now. The agent was told to wait until that run finishes.",
+                                  [blocked.holderName, blocked.path],
+                                ),
                                 style: webText(
                                   context,
                                   size: 13,

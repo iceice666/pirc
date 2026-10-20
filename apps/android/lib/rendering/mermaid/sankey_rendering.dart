@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -26,52 +27,55 @@ class NativeMermaidSankey extends StatelessWidget {
   final String suffix;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final viewportWidth = constraints.maxWidth.isFinite
-          ? constraints.maxWidth
-          : MediaQuery.sizeOf(context).width;
-      final layout = layoutNativeMermaidSankey(
-        diagram,
-        dark: dark,
-        fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
-        prefix: prefix,
-        suffix: suffix,
-      );
-      final scale = math.min(1.0, viewportWidth / layout.size.width);
-      final fittedSize = Size(
-        layout.size.width * scale,
-        layout.size.height * scale,
-      );
-      final semanticValue = [
-        for (final node in layout.nodes) '${node.node.id}: ${node.value}',
-        for (final flow in layout.flows)
-          '${flow.flow.sourceId} to ${flow.flow.targetId}: ${flow.flow.value}',
-      ].join('. ');
-      return Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: 'Sankey diagram',
-        value: semanticValue,
-        child: SizedBox.fromSize(
-          size: fittedSize,
-          child: ClipRect(
-            child: FittedBox(
-              fit: BoxFit.contain,
-              alignment: Alignment.topLeft,
-              child: SizedBox.fromSize(
-                size: layout.size,
-                child: CustomPaint(
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final layout = layoutNativeMermaidSankey(
+          diagram,
+          dark: dark,
+          fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
+          prefix: prefix,
+          suffix: suffix,
+        );
+        final scale = math.min(1.0, viewportWidth / layout.size.width);
+        final fittedSize = Size(
+          layout.size.width * scale,
+          layout.size.height * scale,
+        );
+        final semanticValue = [
+          for (final node in layout.nodes) '${node.node.id}: ${node.value}',
+          for (final flow in layout.flows)
+            '${flow.flow.sourceId} to ${flow.flow.targetId}: ${flow.flow.value}',
+        ].join('. ');
+        return Semantics(
+          container: true,
+          explicitChildNodes: true,
+          label: tr("Sankey diagram"),
+          value: semanticValue,
+          child: SizedBox.fromSize(
+            size: fittedSize,
+            child: ClipRect(
+              child: FittedBox(
+                fit: BoxFit.contain,
+                alignment: Alignment.topLeft,
+                child: SizedBox.fromSize(
                   size: layout.size,
-                  painter: NativeMermaidSankeyPainter(layout),
+                  child: CustomPaint(
+                    size: layout.size,
+                    painter: NativeMermaidSankeyPainter(layout),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
 class NativeMermaidSankeyPainter extends CustomPainter {

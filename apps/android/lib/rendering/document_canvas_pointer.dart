@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -80,6 +81,7 @@ class _NativeDocumentCanvasPointerState
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     return MouseRegion(
       onEnter: _handlePointerEnter,
       onExit: _handlePointerExit,
@@ -483,10 +485,12 @@ class _NativeDocumentCanvasPointerState
             FlutterErrorDetails(
               exception: error,
               stack: stackTrace,
-              library: 'document canvas pointer surface',
+              library: tr("document canvas pointer surface"),
               context: ErrorDescription(
-                'while dispatching ${queued.type} for canvas pointer '
-                '${queued.pointerId}',
+                tr("while dispatching {0} for canvas pointer {1}", [
+                  queued.type,
+                  queued.pointerId,
+                ]),
               ),
             ),
           );
@@ -498,10 +502,12 @@ class _NativeDocumentCanvasPointerState
               FlutterErrorDetails(
                 exception: error,
                 stack: stackTrace,
-                library: 'document canvas pointer surface',
+                library: tr("document canvas pointer surface"),
                 context: ErrorDescription(
-                  'while completing ${queued.type} for canvas pointer '
-                  '${queued.pointerId}',
+                  tr("while completing {0} for canvas pointer {1}", [
+                    queued.type,
+                    queued.pointerId,
+                  ]),
                 ),
               ),
             );
@@ -659,7 +665,7 @@ class _CanvasPointerGestureRecognizer extends OneSequenceGestureRecognizer {
       <int, _CanvasGestureSequence>{};
 
   @override
-  String get debugDescription => 'native canvas pointer';
+  String get debugDescription => tr("native canvas pointer");
 
   @override
   void addAllowedPointer(PointerDownEvent event) {

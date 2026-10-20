@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
@@ -640,7 +641,7 @@ class _RenderAbsoluteLayer extends RenderBox
       assert(
         !spec.needsStaticPosition ||
             (marker is RenderBox && marker.attached && marker.hasSize),
-        'Static position requires a laid-out flow marker',
+        tr("Static position requires a laid-out flow marker"),
       );
       final anchor = marker is RenderBox && marker.attached && marker.hasSize
           ? MatrixUtils.transformPoint(marker.getTransformTo(this), Offset.zero)

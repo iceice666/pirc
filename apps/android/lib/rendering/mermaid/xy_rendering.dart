@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -159,18 +160,18 @@ NativeMermaidXYChartLayout layoutNativeMermaidXYChart(
 }) {
   final config = diagram.config;
   if (!width.isFinite || width <= 0) {
-    throw const FormatException(
-      'Native XY chart viewport width must be positive',
+    throw FormatException(
+      tr("Native XY chart viewport width must be positive"),
     );
   }
   if (!config.width.isFinite ||
       !config.height.isFinite ||
       config.width <= 0 ||
       config.height <= 0) {
-    throw const FormatException('Native XY chart dimensions must be positive');
+    throw FormatException(tr("Native XY chart dimensions must be positive"));
   }
   if (diagram.series.isEmpty) {
-    throw const FormatException('XY chart has no plot data');
+    throw FormatException(tr("XY chart has no plot data"));
   }
 
   final themeText = dark
@@ -1185,6 +1186,7 @@ class NativeMermaidXYChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final fontFamily = Theme.of(context).textTheme.bodyMedium?.fontFamily;
     return Semantics(
       image: true,

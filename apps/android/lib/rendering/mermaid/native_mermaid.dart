@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 import '../../theme.dart';
 import 'flowchart.dart';
@@ -60,6 +61,7 @@ class NativeMermaid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final colors = Theme.of(context).extension<PircColors>()!;
     final dark = Theme.of(context).brightness == Brightness.dark;
     Widget? figure;
@@ -237,8 +239,10 @@ class NativeMermaid extends StatelessWidget {
             dark: dark,
           );
         } else {
-          throw const FormatException(
-            'This diagram type is not yet supported by the native Mermaid renderer',
+          throw FormatException(
+            tr(
+              "This diagram type is not yet supported by the native Mermaid renderer",
+            ),
           );
         }
       } on FormatException catch (e) {
@@ -310,6 +314,7 @@ class _MermaidSvgLineBox extends StatelessWidget {
   final double fontSize, lineHeight;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final scaler = MediaQuery.textScalerOf(context);
     final text = TextPainter(
       text: TextSpan(

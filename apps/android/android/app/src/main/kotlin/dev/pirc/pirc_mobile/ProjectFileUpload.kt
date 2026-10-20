@@ -28,9 +28,9 @@ internal class ProjectFileSelections {
 
     @Synchronized fun consume(token: String, workspaceId: String, pairingStamp: String, contextId: String?): Selection {
         val file = selected[token]
-            ?: throw ApiException(409, "selected_file_expired", "The selected file is no longer available. Choose it again.")
+            ?: throw ApiException(409, "selected_file_expired", NativeI18n.text("The selected file is no longer available. Choose it again."))
         if (file.workspaceId != workspaceId || file.pairingStamp != pairingStamp || file.contextId != contextId)
-            throw ApiException(409, "selected_file_expired", "The project or account changed. Choose the file again.")
+            throw ApiException(409, "selected_file_expired", NativeI18n.text("The project or account changed. Choose the file again."))
         selected.remove(token)
         return file
     }
@@ -60,8 +60,8 @@ internal class ProjectFileUploadBody(
     override fun isOneShot() = true
     override fun writeTo(sink: BufferedSink) {
         val input = try { open() } catch (error: Exception) {
-            throw ProjectFileReadException("Unable to read the selected file. Choose it again.", error)
-        } ?: throw ProjectFileReadException("Unable to read the selected file. Choose it again.")
+            throw ProjectFileReadException(NativeI18n.text("Unable to read the selected file. Choose it again."), error)
+        } ?: throw ProjectFileReadException(NativeI18n.text("Unable to read the selected file. Choose it again."))
         input.use {
             val buffer = ByteArray(8192)
             var total = 0L
@@ -73,14 +73,14 @@ internal class ProjectFileUploadBody(
                         if (next < 0) -1 else { buffer[0] = next.toByte(); 1 }
                     }
                 } catch (error: IOException) {
-                    throw ProjectFileReadException("Unable to read the selected file. Choose it again.", error)
+                    throw ProjectFileReadException(NativeI18n.text("Unable to read the selected file. Choose it again."), error)
                 }
                 if (count < 0) break
-                if (total + count > maxBytes) throw ProjectFileReadException("File exceeds the project file size limit.")
+                if (total + count > maxBytes) throw ProjectFileReadException(NativeI18n.text("File exceeds the project file size limit."))
                 sink.write(buffer, 0, count)
                 total += count
             }
-            if (total == 0L) throw ProjectFileReadException("The selected file is empty.")
+            if (total == 0L) throw ProjectFileReadException(NativeI18n.text("The selected file is empty."))
         }
     }
 }

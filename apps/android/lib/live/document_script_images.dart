@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -61,17 +62,15 @@ class NativeDocumentImagePool {
     String mimeType, {
     required bool originClean,
   }) async {
-    if (_disposed) throw StateError('Image document is closed.');
+    if (_disposed) throw StateError(tr("Image document is closed."));
     if (!RegExp(r'^image-[1-9][0-9]{0,9}$').hasMatch(requestId)) {
-      throw const FormatException('Invalid image request identity.');
+      throw FormatException(tr("Invalid image request identity."));
     }
     if (bytes.isEmpty || bytes.length > maxEncodedBytes) {
-      throw const FormatException('Script images require 1 byte to 2 MiB.');
+      throw FormatException(tr("Script images require 1 byte to 2 MiB."));
     }
     if (_entries.length + _decoding + _retiring >= maxEntries) {
-      throw const FormatException(
-        'Document image limit is 64 decoded versions.',
-      );
+      throw FormatException(tr("Document image limit is 64 decoded versions."));
     }
     _decoding++;
     final vector =
@@ -101,34 +100,36 @@ class NativeDocumentImagePool {
         );
     try {
       image = await decodeImage(decodeBytes, mimeType, (width, height) async {
-        if (_disposed) throw StateError('Image document is closed.');
+        if (_disposed) throw StateError(tr("Image document is closed."));
         if (width <= 0 ||
             height <= 0 ||
             width > maxDimension ||
             height > maxDimension ||
             width * height > maxPixels) {
-          throw const FormatException(
-            'Image dimensions exceed the native limit.',
+          throw FormatException(
+            tr("Image dimensions exceed the native limit."),
           );
         }
         final pixels = width * height;
         while (_allocatedPixels - reserved + pixels > maxPixels &&
             _releasing.isNotEmpty) {
           await Future.any(_releasing.toList());
-          if (_disposed) throw StateError('Image document is closed.');
+          if (_disposed) throw StateError(tr("Image document is closed."));
         }
         if (_allocatedPixels - reserved + pixels > maxPixels) {
-          throw const FormatException('Decoded document images exceed 16 MP.');
+          throw FormatException(tr("Decoded document images exceed 16 MP."));
         }
         _allocatedPixels += pixels - reserved;
         reserved = pixels;
       });
       if (reserved != image.width * image.height) {
-        throw const FormatException(
-          'Decoded image dimensions changed unexpectedly.',
+        throw FormatException(
+          tr("Decoded image dimensions changed unexpectedly."),
         );
       }
-      if (_disposed) throw StateError('Image document changed during decode.');
+      if (_disposed) {
+        throw StateError(tr("Image document changed during decode."));
+      }
       final id = 'canvas-image-${++_serial}';
       _entries[id] = _ImageVersion(
         image,
@@ -175,9 +176,7 @@ class NativeDocumentImagePool {
     final next = ids.toSet();
     if (next.length > maxEntries ||
         next.any((id) => !_entries.containsKey(id))) {
-      throw const FormatException(
-        'Canvas references an unknown document image.',
-      );
+      throw FormatException(tr("Canvas references an unknown document image."));
     }
     _retained
       ..clear()

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show SemanticsRole;
@@ -170,7 +171,9 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
                 obj(item['entry'])['content'] is! String,
           )) {
         throw StateError(
-          'The gateway sent an invalid project deletion preview. Reload it before deleting.',
+          tr(
+            "The gateway sent an invalid project deletion preview. Reload it before deleting.",
+          ),
         );
       }
       setState(() {
@@ -235,7 +238,7 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
           cause.code == 'HTTP_409' &&
           obj(cause.details)['code'] == 'conflict';
       final notice = conflict
-          ? 'Memory changed since this was shown. Review it again.'
+          ? tr("Memory changed since this was shown. Review it again.")
           : attentionRequestError(cause);
       if (!conflict) await widget.controller.refreshList();
       if (!current(ticket)) return;
@@ -332,10 +335,10 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
               spacing: 14,
               runSpacing: 6,
               children: [
-                for (final option in const {
-                  'forget': 'Forget',
-                  'keep': 'Keep as is',
-                  'edit': 'Edit',
+                for (final option in {
+                  'forget': tr("Forget"),
+                  'keep': tr("Keep as is"),
+                  'edit': tr("Edit"),
                 }.entries)
                   InkWell(
                     key: ValueKey('project-memory-$entryId-${option.key}'),
@@ -383,7 +386,7 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
               maxLength: 1000,
               style: webText(context, size: 14).copyWith(height: 1.6),
               decoration: InputDecoration(
-                labelText: 'New text',
+                labelText: tr("New text"),
                 counterText: '',
                 filled: true,
                 fillColor: palette(context)['surface.layer'],
@@ -392,7 +395,7 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
                   vertical: 8,
                 ),
                 errorText: (edits[entryId]?.trim().length ?? 0) > 1000
-                    ? 'Use at most 1000 characters.'
+                    ? tr("Use at most 1000 characters.")
                     : null,
               ),
               onChanged: (value) => setState(() => edits[entryId] = value),
@@ -410,12 +413,12 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
         if (loading)
           Semantics(
             role: SemanticsRole.status,
-            child: text('Loading what the project holds…'),
+            child: text(tr("Loading what the project holds…")),
           ),
         if (error != null) text(error!, alert: true),
         if (!loading)
           WebButton(
-            'Retry',
+            tr("Retry"),
             key: const ValueKey('project-deletion-retry'),
             onPressed: busy ? null : () => load(),
           ),
@@ -431,27 +434,41 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
     return [
       if (data['deleting'] == true)
         text(
-          'An earlier deletion of this project did not finish. Deleting again completes it; entries you kept come up for a decision again.',
+          tr(
+            "An earlier deletion of this project did not finish. Deleting again completes it; entries you kept come up for a decision again.",
+          ),
           alert: true,
         ),
-      heading('Deleted'),
+      heading(tr("Deleted")),
       bullet(
-        '${plural(rows(data['chats']).length, 'chat')}, with their messages, working files, uploads and private transcripts',
+        tr(
+          "{0}, with their messages, working files, uploads and private transcripts",
+          [plural(rows(data['chats']).length, 'chat')],
+        ),
       ),
       bullet(
-        "The project's instructions, files, capability settings${links > 0 ? ' and its links to ${plural(links, 'workspace')}' : ''}",
+        tr("The project's instructions, files, capability settings{0}", [
+          links > 0 ? ' and its links to ${plural(links, 'workspace')}' : '',
+        ]),
       ),
       if (schedules.isNotEmpty)
         bullet(
-          '${plural(schedules.length, 'schedule')} that run here: ${schedules.map((s) => '“${s['title']}”').join(', ')}',
+          tr("{0} that run here: {1}", [
+            plural(schedules.length, 'schedule'),
+            schedules.map((s) => '“${s['title']}”').join(', '),
+          ]),
         ),
       if (delegations > 0)
         bullet(
-          'The records of ${plural(delegations, 'delegated task')} its chats started',
+          tr("The records of {0} its chats started", [
+            plural(delegations, 'delegated task'),
+          ]),
         ),
       if (forgotten.isNotEmpty)
         bullet(
-          '${plural(forgotten.length, 'memory entry', 'memory entries')} written only here:',
+          tr("{0} written only here:", [
+            plural(forgotten.length, 'memory entry', 'memory entries'),
+          ]),
           nested: [
             for (final item in forgotten)
               bullet('“${obj(item['entry'])['content']}”'),
@@ -459,7 +476,10 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
         ),
       if (rollback.isNotEmpty)
         bullet(
-          "The project's changes to ${plural(rollback.length, 'memory entry', 'memory entries')}, which go back to their earlier text:",
+          tr(
+            "The project's changes to {0}, which go back to their earlier text:",
+            [plural(rollback.length, 'memory entry', 'memory entries')],
+          ),
           nested: [
             for (final item in rollback)
               bullet(
@@ -468,107 +488,129 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
           ],
         ),
       if (review.isNotEmpty) ...[
-        heading('Needs your decision'),
+        heading(tr("Needs your decision")),
         text(
-          'These entries mix text from this project with text from other chats, which cannot be separated automatically.',
+          tr(
+            "These entries mix text from this project with text from other chats, which cannot be separated automatically.",
+          ),
         ),
         for (final item in review) reviewEntry(item),
       ],
-      heading('Not deleted'),
+      heading(tr("Not deleted")),
       if (kept.isNotEmpty)
         bullet(
-          'Schedules its chats created in other workspaces: ${kept.map((s) => '“${s['title']}” (${s['workspaceName'] ?? s['workspaceId']})').join(', ')}',
+          tr("Schedules its chats created in other workspaces: {0}", [
+            kept
+                .map(
+                  (s) =>
+                      '“${s['title']}” (${s['workspaceName'] ?? s['workspaceId']})',
+                )
+                .join(', '),
+          ]),
         ),
       bullet(
-        'Work done by delegated tasks in other workspaces: their sessions, files, commits and the workspace memory they wrote',
+        tr(
+          "Work done by delegated tasks in other workspaces: their sessions, files, commits and the workspace memory they wrote",
+        ),
       ),
       bullet(
-        'Copies in other chats (what they already read, and anything they wrote in their own words)',
+        tr(
+          "Copies in other chats (what they already read, and anything they wrote in their own words)",
+        ),
       ),
       bullet(
-        'Files uploaded before this version of pirc, which do not record their project',
+        tr(
+          "Files uploaded before this version of pirc, which do not record their project",
+        ),
       ),
-      bullet('Backups, logs and what model providers keep'),
+      bullet(tr("Backups, logs and what model providers keep")),
       text(
-        'Forgotten text is not blocked: other chats may write it again. To keep a fact from coming back, forget it in Settings → Memory.',
+        tr(
+          "Forgotten text is not blocked: other chats may write it again. To keep a fact from coming back, forget it in Settings → Memory.",
+        ),
       ),
       if (!online || data['nodeOnline'] != true)
-        text('Connect the chat node to delete this project.', alert: true),
+        text(tr("Connect the chat node to delete this project."), alert: true),
       if (error != null) text(error!, alert: true),
     ];
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !busy,
-    child: Dialog(
-      insetPadding: const EdgeInsets.all(20),
-      backgroundColor: palette(context)['surface.layer'],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Delete project “${widget.workspace['displayName']}”?',
-                style: webText(context, size: 20, weight: FontWeight.w600),
-              ),
-              const SizedBox(height: 16),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: math.min(
-                    MediaQuery.sizeOf(context).height * .6,
-                    560,
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return PopScope(
+      canPop: !busy,
+      child: Dialog(
+        insetPadding: const EdgeInsets.all(20),
+        backgroundColor: palette(context)['surface.layer'],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  tr("Delete project “{0}”?", [
+                    widget.workspace['displayName'],
+                  ]),
+                  style: webText(context, size: 20, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: 16),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: math.min(
+                      MediaQuery.sizeOf(context).height * .6,
+                      560,
+                    ),
+                  ),
+                  child: SingleChildScrollView(
+                    key: const ValueKey('project-deletion-body'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: contents(),
+                    ),
                   ),
                 ),
-                child: SingleChildScrollView(
-                  key: const ValueKey('project-deletion-body'),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: contents(),
-                  ),
+                const SizedBox(height: 20),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    WebButton(
+                      tr("Cancel"),
+                      key: const ValueKey('project-deletion-cancel'),
+                      disabledOpacity: .5,
+                      onPressed: busy
+                          ? null
+                          : () => Navigator.pop(context, false),
+                    ),
+                    WebButton(
+                      busy ? tr("Deleting…") : tr("Delete project"),
+                      key: const ValueKey('project-deletion-confirm'),
+                      disabledOpacity: .5,
+                      primary: true,
+                      onPressed:
+                          busy ||
+                              loading ||
+                              closing ||
+                              preview == null ||
+                              !online ||
+                              preview!['nodeOnline'] != true ||
+                              !decided
+                          ? null
+                          : remove,
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  WebButton(
-                    'Cancel',
-                    key: const ValueKey('project-deletion-cancel'),
-                    disabledOpacity: .5,
-                    onPressed: busy
-                        ? null
-                        : () => Navigator.pop(context, false),
-                  ),
-                  WebButton(
-                    busy ? 'Deleting…' : 'Delete project',
-                    key: const ValueKey('project-deletion-confirm'),
-                    disabledOpacity: .5,
-                    primary: true,
-                    onPressed:
-                        busy ||
-                            loading ||
-                            closing ||
-                            preview == null ||
-                            !online ||
-                            preview!['nodeOnline'] != true ||
-                            !decided
-                        ? null
-                        : remove,
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

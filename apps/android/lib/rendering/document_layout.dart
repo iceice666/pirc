@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:collection';
 import 'dart:convert';
 import 'document_canvas_sizing.dart';
@@ -325,7 +326,9 @@ class NativeDocumentLayoutController extends ChangeNotifier {
         0,
         maximumElementCount,
         'knownIds',
-        'At most $maximumElementCount native document element IDs are supported.',
+        tr("At most {0} native document element IDs are supported.", [
+          maximumElementCount,
+        ]),
       );
     }
     if (!root.attached ||

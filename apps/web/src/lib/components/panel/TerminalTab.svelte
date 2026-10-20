@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   import { Plus, SquareTerminal, X } from '@lucide/svelte';
   import { rovingFocus } from '../../a11y';
   import { errorMessage } from '../../errors';
@@ -27,7 +29,7 @@
     const id = sessionId;
     const result = await listLoader.run(
       (signal) => panelApi.terminals(id, signal),
-      'Terminals are unavailable.',
+      tr('Terminals are unavailable.'),
     );
     if (!result || id !== sessionId) return;
     terminals = result.terminals;
@@ -37,7 +39,7 @@
 
   async function create() {
     if (!hasControl || generation === undefined) {
-      error = 'Take control of the session to open a terminal.';
+      error = tr('Take control of the session to open a terminal.');
       return;
     }
     busy = true;
@@ -47,7 +49,7 @@
       terminals = [...terminals.filter((t) => !t.exited), terminal];
       current = terminal.id;
     } catch (cause) {
-      error = errorMessage(cause, 'Unable to open a terminal.');
+      error = errorMessage(cause, tr('Unable to open a terminal.'));
     } finally {
       busy = false;
     }
@@ -56,14 +58,14 @@
   async function close(terminal: TerminalInfo) {
     if (!terminal.exited) {
       if (!hasControl || generation === undefined) {
-        error = 'Take control of the session to close a terminal.';
+        error = tr('Take control of the session to close a terminal.');
         return;
       }
       try {
         await panelApi.closeTerminal(sessionId, terminal.id, generation);
       } catch (cause) {
         if (!(cause instanceof Error && /not found/i.test(cause.message))) {
-          error = errorMessage(cause, 'Unable to close the terminal.');
+          error = errorMessage(cause, tr('Unable to close the terminal.'));
           return;
         }
       }
@@ -93,7 +95,7 @@
   <div
     class="terminal-strip"
     role="tablist"
-    aria-label="Terminals"
+    aria-label={tr('Terminals')}
     use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
   >
     {#each terminals as terminal, index (terminal.id)}
@@ -109,7 +111,7 @@
           aria-controls="terminal-panel-{terminal.id}"
           aria-selected={terminal.id === current}
           tabindex={terminal.id === current ? 0 : -1}
-          title="Delete closes this terminal"
+          title={tr('Delete closes this terminal')}
           onclick={() => (current = terminal.id)}
           onkeydown={(event) => {
             if (event.key === 'Delete') {
@@ -125,7 +127,7 @@
           type="button"
           class="chip-close"
           tabindex="-1"
-          aria-label="Close terminal {index + 1}"
+          aria-label={tr('Close terminal {0}', [index + 1])}
           onclick={() => close(terminal)}><X size={12} /></button
         >
       </div>
@@ -133,9 +135,9 @@
     <button
       class="icon-button small"
       type="button"
-      aria-label="New terminal"
+      aria-label={tr('New terminal')}
       disabled={busy || !hasControl}
-      title={hasControl ? 'New terminal' : 'Take control to open a terminal'}
+      title={hasControl ? tr('New terminal') : tr('Take control to open a terminal')}
       onclick={create}><Plus size={15} /></button
     >
   </div>
@@ -144,13 +146,14 @@
     <div class="terminal-empty">
       <SquareTerminal size={22} />
       <p>
-        Run commands in this workspace. The shell runs as the gateway’s account, just like the
-        agent’s own tools.
+        {tr(
+          'Run commands in this workspace. The shell runs as the gateway’s account, just like the agent’s own tools.',
+        )}
       </p>
       <button class="button primary" type="button" disabled={busy || !hasControl} onclick={create}
-        >Open terminal</button
+        >{tr('Open terminal')}</button
       >
-      {#if !hasControl}<p class="muted">Take control of the session to open one.</p>{/if}
+      {#if !hasControl}<p class="muted">{tr('Take control of the session to open one.')}</p>{/if}
     </div>
   {/if}
   {#each terminals as terminal (terminal.id)}

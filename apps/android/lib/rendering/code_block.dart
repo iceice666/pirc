@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'code_tabs.dart';
 import 'code_lines.dart';
@@ -424,6 +425,7 @@ class _NativeCodeBlockState extends State<NativeCodeBlock> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final colors = Theme.of(context).extension<PircColors>()!;
     if (lastSource != widget.source ||
         lastLanguage != widget.language ||
@@ -533,7 +535,7 @@ class _NativeCodeBlockState extends State<NativeCodeBlock> {
                                     : null,
                               ),
                             ),
-                        child: Text(copied ? 'Copied' : 'Copy'),
+                        child: Text(copied ? tr("Copied") : tr("Copy")),
                       ),
                     ],
                   ),

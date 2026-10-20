@@ -30,8 +30,8 @@ object GatewayNotifications {
         .putExtra("gatewaySession", session).putExtra("gatewayRoute", page)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
     fun manager(context: Context) = context.getSystemService(NotificationManager::class.java).apply {
-        createNotificationChannel(NotificationChannel(CHANNEL, "pirc 工作通知", NotificationManager.IMPORTANCE_DEFAULT))
-        for ((id, label) in categories) createNotificationChannel(NotificationChannel("pirc_$id", label,
+        createNotificationChannel(NotificationChannel(CHANNEL, NativeI18n.text("pirc 工作通知"), NotificationManager.IMPORTANCE_DEFAULT))
+        for ((id, label) in categories) createNotificationChannel(NotificationChannel("pirc_$id", NativeI18n.text(label),
             if(id=="live") NotificationManager.IMPORTANCE_LOW else NotificationManager.IMPORTANCE_DEFAULT))
     }
     private fun open(context: Context, intent: Intent, key: String) = PendingIntent.getActivity(context, key.hashCode(), intent,
@@ -53,7 +53,7 @@ object GatewayNotifications {
         val contentKey = questionIdentity?.notificationTag?.let { "open:$it" } ?: "open:$session:$page"
         val public = Notification.Builder(context, channel).setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(if(prefs.lock=="hide") "pirc" else title)
-            .setContentText(if(prefs.lock=="all") body else "解鎖後查看內容").build()
+            .setContentText(if(prefs.lock=="all") body else NativeI18n.text("解鎖後查看內容")).build()
         return Notification.Builder(context, channel).setSmallIcon(R.drawable.ic_notification).setContentTitle(title)
             .setContentText(body).setStyle(Notification.BigTextStyle().bigText(body))
             .setContentIntent(open(context,contentIntent,contentKey))
@@ -80,7 +80,7 @@ object GatewayNotifications {
                 !q.multiple && q.modelChoice == null && q.userRequestChoice == null &&
                 (q.kind=="confirm" || (q.kind=="select" && q.options.size<=3))
             if(settings.enabled("rich") && simple) {
-                val options=if(q!!.kind=="confirm") listOf("yes" to "確認…", "no" to "拒絕…") else q.options.map { it.value to it.label }
+                val options=if(q!!.kind=="confirm") listOf("yes" to NativeI18n.text("確認…"), "no" to NativeI18n.text("拒絕…")) else q.options.map { it.value to it.label }
                 for((value,label) in options) {
                     val target=intent(context,session).putQuestionIdentity(identity, questionPairingStamp).putExtra("interactionId",q.id).putExtra("answerChoice",value)
                     identity?.let { target.action = it.intentAction("answer", value) }
@@ -91,7 +91,7 @@ object GatewayNotifications {
             } else {
                 val target=intent(context,session).putQuestionIdentity(identity, questionPairingStamp).putExtra("interactionId",identity?.interactionId ?: q?.id).putExtra("confirmQuestion",true)
                 identity?.let { target.action = it.intentAction("open-answer") }
-                val action=Notification.Action.Builder(null,"開啟對話回答",open(context,target,identity?.intentAction("open-answer-pi") ?: "answer:$tag"))
+                val action=Notification.Action.Builder(null,NativeI18n.text("開啟對話回答"),open(context,target,identity?.intentAction("open-answer-pi") ?: "answer:$tag"))
                 if(Build.VERSION.SDK_INT>=31) action.setAuthenticationRequired(true)
                 notification.addAction(action.build())
             }
@@ -101,15 +101,15 @@ object GatewayNotifications {
                     .putExtra("questionPairingStamp",questionPairingStamp)
                 identity?.let { target.action = it.intentAction("overlay") }
                 val reply=PendingIntent.getForegroundService(context,0,target,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                val action=Notification.Action.Builder(null,"快速回應…",reply)
+                val action=Notification.Action.Builder(null,NativeI18n.text("快速回應…"),reply)
                 if(Build.VERSION.SDK_INT>=31) action.setAuthenticationRequired(true)
                 if(!simple || !settings.enabled("rich") || q!!.options.size<3) notification.addAction(action.build())
             }
         }
-        if(page?.startsWith("schedule")==true) notification.addAction(Notification.Action.Builder(null,"查看並執行…",open(context,intent(context,null,page),"schedule:$tag")).build())
+        if(page?.startsWith("schedule")==true) notification.addAction(Notification.Action.Builder(null,NativeI18n.text("查看並執行…"),open(context,intent(context,null,page),"schedule:$tag")).build())
         if(page?.startsWith("schedule:")==true && settings.enabled("popup") && Settings.canDrawOverlays(context)) {
             val reply=PendingIntent.getForegroundService(context,tag.hashCode(),Intent(context,GatewayOverlayService::class.java).putExtra("scheduleId",page.substringAfter(':')),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val action=Notification.Action.Builder(null,"快速處理…",reply)
+            val action=Notification.Action.Builder(null,NativeI18n.text("快速處理…"),reply)
             if(Build.VERSION.SDK_INT>=31) action.setAuthenticationRequired(true)
             notification.addAction(action.build())
         }
@@ -141,12 +141,12 @@ object GatewayNotifications {
         if(!active || !prefs.allows("live",state.session.workspaceId)) { manager(context).cancel(progressId); lastProgress.remove(id) }
         else if(System.currentTimeMillis()-(lastProgress[id]?:0)>5000) {
             lastProgress[id]=System.currentTimeMillis()
-            val step=state.messages.lastOrNull()?.tools?.lastOrNull()?.title ?: "正在執行工作"
+            val step=state.messages.lastOrNull()?.tools?.lastOrNull()?.title ?: NativeI18n.text("正在執行工作")
             val note=notification(context,state.session.name,step,id,category="live").setOngoing(true).setOnlyAlertOnce(true).setProgress(0,0,true).setAutoCancel(false)
             manager(context).notify(progressId,note.build())
         }
         if(previous?.run?.id==state.run?.id && previous?.run?.status in listOf("running","queued","stopping","waiting_input") && status in listOf("succeeded","completed","failed","cancelled","stopped"))
-            show(context,state.session.name,if(status in listOf("succeeded","completed")) "工作已完成" else "工作已結束：$status",id,category="done",workspace=state.session.workspaceId,tag="done:$id")
+            show(context,state.session.name,if(status in listOf("succeeded","completed")) NativeI18n.text("工作已完成") else NativeI18n.text("工作已結束：{0}", status),id,category="done",workspace=state.session.workspaceId,tag="done:$id")
     }
 
     internal fun isQuestionResolved(context: Context, identity: QuestionNotificationIdentity): Boolean = synchronized(questionNotificationLock) {

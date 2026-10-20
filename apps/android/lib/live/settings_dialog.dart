@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -126,11 +127,48 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
     }
   }
 
+  Future<void> saveLanguage(String language) async {
+    if (saving) return;
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      await c.savePreferences({'language': language});
+    } catch (e) {
+      if (mounted) setState(() => error = '$e');
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
   Widget general() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       AssistantSection(
-        title: 'Sessions',
+        title: tr('Language'),
+        children: [
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            initialValue: AppI18n.instance.language,
+            decoration: InputDecoration(labelText: tr('Interface language')),
+            items: [
+              DropdownMenuItem(value: 'en', child: Text(tr("English"))),
+              DropdownMenuItem(
+                value: 'zh-TW',
+                child: const Text('繁體中文', overflow: TextOverflow.ellipsis),
+              ),
+            ],
+            onChanged: saving
+                ? null
+                : (value) {
+                    if (value != null) saveLanguage(value);
+                  },
+          ),
+        ],
+      ),
+      AssistantSection(
+        title: tr("Sessions"),
         children: [
           const SizedBox(height: 8),
           Row(
@@ -143,7 +181,7 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
                       ? null
                       : () => saveDone(c.preferences['showSettled'] != true),
                   child: Text(
-                    'Show done sessions',
+                    tr("Show done sessions"),
                     style: webText(
                       context,
                       size: 13,
@@ -165,7 +203,7 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
                       child: Checkbox(
                         value: c.preferences['showSettled'] == true,
                         onChanged: saving ? null : (v) => saveDone(v!),
-                        semanticLabel: 'Show done sessions',
+                        semanticLabel: tr("Show done sessions"),
                         visualDensity: VisualDensity.compact,
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         shape: RoundedRectangleBorder(
@@ -179,8 +217,10 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
               ),
             ],
           ),
-          const AssistantParagraph(
-            'Settled (done) sessions are hidden from project and workspace pages unless this is on. Project and workspace settings are on their own pages.',
+          AssistantParagraph(
+            tr(
+              "Settled (done) sessions are hidden from project and workspace pages unless this is on. Project and workspace settings are on their own pages.",
+            ),
           ),
           if (error != null)
             AssistantParagraph(error!, error: true, live: true),
@@ -191,7 +231,7 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
         clock: widget.notificationClock,
       ),
       AssistantSection(
-        title: 'Layout',
+        title: tr("Layout"),
         divider: true,
         children: [
           const SizedBox(height: 8),
@@ -199,7 +239,9 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
             children: [
               Expanded(
                 child: Text(
-                  'Restore the sidebar and side panel to their default size and visibility.',
+                  tr(
+                    "Restore the sidebar and side panel to their default size and visibility.",
+                  ),
                   style: webText(
                     context,
                     size: 13,
@@ -208,7 +250,7 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
                 ),
               ),
               const SizedBox(width: 12),
-              AssistantButton('Reset', onPressed: widget.onResetLayout),
+              AssistantButton(tr("Reset"), onPressed: widget.onResetLayout),
             ],
           ),
         ],
@@ -219,12 +261,12 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
     final label = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(settingsCategories[i]),
+        Text(tr(settingsCategories[i])),
         if (i == 2 && c.attention.proposals.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(left: 6),
             child: Semantics(
-              label: '${c.attention.proposals.length} waiting',
+              label: tr("{0} waiting", [c.attention.proposals.length]),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 decoration: BoxDecoration(
@@ -308,6 +350,7 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
   );
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final media = MediaQuery.of(context), narrow = media.size.width <= 640;
     final colors = palette(context);
     final availableHeight =
@@ -331,10 +374,10 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AssistantSection(
-            title: 'Nodes',
+            title: tr("Nodes"),
             children: [
               const SizedBox(height: 8),
-              if (c.nodes.isEmpty) const AssistantParagraph('No nodes online.'),
+              if (c.nodes.isEmpty) AssistantParagraph(tr("No nodes online.")),
               for (final node in c.nodes)
                 Container(
                   constraints: const BoxConstraints(minHeight: 34),
@@ -368,13 +411,16 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        '${rows(node['workspaces']).length} workspace${rows(node['workspaces']).length == 1 ? '' : 's'}',
+                        tr("{0} workspace{1}", [
+                          rows(node['workspaces']).length,
+                          rows(node['workspaces']).length == 1 ? '' : 's',
+                        ]),
                         style: webText(context, size: 11, color: 'text.muted'),
                       ),
                     ],
                   ),
                 ),
-              AssistantParagraph('${c.nodes.length} online'),
+              AssistantParagraph(tr("{0} online", [c.nodes.length])),
             ],
           ),
           PairedDevices(controller: c),
@@ -468,7 +514,7 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Settings',
+                        tr("Settings"),
                         style: webText(
                           context,
                           size: 18,
@@ -506,7 +552,7 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
                         ),
                       WebIconButton(
                         LucideIcons.x,
-                        'Close',
+                        tr("Close"),
                         size: 32,
                         iconSize: 19,
                         focusNode: closeFocus,

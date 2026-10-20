@@ -145,9 +145,9 @@ void main() {
           call.$2['path'] == '/api/sessions' &&
           call.$2['method'] == 'POST',
     );
-    expect(creates, hasLength(1));
-    expect(creates.single.$2['body'], {'workspaceId': 'device:project'});
-    expect(controller.sessionId, 's');
+    expect(creates, isEmpty);
+    expect(controller.isDraftSession, true);
+    expect(obj(controller.state['session'])['workspaceId'], 'device:project');
     expect(t.takeException(), isNull);
     await t.pumpWidget(const SizedBox());
     controller.dispose();

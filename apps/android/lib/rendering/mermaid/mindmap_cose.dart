@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 // Port of the flat-forest CoSE-Bilkent path from cose-base 1.0.3 and
 // layout-base 1.0.2 (MIT; Copyright (c) 2019-present iVis@Bilkent).
 //
@@ -56,7 +57,7 @@ List<Offset> layoutNativeMindmapCoseBilkent({
   required List<({int source, int target})> edges,
 }) {
   if (nodeSizes.isEmpty) {
-    throw ArgumentError.value(nodeSizes, 'nodeSizes', 'must not be empty');
+    throw ArgumentError.value(nodeSizes, 'nodeSizes', tr("must not be empty"));
   }
   for (var i = 0; i < nodeSizes.length; i++) {
     final size = nodeSizes[i];
@@ -67,7 +68,7 @@ List<Offset> layoutNativeMindmapCoseBilkent({
       throw ArgumentError.value(
         size,
         'nodeSizes[$i]',
-        'width and height must be finite and greater than zero',
+        tr("width and height must be finite and greater than zero"),
       );
     }
   }
@@ -75,8 +76,10 @@ List<Offset> layoutNativeMindmapCoseBilkent({
     throw ArgumentError.value(
       edges.length,
       'edges',
-      'a connected tree with ${nodeSizes.length} nodes must have '
-          '${nodeSizes.length - 1} edges',
+      tr("a connected tree with {0} nodes must have {1} edges", [
+        nodeSizes.length,
+        nodeSizes.length - 1,
+      ]),
     );
   }
 
@@ -94,7 +97,7 @@ List<Offset> layoutNativeMindmapCoseBilkent({
       throw ArgumentError.value(
         edge,
         'edges[$i]',
-        'node index is out of range',
+        tr("node index is out of range"),
       );
     }
     if (edge.source == edge.target ||
@@ -102,7 +105,7 @@ List<Offset> layoutNativeMindmapCoseBilkent({
       throw ArgumentError.value(
         edge,
         'edges[$i]',
-        'self edges and duplicate edges are not tree edges',
+        tr("self edges and duplicate edges are not tree edges"),
       );
     }
     nodes[edge.source].neighbors.add(edge.target);
@@ -115,7 +118,7 @@ List<Offset> layoutNativeMindmapCoseBilkent({
     throw ArgumentError.value(
       edges,
       'edges',
-      'the input graph must be connected',
+      tr("the input graph must be connected"),
     );
   }
 
@@ -280,7 +283,7 @@ void _branchRadial(
   if (parent != null) {
     final parentIndex = neighborEdges.indexOf(parent);
     if (parentIndex < 0) {
-      throw StateError('CoSE radial traversal lost its parent edge');
+      throw StateError(tr("CoSE radial traversal lost its parent edge"));
     }
     startIndex = (parentIndex + 1) % neighborEdges.length;
   }
@@ -858,7 +861,7 @@ bool _intersects(_CoseNode a, _CoseNode b) {
   }
 
   // Coincident centers are already caught by _intersects above.
-  throw StateError('Unable to clip non-overlapping CoSE rectangles');
+  throw StateError(tr("Unable to clip non-overlapping CoSE rectangles"));
 }
 
 int _cardinalDirection(double slope, double slopePrime, int line) {
@@ -888,7 +891,9 @@ Offset _clipOnCardinal(
     case 4:
       return Offset(left, centerY + (-halfWidth) * slope);
     default:
-      throw StateError('Invalid CoSE clipping cardinal direction: $direction');
+      throw StateError(
+        tr("Invalid CoSE clipping cardinal direction: {0}", [direction]),
+      );
   }
 }
 

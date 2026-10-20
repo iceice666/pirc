@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'sankey_model.dart';
 
 /// Parses the CSV subset accepted by the pinned Mermaid Sankey parser.
@@ -7,7 +8,7 @@ import 'sankey_model.dart';
 /// silently changed by this parser. Link order and duplicate links are kept.
 NativeSankeyDiagram parseNativeMermaidSankey(String source) {
   if (source.length > 50000) {
-    throw const FormatException('Sankey input exceeds 50000 characters.');
+    throw FormatException(tr("Sankey input exceeds 50000 characters."));
   }
   final normalized = source.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   final lines = normalized
@@ -20,7 +21,7 @@ NativeSankeyDiagram parseNativeMermaidSankey(String source) {
         r'^sankey(?:-beta)?$',
         caseSensitive: false,
       ).hasMatch(lines.first)) {
-    throw const FormatException('Expected a sankey or sankey-beta header.');
+    throw FormatException(tr("Expected a sankey or sankey-beta header."));
   }
 
   final nodes = <NativeSankeyNode>[];
@@ -30,7 +31,9 @@ NativeSankeyDiagram parseNativeMermaidSankey(String source) {
     final row = _parseCsvRow(lines[lineIndex], lineIndex + 1);
     if (row.length != 3) {
       throw FormatException(
-        'Sankey row ${lineIndex + 1} must have source, target, and value fields.',
+        tr("Sankey row {0} must have source, target, and value fields.", [
+          lineIndex + 1,
+        ]),
       );
     }
     final sourceId = row[0].trim();
@@ -38,13 +41,16 @@ NativeSankeyDiagram parseNativeMermaidSankey(String source) {
     final numberText = row[2].trim();
     if (sourceId.isEmpty || targetId.isEmpty) {
       throw FormatException(
-        'Sankey row ${lineIndex + 1} has an empty node id.',
+        tr("Sankey row {0} has an empty node id.", [lineIndex + 1]),
       );
     }
     final value = double.tryParse(numberText);
     if (value == null || !value.isFinite || value < 0) {
       throw FormatException(
-        'Sankey row ${lineIndex + 1} has an unsupported flow value: $numberText',
+        tr("Sankey row {0} has an unsupported flow value: {1}", [
+          lineIndex + 1,
+          numberText,
+        ]),
       );
     }
     for (final field in [sourceId, targetId]) {
@@ -64,7 +70,7 @@ NativeSankeyDiagram parseNativeMermaidSankey(String source) {
     );
   }
   if (flows.isEmpty) {
-    throw const FormatException('Sankey needs at least one flow row.');
+    throw FormatException(tr("Sankey needs at least one flow row."));
   }
   return NativeSankeyDiagram(nodes: nodes, flows: flows);
 }
@@ -95,12 +101,14 @@ List<String> _parseCsvRow(String line, int lineNumber) {
       }
       if (!closed) {
         throw FormatException(
-          'Unclosed quoted field on Sankey row $lineNumber.',
+          tr("Unclosed quoted field on Sankey row {0}.", [lineNumber]),
         );
       }
       if (index < line.length && line[index] != ',') {
         throw FormatException(
-          'Unexpected text after a quoted field on Sankey row $lineNumber.',
+          tr("Unexpected text after a quoted field on Sankey row {0}.", [
+            lineNumber,
+          ]),
         );
       }
     } else {
@@ -108,7 +116,9 @@ List<String> _parseCsvRow(String line, int lineNumber) {
         final character = line[index++];
         if (character == '"') {
           throw FormatException(
-            'Unexpected quote in an unquoted field on Sankey row $lineNumber.',
+            tr("Unexpected quote in an unquoted field on Sankey row {0}.", [
+              lineNumber,
+            ]),
           );
         }
         _requireSourceAscii(character, lineNumber);
@@ -132,7 +142,10 @@ void _requireSourceAscii(String character, int lineNumber) {
   final code = character.codeUnitAt(0);
   if (code < 0x20 || code > 0x7e) {
     throw FormatException(
-      'Sankey row $lineNumber contains characters outside the pinned ASCII parser subset.',
+      tr(
+        "Sankey row {0} contains characters outside the pinned ASCII parser subset.",
+        [lineNumber],
+      ),
     );
   }
 }

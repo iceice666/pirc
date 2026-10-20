@@ -39,11 +39,11 @@ void main() {
 
       expect(find.byType(AssistantSection), findsNWidgets(3));
       expect(find.byType(Surface), findsNothing);
-      expect(find.text('解除配對'), findsOneWidget);
+      expect(find.text("Unpair"), findsOneWidget);
 
-      await tester.tap(find.text('外觀').first);
+      await tester.tap(find.text("Appearance").first);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('淺色').last);
+      await tester.tap(find.text("Light").last);
       await tester.pumpAndSettle();
 
       expect(find.text('偏好設定無法儲存'), findsOneWidget);
@@ -84,7 +84,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('啟用推播'));
+    await tester.tap(find.text("Enable push"));
     await tester.pumpAndSettle();
 
     expect(find.text('推播註冊失敗'), findsOneWidget);
@@ -130,7 +130,7 @@ void main() {
         tester
             .widget<Text>(find.byKey(const Key('permission-status-overlay')))
             .data,
-        '已開啟',
+        "Enabled",
       );
 
       reads[0].complete({'notifications': false, 'overlay': false});
@@ -139,7 +139,7 @@ void main() {
         tester
             .widget<Text>(find.byKey(const Key('permission-status-overlay')))
             .data,
-        '已開啟',
+        "Enabled",
       );
 
       await tester.pumpWidget(const SizedBox());

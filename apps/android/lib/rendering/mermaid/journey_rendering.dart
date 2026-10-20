@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -123,7 +124,7 @@ NativeMermaidJourneyLayout layoutNativeMermaidJourney(
   String? fontFamily,
 }) {
   if (!width.isFinite || width <= 0) {
-    throw const FormatException('Journey width must be positive');
+    throw FormatException(tr("Journey width must be positive"));
   }
   const taskWidth = 150.0;
   const taskHeight = 50.0;
@@ -410,51 +411,54 @@ class NativeMermaidJourney extends StatelessWidget {
   final bool dark;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final width = constraints.maxWidth.isFinite
-          ? constraints.maxWidth
-          : MediaQuery.sizeOf(context).width;
-      final layout = layoutNativeMermaidJourney(
-        diagram,
-        width: width,
-        dark: dark,
-        fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
-      );
-      final semanticText = <String>[
-        if (diagram.title.isNotEmpty) diagram.title,
-        for (final task in diagram.tasks)
-          '${task.sectionName}: ${task.label}, score ${task.score}, actors ${task.actors.join(', ')}',
-      ].join('. ');
-      return Semantics(
-        container: true,
-        label: diagram.accessibleTitle.isEmpty
-            ? (diagram.title.isEmpty ? 'User journey' : diagram.title)
-            : diagram.accessibleTitle,
-        value: diagram.accessibleDescription.isEmpty
-            ? semanticText
-            : diagram.accessibleDescription,
-        child: SizedBox(
-          width: layout.size.width,
-          height: layout.size.height,
-          child: ClipRect(
-            child: FittedBox(
-              fit: BoxFit.contain,
-              alignment: Alignment.topLeft,
-              child: SizedBox(
-                width: layout.viewBox.width,
-                height: layout.viewBox.height,
-                child: CustomPaint(
-                  size: Size(layout.viewBox.width, layout.viewBox.height),
-                  painter: NativeMermaidJourneyPainter(layout),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final layout = layoutNativeMermaidJourney(
+          diagram,
+          width: width,
+          dark: dark,
+          fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
+        );
+        final semanticText = <String>[
+          if (diagram.title.isNotEmpty) diagram.title,
+          for (final task in diagram.tasks)
+            '${task.sectionName}: ${task.label}, score ${task.score}, actors ${task.actors.join(', ')}',
+        ].join('. ');
+        return Semantics(
+          container: true,
+          label: diagram.accessibleTitle.isEmpty
+              ? (diagram.title.isEmpty ? tr("User journey") : diagram.title)
+              : diagram.accessibleTitle,
+          value: diagram.accessibleDescription.isEmpty
+              ? semanticText
+              : diagram.accessibleDescription,
+          child: SizedBox(
+            width: layout.size.width,
+            height: layout.size.height,
+            child: ClipRect(
+              child: FittedBox(
+                fit: BoxFit.contain,
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: layout.viewBox.width,
+                  height: layout.viewBox.height,
+                  child: CustomPaint(
+                    size: Size(layout.viewBox.width, layout.viewBox.height),
+                    painter: NativeMermaidJourneyPainter(layout),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
 class NativeMermaidJourneyPainter extends CustomPainter {

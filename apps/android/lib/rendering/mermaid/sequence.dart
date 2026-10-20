@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -129,7 +130,7 @@ class NativeSequenceDiagram {
 /// parse failures are caught by the surrounding markdown block.
 NativeSequenceDiagram parseNativeMermaidSequence(String source) {
   if (source.length > 50000) {
-    throw const FormatException('Sequence diagram exceeds 50000 characters');
+    throw FormatException(tr("Sequence diagram exceeds 50000 characters"));
   }
 
   final lines = source
@@ -149,7 +150,7 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
   final activationCounts = <String, int>{};
 
   Never invalid(int line, String details) => throw FormatException(
-    'Invalid Mermaid sequence diagram at line $line: $details',
+    tr("Invalid Mermaid sequence diagram at line {0}: {1}", [line, details]),
   );
 
   NativeSequenceParticipant ensureParticipant(
@@ -185,7 +186,7 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
   String normalizeIdentifier(String value, int lineNumber) {
     final identifier = unquote(value);
     if (identifier.isEmpty) {
-      invalid(lineNumber, 'Participant identifiers cannot be empty');
+      invalid(lineNumber, tr("Participant identifiers cannot be empty"));
     }
     return identifier;
   }
@@ -194,13 +195,13 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
     var line = lines[index].trim();
     if (line.isEmpty) continue;
     if (line.startsWith('%%{')) {
-      invalid(index + 1, 'Mermaid directives are not supported natively');
+      invalid(index + 1, tr("Mermaid directives are not supported natively"));
     }
     if (line.startsWith('%%')) continue;
 
     if (!headerFound) {
       if (line.toLowerCase() != 'sequencediagram') {
-        invalid(index + 1, 'Expected sequenceDiagram header');
+        invalid(index + 1, tr("Expected sequenceDiagram header"));
       }
       headerFound = true;
       continue;
@@ -212,7 +213,7 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
     ).firstMatch(line);
     if (titleMatch != null) {
       if (title.isNotEmpty) {
-        invalid(index + 1, 'Only one diagram title is supported');
+        invalid(index + 1, tr("Only one diagram title is supported"));
       }
       title = unquote(titleMatch.group(1)!);
       continue;
@@ -231,7 +232,7 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
         nextNumber = int.tryParse(start ?? '') ?? 1;
         numberStep = int.tryParse(numberMatch.group(2) ?? '') ?? 1;
         if (numberStep < 1) {
-          invalid(index + 1, 'autonumber step must be positive');
+          invalid(index + 1, tr("autonumber step must be positive"));
         }
       }
       continue;
@@ -247,11 +248,11 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
           ? NativeSequenceParticipantKind.actor
           : NativeSequenceParticipantKind.participant;
       if (explicitlyDeclared.contains(id)) {
-        invalid(index + 1, 'Participant $id is already declared');
+        invalid(index + 1, tr("Participant {0} is already declared", [id]));
       }
       final label = unquote(declaration.group(3) ?? id);
       if (label.isEmpty) {
-        invalid(index + 1, 'Participant labels cannot be empty');
+        invalid(index + 1, tr("Participant labels cannot be empty"));
       }
       participants[id] = NativeSequenceParticipant(
         id: id,
@@ -265,7 +266,7 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
       r'^(participant|actor)\b',
       caseSensitive: false,
     ).hasMatch(line)) {
-      invalid(index + 1, 'Malformed participant declaration');
+      invalid(index + 1, tr("Malformed participant declaration"));
     }
 
     final activate = RegExp(
@@ -278,7 +279,10 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
       final start = activate.group(1)!.toLowerCase() == 'activate';
       final count = activationCounts[id] ?? 0;
       if (!start && count == 0) {
-        invalid(index + 1, 'Cannot deactivate inactive participant $id');
+        invalid(
+          index + 1,
+          tr("Cannot deactivate inactive participant {0}", [id]),
+        );
       }
       activationCounts[id] = count + (start ? 1 : -1);
       events.add(NativeSequenceActivation(participant: id, start: start));
@@ -288,12 +292,12 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
       r'^(activate|deactivate)\b',
       caseSensitive: false,
     ).hasMatch(line)) {
-      invalid(index + 1, 'Malformed activation statement');
+      invalid(index + 1, tr("Malformed activation statement"));
     }
 
     if (line.toLowerCase() == 'end') {
       if (frames.isEmpty) {
-        invalid(index + 1, 'Unexpected end');
+        invalid(index + 1, tr("Unexpected end"));
       }
       final frame = frames.removeLast();
       events.add(NativeSequenceFrameEnd(id: frame.id, kind: frame.kind));
@@ -334,7 +338,7 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
     if (divider != null) {
       if (frames.isEmpty) {
         final name = divider.group(1)!;
-        invalid(index + 1, 'Unexpected $name');
+        invalid(index + 1, tr("Unexpected {0}", [name]));
       }
       final keyword = divider.group(1)!.toLowerCase();
       final activeKind = frames.last.kind;
@@ -344,7 +348,10 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
         _ => activeKind == NativeSequenceFrameKind.critical,
       };
       if (!supported) {
-        invalid(index + 1, '$keyword does not match the open sequence block');
+        invalid(
+          index + 1,
+          tr("{0} does not match the open sequence block", [keyword]),
+        );
       }
       events.add(
         NativeSequenceFrameDivider(
@@ -366,7 +373,7 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
           .map((match) => normalizeIdentifier(match.group(0)!, index + 1))
           .toList(growable: false);
       if (placementName != 'over' && ids.length != 1) {
-        invalid(index + 1, 'left/right notes require one participant');
+        invalid(index + 1, tr("left/right notes require one participant"));
       }
       for (final id in ids) {
         ensureParticipant(id);
@@ -385,7 +392,7 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
       continue;
     }
     if (RegExp(r'^note\b', caseSensitive: false).hasMatch(line)) {
-      invalid(index + 1, 'Malformed note statement');
+      invalid(index + 1, tr("Malformed note statement"));
     }
 
     final message = RegExp(
@@ -419,7 +426,10 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
       } else if (marker == NativeSequenceActivationMarker.deactivateSender) {
         final count = activationCounts[from] ?? 0;
         if (count == 0) {
-          invalid(index + 1, 'Cannot deactivate inactive participant $from');
+          invalid(
+            index + 1,
+            tr("Cannot deactivate inactive participant {0}", [from]),
+          );
         }
         activationCounts[from] = count - 1;
       }
@@ -438,14 +448,14 @@ NativeSequenceDiagram parseNativeMermaidSequence(String source) {
       continue;
     }
 
-    invalid(index + 1, 'Unsupported sequence diagram statement');
+    invalid(index + 1, tr("Unsupported sequence diagram statement"));
   }
 
   if (!headerFound) {
-    throw const FormatException('Expected sequenceDiagram header');
+    throw FormatException(tr("Expected sequenceDiagram header"));
   }
   if (frames.isNotEmpty) {
-    throw const FormatException('Unclosed sequence diagram block');
+    throw FormatException(tr("Unclosed sequence diagram block"));
   }
   return NativeSequenceDiagram(
     participants: List.unmodifiable(participants.values),
@@ -534,7 +544,7 @@ NativeSequenceLayout layoutNativeMermaidSequence(
   NativeSequenceDiagram diagram, {
   TextStyle? inheritedTextStyle,
 }) {
-  final fontFamily = inheritedTextStyle?.fontFamily ?? 'Arial';
+  final fontFamily = inheritedTextStyle?.fontFamily ?? tr("Arial");
   TextStyle textStyle(double size) =>
       TextStyle(fontFamily: fontFamily, fontSize: size);
   final actorFont = textStyle(16);
@@ -809,6 +819,7 @@ class NativeMermaidSequence extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final diagram = parseNativeMermaidSequence(source);
     final layout = layoutNativeMermaidSequence(
       diagram,
@@ -862,15 +873,17 @@ String _sequenceSemanticsLabel(NativeSequenceDiagram diagram) {
     final from = labels[message.from] ?? message.from;
     final to = labels[message.to] ?? message.to;
     final text = message.displayText;
-    return text.isEmpty ? '$from to $to' : '$from to $to: $text';
+    return text.isEmpty
+        ? tr("{0} to {1}", [from, to])
+        : tr("{0} to {1}: {2}", [from, to, text]);
   }).toList();
   if (messages.isNotEmpty) {
     sections.add('Messages: ${messages.join('; ')}');
   }
   final notes = diagram.events.whereType<NativeSequenceNote>().map((note) {
     final placement = switch (note.placement) {
-      NativeSequenceNotePlacement.left => 'left of',
-      NativeSequenceNotePlacement.right => 'right of',
+      NativeSequenceNotePlacement.left => tr("left of"),
+      NativeSequenceNotePlacement.right => tr("right of"),
       NativeSequenceNotePlacement.over => 'over',
     };
     final participants = note.participants
@@ -883,8 +896,8 @@ String _sequenceSemanticsLabel(NativeSequenceDiagram diagram) {
   }
   final title = diagram.title;
   final description = title == null
-      ? 'Sequence diagram. ${sections.join('. ')}'
-      : 'Sequence diagram. $title. ${sections.join('. ')}';
+      ? tr("Sequence diagram. {0}", [sections.join('. ')])
+      : tr("Sequence diagram. {0}. {1}", [title, sections.join('. ')]);
   return description.length <= 4000
       ? description
       : '${description.substring(0, 3997)}...';

@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'dart:ui' show Offset, Path, Radius, Rect, RRect, Size;
@@ -46,21 +47,21 @@ NativeC4NodeGeometry nativeC4NodeGeometry(
     throw ArgumentError.value(
       labelSize,
       'labelSize',
-      'Must be finite and non-negative.',
+      tr("Must be finite and non-negative."),
     );
   }
   if (!minWidth.isFinite || minWidth <= 0) {
     throw ArgumentError.value(
       minWidth,
       'minWidth',
-      'Must be finite and greater than zero.',
+      tr("Must be finite and greater than zero."),
     );
   }
   if (!padding.isFinite || padding < 0) {
     throw ArgumentError.value(
       padding,
       'padding',
-      'Must be finite and non-negative.',
+      tr("Must be finite and non-negative."),
     );
   }
 
@@ -77,8 +78,10 @@ NativeC4NodeGeometry nativeC4NodeGeometry(
       return _horizontalCylinderGeometry(labelSize, minWidth, padding);
     default:
       throw FormatException(
-        'Unsupported native Mermaid C4 shape "$shape". Supported shapes: '
-        'person, rounded, fr-rect, cylinder, h-cyl.',
+        tr(
+          "Unsupported native Mermaid C4 shape \"{0}\". Supported shapes: person, rounded, fr-rect, cylinder, h-cyl.",
+          [shape],
+        ),
       );
   }
 }

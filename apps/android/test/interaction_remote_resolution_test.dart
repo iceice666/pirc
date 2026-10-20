@@ -97,7 +97,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(answerCalls, 0);
-      expect(find.text('此問題已處理或已失效'), findsOneWidget);
+      expect(
+        find.text("This question has been handled or is no longer active."),
+        findsOneWidget,
+      );
       expect(find.text('Yes, continue'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
@@ -156,7 +159,10 @@ void main() {
       controller.changed();
       await tester.pumpAndSettle();
 
-      expect(find.text('此問題已處理或已失效'), findsOneWidget);
+      expect(
+        find.text("This question has been handled or is no longer active."),
+        findsOneWidget,
+      );
       expect(find.text('Yes, continue'), findsNothing);
       expect(find.textContaining('another device'), findsNothing);
       await tester.pumpWidget(const SizedBox());
@@ -202,7 +208,10 @@ void main() {
       refreshResponse.complete(snapshot([q]));
       await tester.pumpAndSettle();
 
-      expect(find.text('此問題已處理或已失效'), findsOneWidget);
+      expect(
+        find.text("This question has been handled or is no longer active."),
+        findsOneWidget,
+      );
       expect(find.text('Yes, continue'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
@@ -237,13 +246,13 @@ void main() {
     await tester.tap(find.text('Yes, continue'));
     await tester.pumpAndSettle();
     expect(answerCalls, 0);
-    expect(find.text('此問題已處理'), findsNothing);
+    expect(find.text("This question has been handled."), findsNothing);
 
     controller.connection = 'live';
     controller.changed();
     await tester.pumpAndSettle();
     expect(find.text('Yes, continue'), findsOneWidget);
-    expect(find.text('此問題已處理'), findsNothing);
+    expect(find.text("This question has been handled."), findsNothing);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
     await gateway.stream.close();
@@ -279,7 +288,10 @@ void main() {
       expect(answerCalls, 1);
       expect(refreshCalls, 1);
       expect(controlCalls, 0);
-      expect(find.text('此問題已處理或已失效'), findsOneWidget);
+      expect(
+        find.text("This question has been handled or is no longer active."),
+        findsOneWidget,
+      );
       expect(find.text('Yes, continue'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
@@ -316,7 +328,7 @@ void main() {
         find.text('Control changed. Check the latest state before answering.'),
         findsOneWidget,
       );
-      expect(find.text('此問題已處理'), findsNothing);
+      expect(find.text("This question has been handled."), findsNothing);
       expect(find.text('Yes, continue'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
@@ -357,13 +369,19 @@ void main() {
     controller.state = snapshot([]);
     controller.changed();
     await tester.pump();
-    expect(find.text('此問題已處理或已失效'), findsOneWidget);
+    expect(
+      find.text("This question has been handled or is no longer active."),
+      findsOneWidget,
+    );
     expect(find.text('Yes, continue'), findsNothing);
 
     answerResult.completeError(PlatformException(code: 'HTTP_503'));
     await tester.pumpAndSettle();
     expect(answerCalls, 1);
-    expect(find.text('此問題已處理或已失效'), findsOneWidget);
+    expect(
+      find.text("This question has been handled or is no longer active."),
+      findsOneWidget,
+    );
     expect(find.text('Check latest state'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
@@ -388,8 +406,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Yes, continue'), findsNothing);
-      expect(find.text('此問題已處理'), findsNothing);
-      expect(find.text('此問題已處理或已失效'), findsNothing);
+      expect(find.text("This question has been handled."), findsNothing);
+      expect(
+        find.text("This question has been handled or is no longer active."),
+        findsNothing,
+      );
       expect(
         find.text('The connection changed. Reopen this question to continue.'),
         findsOneWidget,

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'gateway.dart';
@@ -34,58 +35,63 @@ String describeCron(String expression) {
   final number = RegExp(r'^\d{1,2}$'), step = RegExp(r'^\*/(\d+)$');
   String two(String s) => s.padLeft(2, '0');
   if (hour == '*' && day == '*' && month == '*' && weekday == '*') {
-    if (minute == '*') return 'Every minute';
+    if (minute == '*') return tr("Every minute");
     final match = step.firstMatch(minute);
-    if (match != null) return 'Every ${match[1]} minutes';
-    if (number.hasMatch(minute)) return 'Every hour at :${two(minute)}';
+    if (match != null) return tr("Every {0} minutes", [match[1]]);
+    if (number.hasMatch(minute)) return tr("Every hour at :{0}", [two(minute)]);
     return expression;
   }
   if (!number.hasMatch(minute) || month != '*') return expression;
   final match = step.firstMatch(hour);
   if (match != null && day == '*' && weekday == '*') {
-    return 'Every ${match[1]} hours at :${two(minute)}';
+    return tr("Every {0} hours at :{1}", [match[1], two(minute)]);
   }
   if (!number.hasMatch(hour)) return expression;
   final time = '${two(hour)}:${two(minute)}';
-  if (day == '*' && weekday == '*') return 'Every day at $time';
+  if (day == '*' && weekday == '*') return tr("Every day at {0}", [time]);
   if (day == '*') {
-    if (weekday == '1-5') return 'Weekdays at $time';
-    if (weekday == '0,6' || weekday == '6,0') return 'Weekends at $time';
-    const days = [
-      'Sunday',
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
+    if (weekday == '1-5') return tr("Weekdays at {0}", [time]);
+    if (weekday == '0,6' || weekday == '6,0') {
+      return tr("Weekends at {0}", [time]);
+    }
+    final days = [
+      tr("Sunday"),
+      tr("Monday"),
+      tr("Tuesday"),
+      tr("Wednesday"),
+      tr("Thursday"),
+      tr("Friday"),
+      tr("Saturday"),
     ];
     final selected = weekday.split(',');
     if (selected.every((d) => RegExp(r'^[0-7]$').hasMatch(d))) {
-      return 'Every ${selected.map((d) => days[int.parse(d) % 7]).join(', ')} at $time';
+      return tr("Every {0} at {1}", [
+        selected.map((d) => days[int.parse(d) % 7]).join(', '),
+        time,
+      ]);
     }
     return expression;
   }
   if (weekday == '*' && number.hasMatch(day)) {
-    return 'Monthly on day ${int.parse(day)} at $time';
+    return tr("Monthly on day {0} at {1}", [int.parse(day), time]);
   }
   return expression;
 }
 
 String scheduleUntil(num at, int now) {
   final delta = at - now;
-  if (delta < 60000) return 'in under a minute';
-  if (delta < 3600000) return 'in ${(delta / 60000).round()}m';
-  if (delta < 86400000) return 'in ${(delta / 3600000).round()}h';
-  return 'in ${(delta / 86400000).round()}d';
+  if (delta < 60000) return tr("in under a minute");
+  if (delta < 3600000) return tr("in {0}m", [(delta / 60000).round()]);
+  if (delta < 86400000) return tr("in {0}h", [(delta / 3600000).round()]);
+  return tr("in {0}d", [(delta / 86400000).round()]);
 }
 
 String scheduleAgo(num at, int now) {
   final seconds = (now - at) / 1000;
-  if (seconds < 60) return 'just now';
-  if (seconds < 3600) return '${(seconds / 60).floor()}m ago';
-  if (seconds < 86400) return '${(seconds / 3600).floor()}h ago';
-  if (seconds < 30 * 86400) return '${(seconds / 86400).floor()}d ago';
+  if (seconds < 60) return tr("just now");
+  if (seconds < 3600) return tr("{0}m ago", [(seconds / 60).floor()]);
+  if (seconds < 86400) return tr("{0}h ago", [(seconds / 3600).floor()]);
+  if (seconds < 30 * 86400) return tr("{0}d ago", [(seconds / 86400).floor()]);
   final date = DateTime.fromMillisecondsSinceEpoch(at.toInt());
   return '${date.month}/${date.day}/${date.year}';
 }
@@ -184,12 +190,15 @@ class SchedulesState extends ChangeNotifier {
   }
 
   String wall(dynamic at, String zone) =>
-      walls['$zone:$at'] ?? 'Time unavailable';
+      walls['$zone:$at'] ?? tr("Time unavailable");
   String when(Json s) => s['cron'] != null
       ? '${describeCron('${s['cron']}')} (${s['timezone']})'
       : s['runAt'] != null
-      ? 'Once at ${wall(s['runAt'], '${s['timezone']}')} (${s['timezone']})'
-      : 'Never';
+      ? tr("Once at {0} ({1})", [
+          wall(s['runAt'], '${s['timezone']}'),
+          s['timezone'],
+        ])
+      : tr("Never");
   String where(Json s) => [
     obj(s['workspace'])['name'],
     obj(s['workspace'])['node'],

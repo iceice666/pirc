@@ -395,7 +395,7 @@ void main() {
             .any((w) => w.text == original),
         isTrue,
       );
-      expect(find.text('開啟閱讀'), findsNothing);
+      expect(find.text("Open 閱讀"), findsNothing);
       await tester.enterText(find.byKey(const Key('live-draft')), '草稿不變');
       tester.view.physicalSize = const Size(390, 844);
       await tester.pumpAndSettle();
@@ -440,7 +440,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('此問題已處理'), findsOneWidget);
+    expect(find.text("This question has been handled."), findsOneWidget);
     expect(find.text('Yes, continue'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     c.dispose();

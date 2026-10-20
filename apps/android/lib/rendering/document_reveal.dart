@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -85,31 +86,33 @@ List<NativeDocumentRevealAction> _nativeDocumentRevealPlan(
   bool focus = false,
 }) {
   Never unavailable(String reason) =>
-      throw UnsupportedError('Native fragment reveal: $reason');
+      throw UnsupportedError(tr("Native fragment reveal: {0}", [reason]));
   final boxes = {
     for (final raw in packet['boxes'] as List)
       raw['id'] as String: Map<String, dynamic>.from(raw as Map),
   };
   final target = boxes[id];
   if (target?['kind'] == 'none') return const [];
-  if (target?['kind'] != 'box') unavailable('target has no proved native box');
+  if (target?['kind'] != 'box') {
+    unavailable(tr("target has no proved native box"));
+  }
   final proof = target!['scrollReveal'];
   if (proof is! Map || target['scrollGeometry'] is! Map) {
-    unavailable('missing scrollport ancestry');
+    unavailable(tr("missing scrollport ancestry"));
   }
   Map style(Map? owner) {
     final value = owner?['computedStyle'];
     if (value is! Map ||
         value['direction'] != 'ltr' ||
         value['writing-mode'] != 'horizontal-tb') {
-      unavailable('unsupported writing mode');
+      unavailable(tr("unsupported writing mode"));
     }
     return value;
   }
 
   double number(Object? value) {
     if (value is! num || !value.isFinite || value.abs() > 9007199254740990) {
-      unavailable('invalid coordinate');
+      unavailable(tr("invalid coordinate"));
     }
     return value.toDouble();
   }
@@ -117,16 +120,18 @@ List<NativeDocumentRevealAction> _nativeDocumentRevealPlan(
   double inset(Map css, String name, double basis, {bool padding = false}) {
     final value = css[name];
     if (padding && value == 'auto') return 0;
-    if (value is! String) unavailable('unmeasured $name');
+    if (value is! String) unavailable(tr("unmeasured {0}", [name]));
     final match = RegExp(
       r'^([+-]?(?:\d+(?:\.\d*)?|\.\d+))(px|%)$',
     ).firstMatch(value);
     if (match == null || !padding && match[2] == '%') {
-      unavailable('unresolved $name');
+      unavailable(tr("unresolved {0}", [name]));
     }
     final result =
         double.parse(match[1]!) * (match[2] == '%' ? basis / 100 : 1);
-    if (!result.isFinite || padding && result < 0) unavailable('invalid $name');
+    if (!result.isFinite || padding && result < 0) {
+      unavailable(tr("invalid {0}", [name]));
+    }
     return result;
   }
 
@@ -144,7 +149,7 @@ List<NativeDocumentRevealAction> _nativeDocumentRevealPlan(
     double visibleEnd,
   ) {
     if (end < start || visibleEnd < visibleStart) {
-      unavailable('inverted reveal region');
+      unavailable(tr("inverted reveal region"));
     }
     if (start < visibleStart && end > visibleEnd) return 0;
     final larger = end - start > visibleEnd - visibleStart;
@@ -164,7 +169,7 @@ List<NativeDocumentRevealAction> _nativeDocumentRevealPlan(
     double visibleEnd,
   ) {
     if (end < start || visibleEnd < visibleStart) {
-      unavailable('inverted focus region');
+      unavailable(tr("inverted focus region"));
     }
     if (start >= visibleStart && end <= visibleEnd) return 0;
     return (start + end - visibleStart - visibleEnd) / 2;
@@ -177,7 +182,7 @@ List<NativeDocumentRevealAction> _nativeDocumentRevealPlan(
     Offset position,
     Map? range,
   ) {
-    if (range == null) unavailable('missing native scroll limits');
+    if (range == null) unavailable(tr("missing native scroll limits"));
     final left = inset(css, 'scroll-padding-left', port.width, padding: true),
         right =
             port.width -
@@ -189,7 +194,7 @@ List<NativeDocumentRevealAction> _nativeDocumentRevealPlan(
     if (right < left ||
         bottom < top ||
         rect.bottom + margin.bottom < rect.top - margin.top) {
-      unavailable('inverted reveal region');
+      unavailable(tr("inverted reveal region"));
     }
     final x =
             position.dx +
@@ -213,7 +218,7 @@ List<NativeDocumentRevealAction> _nativeDocumentRevealPlan(
         maxX = number(range['maxLeft']),
         minY = number(range['minTop']),
         maxY = number(range['maxTop']);
-    if (minX > maxX || minY > maxY) unavailable('inverted native limits');
+    if (minX > maxX || minY > maxY) unavailable(tr("inverted native limits"));
     return Offset(
       number(x).roundToDouble().clamp(minX, maxX),
       number(y).roundToDouble().clamp(minY, maxY),
@@ -248,7 +253,7 @@ List<NativeDocumentRevealAction> _nativeDocumentRevealPlan(
   for (final raw in proof['ports'] as List) {
     final port = raw as Map, owner = boxes[port['id']];
     if (owner?['kind'] != 'box' || owner?['scroll'] is! Map) {
-      unavailable('scroll owner has no current native box');
+      unavailable(tr("scroll owner has no current native box"));
     }
     final metrics = owner!['scroll'] as Map,
         axes = (port['axes'] as List).map(number).toList(),
@@ -257,7 +262,7 @@ List<NativeDocumentRevealAction> _nativeDocumentRevealPlan(
         oy = origin[1] - scroll.dy,
         det = axes[0] * axes[3] - axes[1] * axes[2];
     if (!det.isFinite || det.abs() < 1e-12) {
-      unavailable('singular scroll transform');
+      unavailable(tr("singular scroll transform"));
     }
     final rect = mapRect(
       absolute,
@@ -290,7 +295,7 @@ List<NativeDocumentRevealAction> _nativeDocumentRevealPlan(
     final size = Size(number(viewport['width']), number(viewport['height'])),
         range = viewport['scrollRange'] as Map?;
     if (absolute.right + margin.right > size.width && range?['maxLeft'] == 0) {
-      unavailable('root horizontal reveal has no native range');
+      unavailable(tr("root horizontal reveal has no native range"));
     }
     plan.add(
       NativeDocumentRevealAction(

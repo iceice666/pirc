@@ -281,13 +281,13 @@ internal class PushEnableCoordinator {
         enable: suspend (Any) -> Unit,
     ) {
         if (!pending.compareAndSet(false, true)) {
-            throw PushEnableFailure("PUSH_BUSY", "A distributor picker is already open.")
+            throw PushEnableFailure("PUSH_BUSY", NativeI18n.text("A distributor picker is already open."))
         }
         try {
             if (!hasDistributor()) {
                 throw PushEnableFailure(
                     "NO_DISTRIBUTOR",
-                    "No UnifiedPush distributor is installed. Install one and try again.",
+                    NativeI18n.text("No UnifiedPush distributor is installed. Install one and try again."),
                 )
             }
             val snapshot = captureSnapshot()
@@ -295,10 +295,10 @@ internal class PushEnableCoordinator {
                 if (!hasDistributor()) {
                     throw PushEnableFailure(
                         "NO_DISTRIBUTOR",
-                        "No UnifiedPush distributor is installed. Install one and try again.",
+                        NativeI18n.text("No UnifiedPush distributor is installed. Install one and try again."),
                     )
                 }
-                throw PushEnableFailure("PUSH_CANCELLED", "No distributor was chosen.")
+                throw PushEnableFailure("PUSH_CANCELLED", NativeI18n.text("No distributor was chosen."))
             }
             validateSnapshot(snapshot)
             enable(snapshot)
@@ -501,7 +501,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                     result.error("INVALID", "requestId must contain 1 to 128 characters", null)
                     return@setMethodCallHandler
                 }
-                if (!scanBusyGate.tryEnter(requestId)) { result.error("SCAN_BUSY", "掃描器已開啟", null); return@setMethodCallHandler }
+                if (!scanBusyGate.tryEnter(requestId)) { result.error("SCAN_BUSY", NativeI18n.text("掃描器已開啟"), null); return@setMethodCallHandler }
                 val responseCompleted = AtomicBoolean(false)
                 fun failed(error: Exception) {
                     if (!responseCompleted.compareAndSet(false, true)) return
@@ -526,7 +526,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                     val details = moduleInstallError?.let {
                         mapOf("moduleInstallErrorCode" to it.errorCode)
                     }
-                    result.error(code, "無法開啟掃描器，請稍後重試或貼上配對連結。", details)
+                    result.error(code, NativeI18n.text("無法開啟掃描器，請稍後重試或貼上配對連結。"), details)
                 }
                 fun succeeded(value: String?) {
                     if (!responseCompleted.compareAndSet(false, true)) return
@@ -579,7 +579,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
             }
             if (call.method == "saveDocument") {
                 if (pendingFilePicker != null || documentSavePicker.isPending) {
-                    result.error("BUSY", "A document picker is already open.", null)
+                    result.error("BUSY", NativeI18n.text("A document picker is already open."), null)
                     return@setMethodCallHandler
                 }
                 val payload = try {
@@ -589,7 +589,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                         bytes = optionalBytes("bytes"),
                     )
                 } catch (e: Exception) {
-                    result.error("INVALID", e.message ?: "Invalid document data", null)
+                    result.error("INVALID", e.message ?: NativeI18n.text("Invalid document data"), null)
                     return@setMethodCallHandler
                 }
                 val pairingStamp = try {
@@ -607,7 +607,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                 return@setMethodCallHandler
             }
             if (call.method == "pickUpload" || call.method == "pickAttachments") {
-                if (pendingFilePicker != null || documentSavePicker.isPending) { result.error("BUSY", "已有附件選擇器開啟", null); return@setMethodCallHandler }
+                if (pendingFilePicker != null || documentSavePicker.isPending) { result.error("BUSY", NativeI18n.text("已有附件選擇器開啟"), null); return@setMethodCallHandler }
                 val mode = if (call.method == "pickAttachments") FilePickerMode.READ_ATTACHMENTS else FilePickerMode.LEGACY_UPLOAD
                 val pickerOptions: Pair<Boolean, List<String>> = try {
                     if (mode == FilePickerMode.READ_ATTACHMENTS) {
@@ -637,7 +637,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                 } catch (e: Exception) {
                     // Do not leave this result installed if Android cannot launch the picker.
                     if (pendingFilePicker === pending) pendingFilePicker = null
-                    result.error("PICKER", e.message ?: "無法開啟附件選擇器", null)
+                    result.error("PICKER", e.message ?: NativeI18n.text("無法開啟附件選擇器"), null)
                 }
                 return@setMethodCallHandler
             }
@@ -682,6 +682,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                         "savePreferences" -> {
                             val preferences = NotificationPreferences(activity)
                             preferences.save(args)
+                            if (args.containsKey("language")) GatewayNotifications.manager(activity)
                             preferences.read().also(runtime::notifyPreferencesChanged)
                         }
                         "appSettings" -> {
@@ -692,7 +693,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             activity.startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, activity.packageName)); null
                         }
                         "share" -> {
-                            activity.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, str("text")), "分享內容")); null
+                            activity.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, str("text")), NativeI18n.text("分享內容"))); null
                         }
                         "permissions" -> activity.permissionAccess.status()
                         "requestOverlay" -> { activity.permissionAccess.overlay(); activity.permissionAccess.status() }
@@ -940,7 +941,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                                         val mime = activity.contentResolver.getType(uri)
                                         if (mime?.startsWith("image/") != true) null else attachmentWire(readAttachment(uri))
                                     } catch (e: Exception) {
-                                        attachmentWire(AttachmentRead.Failure(uri.lastPathSegment ?: "image", "image/unknown", e.message ?: "無法讀取剪貼簿圖片"))
+                                        attachmentWire(AttachmentRead.Failure(uri.lastPathSegment ?: "image", "image/unknown", e.message ?: NativeI18n.text("無法讀取剪貼簿圖片")))
                                     }
                                 }
                             }
@@ -966,7 +967,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                                 ProjectFileUploadBody(limit) { activity.contentResolver.openInputStream(Uri.parse(selection.uri)) }
                             } else {
                                 requireNotNull(bytes)
-                                if (bytes.isEmpty() || bytes.size > limit) throw ApiException(413, "payload_too_large", "File is empty or exceeds the project file size limit.")
+                                if (bytes.isEmpty() || bytes.size > limit) throw ApiException(413, "payload_too_large", NativeI18n.text("File is empty or exceeds the project file size limit."))
                                 ProjectFileUploadBody(limit) { bytes.inputStream() }
                             }
                             api.uploadProjectFile(workspaceId, name, body).wire()
@@ -977,7 +978,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             val mimeType = str("mimeType")
                             val bytes = args["bytes"] as? ByteArray
                                 ?: throw IllegalArgumentException("bytes 必須是 Uint8List")
-                            require(bytes.size <= MAX_ATTACHMENT_BYTES) { "附件上限 8 MiB" }
+                            require(bytes.size <= MAX_ATTACHMENT_BYTES) { NativeI18n.text("附件上限 8 MiB") }
                             withContext(Dispatchers.IO) {
                                 val uploaded = runtime.api().upload(sessionId, bytes, mimeType, name)
                                 mapOf(
@@ -1012,9 +1013,9 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                                     is PushStatus.On -> "on"
                                     is PushStatus.Failed -> "failed"
                                 }, "state" to when(val state = PushRegistration.status.value) {
-                                PushStatus.Off -> "尚未啟用"
-                                PushStatus.Connecting -> "註冊中"
-                                is PushStatus.On -> "已啟用：${state.distributor}"
+                                PushStatus.Off -> NativeI18n.text("尚未啟用")
+                                PushStatus.Connecting -> NativeI18n.text("註冊中")
+                                is PushStatus.On -> NativeI18n.text("已啟用：{0}", state.distributor)
                                 is PushStatus.Failed -> state.reason
                             })
                         }
@@ -1054,8 +1055,8 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             val schedule = args["scheduleId"] as? String
                             require(id != null || schedule != null)
                             if (!android.provider.Settings.canDrawOverlays(activity)) {
-                                GatewayNotifications.show(activity, "pirc · 待你處理", "開啟 App 確認最新狀態", id, schedule?.let { "schedule:$it" }, if(schedule!=null) "missed" else "q")
-                                "浮窗權限尚未開啟，已嘗試改用通知；也可直接在對話內回答"
+                                GatewayNotifications.show(activity, NativeI18n.text("pirc · 待你處理"), NativeI18n.text("開啟 App 確認最新狀態"), id, schedule?.let { "schedule:$it" }, if(schedule!=null) "missed" else "q")
+                                NativeI18n.text("浮窗權限尚未開啟，已嘗試改用通知；也可直接在對話內回答")
                             } else {
                                 activity.startForegroundService(Intent(activity, GatewayOverlayService::class.java)
                                     .putExtra("sessionId", id).putExtra("interactionId", args["interactionId"] as? String)
@@ -1082,14 +1083,14 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                         else -> { result.notImplemented(); return@launch }
                     }
                     result.success(value)
-                } catch (e: CancellationException) { result.error("CANCELLED", "操作已取消，請檢查狀態", null) }
+                } catch (e: CancellationException) { result.error("CANCELLED", NativeI18n.text("操作已取消，請檢查狀態"), null) }
                 catch (e: DocumentScriptException) { result.error(e.code, e.message, null) }
                 catch (e: ProjectFileReadException) { result.error("PROJECT_FILE_READ", e.message, null) }
                 catch (e: PushEnableFailure) { result.error(e.code, e.message, null) }
                 catch (e: ApiException) { result.error("HTTP_${e.status}", e.message, mapOf("status" to e.status, "code" to e.code)) }
                 catch (e: Exception) {
                     android.util.Log.e("PircBridge", "${call.method}/${args["method"] ?: ""}: ${e.javaClass.name}/${e.cause?.javaClass?.name} at ${e.stackTrace.take(8).joinToString()}")
-                    result.error(if (e is IllegalArgumentException) "INVALID" else "NETWORK", e.message ?: "連線失敗", null)
+                    result.error(if (e is IllegalArgumentException) "INVALID" else "NETWORK", e.message ?: NativeI18n.text("連線失敗"), null)
                 }
             }
         }
@@ -1105,7 +1106,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
         val boot = runtime.boot()
         val pairingStamp = boot["pairingStamp"] as? String
         if (pairingStamp.isNullOrBlank()) {
-            throw ApiException(401, "unpaired", "請先配對此裝置")
+            throw ApiException(401, "unpaired", NativeI18n.text("請先配對此裝置"))
         }
         runtime.validateContext(contextId)
         return PushEnableSnapshot(
@@ -1117,13 +1118,13 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
 
     private suspend fun validatePushEnableSnapshot(snapshot: PushEnableSnapshot) {
         if (contextGeneration.get() != snapshot.contextGeneration) {
-            throw ApiException(409, "context_expired", "App context changed; reopen notification settings and try again.")
+            throw ApiException(409, "context_expired", NativeI18n.text("App context changed; reopen notification settings and try again."))
         }
         val currentStamp = runtime.boot()["pairingStamp"] as? String
         requirePairingStamp(snapshot.pairingStamp, currentStamp)
         runtime.validateContext(snapshot.contextId)
         if (contextGeneration.get() != snapshot.contextGeneration) {
-            throw ApiException(409, "context_expired", "App context changed; reopen notification settings and try again.")
+            throw ApiException(409, "context_expired", NativeI18n.text("App context changed; reopen notification settings and try again."))
         }
     }
 
@@ -1143,7 +1144,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
             }
             try {
                 if (activity.isFinishing || activity.isDestroyed) {
-                    throw PushEnableFailure("PUSH_PICKER", "Cannot open the distributor picker right now.")
+                    throw PushEnableFailure("PUSH_PICKER", NativeI18n.text("Cannot open the distributor picker right now."))
                 }
                 UnifiedPush.tryUseCurrentOrDefaultDistributor(activity) { chosen ->
                     if (distributorPickerContinuation === continuation) {
@@ -1158,7 +1159,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                 if (continuation.isActive) {
                     if (error is PushEnableFailure) continuation.resumeWithException(error)
                     else continuation.resumeWithException(
-                        PushEnableFailure("PUSH_PICKER", "Could not open the distributor picker right now."),
+                        PushEnableFailure("PUSH_PICKER", NativeI18n.text("Could not open the distributor picker right now.")),
                     )
                 }
             }
@@ -1182,7 +1183,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
             val uri = intent?.data
             if (uri == null) { result.success(null); return }
             val id = pending.sessionId ?: run {
-                result.error("UPLOAD", "缺少工作階段", null)
+                result.error("UPLOAD", NativeI18n.text("缺少工作階段"), null)
                 return
             }
             runtime.scope.launch {
@@ -1435,7 +1436,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
         projectFileSelections.clear()
         val pending = pendingFilePicker?.takeIf { it.mode == FilePickerMode.PROJECT_FILES } ?: return
         pendingFilePicker = null
-        pending.result.error("HTTP_409", "The project or account changed. Choose the files again.", mapOf("status" to 409, "code" to "account_changed"))
+        pending.result.error("HTTP_409", NativeI18n.text("The project or account changed. Choose the files again."), mapOf("status" to 409, "code" to "account_changed"))
     }
 
     private fun startProjectFilePicker(args: Map<*, *>, result: MethodChannel.Result, contextId: String?) {
@@ -1466,7 +1467,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                 if (pendingFilePicker !== pending) return@launch
                 pendingFilePicker = null
                 if (e is ApiException) result.error("HTTP_${e.status}", e.message, mapOf("status" to e.status, "code" to e.code))
-                else result.error("PICKER", e.message ?: "Unable to open the file picker.", null)
+                else result.error("PICKER", e.message ?: NativeI18n.text("Unable to open the file picker."), null)
             }
         }
     }
@@ -1496,7 +1497,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                     }
                 }
                 projectFileApi(stamp, pending.contextId)
-                if (pending.contextGeneration != contextGeneration.get()) throw ApiException(409, "context_expired", "App context changed. Choose the files again.")
+                if (pending.contextGeneration != contextGeneration.get()) throw ApiException(409, "context_expired", NativeI18n.text("App context changed. Choose the files again."))
                 pending.result.success(selected.map { (selection, error) ->
                     if (selection == null) error else mapOf(
                         "name" to selection.name,
@@ -1506,7 +1507,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                 })
             } catch (e: Exception) {
                 if (e is ApiException) pending.result.error("HTTP_${e.status}", e.message, mapOf("status" to e.status, "code" to e.code))
-                else pending.result.error("PICKER_READ", e.message ?: "Unable to read the selected files.", null)
+                else pending.result.error("PICKER_READ", e.message ?: NativeI18n.text("Unable to read the selected files."), null)
             }
         }
     }
@@ -1526,14 +1527,14 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                 while (true) {
                     val count = input.read(buffer)
                     if (count < 0) break
-                    require(output.size() + count <= MAX_ATTACHMENT_BYTES) { "附件上限 8 MiB" }
+                    require(output.size() + count <= MAX_ATTACHMENT_BYTES) { NativeI18n.text("附件上限 8 MiB") }
                     output.write(buffer, 0, count)
                 }
                 output.toByteArray()
-            } ?: throw java.io.IOException("無法讀取附件")
+            } ?: throw java.io.IOException(NativeI18n.text("無法讀取附件"))
             AttachmentRead.Success(AttachmentContents(name, mimeType, bytes))
         } catch (e: Exception) {
-            AttachmentRead.Failure(name, mimeType, e.message ?: "無法讀取附件")
+            AttachmentRead.Failure(name, mimeType, e.message ?: NativeI18n.text("無法讀取附件"))
         }
     }
     fun route(intent: Intent) {

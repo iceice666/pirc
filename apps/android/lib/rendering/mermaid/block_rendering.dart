@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -22,7 +23,8 @@ class NativeMermaidBlockChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final semantics = StringBuffer('Block diagram.');
+    AppI18n.watch(context);
+    final semantics = StringBuffer(tr("Block diagram."));
     for (final node in diagram.leafNodes) {
       semantics.write(' ');
       semantics.write(node.label);
@@ -31,10 +33,10 @@ class NativeMermaidBlockChart extends StatelessWidget {
     for (final edge in diagram.edges) {
       semantics.write(' ');
       semantics.write(edge.start);
-      semantics.write(' connects to ');
+      semantics.write(tr(" connects to "));
       semantics.write(edge.end);
       if (edge.label.isNotEmpty) {
-        semantics.write(' with label ');
+        semantics.write(tr(" with label "));
         semantics.write(edge.label);
       }
       semantics.write('.');

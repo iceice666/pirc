@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import '../rendering/svg_dimensions.dart';
 import '../rendering/native_image_density.dart';
@@ -175,7 +176,7 @@ class _NativeMarkdownImageState extends State<NativeMarkdownImage> {
       String mime;
       if (widget.source.scheme == 'blob') {
         if (objectUrls == null) {
-          throw StateError('Object URL document is unavailable.');
+          throw StateError(tr("Object URL document is unavailable."));
         }
         final blob = await objectUrls.read(widget.source.toString());
         data = blob.bytes;
@@ -186,7 +187,7 @@ class _NativeMarkdownImageState extends State<NativeMarkdownImage> {
         mime = uri.mimeType;
       } else {
         if (!['', 'http', 'https'].contains(widget.source.scheme)) {
-          throw const FormatException('Unsupported image URL');
+          throw FormatException(tr("Unsupported image URL"));
         }
         final result = obj(
           await widget.gateway.call('image', {
@@ -200,7 +201,7 @@ class _NativeMarkdownImageState extends State<NativeMarkdownImage> {
         mime = '${result['mimeType']}';
       }
       if (data.length > 32 * 1024 * 1024) {
-        throw const FormatException('Image exceeds 32 MiB');
+        throw FormatException(tr("Image exceeds 32 MiB"));
       }
       data = await NativeRasterImages.prepare(data, mime);
       final isSvg = mime.toLowerCase() == 'image/svg+xml';
@@ -226,7 +227,7 @@ class _NativeMarkdownImageState extends State<NativeMarkdownImage> {
         }
       }
       if (dimensions.width < 0 || dimensions.height < 0) {
-        throw const FormatException('Empty image');
+        throw FormatException(tr("Empty image"));
       }
       if (!mounted ||
           ticket != revision ||
@@ -259,6 +260,7 @@ class _NativeMarkdownImageState extends State<NativeMarkdownImage> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final density = NativeImageDensity.of(context);
     final dimensions = size == null
         ? null

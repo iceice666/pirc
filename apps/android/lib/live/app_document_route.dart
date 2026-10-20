@@ -7,6 +7,8 @@
 /// or its `index.html` alias. Deep SPA fallback paths can be enabled explicitly.
 library;
 
+import '../l10n/app_i18n.dart';
+
 import 'dart:convert';
 
 /// Builds the URL used when the web app replaces its address with
@@ -24,7 +26,7 @@ String nativePircReplaceRouteQuery(
 }) {
   final uri = _parseWebUri(canonicalUrl);
   if (uri == null || uri.userInfo.isNotEmpty) {
-    throw FormatException('Expected an absolute HTTP(S) canonical URL.');
+    throw FormatException(tr("Expected an absolute HTTP(S) canonical URL."));
   }
 
   var pathEnd = canonicalUrl.length;
@@ -345,11 +347,15 @@ String _encodeUriComponent(String value) {
       if (index + 1 >= codeUnits.length ||
           codeUnits[index + 1] < 0xdc00 ||
           codeUnits[index + 1] > 0xdfff) {
-        throw FormatException('URI component contains an unpaired surrogate.');
+        throw FormatException(
+          tr("URI component contains an unpaired surrogate."),
+        );
       }
       index++;
     } else if (unit >= 0xdc00 && unit <= 0xdfff) {
-      throw FormatException('URI component contains an unpaired surrogate.');
+      throw FormatException(
+        tr("URI component contains an unpaired surrogate."),
+      );
     }
   }
 

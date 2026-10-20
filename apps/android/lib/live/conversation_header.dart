@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -27,6 +28,7 @@ class ConversationHeader extends StatelessWidget {
   final ValueChanged<Json> onOrigin;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final c = controller, colors = palette(context);
     final phone = MediaQuery.sizeOf(context).width <= 650;
     final workspace = c.workspaces
@@ -37,10 +39,10 @@ class ConversationHeader extends StatelessWidget {
     final live = c.connection == 'live';
     final offline = c.connection == 'offline' || c.connection == 'stopped';
     final status = live
-        ? 'Live'
+        ? tr("Live")
         : offline
-        ? 'Offline'
-        : 'Reconnecting';
+        ? tr("Offline")
+        : tr("Reconnecting");
     Widget chip(
       String label,
       IconData icon, {
@@ -139,10 +141,10 @@ class ConversationHeader extends StatelessWidget {
               (c.chat || phone ? 0 : labelWidth('99 running') + 42),
         );
         final controlNatural = !held
-            ? labelWidth('Take control') + 45
+            ? labelWidth(tr("Take control")) + 45
             : c.chat
             ? 0.0
-            : labelWidth('In control') + 39;
+            : labelWidth(tr("In control")) + 39;
         final liveNatural = labelWidth(status) + 38;
         final ratio = math.min(1.0, room / (controlNatural + liveNatural));
         final liveWidth = phone ? 28.0 : math.max(38.0, liveNatural * ratio);
@@ -159,7 +161,7 @@ class ConversationHeader extends StatelessWidget {
                 if (phone) ...[
                   WebIconButton(
                     LucideIcons.chevronLeft,
-                    'Back to the list',
+                    tr("Back to the list"),
                     size: 40,
                     iconSize: 22,
                     onPressed: onBack,
@@ -168,7 +170,7 @@ class ConversationHeader extends StatelessWidget {
                 ] else if (sidebarCollapsed) ...[
                   WebIconButton(
                     LucideIcons.panelLeftOpen,
-                    'Show sidebar',
+                    tr("Show sidebar"),
                     size: 34,
                     iconSize: 19,
                     onPressed: onExpand,
@@ -242,13 +244,16 @@ class ConversationHeader extends StatelessWidget {
                       if (sandbox['active'] == false) ...[
                         const SizedBox(width: 10),
                         Flexible(
-                          flex: titleFlex('Not sandboxed', extra: 38),
+                          flex: titleFlex(tr("Not sandboxed"), extra: 38),
                           child: chip(
-                            'Not sandboxed',
+                            tr("Not sandboxed"),
                             LucideIcons.shieldOff,
                             warning: true,
-                            tooltip:
-                                'Not sandboxed${sandbox['reason'] == null ? '' : ': ${sandbox['reason']}'}',
+                            tooltip: tr("Not sandboxed{0}", [
+                              sandbox['reason'] == null
+                                  ? ''
+                                  : ': ${sandbox['reason']}',
+                            ]),
                           ),
                         ),
                       ],
@@ -316,7 +321,7 @@ class ConversationHeader extends StatelessWidget {
                 SizedBox(width: phone ? 2 : 4),
                 if (!held) ...[
                   Tooltip(
-                    message: 'Take control',
+                    message: tr("Take control"),
                     child: SizedBox(
                       width: phone ? 36 : controlWidth,
                       child: TextButton(
@@ -340,7 +345,7 @@ class ConversationHeader extends StatelessWidget {
                               const SizedBox(width: 6),
                               Flexible(
                                 child: Text(
-                                  'Take control',
+                                  tr("Take control"),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: webText(
@@ -376,7 +381,7 @@ class ConversationHeader extends StatelessWidget {
                         const SizedBox(width: 5),
                         Flexible(
                           child: Text(
-                            'In control',
+                            tr("In control"),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: webText(
@@ -395,10 +400,10 @@ class ConversationHeader extends StatelessWidget {
                   panelOpen
                       ? LucideIcons.panelRightClose
                       : LucideIcons.panelRightOpen,
-                  panelOpen ? 'Hide side panel' : 'Show side panel',
+                  panelOpen ? tr("Hide side panel") : tr("Show side panel"),
                   size: phone ? 40 : 32,
                   iconSize: 19,
-                  onPressed: onPanel,
+                  onPressed: c.isDraftSession ? null : onPanel,
                   focusNode: panelFocus,
                 ),
               ],
@@ -414,59 +419,67 @@ class ConversationViewerBanner extends StatelessWidget {
   const ConversationViewerBanner({super.key, required this.controller});
   final LiveController controller;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-    child: Align(
-      alignment: Alignment.center,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 780),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: palette(context)['web.bg-subtle'],
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'You’re viewing this session. ${controller.control['holder'] ?? 'Another device'} currently has control.',
-                  style: webText(
-                    context,
-                    size: 13,
-                    color: 'text.secondary',
-                  ).copyWith(height: kTextHeightNone),
-                ),
-              ),
-              const SizedBox(width: 8),
-              TextButton(
-                style: TextButton.styleFrom(
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Align(
+        alignment: Alignment.center,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 780),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: palette(context)['web.bg-subtle'],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    tr(
+                      "You’re viewing this session. {0} currently has control.",
+                      [controller.control['holder'] ?? 'Another device'],
+                    ),
+                    style: webText(
+                      context,
+                      size: 13,
+                      color: 'text.secondary',
+                    ).copyWith(height: kTextHeightNone),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  foregroundColor: palette(context)['accent.default'],
-                  textStyle: webText(
-                    context,
-                    size: 13,
-                    weight: FontWeight.w500,
-                  ).copyWith(height: kTextHeightNone),
                 ),
-                onPressed: () =>
-                    guarded(context, () => controller.takeControl(force: true)),
-                child: const Text('Take control'),
-              ),
-            ],
+                const SizedBox(width: 8),
+                TextButton(
+                  style: TextButton.styleFrom(
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    foregroundColor: palette(context)['accent.default'],
+                    textStyle: webText(
+                      context,
+                      size: 13,
+                      weight: FontWeight.w500,
+                    ).copyWith(height: kTextHeightNone),
+                  ),
+                  onPressed: () => guarded(
+                    context,
+                    () => controller.takeControl(force: true),
+                  ),
+                  child: Text(tr("Take control")),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// The pinned App.svelte error-banner, positioned below the conversation header.
@@ -476,6 +489,7 @@ class ConversationErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final colors = palette(context);
     return Semantics(
       liveRegion: true,
@@ -511,7 +525,7 @@ class ConversationErrorBanner extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Tooltip(
-                    message: 'Dismiss error',
+                    message: tr("Dismiss error"),
                     child: TextButton(
                       style: ButtonStyle(
                         foregroundColor: WidgetStatePropertyAll(

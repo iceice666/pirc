@@ -44,7 +44,7 @@ internal fun validateHtmlMediaOpenRequest(
         }
     }
     val validatedBytes = bytes?.also {
-        require(it.size <= MAX_HTML_MEDIA_BYTES) { "Media exceeds the 32 MiB limit" }
+        require(it.size <= MAX_HTML_MEDIA_BYTES) { NativeI18n.text("Media exceeds the 32 MiB limit") }
         require(mimeType != null && mimeType.matches(MIME_TYPE_PATTERN)) {
             "A valid MIME type is required for byte media"
         }

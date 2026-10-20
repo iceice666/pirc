@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:convert';
 
 import 'packet_model.dart';
@@ -15,8 +16,8 @@ const double _maxPacketGeometryValue = 512;
 /// the seven geometry keys modeled by [NativeMermaidPacketConfig].
 NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
   if (source.length > _maxPacketSourceLength) {
-    throw const FormatException(
-      'Mermaid packet source exceeds the 50,000 character limit',
+    throw FormatException(
+      tr("Mermaid packet source exceeds the 50,000 character limit"),
     );
   }
 
@@ -42,7 +43,7 @@ NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
     if (line.isEmpty) continue;
     if (line == '---' || line.startsWith('--- ')) {
       throw FormatException(
-        'Packet YAML frontmatter is unsupported by the native renderer',
+        tr("Packet YAML frontmatter is unsupported by the native renderer"),
         source,
         lineNumber,
       );
@@ -50,14 +51,14 @@ NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
     if (line.startsWith('%%{')) {
       if (sawHeader) {
         throw FormatException(
-          'Packet init directives must appear before the diagram header',
+          tr("Packet init directives must appear before the diagram header"),
           source,
           lineNumber,
         );
       }
       if (sawInitDirective) {
         throw FormatException(
-          'Only one packet init directive is supported',
+          tr("Only one packet init directive is supported"),
           source,
           lineNumber,
         );
@@ -73,7 +74,7 @@ NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
     if (!sawHeader) {
       if (statement != 'packet' && statement != 'packet-beta') {
         throw FormatException(
-          'Expected packet or packet-beta header, found: $statement',
+          tr("Expected packet or packet-beta header, found: {0}", [statement]),
           source,
           lineNumber,
         );
@@ -83,7 +84,7 @@ NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
     }
     if (statement == 'packet' || statement == 'packet-beta') {
       throw FormatException(
-        'Unexpected second packet header',
+        tr("Unexpected second packet header"),
         source,
         lineNumber,
       );
@@ -130,7 +131,7 @@ NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
           final trailing = _stripPacketComment(row.substring(close + 1)).trim();
           if (trailing.isNotEmpty) {
             throw FormatException(
-              'Unexpected text after accDescr block',
+              tr("Unexpected text after accDescr block"),
               source,
               index + 1,
             );
@@ -141,7 +142,11 @@ NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
         descriptionLines.add(row);
       }
       if (!closed) {
-        throw FormatException('Unclosed accDescr block', source, lineNumber);
+        throw FormatException(
+          tr("Unclosed accDescr block"),
+          source,
+          lineNumber,
+        );
       }
       accessibleDescription = descriptionLines.join('\n').trim();
       continue;
@@ -150,7 +155,7 @@ NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
     final field = _parsePacketField(statement, source, lineNumber);
     if (fields.length >= _maxPacketFields) {
       throw FormatException(
-        'Mermaid packet exceeds the 10,000 field limit',
+        tr("Mermaid packet exceeds the 10,000 field limit"),
         source,
         lineNumber,
       );
@@ -160,14 +165,19 @@ NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
     final declaredStart = field.declaredStart;
     if (declaredStart != null && declaredStart != lastBit + 1) {
       throw FormatException(
-        'Packet field $declaredStart is not contiguous; expected ${lastBit + 1}',
+        tr("Packet field {0} is not contiguous; expected {1}", [
+          declaredStart,
+          lastBit + 1,
+        ]),
         source,
         lineNumber,
       );
     }
     if (field.declaredBits == 0) {
       throw FormatException(
-        'Packet field $start is invalid; a field cannot have zero bits',
+        tr("Packet field {0} is invalid; a field cannot have zero bits", [
+          start,
+        ]),
         source,
         lineNumber,
       );
@@ -176,7 +186,10 @@ NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
     final end = field.declaredEnd ?? start + (field.declaredBits ?? 1) - 1;
     if (end < start) {
       throw FormatException(
-        'Packet field $start-$end is invalid; end must not precede start',
+        tr("Packet field {0}-{1} is invalid; end must not precede start", [
+          start,
+          end,
+        ]),
         source,
         lineNumber,
       );
@@ -184,7 +197,7 @@ NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
     var bitCount = field.declaredBits ?? end - start + 1;
     if (end >= config.bitsPerRow * _maxPacketRows) {
       throw FormatException(
-        'Mermaid packet exceeds the 10,000 row limit',
+        tr("Mermaid packet exceeds the 10,000 row limit"),
         source,
         lineNumber,
       );
@@ -245,7 +258,7 @@ NativeMermaidPacketDiagram parseNativeMermaidPacket(String source) {
   }
 
   if (!sawHeader) {
-    throw const FormatException('Expected packet or packet-beta header');
+    throw FormatException(tr("Expected packet or packet-beta header"));
   }
   if (word.isNotEmpty && rows.length < _maxPacketRows) rows.add(word);
 
@@ -270,7 +283,7 @@ NativeMermaidPacketConfig _parsePacketInitDirective(
   ).firstMatch(directive);
   if (match == null) {
     throw FormatException(
-      'Only JSON packet init directives are supported',
+      tr("Only JSON packet init directives are supported"),
       source,
       lineNumber,
     );
@@ -281,21 +294,21 @@ NativeMermaidPacketConfig _parsePacketInitDirective(
     decoded = jsonDecode(match[1]!.trim());
   } on FormatException {
     throw FormatException(
-      'Packet init directive must contain valid JSON',
+      tr("Packet init directive must contain valid JSON"),
       source,
       lineNumber,
     );
   }
   if (decoded is! Map<String, dynamic>) {
     throw FormatException(
-      'Packet init directive must be a JSON object',
+      tr("Packet init directive must be a JSON object"),
       source,
       lineNumber,
     );
   }
   if (decoded.keys.any((key) => key != 'packet')) {
     throw FormatException(
-      'Packet init directive may only contain the packet object',
+      tr("Packet init directive may only contain the packet object"),
       source,
       lineNumber,
     );
@@ -303,7 +316,7 @@ NativeMermaidPacketConfig _parsePacketInitDirective(
   final packet = decoded['packet'];
   if (packet is! Map<String, dynamic>) {
     throw FormatException(
-      'Packet init directive requires a packet object',
+      tr("Packet init directive requires a packet object"),
       source,
       lineNumber,
     );
@@ -387,7 +400,7 @@ NativeMermaidPacketConfig _parsePacketInitDirective(
         break;
       default:
         throw FormatException(
-          'Unsupported packet init setting: ${entry.key}',
+          tr("Unsupported packet init setting: {0}", [entry.key]),
           source,
           lineNumber,
         );
@@ -395,7 +408,7 @@ NativeMermaidPacketConfig _parsePacketInitDirective(
   }
   if (paddingX >= bitWidth) {
     throw FormatException(
-      'packet.paddingX must be smaller than packet.bitWidth',
+      tr("packet.paddingX must be smaller than packet.bitWidth"),
       source,
       lineNumber,
     );
@@ -423,15 +436,23 @@ double _readPacketGeometryNumber(
   required bool allowZero,
 }) {
   if (value is! num || !value.toDouble().isFinite) {
-    throw FormatException('$key must be a finite number', source, lineNumber);
+    throw FormatException(
+      tr("{0} must be a finite number", [key]),
+      source,
+      lineNumber,
+    );
   }
   final number = value.toDouble();
   final minimum = allowZero ? 0 : 0.01;
   if (number < minimum || number > _maxPacketGeometryValue) {
     final range = allowZero
-        ? '0 to $_maxPacketGeometryValue'
-        : 'positive and at most $_maxPacketGeometryValue';
-    throw FormatException('$key must be $range', source, lineNumber);
+        ? tr("0 to {0}", [_maxPacketGeometryValue])
+        : tr("positive and at most {0}", [_maxPacketGeometryValue]);
+    throw FormatException(
+      tr("{0} must be {1}", [key, range]),
+      source,
+      lineNumber,
+    );
   }
   return number;
 }
@@ -462,7 +483,7 @@ _ParsedPacketField _parsePacketField(
   ).firstMatch(statement);
   if (match == null) {
     throw FormatException(
-      'Invalid packet field syntax: $statement',
+      tr("Invalid packet field syntax: {0}", [statement]),
       source,
       lineNumber,
     );
@@ -476,7 +497,7 @@ _ParsedPacketField _parsePacketField(
       match[2] != null && end == null ||
       match[3] != null && bits == null) {
     throw FormatException(
-      'Packet bit range is outside the supported integer range',
+      tr("Packet bit range is outside the supported integer range"),
       source,
       lineNumber,
     );
@@ -501,7 +522,7 @@ String _parsePacketString(String token, String source, int lineNumber) {
       (token[0] != '"' && token[0] != "'") ||
       token[token.length - 1] != token[0]) {
     throw FormatException(
-      'Packet labels must be quoted strings',
+      tr("Packet labels must be quoted strings"),
       source,
       lineNumber,
     );
@@ -513,7 +534,7 @@ String _parsePacketString(String token, String source, int lineNumber) {
     final char = token[index];
     if (char == quote) {
       throw FormatException(
-        'Unexpected quote in packet label',
+        tr("Unexpected quote in packet label"),
         source,
         lineNumber,
       );
@@ -524,7 +545,7 @@ String _parsePacketString(String token, String source, int lineNumber) {
     }
     if (++index >= token.length - 1) {
       throw FormatException(
-        'Unterminated packet label escape',
+        tr("Unterminated packet label escape"),
         source,
         lineNumber,
       );

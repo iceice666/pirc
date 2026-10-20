@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 
 import 'gateway.dart';
@@ -94,7 +95,7 @@ class DartScopedGateway extends Gateway {
   /// concurrent callers. The primary context is owned by the App runtime.
   Future<void> ensureContext() {
     if (_closed) {
-      return Future<void>.error(StateError('Gateway context is closed.'));
+      return Future<void>.error(StateError(tr("Gateway context is closed.")));
     }
     if (isPrimary || _registered) return Future<void>.value();
     final opening = _openingFuture;
@@ -109,7 +110,9 @@ class DartScopedGateway extends Gateway {
       final boot = obj(await rawTransport.call('boot'));
       final stamp = boot['pairingStamp'];
       if (stamp is! String || stamp.isEmpty) {
-        throw StateError('Cannot register a context without a pairing stamp.');
+        throw StateError(
+          tr("Cannot register a context without a pairing stamp."),
+        );
       }
       _pairingStamp = stamp;
       await rawTransport.call('openContext', <String, dynamic>{
@@ -158,11 +161,13 @@ class DartScopedGateway extends Gateway {
   Future<dynamic> call(String method, [Json args = const <String, dynamic>{}]) {
     if (method == 'closeContext') return closeContext();
     if (_closed) {
-      return Future<dynamic>.error(StateError('Gateway context is closed.'));
+      return Future<dynamic>.error(
+        StateError(tr("Gateway context is closed.")),
+      );
     }
     if (method == 'openContext') {
       return Future<dynamic>.error(
-        StateError('Use ensureContext() to register this gateway context.'),
+        StateError(tr("Use ensureContext() to register this gateway context.")),
       );
     }
 
@@ -207,7 +212,7 @@ class DartScopedGateway extends Gateway {
         throw ArgumentError.value(
           requestedRevision,
           'visibilityRevision',
-          'Must be a nonnegative integer.',
+          tr("Must be a nonnegative integer."),
         );
       }
       // LiveController counters restart with a replacement controller. Keep
@@ -228,7 +233,7 @@ class DartScopedGateway extends Gateway {
 
     try {
       await ensureContext();
-      if (_closed) throw StateError('Gateway context is closed.');
+      if (_closed) throw StateError(tr("Gateway context is closed."));
       final result = await _callAndSanitizeBoot(method, args);
       if (method == 'unwatch' && thisWatchTag != null) {
         _unwatchingTags.remove(thisWatchTag);

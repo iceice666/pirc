@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import {
     Trash2,
     Archive,
@@ -65,13 +67,19 @@
   const deleting = $derived(!!workspace.deleting);
   /** What a project can be linked to: workspaces taking delegated work. */
   const directories = $derived(app.workspaces.filter((item) => app.modeOf(item).delegate_target));
-  const noun = $derived(mode.ui.noun);
+  const noun = $derived(tr(mode.ui.noun));
   const subtitle = $derived(
     [
-      chat ? (topLevel ? 'Chats' : 'Project') : mode.repository ? 'Workspace' : mode.label,
+      chat
+        ? topLevel
+          ? tr('Chats')
+          : tr('Project')
+        : mode.repository
+          ? tr('Workspace')
+          : tr(mode.label),
       chat ? '' : workspace.hostId,
-      online ? '' : 'offline',
-      readOnly ? 'read-only' : '',
+      online ? '' : tr('offline'),
+      readOnly ? tr('read-only') : '',
     ]
       .filter(Boolean)
       .join(' · '),
@@ -134,9 +142,9 @@
   }
 
   function status(session: SessionSummary) {
-    if (needsInput(session)) return 'Needs input';
-    if (isRunning(session)) return 'Working';
-    return session.unread ? 'Unread' : '';
+    if (needsInput(session)) return tr('Needs input');
+    if (isRunning(session)) return tr('Working');
+    return session.unread ? tr('Unread') : '';
   }
 </script>
 
@@ -146,8 +154,8 @@
       <button
         class="icon-button"
         type="button"
-        aria-label="Show sidebar"
-        title="Show sidebar"
+        aria-label={tr('Show sidebar')}
+        title={tr('Show sidebar')}
         onclick={onexpand}><PanelLeftOpen size={19} /></button
       >
     {/if}
@@ -162,17 +170,17 @@
       class="button dark new-in"
       type="button"
       disabled={!online || deleting || readOnly}
-      onclick={() => onnew(workspace.id)}><SquarePen size={15} /> New {noun}</button
+      onclick={() => onnew(workspace.id)}><SquarePen size={15} /> {tr('New {0}', [noun])}</button
     >
   </header>
 
   <div
     class="page-tabs"
     role="tablist"
-    aria-label="{workspace.displayName} sections"
+    aria-label={tr('{0} sections', [workspace.displayName])}
     use:rovingFocus={{ selector: '[role="tab"]', orientation: 'horizontal', activate: true }}
   >
-    {#each [{ id: 'sessions' as Tab, label: `${capitalized(noun)}s` }, { id: 'settings' as Tab, label: 'Settings' }] as item (item.id)}
+    {#each [{ id: 'sessions' as Tab, label: tr(`${capitalized(mode.ui.noun)}s`) }, { id: 'settings' as Tab, label: tr('Settings') }] as item (item.id)}
       <button
         type="button"
         role="tab"
@@ -184,7 +192,7 @@
         onclick={() => (tab = item.id)}
         >{item.label}{#if item.id === 'sessions' && unread}<span class="sr-only">,</span><span
             class="tab-count"
-            aria-label="{unread} unread">{unread}</span
+            aria-label={tr('{0} unread', [unread])}>{unread}</span
           >{/if}</button
       >
     {/each}
@@ -195,20 +203,24 @@
       {#if deleting}
         <div class="deleting" role="status">
           <p>
-            This project's deletion did not finish: its chats accept no more work. Finish deleting
-            it once the chat node is connected.
+            {tr(
+              "This project's deletion did not finish: its chats accept no more work. Finish deleting it once the chat node is connected.",
+            )}
           </p>
           <button
             class="button dark"
             type="button"
             disabled={app.usingDemo || !online}
-            onclick={() => (deletingProject = workspace)}>Finish deleting…</button
+            onclick={() => (deletingProject = workspace)}>{tr('Finish deleting…')}</button
           >
         </div>
       {/if}
       {#if readOnly}
         <p class="note" role="status">
-          This workspace's mode is no longer available on the gateway: its {noun}s are read-only.
+          {tr(
+            "This workspace's mode is no longer available on the gateway: its {0}s are read-only.",
+            [noun],
+          )}
         </p>
       {/if}
       {#if tab === 'sessions'}
@@ -216,8 +228,8 @@
           <div class="list-tools">
             <label class="search">
               <Search size={15} />
-              <span class="sr-only">Search {noun}s in {workspace.displayName}</span>
-              <input bind:value={query} placeholder="Search {noun}s" />
+              <span class="sr-only">{tr('Search {0}s in {1}', [noun, workspace.displayName])}</span>
+              <input bind:value={query} placeholder={tr('Search {0}s', [noun])} />
             </label>
             {#if settledCount || showDone}
               <button
@@ -225,7 +237,7 @@
                 type="button"
                 aria-pressed={showDone}
                 onclick={() => (showDone = !showDone)}
-                >{showDone ? 'Hide done' : `Show done · ${settledCount}`}</button
+                >{showDone ? tr('Hide done') : tr('Show done · {0}', [settledCount])}</button
               >
             {/if}
           </div>
@@ -244,9 +256,9 @@
                       class="status-dot"
                       class:unread={item.sessions.some((session) => session.unread)}
                     ></span>
-                    <span class="origin-icon" title="Scheduled"><Clock size={13} /></span>
+                    <span class="origin-icon" title={tr('Scheduled')}><Clock size={13} /></span>
                     <span class="row-name">{item.title}</span>
-                    <small class="fold-count">{item.sessions.length} runs</small>
+                    <small class="fold-count">{tr('{0} runs', [item.sessions.length])}</small>
                     <span class="chevron" class:collapsed={!expanded}
                       ><ChevronDown size={13} /></span
                     >
@@ -258,8 +270,10 @@
               {/if}
             {:else}
               <li class="empty-note">
-                {#if query}Nothing matches.{:else if settledCount}Every {noun} here is done.{:else}No
-                  {noun}s yet. Start one with “New {noun}”.{/if}
+                {#if query}{tr('Nothing matches.')}{:else if settledCount}{tr(
+                    'Every {0} here is done.',
+                    [noun],
+                  )}{:else}{tr('No {0}s yet. Start one with “New {1}”.', [noun, noun])}{/if}
               </li>
             {/each}
           </ul>
@@ -267,15 +281,18 @@
       {:else}
         <div id="workspace-panel-settings" role="tabpanel" aria-labelledby="workspace-tab-settings">
           {#if deleting}
-            <p class="note">Settings are gone with the project's deletion.</p>
+            <p class="note">{tr("Settings are gone with the project's deletion.")}</p>
           {:else}
             {#if mode.project_instructions || mode.project_files}
               {#if app.usingDemo}
-                <p class="note">Project instructions and files are unavailable in demo mode.</p>
+                <p class="note">
+                  {tr('Project instructions and files are unavailable in demo mode.')}
+                </p>
               {:else if !online}
                 <p class="note">
-                  The project's node is offline: its instructions and files can be changed once it
-                  is back.
+                  {tr(
+                    "The project's node is offline: its instructions and files can be changed once it is back.",
+                  )}
                 </p>
               {:else}
                 {#if mode.project_instructions}<ProjectInstructions
@@ -296,35 +313,35 @@
               <ProjectSettings workspaceId={workspace.id} disabled={app.usingDemo} />
             {:else}
               <section class="settings-section">
-                <h3>Workspace</h3>
+                <h3>{tr('Workspace')}</h3>
                 <dl class="facts">
                   <div>
-                    <dt>Device</dt>
-                    <dd>{workspace.hostId} · {online ? 'online' : 'offline'}</dd>
+                    <dt>{tr('Device')}</dt>
+                    <dd>{workspace.hostId} · {online ? tr('online') : tr('offline')}</dd>
                   </div>
                   <div>
-                    <dt>Sessions</dt>
+                    <dt>{tr('Sessions')}</dt>
                     <dd>
                       {all.length}{#if running}
-                        · {running} running{/if}{#if unread}
-                        · {unread} unread{/if}
+                        {tr('· {0} running', [running])}{/if}{#if unread}
+                        {tr('· {0} unread', [unread])}{/if}
                     </dd>
                   </div>
                   {#if mode.workdir === 'workspace'}
                     <div>
-                      <dt>Write lease</dt>
-                      <dd>{leaseHolder ? `Held by “${leaseHolder.name}”` : 'Free'}</dd>
+                      <dt>{tr('Write lease')}</dt>
+                      <dd>{leaseHolder ? tr('Held by “{0}”', [leaseHolder.name]) : tr('Free')}</dd>
                     </div>
                   {/if}
                   {#if workspace.defaults.modelId}
                     <div>
-                      <dt>Default model</dt>
+                      <dt>{tr('Default model')}</dt>
                       <dd>{workspace.defaults.modelId}</dd>
                     </div>
                   {/if}
                   {#if workspace.defaults.thinkingLevel}
                     <div>
-                      <dt>Default thinking</dt>
+                      <dt>{tr('Default thinking')}</dt>
                       <dd>{workspace.defaults.thinkingLevel}</dd>
                     </div>
                   {/if}
@@ -333,11 +350,12 @@
             {/if}
             {#if mode.project_config}
               {#if app.usingDemo}
-                <p class="note">The project config is unavailable in demo mode.</p>
+                <p class="note">{tr('The project config is unavailable in demo mode.')}</p>
               {:else if !online}
                 <p class="note">
-                  The workspace's node is offline: its project config can be reviewed once it is
-                  back.
+                  {tr(
+                    "The workspace's node is offline: its project config can be reviewed once it is back.",
+                  )}
                 </p>
               {:else}
                 <ProjectTrust workspaceId={workspace.id} />
@@ -345,20 +363,21 @@
             {/if}
             {#if mode.projects && !topLevel}
               <section class="settings-section">
-                <h3>Delete project</h3>
+                <h3>{tr('Delete project')}</h3>
                 <p class="note">
-                  Deletes the project, its chats and what they wrote to memory. You see what goes
-                  and what stays before anything is deleted.
+                  {tr(
+                    'Deletes the project, its chats and what they wrote to memory. You see what goes and what stays before anything is deleted.',
+                  )}
                 </p>
                 <button
                   class="button ghost danger"
                   type="button"
                   disabled={app.usingDemo || !online}
                   onclick={() => (deletingProject = workspace)}
-                  ><Trash2 size={15} /> Delete project…</button
+                  ><Trash2 size={15} /> {tr('Delete project…')}</button
                 >
                 {#if !online && !app.usingDemo}
-                  <p class="note">Connect the chat node to delete this project.</p>
+                  <p class="note">{tr('Connect the chat node to delete this project.')}</p>
                 {/if}
               </section>
             {/if}
@@ -390,7 +409,7 @@
           bind:this={renameInput}
           bind:value={renameValue}
           maxlength="200"
-          aria-label="Session name"
+          aria-label={tr('Session name')}
           onkeydown={(event) => event.key === 'Escape' && finishRename(false)}
           onblur={() => finishRename(true)}
         />
@@ -419,34 +438,39 @@
         ></span>
         {#if session.origin?.kind === 'schedule'}<span
             class="origin-icon"
-            title="Scheduled: {session.origin.title}"><Clock size={13} /></span
+            title={tr('Scheduled: {0}', [session.origin.title])}><Clock size={13} /></span
           >{:else if session.origin?.kind === 'delegation'}<span
             class="origin-icon"
-            title="Delegated: {session.origin.title}"><Forward size={13} /></span
+            title={tr('Delegated: {0}', [session.origin.title])}><Forward size={13} /></span
           >{/if}
         <span class="row-name">{session.name}</span>
         {#if status(session)}<span class="sr-only">· {status(session)}</span>{/if}
         {#if session.writeLease}<span
             class="lease-lock"
             role="img"
-            aria-label="Holds the write lease"
-            title="Holds the write lease"><Lock size={12} /></span
+            aria-label={tr('Holds the write lease')}
+            title={tr('Holds the write lease')}><Lock size={12} /></span
           >{/if}
-        {#if session.pinned}<span class="pin-mark" title="Pinned"><Pin size={12} /></span>{/if}
+        {#if session.pinned}<span class="pin-mark" title={tr('Pinned')}><Pin size={12} /></span
+          >{/if}
         <small>{shortAgo(session.lastActivityAt)}</small>
       </button>
       <div class="row-actions">
         <button
           type="button"
-          aria-label={session.pinned ? `Unpin ${session.name}` : `Pin ${session.name}`}
-          title={session.pinned ? 'Unpin' : 'Pin'}
+          aria-label={session.pinned
+            ? tr('Unpin {0}', [session.name])
+            : tr('Pin {0}', [session.name])}
+          title={session.pinned ? tr('Unpin') : tr('Pin')}
           onclick={() => app.updateSession(session.id, { pinned: !session.pinned })}
           >{#if session.pinned}<PinOff size={14} />{:else}<Pin size={14} />{/if}</button
         >
         <button
           type="button"
-          aria-label={session.settled ? `Reopen ${session.name}` : `Settle ${session.name}`}
-          title={session.settled ? 'Reopen' : 'Settle'}
+          aria-label={session.settled
+            ? tr('Reopen {0}', [session.name])
+            : tr('Settle {0}', [session.name])}
+          title={session.settled ? tr('Reopen') : tr('Settle')}
           onclick={() => app.updateSession(session.id, { settled: !session.settled })}
           >{#if session.settled}<ArchiveRestore size={14} />{:else}<Archive
               size={14}
@@ -455,15 +479,15 @@
         {#if mode.delete_sessions}
           <button
             type="button"
-            aria-label="Delete {session.name}"
-            title="Delete {noun}"
+            aria-label={tr('Delete {0}', [session.name])}
+            title={tr('Delete {0}', [noun])}
             onclick={() => (deletingChat = session)}><Trash2 size={14} /></button
           >
         {/if}
         <button
           type="button"
-          aria-label="Rename {session.name}"
-          title="Rename (F2)"
+          aria-label={tr('Rename {0}', [session.name])}
+          title={tr('Rename (F2)')}
           onclick={() => startRename(session)}><Pencil size={14} /></button
         >
       </div>

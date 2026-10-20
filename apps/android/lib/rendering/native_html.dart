@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import '../live/document_object_urls.dart';
 import 'package:csslib/visitor.dart' as css;
 import 'package:csslib/parser.dart' as css_parser;
@@ -955,7 +956,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
                 ? picked
                 : picked.take(1).toList();
             if (limited.length > 256) {
-              throw StateError('一次最多選取 256 個檔案。');
+              throw StateError(tr("一次最多選取 256 個檔案。"));
             }
             final selected = selections.store(controlId, version, limited);
             if (mounted && files != null) selections.reconcile(files!);
@@ -972,7 +973,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
                 if (include)
                   'bytesBase64': base64Encode(file.bytes)
                 else
-                  'contentError': '選取檔案的腳本內容超過 2 MiB 限制。',
+                  'contentError': tr("選取檔案的腳本內容超過 2 MiB 限制。"),
               });
             }
             await complete(id, files: wire);
@@ -1315,7 +1316,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
   FocusNode _scriptFocusableNode(dom.Element element) {
     final id = element.attributes['data-pirc-script-id'];
     if (id == null || id.isEmpty) {
-      throw StateError('Script focus target has no control id.');
+      throw StateError(tr("Script focus target has no control id."));
     }
     final tabIndex = int.tryParse(element.attributes['tabindex'] ?? '');
     return _scriptFocusableNodes.putIfAbsent(
@@ -1563,12 +1564,12 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             final submit = widget.onFormSubmit;
             if (submit == null) {
               throw StateError(
-                'Form navigation is unavailable in this document.',
+                tr("Form navigation is unavailable in this document."),
               );
             }
             submit(request);
           } catch (error) {
-            forms?.showScriptError('Form submission failed: $error');
+            forms?.showScriptError(tr("Form submission failed: {0}", [error]));
           }
         }
       } finally {
@@ -1868,7 +1869,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       );
     } catch (error) {
       if (mounted && owner == widget.scriptDocument) {
-        forms?.showScriptError('Form submission failed: $error');
+        forms?.showScriptError(tr("Form submission failed: {0}", [error]));
       }
     }
   }
@@ -1908,7 +1909,9 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
     if (injected != null) return injected(request);
     final scope = NativeDocumentScope.maybeOf(context);
     if (scope == null) {
-      throw UnsupportedError('File selection is unavailable in this document.');
+      throw UnsupportedError(
+        tr("File selection is unavailable in this document."),
+      );
     }
     final identity = scope.accountIdentity;
     final windows = scope.windows;
@@ -2152,7 +2155,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
             if (includeBytes)
               'bytesBase64': base64Encode(file.bytes)
             else
-              'contentError': '選取檔案的腳本內容超過 2 MiB 限制。',
+              'contentError': tr("選取檔案的腳本內容超過 2 MiB 限制。"),
           };
         }).toList();
         values.add(value);
@@ -2197,6 +2200,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     _elementScroll.retainIds(widget.layoutKnownIds);
     final colors = Theme.of(context).extension<PircColors>()!;
     final imageViewport = widget.imageViewport ?? MediaQuery.sizeOf(context);
@@ -2245,7 +2249,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
       try {
         spec = NativeHtmlMediaSpec.fromElement(element);
       } on FormatException {
-        return const Text('Unable to play media.');
+        return Text(tr("Unable to play media."));
       }
       final styles =
           widget.authorStylesBuilder?.call(element) ?? <String, String>{};
@@ -2727,7 +2731,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
                   ),
                 );
               } catch (_) {
-                return const Text('SVG could not be rendered');
+                return Text(tr("SVG could not be rendered"));
               }
             }
             final native = slots[element.attributes['data-pirc-native']];
@@ -2745,7 +2749,7 @@ class _NativeHtmlDocumentState extends State<NativeHtmlDocument>
                 : InlineCustomWidget(child: built);
           },
           onErrorBuilder: (context, element, error) => Text(
-            element.attributes['alt'] ?? 'Content could not be rendered',
+            element.attributes['alt'] ?? tr("Content could not be rendered"),
             style: widget.style,
           ),
         ),
@@ -5345,7 +5349,7 @@ class _NativeHtmlFactory extends WidgetFactory {
       if (width > NativeDocumentCanvasSnapshot.maxDimension ||
           height > NativeDocumentCanvasSnapshot.maxDimension ||
           width * height > NativeDocumentCanvasSnapshot.maxPixels) {
-        canvas = const Text('畫布尺寸超過目前原生渲染上限。');
+        canvas = Text(tr("畫布尺寸超過目前原生渲染上限。"));
       } else {
         canvas = canvasPointerSurface(
           element,

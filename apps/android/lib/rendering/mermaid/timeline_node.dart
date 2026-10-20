@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 // Timeline node text wrapping and classic node paths ported from Mermaid
 // 11.17.2 (MIT), rendering-elements/timeline-svgDraw.ts. See
 // MERMAID_MIT_LICENSE.txt for the upstream license notice.
@@ -117,25 +118,25 @@ NativeTimelineNodeLayout layoutNativeTimelineNode({
   bool isEvent = false,
 }) {
   if (!width.isFinite || width <= 0) {
-    throw const FormatException('Timeline text width must be positive');
+    throw FormatException(tr("Timeline text width must be positive"));
   }
   if (!padding.isFinite || padding < 0) {
-    throw const FormatException('Timeline node padding must be non-negative');
+    throw FormatException(tr("Timeline node padding must be non-negative"));
   }
   if (!maxHeight.isFinite || !configFontSize.isFinite || configFontSize <= 0) {
-    throw const FormatException(
-      'Timeline node font and max height must be finite',
+    throw FormatException(
+      tr("Timeline node font and max height must be finite"),
     );
   }
   if (maxSections <= 0) {
-    throw const FormatException('Timeline theme color limit must be positive');
+    throw FormatException(tr("Timeline theme color limit must be positive"));
   }
   final svgFontSize = textStyle.fontSize ?? configFontSize;
   if (!svgFontSize.isFinite || svgFontSize <= 0) {
-    throw const FormatException('Timeline SVG font size must be positive');
+    throw FormatException(tr("Timeline SVG font size must be positive"));
   }
   if (svgXHeight != null && (!svgXHeight.isFinite || svgXHeight < 0)) {
-    throw const FormatException('Timeline SVG x-height must be finite');
+    throw FormatException(tr("Timeline SVG x-height must be finite"));
   }
 
   // SVG text layout ignores CSS line-height for explicit tspan positioning.

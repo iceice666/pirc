@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import {
     Trash2,
     Archive,
@@ -69,12 +71,12 @@
     onmemory,
   }: Props = $props();
 
-  const DELEGATION_STATUS: Record<DelegationStatus, string> = {
-    running: 'is running',
-    waiting_input: 'waits for you',
+  const DELEGATION_STATUS: Record<DelegationStatus, string> = $derived({
+    running: tr('is running'),
+    waiting_input: tr('waits for you'),
     completed: 'finished',
     failed: 'failed',
-  };
+  });
   const nodes = $derived(app.nodes);
   const catalog = $derived(app.modeCatalog);
   /** Nodes that can host Work workspaces (those accepting a non-assistant mode). */
@@ -210,7 +212,7 @@
 {#if open}<button
     class="sidebar-scrim"
     type="button"
-    aria-label="Close navigation"
+    aria-label={tr('Close navigation')}
     onclick={onclose}
   ></button>{/if}
 <aside
@@ -219,44 +221,44 @@
   class:collapsed
   class="sidebar"
   data-mode={mode}
-  aria-label="Sessions"
+  aria-label={tr('Sessions')}
   inert={collapsed && !open}
 >
   <div class="brand-row">
-    <a class="brand" href="/" aria-label="pirc home">
-      <span class="brand-mark"><Command size={16} /></span><span>pirc</span>
+    <a class="brand" href="/" aria-label={tr('pirc home')}>
+      <span class="brand-mark"><Command size={16} /></span><span>{tr('pirc')}</span>
     </a>
     <button
       class="sidebar-collapse icon-button"
       type="button"
-      aria-label="Hide sidebar"
-      title="Hide sidebar"
+      aria-label={tr('Hide sidebar')}
+      title={tr('Hide sidebar')}
       onclick={oncollapse}><PanelLeftClose size={18} /></button
     >
     <button
       bind:this={closeButton}
       class="mobile-close icon-button"
       type="button"
-      aria-label="Close navigation"
+      aria-label={tr('Close navigation')}
       onclick={onclose}><X size={19} /></button
     >
   </div>
   {#if chats}
-    <div class="mode-switch" role="group" aria-label="Sidebar mode">
+    <div class="mode-switch" role="group" aria-label={tr('Sidebar mode')}>
       <button
         type="button"
         class:chosen={mode === 'chat'}
         aria-pressed={mode === 'chat'}
-        onclick={() => app.setMode('chat')}>Chat</button
+        onclick={() => app.setMode('chat')}>{tr('Chat')}</button
       >
       <button
         type="button"
         class:chosen={mode === 'work'}
         aria-pressed={mode === 'work'}
         onclick={() => app.setMode('work')}
-        >Work{#if app.inbox.length && mode !== 'work'}<span
+        >{tr('Work')}{#if app.inbox.length && mode !== 'work'}<span
             class="attention-dot"
-            title="{app.inbox.length} waiting for you"
+            title={tr('{0} waiting for you', [app.inbox.length])}
           ></span>{/if}</button
       >
     </div>
@@ -267,64 +269,70 @@
       type="button"
       onclick={() => onnew(chats.id)}
       disabled={!app.acceptsSessions(chats)}
-      ><SquarePen size={16} /> New {app.modeOf(chats).ui.noun}</button
+      ><SquarePen size={16} /> {tr('New {0}', [tr(app.modeOf(chats).ui.noun)])}</button
     >
   {:else}
     <button
       class="new-session"
       type="button"
       onclick={() => (newSessionTarget ? onnew(newSessionTarget.id) : onnew())}
-      ><SquarePen size={16} /> New {newSessionTarget
-        ? app.modeOf(newSessionTarget).ui.noun
-        : 'session'}</button
+      ><SquarePen size={16} />
+      {tr('New {0}', [
+        newSessionTarget ? tr(app.modeOf(newSessionTarget).ui.noun) : tr('session'),
+      ])}</button
     >
   {/if}
   <label class="search">
     <Search size={16} />
-    <span class="sr-only">Search sessions</span>
-    <input bind:value={query} placeholder={mode === 'chat' ? 'Search chats' : 'Search sessions'} />
+    <span class="sr-only">{tr('Search sessions')}</span>
+    <input
+      bind:value={query}
+      placeholder={mode === 'chat' ? tr('Search chats') : tr('Search sessions')}
+    />
   </label>
 
   <div class="sidebar-scroll">
     {#if query}
-      <section class="list-section" aria-label="Search results">
-        <div class="section-heading"><strong>Results</strong><small>{results.length}</small></div>
+      <section class="list-section" aria-label={tr('Search results')}>
+        <div class="section-heading">
+          <strong>{tr('Results')}</strong><small>{results.length}</small>
+        </div>
         <div class="session-list">
           {#each results as session (session.id)}{@render sessionRow(session, true)}{:else}
-            <p class="empty-note">Nothing matches.</p>
+            <p class="empty-note">{tr('Nothing matches.')}</p>
           {/each}
         </div>
       </section>
     {:else if mode === 'chat' && chats}
-      <section class="list-section" aria-label="Projects">
+      <section class="list-section" aria-label={tr('Projects')}>
         <div class="section-heading">
-          <strong>Projects</strong>
+          <strong>{tr('Projects')}</strong>
           <button
             class="heading-action"
             type="button"
             onclick={() => onaddproject(chats.hostId)}
             disabled={!app.workspaceOnline(chats)}
-            aria-label="New project"><Plus size={15} /></button
+            aria-label={tr('New project')}><Plus size={15} /></button
           >
         </div>
         <div class="workspace-list">
           {#each projects as project (project.id)}
             {@render workspaceRow(project, false)}
           {:else}
-            <p class="empty-note">Group related chats into a project.</p>
+            <p class="empty-note">{tr('Group related chats into a project.')}</p>
           {/each}
         </div>
       </section>
-      <section class="list-section" aria-label="Chats">
+      <section class="list-section" aria-label={tr('Chats')}>
         <div class="section-heading">
-          <strong>Chats</strong>
-          {#if !app.workspaceOnline(chats)}<small>offline</small>{/if}
+          <strong>{tr('Chats')}</strong>
+          {#if !app.workspaceOnline(chats)}<small>{tr('offline')}</small>{/if}
           <button
             class="heading-action"
             class:current={pageId === chats.id}
             type="button"
-            title="All chats and their settings"
-            aria-label="All chats and their settings"
+            title={tr('All chats and their settings')}
+            aria-label={tr('All chats and their settings')}
             onclick={() => onopenworkspace(chats.id)}><Settings2 size={14} /></button
           >
         </div>
@@ -336,9 +344,9 @@
       </section>
     {:else}
       {#if inbox.length}
-        <section class="list-section" aria-label="Needs you">
+        <section class="list-section" aria-label={tr('Needs you')}>
           <div class="section-heading attention">
-            <strong>Needs you</strong><span class="count-badge">{inbox.length}</span>
+            <strong>{tr('Needs you')}</strong><span class="count-badge">{inbox.length}</span>
           </div>
           <div class="inbox-list">
             {#each inbox as item (item.id)}{@render inboxRow(item)}{/each}
@@ -350,25 +358,25 @@
           <div class="section-heading">
             <span class="host-dot" class:online={host.online}></span>
             <strong>{host.id}</strong>
-            {#if !host.online}<small>offline</small>{/if}
+            {#if !host.online}<small>{tr('offline')}</small>{/if}
             <button
               class="heading-action"
               type="button"
               onclick={() => onaddworkspace(host.id)}
               disabled={!host.online}
-              aria-label="Add workspace on {host.id}"><Plus size={15} /></button
+              aria-label={tr('Add workspace on {0}', [host.id])}><Plus size={15} /></button
             >
           </div>
           <div class="workspace-list">
             {#each host.workspaces as workspace (workspace.id)}
               {@render workspaceRow(workspace, true)}
             {:else}
-              <p class="empty-note">No workspaces yet.</p>
+              <p class="empty-note">{tr('No workspaces yet.')}</p>
             {/each}
           </div>
         </section>
       {:else}
-        <p class="empty-note">Connect a device to add a workspace.</p>
+        <p class="empty-note">{tr('Connect a device to add a workspace.')}</p>
       {/each}
     {/if}
   </div>
@@ -383,13 +391,15 @@
       >
         <CalendarClock size={17} />
         <span class="entry-text"
-          ><span>Schedules</span>{#if nextRunText()}<small>Next: {nextRunText()}</small>{/if}</span
+          ><span>{tr('Schedules')}</span>{#if nextRunText()}<small
+              >{tr('Next: {0}', [nextRunText()])}</small
+            >{/if}</span
         >
       </button>
     {/if}
     <button class="settings-entry" type="button" onclick={onsettings}>
       <Settings size={17} />
-      <span>Settings</span>
+      <span>{tr('Settings')}</span>
     </button>
   </div>
 </aside>
@@ -398,8 +408,8 @@
   bind:this={menuButton}
   class="mobile-menu icon-button"
   type="button"
-  aria-label="Back to the list"
-  title="Back"
+  aria-label={tr('Back to the list')}
+  title={tr('Back')}
   onclick={() => (open = true)}><ChevronLeft size={22} /></button
 >
 
@@ -409,7 +419,7 @@
   {@const unread = unreadIn(workspace.id)}
   {@const running = work ? runningIn(workspace.id) : 0}
   {@const online = app.workspaceOnline(workspace)}
-  {@const noun = app.modeOf(workspace).ui.noun}
+  {@const noun = tr(app.modeOf(workspace).ui.noun)}
   <section class="workspace-group">
     <div class="workspace-heading" class:current={pageId === workspace.id}>
       <button
@@ -419,25 +429,27 @@
       >
         <Folder size={15} />
         <strong>{workspace.displayName}</strong>
-        {#if !online && !work}<small>· offline</small>{/if}
-        {#if isReadOnly(workspace)}<small>· read-only</small>{/if}
+        {#if !online && !work}<small>{tr('· offline')}</small>{/if}
+        {#if isReadOnly(workspace)}<small>{tr('· read-only')}</small>{/if}
         <span class="workspace-meta">
           {#if work && sessions.some((s) => s.writeLease && s.workspaceId === workspace.id)}<span
               class="lease-lock"
               role="img"
-              aria-label="A session holds the write lease"
-              title="A session holds the write lease"><Lock size={12} /></span
+              aria-label={tr('A session holds the write lease')}
+              title={tr('A session holds the write lease')}><Lock size={12} /></span
             >{/if}
-          {#if running}<small class="running-count" title="{running} running"
+          {#if running}<small class="running-count" title={tr('{0} running', [running])}
               ><span class="status-dot running"></span>{running}</small
             >{/if}
-          {#if unread}<span class="unread-count" aria-label="{unread} unread">{unread}</span>{/if}
+          {#if unread}<span class="unread-count" aria-label={tr('{0} unread', [unread])}
+              >{unread}</span
+            >{/if}
         </span>
       </button>
       <button
         class="mini-action"
         type="button"
-        aria-label="New {noun} in {workspace.displayName}"
+        aria-label={tr('New {0} in {1}', [noun, workspace.displayName])}
         disabled={!app.acceptsSessions(workspace)}
         onclick={() => onnew(workspace.id)}><Plus size={15} /></button
       >
@@ -466,9 +478,11 @@
               >{approval.title}</small
             >{/if}
           <small
-            >{session.origin
-              ? `${session.origin.kind === 'schedule' ? 'Scheduled' : 'Delegated'} · ${session.origin.title}`
-              : (workspaceById.get(session.workspaceId)?.displayName ?? '')} · waiting for you</small
+            >{tr('{0} · waiting for you', [
+              session.origin
+                ? `${session.origin.kind === 'schedule' ? tr('Scheduled') : tr('Delegated')} · ${session.origin.title}`
+                : (workspaceById.get(session.workspaceId)?.displayName ?? ''),
+            ])}</small
           >
         </span>
       </button>
@@ -479,16 +493,17 @@
             type="button"
             class="pill-button primary"
             disabled={answering}
-            onclick={() => app.answerApproval(approval, true)}>Allow</button
+            onclick={() => app.answerApproval(approval, true)}>{tr('Allow')}</button
           >
           <button
             type="button"
             class="pill-button"
             disabled={answering}
-            onclick={() => app.answerApproval(approval, false)}>Deny</button
+            onclick={() => app.answerApproval(approval, false)}>{tr('Deny')}</button
           >
         {/if}
-        <button type="button" class="pill-button" onclick={() => onselect(session.id)}>Reply</button
+        <button type="button" class="pill-button" onclick={() => onselect(session.id)}
+          >{tr('Reply')}</button
         >
       </div>
     {:else if item.kind === 'missed'}
@@ -496,7 +511,7 @@
         <span class="inbox-icon"><Clock size={14} /></span>
         <span class="inbox-text">
           <strong>{item.schedule.title}</strong>
-          <small>Missed · {formatWall(item.run.dueAt, item.schedule.timezone)}</small>
+          <small>{tr('Missed · {0}', [formatWall(item.run.dueAt, item.schedule.timezone)])}</small>
         </span>
       </div>
       <div class="inbox-actions">
@@ -504,12 +519,13 @@
           type="button"
           class="pill-button primary"
           onclick={() => app.decideMissed(item.schedule.id, item.run.id, true)}
-          >Allow &amp; run</button
+          >{tr('Allow & run')}</button
         >
         <button
           type="button"
           class="pill-button"
-          onclick={() => app.decideMissed(item.schedule.id, item.run.id, false)}>Dismiss</button
+          onclick={() => app.decideMissed(item.schedule.id, item.run.id, false)}
+          >{tr('Dismiss')}</button
         >
       </div>
     {:else}
@@ -519,10 +535,10 @@
         <span class="inbox-text">
           <strong
             >{proposal.action === 'add'
-              ? 'Remember'
+              ? tr('Remember')
               : proposal.action === 'remove'
-                ? 'Forget'
-                : 'Update memory'}</strong
+                ? tr('Forget')
+                : tr('Update memory')}</strong
           >
           <small title={proposal.content ?? proposal.target?.content ?? ''}
             >{proposal.content ?? proposal.target?.content ?? ''}</small
@@ -533,12 +549,12 @@
         <button
           type="button"
           class="pill-button primary"
-          onclick={() => app.decideProposal(proposal, true)}>Approve</button
+          onclick={() => app.decideProposal(proposal, true)}>{tr('Approve')}</button
         >
         <button
           type="button"
           class="pill-button"
-          onclick={() => app.decideProposal(proposal, false)}>Reject</button
+          onclick={() => app.decideProposal(proposal, false)}>{tr('Reject')}</button
         >
       </div>
     {/if}
@@ -569,7 +585,7 @@
           bind:this={renameInput}
           bind:value={renameValue}
           maxlength="200"
-          aria-label="Session name"
+          aria-label={tr('Session name')}
           onkeydown={(event) => event.key === 'Escape' && finishRename(false)}
           onblur={() => finishRename(true)}
         />
@@ -595,39 +611,42 @@
           class:running={session.runStatus === 'running' || session.runStatus === 'queued'}
           class="status-dot"
           title={session.runStatus === 'waiting_input'
-            ? 'Needs input'
+            ? tr('Needs input')
             : session.runStatus === 'running'
-              ? 'Working'
+              ? tr('Working')
               : (session.runStatus ?? session.runnerStatus)}
         ></span>
         {#if session.origin?.kind === 'schedule'}<span
             class="origin-icon"
-            title="Scheduled: {session.origin.title}"><Clock size={13} /></span
+            title={tr('Scheduled: {0}', [session.origin.title])}><Clock size={13} /></span
           >{:else if session.origin?.kind === 'delegation'}<span
             class="origin-icon"
-            title="Delegated: {session.origin.title}{session.origin.status
-              ? ` (${DELEGATION_STATUS[session.origin.status]})`
-              : ''}"><Forward size={13} /></span
+            title={tr('Delegated: {0}{1}', [
+              session.origin.title,
+              session.origin.status ? ` (${DELEGATION_STATUS[session.origin.status]})` : '',
+            ])}><Forward size={13} /></span
           >{/if}
         <span class="session-name">{session.name}</span>
         <span class="session-meta">
           {#if session.writeLease}<span
               class="lease-lock"
               role="img"
-              aria-label="Holds the write lease"
-              title="Holds the {workspace?.displayName ?? 'workspace'} write lease"
+              aria-label={tr('Holds the write lease')}
+              title={tr('Holds the {0} write lease', [workspace?.displayName ?? 'workspace'])}
               ><Lock size={12} /></span
             >{/if}
           {#if session.origin?.kind === 'delegation' && (session.origin.status === 'completed' || session.origin.status === 'failed')}<span
               class="delegation-status"
               class:failed={session.origin.status === 'failed'}
-              title="The delegated task {DELEGATION_STATUS[session.origin.status]}"
-              >{session.origin.status === 'completed' ? 'Done' : 'Failed'}</span
+              title={tr('The delegated task {0}', [DELEGATION_STATUS[session.origin.status]])}
+              >{session.origin.status === 'completed' ? tr('Done') : tr('Failed')}</span
             >{/if}
-          {#if session.pinned}<span class="pin-mark" title="Pinned"><Pin size={12} /></span>{/if}
+          {#if session.pinned}<span class="pin-mark" title={tr('Pinned')}><Pin size={12} /></span
+            >{/if}
           {#if showWorkspace && workspace}<span class="workspace-chip">{workspace.displayName}</span
             >{/if}
-          {#if session.unread}<span class="unread-dot" role="img" aria-label="Unread"></span>{/if}
+          {#if session.unread}<span class="unread-dot" role="img" aria-label={tr('Unread')}
+            ></span>{/if}
           <small>{shortAgo(session.lastActivityAt)}</small>
         </span>
       </button>
@@ -635,22 +654,26 @@
         <button
           class="session-more"
           type="button"
-          aria-label="Actions for {session.name}"
+          aria-label={tr('Actions for {0}', [session.name])}
           onclick={() => (revealedId = session.id)}><Ellipsis size={16} /></button
         >
       {/if}
       <div class="session-actions">
         <button
           type="button"
-          aria-label={session.pinned ? `Unpin ${session.name}` : `Pin ${session.name}`}
-          title={session.pinned ? 'Unpin' : 'Pin'}
+          aria-label={session.pinned
+            ? tr('Unpin {0}', [session.name])
+            : tr('Pin {0}', [session.name])}
+          title={session.pinned ? tr('Unpin') : tr('Pin')}
           onclick={() => onpin(session.id, !session.pinned)}
           >{#if session.pinned}<PinOff size={14} />{:else}<Pin size={14} />{/if}</button
         >
         <button
           type="button"
-          aria-label={session.settled ? `Reopen ${session.name}` : `Settle ${session.name}`}
-          title={session.settled ? 'Reopen' : 'Settle'}
+          aria-label={session.settled
+            ? tr('Reopen {0}', [session.name])
+            : tr('Settle {0}', [session.name])}
+          title={session.settled ? tr('Reopen') : tr('Settle')}
           onclick={() => onsettle(session.id, !session.settled)}
           >{#if session.settled}<ArchiveRestore size={14} />{:else}<Archive
               size={14}
@@ -659,15 +682,15 @@
         {#if deletable}
           <button
             type="button"
-            aria-label="Delete {session.name}"
-            title="Delete {app.modeOf(workspace)?.ui.noun ?? 'chat'}"
+            aria-label={tr('Delete {0}', [session.name])}
+            title={tr('Delete {0}', [tr(app.modeOf(workspace)?.ui.noun ?? 'chat')])}
             onclick={() => (deletingChat = session)}><Trash2 size={14} /></button
           >
         {/if}
         <button
           type="button"
-          aria-label="Rename {session.name}"
-          title="Rename (F2)"
+          aria-label={tr('Rename {0}', [session.name])}
+          title={tr('Rename (F2)')}
           onclick={() => startRename(session)}><Pencil size={14} /></button
         >
       </div>

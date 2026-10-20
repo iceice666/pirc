@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 /**
  * Conversion from agent RPC message shapes (compatible with pi-ai) into the
  * client timeline model. Tool results are folded into the assistant turn that
@@ -147,7 +148,7 @@ export function piMessage(
         id,
         role: 'system',
         systemKind: 'custom',
-        label: `${raw.toolName ?? 'Tool'} result`,
+        label: tr('{0} result', [raw.toolName ?? 'Tool']),
         content: '',
         createdAt,
         tools: [
@@ -164,7 +165,7 @@ export function piMessage(
         ? 'cancelled'
         : raw.exitCode === undefined || raw.exitCode === null
           ? undefined
-          : `exit ${raw.exitCode}`;
+          : tr('exit {0}', [raw.exitCode]);
       return {
         id,
         role: 'system',
@@ -183,11 +184,11 @@ export function piMessage(
         id,
         role: 'system',
         systemKind: 'compaction',
-        label: 'Context compacted',
+        label: tr('Context compacted'),
         content: raw.summary ?? '',
         createdAt,
         ...(typeof raw.tokensBefore === 'number'
-          ? { meta: `${raw.tokensBefore.toLocaleString()} tokens before` }
+          ? { meta: tr('{0} tokens before', [raw.tokensBefore.toLocaleString()]) }
           : {}),
       };
     case 'branchSummary':
@@ -195,7 +196,7 @@ export function piMessage(
         id,
         role: 'system',
         systemKind: 'branch',
-        label: 'Branch summary',
+        label: tr('Branch summary'),
         content: raw.summary ?? '',
         createdAt,
       };
@@ -236,18 +237,18 @@ export function piMessage(
         role: 'system',
         systemKind: team ? 'team' : background ? 'background' : 'custom',
         label: team
-          ? 'Agent team'
+          ? tr('Agent team')
           : background
-            ? 'Background task'
+            ? tr('Background task')
             : delegated
-              ? 'Task from your assistant'
+              ? tr('Task from your assistant')
               : delegationUpdate
-                ? 'Delegation update'
+                ? tr('Delegation update')
                 : skill
-                  ? 'Skill'
+                  ? tr('Skill')
                   : scheduled
-                    ? 'Scheduled task'
-                    : (raw.customType ?? 'Extension'),
+                    ? tr('Scheduled task')
+                    : (raw.customType ?? tr('Extension')),
         ...(summary ? { meta: summary } : {}),
         content: text(raw.content),
         createdAt,
@@ -259,7 +260,7 @@ export function piMessage(
         id,
         role: 'system',
         systemKind: 'custom',
-        label: typeof raw.role === 'string' ? raw.role : 'Message',
+        label: typeof raw.role === 'string' ? raw.role : tr('Message'),
         content: text(raw.content) || (typeof raw.summary === 'string' ? raw.summary : ''),
         createdAt,
       };

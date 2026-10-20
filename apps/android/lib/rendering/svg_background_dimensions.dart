@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/painting.dart';
@@ -216,7 +217,10 @@ Size? _parseViewBox(String? value) {
   final alignmentName = tokens.first.toLowerCase();
   if (alignmentName == 'none') {
     if (tokens.length != 1) {
-      throw FormatException('Invalid preserveAspectRatio none value.', source);
+      throw FormatException(
+        tr("Invalid preserveAspectRatio none value."),
+        source,
+      );
     }
     return (BoxFit.fill, Alignment.center);
   }
@@ -235,7 +239,7 @@ Size? _parseViewBox(String? value) {
   final alignment = alignments[alignmentName];
   if (alignment == null || tokens.length > 2) {
     throw FormatException(
-      'Unsupported preserveAspectRatio value: $value.',
+      tr("Unsupported preserveAspectRatio value: {0}.", [value]),
       source,
     );
   }
@@ -244,7 +248,7 @@ Size? _parseViewBox(String? value) {
     'meet' => (BoxFit.contain, alignment),
     'slice' => (BoxFit.cover, alignment),
     _ => throw FormatException(
-      'Unsupported preserveAspectRatio mode: $mode.',
+      tr("Unsupported preserveAspectRatio mode: {0}.", [mode]),
       source,
     ),
   };

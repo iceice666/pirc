@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
@@ -69,7 +70,7 @@ class TerminalPaneState extends ChangeNotifier {
       }
     } catch (e2) {
       if (valid(e) && revision == listRevision) {
-        listError = terminalError(e2, 'Terminals are unavailable.');
+        listError = terminalError(e2, tr("Terminals are unavailable."));
       }
     }
     if (valid(e)) emit();
@@ -83,7 +84,7 @@ class TerminalPaneState extends ChangeNotifier {
   Future<void> create() async {
     if (busy || session == null) return;
     if (!hasControl || generation == null) {
-      error = 'Take control of the session to open a terminal.';
+      error = tr("Take control of the session to open a terminal.");
       emit();
       return;
     }
@@ -108,7 +109,7 @@ class TerminalPaneState extends ChangeNotifier {
       terminals = [...terminals.where((t) => t['exited'] != true), terminal];
       current = terminal['id'];
     } catch (e2) {
-      if (valid(e)) error = terminalError(e2, 'Unable to open a terminal.');
+      if (valid(e)) error = terminalError(e2, tr("Unable to open a terminal."));
     } finally {
       if (valid(e)) {
         busy = false;
@@ -121,7 +122,7 @@ class TerminalPaneState extends ChangeNotifier {
     final e = epoch, id = '${terminal['id']}', owner = session;
     if (owner == null || closing.contains(id)) return;
     if (terminal['exited'] != true && (!hasControl || generation == null)) {
-      error = 'Take control of the session to close a terminal.';
+      error = tr("Take control of the session to close a terminal.");
       emit();
       return;
     }
@@ -136,8 +137,8 @@ class TerminalPaneState extends ChangeNotifier {
       }
     } catch (e2) {
       if (!valid(e)) return;
-      final message = terminalError(e2, 'Unable to close the terminal.');
-      if (!RegExp('not found', caseSensitive: false).hasMatch(message)) {
+      final message = terminalError(e2, tr("Unable to close the terminal."));
+      if (!RegExp(tr("not found"), caseSensitive: false).hasMatch(message)) {
         error = message;
         emit();
         return;
@@ -247,7 +248,7 @@ class NativeTerminalSession extends ChangeNotifier {
   void reconnect() {
     if (!valid || exited || !foreground) return;
     ready = false;
-    notice = 'Reconnecting…';
+    notice = tr("Reconnecting…");
     emit();
     retry?.cancel();
     retry = Timer(
@@ -266,7 +267,7 @@ class NativeTerminalSession extends ChangeNotifier {
       ready = false;
       if (data['code'] == 4404) {
         exited = true;
-        notice = 'This terminal no longer exists.';
+        notice = tr("This terminal no longer exists.");
         retry?.cancel();
         onExit(null);
         emit();
@@ -311,7 +312,7 @@ class NativeTerminalSession extends ChangeNotifier {
 
   void input(String data) {
     if (controller.control['held'] != true) {
-      notice = 'Take control of the session to type here.';
+      notice = tr("Take control of the session to type here.");
       emit();
       return;
     }

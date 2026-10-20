@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'document_pointer_style.dart';
 import 'dart:collection';
 
@@ -706,7 +707,7 @@ class _Cascade {
           'width': 'fit-content',
           'height': 'fit-content',
           'color': 'CanvasText',
-          'background-color': 'Canvas',
+          'background-color': tr("Canvas"),
           for (final side in ['top', 'right', 'bottom', 'left']) ...{
             'margin-$side': 'auto',
             'padding-$side': '1em',
@@ -750,7 +751,7 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'invalid-import',
-            message: item.reason ?? 'The CSS import cannot be loaded.',
+            message: item.reason ?? tr("The CSS import cannot be loaded."),
             baseUrl: source.baseUrl,
           ),
         );
@@ -787,7 +788,7 @@ class _Cascade {
           _diagnostics.add(
             NativeDocumentStyleDiagnostic(
               code: 'unsupported-media',
-              message: 'Could not parse the stylesheet media condition.',
+              message: tr("Could not parse the stylesheet media condition."),
               baseUrl: source.baseUrl,
             ),
           );
@@ -854,9 +855,10 @@ class _Cascade {
           _diagnostics.add(
             NativeDocumentStyleDiagnostic(
               code: 'unsupported-css-wide-keyword',
-              message:
-                  'CSS-wide keyword computation is not implemented for the '
-                  '$shorthand shorthand; it was not applied.',
+              message: tr(
+                "CSS-wide keyword computation is not implemented for the {0} shorthand; it was not applied.",
+                [shorthand],
+              ),
               baseUrl: shorthandCandidate.baseUrl,
               property: shorthand,
             ),
@@ -882,9 +884,10 @@ class _Cascade {
             _diagnostics.add(
               NativeDocumentStyleDiagnostic(
                 code: 'unsupported-shorthand',
-                message:
-                    'The $shorthand shorthand is invalid after variable '
-                    'substitution; its initial longhand values are used.',
+                message: tr(
+                  "The {0} shorthand is invalid after variable substitution; its initial longhand values are used.",
+                  [shorthand],
+                ),
                 baseUrl: shorthandCandidate.baseUrl,
                 property: shorthand,
               ),
@@ -1040,9 +1043,9 @@ class _Cascade {
           _diagnostics.add(
             NativeDocumentStyleDiagnostic(
               code: 'unsupported-css-wide-keyword',
-              message:
-                  'CSS-wide keyword computation is not implemented; the value '
-                  'is passed through to the HTML renderer.',
+              message: tr(
+                "CSS-wide keyword computation is not implemented; the value is passed through to the HTML renderer.",
+              ),
               baseUrl: candidate.baseUrl,
               property: property,
             ),
@@ -1205,9 +1208,10 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-at-rule',
-            message:
-                'Ignored CSS construct ${rule.runtimeType}; its semantics are '
-                'not implemented.',
+            message: tr(
+              "Ignored CSS construct {0}; its semantics are not implemented.",
+              [rule.runtimeType],
+            ),
             baseUrl: source.baseUrl,
           ),
         );
@@ -1221,7 +1225,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-selector',
-          message: 'The CSS rule has no selector group.',
+          message: tr("The CSS rule has no selector group."),
           baseUrl: source.baseUrl,
         ),
       );
@@ -1236,8 +1240,9 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-nested-rule',
-            message:
-                'Nested rules or declaration constructs are not supported.',
+            message: tr(
+              "Nested rules or declaration constructs are not supported.",
+            ),
             baseUrl: source.baseUrl,
           ),
         );
@@ -1251,7 +1256,7 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-selector',
-            message: 'The CSS selector has no source text.',
+            message: tr("The CSS selector has no source text."),
             baseUrl: source.baseUrl,
           ),
         );
@@ -1287,7 +1292,7 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-selector',
-            message: 'Selector matching failed: $error',
+            message: tr("Selector matching failed: {0}", [error]),
             baseUrl: source.baseUrl,
             selector: selectorText,
           ),
@@ -1328,7 +1333,7 @@ class _Cascade {
 
     final selectorSpan = selector.span;
     if (selectorSpan == null) {
-      throw const FormatException('The selector has no source span.');
+      throw FormatException(tr("The selector has no source span."));
     }
     late String attribute, rootAttribute, targetAttribute;
     do {
@@ -1348,7 +1353,7 @@ class _Cascade {
     for (final pseudo in [...roots.selectors, ...targets.selectors]) {
       final span = pseudo.span;
       if (span == null) {
-        throw const FormatException('The state selector has no source span.');
+        throw FormatException(tr("The state selector has no source span."));
       }
       final start = span.start.offset - selectorSpan.start.offset - trimOffset;
       final end = span.end.offset - selectorSpan.start.offset - trimOffset;
@@ -1356,8 +1361,8 @@ class _Cascade {
           end > selectorText.length ||
           start >= end ||
           selectorText.substring(start, end) != span.text) {
-        throw const FormatException(
-          'The state selector source range could not be mapped.',
+        throw FormatException(
+          tr("The state selector source range could not be mapped."),
         );
       }
       replacements.add(
@@ -1373,8 +1378,8 @@ class _Cascade {
       final index = _numericNthChildIndex(pseudo);
       final span = pseudo.span;
       if (index == null || span == null) {
-        throw const FormatException(
-          'The selector has an unsupported :nth-child() expression.',
+        throw FormatException(
+          tr("The selector has an unsupported :nth-child() expression."),
         );
       }
       final start = span.start.offset - selectorSpan.start.offset - trimOffset;
@@ -1382,8 +1387,8 @@ class _Cascade {
       // another pseudo-class. Match the complete validated numeric function,
       // so its argument and closing parenthesis are never left in the selector.
       if (start < 0 || start >= selectorText.length) {
-        throw const FormatException(
-          'The :nth-child() source range could not be mapped.',
+        throw FormatException(
+          tr("The :nth-child() source range could not be mapped."),
         );
       }
       final function = RegExp(
@@ -1391,8 +1396,8 @@ class _Cascade {
         caseSensitive: false,
       ).firstMatch(selectorText.substring(start));
       if (function == null || int.tryParse(function.group(1)!) != index) {
-        throw const FormatException(
-          'The :nth-child() source did not match its numeric AST.',
+        throw FormatException(
+          tr("The :nth-child() source did not match its numeric AST."),
         );
       }
       final end = start + function.end;
@@ -1464,7 +1469,7 @@ class _Cascade {
   }
 
   void _addInlineStyle(dom.Element element, String text) {
-    final baseUrl = engine.documentBaseUrl ?? 'inline style attribute';
+    final baseUrl = engine.documentBaseUrl ?? tr("inline style attribute");
     final parsed = _parseCss('* { $text }', baseUrl);
     _addParseMessages(parsed.messages, baseUrl);
     final sheet = parsed.stylesheet;
@@ -1492,7 +1497,7 @@ class _Cascade {
           _diagnostics.add(
             NativeDocumentStyleDiagnostic(
               code: 'unsupported-inline-style',
-              message: 'Nested inline style constructs are not supported.',
+              message: tr("Nested inline style constructs are not supported."),
               baseUrl: baseUrl,
             ),
           );
@@ -1513,7 +1518,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-property-hack',
-          message: 'Legacy IE property hacks are ignored.',
+          message: tr("Legacy IE property hacks are ignored."),
           baseUrl: baseUrl,
           property: sourceProperty,
         ),
@@ -1528,7 +1533,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'invalid-declaration',
-          message: 'The declaration has no value expression.',
+          message: tr("The declaration has no value expression."),
           baseUrl: baseUrl,
           property: property,
         ),
@@ -1560,7 +1565,7 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'invalid-overflow-value',
-            message: 'Ignored invalid value for $property.',
+            message: tr("Ignored invalid value for {0}.", [property]),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -1581,7 +1586,7 @@ class _Cascade {
             code: _isFlexLonghand(property)
                 ? 'invalid-flex-value'
                 : 'invalid-gap-value',
-            message: 'Ignored invalid value for $property.',
+            message: tr("Ignored invalid value for {0}.", [property]),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -1616,8 +1621,9 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'invalid-color-value',
-            message:
-                'Ignored invalid CSS color value "${_expressionText(expression)}".',
+            message: tr("Ignored invalid CSS color value \"{0}\".", [
+              _expressionText(expression),
+            ]),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -1628,8 +1634,9 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unvalidated-color-value',
-            message:
-                'The CSS color function is passed through without validation.',
+            message: tr(
+              "The CSS color function is passed through without validation.",
+            ),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -1669,9 +1676,13 @@ class _Cascade {
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-shorthand',
             message: property == 'overflow'
-                ? 'The overflow shorthand requires one or two supported overflow keywords.'
+                ? tr(
+                    "The overflow shorthand requires one or two supported overflow keywords.",
+                  )
                 : property == 'gap'
-                ? 'The gap shorthand must use one or two supported nonnegative length or percentage values, or normal.'
+                ? tr(
+                    "The gap shorthand must use one or two supported nonnegative length or percentage values, or normal.",
+                  )
                 : _invalidFlexShorthandMessage(property),
             baseUrl: baseUrl,
             property: property,
@@ -1730,9 +1741,9 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-shorthand',
-            message:
-                'Could not expand this 1-to-4 component value without changing '
-                'its meaning.',
+            message: tr(
+              "Could not expand this 1-to-4 component value without changing its meaning.",
+            ),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -1772,8 +1783,9 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-shorthand',
-            message:
-                'Could not safely expand the border width, style, and color components.',
+            message: tr(
+              "Could not safely expand the border width, style, and color components.",
+            ),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -1859,8 +1871,9 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-shorthand',
-            message:
-                'This font shorthand is invalid or outside the supported CSS font grammar.',
+            message: tr(
+              "This font shorthand is invalid or outside the supported CSS font grammar.",
+            ),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -1903,8 +1916,10 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-shorthand',
-            message:
-                'The $property shorthand must use auto, a nonzero integer line, or span with a positive integer.',
+            message: tr(
+              "The {0} shorthand must use auto, a nonzero integer line, or span with a positive integer.",
+              [property],
+            ),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -1941,8 +1956,9 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-shorthand',
-            message:
-                'The border-radius shorthand must use one to four supported nonnegative lengths on each side of at most one slash.',
+            message: tr(
+              "The border-radius shorthand must use one to four supported nonnegative lengths on each side of at most one slash.",
+            ),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -2051,8 +2067,10 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-shorthand',
-          message:
-              'The $property shorthand is not expanded; it was not applied.',
+          message: tr(
+            "The {0} shorthand is not expanded; it was not applied.",
+            [property],
+          ),
           baseUrl: baseUrl,
           property: property,
         ),
@@ -2406,8 +2424,12 @@ class _Cascade {
   }
 
   String _invalidFlexShorthandMessage(String property) => property == 'flex'
-      ? 'The flex shorthand must use none, auto, initial, or one to three supported nonnegative flex factors and basis values.'
-      : 'The flex-flow shorthand must use at most one direction and one wrap value.';
+      ? tr(
+          "The flex shorthand must use none, auto, initial, or one to three supported nonnegative flex factors and basis values.",
+        )
+      : tr(
+          "The flex-flow shorthand must use at most one direction and one wrap value.",
+        );
 
   css.Expression? _parseResolvedShorthandExpression(
     String property,
@@ -2893,8 +2915,9 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'invalid-border-component',
-            message:
-                'The border shorthand contains an unsupported or repeated component.',
+            message: tr(
+              "The border shorthand contains an unsupported or repeated component.",
+            ),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -2906,7 +2929,7 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'invalid-color-value',
-            message: 'The border shorthand has an invalid color component.',
+            message: tr("The border shorthand has an invalid color component."),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -2918,8 +2941,9 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unvalidated-color-value',
-            message:
-                'The CSS color function is passed through without validation.',
+            message: tr(
+              "The CSS color function is passed through without validation.",
+            ),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -3052,9 +3076,10 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-media-type',
-            message:
-                'Unknown media type "$type" does not match this screen '
-                'environment.',
+            message: tr(
+              "Unknown media type \"{0}\" does not match this screen environment.",
+              [type],
+            ),
             baseUrl: baseUrl,
           ),
         );
@@ -3074,7 +3099,9 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-media-unary',
-          message: 'Media operator "${query.unary}" is not supported.',
+          message: tr("Media operator \"{0}\" is not supported.", [
+            query.unary,
+          ]),
           baseUrl: baseUrl,
         ),
       );
@@ -3219,9 +3246,9 @@ class _Cascade {
     _diagnostics.add(
       NativeDocumentStyleDiagnostic(
         code: 'unsupported-media-syntax',
-        message:
-            'The media condition uses syntax that the current CSS parser '
-            'cannot represent completely.',
+        message: tr(
+          "The media condition uses syntax that the current CSS parser cannot represent completely.",
+        ),
         baseUrl: baseUrl,
       ),
     );
@@ -3231,7 +3258,7 @@ class _Cascade {
     _diagnostics.add(
       NativeDocumentStyleDiagnostic(
         code: 'unsupported-media-feature',
-        message: 'Media feature "$feature" is not supported.',
+        message: tr("Media feature \"{0}\" is not supported.", [feature]),
         baseUrl: baseUrl,
       ),
     );
@@ -3328,7 +3355,7 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'cyclic-custom-property',
-            message: 'Custom property cycle: ${signature.join(' → ')}.',
+            message: tr("Custom property cycle: {0}.", [signature.join(' → ')]),
             baseUrl: scope.local[name]?.baseUrl ?? '',
             property: name,
           ),
@@ -3357,7 +3384,9 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-css-wide-keyword',
-            message: 'Custom property value "$raw" is not computed.',
+            message: tr("Custom property value \"{0}\" is not computed.", [
+              raw,
+            ]),
             baseUrl: candidate.baseUrl,
             property: name,
           ),
@@ -3389,7 +3418,9 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'invalid-custom-property',
-          message: 'Custom property "$name" has no usable computed value.',
+          message: tr("Custom property \"{0}\" has no usable computed value.", [
+            name,
+          ]),
           baseUrl: candidate.baseUrl,
           property: name,
         ),
@@ -3416,8 +3447,9 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-image',
-          message:
-              'Could not parse the background value as one CSS declaration.',
+          message: tr(
+            "Could not parse the background value as one CSS declaration.",
+          ),
           baseUrl: baseUrl,
           property: property,
         ),
@@ -3432,7 +3464,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-layers',
-          message: 'The background image layer list is malformed.',
+          message: tr("The background image layer list is malformed."),
           baseUrl: baseUrl,
           property: property,
         ),
@@ -3477,7 +3509,9 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-image',
-          message: 'The $unsupportedFunction image function is unsupported.',
+          message: tr("The {0} image function is unsupported.", [
+            unsupportedFunction,
+          ]),
           baseUrl: baseUrl,
           property: property,
         ),
@@ -3490,8 +3524,9 @@ class _Cascade {
         _diagnostics.add(
           NativeDocumentStyleDiagnostic(
             code: 'unsupported-background-layers',
-            message:
-                'Only one background image or gradient layer is supported.',
+            message: tr(
+              "Only one background image or gradient layer is supported.",
+            ),
             baseUrl: baseUrl,
             property: property,
           ),
@@ -3513,8 +3548,9 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-image',
-          message:
-              'Only none or one raster URL is supported for background-image.',
+          message: tr(
+            "Only none or one raster URL is supported for background-image.",
+          ),
           baseUrl: baseUrl,
           property: property,
         ),
@@ -3525,7 +3561,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-layers',
-          message: 'Only one background URL layer is supported.',
+          message: tr("Only one background URL layer is supported."),
           baseUrl: baseUrl,
           property: property,
         ),
@@ -3579,7 +3615,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-shorthand',
-          message: 'Could not parse this background shorthand.',
+          message: tr("Could not parse this background shorthand."),
           baseUrl: baseUrl,
           property: 'background',
         ),
@@ -3594,7 +3630,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-layers',
-          message: 'The background shorthand layer list is malformed.',
+          message: tr("The background shorthand layer list is malformed."),
           baseUrl: baseUrl,
           property: 'background',
         ),
@@ -3617,7 +3653,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-shorthand',
-          message: 'Only the final background layer may specify a color.',
+          message: tr("Only the final background layer may specify a color."),
           baseUrl: baseUrl,
           property: 'background',
         ),
@@ -3673,7 +3709,9 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-image',
-          message: 'The $unsupportedFunction image function is unsupported.',
+          message: tr("The {0} image function is unsupported.", [
+            unsupportedFunction,
+          ]),
           baseUrl: baseUrl,
           property: 'background',
         ),
@@ -3684,7 +3722,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-layers',
-          message: 'Only one background URL layer is supported.',
+          message: tr("Only one background URL layer is supported."),
           baseUrl: baseUrl,
           property: 'background',
         ),
@@ -3710,7 +3748,7 @@ class _Cascade {
           _diagnostics.add(
             NativeDocumentStyleDiagnostic(
               code: 'unsupported-background-shorthand',
-              message: 'Only one background size slash is supported.',
+              message: tr("Only one background size slash is supported."),
               baseUrl: baseUrl,
               property: 'background',
             ),
@@ -3728,7 +3766,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-shorthand',
-          message: 'A background size must follow the slash.',
+          message: tr("A background size must follow the slash."),
           baseUrl: baseUrl,
           property: 'background',
         ),
@@ -3801,7 +3839,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-shorthand',
-          message: 'Unsupported background component "$text".',
+          message: tr("Unsupported background component \"{0}\".", [text]),
           baseUrl: baseUrl,
           property: 'background',
         ),
@@ -3822,7 +3860,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-shorthand',
-          message: 'Unsupported background size component "$text".',
+          message: tr("Unsupported background size component \"{0}\".", [text]),
           baseUrl: baseUrl,
           property: 'background',
         ),
@@ -3839,8 +3877,9 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-background-shorthand',
-          message:
-              'This background shorthand has conflicting or excess components.',
+          message: tr(
+            "This background shorthand has conflicting or excess components.",
+          ),
           baseUrl: baseUrl,
           property: 'background',
         ),
@@ -3950,7 +3989,7 @@ class _Cascade {
     _diagnostics.add(
       NativeDocumentStyleDiagnostic(
         code: 'unsupported-background-image',
-        message: 'Unable to parse background gradient.',
+        message: tr("Unable to parse background gradient."),
         baseUrl: baseUrl,
         property: property,
       ),
@@ -3990,7 +4029,7 @@ class _Cascade {
     if (value == null) {
       return (
         url: null,
-        error: 'The background URL contains an invalid CSS escape.',
+        error: tr("The background URL contains an invalid CSS escape."),
       );
     }
     final scheme = RegExp(
@@ -4000,7 +4039,7 @@ class _Cascade {
       if (!RegExp(r'^data:image/', caseSensitive: false).hasMatch(value)) {
         return (
           url: null,
-          error: 'Only data:image/* background URLs are supported.',
+          error: tr("Only data:image/* background URLs are supported."),
         );
       }
       return (url: value, error: null);
@@ -4009,13 +4048,15 @@ class _Cascade {
     if (scheme != null && scheme != 'http' && scheme != 'https') {
       return (
         url: null,
-        error: 'The $scheme: background image URL scheme is unsupported.',
+        error: tr("The {0}: background image URL scheme is unsupported.", [
+          scheme,
+        ]),
       );
     }
     if (value.startsWith('#')) {
       return (
         url: null,
-        error: 'SVG fragment background images are unsupported.',
+        error: tr("SVG fragment background images are unsupported."),
       );
     }
     try {
@@ -4024,8 +4065,10 @@ class _Cascade {
     } on Object catch (error) {
       return (
         url: null,
-        error:
-            'Could not resolve the background URL against its source base: $error',
+        error: tr(
+          "Could not resolve the background URL against its source base: {0}",
+          [error],
+        ),
       );
     }
   }
@@ -4046,7 +4089,7 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unsupported-css-expression',
-          message: 'Could not serialize this CSS expression: $error',
+          message: tr("Could not serialize this CSS expression: {0}", [error]),
           baseUrl: baseUrl,
           property: property,
         ),
@@ -4058,8 +4101,10 @@ class _Cascade {
       _diagnostics.add(
         NativeDocumentStyleDiagnostic(
           code: 'unresolved-variable',
-          message:
-              'Ignored declaration because ${unresolved.name} has no value or fallback.',
+          message: tr(
+            "Ignored declaration because {0} has no value or fallback.",
+            [unresolved.name],
+          ),
           baseUrl: baseUrl,
           property: property,
         ),
@@ -4236,13 +4281,13 @@ class _BackgroundUrlPrinter extends css.CssPrinter {
   dynamic visitUriTerm(css.UriTerm node) {
     final raw = _decodeCssEscapes(node.text);
     if (raw == null) {
-      failure ??= 'The background URL contains an invalid CSS escape.';
+      failure ??= tr("The background URL contains an invalid CSS escape.");
       return null;
     }
     final result = resolve(raw);
     final url = result.url;
     if (url == null) {
-      failure ??= result.error ?? 'The background URL is unsupported.';
+      failure ??= result.error ?? tr("The background URL is unsupported.");
       return null;
     }
     emit('url("${_escapeCssString(url)}")');
@@ -4716,22 +4761,24 @@ _CombinedMedia _combineImportMedia(String? outer, String? imported) {
   final importQueries = _parseMediaQueries(child);
   if (outerQueries == null || importQueries == null) {
     return _CombinedMedia(
-      '$parent and $child',
+      tr("{0} and {1}", [parent, child]),
       false,
-      'The outer and imported media conditions could not be combined.',
+      tr("The outer and imported media conditions could not be combined."),
     );
   }
   final combinations = <String>[
     for (final outerQuery in outerQueries)
       for (final importQuery in importQueries)
-        '${_mediaQuerySourceText(outerQuery)} and '
-            '${_mediaQuerySourceText(importQuery)}',
+        tr("{0} and {1}", [
+          _mediaQuerySourceText(outerQuery),
+          _mediaQuerySourceText(importQuery),
+        ]),
   ];
   return _CombinedMedia(combinations.join(', '), true);
 }
 
 List<css.MediaQuery>? _parseMediaQueries(String media) {
-  final parsed = _parseCss('@media $media {}', 'media condition');
+  final parsed = _parseCss('@media $media {}', tr("media condition"));
   if (parsed.messages.isNotEmpty || parsed.stylesheet == null) return null;
   for (final node in parsed.stylesheet!.topLevels) {
     if (node is css.MediaDirective) return node.mediaQueries;
@@ -4878,19 +4925,21 @@ String? _selectorUnsupportedReason(css.Selector selector) {
 
 String? _simpleSelectorUnsupportedReason(css.SimpleSelector selector) {
   if (selector is css.PseudoElementSelector) {
-    return 'Pseudo-elements cannot be mapped to HTML elements.';
+    return tr("Pseudo-elements cannot be mapped to HTML elements.");
   }
   if (selector is css.PseudoClassFunctionSelector) {
     if (selector.name == 'lang') return null;
     if (selector.name == 'nth-child') {
       if (_numericNthChildIndex(selector) != null) return null;
-      return 'Only numeric :nth-child(n) selectors are supported.';
+      return tr("Only numeric :nth-child(n) selectors are supported.");
     }
-    return 'The :${selector.name}() pseudo-class is not supported.';
+    return tr("The :{0}() pseudo-class is not supported.", [selector.name]);
   }
   if (selector is css.PseudoClassSelector) {
     if (selector.name == 'visited') {
-      return ':visited depends on private browsing state and is not applied.';
+      return tr(
+        ":visited depends on private browsing state and is not applied.",
+      );
     }
     if (const {
       'root',
@@ -4904,17 +4953,17 @@ String? _simpleSelectorUnsupportedReason(css.SimpleSelector selector) {
     }.contains(selector.name)) {
       return null;
     }
-    return 'The :${selector.name} pseudo-class is not supported.';
+    return tr("The :{0} pseudo-class is not supported.", [selector.name]);
   }
   if (selector is css.NegationSelector) {
     final argument = selector.negationArg;
     return argument == null
-        ? 'An empty :not() selector is unsupported.'
+        ? tr("An empty :not() selector is unsupported.")
         : _simpleSelectorUnsupportedReason(argument);
   }
   if (selector is css.NamespaceSelector) {
     if (selector.namespace.isNotEmpty && selector.namespace != '*') {
-      return 'Named CSS namespaces are unsupported.';
+      return tr("Named CSS namespaces are unsupported.");
     }
     final name = selector.nameAsSimpleSelector;
     if (name != null) return _simpleSelectorUnsupportedReason(name);
@@ -4925,7 +4974,7 @@ String? _simpleSelectorUnsupportedReason(css.SimpleSelector selector) {
       selector is css.AttributeSelector) {
     return null;
   }
-  return 'Selector component ${selector.runtimeType} is unsupported.';
+  return tr("Selector component {0} is unsupported.", [selector.runtimeType]);
 }
 
 int? _numericNthChildIndex(css.PseudoClassFunctionSelector selector) {

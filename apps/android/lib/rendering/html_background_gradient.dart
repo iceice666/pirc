@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -22,7 +23,9 @@ Gradient? parseNativeHtmlBackgroundGradient(String value) {
   if (!hasGradient) return null;
   if (layers.length != 1) {
     throw FormatException(
-      'Multiple background image layers containing gradients are unsupported.',
+      tr(
+        "Multiple background image layers containing gradients are unsupported.",
+      ),
       value,
     );
   }
@@ -32,7 +35,7 @@ Gradient? parseNativeHtmlBackgroundGradient(String value) {
     caseSensitive: false,
   ).firstMatch(input);
   if (match == null) {
-    throw FormatException('Malformed CSS gradient function.', value);
+    throw FormatException(tr("Malformed CSS gradient function."), value);
   }
   final name = match.group(1)!.toLowerCase();
   final repeating = name.startsWith('repeating-');
@@ -42,7 +45,10 @@ Gradient? parseNativeHtmlBackgroundGradient(String value) {
     'radial-gradient',
     'conic-gradient',
   }.contains(kind)) {
-    throw FormatException('Unsupported CSS gradient function: $name.', value);
+    throw FormatException(
+      tr("Unsupported CSS gradient function: {0}.", [name]),
+      value,
+    );
   }
 
   final body = _extractFunctionBody(input, match.end - 1, value);
@@ -50,7 +56,7 @@ Gradient? parseNativeHtmlBackgroundGradient(String value) {
   if (arguments.length < 2 ||
       arguments.any((argument) => argument.trim().isEmpty)) {
     throw FormatException(
-      'A CSS gradient needs at least two color stops.',
+      tr("A CSS gradient needs at least two color stops."),
       value,
     );
   }
@@ -107,7 +113,7 @@ String _extractFunctionBody(
       if (depth == 0) {
         if (source.substring(i + 1).trim().isNotEmpty) {
           throw FormatException(
-            'Unexpected content after CSS gradient.',
+            tr("Unexpected content after CSS gradient."),
             sourceForError,
           );
         }
@@ -116,7 +122,7 @@ String _extractFunctionBody(
       if (depth < 0) break;
     }
   }
-  throw FormatException('Unclosed CSS gradient function.', sourceForError);
+  throw FormatException(tr("Unclosed CSS gradient function."), sourceForError);
 }
 
 Gradient _parseLinearGradient(
@@ -142,7 +148,7 @@ Gradient _parseLinearGradient(
   final stops = _parseColorStops(arguments.skip(firstStopIndex), source);
   if (stops.length < 2) {
     throw FormatException(
-      'A CSS linear gradient needs at least two color stops.',
+      tr("A CSS linear gradient needs at least two color stops."),
       source,
     );
   }
@@ -158,7 +164,7 @@ String _takeInterpolationMethod(String value, Object source) {
   final method = match.group(1)!.toLowerCase();
   if (method != 'srgb') {
     throw FormatException(
-      'Only the CSS sRGB gradient interpolation method is supported.',
+      tr("Only the CSS sRGB gradient interpolation method is supported."),
       source,
     );
   }
@@ -240,7 +246,7 @@ Gradient _parseRadialGradient(
     ).allMatches(header);
     if (atMatches.length > 1) {
       throw FormatException(
-        'A radial gradient can have only one position clause.',
+        tr("A radial gradient can have only one position clause."),
         source,
       );
     }
@@ -251,7 +257,7 @@ Gradient _parseRadialGradient(
       final positionText = header.substring(at.end).trim();
       if (positionText.isEmpty) {
         throw FormatException(
-          'A radial gradient position cannot be empty.',
+          tr("A radial gradient position cannot be empty."),
           source,
         );
       }
@@ -304,7 +310,7 @@ Gradient _parseRadialGradient(
           final radius = _parseRadialRadius(token);
           if (radius == null) {
             throw FormatException(
-              'Unsupported radial gradient size: $token.',
+              tr("Unsupported radial gradient size: {0}.", [token]),
               source,
             );
           }
@@ -313,7 +319,7 @@ Gradient _parseRadialGradient(
     }
     if (sawKeywordSize && dimensions.isNotEmpty) {
       throw FormatException(
-        'A radial gradient cannot combine a size keyword and radii.',
+        tr("A radial gradient cannot combine a size keyword and radii."),
         source,
       );
     }
@@ -326,7 +332,7 @@ Gradient _parseRadialGradient(
       if (shape == NativeHtmlRadialShape.circle) {
         if (dimensions.length != 1 || dimensions.single.isPercent) {
           throw FormatException(
-            'A circle radius must be one nonnegative length.',
+            tr("A circle radius must be one nonnegative length."),
             source,
           );
         }
@@ -334,7 +340,10 @@ Gradient _parseRadialGradient(
         explicitRadii = dimensions;
       } else if (shape == NativeHtmlRadialShape.ellipse) {
         if (dimensions.length != 2) {
-          throw FormatException('An ellipse needs two explicit radii.', source);
+          throw FormatException(
+            tr("An ellipse needs two explicit radii."),
+            source,
+          );
         }
         sizing = NativeHtmlRadialSizing.explicitEllipse;
         explicitRadii = dimensions;
@@ -345,7 +354,7 @@ Gradient _parseRadialGradient(
   final stops = _parseColorStops(arguments.skip(firstStopIndex), source);
   if (stops.length < 2) {
     throw FormatException(
-      'A CSS radial gradient needs at least two color stops.',
+      tr("A CSS radial gradient needs at least two color stops."),
       source,
     );
   }
@@ -378,12 +387,12 @@ Gradient _parseConicGradient(
       caseSensitive: false,
     ).firstMatch(header);
     if (match == null) {
-      throw FormatException('Unsupported conic gradient header.', source);
+      throw FormatException(tr("Unsupported conic gradient header."), source);
     }
     if (match[1] != null) {
       final parsed = _parseStopPosition(match[1]!, angular: true);
       if (parsed == null || match[1]!.endsWith('%')) {
-        throw FormatException('Conic from needs an angle.', source);
+        throw FormatException(tr("Conic from needs an angle."), source);
       }
       angle = parsed.amount / 100 * math.pi * 2;
     }
@@ -395,7 +404,7 @@ Gradient _parseConicGradient(
     angular: true,
   );
   if (stops.length < 2) {
-    throw FormatException('A conic gradient needs two stops.', source);
+    throw FormatException(tr("A conic gradient needs two stops."), source);
   }
   return NativeHtmlConicGradient._(
     angle,
@@ -431,7 +440,7 @@ _RadialPosition _parseRadialPosition(String value, Object source) {
   final tokens = _splitWhitespaceTopLevel(value);
   if (tokens.isEmpty || tokens.length > 2) {
     throw FormatException(
-      'Only one- and two-value radial positions are supported.',
+      tr("Only one- and two-value radial positions are supported."),
       source,
     );
   }
@@ -447,7 +456,7 @@ _RadialPosition _parseRadialPosition(String value, Object source) {
       return _RadialPosition(x: 'center', y: token);
     }
     throw FormatException(
-      'Unsupported radial gradient position: $value.',
+      tr("Unsupported radial gradient position: {0}.", [value]),
       source,
     );
   }
@@ -461,7 +470,7 @@ _RadialPosition _parseRadialPosition(String value, Object source) {
   }
   if (!_isHorizontalPosition(x) || !_isVerticalPosition(y)) {
     throw FormatException(
-      'Unsupported radial gradient position: $value.',
+      tr("Unsupported radial gradient position: {0}.", [value]),
       source,
     );
   }
@@ -503,19 +512,19 @@ List<_GradientColorStop> _parseColorStops(
   for (final sourceStop in sourceStops) {
     final tokens = _splitWhitespaceTopLevel(sourceStop.trim());
     if (tokens.isEmpty) {
-      throw FormatException('Empty CSS gradient color stop.', source);
+      throw FormatException(tr("Empty CSS gradient color stop."), source);
     }
     final color = _parseCssColor(tokens.first);
     if (color == null) {
       throw FormatException(
-        'Unsupported gradient color: ${tokens.first}.',
+        tr("Unsupported gradient color: {0}.", [tokens.first]),
         source,
       );
     }
     final positions = tokens.skip(1).toList();
     if (positions.length > 2) {
       throw FormatException(
-        'A color stop can have at most two positions.',
+        tr("A color stop can have at most two positions."),
         source,
       );
     }
@@ -527,7 +536,7 @@ List<_GradientColorStop> _parseColorStops(
       final parsed = _parseStopPosition(position, angular: angular);
       if (parsed == null) {
         throw FormatException(
-          'Unsupported color stop position: $position.',
+          tr("Unsupported color stop position: {0}.", [position]),
           source,
         );
       }
@@ -742,14 +751,16 @@ List<String> _splitTopLevel(String input, String delimiter) {
       depth++;
     } else if (character == ')') {
       depth--;
-      if (depth < 0) throw FormatException('Unbalanced CSS function.', input);
+      if (depth < 0) {
+        throw FormatException(tr("Unbalanced CSS function."), input);
+      }
     } else if (character == delimiter && depth == 0) {
       pieces.add(input.substring(start, i).trim());
       start = i + 1;
     }
   }
   if (depth != 0 || quote != null) {
-    throw FormatException('Unbalanced CSS value.', input);
+    throw FormatException(tr("Unbalanced CSS value."), input);
   }
   pieces.add(input.substring(start).trim());
   return pieces;
@@ -989,7 +1000,9 @@ class NativeHtmlRadialGradient extends Gradient {
       }
     }
     if (!rx.isFinite || !ry.isFinite || rx < 0 || ry < 0) {
-      throw FormatException('Invalid radial gradient geometry for $rect.');
+      throw FormatException(
+        tr("Invalid radial gradient geometry for {0}.", [rect]),
+      );
     }
     return NativeHtmlRadialGeometry(center, rx, ry);
   }
@@ -1466,7 +1479,7 @@ class _RadialPosition {
     if (value == 'center') return start + extent / 2;
     final parsed = _parsePositionLength(value);
     if (parsed == null) {
-      throw FormatException('Unsupported radial position: $value.');
+      throw FormatException(tr("Unsupported radial position: {0}.", [value]));
     }
     return start + parsed.resolve(extent);
   }

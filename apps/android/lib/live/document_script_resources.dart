@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import '../rendering/html_document_content.dart';
@@ -12,8 +13,8 @@ Json completeDocumentScriptResource(Json request, Json response) {
           (raw is! List ||
               raw.length > 2 * 1024 * 1024 ||
               raw.any((b) => b is! int || b < 0 || b > 255)))) {
-    throw const FormatException(
-      'Invalid document resource bytes (maximum 2 MiB).',
+    throw FormatException(
+      tr("Invalid document resource bytes (maximum 2 MiB)."),
     );
   }
   final bytes = Uint8List.fromList(
@@ -27,7 +28,7 @@ Json completeDocumentScriptResource(Json request, Json response) {
   if (request['kind'] == 'script') {
     final status = response['status'];
     if (status is! int || status < 200 || status >= 300) {
-      throw FormatException('Script resource returned HTTP $status.');
+      throw FormatException(tr("Script resource returned HTTP {0}.", [status]));
     }
     if (response['moduleReferrerPolicy'] != null) {
       result['referrerPolicy'] = response['moduleReferrerPolicy'];
@@ -50,8 +51,8 @@ Json completeDocumentScriptResource(Json request, Json response) {
     });
   }
   if (utf8.encode(jsonEncode(result)).length > 4 * 1024 * 1024 - 128) {
-    throw const FormatException(
-      'Document resource exceeds the 4 MiB script message limit.',
+    throw FormatException(
+      tr("Document resource exceeds the 4 MiB script message limit."),
     );
   }
   return result;

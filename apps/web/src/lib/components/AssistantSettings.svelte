@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import {
     assistantPromptsApi,
     type AssistantBinding,
@@ -30,7 +32,7 @@
         }
       } catch (cause) {
         if (active)
-          error = cause instanceof Error ? cause.message : 'Unable to load assistant settings.';
+          error = cause instanceof Error ? cause.message : tr('Unable to load assistant settings.');
       } finally {
         if (active) loading = false;
       }
@@ -48,7 +50,7 @@
       prompts = undefined;
       confirming = false;
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Unable to release binding.';
+      error = cause instanceof Error ? cause.message : tr('Unable to release binding.');
     } finally {
       loading = false;
     }
@@ -56,42 +58,47 @@
 </script>
 
 <section class="settings-section">
-  <h3>Assistant</h3>
+  <h3>{tr('Assistant')}</h3>
   <p>
-    Soul defines the assistant's persona; Chat rules apply to all chats. Files stay on the chat
-    node. Changes apply at the next agent start (new chats or restarted agents), not to an already
-    running agent. Empty Soul restores the built-in identity.
+    {tr(
+      "Soul defines the assistant's persona; Chat rules apply to all chats. Files stay on the chat node. Changes apply at the next agent start (new chats or restarted agents), not to an already running agent. Empty Soul restores the built-in identity.",
+    )}
   </p>
-  <p>Chats no longer read AGENTS.md: move chat-relevant rules into CHAT.md.</p>
-  {#if disabled}<p>Assistant settings are unavailable in the demo.</p>
+  <p>{tr('Chats no longer read AGENTS.md: move chat-relevant rules into CHAT.md.')}</p>
+  {#if disabled}<p>{tr('Assistant settings are unavailable in the demo.')}</p>
   {:else}
     {#if binding?.nodeId}
-      <p>Chat node: <code>{binding.nodeId}</code> — {binding.online ? 'online' : 'offline'}</p>
+      <p>
+        {tr('Chat node:')} <code>{binding.nodeId}</code> — {binding.online
+          ? tr('online')
+          : tr('offline')}
+      </p>
       {#if confirming}
         <p>
-          Stop the old chat node before releasing it, or it may reconnect and claim the binding
-          again. Releasing disconnects it; the next chat node to register will be bound.
+          {tr(
+            'Stop the old chat node before releasing it, or it may reconnect and claim the binding again. Releasing disconnects it; the next chat node to register will be bound.',
+          )}
         </p>
         <button type="button" class="button" disabled={loading} onclick={release}
-          >Confirm release</button
+          >{tr('Confirm release')}</button
         >
         <button
           type="button"
           class="button ghost"
           disabled={loading}
-          onclick={() => (confirming = false)}>Cancel</button
+          onclick={() => (confirming = false)}>{tr('Cancel')}</button
         >
       {:else}<button
           type="button"
           class="button ghost"
           disabled={loading}
-          onclick={() => (confirming = true)}>Release chat node binding</button
+          onclick={() => (confirming = true)}>{tr('Release chat node binding')}</button
         >{/if}
-    {:else if !loading}<p>No chat node is bound. Start a chat node to register it.</p>{/if}
+    {:else if !loading}<p>{tr('No chat node is bound. Start a chat node to register it.')}</p>{/if}
     <button type="button" class="button ghost" disabled={loading} onclick={() => reload++}
-      >Refresh</button
+      >{tr('Refresh')}</button
     >
-    {#if loading}<p role="status">Loading…</p>{/if}
+    {#if loading}<p role="status">{tr('Loading…')}</p>{/if}
     {#if error}<p role="alert">{error}</p>{/if}
   {/if}
 </section>

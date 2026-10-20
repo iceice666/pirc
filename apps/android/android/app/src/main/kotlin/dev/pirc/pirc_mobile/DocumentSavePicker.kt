@@ -128,7 +128,7 @@ internal class DocumentSavePicker(
             return
         }
         if (pending != null) {
-            result.error("BUSY", "A document save picker is already open.", null)
+            result.error("BUSY", NativeI18n.text("A document save picker is already open."), null)
             return
         }
         if (pairingStamp.isBlank()) {
@@ -225,7 +225,7 @@ internal class DocumentSavePicker(
         runtime.validateContext(request.contextId)
         ensureInvocationContext(request)
         return SaveSnapshot(
-            pairingStamp = stamp ?: throw ApiException(401, "unpaired", "Device is not paired"),
+            pairingStamp = stamp ?: throw ApiException(401, "unpaired", NativeI18n.text("Device is not paired")),
             contextId = request.contextId,
             generation = request.invocationGeneration,
         )
@@ -276,7 +276,7 @@ internal class DocumentSavePicker(
     private fun finishError(request: PendingSave) = finish(request) {
         it.error(
             "SAVE",
-            "Could not save this document. Choose a location and try again.",
+            NativeI18n.text("Could not save this document. Choose a location and try again."),
             null,
         )
     }

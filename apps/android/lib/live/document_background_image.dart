@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
@@ -46,7 +47,7 @@ class NativeDocumentBackgroundImage
   );
   Future<ui.Codec> _load(ImageDecoderCallback decode) async {
     try {
-      if (!isCurrent()) throw StateError('Background connection changed.');
+      if (!isCurrent()) throw StateError(tr("Background connection changed."));
       // SVG is a successful vector response transported through ImageProvider's
       // error channel. Keep it on this source instance while its scope is live;
       // raster repaint/configuration changes must not fetch it again.
@@ -56,7 +57,7 @@ class NativeDocumentBackgroundImage
       final String mime;
       if (source.scheme == 'blob') {
         if (objectUrls == null) {
-          throw StateError('Object URL document is unavailable.');
+          throw StateError(tr("Object URL document is unavailable."));
         }
         final blob = await objectUrls!.read(source.toString());
         bytes = blob.bytes;
@@ -64,14 +65,14 @@ class NativeDocumentBackgroundImage
       } else if (source.scheme == 'data') {
         // Percent-encoded data may use three characters per byte.
         if (source.toString().length > maxBytes * 3 + 4096) {
-          throw StateError('Background exceeds 32 MiB.');
+          throw StateError(tr("Background exceeds 32 MiB."));
         }
         final data = source.data!;
         bytes = data.contentAsBytes();
         mime = data.mimeType;
       } else {
         if (!['', 'http', 'https'].contains(source.scheme) || gateway == null) {
-          throw UnsupportedError('Unsupported background URL.');
+          throw UnsupportedError(tr("Unsupported background URL."));
         }
         final result = obj(
           await gateway!.call('image', {
@@ -83,9 +84,9 @@ class NativeDocumentBackgroundImage
         bytes = result['bytes'] as Uint8List;
         mime = '${result['mimeType']}';
       }
-      if (!isCurrent()) throw StateError('Background connection changed.');
+      if (!isCurrent()) throw StateError(tr("Background connection changed."));
       if (bytes.length > maxBytes) {
-        throw StateError('Background exceeds 32 MiB.');
+        throw StateError(tr("Background exceeds 32 MiB."));
       }
       final type = mime.split(';').first.trim().toLowerCase();
       if (type == 'image/svg+xml') {
@@ -94,17 +95,19 @@ class NativeDocumentBackgroundImage
         throw svg;
       }
       if (!type.startsWith('image/')) {
-        throw UnsupportedError('This background image format is unsupported.');
+        throw UnsupportedError(
+          tr("This background image format is unsupported."),
+        );
       }
       final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
       if (!isCurrent()) {
         buffer.dispose();
-        throw StateError('Background connection changed.');
+        throw StateError(tr("Background connection changed."));
       }
       final codec = await decode(buffer);
       if (!isCurrent()) {
         codec.dispose();
-        throw StateError('Background connection changed.');
+        throw StateError(tr("Background connection changed."));
       }
       return codec;
     } catch (_) {
@@ -147,7 +150,7 @@ class NativeDocumentSvgBackground implements Exception {
     : bytes = Uint8List.fromList(bytes);
   final Uint8List bytes;
   @override
-  String toString() => 'SVG background requires the native vector painter.';
+  String toString() => tr("SVG background requires the native vector painter.");
 }
 
 /// Bounded SVG bytes shared by providers belonging to one mounted HTML source.

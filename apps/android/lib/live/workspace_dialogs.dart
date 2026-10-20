@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 import 'gateway.dart';
 import 'common.dart';
@@ -91,6 +92,7 @@ class _WorkspaceDialogState extends State<_WorkspaceDialog> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final catalog = widget.c.catalog;
     final devices = catalog.workNodes(widget.c.nodes, widget.c.workspaces);
     final project = widget.project;
@@ -108,20 +110,20 @@ class _WorkspaceDialogState extends State<_WorkspaceDialog> {
         modes.where((m) => m.id == modeId).firstOrNull ?? modes.firstOrNull;
     final needsPath = !project && (mode == null || mode.sharedDirectory);
     return WebDialog(
-      title: project ? 'New project' : 'Add workspace',
-      eyebrow: project ? 'Chats' : 'On a device',
+      title: project ? tr("New project") : tr("Add workspace"),
+      eyebrow: project ? tr("Chats") : tr("On a device"),
       busy: busy,
       actions: [
         WebButton(
-          'Cancel',
+          tr("Cancel"),
           onPressed: busy ? null : () => Navigator.pop(context),
         ),
         WebButton(
           busy
-              ? (project ? 'Creating…' : 'Adding…')
+              ? (project ? tr("Creating…") : tr("Adding…"))
               : project
-              ? 'Create project'
-              : 'Add workspace',
+              ? tr("Create project")
+              : tr("Add workspace"),
           primary: true,
           onPressed:
               busy ||
@@ -165,7 +167,7 @@ class _WorkspaceDialogState extends State<_WorkspaceDialog> {
       children: [
         if (!project) ...[
           Text(
-            'Device',
+            tr("Device"),
             style: webText(context, size: 13, weight: FontWeight.w500),
           ),
           DropdownButton<String>(
@@ -189,7 +191,7 @@ class _WorkspaceDialogState extends State<_WorkspaceDialog> {
           if (modes.length > 1) ...[
             const SizedBox(height: 12),
             Text(
-              'Mode',
+              tr("Mode"),
               style: webText(context, size: 13, weight: FontWeight.w500),
             ),
             DropdownButton<String>(
@@ -216,32 +218,41 @@ class _WorkspaceDialogState extends State<_WorkspaceDialog> {
         ],
         formField(
           context,
-          project ? 'Project name' : 'Workspace name',
+          project ? tr("Project name") : tr("Workspace name"),
           name,
-          hint: project ? 'Trip to Japan' : 'My project',
+          hint: project ? tr("Trip to Japan") : tr("My project"),
           enabled: !busy,
           onChanged: (_) => setState(() {}),
         ),
         if (needsPath)
           formField(
             context,
-            'Existing directory on that device',
+            tr("Existing directory on that device"),
             path,
-            hint: '~/projects/my-project',
+            hint: tr("~/projects/my-project"),
             enabled: !busy,
             onChanged: (_) => setState(() {}),
           ),
         const SizedBox(height: 12),
         Text(
           project
-              ? 'A project groups related chats. The assistant keeps its files for you; no folder to pick.'
+              ? tr(
+                  "A project groups related chats. The assistant keeps its files for you; no folder to pick.",
+                )
               : needsPath
-              ? "Choose an existing folder inside that device’s home directory. No files or folders will be created."
-              : 'Each ${mode!.noun} gets its own folder on that device; no folder to pick.',
+              ? tr(
+                  "Choose an existing folder inside that device’s home directory. No files or folders will be created.",
+                )
+              : tr(
+                  "Each {0} gets its own folder on that device; no folder to pick.",
+                  [mode!.noun],
+                ),
         ),
         if (!project && devices.isEmpty)
-          const WebNotice(
-            'No device can host workspaces: the chat node holds chats and projects only.',
+          WebNotice(
+            tr(
+              "No device can host workspaces: the chat node holds chats and projects only.",
+            ),
             error: true,
           ),
         if (error != null) WebNotice(error!, error: true),
@@ -266,97 +277,105 @@ class _NewSessionState extends State<_NewSession> {
   bool busy = false;
   String? error;
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.c,
-    builder: (context, _) {
-      final workspaces = widget.c.workspaces;
-      final selected = workspaces.where((w) => w['id'] == id).firstOrNull;
-      final selectedDeleting = selected?['deleting'] == true;
-      final available = workspaces.where(_open);
-      final deletionNeedsAttention =
-          selectedDeleting ||
-          (available.isEmpty && workspaces.any((w) => w['deleting'] == true));
-      String workspaceLabel(Json workspace) {
-        final suffix = workspace['deleting'] == true
-            ? ' · deleting'
-            : isReadOnly(workspace)
-            ? ' · unavailable'
-            : workspaceOnline(workspace, widget.c.nodes)
-            ? ''
-            : ' · offline';
-        return '${workspace['displayName']}$suffix';
-      }
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return ListenableBuilder(
+      listenable: widget.c,
+      builder: (context, _) {
+        final workspaces = widget.c.workspaces;
+        final selected = workspaces.where((w) => w['id'] == id).firstOrNull;
+        final selectedDeleting = selected?['deleting'] == true;
+        final available = workspaces.where(_open);
+        final deletionNeedsAttention =
+            selectedDeleting ||
+            (available.isEmpty && workspaces.any((w) => w['deleting'] == true));
+        String workspaceLabel(Json workspace) {
+          final suffix = workspace['deleting'] == true
+              ? ' · deleting'
+              : isReadOnly(workspace)
+              ? ' · unavailable'
+              : workspaceOnline(workspace, widget.c.nodes)
+              ? ''
+              : ' · offline';
+          return '${workspace['displayName']}$suffix';
+        }
 
-      return WebDialog(
-        title: 'Create a session',
-        eyebrow: 'New work',
-        busy: busy,
-        actions: [
-          WebButton(
-            'Cancel',
-            onPressed: busy ? null : () => Navigator.pop(context),
-          ),
-          WebButton(
-            busy ? 'Creating…' : 'Create session',
-            primary: true,
-            onPressed:
-                busy || selected == null || selectedDeleting || !_open(selected)
-                ? null
-                : () async {
-                    setState(() {
-                      busy = true;
-                      error = null;
-                    });
-                    try {
-                      await widget.c.create(id!);
-                      if (context.mounted) Navigator.pop(context);
-                    } catch (e) {
-                      if (mounted) {
-                        setState(() {
-                          error = LiveController.describe(e);
-                          busy = false;
-                        });
-                      }
-                    }
-                  },
-          ),
-        ],
-        children: [
-          Text(
-            'Workspace',
-            style: webText(context, size: 13, weight: FontWeight.w500),
-          ),
-          DropdownButton<String>(
-            isExpanded: true,
-            value: selected == null ? null : id,
-            hint: Text(
-              available.isEmpty
-                  ? 'No workspace available'
-                  : 'Choose a workspace',
+        return WebDialog(
+          title: tr("Create a session"),
+          eyebrow: tr("New work"),
+          busy: busy,
+          actions: [
+            WebButton(
+              tr("Cancel"),
+              onPressed: busy ? null : () => Navigator.pop(context),
             ),
-            items: [
-              for (final w in workspaces)
-                DropdownMenuItem(
-                  value: '${w['id']}',
-                  enabled: _open(w),
-                  child: Text(
-                    workspaceLabel(w),
-                    overflow: TextOverflow.ellipsis,
+            WebButton(
+              busy ? tr("Creating…") : tr("Create session"),
+              primary: true,
+              onPressed:
+                  busy ||
+                      selected == null ||
+                      selectedDeleting ||
+                      !_open(selected)
+                  ? null
+                  : () async {
+                      setState(() {
+                        busy = true;
+                        error = null;
+                      });
+                      try {
+                        await widget.c.create(id!);
+                        if (context.mounted) Navigator.pop(context);
+                      } catch (e) {
+                        if (mounted) {
+                          setState(() {
+                            error = LiveController.describe(e);
+                            busy = false;
+                          });
+                        }
+                      }
+                    },
+            ),
+          ],
+          children: [
+            Text(
+              tr("Workspace"),
+              style: webText(context, size: 13, weight: FontWeight.w500),
+            ),
+            DropdownButton<String>(
+              isExpanded: true,
+              value: selected == null ? null : id,
+              hint: Text(
+                available.isEmpty
+                    ? tr("No workspace available")
+                    : tr("Choose a workspace"),
+              ),
+              items: [
+                for (final w in workspaces)
+                  DropdownMenuItem(
+                    value: '${w['id']}',
+                    enabled: _open(w),
+                    child: Text(
+                      workspaceLabel(w),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-            ],
-            onChanged: busy || available.isEmpty
-                ? null
-                : (value) => setState(() => id = value),
-          ),
-          if (deletionNeedsAttention)
-            const WebNotice(workspaceDeletionNotice, error: true),
-          const Text(
-            'The session is named from your first message and stays active on the host when this browser disconnects.',
-          ),
-          if (error != null) WebNotice(error!, error: true),
-        ],
-      );
-    },
-  );
+              ],
+              onChanged: busy || available.isEmpty
+                  ? null
+                  : (value) => setState(() => id = value),
+            ),
+            if (deletionNeedsAttention)
+              const WebNotice(workspaceDeletionNotice, error: true),
+            Text(
+              tr(
+                "The session is named from your first message and stays active on the host when this browser disconnects.",
+              ),
+            ),
+            if (error != null) WebNotice(error!, error: true),
+          ],
+        );
+      },
+    );
+  }
 }

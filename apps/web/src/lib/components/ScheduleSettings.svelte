@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   /**
    * Scheduled tasks (docs/guides/schedules.md): prompts that run in a new session at set
    * times. Make, change, pause and delete them here; see each run and open
@@ -71,7 +73,7 @@
   const zones = timezones();
 
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : tr('Unable to reach the gateway. Try again.');
   /** Workspaces on nodes: schedules run there, never in this browser. */
   const workspaces = $derived(
     app.workspaces
@@ -88,13 +90,13 @@
     [
       schedule.workspace.name,
       schedule.workspace.node,
-      schedule.workspace.online ? '' : 'offline',
+      schedule.workspace.online ? '' : tr('offline'),
       schedule.model?.id,
-      schedule.thinking ? `thinking ${schedule.thinking}` : '',
+      schedule.thinking ? tr('Thinking: {0}', [tr(schedule.thinking)]) : '',
       schedule.notify === 'none'
-        ? 'no notifications'
+        ? tr('no notifications')
         : schedule.notify === 'problems'
-          ? 'notifies on problems'
+          ? tr('notifies on problems')
           : '',
     ]
       .filter(Boolean)
@@ -103,12 +105,18 @@
   const statusOf = (schedule: Schedule) =>
     [
       schedule.status === 'active' && schedule.nextRunAt !== null
-        ? `Next ${formatWall(schedule.nextRunAt, schedule.timezone)} (${until(schedule.nextRunAt)})`
-        : 'No next run',
+        ? tr('Next {0} ({1})', [
+            formatWall(schedule.nextRunAt, schedule.timezone),
+            until(schedule.nextRunAt),
+          ])
+        : tr('No next run'),
       schedule.lastRun
-        ? `last ${RUN_LABELS[schedule.lastRun.status].toLowerCase()} ${ago(schedule.lastRun.createdAt)}`
+        ? tr('Last: {0} {1}', [
+            tr(RUN_LABELS[schedule.lastRun.status]),
+            ago(schedule.lastRun.createdAt),
+          ])
         : '',
-      schedule.createdBySession ? 'proposed by your assistant' : '',
+      schedule.createdBySession ? tr('proposed by your assistant') : '',
     ]
       .filter(Boolean)
       .join(' · ');
@@ -289,17 +297,17 @@
 </script>
 
 <section class="settings-section" aria-labelledby="schedules-title">
-  <h3 id="schedules-title">Schedules</h3>
+  <h3 id="schedules-title">{tr('Schedules')}</h3>
   <p>
-    Prompts that run by themselves at set times, each in a new session of their workspace. Nobody
-    watches a run live: read its final message here or open its session. Runs the gateway could not
-    start on time wait for you to allow them.
+    {tr(
+      'Prompts that run by themselves at set times, each in a new session of their workspace. Nobody watches a run live: read its final message here or open its session. Runs the gateway could not start on time wait for you to allow them.',
+    )}
   </p>
 
   {#if disabled}
-    <p role="status">Schedules are unavailable in demo mode.</p>
+    <p role="status">{tr('Schedules are unavailable in demo mode.')}</p>
   {:else if loading}
-    <p role="status">Loading schedules…</p>
+    <p role="status">{tr('Loading schedules…')}</p>
   {:else}
     {#if error}<p class="schedule-error" role="alert">{error}</p>{/if}
 
@@ -307,22 +315,24 @@
       {@render editor()}
     {:else}
       <div class="schedule-toolbar">
-        <button class="button dark small" type="button" onclick={startNew}>New schedule</button>
+        <button class="button dark small" type="button" onclick={startNew}
+          >{tr('New schedule')}</button
+        >
       </div>
     {/if}
 
     {#if schedules.length}
-      <ul class="schedule-list" aria-label="Schedules">
+      <ul class="schedule-list" aria-label={tr('Schedules')}>
         {#each schedules as schedule (schedule.id)}
           <li class:paused={schedule.status !== 'active'}>
             <div class="schedule-row">
               <div class="schedule-text">
                 <span class="schedule-title"
                   ><strong>{schedule.title}</strong>
-                  {#if schedule.status === 'paused'}<span class="badge">Paused</span>{/if}
-                  {#if schedule.status === 'done'}<span class="badge">Done</span>{/if}
+                  {#if schedule.status === 'paused'}<span class="badge">{tr('Paused')}</span>{/if}
+                  {#if schedule.status === 'done'}<span class="badge">{tr('Done')}</span>{/if}
                   {#if schedule.attention}<span class="badge attention"
-                      >{schedule.attention} waiting for you</span
+                      >{tr('{0} waiting for you', [schedule.attention])}</span
                     >{/if}</span
                 >
                 <small>{describeWhen(schedule)}</small>
@@ -334,7 +344,7 @@
                   class="button ghost small"
                   type="button"
                   aria-expanded={expanded === schedule.id}
-                  onclick={() => toggleRuns(schedule)}>Runs</button
+                  onclick={() => toggleRuns(schedule)}>{tr('Runs')}</button
                 >
                 <button
                   class="button ghost small"
@@ -342,9 +352,9 @@
                   disabled={!!busy || !schedule.workspace.online}
                   title={schedule.workspace.online
                     ? undefined
-                    : `${schedule.workspace.node} is offline`}
+                    : tr('{0} is offline', [schedule.workspace.node])}
                   onclick={() => act(schedule.id, () => schedulesApi.run(schedule.id))}
-                  >Run now</button
+                  >{tr('Run now')}</button
                 >
                 {#if schedule.status === 'active'}
                   <button
@@ -354,7 +364,7 @@
                     onclick={() =>
                       act(schedule.id, () =>
                         schedulesApi.update(schedule.id, { status: 'paused' }),
-                      )}>Pause</button
+                      )}>{tr('Pause')}</button
                   >
                 {:else if schedule.status === 'paused'}
                   <button
@@ -364,14 +374,14 @@
                     onclick={() =>
                       act(schedule.id, () =>
                         schedulesApi.update(schedule.id, { status: 'active' }),
-                      )}>Resume</button
+                      )}>{tr('Resume')}</button
                   >
                 {/if}
                 <button
                   class="button ghost small"
                   type="button"
                   disabled={!!busy}
-                  onclick={() => startEdit(schedule)}>Edit</button
+                  onclick={() => startEdit(schedule)}>{tr('Edit')}</button
                 >
                 {#if confirming === schedule.id}
                   <button
@@ -379,19 +389,19 @@
                     type="button"
                     disabled={!!busy}
                     onclick={() => act(schedule.id, () => schedulesApi.remove(schedule.id))}
-                    >Delete for good</button
+                    >{tr('Delete for good')}</button
                   >
                   <button
                     class="button ghost small"
                     type="button"
-                    onclick={() => (confirming = undefined)}>Cancel</button
+                    onclick={() => (confirming = undefined)}>{tr('Cancel')}</button
                   >
                 {:else}
                   <button
                     class="button ghost small"
                     type="button"
                     disabled={!!busy}
-                    onclick={() => (confirming = schedule.id)}>Delete</button
+                    onclick={() => (confirming = schedule.id)}>{tr('Delete')}</button
                   >
                 {/if}
               </div>
@@ -403,25 +413,33 @@
         {/each}
       </ul>
     {:else if !editing}
-      <p>No schedules yet. Make one here, or ask your assistant: it asks you before it adds one.</p>
+      <p>
+        {tr(
+          'No schedules yet. Make one here, or ask your assistant: it asks you before it adds one.',
+        )}
+      </p>
     {/if}
   {/if}
 </section>
 
 {#snippet history(schedule: Schedule)}
   <details class="schedule-prompt">
-    <summary>Prompt</summary>
+    <summary>{tr('Prompt')}</summary>
     <p>{schedule.prompt}</p>
   </details>
   {#if runs.length}
-    <ol class="schedule-runs" aria-label="Runs of {schedule.title}">
+    <ol class="schedule-runs" aria-label={tr('Runs of {0}', [schedule.title])}>
       {#each runs as run (run.id)}
         <li>
           <div class="schedule-row">
             <div class="schedule-text">
               <span
-                ><span class="run-status {run.status}">{RUN_LABELS[run.status]}</span>
-                <small>due {formatWall(run.dueAt, schedule.timezone)} · {ago(run.createdAt)}</small
+                ><span class="run-status {run.status}">{tr(RUN_LABELS[run.status])}</span>
+                <small
+                  >{tr('due {0} · {1}', [
+                    formatWall(run.dueAt, schedule.timezone),
+                    ago(run.createdAt),
+                  ])}</small
                 ></span
               >
               {#if run.result}<p class="run-result">{run.result}</p>{/if}
@@ -433,19 +451,19 @@
                   type="button"
                   disabled={!!busy || !schedule.workspace.online}
                   onclick={() => act(run.id, () => schedulesApi.run(schedule.id, run.id))}
-                  >Allow and run now</button
+                  >{tr('Allow and run now')}</button
                 >
                 <button
                   class="button ghost small"
                   type="button"
                   disabled={!!busy}
                   onclick={() => act(run.id, () => schedulesApi.dismiss(schedule.id, run.id))}
-                  >Dismiss</button
+                  >{tr('Dismiss')}</button
                 >
               {/if}
               {#if run.sessionId && run.session}
                 <button class="button ghost small" type="button" onclick={() => openRun(run)}
-                  >Open session</button
+                  >{tr('Open session')}</button
                 >
               {/if}
             </div>
@@ -454,76 +472,83 @@
       {/each}
     </ol>
   {:else}
-    <p class="schedule-empty">No runs yet.</p>
+    <p class="schedule-empty">{tr('No runs yet.')}</p>
   {/if}
 {/snippet}
 
 {#snippet editor()}
   <form
     class="schedule-form"
-    aria-label={editing === 'new' ? 'New schedule' : 'Edit schedule'}
+    aria-label={editing === 'new' ? tr('New schedule') : tr('Edit schedule')}
     onsubmit={(event) => {
       event.preventDefault();
       void save();
     }}
     autocomplete="off"
   >
-    <h4>{editing === 'new' ? 'New schedule' : 'Edit schedule'}</h4>
+    <h4>{editing === 'new' ? tr('New schedule') : tr('Edit schedule')}</h4>
     <label
-      ><span>Workspace</span><select bind:value={form.workspaceId} required>
+      ><span>{tr('Workspace')}</span><select bind:value={form.workspaceId} required>
         {#each workspaces as workspace (workspace.id)}
           <option value={workspace.id}>{workspaceLabel(workspace.id)}</option>
         {/each}
       </select></label
     >
     <label
-      ><span>Title</span><input
+      ><span>{tr('Title')}</span><input
         bind:value={form.title}
         maxlength="80"
-        placeholder="Named after the first line of the prompt"
+        placeholder={tr('Named after the first line of the prompt')}
       /></label
     >
     <label
-      ><span>Prompt</span><textarea
+      ><span>{tr('Prompt')}</span><textarea
         bind:value={form.prompt}
         rows="5"
         required
-        placeholder="What the agent should do. Each run starts fresh with only this."
+        placeholder={tr('What the agent should do. Each run starts fresh with only this.')}
       ></textarea></label
     >
     <fieldset class="schedule-mode">
-      <legend>When</legend>
+      <legend>{tr('When')}</legend>
       <label class="inline"
-        ><input type="radio" bind:group={form.mode} value="repeat" /><span>Repeat</span></label
+        ><input type="radio" bind:group={form.mode} value="repeat" /><span>{tr('Repeat')}</span
+        ></label
       >
       <label class="inline"
-        ><input type="radio" bind:group={form.mode} value="once" /><span>Once</span></label
+        ><input type="radio" bind:group={form.mode} value="once" /><span>{tr('Once')}</span></label
       >
     </fieldset>
     {#if form.mode === 'repeat'}
       <label
-        ><span>Cron (minute hour day month weekday)</span><input
+        ><span>{tr('Cron (minute hour day month weekday)')}</span><input
           bind:value={form.cron}
           required
           spellcheck="false"
           class="mono"
         /></label
       >
-      <div class="presets" aria-label="Common repeats">
+      <div class="presets" aria-label={tr('Common repeats')}>
         {#each CRON_PRESETS as preset (preset.cron)}
           <button
             class="button ghost small"
             type="button"
             aria-pressed={form.cron.trim() === preset.cron}
-            onclick={() => (form.cron = preset.cron)}>{preset.label}</button
+            onclick={() => (form.cron = preset.cron)}>{tr(preset.label)}</button
           >
         {/each}
       </div>
     {:else}
-      <label><span>Time</span><input type="datetime-local" bind:value={form.at} required /></label>
+      <label
+        ><span>{tr('Time')}</span><input
+          type="datetime-local"
+          bind:value={form.at}
+          required
+        /></label
+      >
     {/if}
     <label
-      ><span>Time zone</span><input
+      ><span>{tr('Time zone')}</span><input
         bind:value={form.timezone}
         list="schedule-timezones"
         required
@@ -535,8 +560,8 @@
     </datalist>
     <div class="schedule-columns">
       <label
-        ><span>Model</span><select bind:value={form.model}>
-          <option value="">Workspace default</option>
+        ><span>{tr('Model')}</span><select bind:value={form.model}>
+          <option value="">{tr('Workspace default')}</option>
           {#each models as model (modelKey(model))}
             <option value={modelKey(model)}>{model.displayName} · {model.provider}</option>
           {/each}
@@ -546,26 +571,26 @@
         </select></label
       >
       <label
-        ><span>Thinking</span><select bind:value={form.thinking}>
-          <option value="">Default</option>
+        ><span>{tr('Thinking')}</span><select bind:value={form.thinking}>
+          <option value="">{tr('Default')}</option>
           {#each THINKING as level (level)}<option value={level}>{level}</option>{/each}
         </select></label
       >
     </div>
     <label
-      ><span>Notifications</span><select bind:value={form.notify}>
+      ><span>{tr('Notifications')}</span><select bind:value={form.notify}>
         {#each Object.entries(NOTIFY_LABELS) as [level, label] (level)}
-          <option value={level}>{label}</option>
+          <option value={level}>{tr(label)}</option>
         {/each}
       </select></label
     >
     {#if formError}<p class="schedule-error" role="alert">{formError}</p>{/if}
     <div class="form-actions">
       <button class="button ghost small" type="button" onclick={() => (editing = undefined)}
-        >Cancel</button
+        >{tr('Cancel')}</button
       >
       <button class="button dark small" type="submit" disabled={!!busy || !form.workspaceId}
-        >{editing === 'new' ? 'Create' : 'Save'}</button
+        >{editing === 'new' ? tr('Create') : tr('Save')}</button
       >
     </div>
   </form>

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
@@ -120,74 +121,87 @@ class _AssistantSettingsState extends State<AssistantSettings> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      AssistantSection(
-        title: 'Assistant',
-        children: [
-          const AssistantParagraph(assistantExplanation),
-          const AssistantParagraph(
-            'Chats no longer read AGENTS.md: move chat-relevant rules into CHAT.md.',
-          ),
-          if (binding['nodeId'] != null) ...[
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AssistantSection(
+          title: tr("Assistant"),
+          children: [
+            AssistantParagraph(tr(assistantExplanation)),
             AssistantParagraph(
-              "Chat node: ${binding['nodeId']} — ${binding['online'] == true ? 'online' : 'offline'}",
-              inlineCode: '${binding['nodeId']}',
-              inlineCodeStart: 'Chat node: '.length,
+              tr(
+                "Chats no longer read AGENTS.md: move chat-relevant rules into CHAT.md.",
+              ),
             ),
-          ],
-          if (binding['nodeId'] == null && !loading)
-            const AssistantParagraph(
-              'No chat node is bound. Start a chat node to register it.',
-            ),
-          if (confirming && binding['nodeId'] != null)
-            const AssistantParagraph(
-              'Stop the old chat node before releasing it, or it may reconnect and claim the binding again. Releasing disconnects it; the next chat node to register will be bound.',
-            ),
-          Wrap(
-            spacing: 4,
-            runSpacing: 2,
-            children: [
-              if (binding['nodeId'] != null)
-                if (confirming) ...[
-                  AssistantButton(
-                    'Confirm release',
-                    filled: true,
-                    onPressed: loading ? null : release,
-                  ),
-                  AssistantButton(
-                    'Cancel',
-                    onPressed: loading
-                        ? null
-                        : () => setState(() => confirming = false),
-                  ),
-                ] else
-                  AssistantButton(
-                    'Release chat node binding',
-                    onPressed: loading
-                        ? null
-                        : () => setState(() => confirming = true),
-                  ),
-              AssistantButton('Refresh', onPressed: loading ? null : load),
+            if (binding['nodeId'] != null) ...[
+              AssistantParagraph(
+                tr("Chat node: {0} — {1}", [
+                  binding['nodeId'],
+                  binding['online'] == true ? 'online' : 'offline',
+                ]),
+                inlineCode: '${binding['nodeId']}',
+                inlineCodeStart: tr("Chat node: ").length,
+              ),
             ],
-          ),
-          if (loading) const AssistantParagraph('Loading…', live: true),
-          if (error != null)
-            AssistantParagraph(error!, error: true, live: true),
-        ],
-      ),
-      if (prompts != null)
-        for (final name in ['soul', 'chat'])
-          AssistantPromptEditor(
-            key: ValueKey('$snapshot:$name'),
-            controller: c,
-            name: name,
-            nodeId: '${prompts!['nodeId']}',
-            prompt: obj(prompts![name]),
-          ),
-    ],
-  );
+            if (binding['nodeId'] == null && !loading)
+              AssistantParagraph(
+                tr("No chat node is bound. Start a chat node to register it."),
+              ),
+            if (confirming && binding['nodeId'] != null)
+              AssistantParagraph(
+                tr(
+                  "Stop the old chat node before releasing it, or it may reconnect and claim the binding again. Releasing disconnects it; the next chat node to register will be bound.",
+                ),
+              ),
+            Wrap(
+              spacing: 4,
+              runSpacing: 2,
+              children: [
+                if (binding['nodeId'] != null)
+                  if (confirming) ...[
+                    AssistantButton(
+                      tr("Confirm release"),
+                      filled: true,
+                      onPressed: loading ? null : release,
+                    ),
+                    AssistantButton(
+                      tr("Cancel"),
+                      onPressed: loading
+                          ? null
+                          : () => setState(() => confirming = false),
+                    ),
+                  ] else
+                    AssistantButton(
+                      tr("Release chat node binding"),
+                      onPressed: loading
+                          ? null
+                          : () => setState(() => confirming = true),
+                    ),
+                AssistantButton(
+                  tr("Refresh"),
+                  onPressed: loading ? null : load,
+                ),
+              ],
+            ),
+            if (loading) AssistantParagraph(tr("Loading…"), live: true),
+            if (error != null)
+              AssistantParagraph(error!, error: true, live: true),
+          ],
+        ),
+        if (prompts != null)
+          for (final name in ['soul', 'chat'])
+            AssistantPromptEditor(
+              key: ValueKey('$snapshot:$name'),
+              controller: c,
+              name: name,
+              nodeId: '${prompts!['nodeId']}',
+              prompt: obj(prompts![name]),
+            ),
+      ],
+    );
+  }
 }
 
 class AssistantSection extends StatelessWidget {
@@ -201,35 +215,38 @@ class AssistantSection extends StatelessWidget {
   final List<Widget> children;
   final bool divider;
   @override
-  Widget build(BuildContext context) => Container(
-    margin: EdgeInsets.only(top: divider ? 18 : 0),
-    padding: EdgeInsets.only(top: divider ? 16 : 0),
-    decoration: divider
-        ? BoxDecoration(
-            border: Border(
-              top: BorderSide(color: palette(context)['web.line']),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Container(
+      margin: EdgeInsets.only(top: divider ? 18 : 0),
+      padding: EdgeInsets.only(top: divider ? 16 : 0),
+      decoration: divider
+          ? BoxDecoration(
+              border: Border(
+                top: BorderSide(color: palette(context)['web.line']),
+              ),
+            )
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            headingLevel: 3,
+            child: Text(
+              title.toUpperCase(),
+              style: webText(
+                context,
+                size: 12,
+                weight: FontWeight.w600,
+                color: 'text.secondary',
+              ).copyWith(letterSpacing: .24, height: 14 / 12),
             ),
-          )
-        : null,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Semantics(
-          headingLevel: 3,
-          child: Text(
-            title.toUpperCase(),
-            style: webText(
-              context,
-              size: 12,
-              weight: FontWeight.w600,
-              color: 'text.secondary',
-            ).copyWith(letterSpacing: .24, height: 14 / 12),
           ),
-        ),
-        ...children,
-      ],
-    ),
-  );
+          ...children,
+        ],
+      ),
+    );
+  }
 }
 
 class AssistantParagraph extends StatelessWidget {
@@ -249,28 +266,36 @@ class AssistantParagraph extends StatelessWidget {
   final int inlineCodeStart;
   final bool error, live, code;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 8),
-    child: Semantics(
-      liveRegion: live,
-      child: text.isEmpty
-          ? const SizedBox.shrink()
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final style = webText(
-                  context,
-                  size: 13,
-                  color: color ?? (error ? 'status.danger' : 'text.muted'),
-                ).copyWith(height: 1.55, fontFamily: code ? 'monospace' : null);
-                return SelectionArea(
-                  child: Text.rich(
-                    _content(context, style, constraints.maxWidth),
-                  ),
-                );
-              },
-            ),
-    ),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Semantics(
+        liveRegion: live,
+        child: text.isEmpty
+            ? const SizedBox.shrink()
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final style =
+                      webText(
+                        context,
+                        size: 13,
+                        color:
+                            color ?? (error ? 'status.danger' : 'text.muted'),
+                      ).copyWith(
+                        height: 1.55,
+                        fontFamily: code ? 'monospace' : null,
+                      );
+                  return SelectionArea(
+                    child: Text.rich(
+                      _content(context, style, constraints.maxWidth),
+                    ),
+                  );
+                },
+              ),
+      ),
+    );
+  }
 
   TextSpan _content(BuildContext context, TextStyle style, double maxWidth) {
     final fragment = inlineCode;
@@ -363,7 +388,7 @@ class _AssistantPromptEditorState extends State<AssistantPromptEditor> {
   double? resizedHeight;
   double resizeStartY = 0, resizeStartHeight = 0;
   String? error, status;
-  String get title => widget.name == 'soul' ? 'Soul' : 'Chat rules';
+  String get title => widget.name == 'soul' ? tr("Soul") : tr("Chat rules");
   bool get changed =>
       text.text.replaceAll('\r\n', '\n').trim() != saved['text'];
   bool get tooLong => text.text.length > (saved['maxChars'] as num? ?? 0);
@@ -407,7 +432,7 @@ class _AssistantPromptEditorState extends State<AssistantPromptEditor> {
       if (!current()) return;
       saved = obj(result['prompt']);
       text.text = '${saved['text'] ?? ''}';
-      status = 'Saved. Applies at the next chat agent start.';
+      status = tr("Saved. Applies at the next chat agent start.");
     } catch (e) {
       if (!current()) return;
       error = LiveController.describe(e);
@@ -428,6 +453,7 @@ class _AssistantPromptEditorState extends State<AssistantPromptEditor> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final colors = palette(context);
     final writable = saved['writable'] == true;
     final scaler = MediaQuery.textScalerOf(context);
@@ -461,11 +487,13 @@ class _AssistantPromptEditorState extends State<AssistantPromptEditor> {
         if (!writable)
           AssistantParagraph(
             switch (saved['reason']) {
-              'nix-store' =>
-                "Managed by Nix: edit services.pirc.${widget.name == 'soul' ? 'soulPrompt' : 'chatPrompt'}.",
-              'symlink' => 'Managed symlink: edit its source file.',
-              _ =>
-                'Read-only: the node does not have permission to edit this file.',
+              'nix-store' => tr("Managed by Nix: edit services.pirc.{0}.", [
+                widget.name == 'soul' ? 'soulPrompt' : 'chatPrompt',
+              ]),
+              'symlink' => tr("Managed symlink: edit its source file."),
+              _ => tr(
+                "Read-only: the node does not have permission to edit this file.",
+              ),
             },
             live: true,
             inlineCode: saved['reason'] == 'nix-store'
@@ -485,7 +513,10 @@ class _AssistantPromptEditorState extends State<AssistantPromptEditor> {
         ),
         Semantics(
           label: title,
-          hint: '${text.text.length} / ${saved['maxChars']} characters',
+          hint: tr("{0} / {1} characters", [
+            text.text.length,
+            saved['maxChars'],
+          ]),
           validationResult: tooLong
               ? SemanticsValidationResult.invalid
               : SemanticsValidationResult.valid,
@@ -596,7 +627,10 @@ class _AssistantPromptEditorState extends State<AssistantPromptEditor> {
           child: LayoutBuilder(
             builder: (context, bounds) {
               final count = Text(
-                '${text.text.length} / ${saved['maxChars']} characters',
+                tr("{0} / {1} characters", [
+                  text.text.length,
+                  saved['maxChars'],
+                ]),
                 style: _assistantNormalLineStyle(
                   context,
                   color: tooLong ? 'status.danger' : 'text.secondary',
@@ -606,7 +640,7 @@ class _AssistantPromptEditorState extends State<AssistantPromptEditor> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AssistantButton(
-                    'Revert',
+                    tr("Revert"),
                     onPressed: saving || !changed
                         ? null
                         : () {
@@ -618,7 +652,7 @@ class _AssistantPromptEditorState extends State<AssistantPromptEditor> {
                   ),
                   const SizedBox(width: 8),
                   AssistantButton(
-                    saving ? 'Saving…' : 'Save',
+                    saving ? tr("Saving…") : tr("Save"),
                     filled: true,
                     onPressed: saving || !writable || !changed || tooLong
                         ? null
@@ -680,6 +714,7 @@ class _AssistantButtonState extends State<AssistantButton> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final onPressed = widget.onPressed,
         primary = widget.primary,
         filled = widget.filled;

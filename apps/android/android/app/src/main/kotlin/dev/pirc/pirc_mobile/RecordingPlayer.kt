@@ -47,7 +47,7 @@ class RecordingPlayer(private val activity: MainActivity, private val engine: Fl
                 entry.prepared.complete(Unit)
             }
             player.setOnErrorListener { _, what, extra ->
-                entry.error = "Unable to play this recording ($what/$extra)."
+                entry.error = NativeI18n.text("Unable to play this recording ({0}/{1}).", what, extra)
                 entry.prepared.completeExceptionally(IllegalStateException(entry.error))
                 true
             }
@@ -59,14 +59,14 @@ class RecordingPlayer(private val activity: MainActivity, private val engine: Fl
     }
     fun status(id: Long): Map<String, Any?> {
         val entry = entries[id] ?: error("Recording player closed")
-        check(entry.ready) { "Recording is not ready" }
+        check(entry.ready) { NativeI18n.text("Recording is not ready") }
         entry.error?.let { error(it) }
         val p = entry.player
         return mapOf("id" to id, "width" to p.videoWidth, "height" to p.videoHeight, "duration" to p.duration, "position" to p.currentPosition, "playing" to p.isPlaying, "rate" to entry.rate)
     }
     fun control(id: Long, action: String, position: Long?, volume: Double?, rate: Double?): Map<String, Any?> {
         val e = entries[id] ?: error("Recording player closed")
-        check(e.ready) { "Recording is not ready" }; e.error?.let { error(it) }
+        check(e.ready) { NativeI18n.text("Recording is not ready") }; e.error?.let { error(it) }
         when(action) {
             "play" -> e.player.start()
             "pause" -> e.player.pause()
@@ -74,7 +74,7 @@ class RecordingPlayer(private val activity: MainActivity, private val engine: Fl
             "volume" -> { val level = (volume ?: 1.0).coerceIn(0.0, 1.0).toFloat(); e.player.setVolume(level, level) }
             "rate" -> {
                 val speed = requireNotNull(rate) { "Missing playback rate" }
-                require(speed in listOf(0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0)) { "Unsupported playback rate" }
+                require(speed in listOf(0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0)) { NativeI18n.text("Unsupported playback rate") }
                 val wasPlaying = e.player.isPlaying
                 try {
                     e.player.playbackParams = e.player.playbackParams.allowDefaults().setSpeed(speed.toFloat())
@@ -108,11 +108,11 @@ class RecordingPlayer(private val activity: MainActivity, private val engine: Fl
                     put(MediaStore.Downloads.IS_PENDING, 1)
                 }
                 val resolver = activity.contentResolver
-                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: error("Unable to create download")
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: error(NativeI18n.text("Unable to create download"))
                 try {
                     resolver.openOutputStream(uri)!!.use { out -> file.inputStream().use { it.copyTo(out) } }
                     resolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
-                    "Saved to Downloads"
+                    NativeI18n.text("Saved to Downloads")
                 } catch (e: Exception) { resolver.delete(uri, null, null); throw e }
             }
         } finally { file.delete() }

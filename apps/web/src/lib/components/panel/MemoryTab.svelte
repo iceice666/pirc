@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   import { Brain, CircleAlert, LoaderCircle } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
@@ -44,12 +46,12 @@
       : value >= 1000
         ? `${(value / 1000).toFixed(1)}k`
         : String(value);
-  const phaseLabel: Record<string, string> = {
-    starting: 'Starting consolidation',
-    observer: 'Observing recent turns',
-    reflector: 'Reflecting on observations',
-    dropper: 'Pruning low-value observations',
-  };
+  const phaseLabel: Record<string, string> = $derived({
+    starting: tr('Starting consolidation'),
+    observer: tr('Observing recent turns'),
+    reflector: tr('Reflecting on observations'),
+    dropper: tr('Pruning low-value observations'),
+  });
   function toggle(id: string) {
     if (!expanded.delete(id)) expanded.add(id);
   }
@@ -57,10 +59,18 @@
   let meters = $derived(
     memory
       ? [
-          { key: 'observation', label: 'Next observation', meter: memory.thresholds.observation },
-          { key: 'reflection', label: 'Next reflection', meter: memory.thresholds.reflection },
-          { key: 'compaction', label: 'Next compaction', meter: memory.thresholds.compaction },
-          { key: 'pool', label: 'Active observation pool', meter: memory.thresholds.activePool },
+          {
+            key: 'observation',
+            label: tr('Next observation'),
+            meter: memory.thresholds.observation,
+          },
+          { key: 'reflection', label: tr('Next reflection'), meter: memory.thresholds.reflection },
+          { key: 'compaction', label: tr('Next compaction'), meter: memory.thresholds.compaction },
+          {
+            key: 'pool',
+            label: tr('Active observation pool'),
+            meter: memory.thresholds.activePool,
+          },
         ]
       : [],
   );
@@ -78,11 +88,11 @@
   {#if app.panel.error && !app.panel.value}
     <p class="panel-error">{app.panel.error}</p>
   {:else if !app.panel.value}
-    <p class="panel-empty">Loading…</p>
+    <p class="panel-empty">{tr('Loading…')}</p>
   {:else if !memory}
-    <p class="panel-empty">Memory state is unavailable for this session.</p>
+    <p class="panel-empty">{tr('Memory state is unavailable for this session.')}</p>
   {:else if !memory.enabled}
-    <p class="panel-empty">Observational memory is disabled in this workspace’s config.</p>
+    <p class="panel-empty">{tr('Observational memory is disabled in this workspace’s config.')}</p>
   {:else}
     <div class="memory-status">
       {#if runtime?.phase}
@@ -91,18 +101,20 @@
           {phaseLabel[runtime.phase] ?? runtime.phase}</span
         >
       {:else if runtime?.autoCompacting}
-        <span class="chip working"><LoaderCircle class="spin" size={12} /> Compacting</span>
+        <span class="chip working"><LoaderCircle class="spin" size={12} /> {tr('Compacting')}</span>
       {:else}
-        <span class="chip"><Brain size={12} /> {agentRunning ? 'Idle' : 'Agent stopped'}</span>
+        <span class="chip"
+          ><Brain size={12} /> {agentRunning ? tr('Idle') : tr('Agent stopped')}</span
+        >
       {/if}
-      {#if memory.passive}<span class="chip">Passive</span>{/if}
+      {#if memory.passive}<span class="chip">{tr('Passive')}</span>{/if}
     </div>
 
     <div class="stat-grid">
-      <div><strong>{memory.counts.reflections}</strong><span>Reflections</span></div>
-      <div><strong>{memory.counts.active}</strong><span>Active obs.</span></div>
-      <div><strong>{memory.counts.dropped}</strong><span>Dropped</span></div>
-      <div><strong>{memory.counts.compactions}</strong><span>Compactions</span></div>
+      <div><strong>{memory.counts.reflections}</strong><span>{tr('Reflections')}</span></div>
+      <div><strong>{memory.counts.active}</strong><span>{tr('Active obs.')}</span></div>
+      <div><strong>{memory.counts.dropped}</strong><span>{tr('Dropped')}</span></div>
+      <div><strong>{memory.counts.compactions}</strong><span>{tr('Compactions')}</span></div>
     </div>
 
     <div class="meters">
@@ -131,14 +143,17 @@
       <div class="panel-error">
         {#each errors as [phase, message]}<p><CircleAlert size={13} /> {phase}: {message}</p>{/each}
         {#each limited as item}<p>
-            {item.model} rate-limited until {new Date(item.until).toLocaleTimeString()}
+            {tr('{0} rate-limited until {1}', [
+              item.model,
+              new Date(item.until).toLocaleTimeString(),
+            ])}
           </p>{/each}
       </div>
     {/if}
 
-    <div class="group-title">Reflections<span>{memory.reflections.length}</span></div>
+    <div class="group-title">{tr('Reflections')}<span>{memory.reflections.length}</span></div>
     {#if !memory.reflections.length}
-      <p class="panel-empty">No reflections yet.</p>
+      <p class="panel-empty">{tr('No reflections yet.')}</p>
     {:else}
       <ul class="memory-list">
         {#each memory.reflections.slice().reverse() as item (item.id)}
@@ -151,9 +166,12 @@
             >
               <span class="memory-text" class:clamped={!expanded.has(item.id)}>{item.content}</span>
               <span class="memory-sub"
-                ><span class="mono">{item.id}</span> · {item.supportingObservationIds.length} sources
-                · {tokens(item.tokenCount)} tok{#if !item.visible}
-                  · not in context{/if}</span
+                ><span class="mono">{item.id}</span>
+                {tr('· {0} sources · {1} tok', [
+                  item.supportingObservationIds.length,
+                  tokens(item.tokenCount),
+                ])}{#if !item.visible}
+                  {tr('· not in context')}{/if}</span
               >
             </button>
           </li>
@@ -162,8 +180,8 @@
     {/if}
 
     <div class="group-title">
-      Observations
-      <div class="segmented small" role="group" aria-label="Observation filter">
+      {tr('Observations')}
+      <div class="segmented small" role="group" aria-label={tr('Observation filter')}>
         {#each ['active', 'all', 'dropped'] as option}
           <button
             type="button"
@@ -175,7 +193,7 @@
       </div>
     </div>
     {#if !observations.length}
-      <p class="panel-empty">Nothing here yet.</p>
+      <p class="panel-empty">{tr('Nothing here yet.')}</p>
     {:else}
       <ul class="memory-list">
         {#each observations as item (item.id)}
@@ -187,12 +205,14 @@
               aria-expanded={expanded.has(item.id)}
             >
               <span class="memory-text" class:clamped={!expanded.has(item.id)}
-                ><span class="rel rel-{item.relevance}" title="{item.relevance} relevance"
+                ><span
+                  class="rel rel-{item.relevance}"
+                  title={tr('{0} relevance', [item.relevance])}
                 ></span>{item.content}</span
               >
               <span class="memory-sub"
                 ><span class="mono">{item.id}</span> · {item.timestamp}{#if item.dropped}
-                  · dropped{/if}</span
+                  {tr('· dropped')}{/if}</span
               >
             </button>
           </li>

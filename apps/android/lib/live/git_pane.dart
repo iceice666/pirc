@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:ui' show SemanticsRole;
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -127,7 +128,7 @@ class _GitPaneState extends State<GitPane> {
           scrollDirection: Axis.horizontal,
           child: Semantics(
             role: SemanticsRole.tabBar,
-            label: 'Git view',
+            label: tr("Git view"),
             child: Container(
               padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
@@ -164,8 +165,12 @@ class _GitPaneState extends State<GitPane> {
                         role: SemanticsRole.tab,
                         selected: state.view == view,
                         label: i == 0
-                            ? 'Changes${state.files.isEmpty ? '' : ' ${state.files.length}'}'
-                            : 'History',
+                            ? tr("Changes{0}", [
+                                state.files.isEmpty
+                                    ? ''
+                                    : ' ${state.files.length}',
+                              ])
+                            : tr("History"),
                         onTap: () => state.switchView(view),
                         excludeSemantics: true,
                         child: InkWell(
@@ -204,7 +209,7 @@ class _GitPaneState extends State<GitPane> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        i == 0 ? 'Changes' : 'History',
+                                        i == 0 ? tr("Changes") : tr("History"),
                                         style: text(
                                           12.5,
                                           color: state.view == view
@@ -239,7 +244,7 @@ class _GitPaneState extends State<GitPane> {
       const SizedBox(width: 8),
       WebIconButton(
         LucideIcons.refreshCw,
-        'Refresh',
+        tr("Refresh"),
         onPressed: state.statusRead.loading ? null : state.load,
       ),
     ],
@@ -402,7 +407,7 @@ class _GitPaneState extends State<GitPane> {
               builder: (context, b) => Row(
                 children: [
                   Tooltip(
-                    message: gitLabels[code] ?? '',
+                    message: tr(gitLabels[code] ?? ''),
                     child: SizedBox(
                       width: 16,
                       child: Text(
@@ -452,10 +457,10 @@ class _GitPaneState extends State<GitPane> {
     final delta = (widget.clock?.call() ?? DateTime.now())
         .difference(d)
         .inSeconds;
-    if (delta < 60) return 'just now';
-    if (delta < 3600) return '${delta ~/ 60}m ago';
-    if (delta < 86400) return '${delta ~/ 3600}h ago';
-    if (delta < 30 * 86400) return '${delta ~/ 86400}d ago';
+    if (delta < 60) return tr("just now");
+    if (delta < 3600) return tr("{0}m ago", [delta ~/ 60]);
+    if (delta < 86400) return tr("{0}h ago", [delta ~/ 3600]);
+    if (delta < 30 * 86400) return tr("{0}d ago", [delta ~/ 86400]);
     final local = d.toLocal();
     return '${local.month}/${local.day}/${local.year}';
   }
@@ -557,7 +562,7 @@ class _GitPaneState extends State<GitPane> {
     children: [
       WebIconButton(
         LucideIcons.arrowLeft,
-        'Back',
+        tr("Back"),
         iconSize: 16,
         onPressed: state.back,
       ),
@@ -567,154 +572,160 @@ class _GitPaneState extends State<GitPane> {
     ],
   );
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: state,
-    builder: (context, _) {
-      final selected = state.selected, commit = state.commit;
-      final children = <Widget>[
-        if (selected != null) ...[
-          drill(
-            Tooltip(
-              message: 'Open file',
-              child: InkWell(
-                onTap: () => widget.onFile('${selected['path']}'),
-                splashFactory: NoSplash.splashFactory,
-                child: Text(
-                  '${selected['path']}',
-                  textDirection: TextDirection.rtl,
-                  textAlign: TextAlign.left,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text(13, weight: FontWeight.w600),
-                ),
-              ),
-            ),
-            trailing: PanelChip(
-              state.selectedStaged
-                  ? 'Staged'
-                  : gitLabels[selected['worktree']] ?? 'Changed',
-            ),
-          ),
-          if (state.diffRead.error != null)
-            error(state.diffRead.error!)
-          else if (state.diff != null)
-            NativeDiffView(
-              diff: '${state.diff!['diff']}',
-              truncated: state.diff!['truncated'] == true,
-            )
-          else
-            empty('Loading diff…'),
-        ] else if (commit != null) ...[
-          drill(
-            Text(
-              '${commit['sha']}'.substring(
-                0,
-                '${commit['sha']}'.length.clamp(0, 10),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: text(
-                13,
-                weight: FontWeight.w600,
-              ).copyWith(fontFamily: 'monospace'),
-            ),
-          ),
-          commitCard(commit),
-          NativeDiffView(
-            diff: '${commit['diff']}',
-            truncated: commit['truncated'] == true,
-          ),
-        ] else ...[
-          toolbar(),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final rowWidth = _contentWidth(constraints.maxWidth);
-              return OverflowBox(
-                alignment: Alignment.topLeft,
-                fit: OverflowBoxFit.deferToChild,
-                minWidth: rowWidth,
-                maxWidth: rowWidth,
-                child: SizedBox(
-                  width: rowWidth,
-                  child: Semantics(
-                    role: SemanticsRole.tabPanel,
-                    label: state.view == 'changes' ? 'Changes' : 'History',
-                    child: sequence([
-                      if (state.listError != null) error(state.listError!),
-                      if (state.status != null && state.status?['repo'] != true)
-                        empty('This workspace is not a Git repository.')
-                      else if (state.status?['repo'] == true) ...[
-                        branch(rowWidth),
-                        if (state.view == 'changes') ...[
-                          if (state.files.isEmpty)
-                            empty('Working tree clean.')
-                          else ...[
-                            if (state.staged.isNotEmpty) ...[
-                              group('Staged', state.staged.length),
-                              sequence([
-                                for (final f in state.staged)
-                                  file(f, true, rowWidth),
-                              ], gap: 1),
-                            ],
-                            if (state.unstaged.isNotEmpty) ...[
-                              group('Changes', state.unstaged.length),
-                              sequence([
-                                for (final f in state.unstaged)
-                                  file(f, false, rowWidth),
-                              ], gap: 1),
-                            ],
-                            if (state.status?['truncated'] == true)
-                              empty('Showing the first 5,000 files.'),
-                          ],
-                        ] else if (state.commits.isEmpty)
-                          empty('No commits yet.')
-                        else ...[
-                          sequence([
-                            for (final c in state.commits) commitRow(c),
-                          ], gap: 1),
-                          if (state.more)
-                            Align(
-                              alignment: Alignment.center,
-                              child: TextButton(
-                                onPressed: state.historyRead.loading
-                                    ? null
-                                    : () => state.loadHistory(),
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  foregroundColor: palette(
-                                    context,
-                                  )['accent.default'],
-                                  textStyle: text(12.5),
-                                ),
-                                child: const Text('Load more'),
-                              ),
-                            ),
-                        ],
-                      ] else if (state.statusRead.loading)
-                        empty('Loading…'),
-                    ]),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return AnimatedBuilder(
+      animation: state,
+      builder: (context, _) {
+        final selected = state.selected, commit = state.commit;
+        final children = <Widget>[
+          if (selected != null) ...[
+            drill(
+              Tooltip(
+                message: tr("Open file"),
+                child: InkWell(
+                  onTap: () => widget.onFile('${selected['path']}'),
+                  splashFactory: NoSplash.splashFactory,
+                  child: Text(
+                    '${selected['path']}',
+                    textDirection: TextDirection.rtl,
+                    textAlign: TextAlign.left,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text(13, weight: FontWeight.w600),
                   ),
                 ),
-              );
-            },
-          ),
-        ],
-      ];
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-        children: [
-          for (final (i, w) in children.indexed) ...[
-            if (i > 0) const SizedBox(height: 8),
-            w,
+              ),
+              trailing: PanelChip(
+                state.selectedStaged
+                    ? tr("Staged")
+                    : tr(gitLabels[selected['worktree']] ?? "Changed"),
+              ),
+            ),
+            if (state.diffRead.error != null)
+              error(state.diffRead.error!)
+            else if (state.diff != null)
+              NativeDiffView(
+                diff: '${state.diff!['diff']}',
+                truncated: state.diff!['truncated'] == true,
+              )
+            else
+              empty(tr("Loading diff…")),
+          ] else if (commit != null) ...[
+            drill(
+              Text(
+                '${commit['sha']}'.substring(
+                  0,
+                  '${commit['sha']}'.length.clamp(0, 10),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text(
+                  13,
+                  weight: FontWeight.w600,
+                ).copyWith(fontFamily: 'monospace'),
+              ),
+            ),
+            commitCard(commit),
+            NativeDiffView(
+              diff: '${commit['diff']}',
+              truncated: commit['truncated'] == true,
+            ),
+          ] else ...[
+            toolbar(),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final rowWidth = _contentWidth(constraints.maxWidth);
+                return OverflowBox(
+                  alignment: Alignment.topLeft,
+                  fit: OverflowBoxFit.deferToChild,
+                  minWidth: rowWidth,
+                  maxWidth: rowWidth,
+                  child: SizedBox(
+                    width: rowWidth,
+                    child: Semantics(
+                      role: SemanticsRole.tabPanel,
+                      label: state.view == 'changes'
+                          ? tr("Changes")
+                          : tr("History"),
+                      child: sequence([
+                        if (state.listError != null) error(state.listError!),
+                        if (state.status != null &&
+                            state.status?['repo'] != true)
+                          empty(tr("This workspace is not a Git repository."))
+                        else if (state.status?['repo'] == true) ...[
+                          branch(rowWidth),
+                          if (state.view == 'changes') ...[
+                            if (state.files.isEmpty)
+                              empty(tr("Working tree clean."))
+                            else ...[
+                              if (state.staged.isNotEmpty) ...[
+                                group(tr("Staged"), state.staged.length),
+                                sequence([
+                                  for (final f in state.staged)
+                                    file(f, true, rowWidth),
+                                ], gap: 1),
+                              ],
+                              if (state.unstaged.isNotEmpty) ...[
+                                group(tr("Changes"), state.unstaged.length),
+                                sequence([
+                                  for (final f in state.unstaged)
+                                    file(f, false, rowWidth),
+                                ], gap: 1),
+                              ],
+                              if (state.status?['truncated'] == true)
+                                empty(tr("Showing the first 5,000 files.")),
+                            ],
+                          ] else if (state.commits.isEmpty)
+                            empty(tr("No commits yet."))
+                          else ...[
+                            sequence([
+                              for (final c in state.commits) commitRow(c),
+                            ], gap: 1),
+                            if (state.more)
+                              Align(
+                                alignment: Alignment.center,
+                                child: TextButton(
+                                  onPressed: state.historyRead.loading
+                                      ? null
+                                      : () => state.loadHistory(),
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    foregroundColor: palette(
+                                      context,
+                                    )['accent.default'],
+                                    textStyle: text(12.5),
+                                  ),
+                                  child: Text(tr("Load more")),
+                                ),
+                              ),
+                          ],
+                        ] else if (state.statusRead.loading)
+                          empty(tr("Loading…")),
+                      ]),
+                    ),
+                  ),
+                );
+              },
+            ),
           ],
-        ],
-      );
-    },
-  );
+        ];
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+          children: [
+            for (final (i, w) in children.indexed) ...[
+              if (i > 0) const SizedBox(height: 8),
+              w,
+            ],
+          ],
+        );
+      },
+    );
+  }
 }

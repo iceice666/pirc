@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import {
     Brain,
     ChevronLeft,
@@ -47,9 +49,9 @@
     editError = '';
     try {
       if (await onedit(message.entryId, editDraft)) editing = false;
-      else editError = 'Could not save this edit. Your draft is still here; try again.';
+      else editError = tr('Could not save this edit. Your draft is still here; try again.');
     } catch {
-      editError = 'Could not save this edit. Your draft is still here; try again.';
+      editError = tr('Could not save this edit. Your draft is still here; try again.');
     } finally {
       editBusy = false;
     }
@@ -126,7 +128,7 @@
     class="system-entry"
     data-kind={kind}
     data-level={message.level ?? 'info'}
-    aria-label={message.label ?? 'System message'}
+    aria-label={message.label ?? tr('System message')}
   >
     {#if kind === 'notice'}
       <button
@@ -187,7 +189,7 @@
         <div class="message-images">
           {#each message.images as image, index (`${index}:${image.url}`)}<img
               src={image.url}
-              alt="Attachment"
+              alt={tr('Attachment')}
               loading="lazy"
             />{/each}
         </div>
@@ -218,10 +220,10 @@
             <Brain size={15} aria-hidden="true" />
             <span
               >{streamingThinking
-                ? 'Thinking…'
+                ? tr('Thinking…')
                 : message.thinkingRedacted && !message.thinking
-                  ? 'Reasoning redacted'
-                  : 'Thought'}</span
+                  ? tr('Reasoning redacted')
+                  : tr('Thought')}</span
             >
             <ChevronRight class={thinkingVisible ? 'rotated' : ''} size={14} aria-hidden="true" />
           </button>
@@ -241,9 +243,9 @@
           }}
         >
           <label>
-            <span>Edit message</span>
+            <span>{tr('Edit message')}</span>
             <textarea
-              aria-label="Edit message"
+              aria-label={tr('Edit message')}
               bind:value={editDraft}
               disabled={editBusy}
               rows="5"
@@ -253,19 +255,20 @@
             ></textarea>
           </label>
           <p>
-            Saving creates a new branch and regenerates the response. Existing versions remain
-            available. Files and tool actions are not rolled back.
+            {tr(
+              'Saving creates a new branch and regenerates the response. Existing versions remain available. Files and tool actions are not rolled back.',
+            )}
           </p>
           {#if message.images?.length || message.attachments?.length}<p>
-              Attachments will be kept.
+              {tr('Attachments will be kept.')}
             </p>{/if}
           {#if editError}<p role="alert">{editError}</p>{/if}
           <div class="edit-actions">
             <button type="button" disabled={editBusy} onclick={() => (editing = false)}
-              >Cancel</button
+              >{tr('Cancel')}</button
             >
             <button type="submit" disabled={branchDisabled || editBusy || !editDraft.trim()}
-              >{editBusy ? 'Saving…' : 'Save & regenerate'}</button
+              >{editBusy ? tr('Saving…') : tr('Save & regenerate')}</button
             >
           </div>
         </form>
@@ -278,7 +281,7 @@
           {/if}
           {#if message.isPartial && !streamingThinking && (message.role === 'user' || !message.content)}<span
               class="stream-cursor"
-              aria-label="Streaming"
+              aria-label={tr('Streaming')}
             ></span>{/if}
         </div>
       {/if}
@@ -286,7 +289,7 @@
         <div class="message-error" role="status">
           <CircleAlert size={14} aria-hidden="true" />
           <span
-            >{message.stopReason === 'aborted' ? 'Stopped' : 'Error'}{message.errorMessage
+            >{message.stopReason === 'aborted' ? tr('Stopped') : tr('Error')}{message.errorMessage
               ? `: ${message.errorMessage}`
               : ''}</span
           >
@@ -296,7 +299,7 @@
         <div class="message-images">
           {#each message.images as image, index (`${index}:${image.url}`)}<img
               src={image.url}
-              alt="Attachment"
+              alt={tr('Attachment')}
               loading="lazy"
             />{/each}
         </div>
@@ -321,8 +324,8 @@
             <button
               type="button"
               class="icon-action touch-target"
-              aria-label="Edit message"
-              title="Edit message"
+              aria-label={tr('Edit message')}
+              title={tr('Edit message')}
               disabled={branchDisabled}
               onclick={startEditing}><Pencil size={14} /></button
             >
@@ -331,16 +334,17 @@
             <button
               type="button"
               class="icon-action touch-target"
-              aria-label="Previous version"
+              aria-label={tr('Previous version')}
               disabled={branchDisabled || editing || version === 0}
               onclick={() => onswitch?.(message.branches![version - 1]!.entryId)}
               ><ChevronLeft size={14} /></button
             >
-            <span aria-label="Message version">{version + 1} / {message.branches.length}</span>
+            <span aria-label={tr('Message version')}>{version + 1} / {message.branches.length}</span
+            >
             <button
               type="button"
               class="icon-action touch-target"
-              aria-label="Next version"
+              aria-label={tr('Next version')}
               disabled={branchDisabled || editing || version === message.branches.length - 1}
               onclick={() => onswitch?.(message.branches![version + 1]!.entryId)}
               ><ChevronRight size={14} /></button
@@ -350,8 +354,8 @@
             <button
               type="button"
               class="icon-action touch-target"
-              aria-label="Copy message"
-              title="Copy"
+              aria-label={tr('Copy message')}
+              title={tr('Copy')}
               onclick={() => navigator.clipboard.writeText(message.content)}
               ><Copy size={14} /></button
             >

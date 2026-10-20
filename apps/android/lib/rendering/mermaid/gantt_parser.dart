@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'gantt_model.dart';
 
 /// Parses the native Mermaid Gantt subset synchronously.
@@ -10,7 +11,7 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
   DateTime? clock,
 }) {
   if (source.length > 50000) {
-    throw const FormatException('Gantt diagram exceeds 50000 characters');
+    throw FormatException(tr("Gantt diagram exceeds 50000 characters"));
   }
 
   final now = clock ?? DateTime.now();
@@ -32,21 +33,22 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
   var activeSection = -1;
   String? title;
 
-  Never invalid(int line, String details) =>
-      throw FormatException('Invalid Mermaid Gantt at line $line: $details');
+  Never invalid(int line, String details) => throw FormatException(
+    tr("Invalid Mermaid Gantt at line {0}: {1}", [line, details]),
+  );
 
   for (var index = 0; index < lines.length; index++) {
     final lineNumber = index + 1;
     final line = lines[index].trim();
     if (line.isEmpty) continue;
     if (line.startsWith('%%{')) {
-      invalid(lineNumber, 'Mermaid directives are not supported natively');
+      invalid(lineNumber, tr("Mermaid directives are not supported natively"));
     }
     if (line.startsWith('%%')) continue;
 
     if (!headerFound) {
       if (line.toLowerCase() != 'gantt') {
-        invalid(lineNumber, 'Expected gantt header');
+        invalid(lineNumber, tr("Expected gantt header"));
       }
       headerFound = true;
       continue;
@@ -57,10 +59,10 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
       caseSensitive: false,
     ).firstMatch(line);
     if (titleMatch != null) {
-      if (titleSeen) invalid(lineNumber, 'Only one title is supported');
+      if (titleSeen) invalid(lineNumber, tr("Only one title is supported"));
       titleSeen = true;
       title = titleMatch.group(1)!.trim();
-      if (title.isEmpty) invalid(lineNumber, 'Title cannot be empty');
+      if (title.isEmpty) invalid(lineNumber, tr("Title cannot be empty"));
       continue;
     }
 
@@ -75,7 +77,9 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
           candidate != 'HH:mm') {
         invalid(
           lineNumber,
-          'Only dateFormat YYYY-MM-DD, YYYY-MM-DD HH:mm, and HH:mm are supported',
+          tr(
+            "Only dateFormat YYYY-MM-DD, YYYY-MM-DD HH:mm, and HH:mm are supported",
+          ),
         );
       }
       dateFormat = candidate;
@@ -88,7 +92,9 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
     ).firstMatch(line);
     if (axisMatch != null) {
       axisFormat = axisMatch.group(1)!.trim();
-      if (axisFormat.isEmpty) invalid(lineNumber, 'axisFormat cannot be empty');
+      if (axisFormat.isEmpty) {
+        invalid(lineNumber, tr("axisFormat cannot be empty"));
+      }
       continue;
     }
 
@@ -104,7 +110,7 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
     if (todayMatch != null) {
       final value = todayMatch.group(1)!.trim();
       if (value.toLowerCase() != 'off') {
-        invalid(lineNumber, 'Only todayMarker off is supported');
+        invalid(lineNumber, tr("Only todayMarker off is supported"));
       }
       todayMarkerEnabled = false;
       continue;
@@ -117,7 +123,7 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
     if (excludesMatch != null) {
       for (final item in excludesMatch.group(1)!.split(',')) {
         final value = item.trim();
-        if (value.isEmpty) invalid(lineNumber, 'Empty excludes entry');
+        if (value.isEmpty) invalid(lineNumber, tr("Empty excludes entry"));
         if (value.toLowerCase() == 'weekends') {
           excludesWeekends = true;
         } else {
@@ -133,9 +139,9 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
     ).firstMatch(line);
     if (sectionMatch != null) {
       final name = sectionMatch.group(1)!.trim();
-      if (name.isEmpty) invalid(lineNumber, 'Section name cannot be empty');
+      if (name.isEmpty) invalid(lineNumber, tr("Section name cannot be empty"));
       if (sectionNames.length >= 100) {
-        invalid(lineNumber, 'Native Gantt supports at most 100 sections');
+        invalid(lineNumber, tr("Native Gantt supports at most 100 sections"));
       }
       sectionNames.add(name);
       activeSection = sectionNames.length - 1;
@@ -146,14 +152,14 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
       r'^(click|includes|weekday|weekend|tickInterval|accTitle|accDescr)(?:\s|$)',
       caseSensitive: false,
     ).hasMatch(line)) {
-      invalid(lineNumber, 'This Gantt directive is not supported natively');
+      invalid(lineNumber, tr("This Gantt directive is not supported natively"));
     }
 
     final separator = line.indexOf(':');
     if (separator <= 0) {
       invalid(
         lineNumber,
-        'Expected a directive, section, or task label : data',
+        tr("Expected a directive, section, or task label : data"),
       );
     }
     // Keep author whitespace before the separator: Mermaid preserves it in
@@ -161,14 +167,14 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
     final label = line.substring(0, separator).trimLeft();
     final data = line.substring(separator + 1).trim();
     if (label.isEmpty || data.isEmpty) {
-      invalid(lineNumber, 'Task label and task data must be non-empty');
+      invalid(lineNumber, tr("Task label and task data must be non-empty"));
     }
     if (activeSection < 0) {
       sectionNames.add('');
       activeSection = 0;
     }
     if (rawTasks.length >= 500) {
-      invalid(lineNumber, 'Native Gantt supports at most 500 tasks');
+      invalid(lineNumber, tr("Native Gantt supports at most 500 tasks"));
     }
     rawTasks.add(
       _RawTask(
@@ -182,10 +188,10 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
   }
 
   if (!headerFound) {
-    throw const FormatException('Missing Mermaid Gantt header');
+    throw FormatException(tr("Missing Mermaid Gantt header"));
   }
   if (rawTasks.isEmpty) {
-    throw const FormatException('Gantt diagram must contain at least one task');
+    throw FormatException(tr("Gantt diagram must contain at least one task"));
   }
 
   final excludedDates = <DateTime>{};
@@ -193,7 +199,10 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
     final parsed = _parseDate(raw, dateFormat, clockAnchor);
     if (parsed == null) {
       throw FormatException(
-        'Invalid Mermaid Gantt excludes date "$raw" for dateFormat $dateFormat',
+        tr("Invalid Mermaid Gantt excludes date \"{0}\" for dateFormat {1}", [
+          raw,
+          dateFormat,
+        ]),
       );
     }
     excludedDates.add(_day(parsed));
@@ -206,7 +215,7 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
     final id = raw.explicitId;
     if (id != null) {
       if (rawById.containsKey(id)) {
-        invalid(raw.sourceLine, 'Duplicate task id "$id"');
+        invalid(raw.sourceLine, tr("Duplicate task id \"{0}\"", [id]));
       }
       rawById[id] = raw;
       explicitIds[raw] = id;
@@ -229,7 +238,7 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
   for (final raw in rawTasks) {
     for (final dependency in raw.dependencies) {
       if (!rawById.containsKey(dependency)) {
-        invalid(raw.sourceLine, 'Unknown dependency "$dependency"');
+        invalid(raw.sourceLine, tr("Unknown dependency \"{0}\"", [dependency]));
       }
     }
   }
@@ -241,7 +250,7 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
     final cached = resolved[raw];
     if (cached != null) return cached;
     if (!resolving.add(raw)) {
-      invalid(raw.sourceLine, 'Task dependencies contain a cycle');
+      invalid(raw.sourceLine, tr("Task dependencies contain a cycle"));
     }
 
     DateTime start;
@@ -258,7 +267,7 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
       if (dependencies.isEmpty) {
         invalid(
           raw.sourceLine,
-          'A task needs a start date or after dependency',
+          tr("A task needs a start date or after dependency"),
         );
       }
       start = dependencies.first.end;
@@ -290,7 +299,7 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
         if (sourceEnd != start) {
           invalid(
             raw.sourceLine,
-            'Milestone start and end must identify the same instant',
+            tr("Milestone start and end must identify the same instant"),
           );
         }
         end = start;
@@ -307,10 +316,10 @@ NativeMermaidGanttDiagram parseNativeMermaidGantt(
       NativeMermaidGanttTaskStatus.milestone,
     );
     if (milestone && duration != null && duration != Duration.zero) {
-      invalid(raw.sourceLine, 'Milestone duration must be zero');
+      invalid(raw.sourceLine, tr("Milestone duration must be zero"));
     }
     if (!milestone && !end.isAfter(start)) {
-      invalid(raw.sourceLine, 'Task end must be after task start');
+      invalid(raw.sourceLine, tr("Task end must be after task start"));
     }
 
     final task = NativeMermaidGanttTask(
@@ -386,7 +395,10 @@ class _RawTask {
   ) {
     final all = data.split(',').map((part) => part.trim()).toList();
     if (all.any((part) => part.isEmpty)) {
-      invalid(sourceLine, 'Task data contains an empty comma-separated field');
+      invalid(
+        sourceLine,
+        tr("Task data contains an empty comma-separated field"),
+      );
     }
 
     statuses = <NativeMermaidGanttTaskStatus>{};
@@ -413,18 +425,18 @@ class _RawTask {
     if (startIndex < 0) {
       invalid(
         sourceLine,
-        'Task start must be a supported date or an after dependency',
+        tr("Task start must be a supported date or an after dependency"),
       );
     }
 
     final prefix = fields.take(startIndex).toList();
     if (prefix.length > 1) {
-      invalid(sourceLine, 'Task data may contain at most one explicit id');
+      invalid(sourceLine, tr("Task data may contain at most one explicit id"));
     }
     if (prefix.isNotEmpty) {
       final id = prefix.single;
       if (!_validId.hasMatch(id)) {
-        invalid(sourceLine, 'Invalid task id "$id"');
+        invalid(sourceLine, tr("Invalid task id \"{0}\"", [id]));
       }
       explicitId = id;
     }
@@ -445,13 +457,13 @@ class _RawTask {
         }
       }
       if (endpointIndex < 0) {
-        invalid(sourceLine, 'after tasks need an end date or duration');
+        invalid(sourceLine, tr("after tasks need an end date or duration"));
       }
       for (final item in remaining.take(endpointIndex)) {
         dependencies.addAll(_dependencyWords(item, sourceLine, invalid));
       }
       if (remaining.length != endpointIndex + 1) {
-        invalid(sourceLine, 'Unexpected task fields after its endpoint');
+        invalid(sourceLine, tr("Unexpected task fields after its endpoint"));
       }
       endpoint = _parseEndpoint(
         remaining[endpointIndex],
@@ -461,16 +473,19 @@ class _RawTask {
     } else {
       startDate = _parseDate(startField, dateFormat, clockAnchor);
       if (remaining.length != 1) {
-        invalid(sourceLine, 'A task needs exactly one end date or duration');
+        invalid(
+          sourceLine,
+          tr("A task needs exactly one end date or duration"),
+        );
       }
       endpoint = _parseEndpoint(remaining.single, dateFormat, clockAnchor);
     }
 
     if (dependencies.toSet().length != dependencies.length) {
-      invalid(sourceLine, 'A dependency is listed more than once');
+      invalid(sourceLine, tr("A dependency is listed more than once"));
     }
     if (dependencies.any((id) => !_validId.hasMatch(id))) {
-      invalid(sourceLine, 'Invalid dependency id');
+      invalid(sourceLine, tr("Invalid dependency id"));
     }
   }
 }
@@ -486,7 +501,7 @@ List<String> _dependencyWords(
       .split(RegExp(r'\s+'))
       .where((word) => word.isNotEmpty)
       .toList();
-  if (result.isEmpty) invalid(line, 'after must name at least one task id');
+  if (result.isEmpty) invalid(line, tr("after must name at least one task id"));
   return result;
 }
 
@@ -616,7 +631,7 @@ DateTime _day(DateTime value) =>
     cursor = DateTime.utc(cursor.year, cursor.month, cursor.day + 1);
   }
   if (!cursor.isAfter(logicalEnd)) {
-    invalid(line, 'Task duration exceeds the supported range');
+    invalid(line, tr("Task duration exceeds the supported range"));
   }
   if (!crossedExcludedDay) return (end: logicalEnd, renderEnd: null);
 

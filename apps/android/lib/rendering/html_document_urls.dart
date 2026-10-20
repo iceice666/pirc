@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 
 /// Resolves an HTTP(S) document reference against an absolute HTTP(S) base.
@@ -27,7 +28,7 @@ String resolveNativeDocumentUrl(String reference, String base) {
   }
 
   if (input.contains(r'\')) {
-    throw UnsupportedError('Backslashes in document URLs are unsupported.');
+    throw UnsupportedError(tr("Backslashes in document URLs are unsupported."));
   }
 
   final scheme = _schemePattern.matchAsPrefix(input);
@@ -150,25 +151,25 @@ String _cleanUrlInput(String input) {
 
 _HttpUrl _parseAbsoluteHttpUrl(String input) {
   if (input.contains(r'\')) {
-    throw UnsupportedError('Backslashes in document URLs are unsupported.');
+    throw UnsupportedError(tr("Backslashes in document URLs are unsupported."));
   }
 
   final schemeMatch = _schemePattern.matchAsPrefix(input);
   if (schemeMatch == null) {
     throw UnsupportedError(
-      'The document base must be an absolute HTTP(S) URL.',
+      tr("The document base must be an absolute HTTP(S) URL."),
     );
   }
 
   final scheme = schemeMatch.group(1)!.toLowerCase();
   if (scheme != 'http' && scheme != 'https') {
-    throw UnsupportedError('Only HTTP(S) document URLs are supported.');
+    throw UnsupportedError(tr("Only HTTP(S) document URLs are supported."));
   }
 
   final rest = input.substring(schemeMatch.end);
   if (!rest.startsWith('//')) {
     throw UnsupportedError(
-      'HTTP(S) URLs without an authority are unsupported.',
+      tr("HTTP(S) URLs without an authority are unsupported."),
     );
   }
 
@@ -195,35 +196,35 @@ _HttpUrl _parseAbsoluteHttpUrl(String input) {
 
 String _normalizeAuthority(String scheme, String authority) {
   if (authority.isEmpty) {
-    throw UnsupportedError('HTTP(S) URLs must include a host.');
+    throw UnsupportedError(tr("HTTP(S) URLs must include a host."));
   }
   if (authority.contains('@')) {
-    throw UnsupportedError('HTTP(S) URL user info is unsupported.');
+    throw UnsupportedError(tr("HTTP(S) URL user info is unsupported."));
   }
   if (authority.contains('[') || authority.contains(']')) {
-    throw UnsupportedError('IPv6 URL hosts are unsupported.');
+    throw UnsupportedError(tr("IPv6 URL hosts are unsupported."));
   }
 
   final colon = authority.lastIndexOf(':');
   final rawHost = colon < 0 ? authority : authority.substring(0, colon);
   final rawPort = colon < 0 ? null : authority.substring(colon + 1);
   if (rawHost.contains(':')) {
-    throw UnsupportedError('IPv6 URL hosts are unsupported.');
+    throw UnsupportedError(tr("IPv6 URL hosts are unsupported."));
   }
   if (rawHost.codeUnits.any((unit) => unit > 0x7F)) {
-    throw UnsupportedError('Non-ASCII and IDN URL hosts are unsupported.');
+    throw UnsupportedError(tr("Non-ASCII and IDN URL hosts are unsupported."));
   }
   if (rawHost
       .toLowerCase()
       .split('.')
       .any((label) => label.startsWith('xn--'))) {
-    throw UnsupportedError('Non-ASCII and IDN URL hosts are unsupported.');
+    throw UnsupportedError(tr("Non-ASCII and IDN URL hosts are unsupported."));
   }
   if (rawHost.contains('%')) {
-    throw UnsupportedError('Percent-encoded URL hosts are unsupported.');
+    throw UnsupportedError(tr("Percent-encoded URL hosts are unsupported."));
   }
   if (!RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(rawHost)) {
-    throw UnsupportedError('This HTTP(S) host syntax is unsupported.');
+    throw UnsupportedError(tr("This HTTP(S) host syntax is unsupported."));
   }
 
   final hostWithoutTrailingDot = rawHost.endsWith('.')
@@ -236,7 +237,7 @@ String _normalizeAuthority(String scheme, String authority) {
             label.isEmpty || label.startsWith('-') || label.endsWith('-'),
       ) ||
       labels.any((label) => label.length > 63)) {
-    throw UnsupportedError('This HTTP(S) host syntax is unsupported.');
+    throw UnsupportedError(tr("This HTTP(S) host syntax is unsupported."));
   }
 
   final canonicalIpv4 = _isCanonicalIpv4(hostWithoutTrailingDot);
@@ -245,17 +246,21 @@ String _normalizeAuthority(String scheme, String authority) {
     r'^(?:0x[0-9a-f]*|[0-9]+)$',
   ).hasMatch(lastLabel);
   if (ipv4LikeEnding && !canonicalIpv4) {
-    throw UnsupportedError('Non-canonical IPv4 URL hosts are unsupported.');
+    throw UnsupportedError(tr("Non-canonical IPv4 URL hosts are unsupported."));
   }
 
   var port = '';
   if (rawPort != null && rawPort.isNotEmpty) {
     if (!RegExp(r'^[0-9]+$').hasMatch(rawPort)) {
-      throw UnsupportedError('Non-numeric HTTP(S) URL ports are unsupported.');
+      throw UnsupportedError(
+        tr("Non-numeric HTTP(S) URL ports are unsupported."),
+      );
     }
     final parsedPort = int.tryParse(rawPort);
     if (parsedPort == null || parsedPort > 65535) {
-      throw UnsupportedError('HTTP(S) URL ports must be between 0 and 65535.');
+      throw UnsupportedError(
+        tr("HTTP(S) URL ports must be between 0 and 65535."),
+      );
     }
     final isDefaultPort =
         (scheme == 'http' && parsedPort == 80) ||

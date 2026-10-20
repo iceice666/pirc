@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:html/parser.dart' as html;
@@ -90,7 +91,7 @@ MermaidStateLayout layoutNativeMermaidStateDiagram(
       if (node.parentId == null) return null;
       id = node.parentId!;
     }
-    throw const FormatException('Cyclic state containment');
+    throw FormatException(tr("Cyclic state containment"));
   }
 
   Size leafSize(MermaidStateNode node, bool vertical) {
@@ -115,7 +116,7 @@ MermaidStateLayout layoutNativeMermaidStateDiagram(
   late _Region Function(String?, String, int) region;
   region = (parent, inheritedDirection, depth) {
     if (depth > 64) {
-      throw const FormatException('State nesting exceeds 64 levels');
+      throw FormatException(tr("State nesting exceeds 64 levels"));
     }
     final owner = nodes[parent];
     final direction = owner?.direction ?? inheritedDirection;
@@ -125,7 +126,7 @@ MermaidStateLayout layoutNativeMermaidStateDiagram(
     final local = <String, _Region>{};
     for (final id in ids) {
       if (!active.add(id)) {
-        throw const FormatException('Cyclic state containment');
+        throw FormatException(tr("Cyclic state containment"));
       }
       final node = nodes[id]!;
       depths[id] = depth;
@@ -281,7 +282,7 @@ MermaidStateLayout layoutNativeMermaidStateDiagram(
   };
   final result = region(null, model.direction, 0);
   if (result.boxes.length != nodes.length) {
-    throw const FormatException('State references an unrenderable parent');
+    throw FormatException(tr("State references an unrenderable parent"));
   }
   final layouts = [
     for (final node in model.nodes)
@@ -297,7 +298,7 @@ MermaidStateLayout layoutNativeMermaidStateDiagram(
     final edge = model.edges[i];
     final a = result.boxes[edge.start], b = result.boxes[edge.end];
     if (a == null || b == null) {
-      throw const FormatException('Missing state transition endpoint');
+      throw FormatException(tr("Missing state transition endpoint"));
     }
     final parent = nodes[edge.start]!.parentId;
     final direction = regionDirections[parent] ?? model.direction;
@@ -428,6 +429,7 @@ class NativeMermaidStateDiagram extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final model = parseNativeMermaidStateDiagram(source);
     final family = DefaultTextStyle.of(context).style.fontFamily;
     final layout = layoutNativeMermaidStateDiagram(model, fontFamily: family);

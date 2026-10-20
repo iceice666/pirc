@@ -1,7 +1,9 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -33,32 +35,75 @@ import 'app_document_route.dart';
 import 'scoped_gateway.dart';
 import 'native_app_surface.dart';
 
-class MobileApp extends StatelessWidget {
+class MobileApp extends StatefulWidget {
   const MobileApp({super.key, required this.theme, required this.controller});
   final PircTheme theme;
   final LiveController controller;
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: controller,
-    builder: (context, _) => MaterialApp(
-      title: 'pirc',
+  State<MobileApp> createState() => _MobileAppState();
+}
+
+class _MobileAppState extends State<MobileApp> {
+  String? _appearance;
+  @override
+  void initState() {
+    super.initState();
+    _appearance = widget.controller.preferences['appearance'] as String?;
+    widget.controller.addListener(_preferencesChanged);
+    AppI18n.instance.addListener(_languageChanged);
+  }
+
+  void _languageChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _preferencesChanged() {
+    final appearance = widget.controller.preferences['appearance'] as String?;
+    if (appearance != _appearance) setState(() => _appearance = appearance);
+  }
+
+  @override
+  void didUpdateWidget(MobileApp old) {
+    super.didUpdateWidget(old);
+    if (old.controller != widget.controller) {
+      old.controller.removeListener(_preferencesChanged);
+      widget.controller.addListener(_preferencesChanged);
+      _appearance = widget.controller.preferences['appearance'] as String?;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_preferencesChanged);
+    AppI18n.instance.removeListener(_languageChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return MaterialApp(
+      title: tr("pirc"),
+      locale: AppI18n.instance.locale,
+      supportedLocales: const [Locale('en'), Locale('zh', 'TW')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
         value: Theme.of(context).brightness == Brightness.dark
             ? SystemUiOverlayStyle.light
             : SystemUiOverlayStyle.dark,
-        child: child ?? const SizedBox(),
+        child: I18nScope(child: child ?? const SizedBox()),
       ),
-      themeMode: switch (controller.preferences['appearance']) {
+      themeMode: switch (_appearance) {
         'light' => ThemeMode.light,
         'dark' => ThemeMode.dark,
         _ => ThemeMode.system,
       },
       debugShowCheckedModeBanner: false,
-      theme: theme.build(Brightness.light),
-      darkTheme: theme.build(Brightness.dark),
-      home: LiveShell(controller: controller, theme: theme),
-    ),
-  );
+      theme: widget.theme.build(Brightness.light),
+      darkTheme: widget.theme.build(Brightness.dark),
+      home: LiveShell(controller: widget.controller, theme: widget.theme),
+    );
+  }
 }
 
 class LiveShell extends StatefulWidget {
@@ -463,7 +508,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       panelKind = 'files';
       pane = null;
     }
-    if (c.sessionId != null && panelOpen && pane == null) {
+    if (!c.isDraftSession && c.sessionId != null && panelOpen && pane == null) {
       _panel(panelKind ?? 'files', remember: false);
     }
     final run = obj(c.state['run'])['status'] as String?;
@@ -563,7 +608,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
                   {
                     'id': interactionId,
                     'epoch': interactionEpoch,
-                    'title': '確認通知狀態',
+                    'title': tr("確認通知狀態"),
                   },
               requiresManualReview:
                   interactionId == null ||
@@ -657,6 +702,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
   }
 
   void _page(String name, {bool documentRoute = false, bool deferred = false}) {
+    if (name != 'settings') c.discardDraftSession();
     final surface = _appSurface.currentState;
     final context = surface?.widget.activeIdentity == _appSurfaceIdentity
         ? surface?.ownedAppContext
@@ -758,12 +804,12 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
           heightFactor: .85,
           child: Column(
             children: [
-              const Padding(
+              Padding(
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    '待處理與動態',
+                    tr("待處理與動態"),
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -888,6 +934,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     if (c.booting) {
       return const Scaffold(body: AppLoadingState());
     }
@@ -1195,6 +1242,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
   );
 
   void _showList() {
+    c.discardDraftSession();
     _documentRouteTicket++;
     _documentRouting = false;
     c.sessionVisible = false;
@@ -1328,7 +1376,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
           key: const Key('panel-scrim'),
           color: Colors.black.withValues(alpha: .25),
           dismissible: true,
-          semanticsLabel: 'Close side panel',
+          semanticsLabel: tr("Close side panel"),
           onDismiss: _closePane,
         ),
       ),
@@ -1409,7 +1457,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
           Align(
             alignment: Alignment.centerLeft,
             child: IconButton(
-              tooltip: 'Back to side panel',
+              tooltip: tr("Back to side panel"),
               onPressed: _closePane,
               icon: const Icon(LucideIcons.arrowLeft),
             ),
@@ -1433,6 +1481,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
   }
 
   void _openWorkspace(String id) {
+    c.discardDraftSession();
     _documentRouteTicket++;
     _documentRouting = false;
     _replaceDocumentAddress('workspace', id);
@@ -1798,14 +1847,17 @@ class _IndependentAppWindowState extends State<_IndependentAppWindow> {
   }
 
   @override
-  Widget build(BuildContext context) => LiveShell(
-    controller: controller,
-    theme: widget.theme,
-    documentWindows: widget.windows,
-    documentWindow: widget.window,
-    initialRoute: initialRoute,
-    onBooted: _booted,
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return LiveShell(
+      controller: controller,
+      theme: widget.theme,
+      documentWindows: widget.windows,
+      documentWindow: widget.window,
+      initialRoute: initialRoute,
+      onBooted: _booted,
+    );
+  }
 }
 
 class PairingScreen extends StatefulWidget {
@@ -1934,98 +1986,101 @@ class _PairingScreenState extends State<PairingScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('連接 pirc'),
-      leading: widget.onCancel == null
-          ? null
-          : IconButton(
-              onPressed: widget.onCancel,
-              icon: const Icon(LucideIcons.x),
-            ),
-    ),
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.all(16),
-          children: [
-            const Icon(LucideIcons.messagesSquare, size: 48),
-            const SizedBox(height: 24),
-            const Text(
-              '讓工作跟著你',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 24,
-                height: 32 / 24,
-                fontWeight: FontWeight.w600,
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(tr("連接 pirc")),
+        leading: widget.onCancel == null
+            ? null
+            : IconButton(
+                onPressed: widget.onCancel,
+                icon: const Icon(LucideIcons.x),
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              '在網頁版「設定 → 裝置」建立配對，掃描 QR code 或貼上配對連結。',
-              style: TextStyle(fontSize: 16, height: 28 / 16),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: field,
-              obscureText: true,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: supportingField(
-                context,
-                label: '配對連結',
-                hint: 'pirc://pair?…',
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.all(16),
+            children: [
+              const Icon(LucideIcons.messagesSquare, size: 48),
+              const SizedBox(height: 24),
+              Text(
+                tr("讓工作跟著你"),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 24,
+                  height: 32 / 24,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: widget.controller.busy
-                  ? null
-                  : () => guarded(context, () async {
-                      final cancelled = await _cancelScanPreparation();
-                      if (!mounted || (_scanPending && !cancelled)) return;
-                      await widget.controller.pair(field.text);
-                    }),
-              child: Text(widget.controller.busy ? '確認連線中…' : '連接'),
-            ),
-            TextButton.icon(
-              onPressed:
-                  widget.controller.busy ||
-                      _scanPending ||
-                      _bundledScannerPending
-                  ? null
-                  : _scan,
-              icon: const Icon(LucideIcons.scanLine),
-              label: Text(_scanPending ? '正在準備掃描器…' : '掃描 QR code'),
-            ),
-            if (_bundledScannerAvailable)
+              const SizedBox(height: 16),
+              Text(
+                tr("在網頁版「設定 → 裝置」建立配對，掃描 QR code 或貼上配對連結。"),
+                style: TextStyle(fontSize: 16, height: 28 / 16),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: field,
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: supportingField(
+                  context,
+                  label: tr("配對連結"),
+                  hint: tr("pirc://pair?…"),
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: widget.controller.busy
+                    ? null
+                    : () => guarded(context, () async {
+                        final cancelled = await _cancelScanPreparation();
+                        if (!mounted || (_scanPending && !cancelled)) return;
+                        await widget.controller.pair(field.text);
+                      }),
+                child: Text(widget.controller.busy ? tr("確認連線中…") : tr("連接")),
+              ),
               TextButton.icon(
                 onPressed:
                     widget.controller.busy ||
                         _scanPending ||
                         _bundledScannerPending
                     ? null
-                    : _scanBundled,
-                icon: const Icon(LucideIcons.camera),
-                label: const Text('使用內建相機掃描'),
+                    : _scan,
+                icon: const Icon(LucideIcons.scanLine),
+                label: Text(_scanPending ? tr("正在準備掃描器…") : tr("掃描 QR code")),
               ),
-            if (_scanPending)
-              TextButton(
-                onPressed: () => guarded(context, () async {
-                  await _cancelScanPreparation();
-                }),
-                child: const Text('取消準備'),
-              ),
-            if (widget.controller.error != null)
-              Text(
-                widget.controller.error!,
-                style: TextStyle(color: palette(context)['status.danger']),
-              ),
-          ],
+              if (_bundledScannerAvailable)
+                TextButton.icon(
+                  onPressed:
+                      widget.controller.busy ||
+                          _scanPending ||
+                          _bundledScannerPending
+                      ? null
+                      : _scanBundled,
+                  icon: const Icon(LucideIcons.camera),
+                  label: Text(tr("使用內建相機掃描")),
+                ),
+              if (_scanPending)
+                TextButton(
+                  onPressed: () => guarded(context, () async {
+                    await _cancelScanPreparation();
+                  }),
+                  child: Text(tr("取消準備")),
+                ),
+              if (widget.controller.error != null)
+                Text(
+                  widget.controller.error!,
+                  style: TextStyle(color: palette(context)['status.danger']),
+                ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

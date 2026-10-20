@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 /**
  * The assistant's memory, held by the gateway (docs/architecture/assistant-memory.md): USER
  * entries (who you are; changed only with your approval), the assistant's
@@ -98,18 +99,18 @@ export const memoryApi = {
 export function describeOrigins(origins: string[]): string {
   const tools = origins
     .filter((origin) => origin.startsWith('tool:'))
-    .map((o) => (o === 'tool:bash:network' ? 'bash fetching from the network' : o.slice(5)));
+    .map((o) => (o === 'tool:bash:network' ? tr('bash fetching from the network') : o.slice(5)));
   const others = origins
     .filter((origin) => origin.startsWith('custom:'))
     .map((origin) => origin.slice(7));
   const parts = [
-    ...(origins.includes('user') ? ['your words'] : []),
-    ...(origins.includes('assistant') ? ['the assistant'] : []),
-    ...(tools.length ? [`tool output (${tools.join(', ')})`] : []),
-    ...(others.length ? [`${others.join(', ')} messages`] : []),
-    ...(origins.includes('unknown') ? ['an unknown source'] : []),
+    ...(origins.includes('user') ? [tr('your words')] : []),
+    ...(origins.includes('assistant') ? [tr('the assistant')] : []),
+    ...(tools.length ? [tr('tool output ({0})', [tools.join(', ')])] : []),
+    ...(others.length ? [tr('{0} messages', [others.join(', ')])] : []),
+    ...(origins.includes('unknown') ? [tr('an unknown source')] : []),
   ];
-  return parts.length ? `From ${parts.join(', ')}` : '';
+  return parts.length ? tr('From {0}', [parts.join(', ')]) : '';
 }
 
 const OPS: Record<MemoryVersion['op'], string> = {
@@ -122,7 +123,9 @@ const OPS: Record<MemoryVersion['op'], string> = {
 /** "Changed by the assistant (Trip planning)", "Added by you". */
 export function describeVersion(version: MemoryVersion, sessions: Record<string, string>) {
   const who = version.actor.startsWith('session:')
-    ? `the assistant${sessions[version.actor.slice(8)] ? ` (${sessions[version.actor.slice(8)]})` : ''}`
+    ? tr('the assistant{0}', [
+        sessions[version.actor.slice(8)] ? ` (${sessions[version.actor.slice(8)]})` : '',
+      ])
     : 'you';
-  return `${OPS[version.op] ?? version.op} by ${who}`;
+  return tr('{0} by {1}', [OPS[version.op] ?? version.op, who]);
 }

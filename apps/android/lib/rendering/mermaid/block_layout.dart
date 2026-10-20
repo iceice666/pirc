@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -57,13 +58,13 @@ NativeMermaidBlockLayout layoutNativeMermaidBlock(
   double padding = 8,
 }) {
   if (!width.isFinite || width <= 0) {
-    throw const FormatException('Native block chart width must be positive.');
+    throw FormatException(tr("Native block chart width must be positive."));
   }
   if (!fontSize.isFinite || fontSize <= 0 || !padding.isFinite || padding < 0) {
-    throw const FormatException('Native block chart metrics are invalid.');
+    throw FormatException(tr("Native block chart metrics are invalid."));
   }
   if (_containsZeroColumns(diagram.root)) {
-    throw const FormatException('Columns must be an integer other than zero.');
+    throw FormatException(tr("Columns must be an integer other than zero."));
   }
 
   final style = TextStyle(
@@ -87,7 +88,10 @@ NativeMermaidBlockLayout layoutNativeMermaidBlock(
     final to = byId[edge.end];
     if (from == null || to == null) {
       throw FormatException(
-        'Block edge ${edge.start} to ${edge.end} references a missing node.',
+        tr("Block edge {0} to {1} references a missing node.", [
+          edge.start,
+          edge.end,
+        ]),
       );
     }
     final delta = to.bounds.center - from.bounds.center;
@@ -301,7 +305,7 @@ void _sizeBlock(_BlockMeasure block, TextStyle style, double padding) {
 void _positionBlock(_BlockMeasure block, double padding) {
   final columns = block.node.columns;
   if (columns == 0) {
-    throw const FormatException('Columns must be an integer other than zero.');
+    throw FormatException(tr("Columns must be an integer other than zero."));
   }
   if (block.children.isEmpty) return;
 
@@ -355,10 +359,10 @@ void _positionBlock(_BlockMeasure block, double padding) {
 
 (int, int) _blockPosition(int columns, int position) {
   if (position < 0) {
-    throw const FormatException('Block positions cannot be negative.');
+    throw FormatException(tr("Block positions cannot be negative."));
   }
   if (columns == 0) {
-    throw const FormatException('Columns must be an integer other than zero.');
+    throw FormatException(tr("Columns must be an integer other than zero."));
   }
   if (columns < 0) return (position, 0);
   if (columns == 1) return (0, position);

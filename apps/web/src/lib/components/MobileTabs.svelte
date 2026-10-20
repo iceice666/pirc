@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import { CalendarClock, MessageSquare, Settings, SquareTerminal } from '@lucide/svelte';
   import { app } from '../app.svelte';
 
@@ -16,13 +18,13 @@
 </script>
 
 <!-- The phone's bottom navigation (desktop has the sidebar's switch and footer instead). -->
-<nav class="mobile-tabs" aria-label="Sections">
+<nav class="mobile-tabs" aria-label={tr('Sections')}>
   {#if chats}
     <button
       type="button"
       aria-current={current === 'chat' ? 'page' : undefined}
       class:chosen={current === 'chat'}
-      onclick={() => onpick('chat')}><MessageSquare size={20} /><span>Chat</span></button
+      onclick={() => onpick('chat')}><MessageSquare size={20} /><span>{tr('Chat')}</span></button
     >
   {/if}
   <button
@@ -33,21 +35,22 @@
     ><span class="icon-wrap"
       ><SquareTerminal size={20} />{#if waiting}<span
           class="tab-badge"
-          aria-label="{waiting} waiting for you">{waiting}</span
+          aria-label={tr('{0} waiting for you', [waiting])}>{waiting}</span
         >{/if}</span
-    ><span>Work</span></button
+    ><span>{tr('Work')}</span></button
   >
   <button
     type="button"
     aria-current={current === 'schedules' ? 'page' : undefined}
     class:chosen={current === 'schedules'}
-    onclick={() => onpick('schedules')}><CalendarClock size={20} /><span>Schedules</span></button
+    onclick={() => onpick('schedules')}
+    ><CalendarClock size={20} /><span>{tr('Schedules')}</span></button
   >
   <button
     type="button"
     aria-current={current === 'settings' ? 'page' : undefined}
     class:chosen={current === 'settings'}
-    onclick={() => onpick('settings')}><Settings size={20} /><span>Settings</span></button
+    onclick={() => onpick('settings')}><Settings size={20} /><span>{tr('Settings')}</span></button
   >
 </nav>
 

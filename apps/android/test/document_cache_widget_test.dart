@@ -82,7 +82,7 @@ void main() {
         find.byType(NativeHtmlSelectWidget),
       );
       expect(select.state.selectedIndices(select.control.key), [1]);
-      await t.tap(find.byTooltip('重新載入'));
+      await t.tap(find.byTooltip("Reload"));
       await t.pumpAndSettle();
       expect(gateway.calls, hasLength(2));
       expect(gateway.calls.last['cacheMode'], 'revalidate');
@@ -117,7 +117,7 @@ void main() {
             .value,
         defaults['selectValue'],
       );
-      await t.tap(find.byTooltip('重新載入'));
+      await t.tap(find.byTooltip("Reload"));
       await t.pumpAndSettle();
       expect(gateway.calls, hasLength(3));
       expect(windows.active!.history, hasLength(1));

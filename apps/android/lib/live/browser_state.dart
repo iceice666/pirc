@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -126,7 +127,7 @@ class BrowserState extends ChangeNotifier {
   void reconnect() {
     connected = false;
     if (!valid || !active || !foreground || unavailable.isNotEmpty) return;
-    notice = 'Reconnecting…';
+    notice = tr("Reconnecting…");
     emit();
     retry?.cancel();
     retry = Timer(
@@ -225,7 +226,7 @@ class BrowserState extends ChangeNotifier {
 
   Future<void> act(Json message) async {
     if (!hasControl || controller.control['generation'] == null) {
-      notice = 'Take control of the session to use the browser.';
+      notice = tr("Take control of the session to use the browser.");
       emit();
       return;
     }

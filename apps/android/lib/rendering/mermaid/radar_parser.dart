@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:convert';
 
 import 'radar_model.dart';
@@ -8,14 +9,14 @@ import 'radar_model.dart';
 /// keep the Mermaid source visible instead of silently dropping chart data.
 NativeMermaidRadarDiagram parseNativeMermaidRadar(String source) {
   if (source.length > 50000) {
-    throw const FormatException('Radar diagram exceeds 50000 characters');
+    throw FormatException(tr("Radar diagram exceeds 50000 characters"));
   }
   final lines = source
       .replaceAll('\r\n', '\n')
       .replaceAll('\r', '\n')
       .split('\n');
   if (lines.length > 1200) {
-    throw const FormatException('Radar diagram exceeds 1200 lines');
+    throw FormatException(tr("Radar diagram exceeds 1200 lines"));
   }
 
   var config = const NativeMermaidRadarConfig();
@@ -50,7 +51,7 @@ NativeMermaidRadarDiagram parseNativeMermaidRadar(String source) {
     if (!sawHeader) {
       if (statement != 'radar-beta') {
         throw FormatException(
-          'Expected radar-beta header, found: $statement',
+          tr("Expected radar-beta header, found: {0}", [statement]),
           source,
           lineNumber,
         );
@@ -65,7 +66,7 @@ NativeMermaidRadarDiagram parseNativeMermaidRadar(String source) {
     ).firstMatch(statement);
     if (titleMatch != null) {
       if (titleSeen) {
-        throw FormatException('Duplicate radar title', source, lineNumber);
+        throw FormatException(tr("Duplicate radar title"), source, lineNumber);
       }
       titleSeen = true;
       title = _decodeRadarTitle(titleMatch[1]!, source, lineNumber);
@@ -109,7 +110,7 @@ NativeMermaidRadarDiagram parseNativeMermaidRadar(String source) {
           body.add(row.substring(0, close));
           if (_stripInlineComment(row.substring(close + 1)).trim().isNotEmpty) {
             throw FormatException(
-              'Unexpected text after accDescr block',
+              tr("Unexpected text after accDescr block"),
               source,
               index + 1,
             );
@@ -120,7 +121,11 @@ NativeMermaidRadarDiagram parseNativeMermaidRadar(String source) {
         body.add(row);
       }
       if (!closed) {
-        throw FormatException('Unclosed accDescr block', source, lineNumber);
+        throw FormatException(
+          tr("Unclosed accDescr block"),
+          source,
+          lineNumber,
+        );
       }
       accessibleDescription = body.join('\n').trim();
       continue;
@@ -134,14 +139,14 @@ NativeMermaidRadarDiagram parseNativeMermaidRadar(String source) {
       final name = axisMatch[1]!;
       if (axes.length >= 24) {
         throw FormatException(
-          'Radar supports at most 24 axes',
+          tr("Radar supports at most 24 axes"),
           source,
           lineNumber,
         );
       }
       if (!axisNames.add(name)) {
         throw FormatException(
-          'Duplicate radar axis: $name',
+          tr("Duplicate radar axis: {0}", [name]),
           source,
           lineNumber,
         );
@@ -166,14 +171,14 @@ NativeMermaidRadarDiagram parseNativeMermaidRadar(String source) {
       final name = curveMatch[1]!;
       if (curves.length >= 12) {
         throw FormatException(
-          'Radar supports at most 12 curves',
+          tr("Radar supports at most 12 curves"),
           source,
           lineNumber,
         );
       }
       if (!curveNames.add(name)) {
         throw FormatException(
-          'Duplicate radar curve: $name',
+          tr("Duplicate radar curve: {0}", [name]),
           source,
           lineNumber,
         );
@@ -213,7 +218,7 @@ NativeMermaidRadarDiagram parseNativeMermaidRadar(String source) {
       final rawTicks = int.parse(statement.split(RegExp(r'\s+')).last);
       if (rawTicks > 100000) {
         throw FormatException(
-          'Radar ticks exceed the supported source bound',
+          tr("Radar ticks exceed the supported source bound"),
           source,
           lineNumber,
         );
@@ -264,24 +269,24 @@ NativeMermaidRadarDiagram parseNativeMermaidRadar(String source) {
     }
 
     throw FormatException(
-      'Unsupported or invalid native radar statement: $statement',
+      tr("Unsupported or invalid native radar statement: {0}", [statement]),
       source,
       lineNumber,
     );
   }
 
-  if (!sawHeader) throw const FormatException('Expected radar-beta header');
+  if (!sawHeader) throw FormatException(tr("Expected radar-beta header"));
   if (axes.length < 3) {
-    throw const FormatException('Radar requires at least three axes');
+    throw FormatException(tr("Radar requires at least three axes"));
   }
   if (curves.isEmpty) {
-    throw const FormatException('Radar requires at least one curve');
+    throw FormatException(tr("Radar requires at least one curve"));
   }
   final maximum =
       options.max ??
       curves.expand((curve) => curve.entries).reduce((a, b) => a > b ? a : b);
   if (!options.min.isFinite || !maximum.isFinite || maximum <= options.min) {
-    throw const FormatException('Radar max must be greater than min');
+    throw FormatException(tr("Radar max must be greater than min"));
   }
   return NativeMermaidRadarDiagram(
     title: title,
@@ -318,7 +323,7 @@ List<double> _parseCurveEntries(
 ) {
   if (axes.length < 3) {
     throw FormatException(
-      'Declare at least three axes before curves',
+      tr("Declare at least three axes before curves"),
       source,
       line,
     );
@@ -331,7 +336,7 @@ List<double> _parseCurveEntries(
       rawEntries.length > 24 ||
       rawEntries.any((e) => e.isEmpty)) {
     throw FormatException(
-      'Radar curve must contain 1 to 24 values',
+      tr("Radar curve must contain 1 to 24 values"),
       source,
       line,
     );
@@ -339,7 +344,7 @@ List<double> _parseCurveEntries(
   final named = rawEntries.any((entry) => entry.contains(':'));
   if (named && rawEntries.any((entry) => !entry.contains(':'))) {
     throw FormatException(
-      'Do not mix named and positional radar values',
+      tr("Do not mix named and positional radar values"),
       source,
       line,
     );
@@ -347,7 +352,10 @@ List<double> _parseCurveEntries(
   if (!named) {
     if (rawEntries.length != axes.length) {
       throw FormatException(
-        'Radar curve has ${rawEntries.length} values for ${axes.length} axes',
+        tr("Radar curve has {0} values for {1} axes", [
+          rawEntries.length,
+          axes.length,
+        ]),
         source,
         line,
       );
@@ -361,28 +369,32 @@ List<double> _parseCurveEntries(
   for (final entry in rawEntries) {
     final separator = entry.indexOf(':');
     if (separator <= 0 || separator == entry.length - 1) {
-      throw FormatException('Invalid named radar value: $entry', source, line);
+      throw FormatException(
+        tr("Invalid named radar value: {0}", [entry]),
+        source,
+        line,
+      );
     }
     final axisName = entry.substring(0, separator).trim();
     if (!RegExp(
       r'^[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?$',
     ).hasMatch(axisName)) {
       throw FormatException(
-        'Invalid radar axis reference: $axisName',
+        tr("Invalid radar axis reference: {0}", [axisName]),
         source,
         line,
       );
     }
     if (!axes.any((axis) => axis.name == axisName)) {
       throw FormatException(
-        'Unknown radar axis reference: $axisName',
+        tr("Unknown radar axis reference: {0}", [axisName]),
         source,
         line,
       );
     }
     if (byAxis.containsKey(axisName)) {
       throw FormatException(
-        'Duplicate radar axis value: $axisName',
+        tr("Duplicate radar axis value: {0}", [axisName]),
         source,
         line,
       );
@@ -398,14 +410,14 @@ List<double> _parseCurveEntries(
       .where((name) => !byAxis.containsKey(name));
   if (missing.isNotEmpty) {
     throw FormatException(
-      'Missing radar axis value: ${missing.first}',
+      tr("Missing radar axis value: {0}", [missing.first]),
       source,
       line,
     );
   }
   if (byAxis.length != axes.length) {
     throw FormatException(
-      'Radar curve values do not match its axes',
+      tr("Radar curve values do not match its axes"),
       source,
       line,
     );
@@ -417,7 +429,7 @@ double _parseRadarNumber(String raw, String source, int line) {
   final value = raw.trim();
   if (!RegExp(r'^(?:0|[1-9]\d*)(?:\.\d+)?$').hasMatch(value)) {
     throw FormatException(
-      'Invalid non-negative radar number: $value',
+      tr("Invalid non-negative radar number: {0}", [value]),
       source,
       line,
     );
@@ -425,7 +437,7 @@ double _parseRadarNumber(String raw, String source, int line) {
   final parsed = double.parse(value);
   if (!parsed.isFinite || parsed > 1000000000) {
     throw FormatException(
-      'Radar number exceeds the supported source bound',
+      tr("Radar number exceeds the supported source bound"),
       source,
       line,
     );
@@ -438,7 +450,11 @@ String _decodeRadarLabel(String raw, String source, int line) {
   if (value.length < 2 ||
       !((value.startsWith('"') && value.endsWith('"')) ||
           (value.startsWith("'") && value.endsWith("'")))) {
-    throw FormatException('Radar labels must be quoted strings', source, line);
+    throw FormatException(
+      tr("Radar labels must be quoted strings"),
+      source,
+      line,
+    );
   }
   try {
     if (value.startsWith('"')) {
@@ -468,13 +484,13 @@ String _decodeRadarLabel(String raw, String source, int line) {
   } on FormatException {
     // Report the focused radar label error below.
   }
-  throw FormatException('Invalid radar label', source, line);
+  throw FormatException(tr("Invalid radar label"), source, line);
 }
 
 String _decodeRadarTitle(String raw, String source, int line) {
   final value = raw.trim();
   if (value.isEmpty) {
-    throw FormatException('Radar title cannot be empty', source, line);
+    throw FormatException(tr("Radar title cannot be empty"), source, line);
   }
   if (value.startsWith('"') || value.startsWith("'")) {
     return _decodeRadarLabel(value, source, line);
@@ -522,7 +538,7 @@ NativeMermaidRadarConfig _parseRadarInit(
   final match = RegExp(r'^%%\{\s*init\s*:\s*(\{.*\})\s*\}%%$').firstMatch(line);
   if (match == null) {
     throw FormatException(
-      'Unsupported native Mermaid radar directive',
+      tr("Unsupported native Mermaid radar directive"),
       source,
       lineNumber,
     );
@@ -532,7 +548,7 @@ NativeMermaidRadarConfig _parseRadarInit(
     decoded = jsonDecode(match[1]!);
   } on FormatException {
     throw FormatException(
-      'Radar init directive must contain JSON',
+      tr("Radar init directive must contain JSON"),
       source,
       lineNumber,
     );
@@ -540,7 +556,7 @@ NativeMermaidRadarConfig _parseRadarInit(
   if (decoded is! Map<String, dynamic> ||
       decoded.keys.any((key) => key != 'radar')) {
     throw FormatException(
-      'Only radar init options are supported',
+      tr("Only radar init options are supported"),
       source,
       lineNumber,
     );
@@ -548,7 +564,7 @@ NativeMermaidRadarConfig _parseRadarInit(
   final raw = decoded['radar'];
   if (raw is! Map<String, dynamic>) {
     throw FormatException(
-      'radar init options must be an object',
+      tr("radar init options must be an object"),
       source,
       lineNumber,
     );
@@ -568,7 +584,7 @@ NativeMermaidRadarConfig _parseRadarInit(
   final unknown = raw.keys.where((key) => !supported.contains(key)).toList();
   if (unknown.isNotEmpty) {
     throw FormatException(
-      'Unsupported radar init option: ${unknown.first}',
+      tr("Unsupported radar init option: {0}", [unknown.first]),
       source,
       lineNumber,
     );
@@ -583,7 +599,7 @@ NativeMermaidRadarConfig _parseRadarInit(
         (positive && value == 0) ||
         value > 10000) {
       throw FormatException(
-        '$key must be a finite supported number',
+        tr("{0} must be a finite supported number", [key]),
         source,
         lineNumber,
       );
@@ -593,7 +609,11 @@ NativeMermaidRadarConfig _parseRadarInit(
 
   final useMaxWidth = raw['useMaxWidth'];
   if (useMaxWidth != null && useMaxWidth is! bool) {
-    throw FormatException('useMaxWidth must be a boolean', source, lineNumber);
+    throw FormatException(
+      tr("useMaxWidth must be a boolean"),
+      source,
+      lineNumber,
+    );
   }
   return NativeMermaidRadarConfig(
     width: number('width', previous.width, positive: true),

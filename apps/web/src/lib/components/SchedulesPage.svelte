@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import { CalendarClock, PanelLeftOpen } from '@lucide/svelte';
   import { app } from '../app.svelte';
   import ScheduleSettings from './ScheduleSettings.svelte';
@@ -19,13 +21,13 @@
       <button
         class="icon-button"
         type="button"
-        aria-label="Show sidebar"
-        title="Show sidebar"
+        aria-label={tr('Show sidebar')}
+        title={tr('Show sidebar')}
         onclick={onexpand}><PanelLeftOpen size={19} /></button
       >
     {/if}
     <CalendarClock size={18} />
-    <h1 id="schedules-title">Schedules</h1>
+    <h1 id="schedules-title">{tr('Schedules')}</h1>
   </header>
   <div class="page-scroll">
     <div class="page-body">

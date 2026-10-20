@@ -76,7 +76,7 @@ void main() {
               body: TextButton(
                 onPressed: () async => result = await input(
                   context,
-                  'Node 上的資料夾路徑',
+                  "Folder path on Node",
                   value: '/original',
                 ),
                 child: const Text('Open input'),
@@ -93,7 +93,7 @@ void main() {
         find.byType(TextField),
         '/workspace with spaces/新目錄',
       );
-      await tester.tap(find.text('確認'));
+      await tester.tap(find.text("Confirm"));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(milliseconds: 500));
       expect(result, '/workspace with spaces/新目錄');

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/rendering.dart';
@@ -97,6 +98,7 @@ class _ConversationComposerState extends State<ConversationComposer> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final c = widget.controller,
         colors = palette(context),
         viewport = MediaQuery.sizeOf(context);
@@ -106,12 +108,12 @@ class _ConversationComposerState extends State<ConversationComposer> {
     final empty = widget.text.text.trim().isEmpty;
     final stopPrimary = c.running && empty && !c.busy;
     final placeholder = offline
-        ? 'Offline draft — it will stay on this device'
+        ? tr("Offline draft — it will stay on this device")
         : c.control['held'] != true
-        ? 'Take control to send a message'
+        ? tr("Take control to send a message")
         : c.running
-        ? 'Steer the current run…'
-        : 'Tell the agent what to work on…';
+        ? tr("Steer the current run…")
+        : tr("Tell the agent what to work on…");
     final model = c.selectedModel;
     final options = c.models
         .where((m) => m['available'] != false)
@@ -242,20 +244,22 @@ class _ConversationComposerState extends State<ConversationComposer> {
                 Wrap(
                   children: [
                     WebButton(
-                      'Check latest state',
+                      tr("Check latest state"),
                       onPressed: c.refreshSession,
                     ),
                     WebButton(
-                      'I checked; continue…',
+                      tr("I checked; continue…"),
                       onPressed: () async {
                         await c.refreshSession();
                         if (!context.mounted) return;
                         if (await confirm(
                           context,
-                          'Continue after checking?',
-                          'Check whether the previous message arrived. Continuing unlocks sending and does not resend that operation.',
-                          action: 'Continue',
-                          cancelLabel: 'Cancel',
+                          tr("Continue after checking?"),
+                          tr(
+                            "Check whether the previous message arrived. Continuing unlocks sending and does not resend that operation.",
+                          ),
+                          action: tr("Continue"),
+                          cancelLabel: tr("Cancel"),
                         )) {
                           await c.acknowledgeCommand();
                         }
@@ -303,7 +307,9 @@ class _ConversationComposerState extends State<ConversationComposer> {
                               vertical: 8,
                             ),
                             child: Text(
-                              'Full access: the agent runs commands and changes files without asking. Only your deny-list still asks.',
+                              tr(
+                                "Full access: the agent runs commands and changes files without asking. Only your deny-list still asks.",
+                              ),
                               style: webText(
                                 context,
                                 size: 12,
@@ -321,7 +327,9 @@ class _ConversationComposerState extends State<ConversationComposer> {
                             vertical: 8,
                           ),
                           child: Text(
-                            'You’re offline. This draft is saved locally and will never be sent automatically.',
+                            tr(
+                              "You’re offline. This draft is saved locally and will never be sent automatically.",
+                            ),
                             style: webText(
                               context,
                               size: 12,
@@ -451,7 +459,7 @@ class _ConversationComposerState extends State<ConversationComposer> {
                                 ? 0.0
                                 : math.min(
                                     labelWidth(
-                                      approvalModeLabels[c.approvalMode]!,
+                                      tr(approvalModeLabels[c.approvalMode]!),
                                     ),
                                     available * .4,
                                   );
@@ -474,7 +482,7 @@ class _ConversationComposerState extends State<ConversationComposer> {
                               children: [
                                 action(
                                   LucideIcons.paperclip,
-                                  'Attach files',
+                                  tr("Attach files"),
                                   c.uploading
                                       ? null
                                       : () async {
@@ -493,7 +501,7 @@ class _ConversationComposerState extends State<ConversationComposer> {
                                     maxWidth: modelWidth,
                                   ),
                                   child: ComposerSelect(
-                                    label: 'Model',
+                                    label: tr("Model"),
                                     value: model == null
                                         ? ''
                                         : '${model['provider']}/${model['id']}',
@@ -515,9 +523,15 @@ class _ConversationComposerState extends State<ConversationComposer> {
                                     maxWidth: thinkingWidth,
                                   ),
                                   child: ComposerSelect(
-                                    label: 'Reasoning effort',
+                                    label: tr("Reasoning effort"),
                                     value: c.selectedThinking,
-                                    options: thinkingChoices,
+                                    options: [
+                                      for (final option in thinkingChoices)
+                                        ComposerOption(
+                                          option.value,
+                                          tr(option.label),
+                                        ),
+                                    ],
                                     onSelect: c.changeThinking,
                                   ),
                                 ),
@@ -534,7 +548,7 @@ class _ConversationComposerState extends State<ConversationComposer> {
                                 if (c.running && !stopPrimary) ...[
                                   action(
                                     LucideIcons.square,
-                                    'Stop run',
+                                    tr("Stop run"),
                                     c.canControl && !stopping
                                         ? () => c.sendCommand({'type': 'stop'})
                                         : null,
@@ -560,7 +574,9 @@ class _ConversationComposerState extends State<ConversationComposer> {
                                     stopPrimary
                                         ? LucideIcons.square
                                         : LucideIcons.arrowUp,
-                                    stopPrimary ? 'Stop run' : 'Send message',
+                                    stopPrimary
+                                        ? tr("Stop run")
+                                        : tr("Send message"),
                                     c.canWrite &&
                                             (stopPrimary
                                                 ? !stopping

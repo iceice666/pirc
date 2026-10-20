@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/foundation.dart';
 
 /// Image loading state from the current script snapshot, separate from authored
@@ -24,11 +25,11 @@ Map<String, NativeDocumentHtmlImage> decodeNativeDocumentHtmlImages(
 }) {
   final raw = input ?? const [];
   if (raw is! List || raw.length > 5000) {
-    throw const FormatException('Invalid HTML image snapshot.');
+    throw FormatException(tr("Invalid HTML image snapshot."));
   }
   final result = <String, NativeDocumentHtmlImage>{};
   for (final entry in raw) {
-    if (entry is! Map) throw const FormatException('Invalid HTML image state.');
+    if (entry is! Map) throw FormatException(tr("Invalid HTML image state."));
     final id = entry['id'], status = entry['status'], image = entry['imageId'];
     if (id is! String ||
         !RegExp(r'^pirc-[1-9][0-9]*$').hasMatch(id) ||
@@ -37,7 +38,7 @@ Map<String, NativeDocumentHtmlImage> decodeNativeDocumentHtmlImages(
         (status == 'loaded'
             ? image is! String || !available.contains(image)
             : image != null)) {
-      throw const FormatException('Invalid HTML image ownership.');
+      throw FormatException(tr("Invalid HTML image ownership."));
     }
     result[id] = NativeDocumentHtmlImage(
       status: status as String,

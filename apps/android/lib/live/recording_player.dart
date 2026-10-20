@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -62,7 +63,7 @@ class RecordingState extends ChangeNotifier {
       });
     } catch (e) {
       if (!disposed) {
-        error = terminalError(e, 'Unable to play recording.');
+        error = terminalError(e, tr("Unable to play recording."));
         emit();
       }
     }
@@ -96,7 +97,7 @@ class RecordingState extends ChangeNotifier {
       return !disposed;
     } catch (e) {
       if (!disposed && ticket == revision) {
-        error = terminalError(e, 'Unable to control recording.');
+        error = terminalError(e, tr("Unable to control recording."));
         emit();
       }
       return false;
@@ -282,7 +283,7 @@ class _NativeRecordingPlayerState extends State<NativeRecordingPlayer>
         setState(
           () => downloadNotice = terminalError(
             e,
-            'Unable to download recording.',
+            tr("Unable to download recording."),
           ),
         );
       }
@@ -317,13 +318,13 @@ class _NativeRecordingPlayerState extends State<NativeRecordingPlayer>
             initialValue: speeds ? '${owner.playbackRate}' : null,
             items: speeds
                 ? [
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'back',
                       child: Row(
                         children: [
                           Icon(LucideIcons.arrowLeft, size: 16),
                           SizedBox(width: 12),
-                          Text('Playback speed'),
+                          Text(tr("Playback speed")),
                         ],
                       ),
                     ),
@@ -336,7 +337,7 @@ class _NativeRecordingPlayerState extends State<NativeRecordingPlayer>
                           child: Row(
                             children: [
                               Expanded(
-                                child: Text(rate == 1 ? 'Normal' : '$rate'),
+                                child: Text(rate == 1 ? tr("Normal") : '$rate'),
                               ),
                               SizedBox(
                                 width: 24,
@@ -353,12 +354,12 @@ class _NativeRecordingPlayerState extends State<NativeRecordingPlayer>
                     PopupMenuItem(
                       value: 'download',
                       enabled: !saving,
-                      child: const Text('Download'),
+                      child: Text(tr("Download")),
                     ),
                     PopupMenuItem(
                       value: 'speed',
                       enabled: !owner.changingRate,
-                      child: const Text('Playback speed'),
+                      child: Text(tr("Playback speed")),
                     ),
                   ],
           );
@@ -386,7 +387,7 @@ class _NativeRecordingPlayerState extends State<NativeRecordingPlayer>
       }
 
       return IconButton(
-        tooltip: 'More media controls',
+        tooltip: tr("More media controls"),
         onPressed: owner.id == null ? null : openMenu,
         icon: const Icon(
           LucideIcons.ellipsisVertical,
@@ -421,7 +422,9 @@ class _NativeRecordingPlayerState extends State<NativeRecordingPlayer>
         child: Row(
           children: [
             IconButton(
-              tooltip: state.playing ? 'Pause recording' : 'Play recording',
+              tooltip: state.playing
+                  ? tr("Pause recording")
+                  : tr("Play recording"),
               onPressed: state.id == null
                   ? null
                   : () => state.command(state.playing ? 'pause' : 'play'),
@@ -447,7 +450,9 @@ class _NativeRecordingPlayerState extends State<NativeRecordingPlayer>
               ),
             ),
             IconButton(
-              tooltip: state.muted ? 'Unmute recording' : 'Mute recording',
+              tooltip: state.muted
+                  ? tr("Unmute recording")
+                  : tr("Mute recording"),
               onPressed: state.id == null || state.changingMute
                   ? null
                   : state.toggleMute,
@@ -458,7 +463,9 @@ class _NativeRecordingPlayerState extends State<NativeRecordingPlayer>
               ),
             ),
             IconButton(
-              tooltip: full ? 'Exit fullscreen' : 'Fullscreen recording',
+              tooltip: full
+                  ? tr("Exit fullscreen")
+                  : tr("Fullscreen recording"),
               onPressed: full ? () => Navigator.pop(context) : expand,
               icon: Icon(
                 full ? LucideIcons.minimize : LucideIcons.maximize,
@@ -481,50 +488,51 @@ class _NativeRecordingPlayerState extends State<NativeRecordingPlayer>
     ],
   );
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    // Each source owns its controls, focus and semantics nodes, including when
-    // a fullscreen route is covered by another dialog during replacement.
-    key: ObjectKey(state),
-    animation: state,
-    builder: (context, _) => Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: ColoredBox(
-            color: Colors.black,
-            child: LayoutBuilder(
-              builder: (context, bounds) {
-                final limit = widget.maxHeight;
-                if (limit == null) return video(context);
-                return SizedBox(
-                  height: math.min(limit, bounds.maxWidth / state.ratio + 48),
-                  child: video(context, constrained: true),
-                );
-              },
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return AnimatedBuilder(
+      key: ObjectKey(state),
+      animation: state,
+      builder: (context, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: ColoredBox(
+              color: Colors.black,
+              child: LayoutBuilder(
+                builder: (context, bounds) {
+                  final limit = widget.maxHeight;
+                  if (limit == null) return video(context);
+                  return SizedBox(
+                    height: math.min(limit, bounds.maxWidth / state.ratio + 48),
+                    child: video(context, constrained: true),
+                  );
+                },
+              ),
             ),
           ),
-        ),
-        if (widget.showDownload)
-          TextButton(
-            onPressed: saving ? null : () => saveRecording(state),
-            style: TextButton.styleFrom(
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.only(top: 2, bottom: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          if (widget.showDownload)
+            TextButton(
+              onPressed: saving ? null : () => saveRecording(state),
+              style: TextButton.styleFrom(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(top: 2, bottom: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                widget.path,
+                style: webText(context, size: 11.5, color: 'text.muted'),
+              ),
             ),
-            child: Text(
-              widget.path,
-              style: webText(context, size: 11.5, color: 'text.muted'),
+          if (downloadNotice != null)
+            Text(
+              downloadNotice!,
+              style: webText(context, size: 12, color: 'text.secondary'),
             ),
-          ),
-        if (downloadNotice != null)
-          Text(
-            downloadNotice!,
-            style: webText(context, size: 12, color: 'text.secondary'),
-          ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }

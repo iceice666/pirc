@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -340,7 +341,7 @@ class _BackendSettingsState extends State<BackendSettings> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${models.length} models',
+                        tr("{0} models", [models.length]),
                         style: webText(
                           context,
                           size: 13,
@@ -395,13 +396,13 @@ class _BackendSettingsState extends State<BackendSettings> {
                 runSpacing: 8,
                 children: [
                   AssistantButton(
-                    'Edit $id',
+                    tr("Edit {0}", [id]),
                     onPressed: locked || activeLogin
                         ? null
                         : () => edit(provider),
                   ),
                   AssistantButton(
-                    'Remove $id',
+                    tr("Remove {0}", [id]),
                     onPressed: locked || activeLogin
                         ? null
                         : () => mutate('/api/providers/${enc(id)}', 'DELETE'),
@@ -416,8 +417,9 @@ class _BackendSettingsState extends State<BackendSettings> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final providers = rows(snapshot?['providers']);
-    final choices = <String, String>{'': 'Use file default / automatic'};
+    final choices = <String, String>{'': tr("Use file default / automatic")};
     for (final provider in providers) {
       for (final model in rows(provider['models'])) {
         choices[jsonEncode([provider['id'], model['id']])] =
@@ -426,19 +428,22 @@ class _BackendSettingsState extends State<BackendSettings> {
     }
     final token = generation;
     return AssistantSection(
-      title: 'Model backends',
+      title: tr("Model backends"),
       children: [
-        const AssistantParagraph(
-          'Global settings for this single-user gateway. All model requests run on the gateway; endpoints must be reachable from there.',
+        AssistantParagraph(
+          tr(
+            "Global settings for this single-user gateway. All model requests run on the gateway; endpoints must be reachable from there.",
+          ),
         ),
         if (widget.disabled)
-          const AssistantParagraph(
-            'Backend settings are unavailable in demo mode. No real accounts or settings will be changed.',
+          AssistantParagraph(
+            tr(
+              "Backend settings are unavailable in demo mode. No real accounts or settings will be changed.",
+            ),
             live: true,
           )
         else ...[
-          if (loading)
-            const AssistantParagraph('Loading backends…', live: true),
+          if (loading) AssistantParagraph(tr("Loading backends…"), live: true),
           if (error != null)
             AssistantParagraph(error!, error: true, live: true),
           if (managementRequired)
@@ -475,7 +480,7 @@ class _BackendSettingsState extends State<BackendSettings> {
                 if (current(token)) await refresh(models: true);
               },
             ),
-            heading('API keys and custom endpoints'),
+            heading(tr("API keys and custom endpoints")),
             for (final provider in providers.where(
               (p) => p['source'] != 'oauth',
             ))
@@ -489,15 +494,15 @@ class _BackendSettingsState extends State<BackendSettings> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: AssistantButton(
-                  'Add backend',
+                  tr("Add backend"),
                   onPressed: locked || activeLogin || editing
                       ? null
                       : () => edit(),
                 ),
               ),
-            heading('Default model'),
+            heading(tr("Default model")),
             Text(
-              'Gateway default',
+              tr("Gateway default"),
               style: webText(
                 context,
                 size: 13,
@@ -544,7 +549,7 @@ class _BackendSettingsState extends State<BackendSettings> {
             Align(
               alignment: Alignment.centerLeft,
               child: AssistantButton(
-                'Save default',
+                tr("Save default"),
                 onPressed: locked || activeLogin
                     ? null
                     : () {
@@ -561,15 +566,15 @@ class _BackendSettingsState extends State<BackendSettings> {
                       },
               ),
             ),
-            const AssistantParagraph(
-              'Applies to new runs that have no explicit model selection.',
+            AssistantParagraph(
+              tr("Applies to new runs that have no explicit model selection."),
             ),
           ],
           if (!loading && snapshot == null)
             Align(
               alignment: Alignment.centerLeft,
               child: AssistantButton(
-                'Retry settings',
+                tr("Retry settings"),
                 onPressed: () => refresh(),
               ),
             ),

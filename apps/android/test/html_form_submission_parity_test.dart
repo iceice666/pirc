@@ -1,3 +1,4 @@
+import 'package:pirc_mobile/l10n/app_i18n.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -58,6 +59,8 @@ void main() {
   testWidgets(
     'real native click and Enter produce pinned browser submissions and clipboard writes',
     (t) async {
+      AppI18n.instance.setLanguage('zh-TW');
+      addTearDown(() => AppI18n.instance.setLanguage('en'));
       t.binding.platformDispatcher.localeTestValue = const Locale('zh', 'TW');
       addTearDown(t.binding.platformDispatcher.clearLocaleTestValue);
       t.view.devicePixelRatio = 1;
@@ -192,6 +195,8 @@ void main() {
   testWidgets(
     'native request bytes match real Chromium local GET and POST requests',
     (t) async {
+      AppI18n.instance.setLanguage('zh-TW');
+      addTearDown(() => AppI18n.instance.setLanguage('en'));
       t.binding.platformDispatcher.localeTestValue = const Locale('zh', 'TW');
       addTearDown(t.binding.platformDispatcher.clearLocaleTestValue);
       t.view.devicePixelRatio = 1;
@@ -240,6 +245,8 @@ void main() {
   testWidgets('native zh-TW feedback matches each captured validation message', (
     t,
   ) async {
+    AppI18n.instance.setLanguage('zh-TW');
+    addTearDown(() => AppI18n.instance.setLanguage('en'));
     t.binding.platformDispatcher.localeTestValue = const Locale('zh', 'TW');
     addTearDown(t.binding.platformDispatcher.clearLocaleTestValue);
     final doc = html.parseFragment(

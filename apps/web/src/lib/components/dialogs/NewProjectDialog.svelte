@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   import { X } from '@lucide/svelte';
   import { app } from '../../app.svelte';
   import { errorMessage } from '../../errors';
@@ -48,7 +50,7 @@
       open = false;
       oncreated(workspace.id);
     } catch (cause) {
-      error = errorMessage(cause, 'Could not create the project.');
+      error = errorMessage(cause, tr('Could not create the project.'));
     } finally {
       busy = false;
     }
@@ -58,26 +60,34 @@
 <Modal bind:open labelledby="new-project-title">
   <header>
     <div>
-      <span class="eyebrow">Chats</span>
-      <h2 id="new-project-title">New project</h2>
+      <span class="eyebrow">{tr('Chats')}</span>
+      <h2 id="new-project-title">{tr('New project')}</h2>
     </div>
-    <button class="icon-button" type="button" aria-label="Close" onclick={() => (open = false)}
-      ><X size={19} /></button
+    <button
+      class="icon-button"
+      type="button"
+      aria-label={tr('Close')}
+      onclick={() => (open = false)}><X size={19} /></button
     >
   </header>
   <label
-    ><span>Project name</span><input
+    ><span>{tr('Project name')}</span><input
       bind:value={name}
-      placeholder="Trip to Japan"
+      placeholder={tr('Trip to Japan')}
       onkeydown={(event) => event.key === 'Enter' && create()}
     /></label
   >
-  <p>A project groups related chats. The assistant keeps its files for you; no folder to pick.</p>
+  <p>
+    {tr(
+      'A project groups related chats. The assistant keeps its files for you; no folder to pick.',
+    )}
+  </p>
   {#if error}<p role="alert">{error}</p>{/if}
   <footer>
-    <button class="button ghost" type="button" onclick={() => (open = false)}>Cancel</button>
+    <button class="button ghost" type="button" onclick={() => (open = false)}>{tr('Cancel')}</button
+    >
     <button class="button dark" type="button" disabled={busy || !name.trim()} onclick={create}
-      >{busy ? 'Creating…' : 'Create project'}</button
+      >{busy ? tr('Creating…') : tr('Create project')}</button
     >
   </footer>
 </Modal>

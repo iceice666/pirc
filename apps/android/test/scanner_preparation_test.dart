@@ -53,17 +53,19 @@ void main() {
   ) async {
     final g = PreparingGateway();
     final c = await mount(t, g);
-    await t.tap(find.text('掃描 QR code'));
+    await t.tap(find.text("Scan QR code"));
     await t.pump();
-    expect(find.text('正在準備掃描器…'), findsOneWidget);
+    expect(find.text("Preparing scanner…"), findsOneWidget);
     expect(
       t
-          .widget<TextButton>(find.widgetWithText(TextButton, '正在準備掃描器…'))
+          .widget<TextButton>(
+            find.widgetWithText(TextButton, "Preparing scanner…"),
+          )
           .onPressed,
       isNull,
     );
     final request = g.calls.singleWhere((call) => call.$1 == 'scan').$2;
-    await t.tap(find.text('取消準備'));
+    await t.tap(find.text("Cancel setup"));
     await t.pumpAndSettle();
     expect(
       g.calls
@@ -72,8 +74,8 @@ void main() {
       request['requestId'],
     );
     expect(g.calls.where((call) => call.$1 == 'pair'), isEmpty);
-    expect(find.text('掃描 QR code'), findsOneWidget);
-    await t.tap(find.text('掃描 QR code'));
+    expect(find.text("Scan QR code"), findsOneWidget);
+    await t.tap(find.text("Scan QR code"));
     await t.pump();
     final scans = g.calls.where((call) => call.$1 == 'scan').toList();
     expect(scans, hasLength(2));
@@ -86,7 +88,7 @@ void main() {
     (t) async {
       final g = PreparingGateway()..canCancel = false;
       final c = await mount(t, g);
-      await t.tap(find.text('掃描 QR code'));
+      await t.tap(find.text("Scan QR code"));
       await t.pump();
       final request = g.calls.singleWhere((call) => call.$1 == 'scan').$2;
       await t.pumpWidget(const SizedBox());
@@ -109,10 +111,10 @@ void main() {
   testWidgets('pasted link cancels preparation before pairing', (t) async {
     final g = PreparingGateway();
     final c = await mount(t, g);
-    await t.tap(find.text('掃描 QR code'));
+    await t.tap(find.text("Scan QR code"));
     await t.pump();
     await t.enterText(find.byType(TextField), 'a-pasted-test-link');
-    await t.tap(find.text('連接'));
+    await t.tap(find.text("Connect"));
     await t.pumpAndSettle();
     final calls = g.calls.map((call) => call.$1).toList();
     expect(
@@ -124,7 +126,7 @@ void main() {
       'a-pasted-test-link',
     );
     expect(c.origin, 'https://gateway.example');
-    expect(find.text('正在準備掃描器…'), findsNothing);
+    expect(find.text("Preparing scanner…"), findsNothing);
     await cleanup(t, g, c);
   });
 
@@ -133,14 +135,14 @@ void main() {
   ) async {
     final g = PreparingGateway();
     final c = await mount(t, g);
-    await t.tap(find.text('掃描 QR code'));
+    await t.tap(find.text("Scan QR code"));
     await t.pump();
     g.pending!.completeError(PlatformException(code: 'SCAN_TIMEOUT'));
     await t.pumpAndSettle();
     expect(find.text('掃描器準備逾時，請重試或貼上配對連結。'), findsOneWidget);
-    expect(find.text('掃描 QR code'), findsOneWidget);
-    expect(find.text('使用內建相機掃描'), findsOneWidget);
-    expect(find.text('取消準備'), findsNothing);
+    expect(find.text("Scan QR code"), findsOneWidget);
+    expect(find.text("Scan with built-in camera"), findsOneWidget);
+    expect(find.text("Cancel setup"), findsNothing);
     expect(t.takeException(), isNull);
     await cleanup(t, g, c);
   });

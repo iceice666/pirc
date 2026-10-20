@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   import { onDestroy } from 'svelte';
   import { app } from '../../app.svelte';
   import { Loader } from '../../loader.svelte';
@@ -17,7 +19,7 @@
     const id = sessionId;
     const next = await loader.run(
       (signal) => panelApi.context(id, signal),
-      'Unable to load context.',
+      tr('Unable to load context.'),
     );
     if (id === sessionId && next) value = next;
   }
@@ -83,26 +85,27 @@
           .filter(Boolean)
           .join('\n\n'),
       );
-      copied = 'Copied system prompt.';
+      copied = tr('Copied system prompt.');
     } catch {
-      copied = 'Unable to copy. Select the expanded section text instead.';
+      copied = tr('Unable to copy. Select the expanded section text instead.');
     }
   }
 </script>
 
 <div class="context-tab">
   <div class="actions">
-    <h3>Context</h3>
+    <h3>{tr('Context')}</h3>
     <button class="button ghost" type="button" disabled={loader.loading} onclick={load}
-      >Refresh</button
+      >{tr('Refresh')}</button
     >
   </div>
   {#if loader.error}<p role="alert">{loader.error}</p>{/if}
-  {#if loader.loading && !snapshot}<p role="status">Loading context…</p>{/if}
+  {#if loader.loading && !snapshot}<p role="status">{tr('Loading context…')}</p>{/if}
   {#if snapshot && value}
     {#if !value.agentRunning || value.source === 'snapshot'}<p class="stale" role="status">
-        Saved snapshot{!value.agentRunning ? ' — agent stopped' : ''}. This is the last request, not
-        current configuration.
+        {tr('Saved snapshot{0}. This is the last request, not current configuration.', [
+          !value.agentRunning ? tr(' — agent stopped') : '',
+        ])}
       </p>{/if}
     <p class="meta">
       {snapshot.model.provider} / {snapshot.model.id}<br /><time
@@ -113,7 +116,9 @@
     <div
       class="usage-bar"
       role="img"
-      aria-label="Context usage: {segments.map((s) => s.name + ' ' + tokens(s.tokens)).join(', ')}"
+      aria-label={tr('Context usage: {0}', [
+        segments.map((s) => s.name + ' ' + tokens(s.tokens)).join(', '),
+      ])}
     >
       {#each segments as segment}<span
           class={segment.name}
@@ -127,30 +132,36 @@
         </li>{/each}
     </ul>
     <p class="meta">
-      Estimated input: {tokens(snapshot.usage.estimatedInput)} · Reported input: {snapshot.usage
-        .reportedInput === undefined
-        ? 'not available'
-        : tokens(snapshot.usage.reportedInput)}<br />Context window: {snapshot.model.contextWindow
-        ? tokens(snapshot.model.contextWindow)
-        : 'unknown'}
+      {tr('Estimated input: {0} · Reported input: {1}', [
+        tokens(snapshot.usage.estimatedInput),
+        snapshot.usage.reportedInput === undefined
+          ? tr('not available')
+          : tokens(snapshot.usage.reportedInput),
+      ])}<br />{tr('Context window: {0}', [
+        snapshot.model.contextWindow ? tokens(snapshot.model.contextWindow) : tr('unknown'),
+      ])}
     </p>
     <p class="meta">
-      Bucket sizes are estimates{snapshot.usage.reportedInput === undefined
-        ? ''
-        : ' scaled to reported input (including cache)'}. Memory is observations/reflections within
-      messages, not an extra copy. System memory stays in system.
+      {tr(
+        'Bucket sizes are estimates{0}. Memory is observations/reflections within messages, not an extra copy. System memory stays in system.',
+        [
+          snapshot.usage.reportedInput === undefined
+            ? ''
+            : tr(' scaled to reported input (including cache)'),
+        ],
+      )}
     </p>
     <div class="actions">
-      <h4>System sections</h4>
-      <button type="button" class="button ghost" onclick={copy}>Copy all</button>
+      <h4>{tr('System sections')}</h4>
+      <button type="button" class="button ghost" onclick={copy}>{tr('Copy all')}</button>
     </div>
     <p role="status">{copied}</p>
     {#each snapshot.sections as section, index (`${index}:${section.id}`)}
       <details>
         <summary
           >{section.title}
-          <span class="meta">~{tokens(section.estimatedTokens)} tokens</span
-          >{#if section.frozen}<span class="badge">Frozen</span>{/if}</summary
+          <span class="meta">{tr('~{0} tokens', [tokens(section.estimatedTokens)])}</span
+          >{#if section.frozen}<span class="badge">{tr('Frozen')}</span>{/if}</summary
         >
         <p class="source">
           {#if section.filePath !== undefined}<button
@@ -162,21 +173,23 @@
         <pre>{section.text}</pre>
       </details>
     {/each}
-    <h4>Model tools ({snapshot.tools.length})</h4>
+    <h4>{tr('Model tools ({0})', [snapshot.tools.length])}</h4>
     {#each snapshot.tools as tool (tool.name)}
       <details>
         <summary
-          >{tool.name} <span class="meta">~{tokens(tool.estimatedTokens)} tokens</span></summary
+          >{tool.name}
+          <span class="meta">{tr('~{0} tokens', [tokens(tool.estimatedTokens)])}</span></summary
         >
         <pre>{tool.description}</pre>
         <pre>{JSON.stringify(tool.parameters, null, 2)}</pre>
       </details>
     {/each}
     {#if snapshot.capabilities}
-      <h4>Capabilities ({snapshot.capabilities.length})</h4>
+      <h4>{tr('Capabilities ({0})', [snapshot.capabilities.length])}</h4>
       <p class="meta">
-        Called from ptc scripts; the core ones are also tools above. The others are only named in
-        the system prompt, and ptc_docs returns their schemas on request.
+        {tr(
+          'Called from ptc scripts; the core ones are also tools above. The others are only named in the system prompt, and ptc_docs returns their schemas on request.',
+        )}
       </p>
       <ul class="capabilities">
         {#each snapshot.capabilities as capability (capability.name)}

@@ -25,7 +25,13 @@ class PircTheme {
     jsonDecode(await rootBundle.loadString('assets/design-tokens.json'))
         as Map<String, dynamic>,
   );
-  ThemeData build(Brightness brightness) {
+  // Theme identity is also the renderer's palette/cache identity. A stream
+  // update must not create a theme animation and invalidate every text layout.
+  final _themes = <Brightness, ThemeData>{};
+  ThemeData build(Brightness brightness) =>
+      _themes.putIfAbsent(brightness, () => _build(brightness));
+
+  ThemeData _build(Brightness brightness) {
     final raw =
         tokens['color'][brightness == Brightness.dark ? 'dark' : 'light']
             as Map<String, dynamic>;

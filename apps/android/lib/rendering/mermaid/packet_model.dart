@@ -1,3 +1,5 @@
+import '../../l10n/app_i18n.dart';
+
 /// One authored field in a Mermaid `packet` or `packet-beta` diagram.
 ///
 /// `startBit`, `endBit`, and `bits` are the effective values stored by
@@ -107,12 +109,14 @@ class NativeMermaidPacketDiagram {
   final NativeMermaidPacketConfig config;
 
   String get semanticsLabel {
-    final parts = <String>['Packet diagram'];
+    final parts = <String>[tr("Packet diagram")];
     if (accessibleTitle.isNotEmpty) parts.add(accessibleTitle);
     if (accessibleDescription.isNotEmpty) parts.add(accessibleDescription);
     if (title.isNotEmpty) parts.add(title);
     for (final field in fields) {
-      parts.add('Bits ${field.startBit}–${field.endBit}: ${field.label}');
+      parts.add(
+        tr("Bits {0}–{1}: {2}", [field.startBit, field.endBit, field.label]),
+      );
     }
     return parts.join('. ');
   }

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:ui' show SemanticsRole;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,8 +26,8 @@ class DelegationsStrip extends StatefulWidget {
   /// The muted line under a delegation's title, or null.
   static String? detail(Json delegation) {
     final parts = [
-      if (delegation['status'] == 'waiting_input') 'Waiting for you',
-      if (delegation['dispatch'] == 'auto') 'started automatically',
+      if (delegation['status'] == 'waiting_input') tr("Waiting for you"),
+      if (delegation['dispatch'] == 'auto') tr("started automatically"),
     ];
     return parts.isEmpty ? null : parts.join(' · ');
   }
@@ -40,8 +41,10 @@ class DelegationsStrip extends StatefulWidget {
       ? e.message!
       : LiveController.describe(e);
 
-  static String headline(Json delegation) =>
-      'Delegated to ${delegation['workspace'] ?? ''} — ${delegation['title'] ?? ''}';
+  static String headline(Json delegation) => tr("Delegated to {0} — {1}", [
+    delegation['workspace'] ?? '',
+    delegation['title'] ?? '',
+  ]);
 
   @override
   State<DelegationsStrip> createState() => _DelegationsStripState();
@@ -68,12 +71,13 @@ class _DelegationsStripState extends State<DelegationsStrip> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     if (widget.delegations.isEmpty) return const SizedBox.shrink();
     final p = palette(context);
     return Semantics(
       key: const ValueKey('delegations-strip'),
       container: true,
-      label: 'Active delegations',
+      label: tr("Active delegations"),
       child: Padding(
         padding: const EdgeInsets.only(top: 4, bottom: 24),
         child: Column(
@@ -154,7 +158,7 @@ class _DelegationsStripState extends State<DelegationsStrip> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         WebButton(
-                          'Open',
+                          tr("Open"),
                           key: ValueKey('delegation-open-${d['id']}'),
                           height: 30,
                           fontSize: 13,
@@ -164,8 +168,8 @@ class _DelegationsStripState extends State<DelegationsStrip> {
                         ),
                         WebButton(
                           stopping.contains('${d['id']}')
-                              ? 'Stopping…'
-                              : 'Stop',
+                              ? tr("Stopping…")
+                              : tr("Stop"),
                           key: ValueKey('delegation-stop-${d['id']}'),
                           height: 30,
                           fontSize: 13,

@@ -63,6 +63,20 @@ are available from Git through Historical records, not repeated here.
       credentials are supplied;
       update-compatible verification APKs use the existing Release identity.
 
+## 2026-10-20 client UX integration
+
+Web and Flutter now share local unsent conversation creation, approval-mode warning
+icons, and selectable English/Traditional Chinese UI catalogs. First send creates
+the remote session; abandoning an unsent conversation creates no server record.
+Automatic naming retries transient failures and falls back to the first meaningful
+message while preserving manual names. The Web source viewer fixes line/gutter
+alignment and horizontal overflow; Flutter retains its separate gutter.
+
+The Flutter application root keeps its theme and input connection stable during
+stream updates; widget tests exercise IME inset animation and CJK composition.
+These checks do not replace the physical-device keyboard/background acceptance above.
+Provider model catalogs were refreshed without replacing stored account configuration.
+
 ## Current local verification additions
 
 Title-only system notices now use the remaining row width, instead of sharing it

@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -111,9 +112,7 @@ NativeMermaidPacketLayout layoutNativeMermaidPacket(
   String? fontFamily,
 }) {
   if (!width.isFinite || width <= 0) {
-    throw const FormatException(
-      'Native packet viewport width must be positive',
-    );
+    throw FormatException(tr("Native packet viewport width must be positive"));
   }
   final config = diagram.config;
   if (config.bitsPerRow <= 0 ||
@@ -131,7 +130,7 @@ NativeMermaidPacketLayout layoutNativeMermaidPacket(
       config.rowHeight > 512 ||
       config.paddingX > 512 ||
       config.paddingY > 512) {
-    throw const FormatException('Invalid native packet geometry config');
+    throw FormatException(tr("Invalid native packet geometry config"));
   }
 
   final viewBoxWidth = config.bitWidth * config.bitsPerRow + 2;
@@ -213,7 +212,7 @@ NativeMermaidPacketLayout layoutNativeMermaidPacket(
               ? NativeMermaidPacketTextAnchor.middle
               : NativeMermaidPacketTextAnchor.start,
           baseline: NativeMermaidPacketTextBaseline.alphabetic,
-          role: isSingleBit ? 'packetByte' : 'packetByte start',
+          role: isSingleBit ? 'packetByte' : tr("packetByte start"),
         );
         if (!isSingleBit) {
           endBitText = makeText(
@@ -222,7 +221,7 @@ NativeMermaidPacketLayout layoutNativeMermaidPacket(
             fontSize: config.bitFontSize,
             anchor: NativeMermaidPacketTextAnchor.end,
             baseline: NativeMermaidPacketTextBaseline.alphabetic,
-            role: 'packetByte end',
+            role: tr("packetByte end"),
           );
         }
       }
@@ -282,6 +281,7 @@ class NativeMermaidPacket extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final fontFamily = Theme.of(context).textTheme.bodyMedium?.fontFamily;
     return LayoutBuilder(
       builder: (context, constraints) {

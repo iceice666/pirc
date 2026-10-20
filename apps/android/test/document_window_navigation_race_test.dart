@@ -172,7 +172,7 @@ void main() {
           await t.pumpAndSettle();
         }
         gateway.pending = Completer<Json>();
-        await t.tap(retry ? find.text('重試') : find.byTooltip('重新載入'));
+        await t.tap(retry ? find.text("Retry") : find.byTooltip("Reload"));
         await t.pump();
         await host.currentState!.selectWindow(other);
         await t.pumpAndSettle();

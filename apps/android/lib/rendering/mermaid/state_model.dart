@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'package:flutter/foundation.dart';
 
 import 'state_style.dart';
@@ -125,7 +126,7 @@ class MermaidStateStyleClass {
 /// Parses pinned Mermaid 11.17.2 stateDiagram-v2 syntax into a native model.
 MermaidStateDiagramModel parseNativeMermaidStateDiagram(String source) {
   if (source.length > 50000) {
-    throw const FormatException('State diagram exceeds 50000 characters');
+    throw FormatException(tr("State diagram exceeds 50000 characters"));
   }
   return _StateDiagramParser(source).parse();
 }
@@ -211,13 +212,14 @@ class _StateDiagramParser {
   String accessibleTitle = '';
   String accessibleDescription = '';
 
-  Never fail(int line, String message) =>
-      throw FormatException('Invalid stateDiagram-v2 at line $line: $message');
+  Never fail(int line, String message) => throw FormatException(
+    tr("Invalid stateDiagram-v2 at line {0}: {1}", [line, message]),
+  );
 
   MermaidStateDiagramModel parse() {
     readScope(root, false);
     if (!hasHeader) {
-      throw const FormatException('Expected stateDiagram-v2 header');
+      throw FormatException(tr("Expected stateDiagram-v2 header"));
     }
     final regions = <String, List<MermaidStateRegion>>{};
     MermaidStateNode freeze(_MutableNode node) {
@@ -290,7 +292,7 @@ class _StateDiagramParser {
 
     flatten(root);
     if (flattened.isEmpty) {
-      throw const FormatException('State diagram has no states');
+      throw FormatException(tr("State diagram has no states"));
     }
     return MermaidStateDiagramModel(
       direction: root.direction,
@@ -311,14 +313,14 @@ class _StateDiagramParser {
       var line = stripComment(lines[index++]).trim();
       if (line.isEmpty) continue;
       if (line.startsWith('%%{')) {
-        fail(lineNumber, 'configuration directives are unsupported');
+        fail(lineNumber, tr("configuration directives are unsupported"));
       }
       if (line == 'stateDiagram-v2') {
-        if (hasHeader || nested) fail(lineNumber, 'unexpected header');
+        if (hasHeader || nested) fail(lineNumber, tr("unexpected header"));
         hasHeader = true;
         continue;
       }
-      if (!hasHeader) fail(lineNumber, 'expected stateDiagram-v2 header');
+      if (!hasHeader) fail(lineNumber, tr("expected stateDiagram-v2 header"));
       final parts = splitSemicolons(line);
       if (parts.length > 1) {
         for (var i = parts.length - 1; i > 0; i--) {
@@ -327,16 +329,16 @@ class _StateDiagramParser {
         line = parts.first;
       }
       if (line == '}') {
-        if (!nested) fail(lineNumber, 'unmatched closing brace');
+        if (!nested) fail(lineNumber, tr("unmatched closing brace"));
         return;
       }
       if (line == '--') {
         if (!nested || scope.owner == null) {
-          fail(lineNumber, 'parallel separator must be inside a state');
+          fail(lineNumber, tr("parallel separator must be inside a state"));
         }
         if (scope.separators.isNotEmpty &&
             scope.separators.last == scope.nodes.length) {
-          fail(lineNumber, 'parallel regions cannot be empty');
+          fail(lineNumber, tr("parallel regions cannot be empty"));
         }
         scope.separators.add(scope.nodes.length);
         continue;
@@ -372,7 +374,7 @@ class _StateDiagramParser {
         }
         if (declaration.group) {
           if (node.childScope != null) {
-            fail(lineNumber, 'state ${node.id} already has a body');
+            fail(lineNumber, tr("state {0} already has a body", [node.id]));
           }
           node.isGroup = true;
           node.shape = 'roundedWithTitle';
@@ -386,7 +388,7 @@ class _StateDiagramParser {
       final transition = parseTransition(line);
       if (transition != null) {
         if (transition.from.isEmpty || transition.to.isEmpty) {
-          fail(lineNumber, 'transition needs two endpoints');
+          fail(lineNumber, tr("transition needs two endpoints"));
         }
         final from = endpoint(scope, transition.from, true, lineNumber);
         final to = endpoint(scope, transition.to, false, lineNumber);
@@ -412,15 +414,15 @@ class _StateDiagramParser {
         ensure(scope, unquote(line), unquote(line), 'default', declared: true);
         continue;
       }
-      fail(lineNumber, 'unsupported statement: $line');
+      fail(lineNumber, tr("unsupported statement: {0}", [line]));
     }
-    if (nested) fail(lines.length, 'unclosed state body');
+    if (nested) fail(lines.length, tr("unclosed state body"));
   }
 
   void finishScope(_Scope scope, int line) {
     if (scope.separators.isEmpty) return;
     if (scope.separators.last == scope.nodes.length) {
-      fail(line, 'parallel region is empty');
+      fail(line, tr("parallel region is empty"));
     }
     final bounds = <int>[0, ...scope.separators, scope.nodes.length];
     final originals = List<_MutableNode>.from(scope.nodes);
@@ -429,7 +431,7 @@ class _StateDiagramParser {
     final members = <Set<String>>[];
     for (var r = 0; r < bounds.length - 1; r++) {
       final children = originals.sublist(bounds[r], bounds[r + 1]);
-      if (children.isEmpty) fail(line, 'parallel region is empty');
+      if (children.isEmpty) fail(line, tr("parallel region is empty"));
       members.add(children.map((node) => node.id).toSet());
       final id = 'divider-id-${++dividerCount}';
       final divider = ensure(
@@ -475,7 +477,7 @@ class _StateDiagramParser {
       return ensure(scope, id, id, isSource ? 'start' : 'end', declared: false);
     }
     if (!isId(token) && !isQuoted(token)) {
-      fail(line, 'invalid state identifier: $token');
+      fail(line, tr("invalid state identifier: {0}", [token]));
     }
     final id = unquote(token);
     return ensure(scope, id, id, 'default', declared: false);
@@ -493,7 +495,7 @@ class _StateDiagramParser {
     String? shape,
   }) {
     final key = id.trim();
-    if (key.isEmpty) throw const FormatException('State id is empty');
+    if (key.isEmpty) throw FormatException(tr("State id is empty"));
     final existing = scope.byId[key];
     if (existing != null) {
       if (declared) {
@@ -510,7 +512,9 @@ class _StateDiagramParser {
       return existing;
     }
     if (allNodes.containsKey(key)) {
-      throw FormatException('Duplicate state id in nested scopes: $key');
+      throw FormatException(
+        tr("Duplicate state id in nested scopes: {0}", [key]),
+      );
     }
     final node = _MutableNode(
       id: key,
@@ -577,7 +581,7 @@ class _StateDiagramParser {
         }
         values.add(next);
       }
-      if (!closed) fail(lineNumber, 'unclosed accDescr block');
+      if (!closed) fail(lineNumber, tr("unclosed accDescr block"));
       accessibleDescription = values.join('\n');
       return true;
     }
@@ -591,12 +595,12 @@ class _StateDiagramParser {
     ).firstMatch(line);
     if (match == null) return false;
     final styles = splitStyleList(match[2]!, lineNumber);
-    if (styles.isEmpty) fail(lineNumber, 'classDef has no declarations');
+    if (styles.isEmpty) fail(lineNumber, tr("classDef has no declarations"));
     final textStyles = <String>[];
     for (final style in styles) {
       final pair = style.split(':');
       if (pair.length < 2) {
-        fail(lineNumber, 'invalid style declaration: $style');
+        fail(lineNumber, tr("invalid style declaration: {0}", [style]));
       }
       final key = pair.first.trim();
       final value = pair.skip(1).join(':').trim();
@@ -622,7 +626,7 @@ class _StateDiagramParser {
         .split(RegExp(r'[\s,]+'))
         .where((s) => s.isNotEmpty)
         .toList();
-    if (names.isEmpty) fail(lineNumber, 'class statement has no class');
+    if (names.isEmpty) fail(lineNumber, tr("class statement has no class"));
     for (final id in ids) {
       final node = ensure(scope, id, id, 'default', declared: false);
       for (final name in names) {
@@ -639,11 +643,11 @@ class _StateDiagramParser {
     ).firstMatch(line);
     if (match == null) return false;
     final styles = splitStyleList(match[2]!, lineNumber);
-    if (styles.isEmpty) fail(lineNumber, 'style has no declarations');
+    if (styles.isEmpty) fail(lineNumber, tr("style has no declarations"));
     for (final style in styles) {
       final pair = style.split(':');
       if (pair.length < 2) {
-        fail(lineNumber, 'invalid style declaration: $style');
+        fail(lineNumber, tr("invalid style declaration: {0}", [style]));
       }
       validateStyle(
         pair.first.trim(),
@@ -660,10 +664,10 @@ class _StateDiagramParser {
   void validateStyle(String key, String value, int lineNumber) {
     const keys = {'fill', 'stroke', 'color', 'stroke-width'};
     if (!keys.contains(key)) {
-      fail(lineNumber, 'unsupported state style property: $key');
+      fail(lineNumber, tr("unsupported state style property: {0}", [key]));
     }
     if (value.isEmpty) {
-      fail(lineNumber, 'empty value for style property: $key');
+      fail(lineNumber, tr("empty value for style property: {0}", [key]));
     }
     if (key == 'stroke-width') {
       final width = RegExp(
@@ -672,12 +676,12 @@ class _StateDiagramParser {
       ).firstMatch(value);
       final parsed = width == null ? null : double.tryParse(width[1]!);
       if (parsed == null || !parsed.isFinite) {
-        fail(lineNumber, 'unsupported stroke-width value: $value');
+        fail(lineNumber, tr("unsupported stroke-width value: {0}", [value]));
       }
       return;
     }
     if (parseNativeMermaidStateColor(value) == null) {
-      fail(lineNumber, 'unsupported state color: $value');
+      fail(lineNumber, tr("unsupported state color: {0}", [value]));
     }
   }
 
@@ -690,14 +694,14 @@ class _StateDiagramParser {
         depth++;
       } else if (source[i] == ')') {
         depth--;
-        if (depth < 0) fail(lineNumber, 'unbalanced style value');
+        if (depth < 0) fail(lineNumber, tr("unbalanced style value"));
       } else if (source[i] == ',' && depth == 0) {
         final declaration = source.substring(start, i).trim();
         if (declaration.isNotEmpty) result.add(declaration);
         start = i + 1;
       }
     }
-    if (depth != 0) fail(lineNumber, 'unbalanced style value');
+    if (depth != 0) fail(lineNumber, tr("unbalanced style value"));
     final tail = source.substring(start).trim();
     if (tail.isNotEmpty) result.add(tail);
     return result;
@@ -723,7 +727,7 @@ class _StateDiagramParser {
         }
         noteLines.add(next);
       }
-      if (!closed) fail(lineNumber, 'unclosed note');
+      if (!closed) fail(lineNumber, tr("unclosed note"));
       text = noteLines.join('\n').trim();
     }
     final subject = ensure(

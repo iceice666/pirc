@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -120,7 +121,7 @@ NativeMermaidKanbanLayout layoutNativeMermaidKanban(
   String? fontFamily,
 }) {
   if (!width.isFinite || width <= 0) {
-    throw const FormatException('Kanban width must be positive');
+    throw FormatException(tr("Kanban width must be positive"));
   }
   const columnWidth = 200.0;
   const cardWidth = 185.0;
@@ -296,48 +297,51 @@ class NativeMermaidKanban extends StatelessWidget {
   final bool dark;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final availableWidth = constraints.maxWidth.isFinite
-          ? constraints.maxWidth
-          : MediaQuery.sizeOf(context).width;
-      final layout = layoutNativeMermaidKanban(
-        board,
-        width: availableWidth,
-        dark: dark,
-        fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
-      );
-      final summary = board.columns
-          .map(
-            (column) =>
-                '${column.label}: ${column.cards.map((card) => card.label).join(', ')}',
-          )
-          .join('. ');
-      return Semantics(
-        container: true,
-        label: 'Kanban board',
-        value: summary,
-        child: SizedBox(
-          width: layout.size.width,
-          height: layout.size.height,
-          child: FittedBox(
-            fit: BoxFit.contain,
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: layout.viewBox.width,
-              height: layout.viewBox.height,
-              child: ClipRect(
-                child: CustomPaint(
-                  size: Size(layout.viewBox.width, layout.viewBox.height),
-                  painter: NativeMermaidKanbanPainter(layout),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final layout = layoutNativeMermaidKanban(
+          board,
+          width: availableWidth,
+          dark: dark,
+          fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
+        );
+        final summary = board.columns
+            .map(
+              (column) =>
+                  '${column.label}: ${column.cards.map((card) => card.label).join(', ')}',
+            )
+            .join('. ');
+        return Semantics(
+          container: true,
+          label: tr("Kanban board"),
+          value: summary,
+          child: SizedBox(
+            width: layout.size.width,
+            height: layout.size.height,
+            child: FittedBox(
+              fit: BoxFit.contain,
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: layout.viewBox.width,
+                height: layout.viewBox.height,
+                child: ClipRect(
+                  child: CustomPaint(
+                    size: Size(layout.viewBox.width, layout.viewBox.height),
+                    painter: NativeMermaidKanbanPainter(layout),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
 class NativeMermaidKanbanPainter extends CustomPainter {
@@ -450,13 +454,13 @@ TextSpan _markdownSpan(String source, TextStyle style, {required bool dark}) {
         continue;
       }
       if (name == 'img') {
-        throw const FormatException(
-          'Kanban Markdown images are not supported by the native renderer',
+        throw FormatException(
+          tr("Kanban Markdown images are not supported by the native renderer"),
         );
       }
       if (node.attributes['style']?.trim().isNotEmpty == true) {
-        throw const FormatException(
-          'Inline HTML styles in Kanban labels are unsupported',
+        throw FormatException(
+          tr("Inline HTML styles in Kanban labels are unsupported"),
         );
       }
       final decoration = switch (name) {

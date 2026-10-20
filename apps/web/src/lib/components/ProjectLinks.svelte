@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import { ApiError } from '../http';
   import { linksApi, type ProjectLink } from '../capabilities';
   import type { Workspace } from '../types';
@@ -25,7 +27,7 @@
   let reload = $state(0);
   let generation = 0;
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : tr('Unable to reach the gateway. Try again.');
   const saved = $derived(new Set(links?.map((link) => link.workspaceId) ?? []));
   const changed = $derived(chosen.size !== saved.size || [...chosen].some((id) => !saved.has(id)));
   /** Links to workspaces no longer listed stay visible until unchecked. */
@@ -93,7 +95,7 @@
       const response = await linksApi.update(workspaceId, ids);
       if (current !== generation) return;
       show(response);
-      status = 'Linked workspaces saved.';
+      status = tr('Linked workspaces saved.');
     } catch (cause) {
       if (current === generation) error = message(cause);
     } finally {
@@ -105,7 +107,7 @@
   function details(workspace: Workspace) {
     const link = linkOf(workspace.id);
     const reach = link?.removed
-      ? 'removed from its device'
+      ? tr('removed from its device')
       : (link ? link.online : online(workspace))
         ? ''
         : 'offline';
@@ -114,26 +116,26 @@
 </script>
 
 <section class="settings-section">
-  <h3>Linked workspaces</h3>
+  <h3>{tr('Linked workspaces')}</h3>
   <p>
-    The repositories this project is about. Its assistant lists them first, hands a task to the
-    linked workspace when only one is linked and the task names none, and searches their notes (and
-    those of other clones of the same repository) first.
+    {tr(
+      'The repositories this project is about. Its assistant lists them first, hands a task to the linked workspace when only one is linked and the task names none, and searches their notes (and those of other clones of the same repository) first.',
+    )}
   </p>
   <p>
-    A link is not a permission: delegations to linked and unlinked workspaces alike follow the
-    project's Delegation approval setting, and the assistant can still reach workspaces that are not
-    linked. Chats already open keep the workspace list they started with.
+    {tr(
+      "A link is not a permission: delegations to linked and unlinked workspaces alike follow the project's Delegation approval setting, and the assistant can still reach workspaces that are not linked. Chats already open keep the workspace list they started with.",
+    )}
   </p>
   {#if disabled}
-    <p>Linked workspaces are unavailable in demo mode.</p>
+    <p>{tr('Linked workspaces are unavailable in demo mode.')}</p>
   {:else}
     {#if loading}
-      <p role="status">Loading linked workspaces…</p>
+      <p role="status">{tr('Loading linked workspaces…')}</p>
     {:else if links}
       <form onsubmit={save}>
         <fieldset disabled={saving} aria-busy={saving}>
-          <legend>Workspaces</legend>
+          <legend>{tr('Workspaces')}</legend>
           {#each workspaces as workspace (workspace.id)}
             <label class="link-choice">
               <input
@@ -145,7 +147,7 @@
               <small>{details(workspace)}</small>
             </label>
           {:else}
-            <p class="empty">No directory workspaces yet.</p>
+            <p class="empty">{tr('No directory workspaces yet.')}</p>
           {/each}
           {#each missing as link (link.workspaceId)}
             <label class="link-choice">
@@ -160,16 +162,17 @@
           {/each}
         </fieldset>
         <div class="row">
-          <span>{chosen.size} linked</span>
+          <span>{tr('{0} linked', [chosen.size])}</span>
           <button class="button" type="submit" disabled={saving || !changed}
-            >{saving ? 'Saving…' : 'Save'}</button
+            >{saving ? tr('Saving…') : tr('Save')}</button
           >
         </div>
       </form>
     {/if}
     {#if error}
       <p role="alert">{error}</p>
-      {#if !links}<button class="button ghost" type="button" onclick={() => reload++}>Retry</button
+      {#if !links}<button class="button ghost" type="button" onclick={() => reload++}
+          >{tr('Retry')}</button
         >{/if}
     {/if}
     <p role="status">{status}</p>

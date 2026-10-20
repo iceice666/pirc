@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'c4_model.dart';
 
 /// Parses Mermaid 11.17.2 C4 diagrams into a Flutter-independent model.
@@ -7,7 +8,7 @@ import 'c4_model.dart';
 /// syntax and attributes raise [FormatException] instead of being dropped.
 NativeC4Diagram parseNativeMermaidC4(String source, {bool? wrap}) {
   if (source.length > 50000) {
-    throw const FormatException('C4 diagram exceeds 50000 characters');
+    throw FormatException(tr("C4 diagram exceeds 50000 characters"));
   }
   return _C4Parser(source, wrap: wrap).parse();
 }
@@ -42,19 +43,21 @@ class _C4Parser {
   final List<String> boundaryStack = ['global'];
 
   Never _invalid(String message, [int? atLine]) => throw FormatException(
-    'Invalid Mermaid C4 at line ${atLine ?? line}: $message',
+    tr("Invalid Mermaid C4 at line {0}: {1}", [atLine ?? line, message]),
   );
 
   NativeC4Diagram parse() {
     _skipIgnored();
     if (index >= source.length) {
-      throw const FormatException('Missing Mermaid C4 header');
+      throw FormatException(tr("Missing Mermaid C4 header"));
     }
     final headerLine = line;
     final header = _readWord();
     if (!_diagramKinds.contains(header)) {
       _invalid(
-        'Expected C4Context, C4Container, C4Component, C4Dynamic, or C4Deployment',
+        tr(
+          "Expected C4Context, C4Container, C4Component, C4Dynamic, or C4Deployment",
+        ),
         headerLine,
       );
     }
@@ -69,7 +72,7 @@ class _C4Parser {
         index++;
         _finishCurrentStatementLine();
         if (boundaryStack.length == 1) {
-          _invalid('Unmatched boundary close', statementLine);
+          _invalid(tr("Unmatched boundary close"), statementLine);
         }
         boundaryStack.removeLast();
         continue;
@@ -81,13 +84,16 @@ class _C4Parser {
         continue;
       }
       if (word == 'direction') {
-        _invalid('Diagram direction is not supported natively', statementLine);
+        _invalid(
+          tr("Diagram direction is not supported natively"),
+          statementLine,
+        );
       }
       if (word == 'accTitle' ||
           word == 'accDescr' ||
           word == 'accDescription') {
         _invalid(
-          'Accessibility metadata is not supported natively',
+          tr("Accessibility metadata is not supported natively"),
           statementLine,
         );
       }
@@ -101,7 +107,7 @@ class _C4Parser {
         final args = _readCall(statementLine);
         final opensBoundary = _finishLine(statementLine, allowBlock: true);
         if (!opensBoundary) {
-          _invalid('$word requires an opening "{"', statementLine);
+          _invalid(tr("{0} requires an opening \"{\"", [word]), statementLine);
         }
         _addBoundary(word, args, statementLine);
         continue;
@@ -130,20 +136,29 @@ class _C4Parser {
         _updateLayout(args, statementLine);
         continue;
       }
-      _invalid('Unsupported or invalid statement "$word"', statementLine);
+      _invalid(
+        tr("Unsupported or invalid statement \"{0}\"", [word]),
+        statementLine,
+      );
     }
 
     if (boundaryStack.length > 1) {
-      _invalid('Boundary "${boundaryStack.last}" is missing a closing "}"');
+      _invalid(
+        tr("Boundary \"{0}\" is missing a closing \"}\"", [boundaryStack.last]),
+      );
     }
     final aliases = shapes.map((shape) => shape.alias).toSet();
     for (final relation in relations) {
       if (!aliases.contains(relation.from)) {
-        _invalid('Relationship references unknown source "${relation.from}"');
+        _invalid(
+          tr("Relationship references unknown source \"{0}\"", [relation.from]),
+        );
       }
       if (!aliases.contains(relation.to)) {
         _invalid(
-          'Relationship references unknown destination "${relation.to}"',
+          tr("Relationship references unknown destination \"{0}\"", [
+            relation.to,
+          ]),
         );
       }
     }
@@ -265,25 +280,25 @@ class _C4Parser {
     while (index < source.length && _isWordChar(source.codeUnitAt(index))) {
       index++;
     }
-    if (start == index) _invalid('Expected a statement name');
+    if (start == index) _invalid(tr("Expected a statement name"));
     return source.substring(start, index);
   }
 
   String _readTitle(int statementLine) {
     if (index >= source.length || !_isHorizontal(source.codeUnitAt(index))) {
-      _invalid('Expected whitespace after title', statementLine);
+      _invalid(tr("Expected whitespace after title"), statementLine);
     }
     _skipHorizontal();
     final start = index;
     while (index < source.length && _peek() != '\n' && _peek() != '\r') {
       if (_startsWith('%%')) break;
       if (_peek() == ';') {
-        _invalid('Semicolon is not supported in title', statementLine);
+        _invalid(tr("Semicolon is not supported in title"), statementLine);
       }
       index++;
     }
     final result = source.substring(start, index).trimRight();
-    if (result.isEmpty) _invalid('Title cannot be empty', statementLine);
+    if (result.isEmpty) _invalid(tr("Title cannot be empty"), statementLine);
     if (_startsWith('%%')) _skipComment();
     _advanceLineEnd(statementLine);
     return result;
@@ -292,7 +307,7 @@ class _C4Parser {
   List<_Argument> _readCall(int statementLine) {
     _skipWhitespace();
     if (_peek() != '(') {
-      _invalid('Expected "(" after statement name', statementLine);
+      _invalid(tr("Expected \"(\" after statement name"), statementLine);
     }
     index++;
     final args = <_Argument>[];
@@ -325,7 +340,9 @@ class _C4Parser {
             c != ',' &&
             c != ')' &&
             !_isWhitespace(source.codeUnitAt(index))) {
-          _invalid('Text after a closing quote is not supported by Mermaid C4');
+          _invalid(
+            tr("Text after a closing quote is not supported by Mermaid C4"),
+          );
         }
         if (c == '"') {
           quoted = true;
@@ -336,7 +353,7 @@ class _C4Parser {
         }
         if (c == ',' || c == ')') break;
         if (c == '(') {
-          _invalid('Nested parentheses are not supported in arguments');
+          _invalid(tr("Nested parentheses are not supported in arguments"));
         }
         if (c == '\n' || c == '\r') {
           _consumeNewline();
@@ -348,14 +365,16 @@ class _C4Parser {
           raw.write(' ');
           continue;
         }
-        if (c == ';') _invalid('Semicolon is not supported in C4 statements');
+        if (c == ';') {
+          _invalid(tr("Semicolon is not supported in C4 statements"));
+        }
         raw.write(c);
         index++;
       }
-      if (quoted) _invalid('Unterminated quoted argument', argLine);
+      if (quoted) _invalid(tr("Unterminated quoted argument"), argLine);
       args.add(_parseArgument(raw.toString(), quoteSeen, argLine));
       if (index >= source.length) {
-        _invalid('Unclosed argument list', statementLine);
+        _invalid(tr("Unclosed argument list"), statementLine);
       }
       if (_peek() == ')') {
         index++;
@@ -385,7 +404,10 @@ class _C4Parser {
     }
     if (quoteSeen) {
       if (!value.startsWith('"') || !value.endsWith('"')) {
-        _invalid('Quoted argument must occupy the complete argument', argLine);
+        _invalid(
+          tr("Quoted argument must occupy the complete argument"),
+          argLine,
+        );
       }
       return _TextArgument(value.substring(1, value.length - 1));
     }
@@ -395,7 +417,7 @@ class _C4Parser {
   String _decodeValue(String raw, int atLine) {
     if (raw.startsWith('"')) {
       if (raw.length < 2 || !raw.endsWith('"')) {
-        _invalid('Unterminated quoted attribute value', atLine);
+        _invalid(tr("Unterminated quoted attribute value"), atLine);
       }
       return raw.substring(1, raw.length - 1);
     }
@@ -412,7 +434,7 @@ class _C4Parser {
     }
     if (_startsWith('%%')) _skipComment();
     if (index < source.length && _peek() != '\n' && _peek() != '\r') {
-      _invalid('Unexpected text after statement', statementLine);
+      _invalid(tr("Unexpected text after statement"), statementLine);
     }
     _advanceLineEnd(statementLine);
     return opensBlock;
@@ -421,7 +443,7 @@ class _C4Parser {
   void _addShape(String statement, List<_Argument> args, int atLine) {
     final spec = _entityKinds[statement]!;
     if (args.length < 2) {
-      _invalid('$statement needs an alias and label', atLine);
+      _invalid(tr("{0} needs an alias and label", [statement]), atLine);
     }
     final alias = _text(args[0], 'alias', atLine);
     final label = _text(args[1], 'label', atLine);
@@ -520,7 +542,7 @@ class _C4Parser {
   void _addBoundary(String statement, List<_Argument> args, int atLine) {
     final spec = _boundaryKinds[statement]!;
     if (args.length < 2) {
-      _invalid('$statement needs an alias and label', atLine);
+      _invalid(tr("{0} needs an alias and label", [statement]), atLine);
     }
     final alias = _text(args[0], 'alias', atLine);
     final label = _text(args[1], 'label', atLine);
@@ -632,7 +654,7 @@ class _C4Parser {
     if (argument is _TextArgument) return argument.value;
     final map = argument as _MapArgument;
     if (map.values.length != 1) {
-      _invalid('Boundary type needs one value', atLine);
+      _invalid(tr("Boundary type needs one value"), atLine);
     }
     if (map.values.containsKey('type')) return map.values['type']!;
     // A named value in the type slot can populate another DB field but leaves
@@ -640,7 +662,7 @@ class _C4Parser {
     final entry = map.values.entries.single;
     onAttribute(entry.key, entry.value);
     _invalid(
-      'Boundary type is missing after named attribute "${entry.key}"',
+      tr("Boundary type is missing after named attribute \"{0}\"", [entry.key]),
       atLine,
     );
   }
@@ -649,10 +671,13 @@ class _C4Parser {
     final relationKind = _relationKinds[statement]!;
     final values = statement == 'RelIndex' ? args.skip(1).toList() : args;
     if (values.length < 3) {
-      _invalid('$statement needs source, destination, and label', atLine);
+      _invalid(
+        tr("{0} needs source, destination, and label", [statement]),
+        atLine,
+      );
     }
-    final from = _text(values[0], 'source alias', atLine);
-    final to = _text(values[1], 'destination alias', atLine);
+    final from = _text(values[0], tr("source alias"), atLine);
+    final to = _text(values[1], tr("destination alias"), atLine);
     final label = _text(values[2], 'label', atLine);
     final technology = values.length > 3
         ? _readRelationField(values[3], 'techn', atLine)
@@ -717,8 +742,11 @@ class _C4Parser {
       if (argument is _TextArgument) {
         final field = i - start < positionalNames.length
             ? positionalNames[i - start]
-            : 'extra argument';
-        _invalid('The $field attribute is not supported natively', atLine);
+            : tr("extra argument");
+        _invalid(
+          tr("The {0} attribute is not supported natively", [field]),
+          atLine,
+        );
       }
       final map = argument as _MapArgument;
       for (final entry in map.values.entries) {
@@ -730,11 +758,11 @@ class _C4Parser {
   void _updateElementStyle(List<_Argument> args, int atLine) {
     if (args.isEmpty || args.length > 10) {
       _invalid(
-        'UpdateElementStyle needs an alias and at most nine style values',
+        tr("UpdateElementStyle needs an alias and at most nine style values"),
         atLine,
       );
     }
-    final alias = _text(args[0], 'element alias', atLine);
+    final alias = _text(args[0], tr("element alias"), atLine);
     final properties = <String, String>{};
     const names = [
       'bgColor',
@@ -794,12 +822,14 @@ class _C4Parser {
   void _updateRelationStyle(List<_Argument> args, int atLine) {
     if (args.length < 2 || args.length > 6) {
       _invalid(
-        'UpdateRelStyle needs source and destination aliases and at most four style values',
+        tr(
+          "UpdateRelStyle needs source and destination aliases and at most four style values",
+        ),
         atLine,
       );
     }
-    final from = _text(args[0], 'source alias', atLine);
-    final to = _text(args[1], 'destination alias', atLine);
+    final from = _text(args[0], tr("source alias"), atLine);
+    final to = _text(args[1], tr("destination alias"), atLine);
     final properties = <String, String>{};
     const names = ['textColor', 'lineColor', 'offsetX', 'offsetY'];
     for (var i = 2; i < args.length; i++) {
@@ -840,7 +870,10 @@ class _C4Parser {
 
   void _updateLayout(List<_Argument> args, int atLine) {
     if (args.length != 2) {
-      _invalid('UpdateLayoutConfig needs shapeInRow and boundaryInRow', atLine);
+      _invalid(
+        tr("UpdateLayoutConfig needs shapeInRow and boundaryInRow"),
+        atLine,
+      );
     }
     final shape = _argumentValue(args[0], 'shapeInRow', atLine);
     final boundary = _argumentValue(args[1], 'boundaryInRow', atLine);
@@ -856,11 +889,14 @@ class _C4Parser {
     final match = RegExp(r'^\s*([+-]?\d+)').firstMatch(value);
     if (match == null) {
       if (field == 'shapeInRow' || field == 'boundaryInRow') return null;
-      _invalid('$field must begin with an integer', atLine);
+      _invalid(tr("{0} must begin with an integer", [field]), atLine);
     }
     final parsed = int.tryParse(match.group(1)!);
     if (parsed == null && field != 'shapeInRow' && field != 'boundaryInRow') {
-      _invalid('$field is outside the supported integer range', atLine);
+      _invalid(
+        tr("{0} is outside the supported integer range", [field]),
+        atLine,
+      );
     }
     return parsed;
   }
@@ -868,12 +904,16 @@ class _C4Parser {
   String _argumentValue(_Argument argument, String field, int atLine) {
     if (argument is _TextArgument) return argument.value;
     final values = (argument as _MapArgument).values;
-    if (values.length != 1) _invalid('$field must have one value', atLine);
+    if (values.length != 1) {
+      _invalid(tr("{0} must have one value", [field]), atLine);
+    }
     return values.values.single;
   }
 
   String _text(_Argument argument, String field, int atLine) {
-    if (argument is _MapArgument) _invalid('$field must be a string', atLine);
+    if (argument is _MapArgument) {
+      _invalid(tr("{0} must be a string", [field]), atLine);
+    }
     return (argument as _TextArgument).value;
   }
 
@@ -888,8 +928,10 @@ class _C4Parser {
     return null;
   }
 
-  Never _unsupportedAttribute(String name, int atLine) =>
-      _invalid('The "$name" attribute is not supported natively', atLine);
+  Never _unsupportedAttribute(String name, int atLine) => _invalid(
+    tr("The \"{0}\" attribute is not supported natively", [name]),
+    atLine,
+  );
 
   void _skipIgnored() {
     while (index < source.length) {
@@ -924,7 +966,7 @@ class _C4Parser {
 
   void _skipComment() {
     if (_startsWith('%%{')) {
-      _invalid('Unsupported Mermaid directive');
+      _invalid(tr("Unsupported Mermaid directive"));
     }
     while (index < source.length && _peek() != '\n' && _peek() != '\r') {
       index++;
@@ -944,7 +986,7 @@ class _C4Parser {
       configWrap = false;
     } else {
       _invalid(
-        'Only the Mermaid init setting c4.wrap is supported natively',
+        tr("Only the Mermaid init setting c4.wrap is supported natively"),
         directiveLine,
       );
     }
@@ -955,7 +997,7 @@ class _C4Parser {
   void _advanceLineEnd(int expectedLine) {
     _skipHorizontal();
     if (index < source.length && _peek() != '\n' && _peek() != '\r') {
-      _invalid('Unexpected text after statement', expectedLine);
+      _invalid(tr("Unexpected text after statement"), expectedLine);
     }
     if (index < source.length) _consumeNewline();
   }
@@ -964,7 +1006,7 @@ class _C4Parser {
     _skipHorizontal();
     if (_startsWith('%%')) _skipComment();
     if (index < source.length && _peek() != '\n' && _peek() != '\r') {
-      _invalid('Unexpected text after statement');
+      _invalid(tr("Unexpected text after statement"));
     }
     if (index < source.length) _consumeNewline();
   }

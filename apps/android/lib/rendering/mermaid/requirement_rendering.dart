@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:csslib/parser.dart' as css;
@@ -35,7 +36,7 @@ Color _color(String value, Color current) {
     final c = css.Color.css(value).rgba;
     return Color.fromRGBO(c.r, c.g, c.b, (c.a ?? 1).toDouble());
   } catch (_) {
-    throw FormatException('Unsupported requirement color: $value');
+    throw FormatException(tr("Unsupported requirement color: {0}", [value]));
   }
 }
 
@@ -56,7 +57,7 @@ NativeRequirementStyle nativeRequirementStyle(
   double number(String value) {
     final parsed = double.tryParse(value.replaceFirst(RegExp(r'px$'), ''));
     if (parsed == null || !parsed.isFinite || parsed < 0) {
-      throw FormatException('Unsupported requirement size: $value');
+      throw FormatException(tr("Unsupported requirement size: {0}", [value]));
     }
     return parsed;
   }
@@ -110,7 +111,9 @@ NativeRequirementStyle nativeRequirementStyle(
       case 'ry':
         break;
       default:
-        throw FormatException('Unsupported requirement style: $property');
+        throw FormatException(
+          tr("Unsupported requirement style: {0}", [property]),
+        );
     }
   }
   if (fillValue != null) out.fill = _color(fillValue, out.ink);
@@ -298,7 +301,7 @@ NativeRequirementLayout layoutNativeMermaidRequirement(
     final body = node.isElement
         ? [
             node.type.isEmpty ? '' : 'Type: ${node.type}',
-            node.docRef.isEmpty ? '' : 'Doc Ref: ${node.docRef}',
+            node.docRef.isEmpty ? '' : tr("Doc Ref: {0}", [node.docRef]),
           ]
         : [
             node.requirementId.isEmpty ? '' : 'ID: ${node.requirementId}',
@@ -339,7 +342,10 @@ NativeRequirementLayout layoutNativeMermaidRequirement(
   for (final rel in diagram.relations) {
     if (!metrics.containsKey(rel.from) || !metrics.containsKey(rel.to)) {
       throw FormatException(
-        'Unknown requirement relation endpoint: ${rel.from} → ${rel.to}',
+        tr("Unknown requirement relation endpoint: {0} → {1}", [
+          rel.from,
+          rel.to,
+        ]),
       );
     }
   }
@@ -431,6 +437,7 @@ class NativeMermaidRequirement extends StatelessWidget {
   final String? fontFamily;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final layout = layoutNativeMermaidRequirement(
       diagram,
       dark: dark,

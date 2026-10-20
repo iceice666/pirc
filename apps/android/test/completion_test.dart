@@ -62,17 +62,17 @@ void main() {
         ),
       );
       await t.pumpAndSettle();
-      await t.tap(find.text('需要你回應'));
+      await t.tap(find.text("Action required"));
       await t.pumpAndSettle();
       expect(g.prefs['q'], false);
       await t.scrollUntilVisible(
-        find.text('只顯示標題'),
+        find.text("Show title only"),
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      await t.ensureVisible(find.text('只顯示標題'));
+      await t.ensureVisible(find.text("Show title only"));
       await t.pumpAndSettle();
-      await t.tap(find.text('只顯示標題'));
+      await t.tap(find.text("Show title only"));
       await t.pumpAndSettle();
       expect(g.prefs['lock'], 'summary');
       await t.pumpWidget(const SizedBox());

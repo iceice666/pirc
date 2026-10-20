@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'gateway.dart';
 
 /// Workspace modes: the gateway's catalog says what a workspace can do. The UI
@@ -9,17 +10,18 @@ class ModeInfo {
   final Json data;
 
   String get id => '${data['id'] ?? ''}';
-  String get label => '${data['label'] ?? ''}';
+  String get label => tr('${data['label'] ?? ''}');
   String get description => '${data['description'] ?? ''}';
 
   /// The noun for one session in this mode ("chat", "session", …).
   String get noun {
     final noun = obj(data['ui'])['noun'];
-    return noun is String && noun.trim().isNotEmpty ? noun : 'session';
+    return tr(noun is String && noun.trim().isNotEmpty ? noun : 'session');
   }
 
   /// "chat" → "Chats", for tab and section labels.
-  String get nounPlural => capitalized('${noun}s');
+  String get nounPlural =>
+      tr(capitalized('${obj(data['ui'])['noun'] ?? 'session'}s'));
 
   /// The personal assistant's modes (chats and projects): no Work chrome.
   bool get assistant => data['assistant'] == 'full';

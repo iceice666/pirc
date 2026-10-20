@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -71,6 +72,7 @@ class _AppNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final media = MediaQuery.of(context);
     final available =
         media.size.height -
@@ -101,7 +103,7 @@ class _AppNotice extends StatelessWidget {
           const SizedBox(width: 8),
           WebIconButton(
             LucideIcons.x,
-            'Dismiss notification',
+            tr("Dismiss notification"),
             size: 32,
             onPressed: () =>
                 ScaffoldMessenger.of(context).hideCurrentSnackBar(),
@@ -152,9 +154,9 @@ Future<String?> input(
     builder: (context) => WebDialog(
       title: title,
       actions: [
-        WebButton('取消', onPressed: () => Navigator.pop(context)),
+        WebButton(tr("取消"), onPressed: () => Navigator.pop(context)),
         WebButton(
-          '確認',
+          tr("確認"),
           primary: true,
           onPressed: () => Navigator.pop(context, field.text),
         ),
@@ -212,12 +214,15 @@ class Surface extends StatelessWidget {
   final EdgeInsets padding;
   final bool layer;
   @override
-  Widget build(BuildContext context) => Material(
-    color: palette(context)[layer ? 'surface.layer' : 'surface.subtle'],
-    borderRadius: BorderRadius.circular(16),
-    clipBehavior: Clip.antiAlias,
-    child: Padding(padding: padding, child: child),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Material(
+      color: palette(context)[layer ? 'surface.layer' : 'surface.subtle'],
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: padding, child: child),
+    );
+  }
 }
 
 class RichTextBody extends StatelessWidget {
@@ -242,6 +247,7 @@ class RichTextBody extends StatelessWidget {
   final Color? textColor;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     void openLink(String href) {
       final target = parseFileTarget(href, base: linkBase);
       if (target != null) {
@@ -322,10 +328,10 @@ Widget inlineImages(List<Json> images) => Wrap(
             try {
               return Image.memory(
                 base64Decode('${image['base64']}'),
-                errorBuilder: (_, e, s) => const Text('圖片無法顯示'),
+                errorBuilder: (_, e, s) => Text(tr("圖片無法顯示")),
               );
             } catch (_) {
-              return const Text('圖片無法顯示');
+              return Text(tr("圖片無法顯示"));
             }
           },
         ),
@@ -345,20 +351,23 @@ class _RemotePageState extends State<RemotePage> {
   late Future<Json> future = widget.load();
   void reload() => setState(() => future = widget.load());
   @override
-  Widget build(BuildContext context) => FutureBuilder<Json>(
-    future: future,
-    builder: (context, s) {
-      if (s.hasError) {
-        return SupportingState(
-          title: '暫時無法載入',
-          detail: LiveController.describe(s.error!),
-          onRetry: reload,
-        );
-      }
-      if (!s.hasData) return const SupportingLoading();
-      return widget.builder(context, s.data!, reload);
-    },
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return FutureBuilder<Json>(
+      future: future,
+      builder: (context, s) {
+        if (s.hasError) {
+          return SupportingState(
+            title: tr("暫時無法載入"),
+            detail: LiveController.describe(s.error!),
+            onRetry: reload,
+          );
+        }
+        if (!s.hasData) return const SupportingLoading();
+        return widget.builder(context, s.data!, reload);
+      },
+    );
+  }
 }
 
 /// Final submission actions use ink; navigation and setup use the accent.
@@ -367,14 +376,17 @@ class FinalButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Widget child;
   @override
-  Widget build(BuildContext context) => FilledButton(
-    onPressed: onPressed,
-    style: FilledButton.styleFrom(
-      backgroundColor: palette(context)['action.primary'],
-      foregroundColor: palette(context)['action.onPrimary'],
-    ),
-    child: child,
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: palette(context)['action.primary'],
+        foregroundColor: palette(context)['action.onPrimary'],
+      ),
+      child: child,
+    );
+  }
 }
 
 /// Shared treatment for supporting screens absent from the visual prototypes.
@@ -412,84 +424,90 @@ class SupportingState extends StatelessWidget {
   final String title, detail;
   final VoidCallback? onRetry;
   @override
-  Widget build(BuildContext context) => Center(
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 17,
-                height: 24 / 17,
-                fontWeight: FontWeight.w600,
-                color: palette(context)['text.primary'],
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 17,
+                  height: 24 / 17,
+                  fontWeight: FontWeight.w600,
+                  color: palette(context)['text.primary'],
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              detail,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                height: 18 / 13,
-                color: palette(context)['text.secondary'],
+              const SizedBox(height: 8),
+              Text(
+                detail,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 18 / 13,
+                  color: palette(context)['text.secondary'],
+                ),
               ),
-            ),
-            if (onRetry != null) ...[
-              const SizedBox(height: 16),
-              TextButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(LucideIcons.refreshCw, size: 16),
-                label: const Text('重新載入'),
-              ),
+              if (onRetry != null) ...[
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(LucideIcons.refreshCw, size: 16),
+                  label: Text(tr("重新載入")),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class SupportingLoading extends StatelessWidget {
   const SupportingLoading({super.key});
   @override
-  Widget build(BuildContext context) => Center(
-    child: Semantics(
-      label: '正在載入',
-      child: ExcludeSemantics(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(
-                '正在載入…',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: palette(context)['text.muted'],
-                ),
-              ),
-              for (var i = 0; i < 3; i++)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: Container(
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: palette(context)['surface.subtle'],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Center(
+      child: Semantics(
+        label: tr("正在載入"),
+        child: ExcludeSemantics(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text(
+                  tr("正在載入…"),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: palette(context)['text.muted'],
                   ),
                 ),
-            ],
+                for (var i = 0; i < 3; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Container(
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: palette(context)['surface.subtle'],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/foundation.dart';
 import '../live/document_background_image.dart';
@@ -100,7 +101,7 @@ List<NativeHtmlBackgroundLayer> nativeHtmlBackgroundLayers(
   Iterable<MapEntry<String, String>> declarations,
 ) {
   var images = <String>[],
-      positions = ['left top'],
+      positions = [tr("left top")],
       sizes = ['auto'],
       repeats = ['repeat'];
   for (final e in declarations) {

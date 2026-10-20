@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -546,7 +547,7 @@ class NativeHtmlTextFieldState extends ChangeNotifier {
       throw ArgumentError.value(
         sanitizedHtml,
         'sanitizedHtml',
-        'Must be the exact fragment used to create this text-field state.',
+        tr("Must be the exact fragment used to create this text-field state."),
       );
     }
     return _annotatedHtml;
@@ -938,7 +939,9 @@ class NativeHtmlTextFieldState extends ChangeNotifier {
 
   _TextFieldRecord _recordFor(String key) {
     final record = _records[key];
-    if (record == null) throw StateError('Unknown HTML text field: $key');
+    if (record == null) {
+      throw StateError(tr("Unknown HTML text field: {0}", [key]));
+    }
     return record;
   }
 
@@ -1319,6 +1322,7 @@ class NativeHtmlTextFieldWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     if (!field.visible) return const SizedBox.shrink();
 
     final dark = Theme.of(context).brightness == Brightness.dark;

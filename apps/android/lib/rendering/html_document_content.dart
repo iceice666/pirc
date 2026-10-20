@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'dart:math' show min;
 import 'dart:typed_data';
@@ -233,7 +234,9 @@ _EncodingLabel? _encodingForLabel(String? rawLabel) {
 String _requireImplemented(_EncodingLabel label) {
   if (!label.implemented) {
     throw UnsupportedError(
-      'The recognized character encoding ${label.name} is not implemented.',
+      tr("The recognized character encoding {0} is not implemented.", [
+        label.name,
+      ]),
     );
   }
   return label.name;
@@ -542,7 +545,7 @@ String _decode(Uint8List bytes, String encoding) {
       return _decodeUtf16(remaining, littleEndian: false);
     default:
       throw UnsupportedError(
-        'The character encoding $encoding is not implemented.',
+        tr("The character encoding {0} is not implemented.", [encoding]),
       );
   }
 }

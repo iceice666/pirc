@@ -1,3 +1,5 @@
+import '../../l10n/app_i18n.dart';
+
 class NativeMermaidErAttribute {
   const NativeMermaidErAttribute({
     required this.type,
@@ -60,7 +62,7 @@ class NativeMermaidErDiagramData {
   final String accessibleDescription;
 
   String get semanticsLabel {
-    final parts = <String>['Entity relationship diagram'];
+    final parts = <String>[tr("Entity relationship diagram")];
     if (entities.isNotEmpty) {
       parts.add(
         'Entities: ${entities.map((item) => item.displayLabel).join(', ')}',
@@ -128,7 +130,7 @@ class _Relation {
 
 NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
   if (source.length > 50000) {
-    throw const FormatException('ER diagram exceeds 50000 characters');
+    throw FormatException(tr("ER diagram exceeds 50000 characters"));
   }
   final lines = source
       .replaceAll('\r\n', '\n')
@@ -144,7 +146,7 @@ NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
   _ErEntityBuilder? activeEntity;
 
   Never invalid(int line, String message) => throw FormatException(
-    'Invalid Mermaid ER diagram at line $line: $message',
+    tr("Invalid Mermaid ER diagram at line {0}: {1}", [line, message]),
   );
 
   _ErEntityBuilder ensure(String name, [String alias = '']) {
@@ -153,7 +155,7 @@ NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
       if (old.alias.isEmpty && alias.isNotEmpty) old.alias = alias;
       return old;
     }
-    if (name.isEmpty) throw const FormatException('Empty ER entity name');
+    if (name.isEmpty) throw FormatException(tr("Empty ER entity name"));
     final value = _ErEntityBuilder(name, entities.length, alias);
     entities[name] = value;
     return value;
@@ -180,18 +182,18 @@ NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
     if (_outside(line, ';') >= 0) {
       invalid(
         number,
-        'Unquoted semicolons are not supported by the pinned ER grammar',
+        tr("Unquoted semicolons are not supported by the pinned ER grammar"),
       );
     }
     if (!hasHeader) {
       if (line.toLowerCase() != 'erdiagram') {
-        invalid(number, 'Expected erDiagram header');
+        invalid(number, tr("Expected erDiagram header"));
       }
       hasHeader = true;
       continue;
     }
     if (line.startsWith('%%{')) {
-      invalid(number, 'Mermaid directives are unsupported');
+      invalid(number, tr("Mermaid directives are unsupported"));
     }
 
     if (activeEntity != null) {
@@ -208,7 +210,7 @@ NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
           }
         }
         if (line.substring(endBrace + 1).trim().isNotEmpty) {
-          invalid(number, 'Unexpected text after entity block');
+          invalid(number, tr("Unexpected text after entity block"));
         }
         activeEntity = null;
       } else {
@@ -224,12 +226,12 @@ NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
       caseSensitive: false,
     ).firstMatch(line);
     if (title != null) {
-      if (accTitle.isNotEmpty) invalid(number, 'Duplicate accTitle');
+      if (accTitle.isNotEmpty) invalid(number, tr("Duplicate accTitle"));
       accTitle = _unquote(title.group(1)!.trim());
       continue;
     }
     if (RegExp(r'^accDescr\s*\{\s*$', caseSensitive: false).hasMatch(line)) {
-      if (accDescription.isNotEmpty) invalid(number, 'Duplicate accDescr');
+      if (accDescription.isNotEmpty) invalid(number, tr("Duplicate accDescr"));
       inDescription = true;
       continue;
     }
@@ -238,7 +240,7 @@ NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
       caseSensitive: false,
     ).firstMatch(line);
     if (descr != null) {
-      if (accDescription.isNotEmpty) invalid(number, 'Duplicate accDescr');
+      if (accDescription.isNotEmpty) invalid(number, tr("Duplicate accDescr"));
       accDescription = _unquote(descr.group(1)!.trim());
       continue;
     }
@@ -255,7 +257,7 @@ NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
       r'^(?:direction|accTitle|accDescr)\b',
       caseSensitive: false,
     ).hasMatch(line)) {
-      invalid(number, 'Malformed direction or accessibility statement');
+      invalid(number, tr("Malformed direction or accessibility statement"));
     }
 
     final open = _outside(line, '{');
@@ -268,9 +270,9 @@ NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
       var alias = '';
       if (cursor < line.length && line[cursor] == '[') {
         final close = _outside(line, ']', cursor + 1);
-        if (close < 0) invalid(number, 'Unclosed entity alias');
+        if (close < 0) invalid(number, tr("Unclosed entity alias"));
         alias = _unquote(line.substring(cursor + 1, close).trim());
-        if (alias.isEmpty) invalid(number, 'Empty entity alias');
+        if (alias.isEmpty) invalid(number, tr("Empty entity alias"));
         cursor = close + 1;
       }
       final headerEnd = open < 0 ? line.length : open;
@@ -300,7 +302,7 @@ NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
             }
           }
           if (rest.substring(close + 1).trim().isNotEmpty) {
-            invalid(number, 'Unexpected text after entity block');
+            invalid(number, tr("Unexpected text after entity block"));
           }
         }
         continue;
@@ -308,7 +310,9 @@ NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
     }
 
     final relation = _parseRelation(line);
-    if (relation == null) invalid(number, 'Unsupported ER statement: $line');
+    if (relation == null) {
+      invalid(number, tr("Unsupported ER statement: {0}", [line]));
+    }
     final left = ensure(relation.left);
     final right = ensure(relation.right);
     edges.add(
@@ -322,11 +326,11 @@ NativeMermaidErDiagramData parseNativeMermaidErDiagram(String source) {
       ),
     );
   }
-  if (!hasHeader) throw const FormatException('Expected erDiagram header');
+  if (!hasHeader) throw FormatException(tr("Expected erDiagram header"));
   if (activeEntity != null) {
-    throw const FormatException('Unclosed entity block');
+    throw FormatException(tr("Unclosed entity block"));
   }
-  if (inDescription) throw const FormatException('Unclosed accDescr block');
+  if (inDescription) throw FormatException(tr("Unclosed accDescr block"));
   return NativeMermaidErDiagramData(
     entities: List.unmodifiable(
       entities.values.map((entity) => entity.freeze()),
@@ -361,7 +365,7 @@ String _stripErComment(
     }
   }
   if (quote.isNotEmpty && !allowUnclosedQuote) {
-    throw FormatException('Unclosed quoted text at line $lineNumber');
+    throw FormatException(tr("Unclosed quoted text at line {0}", [lineNumber]));
   }
   return value;
 }
@@ -474,7 +478,9 @@ NativeMermaidErAttribute _parseAttribute(String line, int number) {
   if (quoteIndex >= 0) {
     final token = _readName(text, quoteIndex);
     if (token == null || text.substring(token.end).trim().isNotEmpty) {
-      throw FormatException('Invalid ER attribute comment at line $number');
+      throw FormatException(
+        tr("Invalid ER attribute comment at line {0}", [number]),
+      );
     }
     comment = token.text;
     text = text.substring(0, quoteIndex).trim();
@@ -483,7 +489,9 @@ NativeMermaidErAttribute _parseAttribute(String line, int number) {
     if (singleIndex >= 0) {
       final token = _readName(text, singleIndex);
       if (token == null || text.substring(token.end).trim().isNotEmpty) {
-        throw FormatException('Invalid ER attribute comment at line $number');
+        throw FormatException(
+          tr("Invalid ER attribute comment at line {0}", [number]),
+        );
       }
       comment = token.text;
       text = text.substring(0, singleIndex).trim();
@@ -507,13 +515,15 @@ NativeMermaidErAttribute _parseAttribute(String line, int number) {
   final divider = text.lastIndexOf(RegExp(r'\s'));
   if (divider < 1 || divider >= text.length - 1) {
     throw FormatException(
-      'Invalid ER attribute at line $number: expected a type and name',
+      tr("Invalid ER attribute at line {0}: expected a type and name", [
+        number,
+      ]),
     );
   }
   final type = text.substring(0, divider).trim();
   final name = text.substring(divider).trim();
   if (type.isEmpty || name.isEmpty || name.contains(RegExp(r'\s'))) {
-    throw FormatException('Invalid ER attribute at line $number');
+    throw FormatException(tr("Invalid ER attribute at line {0}", [number]));
   }
   return NativeMermaidErAttribute(
     type: type,
@@ -623,7 +633,7 @@ String _card(String token) => switch (token) {
   '|o' || 'o|' => 'ZERO_OR_ONE',
   'o{' || '{o' || '}o' || 'o}' => 'ZERO_OR_MORE',
   '|{' || '}|' || '|}' || '{|' => 'ONE_OR_MORE',
-  _ => throw FormatException('Unsupported ER cardinality $token'),
+  _ => throw FormatException(tr("Unsupported ER cardinality {0}", [token])),
 };
 
 String? _wordCard(String value) {

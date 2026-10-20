@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -92,6 +93,7 @@ class _NativeDiffViewState extends State<NativeDiffView> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final p = palette(context),
         scaler = MediaQuery.textScalerOf(context),
         font = scaler.scale(12);
@@ -106,7 +108,7 @@ class _NativeDiffViewState extends State<NativeDiffView> {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
         child: Text(
-          'No changes.',
+          tr("No changes."),
           style: webText(
             context,
             size: 13,
@@ -161,7 +163,7 @@ class _NativeDiffViewState extends State<NativeDiffView> {
           ),
         );
         return Semantics(
-          label: 'Diff',
+          label: tr("Diff"),
           container: true,
           child: Focus(
             onKeyEvent: (node, event) {
@@ -310,7 +312,15 @@ class _NativeDiffViewState extends State<NativeDiffView> {
                                     ),
                                   ),
                                   child: Text(
-                                    'Show ${diffNumber(math.min(4000, lines.length - shown.length))} more lines (${diffNumber(lines.length - shown.length)} hidden)',
+                                    tr("Show {0} more lines ({1} hidden)", [
+                                      diffNumber(
+                                        math.min(
+                                          4000,
+                                          lines.length - shown.length,
+                                        ),
+                                      ),
+                                      diffNumber(lines.length - shown.length),
+                                    ]),
                                     style: style.copyWith(
                                       color: p['web.accent-ink'],
                                     ),
@@ -322,7 +332,7 @@ class _NativeDiffViewState extends State<NativeDiffView> {
                         else if (widget.truncated)
                           SizedBox(
                             width: b.maxWidth,
-                            child: meta('Diff truncated at 1 MB.'),
+                            child: meta(tr("Diff truncated at 1 MB.")),
                           ),
                       ],
                     ),

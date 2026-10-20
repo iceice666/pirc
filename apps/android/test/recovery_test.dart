@@ -23,11 +23,11 @@ void main() {
       final c = LiveController(g);
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
-      await t.tap(find.text('掃描 QR code'));
+      await t.tap(find.text("Scan QR code"));
       await t.pumpAndSettle();
       expect(g.calls.where((x) => x.$1 == 'pair'), isEmpty);
       scanned = 'test-link-from-scanner';
-      await t.tap(find.text('掃描 QR code'));
+      await t.tap(find.text("Scan QR code"));
       await t.pumpAndSettle();
       expect(g.calls.where((x) => x.$1 == 'pair').single.$2['link'], scanned);
       expect(c.origin, 'https://gateway.example');
@@ -61,7 +61,7 @@ void main() {
           home: PairingScreen(controller: c),
         ),
       );
-      await t.tap(find.text('掃描 QR code'));
+      await t.tap(find.text("Scan QR code"));
       await t.pumpAndSettle();
       expect(find.textContaining('java.lang'), findsNothing);
       expect(find.text('暫時無法開啟掃描器，請重試或貼上配對連結。'), findsOneWidget);
@@ -80,39 +80,40 @@ void main() {
       await g.stream.close();
     }
   });
-  testWidgets('empty account creates a session through the web entry point', (
-    t,
-  ) async {
-    final g = FakeGateway();
-    var created = false;
-    g.handler = (method, args) async {
-      if (method == 'request' && args['path'] == '/api/sessions') {
-        if (args['method'] == 'POST') {
-          created = true;
-          return {'session': g.snapshot['session']};
+  testWidgets(
+    'empty account opens a local draft through the new-session entry point',
+    (t) async {
+      final g = FakeGateway();
+      var created = false;
+      g.handler = (method, args) async {
+        if (method == 'request' && args['path'] == '/api/sessions') {
+          if (args['method'] == 'POST') {
+            created = true;
+            return {'session': g.snapshot['session']};
+          }
+          return {
+            'sessions': created ? [g.snapshot['session']] : [],
+          };
         }
-        return {
-          'sessions': created ? [g.snapshot['session']] : [],
-        };
-      }
-      return g.normal(method, args);
-    };
-    final c = LiveController(g);
-    await t.pumpWidget(MobileApp(theme: theme, controller: c));
-    await t.pumpAndSettle();
-    expect(find.text('No session could be loaded.'), findsOneWidget);
-    await t.tap(find.text('New session'));
-    await t.pumpAndSettle();
-    expect(find.text('Create a session'), findsOneWidget);
-    await t.tap(find.text('Create session'));
-    await t.pumpAndSettle();
-    g.publish('s');
-    await t.pumpAndSettle();
-    expect(c.sessionId, 's');
-    expect(find.byKey(const Key('live-draft')), findsOneWidget);
-    expect(find.text('Create a session'), findsNothing);
-    expect(g.calls.where((x) => x.$1 == 'command'), isEmpty);
-    await t.pumpWidget(const SizedBox());
-    await g.stream.close();
-  });
+        return g.normal(method, args);
+      };
+      final c = LiveController(g);
+      await t.pumpWidget(MobileApp(theme: theme, controller: c));
+      await t.pumpAndSettle();
+      expect(find.text('No session could be loaded.'), findsOneWidget);
+      await t.tap(find.text('New session'));
+      await t.pumpAndSettle();
+      expect(find.text('Create a session'), findsOneWidget);
+      await t.tap(find.text('Create session'));
+      await t.pumpAndSettle();
+      expect(c.isDraftSession, true);
+      expect(created, false);
+      expect(c.sessions, isEmpty);
+      expect(find.byKey(const Key('live-draft')), findsOneWidget);
+      expect(find.text('Create a session'), findsNothing);
+      expect(g.calls.where((x) => x.$1 == 'command'), isEmpty);
+      await t.pumpWidget(const SizedBox());
+      await g.stream.close();
+    },
+  );
 }

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -94,7 +95,7 @@ class NativeHtmlScriptFileSelections {
             .expand((e) => e.value.$2)
             .fold<int>(0, (n, f) => n + f.length) +
         files.fold<int>(0, (n, f) => n + f.length);
-    if (total > maxBytes) throw StateError('此文件保留的選檔內容超過 32 MiB 限制。');
+    if (total > maxBytes) throw StateError(tr("此文件保留的選檔內容超過 32 MiB 限制。"));
     final saved = List<NativeHtmlFile>.unmodifiable(files);
     _values[id] = (version, saved);
     return saved;
@@ -216,7 +217,7 @@ class NativeHtmlFileInputState extends ChangeNotifier {
       throw ArgumentError.value(
         sanitizedHtml,
         'sanitizedHtml',
-        'Must be the exact fragment used to create this file-input state.',
+        tr("Must be the exact fragment used to create this file-input state."),
       );
     }
     return _annotatedHtml;
@@ -370,7 +371,7 @@ class NativeHtmlFileInputState extends ChangeNotifier {
         ..descriptor = newDescriptor
         ..owner = this
         ..focusNode.debugLabel = newDescriptor.label.isEmpty
-            ? 'HTML file input'
+            ? tr("HTML file input")
             : newDescriptor.label
         ..focusNode.canRequestFocus =
             !newDescriptor.disabled && newDescriptor.visible
@@ -576,7 +577,9 @@ class NativeHtmlFileInputState extends ChangeNotifier {
         scriptId: original.scriptId,
         fileResetVersion: original.fileResetVersion,
       );
-      record.focusNode.debugLabel = label.isEmpty ? 'HTML file input' : label;
+      record.focusNode.debugLabel = label.isEmpty
+          ? tr("HTML file input")
+          : label;
       record.focusNode.canRequestFocus = !original.disabled && original.visible;
       record.focusNode.skipTraversal = original.disabled || !original.visible;
     }
@@ -719,7 +722,9 @@ class NativeHtmlFileInputState extends ChangeNotifier {
 
   _FileInputRecord _recordFor(String key) {
     final record = _records[key];
-    if (record == null) throw StateError('Unknown HTML file input: $key');
+    if (record == null) {
+      throw StateError(tr("Unknown HTML file input: {0}", [key]));
+    }
     return record;
   }
 
@@ -847,6 +852,7 @@ class NativeHtmlFileInputWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     if (!control.visible) return const SizedBox.shrink();
     final enabled = !control.disabled;
     final dark = Theme.of(context).brightness == Brightness.dark;

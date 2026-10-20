@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 // Native, bounded Mermaid 11.17.2 gitGraph renderer.
 // Upstream source is MIT licensed; see MERMAID_MIT_LICENSE.txt.
 import 'dart:math' as math;
@@ -198,7 +199,7 @@ NativeGitGraphLayout layoutNativeMermaidGitGraph(
   for (final commit in sortedCommits) {
     final branchPosition = branchRawPositions[commit.branch];
     if (branchPosition == null) {
-      throw FormatException('Missing branch for commit ${commit.id}');
+      throw FormatException(tr("Missing branch for commit {0}", [commit.id]));
     }
     final withOffset = commitCursor + layoutOffset;
     rawCenters[commit.id] = vertical
@@ -351,7 +352,9 @@ NativeGitGraphLayout layoutNativeMermaidGitGraph(
       final start = shiftedCenters[parentId];
       final end = shiftedCenters[child.id];
       if (parent == null || start == null || end == null) {
-        throw FormatException('GitGraph commit parent is missing: $parentId');
+        throw FormatException(
+          tr("GitGraph commit parent is missing: {0}", [parentId]),
+        );
       }
       final reroute = _shouldReroute(
         parent,
@@ -496,6 +499,7 @@ class NativeMermaidGitGraph extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final layout = layoutNativeMermaidGitGraph(
       diagram,
       dark: dark,

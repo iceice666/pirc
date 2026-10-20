@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'dart:ui' show SemanticsRole;
 import 'package:flutter/material.dart';
@@ -133,7 +134,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
     final badgeWidth = unread > 0
         ? 6 + 12 + _textWidth(context, '$unread', countStyle)
         : 0.0;
-    final settingsWidth = _textWidth(context, 'Settings', labelStyle);
+    final settingsWidth = _textWidth(context, tr("Settings"), labelStyle);
     const horizontalPadding = 20.0;
     const tabGap = 4.0;
     return horizontalPadding * 2 +
@@ -160,6 +161,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
   );
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final c = widget.controller;
     final w = c.workspaces
         .where((w) => w['id'] == widget.workspaceId)
@@ -167,8 +169,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
     if (w == null) {
       return Column(
         children: [
-          WebButton('Back to the list', onPressed: widget.onBack),
-          const WebNotice('This workspace is no longer available.'),
+          WebButton(tr("Back to the list"), onPressed: widget.onBack),
+          WebNotice(tr("This workspace is no longer available.")),
         ],
       );
     }
@@ -207,7 +209,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 if (phone) ...[
                   WebIconButton(
                     LucideIcons.chevronLeft,
-                    'Back to the list',
+                    tr("Back to the list"),
                     size: 36,
                     iconSize: 22,
                     onPressed: widget.onBack,
@@ -217,7 +219,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 if (!phone && widget.sidebarCollapsed)
                   WebIconButton(
                     LucideIcons.panelLeftOpen,
-                    'Expand sidebar',
+                    tr("Expand sidebar"),
                     onPressed: widget.onExpand,
                   ),
                 Icon(
@@ -272,7 +274,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 180),
                   child: WebButton(
-                    'New $noun',
+                    tr("New {0}", [noun]),
                     primary: true,
                     icon: LucideIcons.squarePen,
                     onPressed: online && !deleting && !readOnly
@@ -296,7 +298,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 children: [
                   const WebNotice(workspaceDeletionNotice, error: true),
                   WebButton(
-                    'Finish deleting…',
+                    tr("Finish deleting…"),
                     key: const ValueKey('project-deletion-finish'),
                     primary: true,
                     disabledOpacity: .5,
@@ -320,14 +322,14 @@ class _WorkspacePageState extends State<WorkspacePage> {
               );
 
               Widget tabButton(bool tab) {
-                final tabLabel = tab ? 'Settings' : mode.nounPlural;
+                final tabLabel = tab ? tr("Settings") : mode.nounPlural;
                 final tabWidget = Semantics(
                   key: Key(
                     tab ? 'workspace-tab-settings' : 'workspace-tab-sessions',
                   ),
                   role: SemanticsRole.tab,
                   label: tab
-                      ? 'Settings'
+                      ? tr("Settings")
                       : '${mode.nounPlural}${unread > 0 ? ', $unread unread' : ''}',
                   selected: settings == tab,
                   child: InkWell(
@@ -425,7 +427,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                   onKeyEvent: _handleTabKey,
                   child: Semantics(
                     role: SemanticsRole.tabBar,
-                    label: '${w['displayName']} sections',
+                    label: tr("{0} sections", [w['displayName']]),
                     explicitChildNodes: true,
                     child: Row(
                       children: [
@@ -442,7 +444,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
           Expanded(
             child: Semantics(
               role: SemanticsRole.tabPanel,
-              label: settings ? 'Settings' : 'Sessions',
+              label: settings ? tr("Settings") : tr("Sessions"),
               explicitChildNodes: true,
               child: SingleChildScrollView(
                 child: Align(
@@ -469,7 +471,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                                     Expanded(
                                       child: WebSearch(
                                         controller: query,
-                                        label: 'Search ${noun}s',
+                                        label: tr("Search {0}s", [noun]),
                                         onChanged: (_) => setState(() {}),
                                       ),
                                     ),
@@ -477,8 +479,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
                                       const SizedBox(width: 8),
                                       WebButton(
                                         showDone
-                                            ? 'Hide done'
-                                            : 'Show done · $done',
+                                            ? tr("Hide done")
+                                            : tr("Show done · {0}", [done]),
                                         height: 30,
                                         fontSize: 12,
                                         horizontalPadding: 10,
@@ -535,7 +537,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
                                               ),
                                             ),
                                             Text(
-                                              '${group.sessions.length} runs',
+                                              tr("{0} runs", [
+                                                group.sessions.length,
+                                              ]),
                                               style: webText(
                                                 context,
                                                 size: 11,
@@ -562,10 +566,15 @@ class _WorkspacePageState extends State<WorkspacePage> {
                                     padding: const EdgeInsets.all(12),
                                     child: Text(
                                       query.text.isNotEmpty
-                                          ? 'Nothing matches.'
+                                          ? tr("Nothing matches.")
                                           : done > 0
-                                          ? 'Every $noun here is done.'
-                                          : 'No ${noun}s yet. Start one with “New $noun”.',
+                                          ? tr("Every {0} here is done.", [
+                                              noun,
+                                            ])
+                                          : tr(
+                                              "No {0}s yet. Start one with “New {1}”.",
+                                              [noun, noun],
+                                            ),
                                       style: webText(
                                         context,
                                         size: 13,

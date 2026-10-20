@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:ui' show SemanticsRole;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -33,375 +34,394 @@ class _TerminalPaneState extends State<TerminalPane> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: state,
-    builder: (context, _) {
-      final p = palette(context), active = TickerMode.valuesOf(context).enabled;
-      final touch =
-          widget.touch ??
-          [
-            TargetPlatform.android,
-            TargetPlatform.iOS,
-          ].contains(defaultTargetPlatform);
-      final error = state.error.isNotEmpty ? state.error : state.listError;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: p['web.line'])),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  if (state.terminals.isNotEmpty)
-                    Semantics(
-                      role: SemanticsRole.tabBar,
-                      container: true,
-                      label: 'Terminals',
-                      child: Row(
-                        children: [
-                          for (final (index, terminal)
-                              in state.terminals.indexed) ...[
-                            if (index > 0) const SizedBox(width: 4),
-                            Builder(
-                              builder: (context) {
-                                final terminalId = '${terminal['id']}';
-                                final tabLabel =
-                                    '${terminal['title']} ${index + 1}';
-                                final node = tabFocus(terminalId);
-                                void selectTab() {
-                                  state.select(terminalId);
-                                  WidgetsBinding.instance.addPostFrameCallback((
-                                    _,
-                                  ) {
-                                    if (mounted) node.requestFocus();
-                                  });
-                                }
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return AnimatedBuilder(
+      animation: state,
+      builder: (context, _) {
+        final p = palette(context),
+            active = TickerMode.valuesOf(context).enabled;
+        final touch =
+            widget.touch ??
+            [
+              TargetPlatform.android,
+              TargetPlatform.iOS,
+            ].contains(defaultTargetPlatform);
+        final error = state.error.isNotEmpty ? state.error : state.listError;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: p['web.line'])),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    if (state.terminals.isNotEmpty)
+                      Semantics(
+                        role: SemanticsRole.tabBar,
+                        container: true,
+                        label: tr("Terminals"),
+                        child: Row(
+                          children: [
+                            for (final (index, terminal)
+                                in state.terminals.indexed) ...[
+                              if (index > 0) const SizedBox(width: 4),
+                              Builder(
+                                builder: (context) {
+                                  final terminalId = '${terminal['id']}';
+                                  final tabLabel =
+                                      '${terminal['title']} ${index + 1}';
+                                  final node = tabFocus(terminalId);
+                                  void selectTab() {
+                                    state.select(terminalId);
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                          if (mounted) node.requestFocus();
+                                        });
+                                  }
 
-                                return ListenableBuilder(
-                                  listenable: node,
-                                  builder: (context, _) => Semantics(
-                                    container: true,
-                                    role: SemanticsRole.tab,
-                                    label: tabLabel,
-                                    selected: state.current == terminalId,
-                                    focusable: true,
-                                    focused: node.hasFocus,
-                                    onTap: selectTab,
-                                    child: Opacity(
-                                      opacity: terminal['exited'] == true
-                                          ? .6
-                                          : 1,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
+                                  return ListenableBuilder(
+                                    listenable: node,
+                                    builder: (context, _) => Semantics(
+                                      container: true,
+                                      role: SemanticsRole.tab,
+                                      label: tabLabel,
+                                      selected: state.current == terminalId,
+                                      focusable: true,
+                                      focused: node.hasFocus,
+                                      onTap: selectTab,
+                                      child: Opacity(
+                                        opacity: terminal['exited'] == true
+                                            ? .6
+                                            : 1,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            color: state.current == terminalId
+                                                ? p['web.bg-active']
+                                                : null,
                                           ),
-                                          color: state.current == terminalId
-                                              ? p['web.bg-active']
-                                              : null,
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Focus(
-                                              onKeyEvent: (_, event) {
-                                                if (event is! KeyDownEvent) {
-                                                  return KeyEventResult.ignored;
-                                                }
-                                                final key = event.logicalKey;
-                                                if (key ==
-                                                    LogicalKeyboardKey.delete) {
-                                                  state.close(terminal);
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Focus(
+                                                onKeyEvent: (_, event) {
+                                                  if (event is! KeyDownEvent) {
+                                                    return KeyEventResult
+                                                        .ignored;
+                                                  }
+                                                  final key = event.logicalKey;
+                                                  if (key ==
+                                                      LogicalKeyboardKey
+                                                          .delete) {
+                                                    state.close(terminal);
+                                                    return KeyEventResult
+                                                        .handled;
+                                                  }
+                                                  int? next;
+                                                  if (key ==
+                                                      LogicalKeyboardKey
+                                                          .arrowRight) {
+                                                    next =
+                                                        (index + 1) %
+                                                        state.terminals.length;
+                                                  }
+                                                  if (key ==
+                                                      LogicalKeyboardKey
+                                                          .arrowLeft) {
+                                                    next =
+                                                        (index -
+                                                            1 +
+                                                            state
+                                                                .terminals
+                                                                .length) %
+                                                        state.terminals.length;
+                                                  }
+                                                  if (key ==
+                                                      LogicalKeyboardKey.home) {
+                                                    next = 0;
+                                                  }
+                                                  if (key ==
+                                                      LogicalKeyboardKey.end) {
+                                                    next =
+                                                        state.terminals.length -
+                                                        1;
+                                                  }
+                                                  if (next == null) {
+                                                    return KeyEventResult
+                                                        .ignored;
+                                                  }
+                                                  final id =
+                                                      '${state.terminals[next]['id']}';
+                                                  state.select(id);
+                                                  WidgetsBinding.instance
+                                                      .addPostFrameCallback((
+                                                        _,
+                                                      ) {
+                                                        if (mounted) {
+                                                          tabFocus(
+                                                            id,
+                                                          ).requestFocus();
+                                                        }
+                                                      });
                                                   return KeyEventResult.handled;
-                                                }
-                                                int? next;
-                                                if (key ==
-                                                    LogicalKeyboardKey
-                                                        .arrowRight) {
-                                                  next =
-                                                      (index + 1) %
-                                                      state.terminals.length;
-                                                }
-                                                if (key ==
-                                                    LogicalKeyboardKey
-                                                        .arrowLeft) {
-                                                  next =
-                                                      (index -
-                                                          1 +
-                                                          state
-                                                              .terminals
-                                                              .length) %
-                                                      state.terminals.length;
-                                                }
-                                                if (key ==
-                                                    LogicalKeyboardKey.home) {
-                                                  next = 0;
-                                                }
-                                                if (key ==
-                                                    LogicalKeyboardKey.end) {
-                                                  next =
-                                                      state.terminals.length -
-                                                      1;
-                                                }
-                                                if (next == null) {
-                                                  return KeyEventResult.ignored;
-                                                }
-                                                final id =
-                                                    '${state.terminals[next]['id']}';
-                                                state.select(id);
-                                                WidgetsBinding.instance
-                                                    .addPostFrameCallback((_) {
-                                                      if (mounted) {
-                                                        tabFocus(
-                                                          id,
-                                                        ).requestFocus();
-                                                      }
-                                                    });
-                                                return KeyEventResult.handled;
-                                              },
-                                              child: ExcludeSemantics(
-                                                child: Tooltip(
-                                                  message:
-                                                      'Delete closes this terminal',
-                                                  child: InkWell(
-                                                    key: ValueKey(
-                                                      'terminal-tab-$terminalId',
+                                                },
+                                                child: ExcludeSemantics(
+                                                  child: Tooltip(
+                                                    message: tr(
+                                                      "Delete closes this terminal",
                                                     ),
-                                                    focusNode: node,
-                                                    canRequestFocus:
-                                                        state.current ==
-                                                        terminalId,
-                                                    onTap: selectTab,
-                                                    splashFactory:
-                                                        NoSplash.splashFactory,
-                                                    child: Container(
-                                                      constraints:
-                                                          BoxConstraints(
-                                                            minHeight: touch
-                                                                ? 40
-                                                                : 26,
-                                                          ),
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            left: 8,
-                                                            right: 4,
-                                                          ),
-                                                      child: Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          Icon(
-                                                            LucideIcons
-                                                                .squareTerminal,
-                                                            size: 13,
-                                                            color:
-                                                                p[state.current ==
+                                                    child: InkWell(
+                                                      key: ValueKey(
+                                                        'terminal-tab-$terminalId',
+                                                      ),
+                                                      focusNode: node,
+                                                      canRequestFocus:
+                                                          state.current ==
+                                                          terminalId,
+                                                      onTap: selectTab,
+                                                      splashFactory: NoSplash
+                                                          .splashFactory,
+                                                      child: Container(
+                                                        constraints:
+                                                            BoxConstraints(
+                                                              minHeight: touch
+                                                                  ? 40
+                                                                  : 26,
+                                                            ),
+                                                        padding:
+                                                            const EdgeInsets.only(
+                                                              left: 8,
+                                                              right: 4,
+                                                            ),
+                                                        child: Row(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            Icon(
+                                                              LucideIcons
+                                                                  .squareTerminal,
+                                                              size: 13,
+                                                              color:
+                                                                  p[state.current ==
+                                                                          terminalId
+                                                                      ? 'text.primary'
+                                                                      : 'text.secondary'],
+                                                            ),
+                                                            const SizedBox(
+                                                              width: 5,
+                                                            ),
+                                                            Text(
+                                                              tabLabel,
+                                                              style: webText(
+                                                                context,
+                                                                size: 12,
+                                                                color:
+                                                                    state.current ==
                                                                         terminalId
                                                                     ? 'text.primary'
-                                                                    : 'text.secondary'],
-                                                          ),
-                                                          const SizedBox(
-                                                            width: 5,
-                                                          ),
-                                                          Text(
-                                                            tabLabel,
-                                                            style: webText(
-                                                              context,
-                                                              size: 12,
-                                                              color:
-                                                                  state.current ==
-                                                                      terminalId
-                                                                  ? 'text.primary'
-                                                                  : 'text.secondary',
+                                                                    : 'text.secondary',
+                                                              ),
                                                             ),
-                                                          ),
-                                                        ],
+                                                          ],
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                            Semantics(
-                                              label:
-                                                  'Close terminal ${index + 1}',
-                                              button: true,
-                                              focusable: false,
-                                              onTap: () =>
-                                                  state.close(terminal),
-                                              excludeSemantics: true,
-                                              child: Tooltip(
-                                                message:
-                                                    'Close terminal ${index + 1}',
-                                                child: InkWell(
-                                                  canRequestFocus: false,
-                                                  onTap: () =>
-                                                      state.close(terminal),
-                                                  splashFactory:
-                                                      NoSplash.splashFactory,
-                                                  child: Container(
-                                                    height: touch ? 40 : 26,
-                                                    padding: EdgeInsets.only(
-                                                      left: touch ? 8 : 2,
-                                                      right: touch ? 12 : 6,
-                                                    ),
-                                                    child: Icon(
-                                                      LucideIcons.x,
-                                                      size: 12,
-                                                      color: p['text.muted'],
+                                              Semantics(
+                                                label: tr(
+                                                  "Close terminal {0}",
+                                                  [index + 1],
+                                                ),
+                                                button: true,
+                                                focusable: false,
+                                                onTap: () =>
+                                                    state.close(terminal),
+                                                excludeSemantics: true,
+                                                child: Tooltip(
+                                                  message: tr(
+                                                    "Close terminal {0}",
+                                                    [index + 1],
+                                                  ),
+                                                  child: InkWell(
+                                                    canRequestFocus: false,
+                                                    onTap: () =>
+                                                        state.close(terminal),
+                                                    splashFactory:
+                                                        NoSplash.splashFactory,
+                                                    child: Container(
+                                                      height: touch ? 40 : 26,
+                                                      padding: EdgeInsets.only(
+                                                        left: touch ? 8 : 2,
+                                                        right: touch ? 12 : 6,
+                                                      ),
+                                                      child: Icon(
+                                                        LucideIcons.x,
+                                                        size: 12,
+                                                        color: p['text.muted'],
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    if (state.terminals.isNotEmpty) const SizedBox(width: 4),
+                    WebIconButton(
+                      LucideIcons.plus,
+                      state.hasControl
+                          ? tr("New terminal")
+                          : tr("Take control to open a terminal"),
+                      onPressed: state.busy || !state.hasControl
+                          ? null
+                          : state.create,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (error.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: p['status.dangerSoft'],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  error,
+                  style: webText(
+                    context,
+                    size: 12.5,
+                    color: 'status.danger',
+                  ).copyWith(height: 1.45),
+                ),
+              ),
+            if (state.terminals.isEmpty)
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            LucideIcons.squareTerminal,
+                            size: 22,
+                            color: p['text.muted'],
+                          ),
+                          const SizedBox(height: 10),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 300),
+                            child: Text(
+                              tr(
+                                "Run commands in this workspace. The shell runs as the gateway’s account, just like the agent’s own tools.",
+                              ),
+                              textAlign: TextAlign.center,
+                              style: webText(
+                                context,
+                                size: 13,
+                                color: 'text.muted',
+                              ).copyWith(height: 1.5),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Opacity(
+                            opacity: state.busy || !state.hasControl ? .5 : 1,
+                            child: TextButton(
+                              onPressed: state.busy || !state.hasControl
+                                  ? null
+                                  : state.create,
+                              style: TextButton.styleFrom(
+                                minimumSize: const Size(0, 36),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                backgroundColor: p['accent.default'],
+                                foregroundColor: p['accent.on'],
+                                disabledForegroundColor: p['accent.on'],
+                                shape: const StadiumBorder(),
+                                textStyle: webText(
+                                  context,
+                                  size: 14,
+                                  weight: FontWeight.w500,
+                                ),
+                              ),
+                              child: Text(tr("Open terminal")),
+                            ),
+                          ),
+                          if (!state.hasControl) ...[
+                            const SizedBox(height: 10),
+                            Text(
+                              tr("Take control of the session to open one."),
+                              textAlign: TextAlign.center,
+                              style: webText(
+                                context,
+                                size: 13,
+                                color: 'text.muted',
+                              ).copyWith(height: 1.5),
                             ),
                           ],
                         ],
                       ),
                     ),
-                  if (state.terminals.isNotEmpty) const SizedBox(width: 4),
-                  WebIconButton(
-                    LucideIcons.plus,
-                    state.hasControl
-                        ? 'New terminal'
-                        : 'Take control to open a terminal',
-                    onPressed: state.busy || !state.hasControl
-                        ? null
-                        : state.create,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (error.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: p['status.dangerSoft'],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                error,
-                style: webText(
-                  context,
-                  size: 12.5,
-                  color: 'status.danger',
-                ).copyWith(height: 1.45),
-              ),
-            ),
-          if (state.terminals.isEmpty)
-            Expanded(
-              child: Center(
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          LucideIcons.squareTerminal,
-                          size: 22,
-                          color: p['text.muted'],
-                        ),
-                        const SizedBox(height: 10),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 300),
-                          child: Text(
-                            'Run commands in this workspace. The shell runs as the gateway’s account, just like the agent’s own tools.',
-                            textAlign: TextAlign.center,
-                            style: webText(
-                              context,
-                              size: 13,
-                              color: 'text.muted',
-                            ).copyWith(height: 1.5),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Opacity(
-                          opacity: state.busy || !state.hasControl ? .5 : 1,
-                          child: TextButton(
-                            onPressed: state.busy || !state.hasControl
-                                ? null
-                                : state.create,
-                            style: TextButton.styleFrom(
-                              minimumSize: const Size(0, 36),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              backgroundColor: p['accent.default'],
-                              foregroundColor: p['accent.on'],
-                              disabledForegroundColor: p['accent.on'],
-                              shape: const StadiumBorder(),
-                              textStyle: webText(
-                                context,
-                                size: 14,
-                                weight: FontWeight.w500,
-                              ),
-                            ),
-                            child: const Text('Open terminal'),
-                          ),
-                        ),
-                        if (!state.hasControl) ...[
-                          const SizedBox(height: 10),
-                          Text(
-                            'Take control of the session to open one.',
-                            textAlign: TextAlign.center,
-                            style: webText(
-                              context,
-                              size: 13,
-                              color: 'text.muted',
-                            ).copyWith(height: 1.5),
-                          ),
-                        ],
-                      ],
-                    ),
                   ),
                 ),
-              ),
-            )
-          else
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  for (final (index, terminal) in state.terminals.indexed)
-                    Offstage(
-                      key: ValueKey('${state.epoch}:${terminal['id']}'),
-                      offstage: terminal['id'] != state.current,
-                      child: ExcludeFocus(
-                        excluding: !active || terminal['id'] != state.current,
-                        child: NativeTerminalView(
-                          key: ValueKey('${state.epoch}:${terminal['id']}'),
-                          controller: widget.controller,
-                          info: terminal,
-                          tabLabel: '${terminal['title']} ${index + 1}',
-                          touch: touch,
-                          visible: active && terminal['id'] == state.current,
-                          onExit: (code) =>
-                              state.exited('${terminal['id']}', code),
+              )
+            else
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    for (final (index, terminal) in state.terminals.indexed)
+                      Offstage(
+                        key: ValueKey('${state.epoch}:${terminal['id']}'),
+                        offstage: terminal['id'] != state.current,
+                        child: ExcludeFocus(
+                          excluding: !active || terminal['id'] != state.current,
+                          child: NativeTerminalView(
+                            key: ValueKey('${state.epoch}:${terminal['id']}'),
+                            controller: widget.controller,
+                            info: terminal,
+                            tabLabel: '${terminal['title']} ${index + 1}',
+                            touch: touch,
+                            visible: active && terminal['id'] == state.current,
+                            onExit: (code) =>
+                                state.exited('${terminal['id']}', code),
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
-        ],
-      );
-    },
-  );
+          ],
+        );
+      },
+    );
+  }
 }
 
 class NativeTerminalView extends StatefulWidget {
@@ -612,104 +632,110 @@ class _NativeTerminalViewState extends State<NativeTerminalView>
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: session,
-    builder: (context, _) {
-      final p = palette(context);
-      final style = _terminalTextStyle(context);
-      final terminalTheme = _terminalColors(context);
-      return Semantics(
-        role: SemanticsRole.tabPanel,
-        label: widget.tabLabel,
-        child: Container(
-          color: p['code.bg'],
-          padding: const EdgeInsets.fromLTRB(8, 6, 4, 4),
-          child: LayoutBuilder(
-            builder: (context, bounds) => Column(
-              children: [
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: ListenableBuilder(
-                          listenable: focus,
-                          builder: (context, _) => Semantics(
-                            label: 'Terminal input',
-                            textField: true,
-                            enabled: true,
-                            focusable: true,
-                            focused: focus.hasFocus,
-                            onTap: () {
-                              if (widget.visible) focus.requestFocus();
-                            },
-                            child: GestureDetector(
-                              key: const ValueKey('terminal-zoom-surface'),
-                              onScaleStart: (_) => _pinchStartSize = _fontSize,
-                              onScaleUpdate: (details) {
-                                if (details.pointerCount >= 2) {
-                                  _setFontSize(_pinchStartSize * details.scale);
-                                }
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return AnimatedBuilder(
+      animation: session,
+      builder: (context, _) {
+        final p = palette(context);
+        final style = _terminalTextStyle(context);
+        final terminalTheme = _terminalColors(context);
+        return Semantics(
+          role: SemanticsRole.tabPanel,
+          label: widget.tabLabel,
+          child: Container(
+            color: p['code.bg'],
+            padding: const EdgeInsets.fromLTRB(8, 6, 4, 4),
+            child: LayoutBuilder(
+              builder: (context, bounds) => Column(
+                children: [
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: ListenableBuilder(
+                            listenable: focus,
+                            builder: (context, _) => Semantics(
+                              label: tr("Terminal input"),
+                              textField: true,
+                              enabled: true,
+                              focusable: true,
+                              focused: focus.hasFocus,
+                              onTap: () {
+                                if (widget.visible) focus.requestFocus();
                               },
-                              child: TerminalView(
-                                session.terminal,
-                                key: ObjectKey(session.terminal),
-                                focusNode: focus,
-                                onKeyEvent: _zoomKey,
-                                autoResize: widget.visible,
-                                padding: EdgeInsets.zero,
-                                textStyle: style,
-                                textScaler: MediaQuery.textScalerOf(context),
-                                keyboardAppearance: Theme.of(
+                              child: GestureDetector(
+                                key: const ValueKey('terminal-zoom-surface'),
+                                onScaleStart: (_) =>
+                                    _pinchStartSize = _fontSize,
+                                onScaleUpdate: (details) {
+                                  if (details.pointerCount >= 2) {
+                                    _setFontSize(
+                                      _pinchStartSize * details.scale,
+                                    );
+                                  }
+                                },
+                                child: TerminalView(
+                                  session.terminal,
+                                  key: ObjectKey(session.terminal),
+                                  focusNode: focus,
+                                  onKeyEvent: _zoomKey,
+                                  autoResize: widget.visible,
+                                  padding: EdgeInsets.zero,
+                                  textStyle: style,
+                                  textScaler: MediaQuery.textScalerOf(context),
+                                  keyboardAppearance: Theme.of(
+                                    context,
+                                  ).brightness,
+                                  theme: terminalTheme,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (session.notice.isNotEmpty)
+                          Positioned(
+                            right: 8,
+                            bottom: 6,
+                            child: Container(
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.sizeOf(context).width - 48,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: p['web.bg-layer'],
+                                borderRadius: BorderRadius.circular(999),
+                                boxShadow: pircShadow(context, card: true),
+                              ),
+                              child: Text(
+                                session.notice,
+                                style: webText(
                                   context,
-                                ).brightness,
-                                theme: terminalTheme,
+                                  size: 12,
+                                  color: 'text.secondary',
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                      if (session.notice.isNotEmpty)
-                        Positioned(
-                          right: 8,
-                          bottom: 6,
-                          child: Container(
-                            constraints: BoxConstraints(
-                              maxWidth: MediaQuery.sizeOf(context).width - 48,
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: p['web.bg-layer'],
-                              borderRadius: BorderRadius.circular(999),
-                              boxShadow: pircShadow(context, card: true),
-                            ),
-                            child: Text(
-                              session.notice,
-                              style: webText(
-                                context,
-                                size: 12,
-                                color: 'text.secondary',
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                if (bounds.maxHeight >= 64 &&
-                    (widget.touch ??
-                        [
-                          TargetPlatform.android,
-                          TargetPlatform.iOS,
-                        ].contains(defaultTargetPlatform)))
-                  _terminalKeys(bounds.maxHeight < 180),
-              ],
+                  if (bounds.maxHeight >= 64 &&
+                      (widget.touch ??
+                          [
+                            TargetPlatform.android,
+                            TargetPlatform.iOS,
+                          ].contains(defaultTargetPlatform)))
+                    _terminalKeys(bounds.maxHeight < 180),
+                ],
+              ),
             ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }

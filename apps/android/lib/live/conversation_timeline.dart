@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +21,7 @@ class ConversationTimeline extends StatelessWidget {
   final String? highlightedMessage;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final items = timelineItems(controller.visibleMessages);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -129,7 +131,9 @@ class _TimelineMessageState extends State<TimelineMessage> {
       } else {
         editError =
             widget.controller.actionError ??
-            'Editing is unavailable. Wait for the session to be idle and take control.';
+            tr(
+              "Editing is unavailable. Wait for the session to be idle and take control.",
+            );
       }
     });
   }
@@ -145,12 +149,13 @@ class _TimelineMessageState extends State<TimelineMessage> {
           minLines: 2,
           maxLines: 12,
           enabled: !saving,
-          decoration: const InputDecoration(labelText: 'Edit message'),
+          decoration: InputDecoration(labelText: tr("Edit message")),
           onChanged: (_) => setState(() {}),
         ),
-        const Text(
-          'Saving creates a new branch and regenerates the response. '
-          'Files and tool actions are not rolled back. Attachments are kept.',
+        Text(
+          tr(
+            "Saving creates a new branch and regenerates the response. Files and tool actions are not rolled back. Attachments are kept.",
+          ),
           style: TextStyle(fontSize: 12),
         ),
         if (editError != null)
@@ -166,7 +171,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
                       edit = null;
                       editError = null;
                     }),
-              child: const Text('Cancel'),
+              child: Text(tr("Cancel")),
             ),
             TextButton(
               onPressed:
@@ -175,7 +180,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
                       edit!.text.trim().isNotEmpty
                   ? saveEdit
                   : null,
-              child: Text(saving ? 'Saving…' : 'Save and regenerate'),
+              child: Text(saving ? tr("Saving…") : tr("Save and regenerate")),
             ),
           ],
         ),
@@ -248,10 +253,13 @@ class _TimelineMessageState extends State<TimelineMessage> {
   }
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.controller,
-    builder: (context, _) => buildMessage(context),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) => buildMessage(context),
+    );
+  }
 
   Widget buildMessage(BuildContext context) {
     final m = widget.message,
@@ -298,11 +306,11 @@ class _TimelineMessageState extends State<TimelineMessage> {
                           Flexible(
                             child: Text(
                               streamingThinking
-                                  ? 'Thinking…'
+                                  ? tr("Thinking…")
                                   : m['thinkingRedacted'] == true &&
                                         thinking.isEmpty
-                                  ? 'Reasoning redacted'
-                                  : 'Thought',
+                                  ? tr("Reasoning redacted")
+                                  : tr("Thought"),
                               style: webText(
                                 context,
                                 size: 14,
@@ -375,7 +383,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
                   markdown(text, streaming: isPartial),
                 if (isPartial && !streamingThinking && (user || text.isEmpty))
                   Semantics(
-                    label: 'Streaming',
+                    label: tr("Streaming"),
                     child: Container(
                       width: 8,
                       height: 8,
@@ -518,7 +526,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
                     if (rows(m['branches']).length > 1) ...[
                       WebIconButton(
                         LucideIcons.chevronLeft,
-                        'Previous version',
+                        tr("Previous version"),
                         size: 28,
                         iconSize: 14,
                         onPressed: branchAction(m, -1),
@@ -529,7 +537,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
                       ),
                       WebIconButton(
                         LucideIcons.chevronRight,
-                        'Next version',
+                        tr("Next version"),
                         size: 28,
                         iconSize: 14,
                         onPressed: branchAction(m, 1),
@@ -537,7 +545,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
                     ],
                     WebIconButton(
                       LucideIcons.pencil,
-                      'Edit message',
+                      tr("Edit message"),
                       size: 28,
                       iconSize: 14,
                       onPressed:
@@ -551,7 +559,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
                   ],
                   WebIconButton(
                     LucideIcons.copy,
-                    'Copy message',
+                    tr("Copy message"),
                     size: 28,
                     iconSize: 14,
                     onPressed: () =>
@@ -613,7 +621,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
           SnackBar(
             content: Text(
               widget.controller.actionError ??
-                  'Unable to switch message version.',
+                  tr("Unable to switch message version."),
             ),
           ),
         );
@@ -673,7 +681,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
       children: [
         Semantics(
           label: value(m, 'label').isEmpty
-              ? 'System message'
+              ? tr("System message")
               : value(m, 'label'),
           expanded: expandable ? systemOpen : null,
           child: InkWell(

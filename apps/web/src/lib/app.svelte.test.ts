@@ -103,6 +103,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  app.discardDraftSession();
   app.dispose();
   app.demo = undefined;
   app.activeSessionId = undefined;
@@ -235,6 +236,51 @@ describe('message branch commands', () => {
 });
 
 describe('app asynchronous refreshes', () => {
+  it('keeps new sessions local and discards an unsent replacement or departure', async () => {
+    app.demo = undefined;
+    app.workspaces = [workspace];
+    app.sessions = [];
+    vi.spyOn(api, 'models').mockResolvedValue([]);
+    const create = vi.spyOn(api, 'createSession');
+    await app.createSession(workspace.id);
+    const first = app.activeSessionId!;
+    app.setDraft('unsent text');
+    app.flushDraft();
+    expect(app.view).toBe('session');
+    expect(loadDraft(first)).toBe('');
+    await app.createSession(workspace.id);
+    expect(app.activeSessionId).not.toBe(first);
+    expect(app.draft).toBe('');
+    app.showWorkspace(workspace.id);
+    expect(app.isDraftSession).toBe(false);
+    expect(app.activeSessionId).toBeUndefined();
+    expect(app.sessions).toEqual([]);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('awaits an existing control renewal before continuing a first send', async () => {
+    app.demo = undefined;
+    app.draftWorkspaceId = undefined;
+    app.activeSessionId = demoSnapshot.session.id;
+    app.sessionState = fromSnapshot({
+      ...demoSnapshot,
+      control: { heldByCurrentClient: true, generation: 1 },
+    });
+    const lease = deferred<SessionSnapshot['control']>();
+    const heartbeat = vi.spyOn(api, 'heartbeatControl').mockReturnValue(lease.promise);
+    const first = app.refreshControl();
+    let finished = false;
+    const joined = app.refreshControl().then(() => {
+      finished = true;
+    });
+    await Promise.resolve();
+    expect(finished).toBe(false);
+    expect(heartbeat).toHaveBeenCalledTimes(1);
+    lease.resolve({ heldByCurrentClient: true, generation: 2 });
+    await Promise.all([first, joined]);
+    expect(app.sessionState?.control.generation).toBe(2);
+  });
+
   it('ignores a session list fetched before creating and opening a session', async () => {
     app.demo = undefined;
     vi.stubGlobal('WebSocket', TestWebSocket);
@@ -254,6 +300,11 @@ describe('app asynchronous refreshes', () => {
     const staleRefresh = app.refreshSessions();
 
     expect(await app.createSession(workspace.id)).toBe(true);
+    expect(api.createSession).not.toHaveBeenCalled();
+    expect(app.sessions.some((s) => s.id === app.activeSessionId)).toBe(false);
+    app.setDraft('first message');
+    vi.spyOn(api, 'command').mockResolvedValue({ status: 'accepted' } as never);
+    await app.sendCommand('prompt');
     saveDraft(created.id, 'keep this draft');
     list.resolve([existing]);
     await staleRefresh;

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -296,7 +297,7 @@ class _ProviderLoginState extends State<ProviderLogin> {
       if (!_current(version)) return;
       _setError(
         providerId,
-        'Login status is unavailable. Start a new login to retry.',
+        tr("Login status is unavailable. Start a new login to retry."),
       );
       await _cancelLogin();
     }
@@ -388,7 +389,9 @@ class _ProviderLoginState extends State<ProviderLogin> {
       if (_current(version)) {
         _setError(
           providerId,
-          'Could not confirm cancellation. This login will expire on the gateway.',
+          tr(
+            "Could not confirm cancellation. This login will expire on the gateway.",
+          ),
         );
       }
     }
@@ -502,7 +505,9 @@ class _ProviderLoginState extends State<ProviderLogin> {
     } catch (_) {
       _setError(
         providerId,
-        'Could not open the authorization page. Copy the link and open it in a browser.',
+        tr(
+          "Could not open the authorization page. Copy the link and open it in a browser.",
+        ),
       );
     }
   }
@@ -594,7 +599,10 @@ class _ProviderLoginState extends State<ProviderLogin> {
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      '${connected ? 'Connected' : 'Not connected'} · $count known models',
+                      tr("{0} · {1} known models", [
+                        connected ? 'Connected' : 'Not connected',
+                        count,
+                      ]),
                       style: webText(
                         context,
                         size: 12,
@@ -610,14 +618,14 @@ class _ProviderLoginState extends State<ProviderLogin> {
                 children: [
                   if (current?['status'] != 'pending' && !consent)
                     _button(
-                      connected ? 'Reconnect' : 'Log in',
+                      connected ? tr("Reconnect") : tr("Log in"),
                       onPressed: _locked || _pending
                           ? null
                           : () => _requestLogin(provider),
                     ),
                   if (connected && current?['status'] != 'pending')
                     _button(
-                      'Log out $name',
+                      tr("Log out {0}", [name]),
                       onPressed: _locked || _pending
                           ? null
                           : () => unawaited(_logout(provider)),
@@ -632,22 +640,24 @@ class _ProviderLoginState extends State<ProviderLogin> {
             AssistantParagraph(_errorText!, error: true, live: true),
           if (consent)
             _panel([
-              const AssistantParagraph(
-                'Logging in enables the policies for all known GitHub Copilot models in your account.',
+              AssistantParagraph(
+                tr(
+                  "Logging in enables the policies for all known GitHub Copilot models in your account.",
+                ),
               ),
               Wrap(
                 spacing: 8,
                 runSpacing: 4,
                 children: [
                   _button(
-                    'I agree, log in',
+                    tr("I agree, log in"),
                     filled: true,
                     onPressed: _locked || _pending
                         ? null
                         : () => unawaited(_startLogin(provider, true)),
                   ),
                   _button(
-                    'Not now',
+                    tr("Not now"),
                     onPressed: _busy
                         ? null
                         : () => setState(() => _consentingProvider = null),
@@ -671,7 +681,9 @@ class _ProviderLoginState extends State<ProviderLogin> {
           child: Semantics(
             liveRegion: true,
             child: Text(
-              'Connected. ${_asInt(provider['modelCount'])} models are now available.',
+              tr("Connected. {0} models are now available.", [
+                _asInt(provider['modelCount']),
+              ]),
               style: webText(context, size: 14, color: 'status.success'),
             ),
           ),
@@ -682,8 +694,8 @@ class _ProviderLoginState extends State<ProviderLogin> {
     return _panel([
       AssistantParagraph(
         expired
-            ? 'The login timed out before it was completed.'
-            : 'The login failed.',
+            ? tr("The login timed out before it was completed.")
+            : tr("The login failed."),
         error: true,
         live: true,
       ),
@@ -691,13 +703,13 @@ class _ProviderLoginState extends State<ProviderLogin> {
         spacing: 8,
         children: [
           _button(
-            'Try again',
+            tr("Try again"),
             onPressed: _locked || _pending
                 ? null
                 : () => _requestLogin(provider),
           ),
           _button(
-            'Dismiss',
+            tr("Dismiss"),
             onPressed: () {
               ++_generation;
               _clearTimers();
@@ -721,7 +733,7 @@ class _ProviderLoginState extends State<ProviderLogin> {
     final children = <Widget>[];
 
     if (auth.isEmpty) {
-      children.add(const AssistantParagraph('Preparing the login…'));
+      children.add(AssistantParagraph(tr("Preparing the login…")));
     } else {
       if (userCode.isNotEmpty) {
         children.add(
@@ -730,7 +742,7 @@ class _ProviderLoginState extends State<ProviderLogin> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const AssistantParagraph('1. Copy your one-time code'),
+                AssistantParagraph(tr("1. Copy your one-time code")),
                 Wrap(
                   spacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -744,7 +756,7 @@ class _ProviderLoginState extends State<ProviderLogin> {
                       ).copyWith(fontFamily: 'monospace', letterSpacing: 1.4),
                     ),
                     _button(
-                      _copied == 'code' ? 'Copied' : 'Copy code',
+                      _copied == 'code' ? tr("Copied") : tr("Copy code"),
                       onPressed: () => unawaited(_copy(userCode, 'code')),
                     ),
                   ],
@@ -761,12 +773,10 @@ class _ProviderLoginState extends State<ProviderLogin> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (userCode.isNotEmpty)
-                const AssistantParagraph(
-                  '2. Enter it on the authorization page',
-                ),
+                AssistantParagraph(tr("2. Enter it on the authorization page")),
               if (authUri == null)
-                const AssistantParagraph(
-                  'The provider returned an unsupported authorization URL.',
+                AssistantParagraph(
+                  tr("The provider returned an unsupported authorization URL."),
                   error: true,
                   live: true,
                 )
@@ -776,13 +786,13 @@ class _ProviderLoginState extends State<ProviderLogin> {
                   runSpacing: 4,
                   children: [
                     _button(
-                      'Open authorization page',
+                      tr("Open authorization page"),
                       filled: true,
                       onPressed: () =>
                           unawaited(_openAuthorization(authUri, providerId)),
                     ),
                     _button(
-                      _copied == 'link' ? 'Copied' : 'Copy link',
+                      _copied == 'link' ? tr("Copied") : tr("Copy link"),
                       onPressed: () =>
                           unawaited(_copy(authUri.toString(), 'link')),
                     ),
@@ -795,8 +805,10 @@ class _ProviderLoginState extends State<ProviderLogin> {
       final instructions = safeBackendText(auth['instructions'], '');
       if (callbackServer) {
         children.add(
-          const AssistantParagraph(
-            "Sign in on the authorization page. If this browser runs on the gateway's machine, the login finishes by itself. Otherwise the browser ends on a localhost page that may not load. Copy that page's full address and paste it below.",
+          AssistantParagraph(
+            tr(
+              "Sign in on the authorization page. If this browser runs on the gateway's machine, the login finishes by itself. Otherwise the browser ends on a localhost page that may not load. Copy that page's full address and paste it below.",
+            ),
           ),
         );
       } else if (instructions.isNotEmpty && userCode.isEmpty) {
@@ -820,10 +832,16 @@ class _ProviderLoginState extends State<ProviderLogin> {
           runSpacing: 4,
           children: [
             Text(
-              'Waiting for authorization · expires in $minutes minute${minutes == 1 ? '' : 's'} · closing settings cancels it',
+              tr(
+                "Waiting for authorization · expires in {0} minute{1} · closing settings cancels it",
+                [minutes, minutes == 1 ? '' : 's'],
+              ),
               style: webText(context, size: 12, color: 'text.muted'),
             ),
-            _button('Cancel login', onPressed: () => unawaited(_cancelLogin())),
+            _button(
+              tr("Cancel login"),
+              onPressed: () => unawaited(_cancelLogin()),
+            ),
           ],
         ),
       ),
@@ -860,7 +878,7 @@ class _ProviderLoginState extends State<ProviderLogin> {
             DropdownButtonFormField<String>(
               initialValue: answer.isEmpty ? null : answer,
               isExpanded: true,
-              hint: const Text('Choose an option'),
+              hint: Text(tr("Choose an option")),
               decoration: _fieldDecoration(''),
               items: [
                 for (final option in options)
@@ -904,14 +922,14 @@ class _ProviderLoginState extends State<ProviderLogin> {
               spacing: 8,
               children: [
                 _button(
-                  kind == 'manual' ? 'Finish login' : 'Continue',
+                  kind == 'manual' ? tr("Finish login") : tr("Continue"),
                   onPressed: enabled && _canSubmit(id, allowEmpty)
                       ? () => unawaited(_answer(prompt))
                       : null,
                 ),
                 if (kind == 'select')
                   _button(
-                    'Skip selection',
+                    tr("Skip selection"),
                     onPressed: enabled
                         ? () => unawaited(_answer(prompt, skip: true))
                         : null,
@@ -928,27 +946,34 @@ class _ProviderLoginState extends State<ProviderLogin> {
       allowEmpty || (_answers[id]?.isNotEmpty ?? false);
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Padding(
-        padding: const EdgeInsets.only(top: 20, bottom: 2),
-        child: Text(
-          'Subscription accounts',
-          style: webText(
-            context,
-            size: 14,
-            weight: FontWeight.w700,
-          ).copyWith(height: 16 / 14),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 20, bottom: 2),
+          child: Text(
+            tr("Subscription accounts"),
+            style: webText(
+              context,
+              size: 14,
+              weight: FontWeight.w700,
+            ).copyWith(height: 16 / 14),
+          ),
         ),
-      ),
-      const AssistantParagraph(
-        "Sign in with an existing subscription. pi-ai's built-in model list is not a verification of your account's model access or service policy.",
-      ),
-      for (final provider in widget.providers) _providerCard(provider),
-      const AssistantParagraph(
-        "Log out removes this gateway's saved credentials and prevents new requests. It does not revoke your account upstream or recall content already sent.",
-      ),
-    ],
-  );
+        AssistantParagraph(
+          tr(
+            "Sign in with an existing subscription. pi-ai's built-in model list is not a verification of your account's model access or service policy.",
+          ),
+        ),
+        for (final provider in widget.providers) _providerCard(provider),
+        AssistantParagraph(
+          tr(
+            "Log out removes this gateway's saved credentials and prevents new requests. It does not revoke your account upstream or recall content already sent.",
+          ),
+        ),
+      ],
+    );
+  }
 }

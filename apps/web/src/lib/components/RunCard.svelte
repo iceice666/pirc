@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import type { Snippet } from 'svelte';
   import { untrack } from 'svelte';
   import { Check, ChevronRight, CircleAlert, LoaderCircle, Lock } from '@lucide/svelte';
@@ -18,20 +20,25 @@
   const blocked = $derived(effectiveTools(tools).some((tool) => writeBlock(tool)));
   const title = $derived.by(() => {
     const names = new Set(effectiveTools(tools).map((tool) => tool.name));
-    if (names.has('edit') || names.has('write')) return 'Made changes';
-    if (names.has('bash')) return 'Ran commands';
-    if (['read', 'grep', 'find', 'ls'].some((name) => names.has(name))) return 'Explored the code';
-    return 'Used tools';
+    if (names.has('edit') || names.has('write')) return tr('Made changes');
+    if (names.has('bash')) return tr('Ran commands');
+    if (['read', 'grep', 'find', 'ls'].some((name) => names.has(name)))
+      return tr('Explored the code');
+    return tr('Used tools');
   });
   const seconds = $derived(
     summary.durationMs === undefined
       ? ''
       : summary.durationMs < 1000
-        ? `${summary.durationMs} ms`
-        : `${(summary.durationMs / 1000).toFixed(summary.durationMs < 10_000 ? 1 : 0)} s`,
+        ? tr('{0} ms', [summary.durationMs])
+        : tr('{0} s', [(summary.durationMs / 1000).toFixed(summary.durationMs < 10_000 ? 1 : 0)]),
   );
   const statusLabel = $derived(
-    summary.status === 'running' ? 'Running' : summary.status === 'failed' ? 'Failed' : 'Done',
+    summary.status === 'running'
+      ? tr('Running')
+      : summary.status === 'failed'
+        ? tr('Failed')
+        : tr('Done'),
   );
 
   let open = $state(false);
@@ -55,12 +62,14 @@
   >
     <ChevronRight class={open ? 'rotated' : ''} size={14} aria-hidden="true" />
     <strong>{title}</strong>
-    <span class="run-meta">{summary.count} tools{seconds ? ` · ${seconds}` : ''}</span>
+    <span class="run-meta"
+      >{tr('{0} tools{1}', [summary.count, seconds ? ` · ${seconds}` : ''])}</span
+    >
     <span class="run-files">
       {#each summary.files.slice(0, 3) as file (file)}<code>{file}</code>{/each}
       {#if summary.files.length > 3}<span>+{summary.files.length - 3}</span>{/if}
     </span>
-    {#if blocked}<span class="run-blocked" title="A write was blocked by another session"
+    {#if blocked}<span class="run-blocked" title={tr('A write was blocked by another session')}
         ><Lock size={13} /></span
       >{/if}
     <span

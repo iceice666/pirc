@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   import { ArrowLeft, GitBranch, GitCommitHorizontal, RefreshCw } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { rovingFocus } from '../../a11y';
@@ -39,16 +41,16 @@
   const commitLoader = new Loader();
   const listError = $derived(statusLoader.error || historyLoader.error || commitLoader.error);
 
-  const label: Record<string, string> = {
-    M: 'Modified',
-    A: 'Added',
-    D: 'Deleted',
-    R: 'Renamed',
-    C: 'Copied',
-    U: 'Conflict',
-    T: 'Type changed',
-    '?': 'Untracked',
-  };
+  const label: Record<string, string> = $derived({
+    M: tr('Modified'),
+    A: tr('Added'),
+    D: tr('Deleted'),
+    R: tr('Renamed'),
+    C: tr('Copied'),
+    U: tr('Conflict'),
+    T: tr('Type changed'),
+    '?': tr('Untracked'),
+  });
 
   let files = $derived(status?.repo ? status.files : []);
   let staged = $derived(files.filter((file) => file.index !== ' ' && file.index !== '?'));
@@ -59,7 +61,7 @@
     const id = sessionId;
     const next = await statusLoader.run(
       (signal) => panelApi.gitStatus(id, signal),
-      'Unable to read Git status.',
+      tr('Unable to read Git status.'),
     );
     if (!next || id !== sessionId) return;
     status = next;
@@ -74,7 +76,7 @@
     const skip = reset ? 0 : commits.length;
     const page = await historyLoader.run(
       (signal) => panelApi.gitLog(id, skip, HISTORY_PAGE, signal),
-      'Unable to load history.',
+      tr('Unable to load history.'),
     );
     if (!page || id !== sessionId) return;
     commits = reset ? page.commits : [...commits, ...page.commits];
@@ -90,7 +92,7 @@
     const id = sessionId;
     const page = await historyLoader.run(
       (signal) => panelApi.gitLog(id, 0, HISTORY_PAGE, signal),
-      'Unable to load history.',
+      tr('Unable to load history.'),
     );
     if (!page || id !== sessionId) return;
     const overlap = page.commits.findIndex((item) => item.sha === commits[0]!.sha);
@@ -111,7 +113,7 @@
           { path: file.path, staged: isStaged, untracked: file.worktree === '?' },
           signal,
         ),
-      'Unable to load diff.',
+      tr('Unable to load diff.'),
     );
     if (result && id === sessionId) diff = result;
   }
@@ -121,7 +123,7 @@
     const id = sessionId;
     const result = await commitLoader.run(
       (signal) => panelApi.gitShow(id, item.sha, signal),
-      'Unable to load commit.',
+      tr('Unable to load commit.'),
     );
     if (result && id === sessionId) commit = result;
   }
@@ -176,30 +178,32 @@
 <div class="tab-body">
   {#if selected}
     <div class="drill-head">
-      <button class="icon-button small" type="button" aria-label="Back" onclick={back}
+      <button class="icon-button small" type="button" aria-label={tr('Back')} onclick={back}
         ><ArrowLeft size={16} /></button
       >
       <button
         class="drill-title linkish"
         type="button"
-        title="Open file"
+        title={tr('Open file')}
         onclick={() => selected && onopenfile(selected.file.path)}
       >
         {selected.file.path}
       </button>
       <span class="chip"
-        >{selected.staged ? 'Staged' : (label[code(selected.file, false)] ?? 'Changed')}</span
+        >{selected.staged
+          ? tr('Staged')
+          : (label[code(selected.file, false)] ?? tr('Changed'))}</span
       >
     </div>
     {#if diffLoader.error}<p class="panel-error">{diffLoader.error}</p>
     {:else if diff}<DiffView diff={diff.diff} truncated={diff.truncated} />{:else}<p
         class="panel-empty"
       >
-        Loading diff…
+        {tr('Loading diff…')}
       </p>{/if}
   {:else if commit}
     <div class="drill-head">
-      <button class="icon-button small" type="button" aria-label="Back" onclick={back}
+      <button class="icon-button small" type="button" aria-label={tr('Back')} onclick={back}
         ><ArrowLeft size={16} /></button
       >
       <span class="drill-title mono">{commit.sha.slice(0, 10)}</span>
@@ -217,7 +221,7 @@
       <div
         class="segmented"
         role="tablist"
-        aria-label="Git view"
+        aria-label={tr('Git view')}
         use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
       >
         <button
@@ -229,7 +233,7 @@
           aria-selected={view === 'changes'}
           tabindex={view === 'changes' ? 0 : -1}
           onclick={() => switchView('changes')}
-          >Changes{#if files.length}<span class="count">{files.length}</span>{/if}</button
+          >{tr('Changes')}{#if files.length}<span class="count">{files.length}</span>{/if}</button
         >
         <button
           role="tab"
@@ -239,13 +243,13 @@
           class:active={view === 'history'}
           aria-selected={view === 'history'}
           tabindex={view === 'history' ? 0 : -1}
-          onclick={() => switchView('history')}>History</button
+          onclick={() => switchView('history')}>{tr('History')}</button
         >
       </div>
       <button
         class="icon-button small"
         type="button"
-        aria-label="Refresh"
+        aria-label={tr('Refresh')}
         onclick={load}
         disabled={statusLoader.loading}
         ><RefreshCw class={statusLoader.loading ? 'spin' : ''} size={15} /></button
@@ -254,18 +258,18 @@
     <div class="tab-view" role="tabpanel" id="git-view-panel" aria-labelledby="git-view-{view}">
       {#if listError}<p class="panel-error">{listError}</p>{/if}
       {#if status && !status.repo}
-        <p class="panel-empty">This workspace is not a Git repository.</p>
+        <p class="panel-empty">{tr('This workspace is not a Git repository.')}</p>
       {:else if status?.repo}
         <div class="branch-line">
           <GitBranch size={14} />
-          <strong>{status.branch ?? 'detached'}</strong>
+          <strong>{status.branch ?? tr('detached')}</strong>
           {#if status.upstream}<span class="muted">→ {status.upstream}</span>{/if}
           {#if status.ahead}<span class="chip">↑{status.ahead}</span>{/if}
           {#if status.behind}<span class="chip">↓{status.behind}</span>{/if}
         </div>
         {#if view === 'changes'}
           {#if !files.length}
-            <p class="panel-empty">Working tree clean.</p>
+            <p class="panel-empty">{tr('Working tree clean.')}</p>
           {:else}
             {#each [{ title: 'Staged', list: staged, isStaged: true }, { title: 'Changes', list: unstaged, isStaged: false }] as group}
               {#if group.list.length}
@@ -284,7 +288,7 @@
                             : code(file, group.isStaged)}"
                           title={label[code(file, group.isStaged)] ?? ''}
                           >{code(file, group.isStaged) === '?'
-                            ? 'U'
+                            ? tr('U')
                             : code(file, group.isStaged)}</span
                         >
                         <span class="file-name">{base(file.path)}</span>
@@ -297,10 +301,12 @@
                 </ul>
               {/if}
             {/each}
-            {#if status.truncated}<p class="panel-empty">Showing the first 5,000 files.</p>{/if}
+            {#if status.truncated}<p class="panel-empty">
+                {tr('Showing the first 5,000 files.')}
+              </p>{/if}
           {/if}
         {:else if !commits.length}
-          <p class="panel-empty">No commits yet.</p>
+          <p class="panel-empty">{tr('No commits yet.')}</p>
         {:else}
           <ul class="commit-list">
             {#each commits as item (item.sha)}
@@ -324,11 +330,11 @@
               class="load-more"
               type="button"
               disabled={historyLoader.loading}
-              onclick={() => loadHistory(false)}>Load more</button
+              onclick={() => loadHistory(false)}>{tr('Load more')}</button
             >{/if}
         {/if}
       {:else if statusLoader.loading}
-        <p class="panel-empty">Loading…</p>
+        <p class="panel-empty">{tr('Loading…')}</p>
       {/if}
     </div>
   {/if}

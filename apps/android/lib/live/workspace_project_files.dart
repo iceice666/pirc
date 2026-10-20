@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:ui' show SemanticsRole;
 
@@ -184,20 +185,22 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
         'BUSY',
       }.contains(cause.code)) {
         return cause.message ??
-            'Unable to read the selected file. Choose it again.';
+            tr("Unable to read the selected file. Choose it again.");
       }
       final match = RegExp(r'^HTTP_(\d{3})$').firstMatch(cause.code);
       if (match != null) {
-        return cause.message ?? 'Request failed (${match.group(1)})';
+        return cause.message ?? tr("Request failed ({0})", [match.group(1)]);
       }
     }
-    return 'Unable to reach the gateway. Try again.';
+    return tr("Unable to reach the gateway. Try again.");
   }
 
   String _size(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (bytes < 1024) return tr("{0} B", [bytes]);
+    if (bytes < 1024 * 1024) {
+      return tr("{0} KB", [(bytes / 1024).toStringAsFixed(1)]);
+    }
+    return tr("{0} MB", [(bytes / (1024 * 1024)).toStringAsFixed(1)]);
   }
 
   void _applyListing(Json response) {
@@ -301,12 +304,15 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
           _showFileError(
             scope,
             generation,
-            '$name is larger than the ${_size(pickedMaxBytes)} limit.',
+            tr("{0} is larger than the {1} limit.", [
+              name,
+              _size(pickedMaxBytes),
+            ]),
           );
           continue;
         }
         if (byteSize == 0) {
-          _showFileError(scope, generation, '$name is empty.');
+          _showFileError(scope, generation, tr("{0} is empty.", [name]));
           continue;
         }
         if (name.isEmpty || (token is! String && bytes is! Uint8List)) {
@@ -314,8 +320,8 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
             scope,
             generation,
             name.isEmpty
-                ? 'Unable to read the selected file.'
-                : '$name: Unable to read the selected file.',
+                ? tr("Unable to read the selected file.")
+                : tr("{0}: Unable to read the selected file.", [name]),
           );
           continue;
         }
@@ -340,8 +346,13 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
       if (!_isCurrent(scope, generation)) return;
       if (uploaded > 0) {
         setState(
-          () => status =
-              '${uploaded == 1 ? '1 file' : '$uploaded files'} uploaded. Every chat in this project can read ${uploaded == 1 ? 'it' : 'them'} now.',
+          () => status = tr(
+            "{0} uploaded. Every chat in this project can read {1} now.",
+            [
+              uploaded == 1 ? '1 file' : '$uploaded files',
+              uploaded == 1 ? 'it' : 'them',
+            ],
+          ),
         );
       }
     } catch (cause) {
@@ -379,7 +390,7 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
       if (!_isCurrent(scope, generation)) return;
       await _refresh(scope, generation);
       if (!_isCurrent(scope, generation)) return;
-      setState(() => status = '$name removed.');
+      setState(() => status = tr("{0} removed.", [name]));
     } catch (cause) {
       if (_isCurrent(scope, generation)) {
         setState(() => error = _requestError(cause));
@@ -420,14 +431,14 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
         spacing: 6,
         children: [
           WebButton(
-            'Remove',
+            tr("Remove"),
             key: ValueKey('project-file-confirm-remove-$name'),
             danger: true,
             disabledOpacity: .5,
             onPressed: busy ? null : () => _remove(name),
           ),
           WebButton(
-            'Cancel',
+            tr("Cancel"),
             key: ValueKey('project-file-cancel-remove-$name'),
             disabledOpacity: .5,
             onPressed: busy ? null : () => setState(() => confirming = null),
@@ -436,7 +447,7 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
       );
     }
     return WebButton(
-      'Remove…',
+      tr("Remove…"),
       key: ValueKey('project-file-remove-$name'),
       disabledOpacity: .5,
       onPressed: busy ? null : () => setState(() => confirming = name),
@@ -493,7 +504,7 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
   }
 
   Widget _uploadButton() => WebButton(
-    busy ? 'Working…' : 'Upload files',
+    busy ? tr("Working…") : tr("Upload files"),
     key: const ValueKey('project-files-upload'),
     fontSize: 13,
     backgroundColor: palette(context)['web.bg-hover'],
@@ -504,8 +515,11 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
   );
 
   Widget _limitsRow() {
-    final limit =
-        '${files!.length} / $maxFiles files${maxBytes > 0 ? ', up to ${_size(maxBytes)} each' : ''}';
+    final limit = tr("{0} / {1} files{2}", [
+      files!.length,
+      maxFiles,
+      maxBytes > 0 ? ', up to ${_size(maxBytes)} each' : '',
+    ]);
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Row(
@@ -540,13 +554,14 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     if (!_available) return const SizedBox.shrink();
     final currentFiles = files ?? const <Json>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'PROJECT FILES',
+          tr("PROJECT FILES"),
           style: webText(
             context,
             size: 12,
@@ -555,16 +570,18 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
           ).copyWith(height: kTextHeightNone, letterSpacing: .24),
         ),
         _description(
-          'Files every chat in this project can read, for example notes, documents or data the assistant should know about. The assistant cannot change them. They are kept on the project\'s node and shared with running chats at once: an upload, a replacement or a removal reaches chats already open. Uploading a file with the same name as an existing one replaces it.',
+          tr(
+            "Files every chat in this project can read, for example notes, documents or data the assistant should know about. The assistant cannot change them. They are kept on the project's node and shared with running chats at once: an upload, a replacement or a removal reaches chats already open. Uploading a file with the same name as an existing one replaces it.",
+          ),
         ),
         if (loading)
-          _feedback('Loading project files…', role: SemanticsRole.status)
+          _feedback(tr("Loading project files…"), role: SemanticsRole.status)
         else if (files != null) ...[
           if (currentFiles.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 16),
               child: Text(
-                'No files yet.',
+                tr("No files yet."),
                 style: webText(context, size: 13, color: 'text.muted'),
               ),
             )
@@ -572,7 +589,7 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
             const SizedBox(height: 10),
             Semantics(
               container: true,
-              label: 'Project files',
+              label: tr("Project files"),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [for (final file in currentFiles) _fileRow(file)],
@@ -589,7 +606,7 @@ class _WorkspaceProjectFilesState extends State<WorkspaceProjectFiles> {
               child: Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: WebButton(
-                  'Retry',
+                  tr("Retry"),
                   disabledOpacity: .5,
                   onPressed: loading ? null : _load,
                 ),

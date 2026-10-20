@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:ui' show SemanticsRole;
 
@@ -180,10 +181,10 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
     if (cause is PlatformException) {
       final match = RegExp(r'^HTTP_(\d{3})$').firstMatch(cause.code);
       if (match != null) {
-        return cause.message ?? 'Request failed (${match.group(1)})';
+        return cause.message ?? tr("Request failed ({0})", [match.group(1)]);
       }
     }
-    return 'Unable to reach the gateway. Try again.';
+    return tr("Unable to reach the gateway. Try again.");
   }
 
   Json? _linkFor(String id) =>
@@ -235,7 +236,7 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
       if (!_isCurrent(scope, generation)) return;
       setState(() {
         _show(rows(response['links']));
-        status = 'Linked workspaces saved.';
+        status = tr("Linked workspaces saved.");
       });
     } catch (cause) {
       if (_isCurrent(scope, generation)) {
@@ -252,7 +253,7 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
     final id = '${workspace['id']}';
     final link = _linkFor(id);
     final reach = link?['removed'] == true
-        ? 'removed from its device'
+        ? tr("removed from its device")
         : ((link?['online'] as bool?) ??
               workspaceOnline(workspace, widget.controller.nodes))
         ? ''
@@ -320,6 +321,7 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final saved = links ?? const <Json>[];
     final workspaces = directoryWorkspaces;
     final missing = saved
@@ -332,14 +334,18 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Linked workspaces',
+          tr("Linked workspaces"),
           style: webText(context, size: 14, weight: FontWeight.w600),
         ),
         _description(
-          'The repositories this project is about. Its assistant lists them first, hands a task to the linked workspace when only one is linked and the task names none, and searches their notes (and those of other clones of the same repository) first.',
+          tr(
+            "The repositories this project is about. Its assistant lists them first, hands a task to the linked workspace when only one is linked and the task names none, and searches their notes (and those of other clones of the same repository) first.",
+          ),
         ),
         _description(
-          "A link is not a permission: delegations to linked and unlinked workspaces alike follow the project's Delegation approval setting, and the assistant can still reach workspaces that are not linked. Chats already open keep the workspace list they started with.",
+          tr(
+            "A link is not a permission: delegations to linked and unlinked workspaces alike follow the project's Delegation approval setting, and the assistant can still reach workspaces that are not linked. Chats already open keep the workspace list they started with.",
+          ),
         ),
         if (loading)
           Padding(
@@ -347,7 +353,7 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
             child: Semantics(
               role: SemanticsRole.status,
               child: Text(
-                'Loading linked workspaces…',
+                tr("Loading linked workspaces…"),
                 style: webText(context, size: 13, color: 'text.muted'),
               ),
             ),
@@ -356,7 +362,7 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Text(
-              'Workspaces',
+              tr("Workspaces"),
               style: webText(context, size: 13, color: 'text.secondary'),
             ),
           ),
@@ -364,7 +370,7 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'No directory workspaces yet.',
+                tr("No directory workspaces yet."),
                 style: webText(context, size: 13, color: 'text.muted'),
               ),
             ),
@@ -389,11 +395,11 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${chosen.length} linked',
+                  tr("{0} linked", [chosen.length]),
                   style: webText(context, size: 13, color: 'text.muted'),
                 ),
                 WebButton(
-                  saving ? 'Saving…' : 'Save',
+                  saving ? tr("Saving…") : tr("Save"),
                   backgroundColor: palette(context)['web.bg-hover'],
                   disabledOpacity: .5,
                   onPressed: saving || !changed ? null : save,
@@ -417,7 +423,7 @@ class _WorkspaceProjectLinksState extends State<WorkspaceProjectLinks> {
             Align(
               alignment: Alignment.centerLeft,
               child: WebButton(
-                'Retry',
+                tr("Retry"),
                 disabledOpacity: .5,
                 onPressed: loading ? null : load,
               ),

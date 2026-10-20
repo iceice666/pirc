@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'html_date_validation.dart';
 
 /// Pure HTML constraint validation for supported form controls.
@@ -183,7 +184,7 @@ abstract final class HtmlFormValidation {
   }) {
     if (control.kind == HtmlValidationControlKind.unsupported) {
       return HtmlValidationResult.unsupported(
-        'Unsupported HTML control kind: ${control.kind.name}',
+        tr("Unsupported HTML control kind: {0}", [control.kind.name]),
       );
     }
 
@@ -274,7 +275,9 @@ abstract final class HtmlFormValidation {
       final urlValidity = _validUrlValue(control.value);
       if (urlValidity == null) {
         return HtmlValidationResult.unsupported(
-          'URL syntax is outside the supported parser subset: ${control.value}',
+          tr("URL syntax is outside the supported parser subset: {0}", [
+            control.value,
+          ]),
         );
       }
       if (!urlValidity) flags.add(HtmlValidityFlag.typeMismatch);
@@ -285,7 +288,10 @@ abstract final class HtmlFormValidation {
         control.value.isNotEmpty) {
       if (_hasUnsupportedVPatternSyntax(control.pattern!)) {
         return HtmlValidationResult.unsupported(
-          'Pattern requires JavaScript Unicode-sets v syntax not modeled by Dart RegExp: ${control.pattern!}',
+          tr(
+            "Pattern requires JavaScript Unicode-sets v syntax not modeled by Dart RegExp: {0}",
+            [control.pattern!],
+          ),
         );
       }
       final pattern = control.pattern!;

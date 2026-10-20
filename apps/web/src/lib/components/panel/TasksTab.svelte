@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   import { ArrowLeft, Bot, ListChecks, RefreshCw, SquareTerminal, Users } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { app } from '../../app.svelte';
@@ -42,7 +44,7 @@
     const taskId = selected.id;
     const result = await outputLoader.run(
       (signal) => panelApi.backgroundOutput(id, taskId, 400, signal),
-      'Unable to load output.',
+      tr('Unable to load output.'),
     );
     if (!result || id !== sessionId || selected?.id !== taskId) return;
     selected = result.task;
@@ -90,7 +92,7 @@
 <div class="tab-body">
   {#if selected}
     <div class="drill-head">
-      <button class="icon-button small" type="button" aria-label="Back" onclick={back}
+      <button class="icon-button small" type="button" aria-label={tr('Back')} onclick={back}
         ><ArrowLeft size={16} /></button
       >
       <span class="drill-title mono">{selected.id}</span>
@@ -98,7 +100,7 @@
       <button
         class="icon-button small"
         type="button"
-        aria-label="Refresh output"
+        aria-label={tr('Refresh output')}
         onclick={refreshOutput}
         disabled={outputLoader.loading}
         ><RefreshCw class={outputLoader.loading ? 'spin' : ''} size={15} /></button
@@ -110,15 +112,17 @@
   {:else if app.panel.error && !panelState}
     <p class="panel-error">{app.panel.error}</p>
   {:else if !panelState}
-    <p class="panel-empty">Loading…</p>
+    <p class="panel-empty">{tr('Loading…')}</p>
   {:else if !panelState.agentRunning && !tasks.length && !agents.length}
     <p class="panel-empty">
-      The agent is not running. Background tasks, subagents and teammates appear here while it is.
+      {tr(
+        'The agent is not running. Background tasks, subagents and teammates appear here while it is.',
+      )}
     </p>
   {:else}
-    <div class="group-title">Background tasks<span>{tasks.length}</span></div>
+    <div class="group-title">{tr('Background tasks')}<span>{tasks.length}</span></div>
     {#if !tasks.length}
-      <p class="panel-empty">No background tasks.</p>
+      <p class="panel-empty">{tr('No background tasks.')}</p>
     {:else}
       <ul class="file-list">
         {#each tasks as task (task.id)}
@@ -132,12 +136,12 @@
                     task.startedAt,
                     task.endedAt,
                   )}{#if task.exitCode !== undefined && task.exitCode !== null}
-                    · exit {task.exitCode}{/if}</span
+                    {tr('· exit {0}', [task.exitCode])}{/if}</span
                 >
               </span>
-              {#if task.tty}<span class="chip">tty</span>{/if}
-              {#if task.notifyOn}<span class="chip" title="notify_on /{task.notifyOn}/"
-                  >watch {task.matches ?? 0}</span
+              {#if task.tty}<span class="chip">{tr('tty')}</span>{/if}
+              {#if task.notifyOn}<span class="chip" title={tr('notify_on /{0}/', [task.notifyOn])}
+                  >{tr('watch {0}', [task.matches ?? 0])}</span
                 >{/if}
               <span class="chip status-{task.status}">{task.status.replace('_', ' ')}</span>
             </button>
@@ -147,7 +151,7 @@
     {/if}
 
     {#if subagents.length}
-      <div class="group-title">Subagents<span>{subagents.length}</span></div>
+      <div class="group-title">{tr('Subagents')}<span>{subagents.length}</span></div>
       <ul class="file-list">
         {#each subagents as agent (agent.name)}
           <li class="task-row static">
@@ -155,8 +159,8 @@
             <span class="task-text">
               <span class="task-cmd"
                 >{agent.name}<span class="muted">
-                  · {agent.kind ?? 'general'}{agent.background
-                    ? ' · background'
+                  · {agent.kind ?? tr('general')}{agent.background
+                    ? tr(' · background')
                     : ''}{#if agent.model}
                     · {agent.model}{/if}</span
                 ></span
@@ -164,14 +168,14 @@
               {#if agent.task}<span class="memory-sub clamped">{agent.task}</span>{/if}
               {#if agent.lastError}<span class="memory-sub danger">{agent.lastError}</span>{/if}
             </span>
-            <span class="chip status-{agent.status}">{agent.status ?? 'unknown'}</span>
+            <span class="chip status-{agent.status}">{agent.status ?? tr('unknown')}</span>
           </li>
         {/each}
       </ul>
     {/if}
 
     {#if boardTasks.length}
-      <div class="group-title">Task board<span>{boardTasks.length}</span></div>
+      <div class="group-title">{tr('Task board')}<span>{boardTasks.length}</span></div>
       <ul class="file-list">
         {#each boardTasks as task (task.id)}
           <li class="task-row static">
@@ -179,9 +183,13 @@
             <span class="task-text">
               <span class="task-cmd"><span class="mono">#{task.id}</span> {task.subject}</span>
               <span class="memory-sub"
-                >{task.owner ? `owner ${task.owner}` : 'unowned'}{#if task.blockedBy.length}
-                  · after {task.blockedBy.map((id) => `#${id}`).join(', ')}{/if}{#if task.blocked}
-                  · blocked{/if}</span
+                >{task.owner
+                  ? tr('owner {0}', [task.owner])
+                  : tr('unowned')}{#if task.blockedBy.length}
+                  {tr('· after {0}', [
+                    task.blockedBy.map((id) => `#${id}`).join(', '),
+                  ])}{/if}{#if task.blocked}
+                  {tr('· blocked')}{/if}</span
               >
             </span>
             <span class="chip status-{task.status}">{task.status.replace('_', ' ')}</span>
@@ -190,9 +198,9 @@
       </ul>
     {/if}
 
-    <div class="group-title">Teammates<span>{teammates.length}</span></div>
+    <div class="group-title">{tr('Teammates')}<span>{teammates.length}</span></div>
     {#if !teammates.length}
-      <p class="panel-empty">No teammates spawned.</p>
+      <p class="panel-empty">{tr('No teammates spawned.')}</p>
     {:else}
       <ul class="file-list">
         {#each teammates as agent (agent.name)}
@@ -205,13 +213,13 @@
               {#if agent.task}<span class="memory-sub clamped">{agent.task}</span>{/if}
               {#if agent.lastError}<span class="memory-sub danger">{agent.lastError}</span>{/if}
             </span>
-            <span class="chip status-{agent.status}">{agent.status ?? 'unknown'}</span>
+            <span class="chip status-{agent.status}">{agent.status ?? tr('unknown')}</span>
           </li>
         {/each}
       </ul>
     {/if}
     {#if teamEvents.length}
-      <div class="group-title">Recent team activity</div>
+      <div class="group-title">{tr('Recent team activity')}</div>
       <ul class="event-list">
         {#each teamEvents as event (event.id)}
           <li>

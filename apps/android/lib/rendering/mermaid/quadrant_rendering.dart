@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -100,16 +101,16 @@ NativeMermaidQuadrantLayout layoutNativeMermaidQuadrant(
 }) {
   final config = diagram.config;
   if (!width.isFinite || width <= 0) {
-    throw const FormatException(
-      'Native quadrant viewport width must be positive',
+    throw FormatException(
+      tr("Native quadrant viewport width must be positive"),
     );
   }
   if (!config.chartWidth.isFinite ||
       !config.chartHeight.isFinite ||
       config.chartWidth <= 0 ||
       config.chartHeight <= 0) {
-    throw const FormatException(
-      'Native quadrant chart dimensions must be positive',
+    throw FormatException(
+      tr("Native quadrant chart dimensions must be positive"),
     );
   }
 
@@ -157,8 +158,8 @@ NativeMermaidQuadrantLayout layoutNativeMermaidQuadrant(
       xAxisBottom -
       titleTop;
   if (qWidth <= 0 || qHeight <= 0) {
-    throw const FormatException(
-      'Native quadrant labels leave no room for the plot',
+    throw FormatException(
+      tr("Native quadrant labels leave no room for the plot"),
     );
   }
   final halfWidth = qWidth / 2;
@@ -363,6 +364,7 @@ class NativeMermaidQuadrant extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final fontFamily = Theme.of(context).textTheme.bodyMedium?.fontFamily;
     return Semantics(
       image: true,

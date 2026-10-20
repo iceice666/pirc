@@ -35,7 +35,7 @@ internal class ContextRegistry(
         }
         require(contextId != primaryId) { "The primary context is implicit" }
         if (expectedPairingStamp.isBlank() || expectedPairingStamp != pairingStamp) {
-            throw ContextRegistryException("Pairing changed; reopen this context.")
+            throw ContextRegistryException(NativeI18n.text("Pairing changed; reopen this context."))
         }
         check(contextId !in active && contextId !in retired) {
             "A contextId cannot be reopened after it has been used."
@@ -55,7 +55,7 @@ internal class ContextRegistry(
         if (id == primaryId) {
             return Lease(id, accountEpoch, registryEpoch, 0L, pairingStamp)
         }
-        return active[id] ?: throw ContextRegistryException("This native context is closed.")
+        return active[id] ?: throw ContextRegistryException(NativeI18n.text("This native context is closed."))
     }
 
     @Synchronized

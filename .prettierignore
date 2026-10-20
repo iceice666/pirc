@@ -33,3 +33,7 @@ apps/android/android/app/build/
 apps/android/assets/
 apps/android/tool/parity/
 fixtures/mobile-parity/
+
+# Public upstream model data and generated Flutter translations.
+scripts/catalog/providers.json
+apps/android/lib/l10n/catalogs.g.dart

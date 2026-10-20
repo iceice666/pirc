@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -135,7 +136,7 @@ class NativeHtmlDateState extends ChangeNotifier {
       throw ArgumentError.value(
         sanitizedHtml,
         'sanitizedHtml',
-        'Must be the exact fragment used to create this date state.',
+        tr("Must be the exact fragment used to create this date state."),
       );
     }
     return _annotatedHtml;
@@ -484,7 +485,9 @@ class NativeHtmlDateState extends ChangeNotifier {
 
   _DateRecord _recordFor(String key) {
     final record = _records[key];
-    if (record == null) throw StateError('Unknown HTML date field: $key');
+    if (record == null) {
+      throw StateError(tr("Unknown HTML date field: {0}", [key]));
+    }
     return record;
   }
 
@@ -860,6 +863,7 @@ class NativeHtmlDateInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     if (!control.visible) return const SizedBox.shrink();
     final dark = Theme.of(context).brightness == Brightness.dark;
     final enabled = !control.disabled;
@@ -1476,6 +1480,7 @@ class _NativeHtmlDateCalendarButtonState
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final width = widget.width;
     final height = widget.height;
     final dark = Theme.of(context).brightness == Brightness.dark;

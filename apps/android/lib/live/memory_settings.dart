@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -92,10 +93,10 @@ class _MemorySettingsState extends State<MemorySettings> {
     final seconds = (widget.clock?.call() ?? DateTime.now())
         .difference(at)
         .inSeconds;
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return '${seconds ~/ 60}m ago';
-    if (seconds < 86400) return '${seconds ~/ 3600}h ago';
-    if (seconds < 2592000) return '${seconds ~/ 86400}d ago';
+    if (seconds < 60) return tr("just now");
+    if (seconds < 3600) return tr("{0}m ago", [seconds ~/ 60]);
+    if (seconds < 86400) return tr("{0}h ago", [seconds ~/ 3600]);
+    if (seconds < 2592000) return tr("{0}d ago", [seconds ~/ 86400]);
     return MaterialLocalizations.of(context).formatCompactDate(at);
   }
 
@@ -131,7 +132,7 @@ class _MemorySettingsState extends State<MemorySettings> {
   );
   Widget chat(String? id) {
     final name = obj(a.memory?['sessions'])[id];
-    if (id == null || name == null) return small('a chat that is gone');
+    if (id == null || name == null) return small(tr("a chat that is gone"));
     return InkWell(
       onTap: () {
         if (widget.onOpenChat != null) {
@@ -278,14 +279,14 @@ class _MemorySettingsState extends State<MemorySettings> {
       ],
       const SizedBox(height: 2),
       sourceLine(
-        'You said “${p['quote']}” · ',
+        tr("You said “{0}” · ", [p['quote']]),
         p['sessionId'] as String?,
         ' · ${ago(p['createdAt'])}',
       ),
     ],
     [
-      action('Approve', () => a.decideProposal(p, true), primary: true),
-      action('Reject', () => a.decideProposal(p, false)),
+      action(tr("Approve"), () => a.decideProposal(p, true), primary: true),
+      action(tr("Reject"), () => a.decideProposal(p, false)),
     ],
     proposal: true,
   );
@@ -306,9 +307,9 @@ class _MemorySettingsState extends State<MemorySettings> {
       ],
       [
         if (e['status'] == 'removed')
-          action('Restore', () => a.restore(id))
+          action(tr("Restore"), () => a.restore(id))
         else
-          action('History', () {
+          action(tr("History"), () {
             setState(() {
               if (historyFor == id) {
                 historyFor = null;
@@ -321,14 +322,14 @@ class _MemorySettingsState extends State<MemorySettings> {
             });
           }, allowBusy: true),
         if (confirming == id) ...[
-          action('Forget for good', () => a.forget(id), danger: true),
+          action(tr("Forget for good"), () => a.forget(id), danger: true),
           action(
-            'Cancel',
+            tr("Cancel"),
             () => setState(() => confirming = null),
             allowBusy: true,
           ),
         ] else
-          action('Forget', () => setState(() => confirming = id)),
+          action(tr("Forget"), () => setState(() => confirming = id)),
       ],
       history: [
         if (historyFor == id)
@@ -344,7 +345,7 @@ class _MemorySettingsState extends State<MemorySettings> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (historyLoading && versions.isEmpty)
-                  const WebNotice('Loading history…'),
+                  WebNotice(tr("Loading history…")),
                 if (historyError != null) WebNotice(historyError!, error: true),
                 for (final v in versions)
                   Padding(
@@ -366,7 +367,7 @@ class _MemorySettingsState extends State<MemorySettings> {
                         if (v['content'] != null &&
                             v['content'] != e['content'])
                           action(
-                            'Restore this',
+                            tr("Restore this"),
                             () => a.restore(
                               id,
                               revision: (v['revision'] as num).toInt(),
@@ -384,6 +385,7 @@ class _MemorySettingsState extends State<MemorySettings> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final view = a.memory;
     final usage = obj(view?['usage']);
     String number(dynamic n) => MaterialLocalizations.of(
@@ -403,24 +405,28 @@ class _MemorySettingsState extends State<MemorySettings> {
         ),
         const SizedBox(height: 8),
         Text.rich(
-          const TextSpan(
+          TextSpan(
             children: [
-              TextSpan(text: 'What your assistant remembers across chats. '),
+              TextSpan(
+                text: tr("What your assistant remembers across chats. "),
+              ),
               TextSpan(
                 text: 'USER',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               TextSpan(
-                text:
-                    ' is what you told it about yourself and changes only when you approve. ',
+                text: tr(
+                  " is what you told it about yourself and changes only when you approve. ",
+                ),
               ),
               TextSpan(
                 text: 'MEMORY',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               TextSpan(
-                text:
-                    " holds the assistant's own notes. New chats start with both; open chats keep what they started with.",
+                text: tr(
+                  " holds the assistant's own notes. New chats start with both; open chats keep what they started with.",
+                ),
               ),
             ],
           ),
@@ -431,43 +437,50 @@ class _MemorySettingsState extends State<MemorySettings> {
           ).copyWith(height: 1.55),
         ),
         const SizedBox(height: 8),
-        if (a.memoryLoading && view == null) const WebNotice('Loading memory…'),
+        if (a.memoryLoading && view == null) WebNotice(tr("Loading memory…")),
         if (a.memoryError != null) ...[
           WebNotice(a.memoryError!, error: true),
           if (view == null)
             Align(
               alignment: Alignment.centerLeft,
               child: WebButton(
-                'Retry',
+                tr("Retry"),
                 onPressed: a.memoryLoading ? null : a.refreshMemory,
               ),
             ),
         ],
         if (view != null) ...[
           paragraph(
-            'USER ${number(obj(usage['user'])['used'])}/${number(obj(usage['user'])['max'])} characters · MEMORY ${number(obj(usage['note'])['used'])}/${number(obj(usage['note'])['max'])} characters',
+            tr("USER {0}/{1} characters · MEMORY {2}/{3} characters", [
+              number(obj(usage['user'])['used']),
+              number(obj(usage['user'])['max']),
+              number(obj(usage['note'])['used']),
+              number(obj(usage['note'])['max']),
+            ]),
             small: true,
           ),
           if (a.proposals.isNotEmpty) ...[
-            heading('Waiting for you'),
+            heading(tr("Waiting for you")),
             for (final (index, p) in a.proposals.indexed) ...[
               if (index > 0) const SizedBox(height: 6),
               proposal(p),
             ],
           ],
-          heading('About you · USER'),
+          heading(tr("About you · USER")),
           if (rows(view['user']).isEmpty)
             paragraph(
-              'Nothing yet. When you tell the assistant about yourself, it asks you here first.',
+              tr(
+                "Nothing yet. When you tell the assistant about yourself, it asks you here first.",
+              ),
             )
           else
             for (final (index, e) in rows(view['user']).indexed) ...[
               if (index > 0) const SizedBox(height: 6),
               entry(e),
             ],
-          heading("The assistant's notes · MEMORY"),
+          heading(tr("The assistant's notes · MEMORY")),
           if (rows(view['notes']).isEmpty)
-            paragraph('No notes yet.')
+            paragraph(tr("No notes yet."))
           else
             for (final (index, e) in rows(view['notes']).indexed) ...[
               if (index > 0) const SizedBox(height: 6),
@@ -510,7 +523,9 @@ class _MemorySettingsState extends State<MemorySettings> {
           ],
           const SizedBox(height: 12),
           paragraph(
-            'Forget erases an entry with all its versions and keeps the same text from being saved again; rewordings are not caught. The chats it came from stay on the chat node, and repositories keep their own workspace memory.',
+            tr(
+              "Forget erases an entry with all its versions and keeps the same text from being saved again; rewordings are not caught. The chats it came from stay on the chat node, and repositories keep their own workspace memory.",
+            ),
             small: true,
           ),
         ],

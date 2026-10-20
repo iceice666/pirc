@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -171,10 +172,10 @@ class _NotificationSettingsState extends State<NativeNotificationSettings>
     final seconds = (widget.clock?.call() ?? DateTime.now())
         .difference(time)
         .inSeconds;
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return '${seconds ~/ 60}m ago';
-    if (seconds < 86400) return '${seconds ~/ 3600}h ago';
-    if (seconds < 2592000) return '${seconds ~/ 86400}d ago';
+    if (seconds < 60) return tr("just now");
+    if (seconds < 3600) return tr("{0}m ago", [seconds ~/ 60]);
+    if (seconds < 86400) return tr("{0}h ago", [seconds ~/ 3600]);
+    if (seconds < 2592000) return tr("{0}d ago", [seconds ~/ 86400]);
     return MaterialLocalizations.of(context).formatCompactDate(time);
   }
 
@@ -211,164 +212,181 @@ class _NotificationSettingsState extends State<NativeNotificationSettings>
     ),
   );
   @override
-  Widget build(BuildContext context) => AssistantSection(
-    title: 'Notifications',
-    divider: true,
-    children: [
-      const AssistantParagraph(
-        'Scheduled runs, sessions waiting for your answer, finished delegations and memory changes to approve. Each schedule chooses which of its runs notify.',
-      ),
-      if (status == 'loading')
-        const AssistantParagraph('Checking notifications…', live: true)
-      else ...[
-        // The pinned Modal p rule overrides push-error's color in this dialog.
-        if (error != null)
-          AssistantParagraph(
-            error!,
-            error: true,
-            live: true,
-            color: 'text.muted',
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return AssistantSection(
+      title: tr("Notifications"),
+      divider: true,
+      children: [
+        AssistantParagraph(
+          tr(
+            "Scheduled runs, sessions waiting for your answer, finished delegations and memory changes to approve. Each schedule chooses which of its runs notify.",
           ),
-        if (note != null) AssistantParagraph(note!, live: true),
-        if (status == 'unsupported')
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: _NotificationMessage(
-              'No UnifiedPush distributor is installed. Install one (ntfy, for example), then come back.',
+        ),
+        if (status == 'loading')
+          AssistantParagraph(tr("Checking notifications…"), live: true)
+        else ...[
+          if (error != null)
+            AssistantParagraph(
+              error!,
+              error: true,
+              live: true,
+              color: 'text.muted',
             ),
-          )
-        else if (status == 'denied')
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _NotificationMessage(
-                  'Notifications are blocked for this app. Allow them in Android settings.',
+          if (note != null) AssistantParagraph(note!, live: true),
+          if (status == 'unsupported')
+            Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: _NotificationMessage(
+                tr(
+                  "No UnifiedPush distributor is installed. Install one (ntfy, for example), then come back.",
                 ),
-                const SizedBox(height: 8),
-                WebButton(
-                  'Allow notifications',
-                  height: 32,
-                  fontSize: 13,
-                  horizontalPadding: 12,
-                  onPressed: busy
-                      ? null
-                      : () => act(() async {
-                          await c.gateway.call('requestNotifications');
-                        }),
-                ),
-              ],
-            ),
-          )
-        else if (status == 'on' || status == 'connecting')
-          row(
-            status == 'on'
-                ? 'This phone gets notifications.'
-                : 'Registering this phone for notifications…',
-            'Turn off',
-            () => act(() async {
-              await c.gateway.call('pushDisable');
-            }),
-          )
-        else
-          row(
-            'This phone does not get notifications.',
-            'Turn on',
-            () => act(() async {
-              await c.gateway.call('pushEnable');
-            }),
-            primary: true,
-          ),
-        if (places.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          for (final place in places)
-            Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: palette(context)['surface.subtle'],
-                borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
+            )
+          else if (status == 'denied')
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${place['name']}${place['id'] == hereId ? ' (this phone)' : ''}',
-                          style: webText(
-                            context,
-                            size: 13,
-                            weight: FontWeight.w500,
-                          ).copyWith(height: kTextHeightNone),
-                        ),
-                        Text(
-                          '${place['kind'] == 'unifiedpush' ? 'Phone · UnifiedPush' : 'Browser'} · ${place['host']}${place['lastSuccessAt'] != null && place['lastSuccessAt'] != 0 ? ' · last delivered ${ago(place['lastSuccessAt'])}' : ''}${place['failing'] == true ? ' · failing' : ''}',
-                          style: webText(
-                            context,
-                            size: 12,
-                            color: 'text.muted',
-                          ).copyWith(height: kTextHeightNone),
-                        ),
-                      ],
+                  _NotificationMessage(
+                    tr(
+                      "Notifications are blocked for this app. Allow them in Android settings.",
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(height: 8),
                   WebButton(
-                    'Remove',
+                    tr("Allow notifications"),
                     height: 32,
                     fontSize: 13,
                     horizontalPadding: 12,
                     onPressed: busy
                         ? null
                         : () => act(() async {
-                            if (place['id'] == hereId) {
-                              await c.gateway.call('pushDisable');
-                            } else {
-                              await c.gateway.request(
-                                '/api/push/subscriptions',
-                                method: 'DELETE',
-                                body: {'id': place['id']},
-                              );
-                            }
+                            await c.gateway.call('requestNotifications');
                           }),
                   ),
                 ],
               ),
+            )
+          else if (status == 'on' || status == 'connecting')
+            row(
+              status == 'on'
+                  ? tr("This phone gets notifications.")
+                  : tr("Registering this phone for notifications…"),
+              tr("Turn off"),
+              () => act(() async {
+                await c.gateway.call('pushDisable');
+              }),
+            )
+          else
+            row(
+              tr("This phone does not get notifications."),
+              tr("Turn on"),
+              () => act(() async {
+                await c.gateway.call('pushEnable');
+              }),
+              primary: true,
             ),
-          row(
-            'Send a notification to every place above.',
-            'Send a test',
-            () => act(() async {
-              final scope = currentAccount, count = places.length;
-              final result = await c.gateway.request(
-                '/api/push/test',
-                method: 'POST',
-                body: {},
-              );
-              if (mounted && scope == currentAccount) {
-                note = 'Sent to ${result['delivered']} of $count.';
-              }
-            }),
-          ),
+          if (places.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            for (final place in places)
+              Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: palette(context)['surface.subtle'],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${place['name']}${place['id'] == hereId ? ' (this phone)' : ''}',
+                            style: webText(
+                              context,
+                              size: 13,
+                              weight: FontWeight.w500,
+                            ).copyWith(height: kTextHeightNone),
+                          ),
+                          Text(
+                            '${place['kind'] == 'unifiedpush' ? 'Phone · UnifiedPush' : 'Browser'} · ${place['host']}${place['lastSuccessAt'] != null && place['lastSuccessAt'] != 0 ? ' · last delivered ${ago(place['lastSuccessAt'])}' : ''}${place['failing'] == true ? ' · failing' : ''}',
+                            style: webText(
+                              context,
+                              size: 12,
+                              color: 'text.muted',
+                            ).copyWith(height: kTextHeightNone),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    WebButton(
+                      tr("Remove"),
+                      height: 32,
+                      fontSize: 13,
+                      horizontalPadding: 12,
+                      onPressed: busy
+                          ? null
+                          : () => act(() async {
+                              if (place['id'] == hereId) {
+                                await c.gateway.call('pushDisable');
+                              } else {
+                                await c.gateway.request(
+                                  '/api/push/subscriptions',
+                                  method: 'DELETE',
+                                  body: {'id': place['id']},
+                                );
+                              }
+                            }),
+                    ),
+                  ],
+                ),
+              ),
+            row(
+              tr("Send a notification to every place above."),
+              tr("Send a test"),
+              () => act(() async {
+                final scope = currentAccount, count = places.length;
+                final result = await c.gateway.request(
+                  '/api/push/test',
+                  method: 'POST',
+                  body: {},
+                );
+                if (mounted && scope == currentAccount) {
+                  note = tr("Sent to {0} of {1}.", [
+                    result['delivered'],
+                    count,
+                  ]);
+                }
+              }),
+            ),
+          ],
         ],
       ],
-    ],
-  );
+    );
+  }
 }
 
 class _NotificationMessage extends StatelessWidget {
   const _NotificationMessage(this.text);
   final String text;
   @override
-  Widget build(BuildContext context) => Text(
-    text,
-    style: webText(
-      context,
-      size: 13,
-      color: 'text.muted',
-    ).copyWith(height: 1.5),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Text(
+      text,
+      style: webText(
+        context,
+        size: 13,
+        color: 'text.muted',
+      ).copyWith(height: 1.5),
+    );
+  }
 }

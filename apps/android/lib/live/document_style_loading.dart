@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:html/parser.dart' as html;
 import 'package:flutter/services.dart';
 
@@ -196,7 +197,7 @@ class NativeDocumentStyleLoader {
       if (href == null || href.isEmpty) continue;
       if (node.attributes['title']?.isNotEmpty == true) {
         _diagnostics.add(
-          'Preferred titled stylesheet sets are not implemented.',
+          tr("Preferred titled stylesheet sets are not implemented."),
         );
       }
       String resolved;
@@ -206,7 +207,9 @@ class NativeDocumentStyleLoader {
         _checkCurrent();
         _failures++;
         _diagnostics.add(
-          'Stylesheet URL could not resolve: ${LiveController.describe(error)}',
+          tr("Stylesheet URL could not resolve: {0}", [
+            LiveController.describe(error),
+          ]),
         );
         continue;
       }
@@ -291,7 +294,9 @@ class NativeDocumentStyleLoader {
   }
 
   void _checkCurrent() {
-    if (!isCurrent()) throw StateError('Document stylesheet load is stale.');
+    if (!isCurrent()) {
+      throw StateError(tr("Document stylesheet load is stale."));
+    }
   }
 
   Future<void> _external(
@@ -306,14 +311,14 @@ class NativeDocumentStyleLoader {
     _checkCurrent();
     if (depth > maximumImportDepth || _sourceCount >= maximumSources) {
       _failures++;
-      _diagnostics.add('Stylesheet import/source limit exceeded.');
+      _diagnostics.add(tr("Stylesheet import/source limit exceeded."));
       return;
     }
     try {
       final url = await resolve(href, baseUrl);
       _checkCurrent();
       if (ancestors.contains(url)) {
-        _diagnostics.add('Cyclic stylesheet import ignored: $url');
+        _diagnostics.add(tr("Cyclic stylesheet import ignored: {0}", [url]));
         return;
       }
       final response = await _cache.putIfAbsent(
@@ -326,13 +331,13 @@ class NativeDocumentStyleLoader {
       final status = (response['status'] as num).toInt();
       if (status < 200 || status >= 300) {
         _failures++;
-        _diagnostics.add('Stylesheet HTTP $status: $url');
+        _diagnostics.add(tr("Stylesheet HTTP {0}: {1}", [status, url]));
         return;
       }
       if (response['mimeType'] != 'text/css') {
         _failures++;
         _diagnostics.add(
-          'Stylesheet MIME ${response['mimeType']} rejected: $url',
+          tr("Stylesheet MIME {0} rejected: {1}", [response['mimeType'], url]),
         );
         return;
       }
@@ -342,12 +347,14 @@ class NativeDocumentStyleLoader {
           : Uint8List.fromList((data as List).cast<int>());
       if (_bytes + bytes.length > maximumBytes) {
         _failures++;
-        _diagnostics.add('Stylesheet byte limit exceeded: $url');
+        _diagnostics.add(tr("Stylesheet byte limit exceeded: {0}", [url]));
         return;
       }
       final finalUrl = response['finalUrl'] as String;
       if (ancestors.contains(finalUrl)) {
-        _diagnostics.add('Cyclic stylesheet redirect ignored: $finalUrl');
+        _diagnostics.add(
+          tr("Cyclic stylesheet redirect ignored: {0}", [finalUrl]),
+        );
         return;
       }
       final declaredEncoding = response['charset'] as String?;
@@ -382,7 +389,7 @@ class NativeDocumentStyleLoader {
       _checkCurrent();
       _failures++;
       _diagnostics.add(
-        'Stylesheet could not load: ${LiveController.describe(e)}',
+        tr("Stylesheet could not load: {0}", [LiveController.describe(e)]),
       );
     }
   }
@@ -398,19 +405,21 @@ class NativeDocumentStyleLoader {
     _checkCurrent();
     if (++_sourceCount > maximumSources) {
       _failures++;
-      _diagnostics.add('Stylesheet source limit exceeded.');
+      _diagnostics.add(tr("Stylesheet source limit exceeded."));
       return;
     }
     // Include inline sources in the same document-wide resource budget.
     _bytes += sheet.cssText.length * 2;
     if (_bytes > maximumBytes) {
       _failures++;
-      _diagnostics.add('Stylesheet decoded-text limit exceeded.');
+      _diagnostics.add(tr("Stylesheet decoded-text limit exceeded."));
       return;
     }
     for (final imported in NativeDocumentStyleEngine.importsOf(sheet)) {
       if (!imported.supported) {
-        _diagnostics.add('Unsupported stylesheet import: ${imported.href}');
+        _diagnostics.add(
+          tr("Unsupported stylesheet import: {0}", [imported.href]),
+        );
         continue;
       }
       await _external(
@@ -442,12 +451,12 @@ Json nativeStylesheetResponse(Json response) {
   if (raw is! List ||
       raw.length > 8 * 1024 * 1024 ||
       raw.any((value) => value is! int || value < 0 || value > 255)) {
-    throw const FormatException('Invalid stylesheet bytes (maximum 8 MiB).');
+    throw FormatException(tr("Invalid stylesheet bytes (maximum 8 MiB)."));
   }
   if (response['status'] is! int ||
       response['url'] is! String ||
       response['mimeType'] is! String) {
-    throw const FormatException('Invalid stylesheet response metadata.');
+    throw FormatException(tr("Invalid stylesheet response metadata."));
   }
   return {
     ...response,

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html;
@@ -160,7 +161,7 @@ class NativeHtmlForms extends ChangeNotifier {
       if (button == null) {
         _show(
           null,
-          'This form uses a submit control that is not yet supported.',
+          tr("This form uses a submit control that is not yet supported."),
         );
         return;
       }
@@ -279,8 +280,8 @@ class NativeHtmlForms extends ChangeNotifier {
           _show(
             keyFor(element),
             buttons.locale.languageCode == 'zh'
-                ? '此表單使用尚未支援的內容，無法送出。'
-                : 'This form uses content that is not yet supported.',
+                ? tr("此表單使用尚未支援的內容，無法送出。")
+                : tr("This form uses content that is not yet supported."),
             result,
           );
           return;
@@ -316,7 +317,7 @@ class NativeHtmlForms extends ChangeNotifier {
       if (element.attributes.containsKey('dirname')) {
         _show(
           keyFor(element),
-          'Directional form entries are not yet supported.',
+          tr("Directional form entries are not yet supported."),
         );
         return;
       }
@@ -328,7 +329,7 @@ class NativeHtmlForms extends ChangeNotifier {
                   HtmlValidationControlKind.unsupported)) {
         _show(
           keyFor(element),
-          'This form includes a control that is not yet supported.',
+          tr("This form includes a control that is not yet supported."),
         );
         return;
       }
@@ -440,7 +441,7 @@ class NativeHtmlForms extends ChangeNotifier {
     if (onSubmit == null) {
       _show(
         null,
-        'Form navigation is not yet available in this native document.',
+        tr("Form navigation is not yet available in this native document."),
       );
       return;
     }
@@ -570,18 +571,21 @@ class NativeHtmlForms extends ChangeNotifier {
 
   void _show(String? key, String text, [HtmlValidationResult? result]) {
     invalidKey = key;
-    const translated = {
-      'Form navigation is not yet available in this native document.':
-          '此原生頁面尚未支援表單導覽。',
-      'This form uses a submit control that is not yet supported.':
-          '此表單使用尚未支援的提交控制項。',
-      'Directional form entries are not yet supported.': '此表單使用尚未支援的欄位格式。',
-      'This form includes a control that is not yet supported.':
-          '此表單包含尚未支援的控制項，無法送出。',
+    final translated = {
+      'Form navigation is not yet available in this native document.': tr(
+        "此原生頁面尚未支援表單導覽。",
+      ),
+      'This form uses a submit control that is not yet supported.': tr(
+        "此表單使用尚未支援的提交控制項。",
+      ),
+      'Directional form entries are not yet supported.': tr("此表單使用尚未支援的欄位格式。"),
+      'This form includes a control that is not yet supported.': tr(
+        "此表單包含尚未支援的控制項，無法送出。",
+      ),
     };
     message = buttons.locale.languageCode == 'zh'
         ? translated[text] ??
-              (text.startsWith('Native HTML form') ? '此表單的送出格式尚未支援。' : text)
+              (text.startsWith('Native HTML form') ? tr("此表單的送出格式尚未支援。") : text)
         : text;
     invalidResult = result;
     notifyListeners();
@@ -651,59 +655,71 @@ String _validationMessage(
   if (result.has(HtmlValidityFlag.badInput)) {
     if (_type(element) == 'date') {
       return locale.languageCode == 'zh'
-          ? '請輸入有效值。'
-          : 'Please enter a valid value.';
+          ? tr("請輸入有效值。")
+          : tr("Please enter a valid value.");
     }
-    return 'Please enter a number.';
+    return tr("Please enter a number.");
   }
   if (result.has(HtmlValidityFlag.valueMissing)) {
     if (locale.languageCode == 'zh') {
       return switch (_type(element)) {
-        'checkbox' => '如果你要繼續執行，請勾選這個核取方塊。',
-        'radio' => '請選取其中一個選項。',
-        'select' => '請選取一個清單中的項目。',
+        'checkbox' => tr("如果你要繼續執行，請勾選這個核取方塊。"),
+        'radio' => tr("請選取其中一個選項。"),
+        'select' => tr("請選取一個清單中的項目。"),
         'file' =>
-          element.attributes.containsKey('multiple') ? '請選取一或多個檔案。' : '請選取檔案。',
-        _ => '請填寫這個欄位。',
+          element.attributes.containsKey('multiple')
+              ? tr("請選取一或多個檔案。")
+              : tr("請選取檔案。"),
+        _ => tr("請填寫這個欄位。"),
       };
     }
     return switch (_type(element)) {
-      'checkbox' => 'Please check this box if you want to proceed.',
-      'radio' => 'Please select one of these options.',
-      'select' => 'Please select an item in the list.',
+      'checkbox' => tr("Please check this box if you want to proceed."),
+      'radio' => tr("Please select one of these options."),
+      'select' => tr("Please select an item in the list."),
       'file' =>
         element.attributes.containsKey('multiple')
-            ? 'Please select one or more files.'
-            : 'Please select a file.',
-      _ => 'Please fill out this field.',
+            ? tr("Please select one or more files.")
+            : tr("Please select a file."),
+      _ => tr("Please fill out this field."),
     };
   }
   if (result.has(HtmlValidityFlag.typeMismatch)) {
     if (locale.languageCode == 'zh') {
-      if (_type(element) == 'url') return '請輸入網址。';
-      if (!value.contains('@')) return '請在電子郵件地址中包含「@」。「$value」未包含「@」。';
-      return '請輸入有效的電子郵件地址。';
+      if (_type(element) == 'url') return tr("請輸入網址。");
+      if (!value.contains('@')) {
+        return tr("請在電子郵件地址中包含「@」。「{0}」未包含「@」。", [value]);
+      }
+      return tr("請輸入有效的電子郵件地址。");
     }
     return _type(element) == 'url'
-        ? 'Please enter a URL.'
-        : 'Please enter an email address.';
+        ? tr("Please enter a URL.")
+        : tr("Please enter an email address.");
   }
   if (result.has(HtmlValidityFlag.patternMismatch)) {
     return locale.languageCode == 'zh'
-        ? '請符合要求的格式。'
-        : 'Please match the requested format.';
+        ? tr("請符合要求的格式。")
+        : tr("Please match the requested format.");
   }
   if (result.has(HtmlValidityFlag.rangeUnderflow)) {
-    return 'Value must be greater than or equal to ${element.attributes['min']}.';
+    return tr("Value must be greater than or equal to {0}.", [
+      element.attributes['min'],
+    ]);
   }
   if (result.has(HtmlValidityFlag.rangeOverflow)) {
-    return 'Value must be less than or equal to ${element.attributes['max']}.';
+    return tr("Value must be less than or equal to {0}.", [
+      element.attributes['max'],
+    ]);
   }
   if (result.has(HtmlValidityFlag.tooShort)) {
-    return 'Please lengthen this text to ${element.attributes['minlength']} characters or more.';
+    return tr("Please lengthen this text to {0} characters or more.", [
+      element.attributes['minlength'],
+    ]);
   }
   if (result.has(HtmlValidityFlag.tooLong)) {
-    return 'Please shorten this text to ${element.attributes['maxlength']} characters or less.';
+    return tr("Please shorten this text to {0} characters or less.", [
+      element.attributes['maxlength'],
+    ]);
   }
-  return 'Please enter a valid value.';
+  return tr("Please enter a valid value.");
 }

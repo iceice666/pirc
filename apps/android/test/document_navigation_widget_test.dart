@@ -111,10 +111,10 @@ void main() {
     expect(saved.body, 'value=raw+%2B+body');
     expect(saved.contentType, 'application/x-www-form-urlencoded');
 
-    await t.tap(find.byTooltip('重新載入'));
+    await t.tap(find.byTooltip("Reload"));
     await t.pumpAndSettle();
-    expect(find.text('重新送出表單？'), findsOneWidget);
-    await t.tap(find.text('取消'));
+    expect(find.text("Resubmit form?"), findsOneWidget);
+    await t.tap(find.text("Cancel"));
     await t.pumpAndSettle();
     expect(gateway.calls, hasLength(1));
     await windows.active!.load(
@@ -125,9 +125,9 @@ void main() {
     await t.pumpAndSettle();
     expect(gateway.calls, hasLength(1));
 
-    await t.tap(find.byTooltip('重新載入'));
+    await t.tap(find.byTooltip("Reload"));
     await t.pumpAndSettle();
-    await t.tap(find.text('重新送出'));
+    await t.tap(find.text("Resubmit"));
     await t.pumpAndSettle();
     expect(gateway.calls, hasLength(2));
     expect(gateway.calls.last['url'], 'https://gateway.example/landed#section');
@@ -162,9 +162,9 @@ void main() {
     await clickSubmit(t);
     expect(windows.active!.current!.document!.reloadRequest!.method, 'GET');
 
-    await t.tap(find.byTooltip('重新載入'));
+    await t.tap(find.byTooltip("Reload"));
     await t.pumpAndSettle();
-    expect(find.text('重新送出表單？'), findsNothing);
+    expect(find.text("Resubmit form?"), findsNothing);
     expect(gateway.calls, hasLength(2));
     expect(gateway.calls.last['url'], 'https://gateway.example/landed?done=1');
     expect(gateway.calls.last['method'], 'GET');
@@ -197,11 +197,11 @@ void main() {
       await clickSubmit(t);
       await clickSubmit(t);
 
-      await t.tap(find.byTooltip('重新載入'));
+      await t.tap(find.byTooltip("Reload"));
       await t.pumpAndSettle();
       windows.active!.back();
       await t.pump();
-      await t.tap(find.text('重新送出'));
+      await t.tap(find.text("Resubmit"));
       await t.pumpAndSettle();
 
       expect(gateway.calls, hasLength(2));
@@ -231,7 +231,7 @@ void main() {
     await clickSubmit(t);
 
     final original = windows.active!;
-    await t.tap(find.byTooltip('重新載入'));
+    await t.tap(find.byTooltip("Reload"));
     await t.pumpAndSettle();
     final other = windows.target(
       '_blank',
@@ -240,7 +240,7 @@ void main() {
     );
     windows.select(other);
     await t.pump();
-    await t.tap(find.text('重新送出'));
+    await t.tap(find.text("Resubmit"));
     await t.pumpAndSettle();
 
     expect(gateway.calls, hasLength(1));
@@ -267,12 +267,12 @@ void main() {
     await t.pumpAndSettle();
     await clickSubmit(t);
 
-    await t.tap(find.byTooltip('重新載入'));
+    await t.tap(find.byTooltip("Reload"));
     await t.pumpAndSettle();
     gateway.bootResponse['pairingStamp'] = 'new-account';
     await windows.connection().catchError((_) => <String, dynamic>{});
     await t.pump();
-    await t.tap(find.text('重新送出'));
+    await t.tap(find.text("Resubmit"));
     await t.pumpAndSettle();
 
     expect(gateway.calls, hasLength(1));
@@ -308,7 +308,7 @@ void main() {
       expect(gateway.calls.single['body'], 'message=Edited');
       expect(gateway.calls.single['method'], 'POST');
       expect(gateway.calls.single['pairingStamp'], 'stamp');
-      await t.tap(find.byTooltip('返回'));
+      await t.tap(find.byTooltip("Back"));
       await t.pumpAndSettle();
       expect(find.byType(NativeDocumentWorkspace), findsNothing);
       expect(
@@ -370,14 +370,14 @@ void main() {
       await clickSubmit(t);
       expect(find.text('Two'), findsOneWidget);
       expect(gateway.calls, hasLength(2));
-      await t.tap(find.byTooltip('返回'));
+      await t.tap(find.byTooltip("Back"));
       await t.pumpAndSettle();
       expect(find.text('One'), findsOneWidget);
       expect(
         t.widget<EditableText>(find.byType(EditableText)).controller.text,
         'Edited response',
       );
-      await t.tap(find.byTooltip('下一頁'));
+      await t.tap(find.byTooltip("Next page"));
       await t.pumpAndSettle();
       expect(find.text('Two'), findsOneWidget);
       expect(gateway.calls, hasLength(2));
@@ -462,14 +462,14 @@ void main() {
     expect(windows.windows, hasLength(2));
     expect(windows.active, same(named));
     expect(find.text('Named again'), findsOneWidget);
-    await t.tap(find.byTooltip('關閉頁面'));
+    await t.tap(find.byTooltip("Close page"));
     await t.pumpAndSettle();
     expect(named!.disposed, isTrue);
     expect(windows.windows, hasLength(1));
     expect(find.byType(NativeDocumentWorkspace), findsOneWidget);
     expect(find.text('Blank'), findsOneWidget);
     expect(gateway.calls, hasLength(3));
-    await t.tap(find.byTooltip('關閉頁面'));
+    await t.tap(find.byTooltip("Close page"));
     await t.pumpAndSettle();
     expect(windows.windows, isEmpty);
     expect(find.byType(NativeDocumentWorkspace), findsNothing);

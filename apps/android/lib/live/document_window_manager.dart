@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -136,26 +137,26 @@ class _NativeDocumentWindowManagerPageState
 
   String _sourceUrl() {
     try {
-      return windows.appDocumentUrl?.call() ?? '目前的 App 頁面';
+      return windows.appDocumentUrl?.call() ?? tr("目前的 App 頁面");
     } catch (_) {
-      return '目前的 App 頁面';
+      return tr("目前的 App 頁面");
     }
   }
 
   String _windowTitle(NativeDocumentWindow window) {
     final title = window.current?.document?.content.title?.trim();
     if (title != null && title.isNotEmpty) return title;
-    if (window.currentAppRoute != null) return 'Pirc App';
+    if (window.currentAppRoute != null) return tr("Pirc App");
     final url = window.current?.url ?? window.sourceUrl;
-    return url.isEmpty ? '未命名頁面' : url;
+    return url.isEmpty ? tr("未命名頁面") : url;
   }
 
   String _windowStatus(NativeDocumentWindow window) {
-    if (window.loading) return '載入中';
-    if (window.error != null) return '錯誤';
-    if (window.currentAppRoute != null) return 'App 頁面';
+    if (window.loading) return tr("載入中");
+    if (window.error != null) return tr("錯誤");
+    if (window.currentAppRoute != null) return tr("App 頁面");
     final status = window.current?.document?.status;
-    return status == null ? '已開啟' : 'HTTP $status';
+    return status == null ? tr("已開啟") : tr("HTTP {0}", [status]);
   }
 
   Widget _statusPill(String text, {required bool selected}) => Container(
@@ -199,7 +200,7 @@ class _NativeDocumentWindowManagerPageState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '主 App',
+                      tr("主 App"),
                       style: webText(
                         context,
                         size: 15,
@@ -217,14 +218,14 @@ class _NativeDocumentWindowManagerPageState
                 ),
               ),
               const SizedBox(width: 8),
-              _statusPill(selected ? '已選取' : '隱藏中', selected: selected),
+              _statusPill(selected ? tr("已選取") : tr("隱藏中"), selected: selected),
             ],
           ),
           const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerRight,
             child: WebButton(
-              selected ? '目前頁面' : '切換到主 App',
+              selected ? tr("目前頁面") : tr("切換到主 App"),
               key: const Key('document-window-source-select'),
               primary: !selected,
               onPressed: selected || _busy
@@ -241,7 +242,9 @@ class _NativeDocumentWindowManagerPageState
     final selected = windows.active == window;
     final title = _windowTitle(window);
     final url = window.current?.url ?? window.sourceUrl;
-    final label = window.name.isEmpty ? '獨立頁面' : '名稱：${window.name}';
+    final label = window.name.isEmpty
+        ? tr("獨立頁面")
+        : tr("名稱：{0}", [window.name]);
     final selectKey = 'select-${window.id}';
     final closeKey = 'close-${window.id}';
     return _card(
@@ -288,7 +291,10 @@ class _NativeDocumentWindowManagerPageState
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  _statusPill(selected ? '已選取' : '隱藏中', selected: selected),
+                  _statusPill(
+                    selected ? tr("已選取") : tr("隱藏中"),
+                    selected: selected,
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     _windowStatus(window),
@@ -297,7 +303,7 @@ class _NativeDocumentWindowManagerPageState
                   const SizedBox(height: 2),
                   WebIconButton(
                     LucideIcons.x,
-                    '關閉 $title',
+                    tr("關閉 {0}", [title]),
                     key: Key('document-window-$closeKey'),
                     onPressed: _busy
                         ? null
@@ -311,7 +317,7 @@ class _NativeDocumentWindowManagerPageState
           Align(
             alignment: Alignment.centerRight,
             child: WebButton(
-              selected ? '目前頁面' : '切換頁面',
+              selected ? tr("目前頁面") : tr("切換頁面"),
               key: Key('document-window-$selectKey'),
               primary: !selected,
               onPressed: selected || _busy
@@ -333,21 +339,22 @@ class _NativeDocumentWindowManagerPageState
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final active = windows.active;
     final narrow = MediaQuery.sizeOf(context).width <= 650;
     return Scaffold(
       backgroundColor: palette(context)['surface.grouped'],
       appBar: AppBar(
         leading: IconButton(
-          tooltip: '返回',
+          tooltip: tr("返回"),
           onPressed: () => Navigator.maybePop(context),
           icon: const Icon(LucideIcons.chevronLeft),
         ),
-        title: const Text('App 視窗'),
+        title: Text(tr("App 視窗")),
         actions: [
           WebIconButton(
             LucideIcons.chevronLeft,
-            '上一頁',
+            tr("上一頁"),
             key: const Key('document-window-back'),
             onPressed: active != null && active.canBack && !_busy
                 ? () => _run(active, () => widget.onBack(active))
@@ -355,7 +362,7 @@ class _NativeDocumentWindowManagerPageState
           ),
           WebIconButton(
             LucideIcons.chevronRight,
-            '下一頁',
+            tr("下一頁"),
             key: const Key('document-window-forward'),
             onPressed: active != null && active.canForward && !_busy
                 ? () => _run(active, () => widget.onForward(active))
@@ -378,7 +385,7 @@ class _NativeDocumentWindowManagerPageState
               ),
               children: [
                 Text(
-                  '主 App 與開啟中的網頁',
+                  tr("主 App 與開啟中的網頁"),
                   style: webText(
                     context,
                     size: 12,
@@ -397,7 +404,7 @@ class _NativeDocumentWindowManagerPageState
                 if (windows.windows.isEmpty) ...[
                   const SizedBox(height: 10),
                   Text(
-                    '目前沒有其他原生視窗。',
+                    tr("目前沒有其他原生視窗。"),
                     style: webText(context, size: 13, color: 'text.muted'),
                   ),
                 ],

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 
 /// Flutter-rendered datalist suggestions above the Android software keyboard.
@@ -62,6 +63,7 @@ class _KeyboardSuggestionsState extends State<KeyboardSuggestions>
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     // Scaffold removes viewInsets from its body MediaQuery. Read the view so
     // the strip still sits above the IME when the form resizes or scrolls.
     final view = View.of(context);
@@ -78,7 +80,7 @@ class _KeyboardSuggestionsState extends State<KeyboardSuggestions>
       fontWeight: FontWeight.w500,
     );
     final metrics = TextPainter(
-      text: TextSpan(text: 'Mg', style: labelStyle),
+      text: TextSpan(text: tr("Mg"), style: labelStyle),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
     )..layout();

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'
     show
@@ -183,8 +184,10 @@ class NativeMathTex extends StatelessWidget {
       parseError = error;
     } on Object catch (error) {
       parseError = ParseException(
-        'Unsanitized parse exception detected: $error. '
-        'Please report this error with corresponding input.',
+        tr(
+          "Unsanitized parse exception detected: {0}. Please report this error with corresponding input.",
+          [error],
+        ),
       );
     }
 
@@ -203,6 +206,7 @@ class NativeMathTex extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final resolved = resolve(context);
     final math = resolved.math;
     final tags = resolved.tags;
@@ -403,8 +407,11 @@ SyntaxTree resolveNativeMathChoices(SyntaxTree ast, MathOptions rootOptions) {
     final childOptions = node.computeChildOptions(options);
     if (childOptions.length != oldChildren.length) {
       throw StateError(
-        '${node.runtimeType} returned ${childOptions.length} child options '
-        'for ${oldChildren.length} AST children.',
+        tr("{0} returned {1} child options for {2} AST children.", [
+          node.runtimeType,
+          childOptions.length,
+          oldChildren.length,
+        ]),
       );
     }
 
@@ -581,7 +588,7 @@ GreenNode _gatherEnvironmentHandler(TexParser parser, EnvContext context) {
       context.envName == 'gather' || context.envName == 'gather*';
   if (displayOnly && !parser.settings.displayMode) {
     throw ParseException(
-      '{${context.envName}} can be used only in display mode.',
+      tr("{{0}} can be used only in display mode.", [context.envName]),
     );
   }
 
@@ -591,7 +598,10 @@ GreenNode _gatherEnvironmentHandler(TexParser parser, EnvContext context) {
     concatRow: (cells) {
       if (cells.length != 1) {
         throw ParseException(
-          'Too many columns in ${context.envName}: expected 1, got ${cells.length}',
+          tr("Too many columns in {0}: expected 1, got {1}", [
+            context.envName,
+            cells.length,
+          ]),
         );
       }
       return EquationRowNode(
@@ -693,7 +703,7 @@ class _NativeMathChoiceNode extends ParentableNode<EquationRowNode> {
   @override
   _NativeMathChoiceNode updateChildren(List<EquationRowNode?> newChildren) {
     if (newChildren.length != 4 || newChildren.any((child) => child == null)) {
-      throw ArgumentError('mathchoice requires exactly four branches.');
+      throw ArgumentError(tr("mathchoice requires exactly four branches."));
     }
     return _NativeMathChoiceNode(newChildren.cast<EquationRowNode>());
   }
@@ -757,7 +767,7 @@ class _NativeSmashNode extends ParentableNode<EquationRowNode> {
   @override
   _NativeSmashNode updateChildren(List<EquationRowNode?> newChildren) {
     if (newChildren.length != 1 || newChildren.single == null) {
-      throw ArgumentError('smash requires exactly one body.');
+      throw ArgumentError(tr("smash requires exactly one body."));
     }
     return _NativeSmashNode(
       newChildren.single!,

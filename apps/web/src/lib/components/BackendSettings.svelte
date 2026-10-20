@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   /**
    * Model backends: subscription accounts (ProviderLogin), API-key and custom
    * endpoints (ProviderEditor) and the gateway default model.
@@ -44,7 +46,7 @@
   function safeError(cause: unknown) {
     return cause instanceof ApiError
       ? cause.message
-      : 'Unable to update backend settings. Check the connection and try again.';
+      : tr('Unable to update backend settings. Check the connection and try again.');
   }
 
   async function refresh() {
@@ -129,17 +131,20 @@
 </script>
 
 <section class="settings-section backend-settings" aria-labelledby="backend-title">
-  <h3 id="backend-title">Model backends</h3>
+  <h3 id="backend-title">{tr('Model backends')}</h3>
   <p>
-    Global settings for this single-user gateway. All model requests run on the gateway; endpoints
-    must be reachable from there.
+    {tr(
+      'Global settings for this single-user gateway. All model requests run on the gateway; endpoints must be reachable from there.',
+    )}
   </p>
   {#if disabled}
     <p role="status">
-      Backend settings are unavailable in demo mode. No real accounts or settings will be changed.
+      {tr(
+        'Backend settings are unavailable in demo mode. No real accounts or settings will be changed.',
+      )}
     </p>
   {:else if loading}
-    <p role="status">Loading backends…</p>
+    <p role="status">{tr('Loading backends…')}</p>
   {:else}
     {#if error}<p class="backend-error" role="alert">{error}</p>{/if}
     {#if settings}
@@ -152,7 +157,7 @@
         onsucceeded={loginSucceeded}
       />
 
-      <h4>API keys and custom endpoints</h4>
+      <h4>{tr('API keys and custom endpoints')}</h4>
       {#each settings.providers.filter((provider) => provider.source !== 'oauth') as provider (provider.id)}
         {#if editor?.provider?.id === provider.id}
           {#key editor}
@@ -166,14 +171,14 @@
         {:else}<div class="backend-card">
             <strong>{provider.name || provider.id}</strong>
             <small
-              >{provider.source === 'file' ? 'File-managed · Read only' : 'Web-managed'} · {provider.api}
-              · {provider.hasApiKey ? 'API key saved' : 'No API key'}{provider.preset
-                ? ` · ${provider.preset} preset`
+              >{provider.source === 'file' ? tr('File-managed · Read only') : tr('Web-managed')} · {provider.api}
+              · {provider.hasApiKey ? tr('API key saved') : tr('No API key')}{provider.preset
+                ? tr(' · {0} preset', [provider.preset])
                 : ''}</small
             >
             {#if provider.baseUrl}<p class="endpoint">{provider.baseUrl}</p>{/if}
             <details>
-              <summary>{provider.models.length} models</summary>
+              <summary>{tr('{0} models', [provider.models.length])}</summary>
               <ul>
                 {#each provider.models as model}<li>
                     {model.name ?? model.id} <small>{model.id}</small>
@@ -185,13 +190,13 @@
                   class="button ghost"
                   type="button"
                   disabled={locked || activeLogin}
-                  onclick={() => editProvider(provider)}>Edit {provider.id}</button
+                  onclick={() => editProvider(provider)}>{tr('Edit {0}', [provider.id])}</button
                 ><button
                   class="button ghost"
                   type="button"
                   disabled={locked || activeLogin}
                   onclick={() => mutate(() => backendApi.remove(provider.id))}
-                  >Remove {provider.id}</button
+                  >{tr('Remove {0}', [provider.id])}</button
                 >
               </div>{/if}
           </div>{/if}
@@ -209,15 +214,15 @@
           class="button ghost"
           type="button"
           disabled={locked || activeLogin || !!editor}
-          onclick={() => editProvider()}>Add backend</button
+          onclick={() => editProvider()}>{tr('Add backend')}</button
         >{/if}
 
-      <h4>Default model</h4>
+      <h4>{tr('Default model')}</h4>
       <label
-        ><span>Gateway default</span><select
+        ><span>{tr('Gateway default')}</span><select
           bind:value={defaultChoice}
           disabled={locked || activeLogin}
-          ><option value="">Use file default / automatic</option
+          ><option value="">{tr('Use file default / automatic')}</option
           >{#each settings.providers as provider}{#each provider.models as model}<option
                 value={JSON.stringify([provider.id, model.id])}
                 >{provider.name || provider.id} / {model.name ?? model.id}</option
@@ -228,14 +233,14 @@
         class="button ghost"
         type="button"
         disabled={locked || activeLogin}
-        onclick={saveDefault}>Save default</button
+        onclick={saveDefault}>{tr('Save default')}</button
       >
-      <p>Applies to new runs that have no explicit model selection.</p>
+      <p>{tr('Applies to new runs that have no explicit model selection.')}</p>
     {:else}<button
         class="button ghost"
         type="button"
         onclick={() => refresh().catch((cause) => (error = safeError(cause)))}
-        >Retry settings</button
+        >{tr('Retry settings')}</button
       >{/if}
   {/if}
 </section>

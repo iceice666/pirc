@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -78,7 +79,7 @@ String _validateHistoryEntryKey(String value) {
   if (value.isEmpty ||
       value.length > 512 ||
       value.codeUnits.any((unit) => unit < 0x20 || unit == 0x7f)) {
-    throw const FormatException('History API entry key is invalid.');
+    throw FormatException(tr("History API entry key is invalid."));
   }
   return value;
 }
@@ -95,24 +96,24 @@ Map<String, Object?> _snapshotJsonStateGraph(Map<String, Object?> graph) {
 
   Object? copy(Object? value, int depth) {
     if (depth > maxDepth || ++nodeCount > maxNodes) {
-      throw const FormatException('History state graph exceeds its limits.');
+      throw FormatException(tr("History state graph exceeds its limits."));
     }
     if (value == null || value is bool || value is String) return value;
     if (value is int) {
       if (value.abs() > maxSafeInteger) {
-        throw const FormatException('History state integer is out of range.');
+        throw FormatException(tr("History state integer is out of range."));
       }
       return value;
     }
     if (value is double) {
       if (!value.isFinite) {
-        throw const FormatException('History state number must be finite.');
+        throw FormatException(tr("History state number must be finite."));
       }
       return value;
     }
     if (value is List) {
       if (!activeContainers.add(value)) {
-        throw const FormatException('History state graph contains a cycle.');
+        throw FormatException(tr("History state graph contains a cycle."));
       }
       try {
         return List<Object?>.unmodifiable(
@@ -124,14 +125,14 @@ Map<String, Object?> _snapshotJsonStateGraph(Map<String, Object?> graph) {
     }
     if (value is Map) {
       if (!activeContainers.add(value)) {
-        throw const FormatException('History state graph contains a cycle.');
+        throw FormatException(tr("History state graph contains a cycle."));
       }
       try {
         final result = <String, Object?>{};
         for (final entry in value.entries) {
           if (entry.key is! String) {
-            throw const FormatException(
-              'History state graph keys must be strings.',
+            throw FormatException(
+              tr("History state graph keys must be strings."),
             );
           }
           result[entry.key as String] = copy(entry.value, depth + 1);
@@ -141,23 +142,21 @@ Map<String, Object?> _snapshotJsonStateGraph(Map<String, Object?> graph) {
         activeContainers.remove(value);
       }
     }
-    throw const FormatException('History state graph is not JSON data.');
+    throw FormatException(tr("History state graph is not JSON data."));
   }
 
   final copied = copy(graph, 0);
   if (copied is! Map<String, Object?>) {
-    throw const FormatException('History state graph must be a JSON object.');
+    throw FormatException(tr("History state graph must be a JSON object."));
   }
   try {
     if (utf8.encode(jsonEncode(copied)).length > maxBytes) {
-      throw const FormatException(
-        'History state graph exceeds its size limit.',
-      );
+      throw FormatException(tr("History state graph exceeds its size limit."));
     }
   } on FormatException {
     rethrow;
   } catch (_) {
-    throw const FormatException('History state graph is not JSON data.');
+    throw FormatException(tr("History state graph is not JSON data."));
   }
   return copied;
 }
@@ -313,7 +312,7 @@ class NativeDocumentWindow extends ChangeNotifier {
   Future<void> _openStorageWindow(Json? boot) async {
     final connection = boot ?? await windows.connection();
     if (disposed || windows.disposed) {
-      throw StateError('The document window is closed.');
+      throw StateError(tr("The document window is closed."));
     }
     // Older native hosts and test gateways explicitly omit this capability.
     if (connection['documentStorage'] != true) return;
@@ -445,24 +444,24 @@ class NativeDocumentWindow extends ChangeNotifier {
   }) {
     final item = current;
     if (sourceScrollTop != null && !sourceScrollTop.isFinite) {
-      throw const FormatException('Invalid source scroll snapshot.');
+      throw FormatException(tr("Invalid source scroll snapshot."));
     }
     if (disposed || item == null || !identical(item.document, document)) {
-      throw const FormatException('History API document is no longer active.');
+      throw FormatException(tr("History API document is no longer active."));
     }
     if (revision != document.historyApiAckRevision + 1 ||
         revision <= 0 ||
         revision > 9007199254740991) {
-      throw const FormatException('History API revision is out of sequence.');
+      throw FormatException(tr("History API revision is out of sequence."));
     }
     final operation = switch (method) {
       'push' || 'pushState' => 'pushState',
       'replace' || 'replaceState' => 'replaceState',
-      _ => throw const FormatException('Unsupported History API mutation.'),
+      _ => throw FormatException(tr("Unsupported History API mutation.")),
     };
     final mode = scrollRestoration ?? item.scrollRestoration;
     if (mode != 'auto' && mode != 'manual') {
-      throw const FormatException('Invalid history scroll restoration mode.');
+      throw FormatException(tr("Invalid history scroll restoration mode."));
     }
     final graph = _snapshotJsonStateGraph(stateGraph);
     final canonicalUrl = _resolveHistoryApiUrl(document, item.url, url);
@@ -472,7 +471,7 @@ class NativeDocumentWindow extends ChangeNotifier {
           ? _newNativeHistoryEntryKey()
           : _validateHistoryEntryKey(entryKey);
       if (history.any((entry) => entry.entryKey == key)) {
-        throw const FormatException('History API entry key is already in use.');
+        throw FormatException(tr("History API entry key is already in use."));
       }
       item.scrollOffsetBeforeInitialFragment =
           initialScrollSnapshotPending ??
@@ -497,9 +496,7 @@ class NativeDocumentWindow extends ChangeNotifier {
     } else {
       if (entryKey != null &&
           _validateHistoryEntryKey(entryKey) != item.entryKey) {
-        throw const FormatException(
-          'replaceState cannot change its entry key.',
-        );
+        throw FormatException(tr("replaceState cannot change its entry key."));
       }
       _rememberScroll(preserveInitialFragment: true);
       item
@@ -524,10 +521,10 @@ class NativeDocumentWindow extends ChangeNotifier {
   ) {
     final item = current;
     if (disposed || item == null || !identical(item.document, document)) {
-      throw const FormatException('History API document is no longer active.');
+      throw FormatException(tr("History API document is no longer active."));
     }
     if (mode != 'auto' && mode != 'manual') {
-      throw const FormatException('Invalid history scroll restoration mode.');
+      throw FormatException(tr("Invalid history scroll restoration mode."));
     }
     if (revision == document.historyApiAckRevision &&
         mode == item.scrollRestoration) {
@@ -536,7 +533,7 @@ class NativeDocumentWindow extends ChangeNotifier {
     if (revision != document.historyApiAckRevision + 1 ||
         revision <= 0 ||
         revision > 9007199254740991) {
-      throw const FormatException('History API revision is out of sequence.');
+      throw FormatException(tr("History API revision is out of sequence."));
     }
     item.scrollRestoration = mode;
     document.historyApiAckRevision = revision;
@@ -552,7 +549,7 @@ class NativeDocumentWindow extends ChangeNotifier {
     String reference,
   ) {
     if (reference.length > 8192) {
-      throw const FormatException('History API URL exceeds its size limit.');
+      throw FormatException(tr("History API URL exceeds its size limit."));
     }
     String resolved;
     try {
@@ -574,11 +571,11 @@ class NativeDocumentWindow extends ChangeNotifier {
         resolved = resolveNativeDocumentUrl(reference, baseUrl);
       }
     } catch (_) {
-      throw const FormatException('History API URL is invalid.');
+      throw FormatException(tr("History API URL is invalid."));
     }
     final parsed = Uri.tryParse(resolved);
     if (parsed == null || parsed.userInfo.isNotEmpty) {
-      throw const FormatException('History API URL is invalid.');
+      throw FormatException(tr("History API URL is invalid."));
     }
     if (document.url.startsWith('blob:')) {
       final sourceBlob = document.url.split('#').first;
@@ -586,8 +583,8 @@ class NativeDocumentWindow extends ChangeNotifier {
           baseUrl.split('#').first != sourceBlob ||
           !resolved.startsWith('blob:') ||
           resolved.split('#').first != sourceBlob) {
-        throw const FormatException(
-          'Blob history API URLs may only change the fragment.',
+        throw FormatException(
+          tr("Blob history API URLs may only change the fragment."),
         );
       }
       return resolved;
@@ -595,7 +592,7 @@ class NativeDocumentWindow extends ChangeNotifier {
     if ((parsed.scheme != 'http' && parsed.scheme != 'https') ||
         !parsed.hasAuthority ||
         parsed.host.isEmpty) {
-      throw const FormatException('History API URL scheme is unsupported.');
+      throw FormatException(tr("History API URL scheme is unsupported."));
     }
     final source = Uri.tryParse(baseUrl);
     if (source == null ||
@@ -604,7 +601,7 @@ class NativeDocumentWindow extends ChangeNotifier {
         parsed.scheme != source.scheme ||
         parsed.host != source.host ||
         parsed.port != source.port) {
-      throw const FormatException('History API URL must remain same-origin.');
+      throw FormatException(tr("History API URL must remain same-origin."));
     }
     return resolved;
   }
@@ -700,7 +697,7 @@ class NativeDocumentWindow extends ChangeNotifier {
       final Json response;
       if (isBlob) {
         if (request.method != 'GET' || source == null) {
-          throw StateError('Blob navigation source is unavailable.');
+          throw StateError(tr("Blob navigation source is unavailable."));
         }
         final blob = await source.read(absolute);
         if (!_valid(generation, account)) return NativeDocumentLoadResult.stale;
@@ -829,7 +826,9 @@ class NativeDocumentWindow extends ChangeNotifier {
           contentType: request.contentType,
         );
       } else {
-        throw StateError('Unsupported final document method: $finalMethod');
+        throw StateError(
+          tr("Unsupported final document method: {0}", [finalMethod]),
+        );
       }
       final document = NativeFetchedDocument(
         id: _nextDocument++,
@@ -1678,7 +1677,7 @@ class NativeDocumentWindows extends ChangeNotifier {
     _connectionEpoch++;
     responses.clear();
     _identity = _readIdentity();
-    connectionError = '連線已變更，請回到 App 重新開啟內容。';
+    connectionError = tr("連線已變更，請回到 App 重新開啟內容。");
     for (final window in windows) {
       window.removeListener(notifyListeners);
       window.dispose();
@@ -1693,7 +1692,7 @@ class NativeDocumentWindows extends ChangeNotifier {
     if (next == _identity) return;
     _identity = next;
     responses.clear();
-    connectionError = '連線已變更，請回到 App 重新開啟內容。';
+    connectionError = tr("連線已變更，請回到 App 重新開啟內容。");
     for (final window in windows) {
       window.removeListener(notifyListeners);
       window.dispose();
@@ -1707,7 +1706,7 @@ class NativeDocumentWindows extends ChangeNotifier {
     final identity = accountIdentity;
     final data = obj(await gateway.call('boot'));
     if (disposed || accountIdentity != identity) {
-      throw StateError('Connection changed.');
+      throw StateError(tr("Connection changed."));
     }
     final stamp = owner?.pairingStamp ?? data['pairingStamp'];
     if (owner == null && stamp != null) {
@@ -1724,9 +1723,9 @@ class NativeDocumentWindows extends ChangeNotifier {
         activeId = null;
         _anonymousStamp = stamp as String;
         _anonymousOrigin = data['origin'] as String?;
-        connectionError = '連線已變更，請回到 App 重新開啟內容。';
+        connectionError = tr("連線已變更，請回到 App 重新開啟內容。");
         notifyListeners();
-        throw StateError('Connection changed.');
+        throw StateError(tr("Connection changed."));
       }
       _anonymousStamp = stamp as String;
       _anonymousOrigin = data['origin'] as String?;
@@ -1734,7 +1733,7 @@ class NativeDocumentWindows extends ChangeNotifier {
     if (stamp == null ||
         data['pairingStamp'] != stamp ||
         (owner?.origin != null && data['origin'] != owner!.origin)) {
-      throw StateError('Connection changed.');
+      throw StateError(tr("Connection changed."));
     }
     return {...data, 'pairingStamp': stamp};
   }
@@ -1749,7 +1748,7 @@ class NativeDocumentWindows extends ChangeNotifier {
         source?.disposed == true ||
         source?.closing == true ||
         source != null && !windows.contains(source)) {
-      throw StateError('Connection changed.');
+      throw StateError(tr("Connection changed."));
     }
     connectionError = null;
     var keyword = raw.toLowerCase();

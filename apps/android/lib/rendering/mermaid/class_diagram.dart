@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -158,7 +159,7 @@ class NativeMermaidClassDiagramData {
   final List<NativeMermaidClassNote> notes;
 
   String get semanticsLabel {
-    final pieces = <String>['Class diagram'];
+    final pieces = <String>[tr("Class diagram")];
     if (classes.isNotEmpty) {
       pieces.add(
         'Classes: ${classes.map((node) => node.displayLabel).join(', ')}',
@@ -262,7 +263,7 @@ class _ParsedMember {
 
 Never _classDiagramError(int line, String details) {
   throw FormatException(
-    'Invalid Mermaid class diagram at line $line: $details',
+    tr("Invalid Mermaid class diagram at line {0}: {1}", [line, details]),
   );
 }
 
@@ -360,7 +361,7 @@ String _trimClassComment(String line, int lineNumber) {
       if (line.startsWith('%%{', index)) {
         _classDiagramError(
           lineNumber,
-          'Mermaid directives are not supported natively',
+          tr("Mermaid directives are not supported natively"),
         );
       }
       return line.substring(0, index).trimRight();
@@ -375,7 +376,7 @@ void _appendClassMember(_MutableClassNode node, String input, int lineNumber) {
   if (member.startsWith('<<') && member.endsWith('>>')) {
     final annotation = member.substring(2, member.length - 2).trim();
     if (annotation.isEmpty) {
-      _classDiagramError(lineNumber, 'Empty class annotation');
+      _classDiagramError(lineNumber, tr("Empty class annotation"));
     }
     node.annotations.add(annotation);
     return;
@@ -398,11 +399,11 @@ void _appendClassMember(_MutableClassNode node, String input, int lineNumber) {
       returnType = returnType.substring(0, returnType.length - 1).trimRight();
     }
     if (openParen <= 0) {
-      _classDiagramError(lineNumber, 'Malformed class method');
+      _classDiagramError(lineNumber, tr("Malformed class method"));
     }
     final id = remainder.substring(0, openParen).trim();
     final parameters = remainder.substring(openParen + 1, closeParen).trim();
-    if (id.isEmpty) _classDiagramError(lineNumber, 'Method name is empty');
+    if (id.isEmpty) _classDiagramError(lineNumber, tr("Method name is empty"));
     node.methods.add(
       _ParsedMember(
         id: _convertMemberGenerics(id),
@@ -422,7 +423,7 @@ void _appendClassMember(_MutableClassNode node, String input, int lineNumber) {
     remainder = remainder.substring(0, remainder.length - 1).trimRight();
   }
   if (remainder.isEmpty) {
-    _classDiagramError(lineNumber, 'Attribute name is empty');
+    _classDiagramError(lineNumber, tr("Attribute name is empty"));
   }
   node.members.add(
     _ParsedMember(
@@ -474,7 +475,7 @@ List<String> _splitClassMembers(String value, int lineNumber) {
     }
   }
   if (quote.isNotEmpty) {
-    _classDiagramError(lineNumber, 'Unclosed quote in member');
+    _classDiagramError(lineNumber, tr("Unclosed quote in member"));
   }
   result.add(current.toString());
   return result;
@@ -489,7 +490,10 @@ NativeMermaidClassMarker _markerFor(String marker, int lineNumber) {
     '<' || '>' => NativeMermaidClassMarker.dependency,
     '()' => NativeMermaidClassMarker.lollipop,
     _ => throw FormatException(
-      'Invalid Mermaid class diagram at line $lineNumber: unsupported relation marker $marker',
+      tr(
+        "Invalid Mermaid class diagram at line {0}: unsupported relation marker {1}",
+        [lineNumber, marker],
+      ),
     ),
   };
 }
@@ -560,7 +564,7 @@ void _parseClassRelation(
 ) {
   final left = _readClassIdentifier(line, 0);
   if (left == null) {
-    _classDiagramError(lineNumber, 'Expected class name');
+    _classDiagramError(lineNumber, tr("Expected class name"));
   }
   final leftNode = ensureClass(left.id, left.genericType, lineNumber);
   var index = _skipSpace(line, left.end);
@@ -573,7 +577,7 @@ void _parseClassRelation(
   }
   final operator = _readRelationOperator(line, index, lineNumber);
   if (operator == null) {
-    _classDiagramError(lineNumber, 'Unknown class statement');
+    _classDiagramError(lineNumber, tr("Unknown class statement"));
   }
   index = _skipSpace(line, operator.end);
 
@@ -585,7 +589,7 @@ void _parseClassRelation(
   }
   final right = _readClassIdentifier(line, index);
   if (right == null) {
-    _classDiagramError(lineNumber, 'Expected class name after relation');
+    _classDiagramError(lineNumber, tr("Expected class name after relation"));
   }
   ensureClass(right.id, right.genericType, lineNumber);
   index = _skipSpace(line, right.end);
@@ -593,7 +597,10 @@ void _parseClassRelation(
   var label = '';
   if (index < line.length) {
     if (line[index] != ':') {
-      _classDiagramError(lineNumber, 'Unexpected text after class relation');
+      _classDiagramError(
+        lineNumber,
+        tr("Unexpected text after class relation"),
+      );
     }
     label = line.substring(index + 1).trim();
   }
@@ -615,7 +622,7 @@ void _parseClassRelation(
 /// for statements that the native class renderer does not understand.
 NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
   if (source.length > 50000) {
-    throw const FormatException('Class diagram exceeds 50000 characters');
+    throw FormatException(tr("Class diagram exceeds 50000 characters"));
   }
   final lines = source
       .replaceAll('\r\n', '\n')
@@ -633,7 +640,7 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
 
   _MutableClassNode ensureClass(String id, String genericType, int lineNumber) {
     if (id.isEmpty) {
-      _classDiagramError(lineNumber, 'Class name cannot be empty');
+      _classDiagramError(lineNumber, tr("Class name cannot be empty"));
     }
     final node = classes.putIfAbsent(
       id,
@@ -681,7 +688,7 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
 
     if (statement == '}') {
       if (namespaceStack.isEmpty) {
-        _classDiagramError(lineNumber, 'Unexpected closing brace');
+        _classDiagramError(lineNumber, tr("Unexpected closing brace"));
       }
       namespaceStack.removeLast();
       return;
@@ -703,7 +710,10 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
     if (noteMatch != null) {
       final target = _readClassIdentifier(statement, noteMatch.end);
       if (target == null) {
-        _classDiagramError(lineNumber, 'Expected class name after note for');
+        _classDiagramError(
+          lineNumber,
+          tr("Expected class name after note for"),
+        );
       }
       final classNode = ensureClass(target.id, target.genericType, lineNumber);
       final noteStart = _skipSpace(statement, target.end);
@@ -712,12 +722,12 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
       if (quote != null) {
         noteText = quote.value;
         if (statement.substring(_skipSpace(statement, quote.end)).isNotEmpty) {
-          _classDiagramError(lineNumber, 'Unexpected text after note');
+          _classDiagramError(lineNumber, tr("Unexpected text after note"));
         }
       } else if (noteStart < statement.length && statement[noteStart] == ':') {
         noteText = statement.substring(noteStart + 1).trim();
       } else {
-        _classDiagramError(lineNumber, 'Expected quoted note text');
+        _classDiagramError(lineNumber, tr("Expected quoted note text"));
       }
       final noteId = 'note$noteIndex';
       noteIndex++;
@@ -747,7 +757,7 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
     ).hasMatch(statement)) {
       _classDiagramError(
         lineNumber,
-        'Styling and clickable class directives are not supported natively',
+        tr("Styling and clickable class directives are not supported natively"),
       );
     }
 
@@ -758,7 +768,7 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
       ).firstMatch(statement)!.end;
       final parsed = _readClassIdentifier(statement, start);
       if (parsed == null) {
-        _classDiagramError(lineNumber, 'Expected class name');
+        _classDiagramError(lineNumber, tr("Expected class name"));
       }
       final node = ensureClass(parsed.id, parsed.genericType, lineNumber);
       var index = _skipSpace(statement, parsed.end);
@@ -766,13 +776,13 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
       if (index < statement.length && statement[index] == '[') {
         final label = _readClassQuote(statement, index + 1);
         if (label == null) {
-          _classDiagramError(lineNumber, 'Expected quoted class label');
+          _classDiagramError(lineNumber, tr("Expected quoted class label"));
         }
         index = _skipSpace(statement, label.end);
         if (index >= statement.length || statement[index] != ']') {
           _classDiagramError(
             lineNumber,
-            'Expected closing bracket after class label',
+            tr("Expected closing bracket after class label"),
           );
         }
         node.label = label.value;
@@ -782,7 +792,7 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
       if (remainder.startsWith('<<') && remainder.endsWith('>>')) {
         final annotation = remainder.substring(2, remainder.length - 2).trim();
         if (annotation.isEmpty) {
-          _classDiagramError(lineNumber, 'Empty class annotation');
+          _classDiagramError(lineNumber, tr("Empty class annotation"));
         }
         node.annotations.add(annotation);
         return;
@@ -793,7 +803,10 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
       }
       if (remainder.isEmpty) return;
       if (!remainder.startsWith('{')) {
-        _classDiagramError(lineNumber, 'Unsupported class declaration suffix');
+        _classDiagramError(
+          lineNumber,
+          tr("Unsupported class declaration suffix"),
+        );
       }
       final content = remainder.substring(1);
       final closing = content.indexOf('}');
@@ -811,7 +824,7 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
     if (statement.startsWith('note ')) {
       _classDiagramError(
         lineNumber,
-        'Only notes of the form note for Class are supported',
+        tr("Only notes of the form note for Class are supported"),
       );
     }
 
@@ -834,7 +847,7 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
     if (line.startsWith('%%{')) {
       _classDiagramError(
         index + 1,
-        'Mermaid directives are not supported natively',
+        tr("Mermaid directives are not supported natively"),
       );
     }
     if (line.startsWith('%%')) continue;
@@ -845,7 +858,7 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
       if (line != 'classDiagram' && line != 'classDiagram-v2') {
         _classDiagramError(
           index + 1,
-          'Expected classDiagram or classDiagram-v2 header',
+          tr("Expected classDiagram or classDiagram-v2 header"),
         );
       }
       headerFound = true;
@@ -856,7 +869,7 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
       final close = line.indexOf('}');
       final node = classes[bodyClass];
       if (node == null) {
-        _classDiagramError(index + 1, 'Class block lost its owner');
+        _classDiagramError(index + 1, tr("Class block lost its owner"));
       }
       if (close < 0) {
         addMembers(node, line, index + 1);
@@ -871,12 +884,12 @@ NativeMermaidClassDiagramData parseNativeMermaidClassDiagram(String source) {
     processStatement(line, index + 1);
   }
 
-  if (!headerFound) _classDiagramError(1, 'Missing class diagram header');
+  if (!headerFound) _classDiagramError(1, tr("Missing class diagram header"));
   if (bodyClass != null) {
-    _classDiagramError(lines.length, 'Unclosed class body');
+    _classDiagramError(lines.length, tr("Unclosed class body"));
   }
   if (namespaceStack.isNotEmpty) {
-    _classDiagramError(lines.length, 'Unclosed namespace');
+    _classDiagramError(lines.length, tr("Unclosed namespace"));
   }
 
   return NativeMermaidClassDiagramData(
@@ -1629,6 +1642,7 @@ class NativeMermaidClassDiagram extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final inherited = DefaultTextStyle.of(context).style;
     final diagram = parseNativeMermaidClassDiagram(source);
     final layout = layoutNativeMermaidClassDiagram(

@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'kanban_model.dart';
 
 /// Parses the Kanban subset backed by Mermaid 11.17.2's `kanbanDb`.
@@ -9,8 +10,8 @@ import 'kanban_model.dart';
 NativeMermaidKanbanBoard parseNativeMermaidKanban(String source) {
   final normalized = source.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   if (normalized.length > 50000) {
-    throw const FormatException(
-      'Mermaid Kanban exceeds the 50000 character native limit',
+    throw FormatException(
+      tr("Mermaid Kanban exceeds the 50000 character native limit"),
     );
   }
   final lines = normalized.split('\n');
@@ -18,8 +19,9 @@ NativeMermaidKanbanBoard parseNativeMermaidKanban(String source) {
   final nodes = <_ParsedKanbanNode>[];
   var generatedId = 0;
 
-  Never invalid(int line, String message) =>
-      throw FormatException('Kanban parse error on line $line: $message');
+  Never invalid(int line, String message) => throw FormatException(
+    tr("Kanban parse error on line {0}: {1}", [line, message]),
+  );
 
   for (var index = 0; index < lines.length; index++) {
     final lineNumber = index + 1;
@@ -28,7 +30,7 @@ NativeMermaidKanbanBoard parseNativeMermaidKanban(String source) {
     if (content.isEmpty || content.startsWith('%%')) continue;
     if (!headerSeen) {
       if (content.toLowerCase() != 'kanban') {
-        invalid(lineNumber, 'Expected a Kanban header');
+        invalid(lineNumber, tr("Expected a Kanban header"));
       }
       headerSeen = true;
       continue;
@@ -37,14 +39,17 @@ NativeMermaidKanbanBoard parseNativeMermaidKanban(String source) {
     final indent = rawLine.length - rawLine.trimLeft().length;
     var nodeSource = rawLine.trimLeft();
     if (nodeSource.contains(':::') || nodeSource.contains('::icon(')) {
-      invalid(lineNumber, 'Kanban class and icon decorators are unsupported');
+      invalid(
+        lineNumber,
+        tr("Kanban class and icon decorators are unsupported"),
+      );
     }
 
     final metadataStart = nodeSource.indexOf('@{');
     String? metadataText;
     if (metadataStart >= 0) {
       if (!nodeSource.endsWith('}')) {
-        invalid(lineNumber, 'Metadata must end with a closing brace');
+        invalid(lineNumber, tr("Metadata must end with a closing brace"));
       }
       metadataText = nodeSource.substring(
         metadataStart + 2,
@@ -52,7 +57,7 @@ NativeMermaidKanbanBoard parseNativeMermaidKanban(String source) {
       );
       nodeSource = nodeSource.substring(0, metadataStart).trimRight();
       if (metadataText.contains('{') || metadataText.contains('}')) {
-        invalid(lineNumber, 'Nested metadata objects are unsupported');
+        invalid(lineNumber, tr("Nested metadata objects are unsupported"));
       }
     }
 
@@ -71,7 +76,7 @@ NativeMermaidKanbanBoard parseNativeMermaidKanban(String source) {
           if (trailing.isNotEmpty) {
             invalid(
               index + 1,
-              'Text after a multiline card label is unsupported',
+              tr("Text after a multiline card label is unsupported"),
             );
           }
           break;
@@ -80,7 +85,7 @@ NativeMermaidKanbanBoard parseNativeMermaidKanban(String source) {
       }
       if (index >= lines.length - 1 &&
           !lines[index].contains(_closingDelimiter(parsedShape.sourceShape))) {
-        invalid(lineNumber, 'Unterminated multiline card label');
+        invalid(lineNumber, tr("Unterminated multiline card label"));
       }
       nodes.add(
         _ParsedKanbanNode(
@@ -107,7 +112,7 @@ NativeMermaidKanbanBoard parseNativeMermaidKanban(String source) {
     );
   }
 
-  if (!headerSeen) throw const FormatException('Missing Kanban header');
+  if (!headerSeen) throw FormatException(tr("Missing Kanban header"));
   if (nodes.isEmpty) return NativeMermaidKanbanBoard(columns: const []);
 
   final sectionLevel = nodes.first.level;
@@ -116,7 +121,10 @@ NativeMermaidKanbanBoard parseNativeMermaidKanban(String source) {
   _ParsedKanbanNode? currentSection;
   for (final node in nodes) {
     if (node.level < sectionLevel) {
-      invalid(node.lineNumber, 'Items cannot be above the first column level');
+      invalid(
+        node.lineNumber,
+        tr("Items cannot be above the first column level"),
+      );
     }
     if (node.level == sectionLevel) {
       sections.add(node);
@@ -124,7 +132,7 @@ NativeMermaidKanbanBoard parseNativeMermaidKanban(String source) {
       children[node.id] = <_ParsedKanbanNode>[];
     } else {
       if (currentSection == null) {
-        invalid(node.lineNumber, 'A card must follow a column');
+        invalid(node.lineNumber, tr("A card must follow a column"));
       }
       children[currentSection.id]!.add(node);
     }
@@ -196,7 +204,7 @@ _ParsedShape _parseShape(
   Never Function(int, String) invalid,
 ) {
   final source = value.trim();
-  if (source.isEmpty) invalid(line, 'Column or card label is empty');
+  if (source.isEmpty) invalid(line, tr("Column or card label is empty"));
   final openIndex = _firstShapeDelimiter(source);
   if (openIndex < 0) {
     return _ParsedShape(id: source, label: source, sourceShape: 'default');
@@ -205,7 +213,7 @@ _ParsedShape _parseShape(
   final id = source.substring(0, openIndex).trim();
   final shaped = source.substring(openIndex);
   final opening = _openingDelimiter(shaped);
-  if (opening == null) invalid(line, 'Unsupported Kanban card shape');
+  if (opening == null) invalid(line, tr("Unsupported Kanban card shape"));
   final close = _closingDelimiterForOpening(opening);
   final bodyStart = opening.length;
   final closeAt = shaped.indexOf(close, bodyStart);
@@ -218,7 +226,7 @@ _ParsedShape _parseShape(
     );
   }
   if (shaped.substring(closeAt + close.length).trim().isNotEmpty) {
-    invalid(line, 'Unexpected text after the card shape');
+    invalid(line, tr("Unexpected text after the card shape"));
   }
   return _ParsedShape(
     id: id,
@@ -277,7 +285,7 @@ Map<String, String> _metadata(
   final result = <String, String>{};
   for (final entry in _splitMetadata(source)) {
     final separator = entry.indexOf(':');
-    if (separator <= 0) invalid(line, 'Expected key: value metadata');
+    if (separator <= 0) invalid(line, tr("Expected key: value metadata"));
     final key = entry.substring(0, separator).trim();
     final value = _unquote(entry.substring(separator + 1).trim());
     if (!const {
@@ -287,12 +295,14 @@ Map<String, String> _metadata(
       'label',
       'shape',
     }.contains(key)) {
-      invalid(line, 'Unsupported Kanban metadata key "$key"');
+      invalid(line, tr("Unsupported Kanban metadata key \"{0}\"", [key]));
     }
     if (key == 'shape' && value != 'kanbanItem') {
-      invalid(line, 'Only the source kanbanItem shape is supported');
+      invalid(line, tr("Only the source kanbanItem shape is supported"));
     }
-    if (result.containsKey(key)) invalid(line, 'Duplicate metadata key "$key"');
+    if (result.containsKey(key)) {
+      invalid(line, tr("Duplicate metadata key \"{0}\"", [key]));
+    }
     result[key] = value;
   }
   return Map.unmodifiable(result);
@@ -316,7 +326,7 @@ List<String> _splitMetadata(String source) {
     }
   }
   if (quote != null) {
-    throw const FormatException('Unterminated quoted metadata value');
+    throw FormatException(tr("Unterminated quoted metadata value"));
   }
   entries.add(source.substring(start).trim());
   return entries;
@@ -329,9 +339,7 @@ String _unquote(String value) {
     return value.substring(1, value.length - 1);
   }
   if (value.contains('{') || value.contains('}')) {
-    throw const FormatException(
-      'Nested Kanban metadata values are unsupported',
-    );
+    throw FormatException(tr("Nested Kanban metadata values are unsupported"));
   }
   return value;
 }

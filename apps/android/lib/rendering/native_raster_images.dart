@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
 
@@ -28,7 +29,7 @@ class NativeRasterImages {
     final result = await _channel.invokeMethod<Uint8List>('normalizeAvif', {
       'bytes': bytes,
     });
-    if (result == null) throw const FormatException('AVIF decode failed');
+    if (result == null) throw FormatException(tr("AVIF decode failed"));
     return result;
   }
 }

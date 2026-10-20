@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -111,8 +112,9 @@ class _QuestionSheetState extends State<QuestionSheet> {
         legacyNotification ||
         notificationPairingMismatch;
     if (notificationPairingMismatch) {
-      error =
-          'This notification belongs to a different connection. Open the current conversation to review its questions.';
+      error = tr(
+        "This notification belongs to a different connection. Open the current conversation to review its questions.",
+      );
     }
     if (widget.embedded) {
       current = widget.question;
@@ -174,7 +176,9 @@ class _QuestionSheetState extends State<QuestionSheet> {
           legacyNotification ||
           notificationPairingMismatch;
       error = notificationPairingMismatch
-          ? 'This notification belongs to a different connection. Open the current conversation to review its questions.'
+          ? tr(
+              "This notification belongs to a different connection. Open the current conversation to review its questions.",
+            )
           : null;
       models = [];
       if (widget.embedded && session.isNotEmpty) {
@@ -200,7 +204,9 @@ class _QuestionSheetState extends State<QuestionSheet> {
           legacyNotification ||
           notificationPairingMismatch;
       error = notificationPairingMismatch
-          ? 'This notification belongs to a different connection. Open the current conversation to review its questions.'
+          ? tr(
+              "This notification belongs to a different connection. Open the current conversation to review its questions.",
+            )
           : null;
       if (widget.embedded) {
         current = widget.question;
@@ -310,8 +316,10 @@ class _QuestionSheetState extends State<QuestionSheet> {
         legacyNotification ||
         notificationPairingMismatch;
     error = notificationPairingMismatch
-        ? 'This notification belongs to a different connection. Open the current conversation to review its questions.'
-        : 'The connection changed. Reopen this question to continue.';
+        ? tr(
+            "This notification belongs to a different connection. Open the current conversation to review its questions.",
+          )
+        : tr("The connection changed. Reopen this question to continue.");
     _rememberQuestionState(c.state);
     _waitForFreshSnapshot = c.connection != 'live';
     setState(() {});
@@ -426,9 +434,7 @@ class _QuestionSheetState extends State<QuestionSheet> {
         await c.gateway.call('refresh', {'sessionId': session}),
       );
       if (!_hasExactSnapshot(state)) {
-        throw const FormatException(
-          'The question state could not be verified.',
-        );
+        throw FormatException(tr("The question state could not be verified."));
       }
       final target = current ?? widget.question;
       final next = target['id'] == null
@@ -465,8 +471,9 @@ class _QuestionSheetState extends State<QuestionSheet> {
         }
       } else if (_requiresManualReview) {
         current = next;
-        error =
-            'This notification has no question version. Close it and review the current question in the conversation before answering.';
+        error = tr(
+          "This notification has no question version. Close it and review the current question in the conversation before answering.",
+        );
       } else {
         current = next;
         // Reading a notification must not itself take control from another client.
@@ -549,15 +556,16 @@ class _QuestionSheetState extends State<QuestionSheet> {
         _handledQuestion = null;
         error = relayed || control['held'] == true
             ? LiveController.describe(cause)
-            : 'Control changed. Check the latest state before answering.';
+            : tr("Control changed. Check the latest state before answering.");
       });
     } catch (_) {
       if (stillCurrent()) {
         setState(() {
           unknown = false;
           uncertainQuestion = null;
-          error =
-              'The answer was rejected, but the latest state could not be verified. Check the latest state before answering.';
+          error = tr(
+            "The answer was rejected, but the latest state could not be verified. Check the latest state before answering.",
+          );
         });
       }
     } finally {
@@ -598,7 +606,7 @@ class _QuestionSheetState extends State<QuestionSheet> {
       }
       if (result['sessionId'] != session ||
           !const ['pending', 'resolved'].contains(result['status'])) {
-        throw const FormatException('The answer status could not be verified.');
+        throw FormatException(tr("The answer status could not be verified."));
       }
       final status = result['status'];
       final latest = obj(result['interaction']);
@@ -606,8 +614,8 @@ class _QuestionSheetState extends State<QuestionSheet> {
           (latest['id'] != id ||
               '${latest['epoch']}' != epoch ||
               latest['status'] != 'pending')) {
-        throw const FormatException(
-          'The pending question could not be verified.',
+        throw FormatException(
+          tr("The pending question could not be verified."),
         );
       }
       setState(() {
@@ -750,7 +758,9 @@ class _QuestionSheetState extends State<QuestionSheet> {
           obj(e.details)['code'] == 'outcome_unknown';
       uncertainQuestion = unknown ? q : null;
       error = unknown
-          ? 'The answer may have been received. Check the latest state; it will not be sent again automatically.'
+          ? tr(
+              "The answer may have been received. Check the latest state; it will not be sent again automatically.",
+            )
           : LiveController.describe(e);
     } finally {
       if (requestStillOwnsSheet()) {
@@ -770,6 +780,7 @@ class _QuestionSheetState extends State<QuestionSheet> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final q = current;
     final content = Column(
       mainAxisSize: MainAxisSize.min,
@@ -779,7 +790,7 @@ class _QuestionSheetState extends State<QuestionSheet> {
           Padding(
             padding: const EdgeInsets.all(14),
             child: Text(
-              'Checking the latest state…',
+              tr("Checking the latest state…"),
               style: webText(context, size: 13, color: 'text.muted'),
             ),
           ),
@@ -801,7 +812,7 @@ class _QuestionSheetState extends State<QuestionSheet> {
             onOpenSession: _openRelayedSession,
           ),
         if (error != null) WebNotice(error!, error: true),
-        if (handledNotice) WebNotice(handledMessage),
+        if (handledNotice) WebNotice(tr(handledMessage)),
         if (!widget.embedded &&
             !loading &&
             q != null &&
@@ -809,18 +820,22 @@ class _QuestionSheetState extends State<QuestionSheet> {
             !isRelayedInteraction(q) &&
             lease['held'] != true) ...[
           Text(
-            'Controlled by ${lease['holderName'] ?? lease['holderClientId'] ?? 'another device'}',
+            tr("Controlled by {0}", [
+              lease['holderName'] ??
+                  lease['holderClientId'] ??
+                  'another device',
+            ]),
             style: webText(context, size: 13, color: 'text.muted'),
           ),
           WebButton(
-            'Take control',
+            tr("Take control"),
             onPressed: () async {
               if (await confirm(
                 context,
-                'Take control',
-                'Take control to answer this question.',
-                action: 'Take control',
-                cancelLabel: 'Cancel',
+                tr("Take control"),
+                tr("Take control to answer this question."),
+                action: tr("Take control"),
+                cancelLabel: tr("Cancel"),
               )) {
                 await c.takeControl(force: true);
                 await refresh();
@@ -835,7 +850,7 @@ class _QuestionSheetState extends State<QuestionSheet> {
           Align(
             alignment: Alignment.centerLeft,
             child: WebButton(
-              'Check latest state',
+              tr("Check latest state"),
               onPressed: unknown ? reconcileUnknownAnswer : refresh,
             ),
           ),
@@ -843,7 +858,7 @@ class _QuestionSheetState extends State<QuestionSheet> {
           Align(
             alignment: Alignment.centerLeft,
             child: WebButton(
-              'Close and review in conversation',
+              tr("Close and review in conversation"),
               onPressed: () => Navigator.of(context).pop(),
             ),
           ),

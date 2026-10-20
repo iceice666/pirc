@@ -18,11 +18,11 @@ internal class NativeManagementSession(
     private var verifier: String? = null
     private val publicFields = setOf("id", "status", "expiresAt", "serverNow", "deviceName", "capabilities", "verificationPath")
     private fun publicReply(value: Any?): Map<String, Any?> {
-        val reply = value as? Map<*, *> ?: throw ApiException(502, "bad_reply", "管理授權回應無法讀取")
+        val reply = value as? Map<*, *> ?: throw ApiException(502, "bad_reply", NativeI18n.text("管理授權回應無法讀取"))
         return reply.entries.filter { it.key in publicFields }.associate { it.key.toString() to it.value }
     }
     private fun path(): String {
-        val id = request?.get("id") as? String ?: throw ApiException(409, "management_missing", "請先提出管理授權")
+        val id = request?.get("id") as? String ?: throw ApiException(409, "management_missing", NativeI18n.text("請先提出管理授權"))
         require(id.matches(Regex("^[A-Za-z0-9_-]{16,128}$")))
         return "/api/native-management/requests/$id"
     }
@@ -59,13 +59,13 @@ internal class NativeManagementSession(
         validate(); request = reply
         when (reply["status"]) {
             "approved" -> {
-                val secret = verifier ?: throw ApiException(409, "management_missing", "請重新提出管理授權")
+                val secret = verifier ?: throw ApiException(409, "management_missing", NativeI18n.text("請重新提出管理授權"))
                 val claimed = exchange("POST", path() + "/claim", mapOf("verifier" to secret)) as? Map<*, *>
-                    ?: throw ApiException(502, "bad_reply", "管理授權回應無法讀取")
+                    ?: throw ApiException(502, "bad_reply", NativeI18n.text("管理授權回應無法讀取"))
                 validate()
-                val token = claimed["token"] as? String ?: throw ApiException(502, "bad_reply", "管理授權回應無法讀取")
-                val expiry = (claimed["expiresAt"] as? Number)?.toLong() ?: throw ApiException(502, "bad_reply", "管理授權回應無法讀取")
-                val now = (claimed["serverNow"] as? Number)?.toLong() ?: throw ApiException(502, "bad_reply", "管理授權回應無法讀取")
+                val token = claimed["token"] as? String ?: throw ApiException(502, "bad_reply", NativeI18n.text("管理授權回應無法讀取"))
+                val expiry = (claimed["expiresAt"] as? Number)?.toLong() ?: throw ApiException(502, "bad_reply", NativeI18n.text("管理授權回應無法讀取"))
+                val now = (claimed["serverNow"] as? Number)?.toLong() ?: throw ApiException(502, "bad_reply", NativeI18n.text("管理授權回應無法讀取"))
                 val caps = (reply["capabilities"] as? List<*>)?.filterIsInstance<String>()?.toSet().orEmpty()
                 api.installManagementGrant(token, expiry, now, caps)
                 verifier = null; request = reply + mapOf("status" to "claimed", "expiresAt" to expiry)
@@ -91,9 +91,9 @@ internal class NativeManagementSession(
         Unit
     }
     private fun verificationUrl(): String {
-        val relative = request?.get("verificationPath") as? String ?: throw ApiException(502, "bad_reply", "管理授權網址無法讀取")
-        val id = request?.get("id") as? String ?: throw ApiException(502, "bad_reply", "管理授權網址無法讀取")
-        if (relative != "/?nativeManagement=$id") throw ApiException(502, "bad_reply", "管理授權網址無法讀取")
+        val relative = request?.get("verificationPath") as? String ?: throw ApiException(502, "bad_reply", NativeI18n.text("管理授權網址無法讀取"))
+        val id = request?.get("id") as? String ?: throw ApiException(502, "bad_reply", NativeI18n.text("管理授權網址無法讀取"))
+        if (relative != "/?nativeManagement=$id") throw ApiException(502, "bad_reply", NativeI18n.text("管理授權網址無法讀取"))
         return api.pairing.baseUrl + relative
     }
     suspend fun url(): String = mutex.withLock { validate(); verificationUrl() }

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -30,7 +31,7 @@ NativeHtmlFilePicker createNativeHtmlFilePicker(
 
     if (!current() || response == null) return null;
     if (response is! List) {
-      throw const FormatException('Attachment picker response must be a list.');
+      throw FormatException(tr("Attachment picker response must be a list."));
     }
 
     return <NativeHtmlFile>[
@@ -42,7 +43,9 @@ NativeHtmlFilePicker createNativeHtmlFilePicker(
 
 NativeHtmlFile _decodePickedFile(Object? value, int index) {
   if (value is! Map) {
-    throw FormatException('Attachment picker item $index must be an object.');
+    throw FormatException(
+      tr("Attachment picker item {0} must be an object.", [index]),
+    );
   }
   final row = obj(value);
   final name = row['name'] is String && (row['name'] as String).isNotEmpty
@@ -50,7 +53,7 @@ NativeHtmlFile _decodePickedFile(Object? value, int index) {
       : 'attachment';
   final error = row['error'];
   if (error != null) {
-    throw FormatException('Could not read $name: $error');
+    throw FormatException(tr("Could not read {0}: {1}", [name, error]));
   }
   final mimeType =
       row['mimeType'] is String && (row['mimeType'] as String).trim().isNotEmpty
@@ -79,7 +82,10 @@ Uint8List _decodeBytes(Object? value, String name) {
       final byte = value[index];
       if (byte is! int || byte < 0 || byte > 255) {
         throw FormatException(
-          'Attachment $name has an invalid byte at offset $index.',
+          tr("Attachment {0} has an invalid byte at offset {1}.", [
+            name,
+            index,
+          ]),
         );
       }
       bytes.add(byte);
@@ -90,8 +96,12 @@ Uint8List _decodeBytes(Object? value, String name) {
     try {
       return Uint8List.fromList(base64Decode(value));
     } on FormatException {
-      throw FormatException('Attachment $name has invalid base64 bytes.');
+      throw FormatException(
+        tr("Attachment {0} has invalid base64 bytes.", [name]),
+      );
     }
   }
-  throw FormatException('Attachment $name did not include byte data.');
+  throw FormatException(
+    tr("Attachment {0} did not include byte data.", [name]),
+  );
 }

@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -34,8 +35,8 @@ String _withoutComment(String line) {
     if (line[i] == '"') quoted = !quoted;
     if (!quoted && line.startsWith('%%', i)) {
       if (line.startsWith('%%{', i)) {
-        throw const FormatException(
-          'Native Mermaid configuration directives are not implemented',
+        throw FormatException(
+          tr("Native Mermaid configuration directives are not implemented"),
         );
       }
       return line.substring(0, i);
@@ -102,11 +103,13 @@ List<_PieStatement> _parsePieStatements(String source) {
       }
     }
     if (!closed) {
-      throw const FormatException('Unclosed native pie accDescr block');
+      throw FormatException(tr("Unclosed native pie accDescr block"));
     }
     if (_withoutComment(trailing).trim().isNotEmpty) {
       throw FormatException(
-        'Unsupported or invalid native pie statement: ${trailing.trim()}',
+        tr("Unsupported or invalid native pie statement: {0}", [
+          trailing.trim(),
+        ]),
       );
     }
     // Mermaid's common DB removes indentation and blank lines after each
@@ -122,11 +125,11 @@ List<_PieStatement> _parsePieStatements(String source) {
 
 MermaidPie parseNativeMermaidPie(String source) {
   final statements = _parsePieStatements(source);
-  if (statements.isEmpty) throw const FormatException('Expected pie diagram');
+  if (statements.isEmpty) throw FormatException(tr("Expected pie diagram"));
   final header = RegExp(
     r'^pie(?:\s+(showData))?(?:\s+(title\s+.*))?$',
   ).firstMatch(statements.first.text);
-  if (header == null) throw const FormatException('Expected pie diagram');
+  if (header == null) throw FormatException(tr("Expected pie diagram"));
   final showData = header[1] != null;
   if (header[2] != null) {
     statements.insert(1, _PieStatement(header[2]!));
@@ -156,13 +159,13 @@ MermaidPie parseNativeMermaidPie(String source) {
     ).firstMatch(line);
     if (entry == null) {
       throw FormatException(
-        'Unsupported or invalid native pie statement: $line',
+        tr("Unsupported or invalid native pie statement: {0}", [line]),
       );
     }
     final value = double.parse(entry[2]!);
     final label = jsonDecode(entry[1]!) as String;
     if (!value.isFinite) {
-      throw const FormatException('Native pie values must be finite');
+      throw FormatException(tr("Native pie values must be finite"));
     }
     if (value < 0) {
       final formatted = value == value.truncateToDouble()
@@ -193,6 +196,7 @@ class NativeMermaidPie extends StatelessWidget {
   final bool dark;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final font = DefaultTextStyle.of(context).style.fontFamily;
     final painter = MermaidPiePainter(diagram, dark, font);
     return Semantics(

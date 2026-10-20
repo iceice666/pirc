@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
+  import { i18n } from '../i18n.svelte';
   import {
     enhanceMarkdown,
     renderMarkdownChecked,
@@ -110,6 +111,14 @@
         typeof requestIdleCallback === 'function'
           ? requestIdleCallback(run, { timeout: 500 })
           : window.setTimeout(run, 0);
+    },
+  );
+
+  watch(
+    () => i18n.language,
+    () => {
+      resetStable();
+      schedule();
     },
   );
 

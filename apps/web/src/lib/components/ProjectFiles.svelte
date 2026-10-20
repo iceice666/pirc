@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   import { ApiError } from '../http';
   import { projectFilesApi, type ProjectFile } from '../capabilities';
 
@@ -16,12 +18,12 @@
   let input: HTMLInputElement | undefined = $state();
   let generation = 0;
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : tr('Unable to reach the gateway. Try again.');
 
   function size(bytes: number) {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes < 1024) return tr('{0} B', [bytes]);
+    if (bytes < 1024 * 1024) return tr('{0} KB', [(bytes / 1024).toFixed(1)]);
+    return tr('{0} MB', [(bytes / (1024 * 1024)).toFixed(1)]);
   }
 
   $effect(() => {
@@ -74,11 +76,11 @@
     try {
       for (const file of picked) {
         if (maxBytes && file.size > maxBytes) {
-          error = `${file.name} is larger than the ${size(maxBytes)} limit.`;
+          error = tr('{0} is larger than the {1} limit.', [file.name, size(maxBytes)]);
           continue;
         }
         if (file.size === 0) {
-          error = `${file.name} is empty.`;
+          error = tr('{0} is empty.', [file.name]);
           continue;
         }
         try {
@@ -92,7 +94,10 @@
       if (current !== generation) return;
       await refresh(current);
       if (uploaded) {
-        status = `${uploaded === 1 ? '1 file' : `${uploaded} files`} uploaded. Every chat in this project can read ${uploaded === 1 ? 'it' : 'them'} now.`;
+        status = tr('{0} uploaded. Every chat in this project can read {1} now.', [
+          uploaded === 1 ? '1 file' : `${uploaded} files`,
+          uploaded === 1 ? 'it' : 'them',
+        ]);
       }
     } catch (cause) {
       if (current === generation) error = message(cause);
@@ -112,7 +117,7 @@
       await projectFilesApi.remove(workspaceId, name);
       if (current !== generation) return;
       await refresh(current);
-      status = `${name} removed.`;
+      status = tr('{0} removed.', [name]);
     } catch (cause) {
       if (current === generation) error = message(cause);
     } finally {
@@ -122,18 +127,17 @@
 </script>
 
 <section class="settings-section">
-  <h3>Project files</h3>
+  <h3>{tr('Project files')}</h3>
   <p>
-    Files every chat in this project can read, for example notes, documents or data the assistant
-    should know about. The assistant cannot change them. They are kept on the project's node and
-    shared with running chats at once: an upload, a replacement or a removal reaches chats already
-    open. Uploading a file with the same name as an existing one replaces it.
+    {tr(
+      "Files every chat in this project can read, for example notes, documents or data the assistant should know about. The assistant cannot change them. They are kept on the project's node and shared with running chats at once: an upload, a replacement or a removal reaches chats already open. Uploading a file with the same name as an existing one replaces it.",
+    )}
   </p>
   {#if loading}
-    <p role="status">Loading project files…</p>
+    <p role="status">{tr('Loading project files…')}</p>
   {:else if loaded}
     {#if files.length}
-      <ul class="files" aria-label="Project files">
+      <ul class="files" aria-label={tr('Project files')}>
         {#each files as file (file.name)}
           <li>
             <span class="name">{file.name}</span>
@@ -144,13 +148,13 @@
                   class="button ghost danger"
                   type="button"
                   disabled={busy}
-                  onclick={() => remove(file.name)}>Remove</button
+                  onclick={() => remove(file.name)}>{tr('Remove')}</button
                 >
                 <button
                   class="button ghost"
                   type="button"
                   disabled={busy}
-                  onclick={() => (confirming = '')}>Cancel</button
+                  onclick={() => (confirming = '')}>{tr('Cancel')}</button
                 >
               </span>
             {:else}
@@ -158,22 +162,26 @@
                 class="button ghost"
                 type="button"
                 disabled={busy}
-                aria-label={`Remove ${file.name}`}
-                onclick={() => (confirming = file.name)}>Remove…</button
+                aria-label={tr('Remove {0}', [file.name])}
+                onclick={() => (confirming = file.name)}>{tr('Remove…')}</button
               >
             {/if}
           </li>
         {/each}
       </ul>
     {:else}
-      <p class="note">No files yet.</p>
+      <p class="note">{tr('No files yet.')}</p>
     {/if}
     <div class="row">
       <span
-        >{files.length} / {maxFiles} files{maxBytes ? `, up to ${size(maxBytes)} each` : ''}</span
+        >{tr('{0} / {1} files{2}', [
+          files.length,
+          maxFiles,
+          maxBytes ? tr(', up to {0} each', [size(maxBytes)]) : '',
+        ])}</span
       >
       <label class="button" class:disabled={busy || files.length >= maxFiles}>
-        {busy ? 'Working…' : 'Upload files'}
+        {busy ? tr('Working…') : tr('Upload files')}
         <input
           bind:this={input}
           class="sr-only"
@@ -187,7 +195,8 @@
   {/if}
   {#if error}
     <p role="alert">{error}</p>
-    {#if !loaded}<button class="button ghost" type="button" onclick={() => reload++}>Retry</button
+    {#if !loaded}<button class="button ghost" type="button" onclick={() => reload++}
+        >{tr('Retry')}</button
       >{/if}
   {/if}
   <p role="status">{status}</p>

@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:csslib/parser.dart' as css;
@@ -10,7 +11,7 @@ Color nativeC4Color(String? source, Color fallback) {
     final color = css.Color.css(source).rgba;
     return Color.fromRGBO(color.r, color.g, color.b, (color.a ?? 1).toDouble());
   } catch (_) {
-    throw FormatException('Unsupported C4 color: $source');
+    throw FormatException(tr("Unsupported C4 color: {0}", [source]));
   }
 }
 
@@ -74,6 +75,7 @@ class NativeMermaidC4 extends StatelessWidget {
   final String? fontFamily;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final layout = layoutNativeMermaidC4(
       diagram,
       screenWidth: MediaQuery.sizeOf(context).width,

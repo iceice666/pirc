@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 /**
  * Session-wide client state: the gateway's workspaces, nodes and sessions, the
  * open session and its event stream, the draft and uploads, and every command
@@ -131,6 +132,24 @@ class AppState {
   activeSessionId = $state<string>();
   connection = $state<ConnectionState>(navigator.onLine ? 'reconnecting' : 'offline');
   draft = $state('');
+  /** Unsaved conversation, scoped to this page until the user first sends. */
+  draftWorkspaceId = $state<string>();
+  #draftFiles = new Map<string, File>();
+  get isDraftSession() {
+    return this.draftWorkspaceId !== undefined;
+  }
+
+  discardDraftSession() {
+    if (!this.isDraftSession) return;
+    this.draftWorkspaceId = undefined;
+    this.#draftFiles.clear();
+    this.uploads.forEach((item) => item.preview && URL.revokeObjectURL(item.preview));
+    this.uploads = [];
+    this.draft = '';
+    this.activeSessionId = undefined;
+    this.sessionState = undefined;
+    ++this.#openSeq;
+  }
   uploads = $state.raw<Upload[]>([]);
   loading = $state(true);
   commandBusy = $state(false);
@@ -147,7 +166,7 @@ class AppState {
 
   #sessionState = $state.raw<ClientSessionState>();
   #events: EventConnection | undefined;
-  #controlSyncing: string | undefined;
+  #controlSyncing: { id: string; promise: Promise<void> } | undefined;
   /** Bumped per openSession; a slower, superseded open must not apply its result. */
   #openSeq = 0;
   /** Local list changes invalidate session lists fetched before them. */
@@ -268,6 +287,7 @@ class AppState {
 
   /** Show the schedules in the main column, optionally opening one. */
   showSchedules(scheduleId?: string) {
+    this.discardDraftSession();
     if (scheduleId) this.scheduleFocus = scheduleId;
     this.view = 'schedules';
   }
@@ -277,6 +297,7 @@ class AppState {
    * open session stays connected behind it, so going back is instant.
    */
   showWorkspace(workspaceId: string) {
+    this.discardDraftSession();
     const workspace = this.workspaces.find((item) => item.id === workspaceId);
     if (!workspace) return;
     // The sidebar shows the list the page belongs to.
@@ -363,7 +384,7 @@ class AppState {
         this.activeSessionId = demo.demoSnapshot.session.id;
       } else {
         this.#bootstrapFailed = true;
-        this.pageError = errorMessage(error, 'Unable to connect to the gateway.');
+        this.pageError = errorMessage(error, tr('Unable to connect to the gateway.'));
       }
     }
     // A project or workspace page the address names stays in front of the session behind it.
@@ -416,7 +437,11 @@ class AppState {
       // session we already know is valid. It must not remove that session or its draft.
       if (version !== this.#sessionsVersion || request !== this.#sessionsRequest) return;
       this.sessions = sessions;
-      if (this.activeSessionId && !this.sessions.some((s) => s.id === this.activeSessionId))
+      if (
+        !this.isDraftSession &&
+        this.activeSessionId &&
+        !this.sessions.some((s) => s.id === this.activeSessionId)
+      )
         this.removeSession(this.activeSessionId);
       this.markActiveRead();
     } catch {
@@ -456,7 +481,7 @@ class AppState {
       this.memoryPending = this.memoryProposals.length;
       this.memoryRevision++;
     } catch (error) {
-      this.pageError = errorMessage(error, 'The memory change could not be answered.');
+      this.pageError = errorMessage(error, tr('The memory change could not be answered.'));
       void this.refreshMemory();
     }
   }
@@ -471,7 +496,7 @@ class AppState {
     } catch (error) {
       this.pageError = errorMessage(
         error,
-        allow ? 'The run could not be started.' : 'The run could not be dismissed.',
+        allow ? tr('The run could not be started.') : tr('The run could not be dismissed.'),
       );
     }
     this.scheduleRevision++;
@@ -515,8 +540,9 @@ class AppState {
       const current = this.sessionState;
       if (this.activeSessionId !== sessionId || current?.session.id !== sessionId) {
         if (this.activeSessionId === sessionId)
-          this.interactionNotice =
-            'We couldn’t verify whether this request was handled. Check the session before submitting an answer.';
+          this.interactionNotice = tr(
+            'We couldn’t verify whether this request was handled. Check the session before submitting an answer.',
+          );
         return;
       }
       const question = snapshot.interactions.find(
@@ -525,8 +551,9 @@ class AppState {
       );
       if (question?.status === 'pending') {
         if (showPendingNotice) {
-          this.interactionNotice =
-            'This request is still waiting. Refresh the session before answering.';
+          this.interactionNotice = tr(
+            'This request is still waiting. Refresh the session before answering.',
+          );
         }
         return;
       }
@@ -537,10 +564,11 @@ class AppState {
             item.id !== identity.interactionId || item.runnerEpoch !== identity.interactionEpoch,
         ),
       };
-      this.interactionNotice = 'This request has already been handled.';
+      this.interactionNotice = tr('This request has already been handled.');
     } catch {
-      this.interactionNotice =
-        'We couldn’t verify whether this request was handled. Check the session before submitting an answer.';
+      this.interactionNotice = tr(
+        'We couldn’t verify whether this request was handled. Check the session before submitting an answer.',
+      );
     }
   }
 
@@ -599,7 +627,15 @@ class AppState {
   }
 
   /** `show: false` connects the session behind the page on screen (a project page, the schedules). */
-  async openSession(id: string, { show = true }: { show?: boolean } = {}) {
+  async openSession(
+    id: string,
+    { show = true, keepComposer = false }: { show?: boolean; keepComposer?: boolean } = {},
+  ) {
+    if (id === this.activeSessionId && this.isDraftSession) {
+      this.view = 'session';
+      return;
+    }
+    if (!keepComposer) this.discardDraftSession();
     if (show) {
       this.view = 'session';
       // The address names the open session: a reload or a shared link comes back
@@ -618,10 +654,14 @@ class AppState {
     this.markActiveRead();
     this.#events?.close();
     this.#events = undefined;
-    this.sessionState = undefined;
+    if (!keepComposer) {
+      this.sessionState = undefined;
+      this.draft = loadDraft(id);
+      this.#draftFiles.clear();
+      this.uploads.forEach((item) => item.preview && URL.revokeObjectURL(item.preview));
+      this.uploads = [];
+    }
     this.pageError = '';
-    this.draft = loadDraft(id);
-    this.uploads = [];
     const demo = this.demo;
     this.panel.reset(id, demo?.demoPanelState);
     try {
@@ -698,13 +738,13 @@ class AppState {
       await this.scroller?.toLatest(false);
     } catch (error) {
       if (seq === this.#openSeq)
-        this.pageError = errorMessage(error, 'Unable to load this session.');
+        this.pageError = errorMessage(error, tr('Unable to load this session.'));
     }
   }
 
   async loadModels(id = this.activeSessionId) {
     try {
-      const list = await api.models(id);
+      const list = await api.models(this.isDraftSession ? undefined : id);
       if (this.activeSessionId === id) this.models = list;
     } catch {
       /* keep the previous list; the runner may still be starting */
@@ -714,7 +754,7 @@ class AppState {
   /** Reload the open session. Bursts coalesce into one request plus one follow-up. */
   async refreshSnapshot() {
     const id = this.activeSessionId;
-    if (!id || this.demo) return;
+    if (!id || this.demo || this.isDraftSession) return;
     const seq = this.#openSeq;
     if (this.#snapshotLoading.has(seq)) {
       this.#snapshotAgain.add(seq);
@@ -746,7 +786,7 @@ class AppState {
       }
     } catch (error) {
       if (seq === this.#openSeq && !this.#snapshotAgain.has(seq))
-        this.pageError = errorMessage(error, 'Could not refresh the session.');
+        this.pageError = errorMessage(error, tr('Could not refresh the session.'));
     } finally {
       this.#snapshotLoading.delete(seq);
       if (this.#snapshotAgain.delete(seq) && seq === this.#openSeq) void this.refreshSnapshot();
@@ -788,6 +828,7 @@ class AppState {
    */
   async deleteProject(workspaceId: string, decisions: ProjectMemoryDecision[]) {
     if (!this.demo) await projectDeletionApi.delete(workspaceId, decisions);
+    if (this.draftWorkspaceId === workspaceId) this.discardDraftSession();
     for (const session of this.sessions.filter((item) => item.workspaceId === workspaceId))
       this.removeSession(session.id);
     this.workspaces = this.workspaces.filter((item) => item.id !== workspaceId);
@@ -824,7 +865,7 @@ class AppState {
       if (updated.settled && id !== this.activeSessionId) removeDraft(id);
     } catch (error) {
       apply({ name: previous.name, pinned: previous.pinned, settled: previous.settled });
-      this.pageError = errorMessage(error, 'Could not update the session.');
+      this.pageError = errorMessage(error, tr('Could not update the session.'));
     }
   }
 
@@ -834,7 +875,7 @@ class AppState {
    */
   setDraft(value: string) {
     this.draft = value;
-    if (!this.activeSessionId) return;
+    if (!this.activeSessionId || this.isDraftSession) return;
     this.#draftPending = { sessionId: this.activeSessionId, value };
     clearTimeout(this.#draftTimer);
     // Cleared drafts (sent messages) are removed at once.
@@ -851,15 +892,40 @@ class AppState {
   }
 
   async sendCommand(kind: CommandKind, content = this.draft) {
+    if (this.commandBusy) return;
+    if (this.isDraftSession) {
+      if (kind !== 'prompt' || !content.trim()) return;
+      this.commandBusy = true;
+      try {
+        if (!(await this.#persistNewSession())) return;
+      } catch (error) {
+        this.pageError = errorMessage(
+          error,
+          tr('Could not start the conversation. Your message is still here.'),
+        );
+        return;
+      } finally {
+        this.commandBusy = false;
+      }
+    }
     const state = this.sessionState;
     const sessionId = this.activeSessionId;
     if (!state || !sessionId || !state.control.generation || this.connection !== 'connected')
       return;
     this.commandBusy = true;
     this.pageError = '';
-    const attachmentIds = this.uploads.filter((item) => !item.uploading).map((item) => item.id);
     try {
       if (!this.demo) {
+        for (const item of this.uploads) {
+          const file = this.#draftFiles.get(item.id);
+          if (!file) continue;
+          const uploaded = await api.upload(sessionId, file);
+          if (this.activeSessionId !== sessionId) return;
+          this.#draftFiles.delete(item.id);
+          this.uploads = this.uploads.map((current) =>
+            current.id === item.id ? { ...uploaded, preview: item.preview } : current,
+          );
+        }
         await api.command(sessionId, {
           commandId: uuid(),
           kind,
@@ -868,7 +934,9 @@ class AppState {
           modelId: this.selectedModelOption?.id,
           provider: this.selectedModelOption?.provider,
           thinkingLevel: this.thinking,
-          attachmentIds: attachmentIds.length ? attachmentIds : undefined,
+          attachmentIds: this.uploads.length
+            ? this.uploads.filter((item) => !item.uploading).map((item) => item.id)
+            : undefined,
         });
       } else if (kind === 'follow_up') {
         this.sessionState = {
@@ -905,7 +973,7 @@ class AppState {
         await this.scroller?.toLatest();
       }
     } catch (error) {
-      this.pageError = errorMessage(error, 'The command was not accepted.');
+      this.pageError = errorMessage(error, tr('The command was not accepted.'));
     } finally {
       this.commandBusy = false;
     }
@@ -940,7 +1008,7 @@ class AppState {
           : {}),
       });
       if (receipt.status !== 'accepted')
-        throw new Error(receipt.message ?? 'The branch change was not accepted.');
+        throw new Error(receipt.message ?? tr('The branch change was not accepted.'));
       // A coalesced lifecycle refresh may still be reading the old tree. Invalidate
       // it and fetch our own authoritative snapshot before enabling another edit.
       if (this.activeSessionId !== sessionId || selection !== this.#openSeq) return true;
@@ -961,7 +1029,7 @@ class AppState {
         if (this.activeSessionId === sessionId)
           this.pageError = errorMessage(
             error,
-            'Message updated, but refreshing failed. Reload the session before editing again.',
+            tr('Message updated, but refreshing failed. Reload the session before editing again.'),
           );
       }
       // The mutation was accepted even when refreshing failed. Never offer to
@@ -969,7 +1037,7 @@ class AppState {
       return true;
     } catch (error) {
       if (this.activeSessionId === sessionId)
-        this.pageError = errorMessage(error, 'The branch change was not accepted.');
+        this.pageError = errorMessage(error, tr('The branch change was not accepted.'));
       return false;
     } finally {
       this.commandBusy = false;
@@ -1001,7 +1069,7 @@ class AppState {
         content: `/goal ${action}`,
       });
     } catch (error) {
-      this.pageError = errorMessage(error, 'The command was not accepted.');
+      this.pageError = errorMessage(error, tr('The command was not accepted.'));
     } finally {
       this.commandBusy = false;
     }
@@ -1011,19 +1079,23 @@ class AppState {
   async refreshControl() {
     const id = this.activeSessionId;
     const state = this.sessionState;
-    if (this.demo || !id || !state || this.#controlSyncing === id) return;
-    this.#controlSyncing = id;
-    try {
-      const control = await syncControl(api, id, state.control, {
-        // A hidden tab only keeps what it has; it never grabs control.
-        mayAcquire: document.visibilityState === 'visible',
-      });
-      const current = this.sessionState;
-      if (control && current && this.activeSessionId === id)
-        this.sessionState = { ...current, control };
-    } finally {
-      if (this.#controlSyncing === id) this.#controlSyncing = undefined;
-    }
+    if (this.demo || this.isDraftSession || !id || !state) return;
+    if (this.#controlSyncing?.id === id) return this.#controlSyncing.promise;
+    const pending = { id, promise: Promise.resolve() };
+    pending.promise = (async () => {
+      try {
+        const control = await syncControl(api, id, state.control, {
+          mayAcquire: document.visibilityState === 'visible',
+        });
+        const current = this.sessionState;
+        if (control && current && this.activeSessionId === id)
+          this.sessionState = { ...current, control };
+      } finally {
+        if (this.#controlSyncing === pending) this.#controlSyncing = undefined;
+      }
+    })();
+    this.#controlSyncing = pending;
+    return pending.promise;
   }
 
   async stopRun() {
@@ -1051,7 +1123,7 @@ class AppState {
         queued: { kind: item.kind, index: item.index },
       });
     } catch (error) {
-      const text = errorMessage(error, 'The message could not be sent now.');
+      const text = errorMessage(error, tr('The message could not be sent now.'));
       // The run delivered or cleared it meanwhile; the next queue update shows that.
       if (!/no longer queued/.test(text)) this.pageError = text;
     } finally {
@@ -1071,13 +1143,13 @@ class AppState {
       const control = this.demo
         ? {
             heldByCurrentClient: true,
-            holderName: 'This browser',
+            holderName: tr('This browser'),
             generation: (state.control.generation ?? 0) + 1,
           }
         : await api.takeControl(this.activeSessionId, this.clientId);
       if (this.sessionState) this.sessionState = { ...this.sessionState, control };
     } catch (error) {
-      this.pageError = errorMessage(error, 'Control could not be transferred.');
+      this.pageError = errorMessage(error, tr('Control could not be transferred.'));
     }
   }
 
@@ -1090,7 +1162,7 @@ class AppState {
     const sessionId = this.activeSessionId;
     if (!sessionId) return;
     if (this.answeringInteractionIds.includes(interactionId)) {
-      this.interactionNotice = 'This request is already being processed.';
+      this.interactionNotice = tr('This request is already being processed.');
       return;
     }
     const interaction = state?.interactions.find(
@@ -1157,21 +1229,22 @@ class AppState {
                   (item) => item.id !== interactionId || item.runnerEpoch !== runnerEpoch,
                 ),
               };
-            this.interactionNotice = 'This request has already been handled.';
+            this.interactionNotice = tr('This request has already been handled.');
           } else {
             this.interactionNotice =
               error.code === 'lost_control'
-                ? 'This request is still waiting. Take control to answer it.'
-                : 'This request is still waiting. Your answer was not accepted.';
+                ? tr('This request is still waiting. Take control to answer it.')
+                : tr('This request is still waiting. Your answer was not accepted.');
           }
           if (error.code === 'lost_control') void this.refreshControl();
         } catch {
-          this.interactionNotice =
-            'We couldn’t verify whether this request was handled. Check the session before submitting another answer.';
+          this.interactionNotice = tr(
+            'We couldn’t verify whether this request was handled. Check the session before submitting another answer.',
+          );
         }
         return;
       }
-      this.pageError = errorMessage(error, 'Your answer was not accepted.');
+      this.pageError = errorMessage(error, tr('Your answer was not accepted.'));
     } finally {
       this.answeringInteractionIds = this.answeringInteractionIds.filter(
         (id) => id !== interactionId,
@@ -1198,7 +1271,9 @@ class AppState {
     } catch (error) {
       this.pageError = errorMessage(
         error,
-        confirmed ? 'The request could not be allowed.' : 'The request could not be denied.',
+        confirmed
+          ? tr('The request could not be allowed.')
+          : tr('The request could not be denied.'),
       );
     } finally {
       this.answeringInteractionIds = this.answeringInteractionIds.filter(
@@ -1215,7 +1290,7 @@ class AppState {
       await api.stopDelegation(delegationId);
       return undefined;
     } catch (error) {
-      return errorMessage(error, 'The delegation could not be stopped.');
+      return errorMessage(error, tr('The delegation could not be stopped.'));
     }
   }
 
@@ -1248,14 +1323,28 @@ class AppState {
               size: file.size,
               kind: (isImage ? 'image' : 'file') as 'image' | 'file',
             }
-          : await api.upload(sessionId, file);
+          : this.isDraftSession
+            ? (this.#draftFiles.set(localId, file),
+              {
+                id: localId,
+                name: file.name,
+                mimeType: file.type,
+                size: file.size,
+                kind: (isImage ? 'image' : 'file') as 'image' | 'file',
+              })
+            : await api.upload(sessionId, file);
+        if (this.activeSessionId !== sessionId) {
+          if (preview) URL.revokeObjectURL(preview);
+          this.#draftFiles.delete(localId);
+          return;
+        }
         this.uploads = this.uploads.map((item) =>
           item.id === localId ? { ...attachment, preview } : item,
         );
       } catch (error) {
         this.uploads = this.uploads.filter((item) => item.id !== localId);
         if (preview) URL.revokeObjectURL(preview);
-        this.pageError = errorMessage(error, `Could not upload ${file.name}.`);
+        this.pageError = errorMessage(error, tr('Could not upload {0}.', [file.name]));
       }
     }
   }
@@ -1265,6 +1354,7 @@ class AppState {
   }
 
   removeUpload(id: string) {
+    this.#draftFiles.delete(id);
     const upload = this.uploads.find((item) => item.id === id);
     if (upload?.preview) URL.revokeObjectURL(upload.preview);
     this.uploads = this.uploads.filter((item) => item.id !== id);
@@ -1280,7 +1370,13 @@ class AppState {
       selectedModelProvider: model.provider,
     };
     // Without the lease the command would be refused; the choice rides with the next prompt.
-    if (!this.demo && this.activeSessionId && this.hasControl && state.control.generation) {
+    if (
+      !this.demo &&
+      !this.isDraftSession &&
+      this.activeSessionId &&
+      this.hasControl &&
+      state.control.generation
+    ) {
       try {
         await api.command(this.activeSessionId, {
           commandId: uuid(),
@@ -1290,7 +1386,7 @@ class AppState {
           modelId: model.id,
         });
       } catch (error) {
-        this.pageError = errorMessage(error, 'Model could not be changed.');
+        this.pageError = errorMessage(error, tr('Model could not be changed.'));
       }
     }
   }
@@ -1300,7 +1396,13 @@ class AppState {
     if (!state) return;
     this.sessionState = { ...state, thinkingLevel: level };
     // Without the lease the command would be refused; the choice rides with the next prompt.
-    if (!this.demo && this.activeSessionId && this.hasControl && state.control.generation) {
+    if (
+      !this.demo &&
+      !this.isDraftSession &&
+      this.activeSessionId &&
+      this.hasControl &&
+      state.control.generation
+    ) {
       try {
         await api.command(this.activeSessionId, {
           commandId: uuid(),
@@ -1309,7 +1411,7 @@ class AppState {
           thinkingLevel: level,
         });
       } catch (error) {
-        this.pageError = errorMessage(error, 'Thinking level could not be changed.');
+        this.pageError = errorMessage(error, tr('Thinking level could not be changed.'));
       }
     }
   }
@@ -1322,12 +1424,12 @@ class AppState {
   async changeApprovalMode(mode: ApprovalMode) {
     const state = this.sessionState;
     if (!state || state.approvalMode === mode) return;
-    if (this.demo) {
+    if (this.demo || this.isDraftSession) {
       this.sessionState = { ...state, approvalMode: mode };
       return;
     }
     if (!this.activeSessionId || !this.hasControl || !state.control.generation) {
-      this.pageError = 'Take control of this session to change its approval mode.';
+      this.pageError = tr('Take control of this session to change its approval mode.');
       return;
     }
     const sessionId = this.activeSessionId;
@@ -1339,12 +1441,12 @@ class AppState {
         approvalMode: mode,
       });
       if (receipt.status !== 'accepted')
-        throw new Error(receipt.message ?? 'The agent did not accept the approval mode.');
+        throw new Error(receipt.message ?? tr('The agent did not accept the approval mode.'));
       const current = this.sessionState;
       if (current && this.activeSessionId === sessionId)
         this.sessionState = { ...current, approvalMode: mode };
     } catch (error) {
-      this.pageError = errorMessage(error, 'Approval mode could not be changed.');
+      this.pageError = errorMessage(error, tr('Approval mode could not be changed.'));
     }
   }
 
@@ -1381,50 +1483,94 @@ class AppState {
     return workspace;
   }
 
-  /** Create a session in a workspace and open it. Returns false when it was not created. */
+  /** Open a local conversation immediately. Nothing is stored until first send. */
   async createSession(workspaceId: string): Promise<boolean> {
     const workspace = this.workspaces.find((item) => item.id === workspaceId);
-    if (workspace && !this.workspaceOnline(workspace)) {
-      this.pageError = `${workspace.displayName} is offline.`;
+    if (!workspace || !this.acceptsSessions(workspace)) {
+      this.pageError = tr('This workspace is unavailable.');
       return false;
     }
-    if (isReadOnly(workspace)) {
-      this.pageError = `${workspace!.displayName} is read-only: its mode is no longer available.`;
-      return false;
-    }
+    this.flushDraft();
+    this.discardDraftSession();
+    ++this.#openSeq;
+    this.#events?.close();
+    this.#events = undefined;
+    this.draftWorkspaceId = workspaceId;
+    this.view = 'session';
+    this.setMode(tabOf(workspace, this.modeCatalog));
+    this.activeSessionId = `draft-${uuid()}`;
+    this.#address(`?new=${encodeURIComponent(workspaceId)}`);
+    this.draft = '';
+    this.uploads = [];
     this.pageError = '';
-    try {
-      const demo = this.demo;
-      const created = demo
-        ? {
-            id: uuid(),
-            workspaceId,
-            name: 'New session',
-            lastActivityAt: new Date().toISOString(),
-            runnerStatus: 'stopped' as const,
-          }
-        : await api.createSession({ workspaceId });
-      this.sessions = [created, ...this.sessions];
-      this.#sessionsVersion++;
-      if (demo) {
-        this.view = 'session';
-        this.activeSessionId = created.id;
-        this.panel.reset(created.id, demo.demoPanelState);
-        this.sessionState = fromSnapshot({
-          ...demo.demoSnapshot,
-          session: created,
-          messages: [],
-          queue: [],
-          run: null,
-        });
-        this.hiddenMessages = 0;
-        this.draft = '';
-      } else await this.openSession(created.id);
-      return true;
-    } catch (error) {
-      this.pageError = errorMessage(error, 'Could not create the session.');
+    this.connection = navigator.onLine ? 'connected' : 'offline';
+    this.hiddenMessages = 0;
+    this.panel.reset('');
+    this.sessionState = fromSnapshot({
+      session: {
+        id: this.activeSessionId,
+        workspaceId,
+        name: 'New session',
+        lastActivityAt: new Date().toISOString(),
+        runnerStatus: 'stopped',
+      },
+      runnerStatus: 'stopped',
+      run: null,
+      messages: [],
+      interactions: [],
+      queue: [],
+      control: { heldByCurrentClient: true },
+      cursor: '',
+      runnerEpoch: '',
+      thinkingLevel: workspace.defaults?.thinkingLevel ?? 'medium',
+      selectedModelId: workspace.defaults?.modelId,
+    });
+    if (!this.demo) void this.loadModels();
+    return true;
+  }
+
+  async #persistNewSession(): Promise<boolean> {
+    const workspaceId = this.draftWorkspaceId;
+    const before = this.sessionState;
+    if (!workspaceId || !before) return false;
+    const seq = this.#openSeq,
+      content = this.draft;
+    const model = this.selectedModelOption,
+      thinking = this.thinking;
+    const created = this.demo
+      ? { ...before.session, id: uuid() }
+      : await api.createSession({ workspaceId });
+    if (!this.workspaces.some((workspace) => workspace.id === workspaceId)) return false;
+    this.sessions = [created, ...this.sessions];
+    ++this.#sessionsVersion;
+    if (seq !== this.#openSeq) {
+      saveDraft(created.id, content);
       return false;
     }
+    this.draftWorkspaceId = undefined;
+    if (this.demo) {
+      this.activeSessionId = created.id;
+      this.sessionState = {
+        ...before,
+        session: created,
+        control: { heldByCurrentClient: true, generation: 1 },
+      };
+    } else {
+      await this.openSession(created.id, { keepComposer: true });
+      if (this.activeSessionId !== created.id) return false;
+      await this.refreshControl();
+      if (this.activeSessionId !== created.id) return false;
+      if (!this.hasControl || !this.sessionState)
+        throw new Error(tr('Could not obtain control. Please retry sending.'));
+      this.sessionState = {
+        ...this.sessionState,
+        selectedModelId: model?.id,
+        selectedModelProvider: model?.provider,
+        thinkingLevel: thinking,
+      };
+    }
+    this.setDraft(content);
+    return true;
   }
 
   /** Release resources held for the page (event socket, upload previews). */

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:typed_data';
 
 import 'document_cache_policy.dart';
@@ -38,7 +39,7 @@ class NativeDocumentResponseCache {
     bool revalidate = false,
     bool hardReload = false,
   }) async {
-    if (!isCurrent()) throw StateError('Document request was superseded.');
+    if (!isCurrent()) throw StateError(tr("Document request was superseded."));
     final method = '${arguments['method'] ?? 'GET'}'.toUpperCase();
     final resource = '${arguments['resourceType'] ?? 'document'}';
     final url = '${arguments['url']}';
@@ -64,10 +65,12 @@ class NativeDocumentResponseCache {
     }
     if (prepare != null) {
       final prepared = await prepare!(arguments);
-      if (!isCurrent()) throw StateError('Document request was superseded.');
+      if (!isCurrent()) {
+        throw StateError(tr("Document request was superseded."));
+      }
       final cookieKey = _cookieKey(prepared);
       if (cookieKey == null) {
-        throw StateError('Native cookie request state is unavailable.');
+        throw StateError(tr("Native cookie request state is unavailable."));
       }
       requestHeaders['cookie'] = cookieKey;
     }
@@ -85,7 +88,9 @@ class NativeDocumentResponseCache {
     if (old != null &&
         decision == NativeDocumentCacheDecision.fresh &&
         !hardReload) {
-      if (!isCurrent()) throw StateError('Document request was superseded.');
+      if (!isCurrent()) {
+        throw StateError(tr("Document request was superseded."));
+      }
       _entries.remove(key);
       _entries[key] = old;
       return {
@@ -124,7 +129,7 @@ class NativeDocumentResponseCache {
         wire['ifModifiedSince'] = validators['if-modified-since'];
       }
     }
-    if (!isCurrent()) throw StateError('Document request was superseded.');
+    if (!isCurrent()) throw StateError(tr("Document request was superseded."));
     final requestStarted = now();
     final response = await fetch(wire);
     // Referrer is request metadata, never a property of cached body bytes.
@@ -152,7 +157,7 @@ class NativeDocumentResponseCache {
           _representationUrl(finalUrl) != key.$1 ||
           finalMethod != 'GET') {
         throw StateError(
-          'Received 304 without a matching cached representation.',
+          tr("Received 304 without a matching cached representation."),
         );
       }
       final mergedHeaders = {

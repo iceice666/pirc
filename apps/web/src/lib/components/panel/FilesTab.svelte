@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   import { ArrowLeft, ChevronRight, Code, Eye, File, Folder, RefreshCw } from '@lucide/svelte';
   import { onDestroy, tick } from 'svelte';
   import { app } from '../../app.svelte';
@@ -50,7 +52,7 @@
     if (!file) fileLoader.error = '';
     const result = await dirLoader.run(
       (signal) => panelApi.files(id, path, signal),
-      'Unable to list directory.',
+      tr('Unable to list directory.'),
     );
     if (!result || id !== sessionId) return;
     dir = result.path;
@@ -67,7 +69,7 @@
     const id = sessionId;
     const result = await fileLoader.run(
       (signal) => panelApi.file(id, path, signal),
-      (cause) => `${path}: ${errorMessage(cause, 'Unable to open file.')}`,
+      (cause) => `${path}: ${errorMessage(cause, tr('Unable to open file.'))}`,
     );
     if (id !== sessionId) return;
     if (!result) {
@@ -119,9 +121,9 @@
 
   function size(bytes?: number) {
     if (bytes === undefined) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+    if (bytes < 1024) return tr('{0} B', [bytes]);
+    if (bytes < 1024 ** 2) return tr('{0} KB', [(bytes / 1024).toFixed(1)]);
+    return tr('{0} MB', [(bytes / 1024 ** 2).toFixed(1)]);
   }
 
   /**
@@ -217,7 +219,7 @@
       <button
         class="icon-button small"
         type="button"
-        aria-label="Back to folder"
+        aria-label={tr('Back to folder')}
         onclick={closeFile}><ArrowLeft size={16} /></button
       >
       <span class="drill-title" title={file.path}
@@ -229,7 +231,7 @@
         <button
           class="icon-button small"
           type="button"
-          aria-label={rendered ? 'Show source' : 'Show rendered'}
+          aria-label={rendered ? tr('Show source') : tr('Show rendered')}
           onclick={() => (rendered = !rendered)}
         >
           {#if rendered}<Code size={15} />{:else}<Eye size={15} />{/if}
@@ -238,9 +240,8 @@
     </div>
     <p class="file-meta">
       {size(file.size)}{#if showImage && imageSize}
-        · {imageSize.width} × {imageSize.height}{/if} · modified {new Date(
-        file.modifiedAt,
-      ).toLocaleString()}
+        · {imageSize.width} × {imageSize.height}{/if}
+      {tr('· modified {0}', [new Date(file.modifiedAt).toLocaleString()])}
     </p>
     {#if showImage}
       <div class="image-view">
@@ -256,7 +257,7 @@
       </div>
     {:else if file.binary}
       <p class="panel-empty">
-        {file.imageTooLarge ? 'Image too large to preview.' : 'Binary file — not shown.'}
+        {file.imageTooLarge ? tr('Image too large to preview.') : tr('Binary file — not shown.')}
       </p>
     {:else if isMarkdown && rendered}
       <div class="doc">
@@ -282,12 +283,12 @@
       </div>
     {/if}
     {#if file.truncated && !showImage && !file.binary}<p class="panel-empty">
-        Showing the first 1 MB.
+        {tr('Showing the first 1 MB.')}
       </p>{/if}
   {:else}
     <div class="toolbar">
-      <nav class="crumbs" aria-label="Folder">
-        <button type="button" onclick={() => listDir('')}>workspace</button>
+      <nav class="crumbs" aria-label={tr('Folder')}>
+        <button type="button" onclick={() => listDir('')}>{tr('workspace')}</button>
         {#each crumbs as crumb, index}
           <ChevronRight size={12} />
           <button type="button" onclick={() => listDir(crumbs.slice(0, index + 1).join('/'))}
@@ -298,7 +299,7 @@
       <button
         class="icon-button small"
         type="button"
-        aria-label="Refresh"
+        aria-label={tr('Refresh')}
         onclick={reload}
         disabled={dirLoader.loading}
         ><RefreshCw class={dirLoader.loading ? 'spin' : ''} size={15} /></button
@@ -333,9 +334,9 @@
       {/each}
     </ul>
     {#if !dirLoader.loading && !entries.length && !error}<p class="panel-empty">
-        Empty folder.
+        {tr('Empty folder.')}
       </p>{/if}
-    {#if truncated}<p class="panel-empty">Showing the first 2,000 entries.</p>{/if}
+    {#if truncated}<p class="panel-empty">{tr('Showing the first 2,000 entries.')}</p>{/if}
   {/if}
 </div>
 
@@ -374,6 +375,8 @@
   }
   .code-view {
     display: flex;
+    align-items: flex-start;
+    isolation: isolate;
     overflow: auto;
     max-height: calc(100dvh - 190px);
     border-radius: var(--radius-md);
@@ -381,6 +384,8 @@
     box-shadow: 0 0 0 1px var(--line);
   }
   .code-view pre {
+    flex: none;
+    white-space: pre;
     margin: 0;
     padding: 8px 12px 8px 0;
     color: var(--code-ink);
@@ -391,6 +396,7 @@
   .code-view pre.gutter {
     position: sticky;
     left: 0;
+    z-index: 1;
     flex: none;
     padding: 8px 10px 8px 12px;
     color: var(--faint);
@@ -399,6 +405,8 @@
     user-select: none;
   }
   .code-view pre code {
+    display: block;
+    white-space: inherit;
     font: inherit;
   }
   /* Lines a file link pointed at; `local` keeps the band on its lines while scrolling. */

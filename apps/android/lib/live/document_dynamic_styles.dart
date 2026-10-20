@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import '../rendering/html_document_styles.dart';
 import 'document_style_loading.dart';
 import 'gateway.dart';
@@ -49,14 +50,14 @@ class NativeDynamicDocumentStyles {
       if (value == null) return;
       if (value is! List) {
         nextDiagnostics.add(
-          'Invalid ${inline ? 'sheets' : 'links'} stylesheet snapshot.',
+          tr("Invalid {0} stylesheet snapshot.", [inline ? 'sheets' : 'links']),
         );
         return;
       }
       for (final raw in value) {
         final descriptor = _asJson(raw);
         if (descriptor == null) {
-          nextDiagnostics.add('Invalid stylesheet owner descriptor.');
+          nextDiagnostics.add(tr("Invalid stylesheet owner descriptor."));
           sequence++;
           continue;
         }
@@ -79,7 +80,7 @@ class NativeDynamicDocumentStyles {
     for (final owner in parsed) {
       if (nextOwners.containsKey(owner.ownerId)) {
         nextDiagnostics.add(
-          'Duplicate stylesheet owner ignored: ${owner.ownerId}.',
+          tr("Duplicate stylesheet owner ignored: {0}.", [owner.ownerId]),
         );
         continue;
       }
@@ -182,7 +183,7 @@ class NativeDynamicDocumentStyles {
     final domId = _string(descriptor['id']) ?? '';
     final ownerId = _string(descriptor['ownerId']) ?? domId;
     if (ownerId.isEmpty) {
-      diagnostics.add('Stylesheet owner is missing ownerId.');
+      diagnostics.add(tr("Stylesheet owner is missing ownerId."));
       return null;
     }
 
@@ -190,7 +191,7 @@ class NativeDynamicDocumentStyles {
     final rawOrder = descriptor['order'];
     final parsedOrder = _integer(rawOrder);
     if (rawOrder != null && parsedOrder == null) {
-      diagnostics.add('Invalid stylesheet order for owner $ownerId.');
+      diagnostics.add(tr("Invalid stylesheet order for owner {0}.", [ownerId]));
     }
     final revision = _integer(descriptor['revision']) ?? 0;
     final baseUrl =
@@ -224,22 +225,29 @@ class NativeDynamicDocumentStyles {
         : _boolean(descriptor['requestable']) ??
               (fetchHref != null && fetchHref.isNotEmpty);
     if (inline && cssText == null) {
-      diagnostics.add('Inline stylesheet owner $ownerId has no cssText.');
+      diagnostics.add(
+        tr("Inline stylesheet owner {0} has no cssText.", [ownerId]),
+      );
       return null;
     }
     if (baseUrl.isEmpty) {
-      diagnostics.add('Stylesheet owner $ownerId has no baseURL.');
+      diagnostics.add(tr("Stylesheet owner {0} has no baseURL.", [ownerId]));
     }
     if (!inline && requestable && (fetchHref == null || fetchHref.isEmpty)) {
       diagnostics.add(
-        'Stylesheet link owner $ownerId has no fetchHref (href: ${href ?? 'null'}).',
+        tr("Stylesheet link owner {0} has no fetchHref (href: {1}).", [
+          ownerId,
+          href ?? 'null',
+        ]),
       );
     }
     final transportId = _string(descriptor['transportId']);
     if (!inline &&
         requestable &&
         (transportId == null || transportId.isEmpty)) {
-      diagnostics.add('Stylesheet link owner $ownerId has no transportId.');
+      diagnostics.add(
+        tr("Stylesheet link owner {0} has no transportId.", [ownerId]),
+      );
     }
 
     return _DynamicStyleOwner(
@@ -292,21 +300,25 @@ class NativeDynamicDocumentStyles {
 
       for (final source in sources) {
         if (documentLimitReached) break;
-        final sourceLabel =
-            'owner ${owner.ownerId}${owner.domId.isEmpty ? '' : ' (#${owner.domId})'}';
+        final sourceLabel = tr("owner {0}{1}", [
+          owner.ownerId,
+          owner.domId.isEmpty ? '' : ' (#${owner.domId})',
+        ]);
         if (sourceCount >= maximumSources) {
-          truncationDiagnostic =
-              'Document stylesheet source limit exceeded ($maximumSources) '
-              'at $sourceLabel.';
+          truncationDiagnostic = tr(
+            "Document stylesheet source limit exceeded ({0}) at {1}.",
+            [maximumSources, sourceLabel],
+          );
           documentLimitReached = true;
           diagnostics.add(truncationDiagnostic);
           break;
         }
         final bytes = source.cssText.length * 2;
         if (bytes > maximumBytes - sourceBytes) {
-          truncationDiagnostic =
-              'Document stylesheet decoded-text limit exceeded '
-              '($maximumBytes UTF-16 bytes) at $sourceLabel.';
+          truncationDiagnostic = tr(
+            "Document stylesheet decoded-text limit exceeded ({0} UTF-16 bytes) at {1}.",
+            [maximumBytes, sourceLabel],
+          );
           documentLimitReached = true;
           diagnostics.add(truncationDiagnostic);
           break;

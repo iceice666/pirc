@@ -369,7 +369,7 @@ void main() {
       expect(old.liveControls.hasDetachedControls, isTrue);
       await t.pumpWidget(page());
       await t.pumpAndSettle();
-      await t.tap(find.byTooltip('重新載入'));
+      await t.tap(find.byTooltip("Reload"));
       await t.pumpAndSettle();
       expect(window.currentDocument, isNot(same(old)));
       expect(old.liveControls.isDisposed, isTrue);

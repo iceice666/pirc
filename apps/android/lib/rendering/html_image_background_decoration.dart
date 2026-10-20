@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/painting.dart';
@@ -117,7 +118,7 @@ class _NativeImageBackgroundPainter extends BoxPainter {
   Future<void> _loadSvg(NativeDocumentSvgBackground representation) async {
     try {
       if (source.source.hasFragment && source.source.fragment.isNotEmpty) {
-        throw UnsupportedError('SVG fragment backgrounds are unsupported.');
+        throw UnsupportedError(tr("SVG fragment backgrounds are unsupported."));
       }
       _markup = utf8.decode(representation.bytes);
       _dimensions = NativeSvgBackgroundDimensions.fromSource(_markup!);

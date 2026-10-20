@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   /**
    * Delete a chat project: what goes, what stays, and a decision for each
    * memory entry that mixes the project's text with other chats'
@@ -53,7 +55,7 @@
       error = notice;
     } catch (cause) {
       if (current !== generation) return;
-      error = errorMessage(cause, 'Could not load what this project holds.');
+      error = errorMessage(cause, tr('Could not load what this project holds.'));
     } finally {
       if (current === generation) loading = false;
     }
@@ -96,13 +98,16 @@
     } catch (cause) {
       open = true;
       if (cause instanceof ApiError && cause.status === 409 && cause.code === 'conflict')
-        await load(id, 'Memory changed since this was shown. Review it again.');
+        await load(id, tr('Memory changed since this was shown. Review it again.'));
       else {
         // The project may be fenced now: show what is left, and the page its state.
         void app.refreshNodes();
         await load(
           id,
-          errorMessage(cause, 'Could not delete this project. Reconnect the chat node and retry.'),
+          errorMessage(
+            cause,
+            tr('Could not delete this project. Reconnect the chat node and retry.'),
+          ),
         );
       }
     } finally {
@@ -112,40 +117,51 @@
 </script>
 
 <Modal bind:open labelledby="delete-project-title" class="wide">
-  <header><h2 id="delete-project-title">Delete project “{workspace?.displayName}”?</h2></header>
+  <header>
+    <h2 id="delete-project-title">{tr('Delete project “{0}”?', [workspace?.displayName])}</h2>
+  </header>
   <div class="scroll">
     {#if loading && !preview}
-      <p>Loading what the project holds…</p>
+      <p>{tr('Loading what the project holds…')}</p>
     {:else if preview}
       {#if preview.deleting}
         <p class="notice">
-          An earlier deletion of this project did not finish. Deleting again completes it; entries
-          you kept come up for a decision again.
+          {tr(
+            'An earlier deletion of this project did not finish. Deleting again completes it; entries you kept come up for a decision again.',
+          )}
         </p>
       {/if}
-      <h3>Deleted</h3>
+      <h3>{tr('Deleted')}</h3>
       <ul>
         <li>
-          {plural(preview.chats.length, 'chat')}, with their messages, working files, uploads and
-          private transcripts
+          {tr('{0}, with their messages, working files, uploads and private transcripts', [
+            plural(preview.chats.length, tr('chat')),
+          ])}
         </li>
         <li>
-          The project's instructions, files, capability settings{#if preview.links}
-            and its links to {plural(preview.links, 'workspace')}{/if}
+          {tr("The project's instructions, files, capability settings")}{#if preview.links}
+            {tr('and its links to {0}', [plural(preview.links, tr('workspace'))])}{/if}
         </li>
         {#if preview.schedules.length}
           <li>
-            {plural(preview.schedules.length, 'schedule')} that run here: {preview.schedules
-              .map((schedule) => `“${schedule.title}”`)
-              .join(', ')}
+            {tr('{0} that run here: {1}', [
+              plural(preview.schedules.length, tr('schedule')),
+              preview.schedules.map((schedule) => `“${schedule.title}”`).join(', '),
+            ])}
           </li>
         {/if}
         {#if preview.delegations}
-          <li>The records of {plural(preview.delegations, 'delegated task')} its chats started</li>
+          <li>
+            {tr('The records of {0} its chats started', [
+              plural(preview.delegations, tr('delegated task')),
+            ])}
+          </li>
         {/if}
         {#if forgotten.length}
           <li>
-            {plural(forgotten.length, 'memory entry', 'memory entries')} written only here:
+            {tr('{0} written only here:', [
+              plural(forgotten.length, tr('memory entry'), tr('memory entries')),
+            ])}
             <ul class="entries">
               {#each forgotten as item (item.entry.id)}<li>“{item.entry.content}”</li>{/each}
             </ul>
@@ -153,8 +169,9 @@
         {/if}
         {#if rolledBack.length}
           <li>
-            The project's changes to {plural(rolledBack.length, 'memory entry', 'memory entries')},
-            which go back to their earlier text:
+            {tr("The project's changes to {0}, which go back to their earlier text:", [
+              plural(rolledBack.length, tr('memory entry'), tr('memory entries')),
+            ])}
             <ul class="entries">
               {#each rolledBack as item (item.entry.id)}
                 <li>“{item.entry.content}” → “{item.restored}”</li>
@@ -165,17 +182,18 @@
       </ul>
 
       {#if review.length}
-        <h3>Needs your decision</h3>
+        <h3>{tr('Needs your decision')}</h3>
         <p>
-          These entries mix text from this project with text from other chats, which cannot be
-          separated automatically.
+          {tr(
+            'These entries mix text from this project with text from other chats, which cannot be separated automatically.',
+          )}
         </p>
         <ul class="review">
           {#each review as item (item.entry.id)}
             {@const id = item.entry.id}
             <li>
               <p class="entry">“{item.entry.content}”</p>
-              <div class="choices" role="radiogroup" aria-label="What to do with this entry">
+              <div class="choices" role="radiogroup" aria-label={tr('What to do with this entry')}>
                 {#each [{ value: 'forget', label: 'Forget' }, { value: 'keep', label: 'Keep as is' }, { value: 'edit', label: 'Edit' }] as option (option.value)}
                   <label class="choice">
                     <input
@@ -191,7 +209,7 @@
               </div>
               {#if choices[id] === 'edit'}
                 <textarea
-                  aria-label="New text"
+                  aria-label={tr('New text')}
                   maxlength="1000"
                   value={edits[id]}
                   oninput={(event) =>
@@ -206,47 +224,55 @@
         </ul>
       {/if}
 
-      <h3>Not deleted</h3>
+      <h3>{tr('Not deleted')}</h3>
       <ul>
         {#if preview.keptSchedules.length}
           <li>
-            Schedules its chats created in other workspaces: {preview.keptSchedules
-              .map(
-                (schedule) =>
-                  `“${schedule.title}” (${schedule.workspaceName ?? schedule.workspaceId})`,
-              )
-              .join(', ')}
+            {tr('Schedules its chats created in other workspaces: {0}', [
+              preview.keptSchedules
+                .map(
+                  (schedule) =>
+                    `“${schedule.title}” (${schedule.workspaceName ?? schedule.workspaceId})`,
+                )
+                .join(', '),
+            ])}
           </li>
         {/if}
         <li>
-          Work done by delegated tasks in other workspaces: their sessions, files, commits and the
-          workspace memory they wrote
+          {tr(
+            'Work done by delegated tasks in other workspaces: their sessions, files, commits and the workspace memory they wrote',
+          )}
         </li>
         <li>
-          Copies in other chats (what they already read, and anything they wrote in their own words)
+          {tr(
+            'Copies in other chats (what they already read, and anything they wrote in their own words)',
+          )}
         </li>
-        <li>Files uploaded before this version of pirc, which do not record their project</li>
-        <li>Backups, logs and what model providers keep</li>
+        <li>
+          {tr('Files uploaded before this version of pirc, which do not record their project')}
+        </li>
+        <li>{tr('Backups, logs and what model providers keep')}</li>
       </ul>
       <p>
-        Forgotten text is not blocked: other chats may write it again. To keep a fact from coming
-        back, forget it in Settings → Memory.
+        {tr(
+          'Forgotten text is not blocked: other chats may write it again. To keep a fact from coming back, forget it in Settings → Memory.',
+        )}
       </p>
       {#if !preview.nodeOnline}
-        <p role="alert">Connect the chat node to delete this project.</p>
+        <p role="alert">{tr('Connect the chat node to delete this project.')}</p>
       {/if}
     {/if}
     {#if error}<p role="alert">{error}</p>{/if}
   </div>
   <footer>
     <button class="button ghost" type="button" disabled={busy} onclick={() => (open = false)}
-      >Cancel</button
+      >{tr('Cancel')}</button
     >
     <button
       class="button dark"
       type="button"
       disabled={busy || loading || !preview || !preview.nodeOnline || !decided}
-      onclick={remove}>{busy ? 'Deleting…' : 'Delete project'}</button
+      onclick={remove}>{busy ? tr('Deleting…') : tr('Delete project')}</button
     >
   </footer>
 </Modal>

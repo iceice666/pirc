@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../i18n.svelte';
+
   /**
    * Push notifications (docs/guides/schedules.md): turn them on for this
    * browser, see every place that gets them (browsers and paired phones),
@@ -36,7 +38,7 @@
       ? cause.message
       : cause instanceof Error
         ? cause.message
-        : 'Unable to reach the gateway. Try again.';
+        : tr('Unable to reach the gateway. Try again.');
 
   async function load() {
     try {
@@ -78,28 +80,32 @@
 </script>
 
 <section class="settings-section" aria-labelledby="notifications-title">
-  <h3 id="notifications-title">Notifications</h3>
+  <h3 id="notifications-title">{tr('Notifications')}</h3>
   <p>
-    Scheduled runs, sessions waiting for your answer, finished delegations and memory changes to
-    approve. Each schedule chooses which of its runs notify.
+    {tr(
+      'Scheduled runs, sessions waiting for your answer, finished delegations and memory changes to approve. Each schedule chooses which of its runs notify.',
+    )}
   </p>
 
   {#if status === 'loading'}
-    <p role="status">Checking notifications…</p>
+    <p role="status">{tr('Checking notifications…')}</p>
   {:else}
     {#if error}<p class="push-error" role="alert">{error}</p>{/if}
     {#if note}<p role="status">{note}</p>{/if}
     <div class="push-row">
       <span>
         {#if status === 'on'}
-          This browser gets notifications.
+          {tr('This browser gets notifications.')}
         {:else if status === 'off'}
-          This browser does not get notifications.
+          {tr('This browser does not get notifications.')}
         {:else if status === 'denied'}
-          Notifications are blocked for this site. Allow them in the browser's site settings.
+          {tr(
+            "Notifications are blocked for this site. Allow them in the browser's site settings.",
+          )}
         {:else}
-          This browser cannot get notifications here (it needs the installed app or https, and a
-          browser with push support).
+          {tr(
+            'This browser cannot get notifications here (it needs the installed app or https, and a browser with push support).',
+          )}
         {/if}
       </span>
       {#if status === 'on'}
@@ -107,28 +113,28 @@
           class="button ghost small"
           type="button"
           disabled={busy}
-          onclick={() => act(disablePush)}>Turn off</button
+          onclick={() => act(disablePush)}>{tr('Turn off')}</button
         >
       {:else if status === 'off'}
         <button
           class="button dark small"
           type="button"
           disabled={busy}
-          onclick={() => act(enablePush)}>Turn on</button
+          onclick={() => act(enablePush)}>{tr('Turn on')}</button
         >
       {/if}
     </div>
 
     {#if places.length}
-      <ul class="push-places" aria-label="Places that get notifications">
+      <ul class="push-places" aria-label={tr('Places that get notifications')}>
         {#each places as place (place.id)}
           <li>
             <span class="push-place">
-              <strong>{place.name}{place.id === hereId ? ' (this browser)' : ''}</strong>
+              <strong>{place.name}{place.id === hereId ? tr(' (this browser)') : ''}</strong>
               <small
-                >{place.kind === 'unifiedpush' ? 'Phone · UnifiedPush' : 'Browser'} · {place.host}{place.lastSuccessAt
-                  ? ` · last delivered ${ago(place.lastSuccessAt)}`
-                  : ''}{place.failing ? ' · failing' : ''}</small
+                >{place.kind === 'unifiedpush' ? tr('Phone · UnifiedPush') : tr('Browser')} · {place.host}{place.lastSuccessAt
+                  ? tr(' · last delivered {0}', [ago(place.lastSuccessAt)])
+                  : ''}{place.failing ? tr(' · failing') : ''}</small
               >
             </span>
             <button
@@ -137,13 +143,13 @@
               disabled={busy}
               onclick={() =>
                 act(() => (place.id === hereId ? disablePush() : pushApi.remove({ id: place.id })))}
-              >Remove</button
+              >{tr('Remove')}</button
             >
           </li>
         {/each}
       </ul>
       <div class="push-row">
-        <span>Send a notification to every place above.</span>
+        <span>{tr('Send a notification to every place above.')}</span>
         <button
           class="button ghost small"
           type="button"
@@ -152,7 +158,7 @@
             act(async () => {
               const { delivered } = await pushApi.test();
               note = `Sent to ${delivered} of ${places.length}.`;
-            })}>Send a test</button
+            })}>{tr('Send a test')}</button
         >
       </div>
     {/if}

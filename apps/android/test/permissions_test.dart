@@ -80,10 +80,10 @@ void main() {
         MobileApp(theme: theme, controller: LiveController(g)),
       );
       await t.pumpAndSettle();
-      expect(find.text('歡迎使用 pirc'), findsOneWidget);
+      expect(find.text("Welcome to pirc"), findsOneWidget);
       expect(g.calls.where((c) => c.$1.startsWith('request')), isEmpty);
       await finishGuide(t);
-      expect(find.text('連接 pirc'), findsOneWidget);
+      expect(find.text("Connect pirc"), findsOneWidget);
       expect(g.complete, isTrue);
       await t.pumpWidget(const SizedBox());
       await t.pump();
@@ -111,10 +111,10 @@ void main() {
             find.byKey(const Key('permission-status-notifications')),
           )
           .data,
-      '尚未開啟',
+      "Not enabled",
     );
     await finishGuide(t);
-    expect(find.text('連接 pirc'), findsOneWidget);
+    expect(find.text("Connect pirc"), findsOneWidget);
     await t.pumpWidget(const SizedBox());
     await t.pump();
     await g.stream.close();
@@ -135,7 +135,7 @@ void main() {
       await t.pumpAndSettle();
       expect(
         t.widget<Text>(find.byKey(const Key('permission-status-overlay'))).data,
-        '尚未開啟',
+        "Not enabled",
       );
       pauseApp(t);
       g.overlay = true;
@@ -143,7 +143,7 @@ void main() {
       await t.pumpAndSettle();
       expect(
         t.widget<Text>(find.byKey(const Key('permission-status-overlay'))).data,
-        '已開啟',
+        "Enabled",
       );
       g.overlay = false;
       pauseApp(t);
@@ -151,7 +151,7 @@ void main() {
       await t.pumpAndSettle();
       expect(
         t.widget<Text>(find.byKey(const Key('permission-status-overlay'))).data,
-        '尚未開啟',
+        "Not enabled",
       );
       await t.pumpWidget(const SizedBox());
       await g.stream.close();
@@ -166,7 +166,7 @@ void main() {
       ),
     );
     await t.pumpAndSettle();
-    expect(find.text('前往系統設定'), findsOneWidget);
+    expect(find.text("Open system settings"), findsOneWidget);
     await t.pumpWidget(const SizedBox());
     await g.stream.close();
   });
@@ -181,7 +181,7 @@ void main() {
     expect(g.complete, isFalse);
     g.failFinish = false;
     await finishGuide(t);
-    expect(find.text('連接 pirc'), findsOneWidget);
+    expect(find.text("Connect pirc"), findsOneWidget);
     await t.pumpWidget(const SizedBox());
     await t.pump();
     await g.stream.close();

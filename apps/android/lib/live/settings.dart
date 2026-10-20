@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter/material.dart';
 import '../theme.dart';
@@ -25,41 +26,44 @@ class ManagementPage extends StatelessWidget {
   final LiveController controller;
   final PircTheme theme;
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: kind == 'settings'
-        ? palette(context)['surface.grouped']
-        : null,
-    appBar: AppBar(
-      leading: onBack == null
-          ? null
-          : IconButton(
-              tooltip: 'Back to the list',
-              onPressed: onBack,
-              icon: const Icon(LucideIcons.chevronLeft),
-            ),
-      title: Text(
-        {
-              'settings': '設定',
-              'schedules': '排程',
-              'memory': 'Memory',
-              'activity': '待處理與動態',
-            }[kind] ??
-            kind,
-      ),
-    ),
-    body: SafeArea(
-      child: switch (kind) {
-        'settings' => SettingsContent(
-          controller: controller,
-          theme: theme,
-          onWindows: onWindows,
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Scaffold(
+      backgroundColor: kind == 'settings'
+          ? palette(context)['surface.grouped']
+          : null,
+      appBar: AppBar(
+        leading: onBack == null
+            ? null
+            : IconButton(
+                tooltip: tr("Back to the list"),
+                onPressed: onBack,
+                icon: const Icon(LucideIcons.chevronLeft),
+              ),
+        title: Text(
+          {
+                'settings': tr("設定"),
+                'schedules': tr("排程"),
+                'memory': tr("Memory"),
+                'activity': tr("待處理與動態"),
+              }[kind] ??
+              kind,
         ),
-        'schedules' => SchedulesPage(controller: controller),
-        'memory' => MemoryProposals(controller: controller),
-        _ => ActivityPage(controller: controller, theme: theme),
-      },
-    ),
-  );
+      ),
+      body: SafeArea(
+        child: switch (kind) {
+          'settings' => SettingsContent(
+            controller: controller,
+            theme: theme,
+            onWindows: onWindows,
+          ),
+          'schedules' => SchedulesPage(controller: controller),
+          'memory' => MemoryProposals(controller: controller),
+          _ => ActivityPage(controller: controller, theme: theme),
+        },
+      ),
+    );
+  }
 }
 
 class SettingsContent extends StatefulWidget {
@@ -122,12 +126,12 @@ class _SettingsContentState extends State<SettingsContent> {
   }
 
   String appearanceLabel() =>
-      const {
-        'system': '跟隨系統',
-        'light': '淺色',
-        'dark': '深色',
+      {
+        'system': tr("跟隨系統"),
+        'light': tr("淺色"),
+        'dark': tr("深色"),
       }[c.preferences['appearance'] ?? 'system'] ??
-      '跟隨系統';
+      tr("跟隨系統");
 
   Widget row({
     required String title,
@@ -146,134 +150,141 @@ class _SettingsContentState extends State<SettingsContent> {
   );
 
   @override
-  Widget build(BuildContext context) => ColoredBox(
-    color: palette(context)['surface.grouped'],
-    child: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-          children: [
-            if (error != null) WebNotice(error!, error: true),
-            AssistantSection(
-              title: '此裝置',
-              children: [
-                row(title: '連線', subtitle: c.origin ?? ''),
-                row(title: '此裝置', subtitle: c.clientId ?? ''),
-                row(
-                  title: '解除配對',
-                  icon: LucideIcons.shieldCheck,
-                  color: 'status.danger',
-                  onTap: () => run(() async {
-                    if (await confirm(context, '解除配對', '這會清除此 App 的配對憑證與草稿。')) {
-                      await c.unpair();
-                      if (context.mounted) Navigator.pop(context);
-                    }
-                  }),
-                ),
-              ],
-            ),
-            AssistantSection(
-              title: '應用程式',
-              divider: true,
-              children: [
-                if (widget.onWindows != null)
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return ColoredBox(
+      color: palette(context)['surface.grouped'],
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+            children: [
+              if (error != null) WebNotice(error!, error: true),
+              AssistantSection(
+                title: tr("此裝置"),
+                children: [
+                  row(title: tr("連線"), subtitle: c.origin ?? ''),
+                  row(title: tr("此裝置"), subtitle: c.clientId ?? ''),
                   row(
-                    title: 'App 視窗',
-                    subtitle: '切換頁面、管理歷史與關閉視窗',
-                    icon: LucideIcons.panelsTopLeft,
-                    onTap: widget.onWindows,
+                    title: tr("解除配對"),
+                    icon: LucideIcons.shieldCheck,
+                    color: 'status.danger',
+                    onTap: () => run(() async {
+                      if (await confirm(
+                        context,
+                        tr("解除配對"),
+                        tr("這會清除此 App 的配對憑證與草稿。"),
+                      )) {
+                        await c.unpair();
+                        if (context.mounted) Navigator.pop(context);
+                      }
+                    }),
                   ),
-                row(
-                  title: '權限與快速回應',
-                  subtitle: '查看通知、浮窗的授權狀態',
-                  icon: LucideIcons.shieldCheck,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => PermissionPage(gateway: c.gateway),
+                ],
+              ),
+              AssistantSection(
+                title: tr("應用程式"),
+                divider: true,
+                children: [
+                  if (widget.onWindows != null)
+                    row(
+                      title: tr("App 視窗"),
+                      subtitle: tr("切換頁面、管理歷史與關閉視窗"),
+                      icon: LucideIcons.panelsTopLeft,
+                      onTap: widget.onWindows,
                     ),
-                  ),
-                ),
-                row(
-                  title: '通知',
-                  icon: LucideIcons.bell,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(title: const Text('通知設定')),
-                        backgroundColor: palette(context)['surface.grouped'],
-                        body: SafeArea(child: PushSettings(controller: c)),
-                      ),
-                    ),
-                  ),
-                ),
-                row(
-                  title: '外觀',
-                  subtitle: appearanceLabel(),
-                  icon: LucideIcons.settings,
-                  onTap: () => _appearance(context),
-                ),
-                row(
-                  title: 'Assistant',
-                  subtitle: 'Soul and chat rules',
-                  icon: LucideIcons.bot,
-                  onTap: () => showDialog<void>(
-                    context: context,
-                    useRootNavigator: false,
-                    builder: (_) => WebDialog(
-                      title: 'Assistant',
-                      eyebrow: 'SETTINGS',
-                      actions: const [],
-                      children: [AssistantSettings(controller: c)],
-                    ),
-                  ),
-                ),
-                row(
-                  title: '記憶提案',
-                  icon: LucideIcons.brain,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => ManagementPage(
-                        kind: 'memory',
-                        controller: c,
-                        theme: widget.theme,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            AssistantSection(
-              title: '工作區',
-              divider: true,
-              children: [
-                row(
-                  title: '新增工作空間',
-                  icon: LucideIcons.plus,
-                  onTap: () => _workspace(context),
-                ),
-                if (const bool.fromEnvironment('PIRC_DEMO'))
                   row(
-                    title: '離線驗證工具',
-                    subtitle: '使用本機測試資料',
-                    icon: LucideIcons.wrench,
+                    title: tr("權限與快速回應"),
+                    subtitle: tr("查看通知、浮窗的授權狀態"),
+                    icon: LucideIcons.shieldCheck,
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute<void>(
-                        builder: (_) => demo.PircApp(theme: widget.theme),
+                        builder: (_) => PermissionPage(gateway: c.gateway),
                       ),
                     ),
                   ),
-              ],
-            ),
-          ],
+                  row(
+                    title: tr("通知"),
+                    icon: LucideIcons.bell,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => Scaffold(
+                          appBar: AppBar(title: Text(tr("通知設定"))),
+                          backgroundColor: palette(context)['surface.grouped'],
+                          body: SafeArea(child: PushSettings(controller: c)),
+                        ),
+                      ),
+                    ),
+                  ),
+                  row(
+                    title: tr("外觀"),
+                    subtitle: appearanceLabel(),
+                    icon: LucideIcons.settings,
+                    onTap: () => _appearance(context),
+                  ),
+                  row(
+                    title: tr("Assistant"),
+                    subtitle: tr("Soul and chat rules"),
+                    icon: LucideIcons.bot,
+                    onTap: () => showDialog<void>(
+                      context: context,
+                      useRootNavigator: false,
+                      builder: (_) => WebDialog(
+                        title: tr("Assistant"),
+                        eyebrow: 'SETTINGS',
+                        actions: const [],
+                        children: [AssistantSettings(controller: c)],
+                      ),
+                    ),
+                  ),
+                  row(
+                    title: tr("記憶提案"),
+                    icon: LucideIcons.brain,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => ManagementPage(
+                          kind: 'memory',
+                          controller: c,
+                          theme: widget.theme,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              AssistantSection(
+                title: tr("工作區"),
+                divider: true,
+                children: [
+                  row(
+                    title: tr("新增工作空間"),
+                    icon: LucideIcons.plus,
+                    onTap: () => _workspace(context),
+                  ),
+                  if (const bool.fromEnvironment('PIRC_DEMO'))
+                    row(
+                      title: tr("離線驗證工具"),
+                      subtitle: tr("使用本機測試資料"),
+                      icon: LucideIcons.wrench,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => demo.PircApp(theme: widget.theme),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   Future<void> _appearance(BuildContext context) async {
     await showModalBottomSheet<void>(
@@ -291,12 +302,12 @@ class _SettingsContentState extends State<SettingsContent> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AssistantSection(
-                    title: '外觀',
+                    title: tr("外觀"),
                     children: [
                       for (final choice in [
-                        ('system', '跟隨系統'),
-                        ('light', '淺色'),
-                        ('dark', '深色'),
+                        ('system', tr("跟隨系統")),
+                        ('light', tr("淺色")),
+                        ('dark', tr("深色")),
                       ])
                         _SettingsOptionRow(
                           title: choice.$2,
@@ -355,9 +366,9 @@ class _SettingsContentState extends State<SettingsContent> {
           padding: const EdgeInsets.all(24),
           children: [
             AssistantSection(
-              title: '選擇 Node',
+              title: tr("選擇 Node"),
               children: [
-                if (c.nodes.isEmpty) const AssistantParagraph('目前沒有可用的 Node。'),
+                if (c.nodes.isEmpty) AssistantParagraph(tr("目前沒有可用的 Node。")),
                 for (final n in c.nodes)
                   _SettingsOptionRow(
                     title: '${n['id']}',
@@ -370,9 +381,9 @@ class _SettingsContentState extends State<SettingsContent> {
       ),
     );
     if (node == null || !context.mounted) return;
-    final path = await input(context, 'Node 上的資料夾路徑');
+    final path = await input(context, tr("Node 上的資料夾路徑"));
     if (path == null || !context.mounted) return;
-    final name = await input(context, '顯示名稱');
+    final name = await input(context, tr("顯示名稱"));
     if (name == null || !context.mounted) return;
     await run(() async {
       await c.gateway.request(
@@ -402,62 +413,69 @@ class _SettingsOptionRow extends StatelessWidget {
   final String color;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        child: Row(
-          children: [
-            if (icon != null) ...[
-              Icon(
-                icon,
-                size: 16,
-                color: palette(
-                  context,
-                )[color == 'status.danger' ? color : 'text.muted'],
-              ),
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: webText(
-                      context,
-                      size: 13,
-                      weight: FontWeight.w500,
-                      color: color,
-                    ),
-                  ),
-                  if (subtitle != null && subtitle!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        subtitle!,
-                        style: webText(context, size: 12, color: 'text.muted'),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Row(
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: 16,
+                  color: palette(
+                    context,
+                  )[color == 'status.danger' ? color : 'text.muted'],
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: webText(
+                        context,
+                        size: 13,
+                        weight: FontWeight.w500,
+                        color: color,
                       ),
                     ),
-                ],
+                    if (subtitle != null && subtitle!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          subtitle!,
+                          style: webText(
+                            context,
+                            size: 12,
+                            color: 'text.muted',
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            if (trailing != null)
-              trailing!
-            else if (onTap != null)
-              Icon(
-                LucideIcons.chevronRight,
-                size: 16,
-                color: palette(context)['text.muted'],
-              ),
-          ],
+              if (trailing != null)
+                trailing!
+              else if (onTap != null)
+                Icon(
+                  LucideIcons.chevronRight,
+                  size: 16,
+                  color: palette(context)['text.muted'],
+                ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class PushSettings extends StatefulWidget {
@@ -638,10 +656,10 @@ class _PushSettingsState extends State<PushSettings>
           heightFactor: .7,
           child: Column(
             children: [
-              const Padding(
+              Padding(
                 padding: EdgeInsets.all(16),
                 child: Text(
-                  '依工作空間靜音',
+                  tr("依工作空間靜音"),
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                 ),
               ),
@@ -667,7 +685,7 @@ class _PushSettingsState extends State<PushSettings>
                 padding: const EdgeInsets.all(16),
                 child: FinalButton(
                   onPressed: () => Navigator.pop(sheet, selected.toList()),
-                  child: const Text('儲存'),
+                  child: Text(tr("儲存")),
                 ),
               ),
             ],
@@ -680,6 +698,7 @@ class _PushSettingsState extends State<PushSettings>
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     if (loading) return const SupportingLoading();
     return ColoredBox(
       color: palette(context)['surface.grouped'],
@@ -693,18 +712,18 @@ class _PushSettingsState extends State<PushSettings>
               children: [
                 if (error != null)
                   SupportingState(
-                    title: '部分設定無法載入',
+                    title: tr("部分設定無法載入"),
                     detail: error!,
                     onRetry: load,
                   ),
                 if (actionError != null) WebNotice(actionError!, error: true),
                 if (actionStatus != null) WebNotice(actionStatus!),
-                group('此手機', [
+                group(tr("此手機"), [
                   _SettingsOptionRow(
                     title: permission['notifications'] == true
-                        ? '通知權限已開啟'
-                        : '通知權限未開啟',
-                    subtitle: push['state']?.toString() ?? '尚未註冊推播',
+                        ? tr("通知權限已開啟")
+                        : tr("通知權限未開啟"),
+                    subtitle: push['state']?.toString() ?? tr("尚未註冊推播"),
                     icon: permission['notifications'] == true
                         ? LucideIcons.bell
                         : LucideIcons.bellOff,
@@ -713,7 +732,7 @@ class _PushSettingsState extends State<PushSettings>
                     spacing: 4,
                     children: [
                       AssistantButton(
-                        '啟用推播',
+                        tr("啟用推播"),
                         onPressed: actionBusy
                             ? null
                             : () => perform(() async {
@@ -722,7 +741,7 @@ class _PushSettingsState extends State<PushSettings>
                               }),
                       ),
                       AssistantButton(
-                        '停用推播',
+                        tr("停用推播"),
                         onPressed: actionBusy
                             ? null
                             : () => perform(() async {
@@ -731,7 +750,7 @@ class _PushSettingsState extends State<PushSettings>
                               }),
                       ),
                       AssistantButton(
-                        '傳送測試',
+                        tr("傳送測試"),
                         filled: true,
                         onPressed: actionBusy
                             ? null
@@ -743,8 +762,9 @@ class _PushSettingsState extends State<PushSettings>
                                 );
                                 if (mounted) {
                                   setState(
-                                    () => actionStatus =
-                                        '已送達 ${d['delivered'] ?? 0} 個目標',
+                                    () => actionStatus = tr("已送達 {0} 個目標", [
+                                      d['delivered'] ?? 0,
+                                    ]),
                                   );
                                 }
                               }),
@@ -752,25 +772,30 @@ class _PushSettingsState extends State<PushSettings>
                     ],
                   ),
                   if ((push['distributors'] as List? ?? []).isEmpty)
-                    const AssistantParagraph(
-                      '請先安裝 UnifiedPush 推播服務（例如 ntfy），再啟用此手機推播。',
+                    AssistantParagraph(
+                      tr("請先安裝 UnifiedPush 推播服務（例如 ntfy），再啟用此手機推播。"),
                     ),
                 ], divider: false),
-                group('通知類別', [
-                  toggle('q', '需要你回應', '問題、確認與等待回覆'),
-                  toggle('missed', '錯過的排程', '需要你決定執行或略過'),
-                  toggle('deleg', '委派的工作', '其他對話交付的工作'),
-                  toggle('mem', '記憶提案', '助手想記住的新內容', defaultValue: false),
+                group(tr("通知類別"), [
+                  toggle('q', tr("需要你回應"), tr("問題、確認與等待回覆")),
+                  toggle('missed', tr("錯過的排程"), tr("需要你決定執行或略過")),
+                  toggle('deleg', tr("委派的工作"), tr("其他對話交付的工作")),
                   toggle(
-                    'done',
-                    '工作完成或失敗',
-                    '通知此手機已連線對話的執行結果',
+                    'mem',
+                    tr("記憶提案"),
+                    tr("助手想記住的新內容"),
                     defaultValue: false,
                   ),
-                  toggle('live', '執行中的即時進度', '顯示此手機已連線對話的目前步驟'),
+                  toggle(
+                    'done',
+                    tr("工作完成或失敗"),
+                    tr("通知此手機已連線對話的執行結果"),
+                    defaultValue: false,
+                  ),
+                  toggle('live', tr("執行中的即時進度"), tr("顯示此手機已連線對話的目前步驟")),
                   _SettingsOptionRow(
-                    title: '系統通知設定',
-                    subtitle: '聲音、震動與彈出方式',
+                    title: tr("系統通知設定"),
+                    subtitle: tr("聲音、震動與彈出方式"),
                     trailing: const Icon(LucideIcons.externalLink, size: 16),
                     onTap: actionBusy
                         ? null
@@ -779,18 +804,18 @@ class _PushSettingsState extends State<PushSettings>
                           ),
                   ),
                 ]),
-                group('樣式', [
+                group(tr("樣式"), [
                   toggle(
                     'popup',
-                    '下方快速回應視窗',
+                    tr("下方快速回應視窗"),
                     permission['overlay'] == true
-                        ? '從通知開啟，在其他 App 上層確認並回答'
-                        : '尚未授權浮窗；通知仍可開啟完整對話',
+                        ? tr("從通知開啟，在其他 App 上層確認並回答")
+                        : tr("尚未授權浮窗；通知仍可開啟完整對話"),
                   ),
                   if (permission['overlay'] != true)
                     _SettingsOptionRow(
-                      title: '授權浮窗',
-                      subtitle: '顯示在其他應用程式上層',
+                      title: tr("授權浮窗"),
+                      subtitle: tr("顯示在其他應用程式上層"),
                       trailing: const Icon(LucideIcons.chevronRight, size: 16),
                       onTap: actionBusy
                           ? null
@@ -798,22 +823,22 @@ class _PushSettingsState extends State<PushSettings>
                               () async => c.gateway.call('requestOverlay'),
                             ),
                     ),
-                  toggle('rich', '大型互動通知', '顯示最多三個選項；點選後仍須確認'),
-                  toggle('recall', '處理後自動收回', '收到最新狀態時，收回已處理的問題通知'),
+                  toggle('rich', tr("大型互動通知"), tr("顯示最多三個選項；點選後仍須確認")),
+                  toggle('recall', tr("處理後自動收回"), tr("收到最新狀態時，收回已處理的問題通知")),
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('鎖定畫面顯示'),
+                        Text(tr("鎖定畫面顯示")),
                         const SizedBox(height: 12),
                         Wrap(
                           spacing: 6,
                           children: [
                             for (final item in [
-                              ('hide', '隱藏內容'),
-                              ('summary', '只顯示標題'),
-                              ('all', '全部顯示'),
+                              ('hide', tr("隱藏內容")),
+                              ('summary', tr("只顯示標題")),
+                              ('all', tr("全部顯示")),
                             ])
                               ChoiceChip(
                                 label: Text(
@@ -837,16 +862,19 @@ class _PushSettingsState extends State<PushSettings>
                     ),
                   ),
                 ]),
-                group('勿擾與範圍', [
+                group(tr("勿擾與範圍"), [
                   toggle(
                     'quiet',
-                    '勿擾時段',
-                    '${time('start', 1380)}–${time('end', 450)} · 需要你回應仍會通知',
+                    tr("勿擾時段"),
+                    tr("{0}–{1} · 需要你回應仍會通知", [
+                      time('start', 1380),
+                      time('end', 450),
+                    ]),
                     defaultValue: false,
                   ),
                   if (prefs['quiet'] == true) ...[
                     _SettingsOptionRow(
-                      title: '開始時間',
+                      title: tr("開始時間"),
                       trailing: Text(
                         time('start', 1380),
                         style: webText(context, size: 13, color: 'text.muted'),
@@ -856,7 +884,7 @@ class _PushSettingsState extends State<PushSettings>
                           : () => chooseTime('start', 1380),
                     ),
                     _SettingsOptionRow(
-                      title: '結束時間',
+                      title: tr("結束時間"),
                       trailing: Text(
                         time('end', 450),
                         style: webText(context, size: 13, color: 'text.muted'),
@@ -865,29 +893,31 @@ class _PushSettingsState extends State<PushSettings>
                     ),
                   ],
                   _SettingsOptionRow(
-                    title: '依工作空間靜音',
-                    subtitle: '已靜音 ${(prefs['muted'] as List? ?? []).length} 個',
+                    title: tr("依工作空間靜音"),
+                    subtitle: tr("已靜音 {0} 個", [
+                      (prefs['muted'] as List? ?? []).length,
+                    ]),
                     trailing: const Icon(LucideIcons.chevronRight, size: 16),
                     onTap: actionBusy ? null : mute,
                   ),
                 ]),
-                group('推送目標', [
+                group(tr("推送目標"), [
                   if (rows(server['subscriptions']).isEmpty)
-                    const AssistantParagraph('尚未設定推送目標'),
+                    AssistantParagraph(tr("尚未設定推送目標")),
                   for (final target in rows(server['subscriptions']))
                     _SettingsOptionRow(
                       title: target['name']?.toString() ?? '',
                       subtitle:
                           '${target['host']} · ${target['failing'] == true ? '最近傳送失敗' : '已註冊'}',
                       trailing: IconButton(
-                        tooltip: '移除目標',
+                        tooltip: tr("移除目標"),
                         icon: const Icon(LucideIcons.trash2, size: 16),
                         onPressed: actionBusy
                             ? null
                             : () => perform(() async {
                                 if (await confirm(
                                   context,
-                                  '移除通知目標',
+                                  tr("移除通知目標"),
                                   target['name']?.toString() ?? '',
                                 )) {
                                   await c.gateway.request(
@@ -920,10 +950,13 @@ class MemoryProposals extends StatelessWidget {
   const MemoryProposals({super.key, required this.controller});
   final LiveController controller;
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    padding: const EdgeInsets.all(20),
-    child: MemorySettings(controller: controller),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: MemorySettings(controller: controller),
+    );
+  }
 }
 
 class ActivityPage extends StatelessWidget {
@@ -935,173 +968,178 @@ class ActivityPage extends StatelessWidget {
   final LiveController controller;
   final PircTheme theme;
   @override
-  Widget build(BuildContext context) => RemotePage(
-    load: () async {
-      await controller.refreshList();
-      final pending = <Json>[];
-      final waiting = controller.sessions
-          .where((s) => s['runStatus'] == 'waiting_input')
-          .toList();
-      for (var start = 0; start < waiting.length; start += 4) {
-        await Future.wait(
-          waiting.skip(start).take(4).map((session) async {
-            try {
-              final snapshot = obj(
-                await controller.gateway.call('refresh', {
-                  'sessionId': session['id'],
-                }),
-              );
-              for (final q in rows(
-                snapshot['interactions'],
-              ).where((q) => q['status'] == 'pending')) {
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return RemotePage(
+      load: () async {
+        await controller.refreshList();
+        final pending = <Json>[];
+        final waiting = controller.sessions
+            .where((s) => s['runStatus'] == 'waiting_input')
+            .toList();
+        for (var start = 0; start < waiting.length; start += 4) {
+          await Future.wait(
+            waiting.skip(start).take(4).map((session) async {
+              try {
+                final snapshot = obj(
+                  await controller.gateway.call('refresh', {
+                    'sessionId': session['id'],
+                  }),
+                );
+                for (final q in rows(
+                  snapshot['interactions'],
+                ).where((q) => q['status'] == 'pending')) {
+                  pending.add({
+                    ...q,
+                    'sessionId': session['id'],
+                    'sessionName': session['name'],
+                  });
+                }
+              } catch (_) {
                 pending.add({
-                  ...q,
+                  'title': tr("開啟對話確認狀態"),
                   'sessionId': session['id'],
                   'sessionName': session['name'],
                 });
               }
-            } catch (_) {
-              pending.add({
-                'title': '開啟對話確認狀態',
-                'sessionId': session['id'],
-                'sessionName': session['name'],
-              });
-            }
-          }),
-        );
-      }
-      pending.sort(
-        (a, b) => ((a['expiresAt'] as num?) ?? 9007199254740991).compareTo(
-          (b['expiresAt'] as num?) ?? 9007199254740991,
-        ),
-      );
-      final unavailable = <String>[];
-      Future<Json> source(String path, String label) async {
-        try {
-          return await controller.gateway.request(path);
-        } catch (_) {
-          unavailable.add(label);
-          return {};
-        }
-      }
-
-      final responses = await Future.wait([
-        source('/api/schedules', '排程'),
-        source('/api/memory', '記憶提案'),
-      ]);
-      final data = responses[0], memory = responses[1];
-      return {
-        'unavailable': unavailable,
-        'pending': pending,
-        'schedules': data['schedules'],
-        'proposals': memory['proposals'],
-        'recent': await controller.gateway.call('activity'),
-      };
-    },
-    builder: (context, data, reload) => ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                '待你處理',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-              ),
-            ),
-            IconButton(
-              tooltip: '重新整理',
-              onPressed: reload,
-              icon: const Icon(LucideIcons.refreshCw),
-            ),
-          ],
-        ),
-        if ((data['unavailable'] as List? ?? []).isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text(
-              '${(data['unavailable'] as List).join('、')} 暫時無法載入，請重新整理。',
-            ),
-          ),
-        if (rows(data['pending']).isEmpty &&
-            !rows(
-              data['schedules'],
-            ).any((s) => (s['attention'] as num? ?? 0) > 0) &&
-            !rows(data['proposals']).any((p) => p['status'] == 'pending'))
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: SupportingState(
-              title: '目前沒有待處理項目',
-              detail: '需要你回答的問題與錯過排程會顯示在這裡。',
-            ),
-          ),
-        for (final s in rows(data['pending']))
-          ListTile(
-            leading: const Icon(LucideIcons.circleHelp),
-            title: Text('${s['title']}'),
-            subtitle: Text(
-              '${s['sessionName']}${s['expiresAt'] == null ? '' : ' · 到期 ${_date(s['expiresAt'])}'}',
-            ),
-            onTap: () => guarded(context, () async {
-              await controller.open('${s['sessionId']}');
-              if (context.mounted) Navigator.pop(context);
             }),
+          );
+        }
+        pending.sort(
+          (a, b) => ((a['expiresAt'] as num?) ?? 9007199254740991).compareTo(
+            (b['expiresAt'] as num?) ?? 9007199254740991,
           ),
-        for (final s in rows(
-          data['schedules'],
-        ).where((s) => (s['attention'] as num? ?? 0) > 0))
-          ListTile(
-            leading: const Icon(LucideIcons.clock),
-            title: Text('${s['title']}'),
-            subtitle: Text('${s['attention']} 次執行待處理'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => ScheduleDetailPage(
-                  controller: controller,
-                  id: '${s['id']}',
+        );
+        final unavailable = <String>[];
+        Future<Json> source(String path, String label) async {
+          try {
+            return await controller.gateway.request(path);
+          } catch (_) {
+            unavailable.add(label);
+            return {};
+          }
+        }
+
+        final responses = await Future.wait([
+          source('/api/schedules', tr("排程")),
+          source('/api/memory', tr("記憶提案")),
+        ]);
+        final data = responses[0], memory = responses[1];
+        return {
+          'unavailable': unavailable,
+          'pending': pending,
+          'schedules': data['schedules'],
+          'proposals': memory['proposals'],
+          'recent': await controller.gateway.call('activity'),
+        };
+      },
+      builder: (context, data, reload) => ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  tr("待你處理"),
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+                ),
+              ),
+              IconButton(
+                tooltip: tr("重新整理"),
+                onPressed: reload,
+                icon: const Icon(LucideIcons.refreshCw),
+              ),
+            ],
+          ),
+          if ((data['unavailable'] as List? ?? []).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                tr("{0} 暫時無法載入，請重新整理。", [
+                  (data['unavailable'] as List).join('、'),
+                ]),
+              ),
+            ),
+          if (rows(data['pending']).isEmpty &&
+              !rows(
+                data['schedules'],
+              ).any((s) => (s['attention'] as num? ?? 0) > 0) &&
+              !rows(data['proposals']).any((p) => p['status'] == 'pending'))
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: SupportingState(
+                title: tr("目前沒有待處理項目"),
+                detail: tr("需要你回答的問題與錯過排程會顯示在這裡。"),
+              ),
+            ),
+          for (final s in rows(data['pending']))
+            ListTile(
+              leading: const Icon(LucideIcons.circleHelp),
+              title: Text('${s['title']}'),
+              subtitle: Text(
+                '${s['sessionName']}${s['expiresAt'] == null ? '' : ' · 到期 ${_date(s['expiresAt'])}'}',
+              ),
+              onTap: () => guarded(context, () async {
+                await controller.open('${s['sessionId']}');
+                if (context.mounted) Navigator.pop(context);
+              }),
+            ),
+          for (final s in rows(
+            data['schedules'],
+          ).where((s) => (s['attention'] as num? ?? 0) > 0))
+            ListTile(
+              leading: const Icon(LucideIcons.clock),
+              title: Text('${s['title']}'),
+              subtitle: Text(tr("{0} 次執行待處理", [s['attention']])),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => ScheduleDetailPage(
+                    controller: controller,
+                    id: '${s['id']}',
+                  ),
                 ),
               ),
             ),
-          ),
-        if (rows(data['proposals']).any((p) => p['status'] == 'pending'))
-          ListTile(
-            leading: const Icon(LucideIcons.brain),
-            title: const Text('記憶提案'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => ManagementPage(
-                  kind: 'memory',
-                  controller: controller,
-                  theme: theme,
+          if (rows(data['proposals']).any((p) => p['status'] == 'pending'))
+            ListTile(
+              leading: const Icon(LucideIcons.brain),
+              title: Text(tr("記憶提案")),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => ManagementPage(
+                    kind: 'memory',
+                    controller: controller,
+                    theme: theme,
+                  ),
                 ),
               ),
             ),
+          const SizedBox(height: 24),
+          Text(
+            tr("最近動態"),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
           ),
-        const SizedBox(height: 24),
-        const Text(
-          '最近動態',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-        ),
-        const Text('此裝置收到的通知', style: TextStyle(fontSize: 12)),
-        for (final entry in rows(data['recent']))
-          ListTile(
-            title: Text('${entry['title']}'),
-            subtitle: Text('${entry['body']}\n${_date(entry['at'])}'),
-            onTap: entry['sessionId'] == null
-                ? null
-                : () => guarded(context, () async {
-                    await controller.open('${entry['sessionId']}');
-                    if (context.mounted) Navigator.pop(context);
-                  }),
-          ),
-        if (rows(data['recent']).isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 20),
-            child: Text('尚未收到通知'),
-          ),
-      ],
-    ),
-  );
+          Text(tr("此裝置收到的通知"), style: TextStyle(fontSize: 12)),
+          for (final entry in rows(data['recent']))
+            ListTile(
+              title: Text('${entry['title']}'),
+              subtitle: Text('${entry['body']}\n${_date(entry['at'])}'),
+              onTap: entry['sessionId'] == null
+                  ? null
+                  : () => guarded(context, () async {
+                      await controller.open('${entry['sessionId']}');
+                      if (context.mounted) Navigator.pop(context);
+                    }),
+            ),
+          if (rows(data['recent']).isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Text(tr("尚未收到通知")),
+            ),
+        ],
+      ),
+    );
+  }
 }

@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 
 enum NativeMermaidXYAxisType { linear, band }
@@ -125,14 +126,14 @@ class NativeMermaidXYChartDiagram {
   final String accessibleDescription;
 
   String get semanticsLabel {
-    final parts = <String>['XY chart'];
+    final parts = <String>[tr("XY chart")];
     if (accessibleTitle.isNotEmpty) parts.add(accessibleTitle);
     if (accessibleDescription.isNotEmpty) parts.add(accessibleDescription);
     if (title.isNotEmpty) parts.add(title);
-    if (xAxis.title.isNotEmpty) parts.add('X axis: ${xAxis.title}');
-    if (yAxis.title.isNotEmpty) parts.add('Y axis: ${yAxis.title}');
+    if (xAxis.title.isNotEmpty) parts.add(tr("X axis: {0}", [xAxis.title]));
+    if (yAxis.title.isNotEmpty) parts.add(tr("Y axis: {0}", [yAxis.title]));
     for (final item in series) {
-      if (item.title.isNotEmpty) parts.add('${item.title} series');
+      if (item.title.isNotEmpty) parts.add(tr("{0} series", [item.title]));
     }
     return parts.join('. ');
   }

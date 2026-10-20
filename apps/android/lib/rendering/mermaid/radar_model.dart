@@ -1,3 +1,5 @@
+import '../../l10n/app_i18n.dart';
+
 enum NativeMermaidRadarGraticule { circle, polygon }
 
 class NativeMermaidRadarConfig {
@@ -87,7 +89,7 @@ class NativeMermaidRadarDiagram {
   final NativeMermaidRadarConfig config;
 
   String get semanticsLabel {
-    final parts = <String>['Radar chart'];
+    final parts = <String>[tr("Radar chart")];
     if (accessibleTitle.isNotEmpty) parts.add(accessibleTitle);
     if (accessibleDescription.isNotEmpty) parts.add(accessibleDescription);
     if (title.isNotEmpty) parts.add(title);

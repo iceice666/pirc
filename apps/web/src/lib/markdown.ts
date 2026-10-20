@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 /**
  * Markdown → sanitized HTML for conversation content.
  *
@@ -200,7 +201,7 @@ const marked = new Marked({
       if (language === 'math' || language === 'latex' || language === 'tex')
         return `<div class="math-block">${renderMath(text, true)}</div>\n`;
       const label = language || 'text';
-      return `<div class="code-block"><div class="code-head"><span>${escapeHtml(label)}</span><button type="button" class="code-copy" data-copy>Copy</button></div><pre><code class="hljs language-${escapeHtml(label)}">${highlight(text, language)}</code></pre></div>\n`;
+      return `<div class="code-block"><div class="code-head"><span>${escapeHtml(label)}</span><button type="button" class="code-copy" data-copy>${escapeHtml(tr('Copy'))}</button></div><pre><code class="hljs language-${escapeHtml(label)}">${highlight(text, language)}</code></pre></div>\n`;
     },
     table(token: Tokens.Table) {
       // Wrap so wide tables scroll horizontally instead of stretching the timeline.
@@ -319,7 +320,10 @@ export function highlightCode(code: string, language?: string): string {
 export function clipText(text: string): string {
   if (text.length <= MAX_HIGHLIGHT) return text;
   const rest = text.length - MAX_HIGHLIGHT;
-  return `${text.slice(0, MAX_HIGHLIGHT)}\n… ${rest.toLocaleString('en')} more characters not shown`;
+  return tr('{0}\n… {1} more characters not shown', [
+    text.slice(0, MAX_HIGHLIGHT),
+    rest.toLocaleString('en'),
+  ]);
 }
 
 const EXTENSION_LANGUAGES: Record<string, string> = {
@@ -472,8 +476,8 @@ export function enhanceMarkdown(node: HTMLElement, params: EnhanceParams) {
     if (!button || !node.contains(button)) return;
     const code = button.closest('.code-block')?.querySelector('code')?.textContent ?? '';
     void navigator.clipboard?.writeText(code).then(() => {
-      button.textContent = 'Copied';
-      setTimeout(() => (button.textContent = 'Copy'), 1400);
+      button.textContent = tr('Copied');
+      setTimeout(() => (button.textContent = tr('Copy')), 1400);
     });
   };
   node.addEventListener('click', onClick);

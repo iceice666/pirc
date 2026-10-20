@@ -1,3 +1,4 @@
+import { tr } from './i18n.svelte';
 import { isAbort } from './http';
 
 /**
@@ -16,7 +17,7 @@ export class Loader {
    */
   async run<T>(
     task: (signal: AbortSignal) => Promise<T>,
-    failure: string | ((cause: unknown) => string) = 'Request failed.',
+    failure: string | ((cause: unknown) => string) = tr('Request failed.'),
   ): Promise<T | undefined> {
     this.#controller?.abort();
     const controller = new AbortController();

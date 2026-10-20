@@ -1,3 +1,5 @@
+import '../l10n/app_i18n.dart';
+
 /// The fixed web's goal.ts and todo.ts widget wire formats.
 class GoalView {
   const GoalView({
@@ -18,12 +20,12 @@ class GoalView {
       (phase == 'paused' || phase == 'blocked' || disarmed) &&
       (maxRounds == null || rounds < maxRounds!);
   String get phaseLabel => disarmed
-      ? 'Waiting for resume'
-      : const {
-          'active': 'Active',
-          'paused': 'Paused',
-          'blocked': 'Blocked',
-          'complete': 'Complete',
+      ? tr("Waiting for resume")
+      : {
+          'active': tr("Active"),
+          'paused': tr("Paused"),
+          'blocked': tr("Blocked"),
+          'complete': tr("Complete"),
         }[phase]!;
   String get count => '$rounds${maxRounds == null ? '' : '/$maxRounds'}';
   String get dot => running
@@ -75,8 +77,8 @@ class TodoList {
   String get headline => active.isNotEmpty
       ? '${active.first.text}${active.length > 1 ? ' +${active.length - 1}' : ''}'
       : done == total && total > 0
-      ? 'All tasks completed'
-      : 'Tasks';
+      ? tr("All tasks completed")
+      : tr("Tasks");
 }
 
 TodoList? parseTodoWidget(dynamic input) {

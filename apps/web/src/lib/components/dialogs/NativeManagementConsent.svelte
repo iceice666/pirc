@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   import { CircleAlert, Clock3, RefreshCw, ShieldCheck, ShieldOff, X } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import Modal from './Modal.svelte';
@@ -35,7 +37,7 @@
   function remainingLabel(): string {
     const minutes = Math.floor(remainingSeconds / 60);
     const seconds = remainingSeconds % 60;
-    return minutes ? `${minutes}m ${seconds}s` : `${seconds}s`;
+    return minutes ? tr('{0}m {1}s', [minutes, seconds]) : `${seconds}s`;
   }
 
   async function fetchStatus(): Promise<void> {
@@ -53,7 +55,7 @@
     try {
       await fetchStatus();
     } catch {
-      if (alive) error = 'Unable to check this request. Check your connection and try again.';
+      if (alive) error = tr('Unable to check this request. Check your connection and try again.');
     } finally {
       checking = false;
       loading = false;
@@ -69,7 +71,7 @@
       else if (action === 'deny') await nativeManagementApi.deny(requestId);
       else await nativeManagementApi.revoke(requestId);
     } catch {
-      if (alive) error = 'Could not update this request. Check its status, then try again.';
+      if (alive) error = tr('Could not update this request. Check its status, then try again.');
       try {
         await fetchStatus();
       } catch {
@@ -83,8 +85,9 @@
       await fetchStatus();
     } catch {
       if (alive)
-        error =
-          'The change was sent, but its status could not be confirmed. Retry the status check.';
+        error = tr(
+          'The change was sent, but its status could not be confirmed. Retry the status check.',
+        );
     } finally {
       busy = false;
     }
@@ -114,83 +117,90 @@
 <Modal bind:open labelledby="native-management-title" class="native-management-dialog">
   <header>
     <div>
-      <span class="eyebrow">Temporary access</span>
-      <h2 id="native-management-title">Review management request</h2>
+      <span class="eyebrow">{tr('Temporary access')}</span>
+      <h2 id="native-management-title">{tr('Review management request')}</h2>
     </div>
-    <button class="icon-button" type="button" aria-label="Close" onclick={() => (open = false)}
-      ><X size={19} /></button
+    <button
+      class="icon-button"
+      type="button"
+      aria-label={tr('Close')}
+      onclick={() => (open = false)}><X size={19} /></button
     >
   </header>
 
   {#if loading && !snapshot}
     <p class="state-line" role="status">
-      <RefreshCw class="spin" size={16} /> Checking this request…
+      <RefreshCw class="spin" size={16} />
+      {tr('Checking this request…')}
     </p>
   {:else if !snapshot}
     <div class="request-error" role="alert">
       <CircleAlert size={17} />
-      <p>{error || 'Unable to check this request. Check your connection and try again.'}</p>
+      <p>{error || tr('Unable to check this request. Check your connection and try again.')}</p>
     </div>
     <footer>
       <button class="button primary" type="button" disabled={checking} onclick={() => refresh()}>
-        {#if checking}<RefreshCw class="spin" size={15} />{/if}Retry
+        {#if checking}<RefreshCw class="spin" size={15} />{/if}{tr('Retry')}
       </button>
     </footer>
   {:else}
     <p class="requesting">
-      <strong>{snapshot.deviceName}</strong> is requesting management access.
+      <strong>{snapshot.deviceName}</strong>
+      {tr('is requesting management access.')}
     </p>
 
     <section class="permissions" aria-labelledby="native-management-permissions">
-      <h3 id="native-management-permissions">Requested permissions</h3>
+      <h3 id="native-management-permissions">{tr('Requested permissions')}</h3>
       {#if snapshot.capabilities.includes('providers')}
         <div class="permission-row">
           <span class="permission-icon"><ShieldCheck size={17} /></span>
           <p>
-            Manage model providers, including adding, editing, and removing providers, and signing
-            in or out of subscription accounts. This can change saved provider credentials.
+            {tr(
+              'Manage model providers, including adding, editing, and removing providers, and signing in or out of subscription accounts. This can change saved provider credentials.',
+            )}
           </p>
         </div>
       {/if}
       {#if snapshot.capabilities.includes('devices')}
         <div class="permission-row">
           <span class="permission-icon"><ShieldOff size={17} /></span>
-          <p>View, pair, and revoke connected devices.</p>
+          <p>{tr('View, pair, and revoke connected devices.')}</p>
         </div>
       {/if}
       {#if snapshot.capabilities.length === 0}
         <p class="missing-permissions">
-          No supported permissions were listed. This request cannot be approved.
+          {tr('No supported permissions were listed. This request cannot be approved.')}
         </p>
       {/if}
     </section>
 
     {#if snapshot.status === 'pending'}
       <p class="expiry">
-        <Clock3 size={15} /> This request expires in <strong>{remainingLabel()}</strong>. If
-        approved, access lasts up to 15 minutes after the device claims it.
+        <Clock3 size={15} />
+        {tr('This request expires in')} <strong>{remainingLabel()}</strong>. If approved, access
+        lasts up to 15 minutes after the device claims it.
       </p>
       {#if expiredLocally}<p class="status-note" role="status">
-          The request may have expired. Checking for an updated status…
+          {tr('The request may have expired. Checking for an updated status…')}
         </p>{/if}
     {:else if snapshot.status === 'approved'}
       <p class="status-note" role="status">
-        <ShieldCheck size={16} /> Approved. The device can claim temporary access. This approval expires
-        in
+        <ShieldCheck size={16} />
+        {tr('Approved. The device can claim temporary access. This approval expires in')}
         <strong>{remainingLabel()}</strong>.
       </p>
     {:else if snapshot.status === 'claimed'}
       <p class="status-note active" role="status">
         <ShieldCheck size={16} />
-        {snapshot.deviceName} has claimed temporary access. It expires in
+        {tr('{0} has claimed temporary access. It expires in', [snapshot.deviceName])}
         <strong>{remainingLabel()}</strong>.
       </p>
     {:else if snapshot.status === 'denied'}
-      <p class="status-note" role="status">This request was denied.</p>
+      <p class="status-note" role="status">{tr('This request was denied.')}</p>
     {:else if snapshot.status === 'revoked'}
-      <p class="status-note" role="status">Temporary access was revoked.</p>
+      <p class="status-note" role="status">{tr('Temporary access was revoked.')}</p>
     {:else}
-      <p class="status-note" role="status">This request or temporary access has expired.</p>
+      <p class="status-note" role="status">{tr('This request or temporary access has expired.')}</p>
     {/if}
 
     {#if error}
@@ -203,7 +213,7 @@
           disabled={checking || busy}
           onclick={() => refresh()}
         >
-          {#if checking}<RefreshCw class="spin" size={14} />{/if}Retry status check
+          {#if checking}<RefreshCw class="spin" size={14} />{/if}{tr('Retry status check')}
         </button>
       </div>
     {/if}
@@ -214,20 +224,21 @@
           class="button ghost"
           type="button"
           disabled={busy || loading || expiredLocally}
-          onclick={() => update('deny')}>{busy ? 'Updating…' : 'Deny'}</button
+          onclick={() => update('deny')}>{busy ? tr('Updating…') : tr('Deny')}</button
         >
         <button
           class="button primary"
           type="button"
           disabled={busy || loading || !canApprove}
-          onclick={() => update('approve')}>{busy ? 'Updating…' : 'Approve for 15 minutes'}</button
+          onclick={() => update('approve')}
+          >{busy ? tr('Updating…') : tr('Approve for 15 minutes')}</button
         >
       {:else if snapshot.status === 'approved' || snapshot.status === 'claimed'}
         <button
           class="button revoke"
           type="button"
           disabled={busy || loading || expiredLocally}
-          onclick={() => update('revoke')}>{busy ? 'Updating…' : 'Revoke access'}</button
+          onclick={() => update('revoke')}>{busy ? tr('Updating…') : tr('Revoke access')}</button
         >
       {/if}
     </footer>

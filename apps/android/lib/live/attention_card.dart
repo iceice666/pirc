@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'gateway.dart';
@@ -18,14 +19,15 @@ class AttentionCard extends StatelessWidget {
   final VoidCallback onMemory;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final a = controller.attention,
         schedule = obj(item['schedule']),
         run = obj(item['run']);
     final title = memory
-        ? const {
-                'add': 'Remember',
-                'remove': 'Forget',
-                'replace': 'Update memory',
+        ? {
+                'add': tr("Remember"),
+                'remove': tr("Forget"),
+                'replace': tr("Update memory"),
               }[item['action']] ??
               ''
         : '${schedule['title']}';
@@ -113,8 +115,8 @@ class AttentionCard extends StatelessWidget {
             spacing: 4,
             runSpacing: 4,
             children: [
-              pill(memory ? 'Approve' : 'Allow & run', true),
-              pill(memory ? 'Reject' : 'Dismiss', false),
+              pill(memory ? tr("Approve") : 'Allow & run', true),
+              pill(memory ? tr("Reject") : tr("Dismiss"), false),
             ],
           );
           double labelWidth(String label) {
@@ -130,8 +132,8 @@ class AttentionCard extends StatelessWidget {
           }
 
           final buttonWidth =
-              labelWidth(memory ? 'Approve' : 'Allow & run') +
-              labelWidth(memory ? 'Reject' : 'Dismiss') +
+              labelWidth(memory ? tr("Approve") : 'Allow & run') +
+              labelWidth(memory ? tr("Reject") : tr("Dismiss")) +
               4;
           if (size.maxWidth >= buttonWidth + 50) {
             return Row(

@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -186,7 +187,7 @@ class _NativeManagementAccessState extends State<NativeManagementAccess> {
       if (!_isCurrent(account)) return;
       setState(() {
         _phase = _AccessPhase.idle;
-        _error = 'Unable to check management access. Try again.';
+        _error = tr("Unable to check management access. Try again.");
       });
     }
   }
@@ -302,7 +303,7 @@ class _NativeManagementAccessState extends State<NativeManagementAccess> {
       if (_isCurrent(account)) {
         setState(() {
           _phase = previousPhase;
-          _error = 'Unable to request browser approval. Try again.';
+          _error = tr("Unable to request browser approval. Try again.");
         });
       }
     } finally {
@@ -324,7 +325,7 @@ class _NativeManagementAccessState extends State<NativeManagementAccess> {
       if (!_isCurrent(account)) return;
     } catch (_) {
       if (_isCurrent(account)) {
-        setState(() => _error = 'Unable to open your browser. Try again.');
+        setState(() => _error = tr("Unable to open your browser. Try again."));
       }
     } finally {
       if (_isCurrent(account)) setState(() => _opening = false);
@@ -346,7 +347,9 @@ class _NativeManagementAccessState extends State<NativeManagementAccess> {
       _applySnapshot(result, account);
     } catch (_) {
       if (_isCurrent(account)) {
-        setState(() => _error = 'Unable to check approval status. Try again.');
+        setState(
+          () => _error = tr("Unable to check approval status. Try again."),
+        );
       }
     } finally {
       if (_isCurrent(account)) setState(() => _checking = false);
@@ -384,8 +387,9 @@ class _NativeManagementAccessState extends State<NativeManagementAccess> {
       }
       if (_isCurrent(account)) {
         setState(
-          () => _error =
-              'Access was cleared here, but the gateway could not confirm revocation.',
+          () => _error = tr(
+            "Access was cleared here, but the gateway could not confirm revocation.",
+          ),
         );
       }
       if (wasActive &&
@@ -457,18 +461,18 @@ class _NativeManagementAccessState extends State<NativeManagementAccess> {
 
   String _capabilityLabel(List<String> capabilities) {
     final labels = <String>[
-      if (capabilities.contains('providers')) 'model backends',
-      if (capabilities.contains('devices')) 'paired devices',
+      if (capabilities.contains('providers')) tr("model backends"),
+      if (capabilities.contains('devices')) tr("paired devices"),
     ];
-    return labels.isEmpty ? 'management settings' : labels.join(' and ');
+    return labels.isEmpty ? tr("management settings") : labels.join(' and ');
   }
 
   String _scopeBadgeLabel(List<String> capabilities) {
     final labels = <String>[
-      if (capabilities.contains('providers')) 'Model backends',
-      if (capabilities.contains('devices')) 'Paired devices',
+      if (capabilities.contains('providers')) tr("Model backends"),
+      if (capabilities.contains('devices')) tr("Paired devices"),
     ];
-    return labels.isEmpty ? 'Management settings' : labels.join(' · ');
+    return labels.isEmpty ? tr("Management settings") : labels.join(' · ');
   }
 
   String _remainingLabel() {
@@ -501,42 +505,49 @@ class _NativeManagementAccessState extends State<NativeManagementAccess> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final requestDevice = _request['deviceName'];
     final remaining = _remainingLabel();
     return AssistantSection(
-      title: 'Browser management access',
+      title: tr("Browser management access"),
       divider: true,
       children: [
         WebNotice(
-          'Approve this app in your browser to manage ${_capabilityLabel(widget.capabilities)}. Access lasts 15 minutes.',
+          tr(
+            "Approve this app in your browser to manage {0}. Access lasts 15 minutes.",
+            [_capabilityLabel(widget.capabilities)],
+          ),
         ),
         if (_phase == _AccessPhase.loading)
-          const AssistantParagraph('Checking management access…', live: true)
+          AssistantParagraph(tr("Checking management access…"), live: true)
         else if (_phase == _AccessPhase.pending) ...[
           AssistantParagraph(
             requestDevice is String && requestDevice.isNotEmpty
-                ? 'Waiting for approval for $requestDevice.'
-                : 'Waiting for approval in your browser.',
+                ? tr("Waiting for approval for {0}.", [requestDevice])
+                : tr("Waiting for approval in your browser."),
             live: true,
           ),
           if (remaining.isNotEmpty)
-            AssistantParagraph('Request expires in $remaining.', live: true),
+            AssistantParagraph(
+              tr("Request expires in {0}.", [remaining]),
+              live: true,
+            ),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               AssistantButton(
-                _opening ? 'Opening browser…' : 'Open browser',
+                _opening ? tr("Opening browser…") : tr("Open browser"),
                 key: const ValueKey('native-management-open'),
                 onPressed: _opening || _cancelling ? null : _openBrowser,
               ),
               AssistantButton(
-                _checking ? 'Checking…' : 'Check status',
+                _checking ? tr("Checking…") : tr("Check status"),
                 key: const ValueKey('native-management-check'),
                 onPressed: _checking || _cancelling ? null : _check,
               ),
               AssistantButton(
-                'Cancel request',
+                tr("Cancel request"),
                 key: const ValueKey('native-management-cancel'),
                 onPressed: _cancelling || _starting ? null : _cancel,
               ),
@@ -546,10 +557,13 @@ class _NativeManagementAccessState extends State<NativeManagementAccess> {
             _phase == _AccessPhase.limited) ...[
           AssistantParagraph(
             _phase == _AccessPhase.limited
-                ? 'Current access covers ${_capabilityLabel(_activeCapabilities)}. This page requires ${_capabilityLabel(widget.capabilities)}.'
+                ? tr("Current access covers {0}. This page requires {1}.", [
+                    _capabilityLabel(_activeCapabilities),
+                    _capabilityLabel(widget.capabilities),
+                  ])
                 : remaining.isEmpty
-                ? 'Management access is active.'
-                : 'Management access expires in $remaining.',
+                ? tr("Management access is active.")
+                : tr("Management access expires in {0}.", [remaining]),
             live: true,
           ),
           Padding(
@@ -561,18 +575,20 @@ class _NativeManagementAccessState extends State<NativeManagementAccess> {
               children: [
                 _badge(_scopeBadgeLabel(_activeCapabilities)),
                 AssistantButton(
-                  _checking ? 'Checking…' : 'Check status',
+                  _checking ? tr("Checking…") : tr("Check status"),
                   key: const ValueKey('native-management-check'),
                   onPressed: _checking || _cancelling ? null : _check,
                 ),
                 AssistantButton(
-                  _cancelling ? 'Revoking…' : 'Revoke access',
+                  _cancelling ? tr("Revoking…") : tr("Revoke access"),
                   key: const ValueKey('native-management-revoke'),
                   onPressed: _cancelling ? null : _cancel,
                 ),
                 if (_phase == _AccessPhase.limited)
                   AssistantButton(
-                    _starting ? 'Requesting…' : 'Request additional access',
+                    _starting
+                        ? tr("Requesting…")
+                        : tr("Request additional access"),
                     key: const ValueKey('native-management-begin'),
                     onPressed: _starting || _cancelling ? null : _begin,
                   ),
@@ -580,14 +596,14 @@ class _NativeManagementAccessState extends State<NativeManagementAccess> {
             ),
           ),
         ] else if (_phase == _AccessPhase.expired) ...[
-          const AssistantParagraph(
-            'The approval request expired or management access ended.',
+          AssistantParagraph(
+            tr("The approval request expired or management access ended."),
             live: true,
           ),
           Align(
             alignment: Alignment.centerLeft,
             child: AssistantButton(
-              _starting ? 'Requesting…' : 'Request again',
+              _starting ? tr("Requesting…") : tr("Request again"),
               key: const ValueKey('native-management-retry'),
               onPressed: _starting || _cancelling ? null : _begin,
             ),
@@ -597,10 +613,10 @@ class _NativeManagementAccessState extends State<NativeManagementAccess> {
             alignment: Alignment.centerLeft,
             child: AssistantButton(
               _starting
-                  ? 'Requesting…'
+                  ? tr("Requesting…")
                   : _error == null
-                  ? 'Request browser approval'
-                  : 'Retry',
+                  ? tr("Request browser approval")
+                  : tr("Retry"),
               key: const ValueKey('native-management-begin'),
               onPressed: _starting || _cancelling ? null : _begin,
             ),

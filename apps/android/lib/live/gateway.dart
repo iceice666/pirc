@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
@@ -68,6 +69,25 @@ class LiveController extends ChangeNotifier {
   final Gateway gateway;
   String? origin, clientId, sessionId, error, actionError, pairLink, routePage;
   Json state = {}, control = {}, preferences = {};
+  String? _draftWorkspaceId;
+  bool get isDraftSession => _draftWorkspaceId != null;
+  bool _creatingOnSend = false;
+  final _sessionReadyWaiters = <Completer<bool>>{};
+
+  void discardDraftSession() {
+    if (!isDraftSession) return;
+    _draftWorkspaceId = null;
+    ++_selection;
+    ++_navigationIntent;
+    sessionId = null;
+    state = {};
+    control = {};
+    draft = '';
+    _resetHistory();
+    _resetAttachments();
+    changed();
+  }
+
   Json? notificationQuestion;
   bool fromNotification = false;
   List<Json> sessions = [],
@@ -100,7 +120,9 @@ class LiveController extends ChangeNotifier {
     final selection = _selection, account = _accountRevision;
     final id = sessionId, host = origin, client = clientId;
     final data = await gateway.request(
-      id == null ? '/api/models' : '/api/models?sessionId=${enc(id)}',
+      (id == null || isDraftSession)
+          ? '/api/models'
+          : '/api/models?sessionId=${enc(id)}',
     );
     if (_disposed ||
         revision != _modelRefreshRevision ||
@@ -127,8 +149,15 @@ class LiveController extends ChangeNotifier {
         approvalMode == mode) {
       return;
     }
+    if (isDraftSession) {
+      state = {...state, 'approvalMode': mode};
+      changed();
+      return;
+    }
     if (!canControl) {
-      actionError = 'Take control of this session to change its approval mode.';
+      actionError = tr(
+        "Take control of this session to change its approval mode.",
+      );
       changed();
       return;
     }
@@ -160,7 +189,7 @@ class LiveController extends ChangeNotifier {
       'modelProvider': model['provider'],
     };
     changed();
-    if (canControl) {
+    if (canControl && !isDraftSession) {
       await sendCommand({
         'type': 'set_model',
         'provider': model['provider'],
@@ -177,7 +206,7 @@ class LiveController extends ChangeNotifier {
     }
     state = {...state, 'thinking': level};
     changed();
-    if (canControl) {
+    if (canControl && !isDraftSession) {
       await sendCommand({'type': 'set_thinking', 'level': level});
     }
   }
@@ -230,7 +259,9 @@ class LiveController extends ChangeNotifier {
   bool _disposed = false;
   int _selection = 0, _navigationIntent = 0, _draftRevision = 0;
   int _unwatchPending = 0;
-  String get title => '${obj(state['session'])['name'] ?? '新對話'}';
+  String get title => isDraftSession
+      ? tr("New session")
+      : '${obj(state['session'])['name'] ?? tr("New session")}';
   bool get running => [
     'queued',
     'running',
@@ -272,6 +303,7 @@ class LiveController extends ChangeNotifier {
   /// Side panels by capability: Git needs a repository, terminals a shared
   /// workspace directory. Unknown workspaces keep every panel, as before.
   bool sessionPanel(String kind) {
+    if (isDraftSession) return false;
     final mode = sessionMode;
     if (mode == null) return true;
     if (kind == 'git') return mode.repository;
@@ -333,6 +365,7 @@ class LiveController extends ChangeNotifier {
       final data = obj(await gateway.call('boot'));
       onboardingComplete = data['onboardingComplete'] != false;
       preferences = obj(await gateway.call('preferences'));
+      AppI18n.instance.setLanguage(preferences['language']);
       if (const ['chat', 'work'].contains(preferences['mode'])) {
         mode = preferences['mode'];
       }
@@ -433,6 +466,7 @@ class LiveController extends ChangeNotifier {
 
   Future<void> savePreferences(Json changes) async {
     preferences = obj(await gateway.call('savePreferences', changes));
+    AppI18n.instance.setLanguage(preferences['language']);
     changed();
   }
 
@@ -442,6 +476,7 @@ class LiveController extends ChangeNotifier {
     if (busy) return;
     _pairingMutation = true;
     _accountRevision++;
+    _draftWorkspaceId = null;
     initializing = false;
     _selectFirstSessionOnRefresh = false;
     _retryListOnNetwork = false;
@@ -486,6 +521,7 @@ class LiveController extends ChangeNotifier {
     _pairingMutation = true;
     try {
       _accountRevision++;
+      _draftWorkspaceId = null;
       initializing = false;
       _selectFirstSessionOnRefresh = false;
       _retryListOnNetwork = false;
@@ -601,7 +637,12 @@ class LiveController extends ChangeNotifier {
     }
   }
 
-  Future<void> open(String id, {bool reveal = true}) async {
+  Future<void> open(
+    String id, {
+    bool reveal = true,
+    bool keepComposer = false,
+  }) async {
+    if (!keepComposer && id != sessionId) discardDraftSession();
     _selectFirstSessionOnRefresh = false;
     final navigation = ++_navigationIntent;
     if (routePage?.startsWith('workspace:') == true) routePage = null;
@@ -637,15 +678,17 @@ class LiveController extends ChangeNotifier {
     revealSelectedSession = reveal;
     sessionNavigationRevision++;
     sessionVisible = reveal;
-    state = {};
+    if (!keepComposer) {
+      state = {};
+      models = [];
+      _resetAttachments();
+    }
     _resetHistory();
     control = {};
-    models = [];
-    _resetAttachments();
     connection = 'connecting';
     _everLive = false;
     actionError = null;
-    draft = '';
+    if (!keepComposer) draft = '';
     unknownCommand = false;
     error = null;
     changed();
@@ -667,11 +710,13 @@ class LiveController extends ChangeNotifier {
       final revision = _draftRevision;
       final saved = await gateway.call('watch', {'sessionId': id});
       if (selection != _selection) return;
-      if (_draftRevision == revision) draft = saved as String? ?? '';
+      if (!keepComposer && _draftRevision == revision) {
+        draft = saved as String? ?? '';
+      }
       final uncertain = await gateway.call('commandStatus', {'sessionId': id});
       if (selection != _selection) return;
       unknownCommand = uncertain == true;
-      if (unknownCommand) actionError = '先前送出結果不明，請先檢查最新狀態。';
+      if (unknownCommand) actionError = tr("先前送出結果不明，請先檢查最新狀態。");
       changed();
       await refreshModels();
     } catch (e) {
@@ -681,6 +726,7 @@ class LiveController extends ChangeNotifier {
   }
 
   Future<void> home() async {
+    discardDraftSession();
     _selectFirstSessionOnRefresh = false;
     final navigation = ++_navigationIntent;
     final previousSelection = _selection;
@@ -713,41 +759,167 @@ class LiveController extends ChangeNotifier {
         .where((w) => w['id'] == workspaceId)
         .firstOrNull;
     if (workspace?['deleting'] == true) {
-      throw StateError(workspaceDeletionNotice);
+      throw StateError(tr(workspaceDeletionNotice));
     }
     if (_deletedWorkspaces.contains(workspaceId)) {
-      throw StateError('This project is no longer available.');
+      throw StateError(tr("This project is no longer available."));
     }
     if (isReadOnly(workspace)) {
-      throw StateError(workspaceUnavailableNotice);
+      throw StateError(tr(workspaceUnavailableNotice));
     }
-    final account = _accountRevision, stamp = pairingStamp;
+    await flushDraft();
+    discardDraftSession();
+    final navigation = ++_navigationIntent, account = _accountRevision;
+    await gateway.call('unwatch');
+    if (_disposed ||
+        navigation != _navigationIntent ||
+        account != _accountRevision ||
+        _deletedWorkspaces.contains(workspaceId)) {
+      return;
+    }
+    ++_selection;
+    _selectFirstSessionOnRefresh = false;
+    _draftWorkspaceId = workspaceId;
+    sessionId =
+        'draft-${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+    state = {
+      'session': {
+        'id': sessionId,
+        'workspaceId': workspaceId,
+        'name': tr("New session"),
+      },
+      'messages': [],
+      'interactions': [],
+      'queue': [],
+      'thinking': obj(workspace?['defaults'])['thinkingLevel'] ?? 'medium',
+      'modelId': obj(workspace?['defaults'])['modelId'],
+    };
+    _resetHistory();
+    _resetAttachments();
+    control = {'held': true};
+    draft = '';
+    error = null;
+    actionError = null;
+    unknownCommand = false;
+    connection = 'live';
+    routePage = null;
+    mode = catalog.assistant(workspace ?? {}) ? 'chat' : 'work';
+    revealSelectedSession = true;
+    sessionNavigationRevision++;
+    sessionVisible = true;
+    changed();
+    await refreshModels();
+  }
+
+  Future<bool> _persistNewSession() async {
+    final workspace = _draftWorkspaceId;
+    if (workspace == null) return true;
+    final account = _accountRevision,
+        stamp = pairingStamp,
+        selection = _selection;
+    final text = draft;
+    final previous = state;
     final data = await gateway.request(
       '/api/sessions',
       method: 'POST',
       pairingStamp: stamp,
-      body: {'workspaceId': workspaceId},
+      body: {'workspaceId': workspace},
     );
+    final created = obj(data['session']), id = obj(data['session'])['id'];
+    if (id is! String || id.isEmpty) {
+      throw StateError(tr("The server did not return the new conversation."));
+    }
     if (_disposed ||
         account != _accountRevision ||
         stamp != pairingStamp ||
-        _deletedWorkspaces.contains(workspaceId)) {
-      return;
+        _deletedWorkspaces.contains(workspace)) {
+      return false;
     }
-    await refreshList();
-    if (_disposed ||
-        account != _accountRevision ||
-        stamp != pairingStamp ||
-        _deletedWorkspaces.contains(workspaceId)) {
-      return;
+    sessions = [created, ...sessions.where((s) => s['id'] != id)];
+    if (selection != _selection) {
+      await _persistDraft(id, text, account);
+      return false;
     }
-    await open('${obj(data['session'])['id']}');
+    _draftWorkspaceId = null;
+    state = {...previous, 'session': created};
+    await open(id, keepComposer: true);
+    if (sessionId != id || account != _accountRevision) return false;
+    if (!await _waitForSessionConnection(id, account)) {
+      if (sessionId != id || account != _accountRevision || _disposed) {
+        return false;
+      }
+      throw StateError(tr("Could not obtain control. Please retry sending."));
+    }
+    await takeControl();
+    if (sessionId != id || account != _accountRevision) return false;
+    if (!canControl) {
+      throw StateError(tr("Could not obtain control. Please retry sending."));
+    }
+    draft = text;
+    return true;
+  }
+
+  /// The native watch call starts asynchronously; do not lose the first Send
+  /// between HTTP session creation and the event stream's connected callback.
+  Future<bool> _waitForSessionConnection(String id, int account) async {
+    final ready = Completer<bool>();
+    _sessionReadyWaiters.add(ready);
+    void check() {
+      if (ready.isCompleted) return;
+      if (_disposed || sessionId != id || account != _accountRevision) {
+        ready.complete(false);
+      } else if (connection == 'live') {
+        ready.complete(true);
+      }
+    }
+
+    addListener(check);
+    final deadline = Timer(const Duration(seconds: 10), () {
+      if (!ready.isCompleted) ready.complete(false);
+    });
+    try {
+      check();
+      return await ready.future;
+    } finally {
+      deadline.cancel();
+      removeListener(check);
+      _sessionReadyWaiters.remove(ready);
+    }
+  }
+
+  Future<bool> _uploadDraftAttachments() async {
+    final id = sessionId, account = _accountRevision;
+    if (id == null) return false;
+    for (final item in List<Json>.of(attachments)) {
+      final bytes = item['draftBytes'];
+      if (bytes is! Uint8List) continue;
+      final uploaded = obj(
+        await gateway.call('uploadAttachment', {
+          'sessionId': id,
+          'name': item['name'],
+          'mimeType': item['mimeType'],
+          'bytes': bytes,
+        }),
+      );
+      if (sessionId != id || account != _accountRevision) return false;
+      final index = attachments.indexOf(item);
+      if (index >= 0) {
+        attachments[index] = {
+          ...uploaded,
+          'name': uploaded['name'] ?? item['name'],
+          if (item['previewBytes'] != null)
+            'previewBytes': item['previewBytes'],
+        };
+      }
+    }
+    return true;
   }
 
   // Only an actually visible conversation may clear the server-owned unread bit.
   Future<void> markVisibleRead() async {
     final id = sessionId;
-    if (!active ||
+    if (isDraftSession ||
+        !active ||
         !sessionVisible ||
         id == null ||
         _reading.contains(id) ||
@@ -777,10 +949,12 @@ class LiveController extends ChangeNotifier {
       method: 'POST',
       body: body,
     );
-    if (revision != _accountRevision) throw StateError('Connection changed.');
+    if (revision != _accountRevision) {
+      throw StateError(tr("Connection changed."));
+    }
     final workspace = obj(data['workspace']);
     if (workspace['id'] == null) {
-      throw StateError('The gateway did not return a workspace.');
+      throw StateError(tr("The gateway did not return a workspace."));
     }
     await refreshList();
     return workspace;
@@ -792,17 +966,17 @@ class LiveController extends ChangeNotifier {
     if (workspace == null ||
         !catalog.of(workspace).projects ||
         catalog.topChats(workspace)) {
-      throw StateError('Only chat projects can be deleted.');
+      throw StateError(tr("Only chat projects can be deleted."));
     }
     if (!workspaceOnline(workspace, nodes)) {
-      throw StateError('Connect the chat node to delete this project.');
+      throw StateError(tr("Connect the chat node to delete this project."));
     }
     final stamp = pairingStamp;
     if (stamp == null || stamp.isEmpty) {
-      throw StateError('Pair this device before deleting a project.');
+      throw StateError(tr("Pair this device before deleting a project."));
     }
     if (_projectDeletions.containsKey(id)) {
-      throw StateError('Deletion is already in progress.');
+      throw StateError(tr("Deletion is already in progress."));
     }
     final operation = Object();
     _projectDeletions[id] = operation;
@@ -866,10 +1040,10 @@ class LiveController extends ChangeNotifier {
           (w) =>
               w['id'] == session['workspaceId'] && catalog.of(w).deleteSessions,
         )) {
-      throw StateError("This workspace's sessions cannot be deleted.");
+      throw StateError(tr("This workspace's sessions cannot be deleted."));
     }
     if (!_deleting.add(id)) {
-      throw StateError('Deletion is already in progress.');
+      throw StateError(tr("Deletion is already in progress."));
     }
     final revision = _accountRevision;
     try {
@@ -928,7 +1102,7 @@ class LiveController extends ChangeNotifier {
 
   Future<void> updateSession(Json patch, {String? targetId}) async {
     final id = targetId ?? sessionId;
-    if (id == null) return;
+    if (id == null || isDraftSession) return;
     final data = await gateway.request(
       sessionPath(id),
       method: 'PATCH',
@@ -953,6 +1127,7 @@ class LiveController extends ChangeNotifier {
     }
     if (event['type'] == 'preferencesChanged') {
       preferences = obj(event['data']);
+      AppI18n.instance.setLanguage(preferences['language']);
       changed();
       return;
     }
@@ -963,6 +1138,7 @@ class LiveController extends ChangeNotifier {
         return;
       }
       _accountRevision++;
+      _draftWorkspaceId = null;
       _selection++;
       _navigationIntent++;
       _save?.cancel();
@@ -1066,7 +1242,7 @@ class LiveController extends ChangeNotifier {
     _save?.cancel();
     final id = sessionId;
     final account = _accountRevision;
-    if (id == null) return;
+    if (id == null || isDraftSession) return;
     // Bind the debounce to the conversation that was edited. Navigation may
     // change the visible conversation before this timer fires.
     _save = Timer(const Duration(milliseconds: 250), () async {
@@ -1092,6 +1268,7 @@ class LiveController extends ChangeNotifier {
   }
 
   Future<void> flushDraft() async {
+    if (isDraftSession) return;
     final id = sessionId;
     final account = _accountRevision;
     if (id == null) return;
@@ -1141,6 +1318,7 @@ class LiveController extends ChangeNotifier {
   }
 
   Future<void> takeControl({bool force = false}) async {
+    if (isDraftSession) return;
     final id = sessionId;
     if (id == null) return;
     final next = obj(
@@ -1205,6 +1383,7 @@ class LiveController extends ChangeNotifier {
 
   final _commandsInFlight = <Object, ({int account, bool blocking})>{};
   Future<bool> sendCommand(Json payload, {List<Json> before = const []}) async {
+    if (isDraftSession) return false;
     // Selection menus remain interactive while another request is pending.
     // Keep every choice; Android serializes ordinary commands at transport.
     final controlOnly = const {
@@ -1251,7 +1430,7 @@ class LiveController extends ChangeNotifier {
           e is! PlatformException ||
           !e.code.startsWith('HTTP_4') ||
           obj(e.details)['code'] == 'outcome_unknown';
-      actionError = unknownCommand ? '送出結果不明，請檢查對話；不會自動重送。' : describe(e);
+      actionError = unknownCommand ? tr("送出結果不明，請檢查對話；不會自動重送。") : describe(e);
       return false;
     } finally {
       _commandsInFlight.remove(commandToken);
@@ -1308,7 +1487,9 @@ class LiveController extends ChangeNotifier {
       if (sessionId == id &&
           selection == _selection &&
           account == _accountRevision) {
-        actionError = 'Message updated, but refreshing failed: ${describe(e)}';
+        actionError = tr("Message updated, but refreshing failed: {0}", [
+          describe(e),
+        ]);
       }
     } finally {
       _historyRefreshing = false;
@@ -1331,11 +1512,48 @@ class LiveController extends ChangeNotifier {
   }
 
   Future<void> send(String kind) async {
-    if (draft.trim().isEmpty || unknownCommand || uploading) return;
+    if (draft.trim().isEmpty ||
+        unknownCommand ||
+        uploading ||
+        _creatingOnSend) {
+      return;
+    }
+    final selectedBefore = selectedModel, thinkingBefore = selectedThinking;
+    if (isDraftSession) {
+      if (kind != 'prompt') return;
+      _creatingOnSend = true;
+      busy = true;
+      changed();
+      try {
+        if (!await _persistNewSession()) return;
+      } catch (e) {
+        actionError = describe(e);
+        return;
+      } finally {
+        _creatingOnSend = false;
+        busy = false;
+        changed();
+      }
+    }
+    if (attachments.any((item) => item['draftBytes'] is Uint8List)) {
+      _creatingOnSend = true;
+      busy = true;
+      changed();
+      try {
+        if (!await _uploadDraftAttachments()) return;
+      } catch (e) {
+        actionError = describe(e);
+        return;
+      } finally {
+        _creatingOnSend = false;
+        busy = false;
+        changed();
+      }
+    }
     final text = draft;
     final sentAttachments = List<Json>.of(attachments);
     final id = sessionId;
-    final model = selectedModel;
+    final model = selectedBefore;
     if (await sendCommand(
       {
         'type': kind,
@@ -1350,7 +1568,7 @@ class LiveController extends ChangeNotifier {
                   'provider': model['provider'],
                   'modelId': model['id'],
                 },
-              {'type': 'set_thinking', 'level': selectedThinking},
+              {'type': 'set_thinking', 'level': thinkingBefore},
             ]
           : const [],
     )) {
@@ -1386,7 +1604,7 @@ class LiveController extends ChangeNotifier {
           if (content.hasData)
             'bytes': content.data
           else
-            'error': 'The keyboard did not provide image data.',
+            'error': tr("The keyboard did not provide image data."),
         },
       ],
     );
@@ -1465,13 +1683,13 @@ class LiveController extends ChangeNotifier {
         if (!current()) break;
         final name = file['name'] as String? ?? 'attachment';
         if (file['error'] != null) {
-          actionError = 'Could not read $name: ${file['error']}';
+          actionError = tr("Could not read {0}: {1}", [name, file['error']]);
           changed();
           continue;
         }
         final bytes = file['bytes'];
         if (bytes is! Uint8List) {
-          actionError = 'Could not read $name.';
+          actionError = tr("Could not read {0}.", [name]);
           changed();
           continue;
         }
@@ -1483,11 +1701,13 @@ class LiveController extends ChangeNotifier {
           'mimeType': mime,
           'kind': isImage ? 'image' : 'file',
           'size': bytes.length,
-          'uploading': true,
+          'uploading': !isDraftSession,
+          if (isDraftSession) 'draftBytes': bytes,
           if (isImage) 'previewBytes': bytes,
         };
         attachments.add(pending);
         changed();
+        if (isDraftSession) continue;
         try {
           final uploaded = obj(
             await gateway.call('uploadAttachment', {
@@ -1555,14 +1775,17 @@ class LiveController extends ChangeNotifier {
           !message.contains('null object')) {
         return message;
       }
-      return '操作未完成，請重試。';
+      return tr("操作未完成，請重試。");
     }
-    return '操作未完成，請重新載入後再試。';
+    return tr("操作未完成，請重新載入後再試。");
   }
 
   @override
   void dispose() {
     _disposed = true;
+    for (final ready in _sessionReadyWaiters) {
+      if (!ready.isCompleted) ready.complete(false);
+    }
     _panelData?.dispose();
     attention.removeListener(changed);
     attention.dispose();

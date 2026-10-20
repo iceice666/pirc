@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/services.dart';
 import 'gateway.dart';
 
@@ -28,7 +29,7 @@ class BackendException implements Exception {
 }
 
 String backendError(Object error) =>
-    error is BackendException ? error.message : backendFailure;
+    error is BackendException ? tr(error.message) : tr(backendFailure);
 
 Future<Json> backendRequest(
   LiveController controller,
@@ -46,7 +47,10 @@ Future<Json> backendRequest(
           ? backendFailure
           : safeBackendText(
               error.message,
-              'Backend request failed ($status). Check your settings and try again.',
+              tr(
+                "Backend request failed ({0}). Check your settings and try again.",
+                [status],
+              ),
             ),
       status: status,
     );

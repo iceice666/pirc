@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'dart:ui' show SemanticsRole;
 
@@ -327,7 +328,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                               ),
                               child: Text(
                                 '$unread',
-                                semanticsLabel: '$unread unread',
+                                semanticsLabel: tr("{0} unread", [unread]),
                                 style: webText(
                                   context,
                                   size: 11,
@@ -381,7 +382,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                     ),
                                     child: Text(
                                       '$unread',
-                                      semanticsLabel: '$unread unread',
+                                      semanticsLabel: tr("{0} unread", [
+                                        unread,
+                                      ]),
                                       textAlign: TextAlign.center,
                                       style: webText(
                                         context,
@@ -402,7 +405,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
               ),
               WebIconButton(
                 LucideIcons.plus,
-                'New ${c.catalog.of(w).noun} in ${w['displayName']}',
+                tr("New {0} in {1}", [c.catalog.of(w).noun, w['displayName']]),
                 size: phone ? 32 : 24,
                 onPressed: online && !deleting && !isReadOnly(w)
                     ? () => guarded(context, () => c.create('${w['id']}'))
@@ -499,7 +502,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
       color: palette(context)['fill.hover'],
       borderRadius: BorderRadius.circular(99),
       child: WebButton(
-        'Reply',
+        tr("Reply"),
         height: 32,
         fontSize: 12,
         horizontalPadding: 10,
@@ -543,7 +546,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                     ),
                   ),
                 Text(
-                  '$sub · waiting for you',
+                  tr("{0} · waiting for you", [sub]),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: webText(
@@ -597,7 +600,11 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   child: Wrap(
                     spacing: 4,
                     runSpacing: 4,
-                    children: [pill('Allow', true), pill('Deny', false), reply],
+                    children: [
+                      pill(tr("Allow"), true),
+                      pill(tr("Deny"), false),
+                      reply,
+                    ],
                   ),
                 ),
               ],
@@ -606,7 +613,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
   }
 
   Widget modeCaption(String mode, int count) {
-    final label = mode == 'chat' ? 'Chat' : 'Work';
+    final label = mode == 'chat' ? tr("Chat") : tr("Work");
     final style = webText(
       context,
       size: 13,
@@ -642,10 +649,10 @@ class _SessionSidebarState extends State<SessionSidebar> {
                 top: 8,
                 left: (bounds.maxWidth + labelWidth) / 2 + 4,
                 child: Tooltip(
-                  message: '$count waiting for you',
+                  message: tr("{0} waiting for you", [count]),
                   child: Semantics(
                     container: true,
-                    label: '$count waiting for you',
+                    label: tr("{0} waiting for you", [count]),
                     child: Container(
                       key: const ValueKey('sidebar-work-attention-dot'),
                       width: 6,
@@ -671,6 +678,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final phone = MediaQuery.sizeOf(context).width <= 650;
     final catalog = c.catalog;
     final chats = c.workspaces.where(catalog.topChats).firstOrNull;
@@ -745,7 +753,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                       if (!phone)
                         WebIconButton(
                           LucideIcons.panelLeftClose,
-                          'Collapse sidebar',
+                          tr("Collapse sidebar"),
                           onPressed: widget.onCollapse,
                         ),
                     ],
@@ -840,7 +848,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'New $newNoun',
+                                tr("New {0}", [newNoun]),
                                 style: webText(
                                   context,
                                   weight: FontWeight.w500,
@@ -861,7 +869,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   fixedHeight: 36,
                   fontSize: 16,
                   controller: search,
-                  label: chatMode ? 'Search ${newNoun}s' : 'Search sessions',
+                  label: chatMode
+                      ? tr("Search {0}s", [newNoun])
+                      : tr("Search sessions"),
                   onChanged: (_) => setState(() {}),
                 ),
               ),
@@ -910,7 +920,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                               if (search.text.isNotEmpty) ...[
                                 fixedListItem(
                                   heading(
-                                    'Results',
+                                    tr("Results"),
                                     trailing: Text(
                                       '${result.length}',
                                       style: webText(context, size: 11),
@@ -918,7 +928,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                   ),
                                 ),
                                 if (result.isEmpty)
-                                  fixedListItem(note('Nothing matches.')),
+                                  fixedListItem(note(tr("Nothing matches."))),
                                 if (result.isNotEmpty)
                                   fixedListItem(const SizedBox(height: 1)),
                                 ...sessionRows(
@@ -928,10 +938,10 @@ class _SessionSidebarState extends State<SessionSidebar> {
                               ] else if (chatMode) ...[
                                 fixedListItem(
                                   heading(
-                                    'Projects',
+                                    tr("Projects"),
                                     trailing: WebIconButton(
                                       LucideIcons.plus,
-                                      'New project',
+                                      tr("New project"),
                                       size: 22,
                                       onPressed: workspaceOnline(chats, c.nodes)
                                           ? () =>
@@ -942,7 +952,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                 ),
                                 if (projects.isEmpty)
                                   fixedListItem(
-                                    note('Group related chats into a project.'),
+                                    note(
+                                      tr("Group related chats into a project."),
+                                    ),
                                   ),
                                 for (final w in projects)
                                   Align(
@@ -956,10 +968,10 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                 fixedListItem(const SizedBox(height: 14)),
                                 fixedListItem(
                                   heading(
-                                    'Chats',
+                                    tr("Chats"),
                                     trailing: WebIconButton(
                                       LucideIcons.settings2,
-                                      'All chats and their settings',
+                                      tr("All chats and their settings"),
                                       size: 22,
                                       onPressed: () =>
                                           widget.onWorkspace('${chats['id']}'),
@@ -994,7 +1006,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                 if (count > 0) ...[
                                   fixedListItem(
                                     heading(
-                                      'Needs you',
+                                      tr("Needs you"),
                                       attention: true,
                                       trailing: Container(
                                         padding: const EdgeInsets.symmetric(
@@ -1071,7 +1083,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                             ),
                                           WebIconButton(
                                             LucideIcons.plus,
-                                            'Add workspace on ${host['id']}',
+                                            tr("Add workspace on {0}", [
+                                              host['id'],
+                                            ]),
                                             size: 22,
                                             onPressed: host['online'] == true
                                                 ? () => add(
@@ -1085,7 +1099,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                     ),
                                   ),
                                   if (rows(host['workspaces']).isEmpty)
-                                    fixedListItem(note('No workspaces yet.')),
+                                    fixedListItem(
+                                      note(tr("No workspaces yet.")),
+                                    ),
                                   for (final w in rows(host['workspaces']))
                                     fixedListItem(workspace(w, true)),
                                   fixedListItem(const SizedBox(height: 14)),
@@ -1093,7 +1109,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                 if (hosts.isEmpty)
                                   fixedListItem(
                                     note(
-                                      'Connect a device to add a workspace.',
+                                      tr(
+                                        "Connect a device to add a workspace.",
+                                      ),
                                       inset: 2,
                                     ),
                                   ),
@@ -1120,7 +1138,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                     children: [
                       if (!chatMode) ...[
                         footerEntry(
-                          'Schedules',
+                          tr("Schedules"),
                           LucideIcons.calendarClock,
                           'schedules',
                           detail: c.attention.nextSchedule == null
@@ -1129,7 +1147,11 @@ class _SessionSidebarState extends State<SessionSidebar> {
                         ),
                         const SizedBox(height: 2),
                       ],
-                      footerEntry('Settings', LucideIcons.settings, 'settings'),
+                      footerEntry(
+                        tr("Settings"),
+                        LucideIcons.settings,
+                        'settings',
+                      ),
                     ],
                   ),
                 ),

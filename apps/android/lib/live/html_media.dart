@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -119,7 +120,7 @@ class HtmlMediaState extends ChangeNotifier {
             if (sourceScheme == 'blob') {
               final binding = objectUrls;
               if (binding == null) {
-                throw StateError('Document object URL is unavailable.');
+                throw StateError(tr("Document object URL is unavailable."));
               }
               if (!valid || ticket != _ticket || !binding.current) return false;
               final blob = await binding.read(source);
@@ -127,11 +128,11 @@ class HtmlMediaState extends ChangeNotifier {
               args.addAll({'bytes': blob.bytes, 'mimeType': blob.mimeType});
             } else if (sourceScheme == 'data') {
               if (source.length > 32 * 1024 * 1024 * 3 + 4096) {
-                throw StateError('Media exceeds 32 MiB.');
+                throw StateError(tr("Media exceeds 32 MiB."));
               }
               final uri = UriData.parse(source), bytes = uri.contentAsBytes();
               if (bytes.length > 32 * 1024 * 1024) {
-                throw StateError('Media exceeds 32 MiB.');
+                throw StateError(tr("Media exceeds 32 MiB."));
               }
               args.addAll({'bytes': bytes, 'mimeType': uri.mimeType});
             } else {
@@ -175,10 +176,10 @@ class HtmlMediaState extends ChangeNotifier {
             }
           }
         }
-        throw lastFailure ?? StateError('No playable media source.');
+        throw lastFailure ?? StateError(tr("No playable media source."));
       } catch (_) {
         if (valid && ticket == _ticket) {
-          error = 'Unable to play media.';
+          error = tr("Unable to play media.");
           emit();
         }
         return false;
@@ -234,7 +235,7 @@ class HtmlMediaState extends ChangeNotifier {
       return valid && id == player;
     } catch (_) {
       if (valid && revision == _revision) {
-        error = 'Unable to control media.';
+        error = tr("Unable to control media.");
         emit();
       }
       return false;
@@ -522,7 +523,7 @@ class _NativeHtmlMediaState extends State<NativeHtmlMedia>
           child: Row(
             children: [
               _button(
-                state.playing ? 'Pause media' : 'Play media',
+                state.playing ? tr("Pause media") : tr("Play media"),
                 state.playing ? LucideIcons.pause : LucideIcons.play,
                 state.loading || widget.spec.candidates.isEmpty
                     ? null
@@ -563,14 +564,14 @@ class _NativeHtmlMediaState extends State<NativeHtmlMedia>
               if (box.maxWidth < 120) const Spacer(),
               if (wide)
                 _button(
-                  state.muted ? 'Unmute media' : 'Mute media',
+                  state.muted ? tr("Unmute media") : tr("Mute media"),
                   state.muted ? LucideIcons.volumeX : LucideIcons.volume2,
                   state.id == null ? null : () => unawaited(state.toggleMute()),
                   light: light,
                 ),
               if (!audio && wide)
                 _button(
-                  full ? 'Exit fullscreen' : 'Fullscreen media',
+                  full ? tr("Exit fullscreen") : tr("Fullscreen media"),
                   full ? LucideIcons.minimize : LucideIcons.maximize,
                   state.id == null
                       ? null
@@ -580,7 +581,7 @@ class _NativeHtmlMediaState extends State<NativeHtmlMedia>
                 ),
               if (box.maxWidth >= 84)
                 PopupMenuButton<String>(
-                  tooltip: 'More media controls',
+                  tooltip: tr("More media controls"),
                   enabled: state.id != null,
                   icon: Icon(
                     LucideIcons.ellipsisVertical,
@@ -614,14 +615,14 @@ class _NativeHtmlMediaState extends State<NativeHtmlMedia>
                       PopupMenuItem(
                         value: 'mute',
                         child: Text(
-                          state.muted ? 'Unmute media' : 'Mute media',
+                          state.muted ? tr("Unmute media") : tr("Mute media"),
                         ),
                       ),
                     if (!audio && !wide)
                       PopupMenuItem(
                         value: 'fullscreen',
                         child: Text(
-                          full ? 'Exit fullscreen' : 'Fullscreen media',
+                          full ? tr("Exit fullscreen") : tr("Fullscreen media"),
                         ),
                       ),
                     for (final rate in [
@@ -643,7 +644,7 @@ class _NativeHtmlMediaState extends State<NativeHtmlMedia>
                     PopupMenuItem(
                       value: 'save',
                       enabled: !saving,
-                      child: const Text('Save media'),
+                      child: Text(tr("Save media")),
                     ),
                   ],
                 ),
@@ -659,7 +660,7 @@ class _NativeHtmlMediaState extends State<NativeHtmlMedia>
       if (box.maxWidth < 160 || box.maxHeight < 120) {
         return Center(
           child: _button(
-            'Unable to play media. Retry',
+            tr("Unable to play media. Retry"),
             LucideIcons.rotateCw,
             () => unawaited(state.retry()),
             light: true,
@@ -670,15 +671,15 @@ class _NativeHtmlMediaState extends State<NativeHtmlMedia>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Unable to play media.',
+            Text(
+              tr("Unable to play media."),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: Colors.white, fontSize: 12),
             ),
             TextButton(
               onPressed: () => unawaited(state.retry()),
-              child: const Text('Retry'),
+              child: Text(tr("Retry")),
             ),
           ],
         ),
@@ -740,84 +741,88 @@ class _NativeHtmlMediaState extends State<NativeHtmlMedia>
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: state,
-    builder: (context, _) {
-      final size = dimensions;
-      if (audio && !widget.spec.controls && widget.styles['display'] == null) {
-        return const SizedBox.shrink();
-      }
-      final child = audio
-          ? Material(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? const Color(0xff333333)
-                  : const Color(0xfff1f3f4),
-              borderRadius: BorderRadius.circular(27),
-              child: state.error != null
-                  ? Row(
-                      children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Text(
-                              'Unable to play media.',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color:
-                                    Theme.of(context).brightness ==
-                                        Brightness.dark
-                                    ? Colors.white
-                                    : const Color(0xff202124),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return AnimatedBuilder(
+      animation: state,
+      builder: (context, _) {
+        final size = dimensions;
+        if (audio &&
+            !widget.spec.controls &&
+            widget.styles['display'] == null) {
+          return const SizedBox.shrink();
+        }
+        final child = audio
+            ? Material(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xff333333)
+                    : const Color(0xfff1f3f4),
+                borderRadius: BorderRadius.circular(27),
+                child: state.error != null
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Text(
+                                tr("Unable to play media."),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.white
+                                      : const Color(0xff202124),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () => unawaited(state.retry()),
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    )
-                  : _controls(context),
-            )
-          : _video(context);
-      final width = (state.data?['width'] as num?)?.toDouble() ?? 0,
-          height = (state.data?['height'] as num?)?.toDouble() ?? 0;
-      final frame = NativeHtmlMediaBox(
-        naturalSize: size,
-        styles: widget.styles,
-        fontSize:
-            double.tryParse(
-              (widget.styles['font-size'] ?? '').replaceFirst(
-                RegExp(r'px$'),
-                '',
-              ),
-            ) ??
-            DefaultTextStyle.of(context).style.fontSize ??
-            16,
-        intrinsicRatio: !audio && width > 0 && height > 0
-            ? width / height
-            : null,
-        widthAttributeSpecified:
-            !widget.styles.containsKey('width') && widget.spec.width != null,
-        heightAttributeSpecified:
-            !widget.styles.containsKey('height') && widget.spec.height != null,
-        child: size.width == 0 || size.height == 0
-            ? const SizedBox.shrink()
-            : child,
-      );
-      // Preserve overwide authored/intrinsic boxes; percentage constraints remain
-      // tied to the containing paragraph instead of an unbounded overflow host.
-      if (widget.styles.values.any((value) => value.contains('%'))) {
-        return frame;
-      }
-      return NativeHtmlInlineIntrinsicOverflow(
-        intrinsicSize: frame.intrinsicSize,
-        baselineFromTop: frame.intrinsicSize.height,
-        child: frame,
-      );
-    },
-  );
+                          TextButton(
+                            onPressed: () => unawaited(state.retry()),
+                            child: Text(tr("Retry")),
+                          ),
+                        ],
+                      )
+                    : _controls(context),
+              )
+            : _video(context);
+        final width = (state.data?['width'] as num?)?.toDouble() ?? 0,
+            height = (state.data?['height'] as num?)?.toDouble() ?? 0;
+        final frame = NativeHtmlMediaBox(
+          naturalSize: size,
+          styles: widget.styles,
+          fontSize:
+              double.tryParse(
+                (widget.styles['font-size'] ?? '').replaceFirst(
+                  RegExp(r'px$'),
+                  '',
+                ),
+              ) ??
+              DefaultTextStyle.of(context).style.fontSize ??
+              16,
+          intrinsicRatio: !audio && width > 0 && height > 0
+              ? width / height
+              : null,
+          widthAttributeSpecified:
+              !widget.styles.containsKey('width') && widget.spec.width != null,
+          heightAttributeSpecified:
+              !widget.styles.containsKey('height') &&
+              widget.spec.height != null,
+          child: size.width == 0 || size.height == 0
+              ? const SizedBox.shrink()
+              : child,
+        );
+        if (widget.styles.values.any((value) => value.contains('%'))) {
+          return frame;
+        }
+        return NativeHtmlInlineIntrinsicOverflow(
+          intrinsicSize: frame.intrinsicSize,
+          baselineFromTop: frame.intrinsicSize.height,
+          child: frame,
+        );
+      },
+    );
+  }
 }

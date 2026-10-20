@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,8 +18,8 @@ String jobDuration(Json task, DateTime now) {
         .round(),
   );
   if (seconds < 60) return '${seconds}s';
-  if (seconds < 3600) return '${seconds ~/ 60}m ${seconds % 60}s';
-  return '${seconds ~/ 3600}h ${(seconds % 3600) ~/ 60}m';
+  if (seconds < 3600) return tr("{0}m {1}s", [seconds ~/ 60, seconds % 60]);
+  return tr("{0}h {1}m", [seconds ~/ 3600, (seconds % 3600) ~/ 60]);
 }
 
 class JobsMenu extends StatefulWidget {
@@ -83,6 +84,7 @@ class _JobsMenuState extends State<JobsMenu> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final phone = MediaQuery.sizeOf(context).width <= 650;
     return OverlayPortal(
       controller: portal,
@@ -164,7 +166,7 @@ class _JobsMenuState extends State<JobsMenu> {
           ? TapRegion(
               groupId: this,
               child: Tooltip(
-                message: 'Background jobs',
+                message: tr("Background jobs"),
                 child: TextButton(
                   key: anchor,
                   focusNode: trigger,
@@ -182,8 +184,11 @@ class _JobsMenuState extends State<JobsMenu> {
                     )[jobs.count > 0 ? 'text.secondary' : 'text.muted'],
                   ),
                   child: Semantics(
-                    label:
-                        '${jobs.count > 0 ? '${jobs.count} running' : '${jobs.finished.length} background tasks'}. Show background jobs',
+                    label: tr("{0}. Show background jobs", [
+                      jobs.count > 0
+                          ? '${jobs.count} running'
+                          : '${jobs.finished.length} background tasks',
+                    ]),
                     expanded: jobs.open,
                     child: ExcludeSemantics(
                       child: Row(
@@ -237,6 +242,7 @@ class JobsList extends StatelessWidget {
   final JobsState jobs;
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final colors = palette(context);
     Widget smallButton(String text, VoidCallback action, {IconData? icon}) =>
         TextButton(
@@ -264,7 +270,7 @@ class JobsList extends StatelessWidget {
           ),
         );
     return Semantics(
-      label: 'Background jobs',
+      label: tr("Background jobs"),
       scopesRoute: true,
       explicitChildNodes: true,
       child: DecoratedBox(
@@ -285,7 +291,7 @@ class JobsList extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(6, 4, 6, 2),
                     child: Text(
-                      'Running',
+                      tr("Running"),
                       style: webText(
                         context,
                         size: 11,
@@ -370,14 +376,14 @@ class JobsList extends StatelessWidget {
                       children: [
                         Flexible(
                           child: smallButton(
-                            'Finished ${jobs.finished.length}',
+                            tr("Finished {0}", [jobs.finished.length]),
                             jobs.toggleFinished,
                             icon: jobs.finishedOpen || jobs.count == 0
                                 ? LucideIcons.chevronDown
                                 : LucideIcons.chevronRight,
                           ),
                         ),
-                        smallButton('Clear', jobs.clearFinished),
+                        smallButton(tr("Clear"), jobs.clearFinished),
                       ],
                     ),
                   ),
@@ -523,9 +529,13 @@ class JobsList extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(right: 5),
                     child: Tooltip(
-                      message: armed ? 'Click again to stop' : 'Stop task',
+                      message: armed
+                          ? tr("Click again to stop")
+                          : tr("Stop task"),
                       child: Semantics(
-                        label: armed ? 'Confirm stop' : 'Stop ${task['id']}',
+                        label: armed
+                            ? tr("Confirm stop")
+                            : tr("Stop {0}", [task['id']]),
                         child: TextButton(
                           onPressed:
                               jobs.controller.canWrite && jobs.stopping == null
@@ -565,7 +575,7 @@ class JobsList extends StatelessWidget {
                               if (armed) ...[
                                 const SizedBox(width: 4),
                                 Text(
-                                  'Stop',
+                                  tr("Stop"),
                                   style: webText(
                                     context,
                                     size: 11,
@@ -583,7 +593,7 @@ class JobsList extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(right: 10),
                     child: Semantics(
-                      label: 'Stopping',
+                      label: tr("Stopping"),
                       child: WebSpinner(size: 12, color: colors['text.muted']),
                     ),
                   ),
@@ -604,11 +614,14 @@ class _JobDot extends StatelessWidget {
   const _JobDot({required this.color});
   final Color color;
   @override
-  Widget build(BuildContext context) => Container(
-    width: 7,
-    height: 7,
-    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-  );
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Container(
+      width: 7,
+      height: 7,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
 }
 
 class _JobOutput extends StatefulWidget {
@@ -640,25 +653,28 @@ class _JobOutputState extends State<_JobOutput> {
   }
 
   @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(maxHeight: 240),
-    margin: const EdgeInsets.fromLTRB(4, 4, 4, 6),
-    decoration: BoxDecoration(
-      color: palette(context)['code.bg'],
-      border: Border.all(color: palette(context)['web.line']),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: SingleChildScrollView(
-      controller: scroll,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      child: SelectableText(
-        widget.text.isEmpty ? 'No output yet.' : widget.text,
-        style: webText(context, size: 11.5).copyWith(
-          color: palette(context)['code.text'],
-          fontFamily: 'monospace',
-          height: 1.5,
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 240),
+      margin: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+      decoration: BoxDecoration(
+        color: palette(context)['code.bg'],
+        border: Border.all(color: palette(context)['web.line']),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: SingleChildScrollView(
+        controller: scroll,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: SelectableText(
+          widget.text.isEmpty ? tr("No output yet.") : widget.text,
+          style: webText(context, size: 11.5).copyWith(
+            color: palette(context)['code.text'],
+            fontFamily: 'monospace',
+            height: 1.5,
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

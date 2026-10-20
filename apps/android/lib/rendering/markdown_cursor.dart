@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -87,7 +88,7 @@ class NativeCursorBuilder extends MarkdownElementBuilder {
         WidgetSpan(
           alignment: PlaceholderAlignment.middle,
           child: Semantics(
-            label: 'Streaming',
+            label: tr("Streaming"),
             child: Padding(
               padding: const EdgeInsets.only(left: 4),
               child: Container(

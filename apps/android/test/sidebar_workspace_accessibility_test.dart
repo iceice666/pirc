@@ -150,7 +150,7 @@ void main() {
     addTearDown(tester.view.reset);
     final gateway = FakeGateway(), controller = _controller(gateway);
     controller.sessions = [_session('Waiting', status: 'waiting_input')];
-    final sidebar = SessionSidebar(
+    SessionSidebar sidebar() => SessionSidebar(
       controller: controller,
       onOpen: (_) {},
       onWorkspace: (_) {},
@@ -158,7 +158,7 @@ void main() {
       onCollapse: () {},
       onMode: (_) {},
     );
-    await tester.pumpWidget(_app(sidebar));
+    await tester.pumpWidget(_app(sidebar()));
     await tester.pumpAndSettle();
     expect(find.byTooltip('1 waiting for you'), findsOneWidget);
     expect(
@@ -171,13 +171,13 @@ void main() {
     );
 
     controller.mode = 'work';
-    await tester.pumpWidget(_app(sidebar));
+    await tester.pumpWidget(_app(sidebar()));
     await tester.pumpAndSettle();
     expect(find.byTooltip('1 waiting for you'), findsNothing);
 
     controller.mode = 'chat';
     controller.sessions = [];
-    await tester.pumpWidget(_app(sidebar));
+    await tester.pumpWidget(_app(sidebar()));
     await tester.pumpAndSettle();
     expect(find.byTooltip('waiting for you'), findsNothing);
     controller.dispose();

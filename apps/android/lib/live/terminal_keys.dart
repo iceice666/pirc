@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:xterm/xterm.dart';
@@ -39,6 +40,7 @@ class NativeTerminalKeys extends StatelessWidget {
   ];
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final p = palette(context),
         scale = MediaQuery.textScalerOf(context).scale(12) / 12;
     final keyRows = compact ? [rows.expand((row) => row).toList()] : rows;
@@ -68,7 +70,7 @@ class NativeTerminalKeys extends StatelessWidget {
                                   ? terminal.altArmed
                                   : null,
                               child: Tooltip(
-                                message: description,
+                                message: tr(description),
                                 excludeFromSemantics: true,
                                 child: TextButton(
                                   key: ValueKey('terminal-key-$label'),
@@ -116,7 +118,7 @@ class NativeTerminalKeys extends StatelessWidget {
                                   ),
                                   child: Text(
                                     label,
-                                    semanticsLabel: description,
+                                    semanticsLabel: tr(description),
                                   ),
                                 ),
                               ),

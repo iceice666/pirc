@@ -100,9 +100,9 @@ void main() {
         },
       ),
     );
-    expect(find.text('主 App'), findsOneWidget);
+    expect(find.text("Main app"), findsOneWidget);
     expect(find.text('First document'), findsOneWidget);
-    expect(find.text('名稱：reports'), findsOneWidget);
+    expect(find.text("Name: reports"), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('document-window-source-select')));
     await tester.pump();

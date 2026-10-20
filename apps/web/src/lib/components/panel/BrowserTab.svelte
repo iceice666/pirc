@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   /**
    * The session's browser (docs/guides/browser.md): a live JPEG screencast of the
    * agent's tab, a takeover mode that forwards mouse and keyboard input (for
@@ -69,7 +71,7 @@
   /** Actions that change the browser need the session's control lease. */
   function act(message: Record<string, unknown>) {
     if (!hasControl || generation === undefined) {
-      notice = 'Take control of the session to use the browser.';
+      notice = tr('Take control of the session to use the browser.');
       return;
     }
     send(message);
@@ -221,22 +223,24 @@
     });
   }
 
-  const SPECIAL = new Set([
-    'Enter',
-    'Tab',
-    'Backspace',
-    'Delete',
-    'Escape',
-    'ArrowUp',
-    'ArrowDown',
-    'ArrowLeft',
-    'ArrowRight',
-    'Home',
-    'End',
-    'PageUp',
-    'PageDown',
-    ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`),
-  ]);
+  const SPECIAL = $derived(
+    new Set([
+      tr('Enter'),
+      tr('Tab'),
+      tr('Backspace'),
+      tr('Delete'),
+      tr('Escape'),
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+      tr('Home'),
+      tr('End'),
+      'PageUp',
+      'PageDown',
+      ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`),
+    ]),
+  );
   /** Keys and chords go through as key presses; text (IME included) through `input`. */
   function keyDown(event: KeyboardEvent) {
     if (!canDrive || event.isComposing || event.key === 'Process') return;
@@ -246,10 +250,10 @@
     if (!SPECIAL.has(event.key) && !(chord && event.key.length === 1)) return;
     event.preventDefault();
     const modifiers = [
-      event.ctrlKey && 'Control',
-      event.altKey && 'Alt',
-      event.shiftKey && (SPECIAL.has(event.key) || chord) && 'Shift',
-      event.metaKey && 'Meta',
+      event.ctrlKey && tr('Control'),
+      event.altKey && tr('Alt'),
+      event.shiftKey && (SPECIAL.has(event.key) || chord) && tr('Shift'),
+      event.metaKey && tr('Meta'),
     ].filter(Boolean);
     send({ type: 'key', key: [...modifiers, event.key].join('+') });
   }
@@ -295,7 +299,7 @@
     <div class="browser-empty">
       <Globe size={22} />
       <p>{unavailable}</p>
-      <p class="muted">Install Chromium on the node or set PIRC_BROWSER_EXECUTABLE.</p>
+      <p class="muted">{tr('Install Chromium on the node or set PIRC_BROWSER_EXECUTABLE.')}</p>
     </div>
   {:else}
     <div class="browser-bar">
@@ -306,11 +310,11 @@
         title={view?.action ?? ''}
       >
         {#if userMode}
-          {view?.agentWaiting ? 'Agent is waiting for you' : 'You are in control'}
+          {view?.agentWaiting ? tr('Agent is waiting for you') : tr('You are in control')}
         {:else if view?.action}
           {view.action}
         {:else}
-          {view?.active ? 'Agent' : 'No browser open'}
+          {view?.active ? tr('Agent') : tr('No browser open')}
         {/if}
       </span>
       <span class="spacer"></span>
@@ -320,8 +324,8 @@
           class:recording={!!view.recording}
           type="button"
           disabled={!hasControl}
-          title={view.recording ? 'Stop recording' : 'Record video'}
-          aria-label={view.recording ? 'Stop recording' : 'Record video'}
+          title={view.recording ? tr('Stop recording') : tr('Record video')}
+          aria-label={view.recording ? tr('Stop recording') : tr('Record video')}
           onclick={() => act({ type: 'record', action: view?.recording ? 'stop' : 'start' })}
         >
           {#if view.recording}<Square size={14} />{:else}<Circle size={14} />{/if}
@@ -331,8 +335,8 @@
         class="icon-button small"
         class:active={showLog}
         type="button"
-        title="Activity and replay"
-        aria-label="Activity and replay"
+        title={tr('Activity and replay')}
+        aria-label={tr('Activity and replay')}
         aria-pressed={showLog}
         onclick={() => (showLog = !showLog)}><History size={15} /></button
       >
@@ -341,7 +345,8 @@
           class="button small primary"
           type="button"
           disabled={!hasControl}
-          onclick={() => act({ type: 'release' })}><Undo2 size={14} /> Return control</button
+          onclick={() => act({ type: 'release' })}
+          ><Undo2 size={14} /> {tr('Return control')}</button
         >
       {:else if view?.active}
         <button
@@ -349,16 +354,16 @@
           type="button"
           disabled={!hasControl}
           title={hasControl
-            ? 'Pause the agent and use the browser yourself'
-            : 'Take control of the session first'}
-          onclick={() => act({ type: 'takeover' })}><Hand size={14} /> Take over</button
+            ? tr('Pause the agent and use the browser yourself')
+            : tr('Take control of the session first')}
+          onclick={() => act({ type: 'takeover' })}><Hand size={14} /> {tr('Take over')}</button
         >
       {/if}
     </div>
 
     {#if view?.handoff}
       <div class="browser-handoff" role="status">
-        <strong>The agent needs you:</strong>
+        <strong>{tr('The agent needs you:')}</strong>
         {view.handoff}
       </div>
     {/if}
@@ -368,21 +373,21 @@
         class="icon-button small"
         type="button"
         disabled={!canDrive}
-        aria-label="Back"
+        aria-label={tr('Back')}
         onclick={() => act({ type: 'back' })}><ArrowLeft size={14} /></button
       >
       <button
         class="icon-button small"
         type="button"
         disabled={!canDrive}
-        aria-label="Forward"
+        aria-label={tr('Forward')}
         onclick={() => act({ type: 'forward' })}><ArrowRight size={14} /></button
       >
       <button
         class="icon-button small"
         type="button"
         disabled={!canDrive}
-        aria-label="Reload"
+        aria-label={tr('Reload')}
         onclick={() => act({ type: 'reload' })}><RotateCw size={14} /></button
       >
       <input
@@ -390,8 +395,8 @@
         inputmode="url"
         autocomplete="off"
         spellcheck="false"
-        aria-label="Address"
-        placeholder={hasControl ? 'Enter a URL to open it yourself' : 'Address'}
+        aria-label={tr('Address')}
+        placeholder={hasControl ? tr('Enter a URL to open it yourself') : tr('Address')}
         readonly={!hasControl}
         bind:value={urlDraft}
         onfocus={() => (editingUrl = true)}
@@ -403,7 +408,7 @@
     </form>
 
     {#if (view?.tabs.length ?? 0) > 1}
-      <div class="browser-tabs" aria-label="Browser tabs">
+      <div class="browser-tabs" aria-label={tr('Browser tabs')}>
         {#each view!.tabs as item (item.index)}
           <button
             type="button"
@@ -411,7 +416,7 @@
             disabled={!canDrive}
             title={item.url}
             onclick={() => act({ type: 'tab', index: item.index })}
-            >{item.title || item.url || 'New tab'}</button
+            >{item.title || item.url || tr('New tab')}</button
           >
         {/each}
       </div>
@@ -423,7 +428,7 @@
           <button
             class="icon-button small"
             type="button"
-            aria-label="Previous step"
+            aria-label={tr('Previous step')}
             onclick={() => step(-1)}><ArrowLeft size={14} /></button
           >
           <span title={replayEntry?.url}
@@ -432,23 +437,25 @@
           <button
             class="icon-button small"
             type="button"
-            aria-label="Next step"
+            aria-label={tr('Next step')}
             onclick={() => step(1)}><ArrowRight size={14} /></button
           >
-          <button class="button small" type="button" onclick={() => (replay = null)}>Live</button>
-        </div>
-        {#if replay.src}<img class="screen" src={replay.src} alt="Browser at this step" />{:else}<p
-            class="panel-empty"
+          <button class="button small" type="button" onclick={() => (replay = null)}
+            >{tr('Live')}</button
           >
-            Loading…
-          </p>{/if}
+        </div>
+        {#if replay.src}<img
+            class="screen"
+            src={replay.src}
+            alt={tr('Browser at this step')}
+          />{:else}<p class="panel-empty">{tr('Loading…')}</p>{/if}
       {:else if frame}
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <img
           class="screen"
           bind:this={screen}
           src={frame.src}
-          alt={view?.title ? `Browser: ${view.title}` : 'Browser'}
+          alt={view?.title ? tr('Browser: {0}', [view.title]) : tr('Browser')}
           draggable="false"
           onpointerdown={pointerDown}
           onpointerup={pointerUp}
@@ -459,7 +466,7 @@
         <textarea
           class="browser-keys"
           bind:this={keys}
-          aria-label="Type into the browser"
+          aria-label={tr('Type into the browser')}
           autocapitalize="off"
           autocomplete="off"
           spellcheck="false"
@@ -468,13 +475,14 @@
           oncompositionend={flushText}
         ></textarea>
       {:else if view?.active}
-        <p class="panel-empty">Waiting for the first frame…</p>
+        <p class="panel-empty">{tr('Waiting for the first frame…')}</p>
       {:else}
         <div class="browser-empty">
           <Globe size={22} />
           <p>
-            The agent opens a browser when it uses web tools. You can watch it here, take over to
-            log in or fill forms, and record videos.
+            {tr(
+              'The agent opens a browser when it uses web tools. You can watch it here, take over to log in or fill forms, and record videos.',
+            )}
           </p>
         </div>
       {/if}
@@ -482,17 +490,17 @@
     </div>
 
     {#if showLog}
-      <section class="browser-log" aria-label="Browser activity">
+      <section class="browser-log" aria-label={tr('Browser activity')}>
         {#if recordings.length}
-          <h3>Recordings</h3>
+          <h3>{tr('Recordings')}</h3>
           {#each recordings as path (path)}
             <!-- svelte-ignore a11y_media_has_caption -->
             <video controls preload="metadata" src={panelApi.recordingUrl(sessionId, path)}></video>
             <a class="muted" href={panelApi.recordingUrl(sessionId, path)} download>{path}</a>
           {/each}
         {/if}
-        <h3>Activity</h3>
-        {#if !log.length}<p class="panel-empty">Nothing yet.</p>{/if}
+        <h3>{tr('Activity')}</h3>
+        {#if !log.length}<p class="panel-empty">{tr('Nothing yet.')}</p>{/if}
         <ol>
           {#each [...log].reverse() as entry (entry.index)}
             <li>

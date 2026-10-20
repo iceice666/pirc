@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tr } from '../../i18n.svelte';
+
   /**
    * Right-hand side panel, Codex/ChatGPT style: a tab strip over Files, Git,
    * Memory, Tasks, Terminal and Browser. A tab mounts on first visit and then stays
@@ -59,17 +61,17 @@
   /** Tabs visited so far; they stay mounted. */
   const mounted = new SvelteSet<PanelTab>();
 
-  const tabs: Array<{ id: PanelTab; label: string; icon: typeof FolderTree }> = [
-    { id: 'files', label: 'Files', icon: FolderTree },
-    { id: 'git', label: 'Git', icon: GitBranch },
-    { id: 'memory', label: 'Memory', icon: Brain },
-    { id: 'context', label: 'Context', icon: ScanText },
-    { id: 'tasks', label: 'Tasks', icon: ListChecks },
-    { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
-    { id: 'browser', label: 'Browser', icon: Globe },
-  ];
+  const tabs: Array<{ id: PanelTab; label: string; icon: typeof FolderTree }> = $derived([
+    { id: 'files', label: tr('Files'), icon: FolderTree },
+    { id: 'git', label: tr('Git'), icon: GitBranch },
+    { id: 'memory', label: tr('Memory'), icon: Brain },
+    { id: 'context', label: tr('Context'), icon: ScanText },
+    { id: 'tasks', label: tr('Tasks'), icon: ListChecks },
+    { id: 'terminal', label: tr('Terminal'), icon: SquareTerminal },
+    { id: 'browser', label: tr('Browser'), icon: Globe },
+  ]);
 
-  const sessionId = $derived(app.sessionState?.session.id ?? '');
+  const sessionId = $derived(app.isDraftSession ? '' : (app.sessionState?.session.id ?? ''));
   /**
    * Every session keeps Files (its directory, where uploads and outputs land);
    * Git needs a repository, the terminal a workspace directory (not one per session).
@@ -149,7 +151,7 @@
   } as Record<string, number>);
 </script>
 
-<aside class:open class="details side-panel" aria-label="Session side panel">
+<aside class:open class="details side-panel" aria-label={tr('Session side panel')}>
   <!-- A focusable separator is an interactive ARIA widget (WAI-ARIA window splitter). -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
@@ -157,12 +159,12 @@
     class:active={resizing}
     role="separator"
     aria-orientation="vertical"
-    aria-label="Resize side panel"
+    aria-label={tr('Resize side panel')}
     aria-valuenow={width}
     aria-valuemin={minWidth}
     aria-valuemax={maxWidth}
     tabindex={open ? 0 : -1}
-    title="Drag to resize · double-click to reset"
+    title={tr('Drag to resize · double-click to reset')}
     onpointerdown={startResize}
     onpointermove={moveResize}
     onpointerup={endResize}
@@ -174,7 +176,7 @@
   <div
     class="panel-tabs"
     role="tablist"
-    aria-label="Side panel"
+    aria-label={tr('Side panel')}
     use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
   >
     {#each shownTabs as item (item.id)}
@@ -192,7 +194,7 @@
         <item.icon size={16} />
         <span class="tab-label">{item.label}</span>
         {#if badge[item.id]}<span class="tab-dot" aria-hidden="true"></span><span class="sr-only"
-            >(activity)</span
+            >{tr('(activity)')}</span
           >{/if}
       </button>
     {/each}
@@ -200,7 +202,7 @@
 
   <div class="panel-body">
     {#if app.usingDemo}
-      <p class="panel-empty">Connect to a gateway to use this panel.</p>
+      <p class="panel-empty">{tr('Connect to a gateway to use this panel.')}</p>
     {:else if sessionId}
       {#each shownTabs as item (item.id)}
         {#if mounted.has(item.id)}

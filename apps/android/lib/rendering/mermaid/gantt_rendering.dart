@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'gantt_model.dart';
@@ -73,18 +74,18 @@ NativeGanttLayout layoutNativeMermaidGantt(
   String? fontFamily,
 }) {
   if (diagram.tasks.isEmpty) {
-    throw const FormatException('Native Gantt requires at least one task');
+    throw FormatException(tr("Native Gantt requires at least one task"));
   }
   if (!width.isFinite || width <= 150) {
-    throw const FormatException(
-      'Native Gantt viewport is too narrow for its fixed margins',
+    throw FormatException(
+      tr("Native Gantt viewport is too narrow for its fixed margins"),
     );
   }
   if (diagram.tasks.any(
     (t) => t.statuses.contains(NativeMermaidGanttTaskStatus.vertical),
   )) {
-    throw const FormatException(
-      'Native Gantt vertical task markers are not yet rendered',
+    throw FormatException(
+      tr("Native Gantt vertical task markers are not yet rendered"),
     );
   }
   final size = Size(width, 100 + diagram.tasks.length * 24);
@@ -131,7 +132,7 @@ NativeGanttLayout layoutNativeMermaidGantt(
   var count = 0;
   while (!day.isAfter(diagram.end)) {
     if (++count > 60000) {
-      throw const FormatException('Native Gantt exclusion range is too large');
+      throw FormatException(tr("Native Gantt exclusion range is too large"));
     }
     if (diagram.isExcluded(day)) {
       excludedStart ??= day;
@@ -228,7 +229,7 @@ List<DateTime> _ticks(DateTime start, DateTime end) {
   var attempts = 0;
   while (!date.isAfter(end)) {
     if (++attempts > 20000) {
-      throw const FormatException('Native Gantt axis contains too many ticks');
+      throw FormatException(tr("Native Gantt axis contains too many ticks"));
     }
     final aligned = switch (unit) {
       'second' => date.second % every == 0,
@@ -258,20 +259,28 @@ List<DateTime> _ticks(DateTime start, DateTime end) {
 }
 
 String _format(DateTime date, String format) {
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
+  final days = [
+    tr("Mon"),
+    tr("Tue"),
+    tr("Wed"),
+    tr("Thu"),
+    tr("Fri"),
+    tr("Sat"),
+    tr("Sun"),
+  ];
+  final months = [
+    tr("Jan"),
+    tr("Feb"),
+    tr("Mar"),
+    tr("Apr"),
+    tr("May"),
+    tr("Jun"),
+    tr("Jul"),
+    tr("Aug"),
+    tr("Sep"),
+    tr("Oct"),
+    tr("Nov"),
+    tr("Dec"),
   ];
   String padded(int value, [int digits = 2]) => '$value'.padLeft(digits, '0');
   return format.replaceAllMapped(
@@ -289,7 +298,7 @@ String _format(DateTime date, String format) {
       '%b' => months[date.month - 1],
       '%%' => '%',
       _ => throw FormatException(
-        'Native Gantt axis format ${m[0]} is not yet supported',
+        tr("Native Gantt axis format {0} is not yet supported", [m[0]]),
       ),
     },
   );
@@ -308,37 +317,40 @@ class NativeMermaidGantt extends StatelessWidget {
   final NativeMermaidGanttDiagram diagram;
   final bool dark;
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final family = Theme.of(context).textTheme.bodyMedium?.fontFamily;
-      final layout =
-          this.layout ??
-          layoutNativeMermaidGantt(
-            diagram,
-            width: MediaQuery.sizeOf(context).width,
-            fontFamily: family,
-          );
-      final width = math.min(layout.size.width, constraints.maxWidth);
-      final scale = width / layout.size.width;
-      return Semantics(
-        label:
-            '${diagram.title ?? 'Gantt chart'}. ${diagram.sections.map((s) => s.name).join(', ')}. ${diagram.tasks.map((t) => '${t.label.trim()}: ${t.start.toIso8601String()} to ${t.end.toIso8601String()}').join('; ')}',
-        image: true,
-        child: SizedBox(
-          width: width,
-          height: layout.size.height * scale,
-          child: CustomPaint(
-            painter: NativeGanttPainter(
-              layout,
-              dark: dark,
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final family = Theme.of(context).textTheme.bodyMedium?.fontFamily;
+        final layout =
+            this.layout ??
+            layoutNativeMermaidGantt(
+              diagram,
+              width: MediaQuery.sizeOf(context).width,
               fontFamily: family,
-              clock: clock,
+            );
+        final width = math.min(layout.size.width, constraints.maxWidth);
+        final scale = width / layout.size.width;
+        return Semantics(
+          label:
+              '${diagram.title ?? 'Gantt chart'}. ${diagram.sections.map((s) => s.name).join(', ')}. ${diagram.tasks.map((t) => '${t.label.trim()}: ${t.start.toIso8601String()} to ${t.end.toIso8601String()}').join('; ')}',
+          image: true,
+          child: SizedBox(
+            width: width,
+            height: layout.size.height * scale,
+            child: CustomPaint(
+              painter: NativeGanttPainter(
+                layout,
+                dark: dark,
+                fontFamily: family,
+                clock: clock,
+              ),
             ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
 class NativeGanttPainter extends CustomPainter {

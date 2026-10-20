@@ -1,3 +1,4 @@
+import '../../l10n/app_i18n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -119,7 +120,7 @@ NativeMermaidArchitectureLayout layoutNativeMermaidArchitecture(
   String? fontFamily,
 }) {
   if (!width.isFinite || width <= 0) {
-    throw const FormatException('Architecture viewport width must be positive');
+    throw FormatException(tr("Architecture viewport width must be positive"));
   }
 
   final textColor = dark ? const Color(0xffcccccc) : const Color(0xff0f1115);
@@ -172,8 +173,8 @@ NativeMermaidArchitectureLayout layoutNativeMermaidArchitecture(
     rawNodes[junction.id] = (service: null, junction: junction, title: null);
   }
   if (rawNodes.length > 200 || diagram.groups.length > 200) {
-    throw const FormatException(
-      'Architecture diagram exceeds the native layout limit',
+    throw FormatException(
+      tr("Architecture diagram exceeds the native layout limit"),
     );
   }
   final gridX = math.max(_architectureGridStep, widestLabel + 100).toDouble();
@@ -244,7 +245,7 @@ NativeMermaidArchitectureLayout layoutNativeMermaidArchitecture(
     if (cached != null) return cached;
     if (!visiting.add(id)) {
       throw FormatException(
-        'Architecture group membership cycle includes "$id"',
+        tr("Architecture group membership cycle includes \"{0}\"", [id]),
       );
     }
     final members = childNodes[id] ?? const <String>[];
@@ -584,6 +585,7 @@ class NativeMermaidArchitecture extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final summary = [
       if (diagram.title.isNotEmpty) diagram.title,
       for (final group in diagram.groups)

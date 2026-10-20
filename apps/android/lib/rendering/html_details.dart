@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'package:flutter/widgets.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
@@ -250,7 +251,10 @@ WidgetPlaceholder _buildDefaultSummary(BuildTree tree, WidgetFactory factory) {
                   alignment: PlaceholderAlignment.middle,
                   child: _NativeDetailsMarker(tree: tree),
                 ),
-                TextSpan(text: 'Details', style: resolved.prepareTextStyle()),
+                TextSpan(
+                  text: tr("Details"),
+                  style: resolved.prepareTextStyle(),
+                ),
               ],
             ),
           ) ??
@@ -347,6 +351,7 @@ class _NativeHtmlDetailsState extends State<_NativeHtmlDetails> {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final activateAction = _NativeDetailsActivateAction(
       focusNode: _focusNode,
       onActivate: _toggle,
@@ -420,6 +425,7 @@ class _NativeDetailsMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppI18n.watch(context);
     final scope = context
         .dependOnInheritedWidgetOfExactType<_NativeDetailsScope>();
     final style = tree.inheritanceResolvers.resolve(context).prepareTextStyle();

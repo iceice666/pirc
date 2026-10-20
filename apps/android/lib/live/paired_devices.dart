@@ -1,3 +1,4 @@
+import '../l10n/app_i18n.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show SemanticsRole;
@@ -20,7 +21,7 @@ String deviceRequestError(Object cause) =>
         RegExp(r'^HTTP_\d{3}$').hasMatch(cause.code) &&
         cause.message?.isNotEmpty == true
     ? cause.message!
-    : deviceConnectionFailure;
+    : tr(deviceConnectionFailure);
 
 String devicePairingUri(String origin, String token) => Uri(
   scheme: 'pirc',
@@ -134,7 +135,7 @@ class _PairedDevicesState extends State<PairedDevices> {
       final result = await controller.gateway.request('/api/devices');
       if (!current(token) || revision != listRevision) return;
       if (result['devices'] is! List) {
-        throw const FormatException('Invalid device list');
+        throw FormatException(tr("Invalid device list"));
       }
       setState(() => devices = rows(result['devices']));
       _discoverManagementStatus(token, controller);
@@ -226,7 +227,7 @@ class _PairedDevicesState extends State<PairedDevices> {
           device['id'] is! String ||
           credential is! String ||
           credential.isEmpty) {
-        throw const FormatException('Invalid pairing response');
+        throw FormatException(tr("Invalid pairing response"));
       }
       setState(() {
         paired = device;
@@ -296,42 +297,42 @@ class _PairedDevicesState extends State<PairedDevices> {
       await c.gateway.call('openPairLink', {'url': value});
     } catch (_) {
       if (current(token)) {
-        setState(() => error = 'Unable to open the pirc app. Try again.');
+        setState(() => error = tr("Unable to open the pirc app. Try again."));
       }
     }
   }
 
   String used(dynamic value) {
-    if (value is! num) return 'Invalid Date';
+    if (value is! num) return tr("Invalid Date");
     final seconds = math.max(
       0,
       (widget.clock().millisecondsSinceEpoch - value) / 1000,
     );
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return '${seconds ~/ 60}m ago';
-    if (seconds < 86400) return '${seconds ~/ 3600}h ago';
-    if (seconds < 30 * 86400) return '${seconds ~/ 86400}d ago';
+    if (seconds < 60) return tr("just now");
+    if (seconds < 3600) return tr("{0}m ago", [seconds ~/ 60]);
+    if (seconds < 86400) return tr("{0}h ago", [seconds ~/ 3600]);
+    if (seconds < 30 * 86400) return tr("{0}d ago", [seconds ~/ 86400]);
     return MaterialLocalizations.of(
       context,
     ).formatCompactDate(DateTime.fromMillisecondsSinceEpoch(value.toInt()));
   }
 
   String expires(dynamic value) {
-    if (value is! num) return 'Invalid Date';
+    if (value is! num) return tr("Invalid Date");
     final date = DateTime.fromMillisecondsSinceEpoch(value.toInt());
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
+    final months = [
+      tr("Jan"),
+      tr("Feb"),
+      tr("Mar"),
+      tr("Apr"),
+      tr("May"),
+      tr("Jun"),
+      tr("Jul"),
+      tr("Aug"),
+      tr("Sep"),
+      tr("Oct"),
+      tr("Nov"),
+      tr("Dec"),
     ];
     return '${months[date.month - 1]} ${date.day}';
   }
@@ -346,7 +347,7 @@ class _PairedDevicesState extends State<PairedDevices> {
     ),
     child: Semantics(
       container: true,
-      label: 'Pair ${paired?['name']}',
+      label: tr("Pair {0}", [paired?['name']]),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final textWidth = constraints.maxWidth >= 436
@@ -363,7 +364,7 @@ class _PairedDevicesState extends State<PairedDevices> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Scan with the pirc app',
+                      tr("Scan with the pirc app"),
                       style: webText(
                         context,
                         size: 13,
@@ -372,7 +373,9 @@ class _PairedDevicesState extends State<PairedDevices> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Shown only once. Anyone with this code can use your nodes until you revoke it.',
+                      tr(
+                        "Shown only once. Anyone with this code can use your nodes until you revoke it.",
+                      ),
                       style: webText(context, size: 12, color: 'text.muted'),
                     ),
                     const SizedBox(height: 6),
@@ -402,13 +405,13 @@ class _PairedDevicesState extends State<PairedDevices> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        AssistantButton('Open in app', onPressed: openLink),
+                        AssistantButton(tr("Open in app"), onPressed: openLink),
                         AssistantButton(
-                          copied ? 'Copied' : 'Copy link',
+                          copied ? tr("Copied") : tr("Copy link"),
                           onPressed: copyLink,
                         ),
                         AssistantButton(
-                          'Done',
+                          tr("Done"),
                           onPressed: () => setState(() {
                             paired = null;
                             link.clear();
@@ -436,7 +439,7 @@ class _PairedDevicesState extends State<PairedDevices> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Device name',
+                tr("Device name"),
                 style: webText(
                   context,
                   size: 13,
@@ -448,7 +451,7 @@ class _PairedDevicesState extends State<PairedDevices> {
               SizedBox(
                 height: 40,
                 child: Semantics(
-                  label: 'Device name',
+                  label: tr("Device name"),
                   child: TextField(
                     key: const ValueKey('device-name'),
                     controller: name,
@@ -463,7 +466,7 @@ class _PairedDevicesState extends State<PairedDevices> {
                       color: 'text.muted',
                     ).copyWith(height: kTextHeightNone),
                     decoration: InputDecoration(
-                      hintText: 'Pixel 9',
+                      hintText: tr("Pixel 9"),
                       hintStyle: webText(
                         context,
                         size: 16,
@@ -503,7 +506,7 @@ class _PairedDevicesState extends State<PairedDevices> {
         ),
         const SizedBox(width: 8),
         AssistantButton(
-          'Pair device',
+          tr("Pair device"),
           onPressed: busy || name.text.trim().isEmpty ? null : pair,
         ),
       ],
@@ -528,7 +531,10 @@ class _PairedDevicesState extends State<PairedDevices> {
                 style: webText(context, size: 13, weight: FontWeight.w700),
               ),
               Text(
-                'Used ${used(device['lastUsedAt'])} · Expires ${expires(device['expiresAt'])}',
+                tr("Used {0} · Expires {1}", [
+                  used(device['lastUsedAt']),
+                  expires(device['expiresAt']),
+                ]),
                 style: webText(context, size: 12, color: 'text.muted'),
               ),
             ],
@@ -536,10 +542,10 @@ class _PairedDevicesState extends State<PairedDevices> {
         ),
         const SizedBox(width: 12),
         Semantics(
-          label: 'Revoke ${device['name']}',
+          label: tr("Revoke {0}", [device['name']]),
           button: true,
           child: AssistantButton(
-            'Revoke',
+            tr("Revoke"),
             onPressed: busy ? null : () => revoke(device),
           ),
         ),
@@ -548,53 +554,58 @@ class _PairedDevicesState extends State<PairedDevices> {
   );
 
   @override
-  Widget build(BuildContext context) => AssistantSection(
-    title: 'Phones',
-    divider: true,
-    children: [
-      const AssistantParagraph(
-        'Pair the pirc Android app. A phone gets the same access as this browser, including files and shells on your nodes, but cannot manage devices or model backends. Its token stops working after a stretch without use, at a fixed age after pairing, or when revoked here.',
-      ),
-      if (widget.disabled)
-        const AssistantParagraph(
-          'Pairing is unavailable in demo mode.',
-          live: true,
-        )
-      else ...[
-        if (error != null)
-          Semantics(
-            role: SemanticsRole.alert,
-            child: AssistantParagraph(error!, error: true),
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    return AssistantSection(
+      title: tr("Phones"),
+      divider: true,
+      children: [
+        AssistantParagraph(
+          tr(
+            "Pair the pirc Android app. A phone gets the same access as this browser, including files and shells on your nodes, but cannot manage devices or model backends. Its token stops working after a stretch without use, at a fixed age after pairing, or when revoked here.",
           ),
-        if (managementRequired)
-          NativeManagementAccess(
-            key: const ValueKey('native-management-access'),
-            controller: c,
-            capabilities: const ['devices'],
-            onApproved: refresh,
-            onRevoked: managementRevoked,
-            clock: widget.clock,
-            initialStatus: managementStatusSnapshot,
-          ),
-        if (paired != null) pairingCard(),
-        pairForm(),
-        if (loading)
-          const AssistantParagraph('Loading devices…', live: true)
-        else if (devices.isEmpty)
-          const AssistantParagraph('No phones paired.')
-        else
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Column(
-              children: [
-                for (var index = 0; index < devices.length; index++) ...[
-                  if (index > 0) const SizedBox(height: 6),
-                  deviceRow(devices[index]),
-                ],
-              ],
+        ),
+        if (widget.disabled)
+          AssistantParagraph(
+            tr("Pairing is unavailable in demo mode."),
+            live: true,
+          )
+        else ...[
+          if (error != null)
+            Semantics(
+              role: SemanticsRole.alert,
+              child: AssistantParagraph(error!, error: true),
             ),
-          ),
+          if (managementRequired)
+            NativeManagementAccess(
+              key: const ValueKey('native-management-access'),
+              controller: c,
+              capabilities: const ['devices'],
+              onApproved: refresh,
+              onRevoked: managementRevoked,
+              clock: widget.clock,
+              initialStatus: managementStatusSnapshot,
+            ),
+          if (paired != null) pairingCard(),
+          pairForm(),
+          if (loading)
+            AssistantParagraph(tr("Loading devices…"), live: true)
+          else if (devices.isEmpty)
+            AssistantParagraph(tr("No phones paired."))
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Column(
+                children: [
+                  for (var index = 0; index < devices.length; index++) ...[
+                    if (index > 0) const SizedBox(height: 6),
+                    deviceRow(devices[index]),
+                  ],
+                ],
+              ),
+            ),
+        ],
       ],
-    ],
-  );
+    );
+  }
 }
