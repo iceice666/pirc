@@ -4,6 +4,8 @@ import {chromium} from 'playwright-core';
 import {requireTestBrowserExecutable} from './test_browser.mjs';
 
 const cases=[
+  {name:'rootless-relative-centered',rootless:true,dialogStyle:'position:relative'},
+  {name:'html-without-body-relative-centered',omitBody:true,dialogStyle:'position:relative'},
   {name:'relative-centered',dialogStyle:'position:relative'},
   {name:'static-important-centered',dialogStyle:'position:static!important'},
   {name:'sticky-centered',dialogStyle:'position:sticky'},
@@ -27,10 +29,15 @@ try {
       for(const scenario of cases) {
         const page=await context.newPage();
         await page.route('**/*',route=>route.abort());
-        const html=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+        const body=`<meta name="viewport" content="width=device-width,initial-scale=1">
           <div style="${scenario.parentStyle||''}">
           <dialog style="${scenario.dialogStyle}"><button>Inside</button></dialog></div>
-          <script>document.querySelector('dialog').showModal()</script></body></html>`;
+          <script>document.querySelector('dialog').showModal()</script>`;
+        const content=body.replace(/^<meta[^>]*>/,'');
+        const html=scenario.rootless?`<!doctype html>${body}`:
+          scenario.omitBody?
+            `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>${content}</html>`:
+            `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${content}</body></html>`;
         await page.setContent(html);
         const result=await page.evaluate(()=>{
           const dialog=document.querySelector('dialog');

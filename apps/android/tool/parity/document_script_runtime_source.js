@@ -5693,6 +5693,47 @@
     dispatchDocumentLoadIfReady();
   }
 
+  function normalizeHostDocumentTree(document) {
+    const existingRoot = document.documentElement?.localName === 'html'
+      ? document.documentElement : null;
+    if (existingRoot && ['head', 'body'].every(name =>
+      Array.from(existingRoot.children).some(child => child.localName === name))) return;
+    const root = existingRoot || document.createElement('html');
+    let head = document.createElement('head');
+    let body = document.createElement('body');
+    let bodyStarted = false;
+    const headElements = new Set([
+      'base', 'basefont', 'bgsound', 'link', 'meta', 'noframes',
+      'script', 'style', 'template', 'title'
+    ]);
+    for (const node of Array.from(existingRoot ? root.childNodes : document.childNodes)) {
+      if (node.nodeType === 10) continue; // Preserve the authored doctype.
+      const name = node.localName;
+      if (name === 'head' && !bodyStarted) {
+        for (const child of Array.from(head.childNodes).reverse()) node.insertBefore(child, node.firstChild);
+        head = node;
+        continue;
+      }
+      if (name === 'body') {
+        for (const child of Array.from(body.childNodes).reverse()) node.insertBefore(child, node.firstChild);
+        body = node;
+        bodyStarted = true;
+        continue;
+      }
+      if (!bodyStarted &&
+          (headElements.has(name) || node.nodeType === 8 ||
+           node.nodeType === 3 && !String(node.textContent || '').trim())) {
+        head.appendChild(node);
+      } else {
+        bodyStarted = true;
+        body.appendChild(node);
+      }
+    }
+    root.appendChild(head);
+    root.appendChild(body);
+    if (!existingRoot) document.appendChild(root);
+  }
+
   function init(options) {
     if (activeState) {
       return JSON.stringify({
@@ -5852,6 +5893,7 @@
       registerHTMLClass('dialog', PircHTMLDialogElement);
       const view = parseHTML(html);
       const document = view.document;
+      if (input.hostLayout === true) normalizeHostDocumentTree(document);
       activeState.window = view;
       activeState.document = document;
       installFormProperties();

@@ -43,10 +43,15 @@ void main() {
     testWidgets('modal author position ${row['name']} ${viewport['width']}', (
       t,
     ) async {
-      final html =
-          '''<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+      final body =
+          '''<meta name="viewport" content="width=device-width,initial-scale=1">
 <div style="${row['parentStyle'] ?? ''}"><dialog id="dialog" style="${row['dialogStyle']}"><button>Inside</button></dialog></div>
-<script>document.getElementById('dialog').showModal()</script></body></html>''';
+<script>document.getElementById('dialog').showModal()</script>''';
+      final html = row['rootless'] == true
+          ? '<!doctype html>$body'
+          : row['omitBody'] == true
+          ? '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>${body.replaceFirst(RegExp(r'^<meta[^>]*>'), '')}</html>'
+          : '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${body.replaceFirst(RegExp(r'^<meta[^>]*>'), '')}</body></html>';
       final gateway = (await t.runAsync(DocumentVmGateway.start))!
         ..responses.add({
           ...response('/test', html),

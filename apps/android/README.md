@@ -128,11 +128,16 @@ compared with the pinned Chromium 153 fixture captured by
 `node apps/android/tool/parity/capture_document_dialog_modal_backdrop_chromium153.mjs`.
 The Flutter widget gate checks touch light-dismiss, canceled light-dismiss,
 `closedby=none` and background tap blocking. Physical-device acceptance remains open.
-`test/document_live_runtime_dialog_author_position_test.dart` compares 12
+`test/document_live_runtime_dialog_author_position_test.dart` compares 16
 phone/tablet cases with the pinned Chromium 153 author-position fixture,
 captured by `node apps/android/tool/parity/capture_document_dialog_author_position_chromium153.mjs`.
 It covers relative/static/sticky coercion, explicit offsets and top-layer
 containing blocks outside positioned or transformed DOM parents.
+Host-layout documents with omitted `html`, `head` or `body` now create the
+browser's common document tree before parser scripts. The pinned fixture from
+`node apps/android/tool/parity/capture_document_rootless_chromium153.mjs`
+compares ten tree/script-placement cases; `document_rootless_runtime_test.mjs`
+and the rootless modal widget cases cover DOM and native layout together.
 Broader UA layout/focus delegates and the remaining modal differences are listed
 in the mobile plan.
 The tests keep the observed close/toggle task-order difference explicit.

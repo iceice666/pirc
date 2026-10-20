@@ -449,7 +449,7 @@ test('native Element scroll events honor native order, capture, trust, and non-b
   ], 'position-difference fallback dispatches targets in document tree order');
 });
 
-test('native content extents expose root scroll dimensions and reject inferred element metrics', () => {
+test('native content extents expose root scroll dimensions and zero explicit no-box element metrics', () => {
   const context = createRuntime();
   const initialized = invoke(context, 'init', {
     url: 'https://example.test/root-scroll-extents',
@@ -465,7 +465,9 @@ test('native content extents expose root scroll dimensions and reject inferred e
   assert.deepEqual(JSON.parse(evaluate(context, `JSON.stringify({width:document.documentElement.scrollWidth,height:document.documentElement.scrollHeight,body:(()=>{try{return document.body.scrollHeight}catch(error){return error.name}})(),child:(()=>{try{return document.querySelector("#child").scrollHeight}catch(error){return error.name}})()})`)), {
     width: 501,
     height: 1001,
-    body: 'NotSupportedError',
-    child: 'NotSupportedError',
+    // The normalized html/head/body tree makes these connected elements part
+    // of the native packet. A kind:none entry explicitly reports no CSS box.
+    body: 0,
+    child: 0,
   });
 });

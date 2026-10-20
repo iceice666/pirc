@@ -3,6 +3,54 @@
   "browserVersion": "153.0.8010.12",
   "cases": [
     {
+      "name": "rootless-relative-centered",
+      "rootless": true,
+      "dialogStyle": "position:relative",
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 150.203125,
+          "y": 368.5,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "html-without-body-relative-centered",
+      "omitBody": true,
+      "dialogStyle": "position:relative",
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 150.203125,
+          "y": 368.5,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
       "name": "relative-centered",
       "dialogStyle": "position:relative",
       "viewport": {
@@ -137,6 +185,54 @@
         "inset": {
           "top": "40px",
           "left": "20px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "rootless-relative-centered",
+      "rootless": true,
+      "dialogStyle": "position:relative",
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 339.203125,
+          "y": 458.5,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "0px",
+          "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "html-without-body-relative-centered",
+      "omitBody": true,
+      "dialogStyle": "position:relative",
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "result": {
+        "position": "absolute",
+        "rect": {
+          "x": 339.203125,
+          "y": 458.5,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
           "right": "0px",
           "bottom": "0px"
         }

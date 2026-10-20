@@ -25,7 +25,7 @@ are available from Git through Historical records, not repeated here.
       tested button-only case. Common author `position` overrides (`relative`,
       `static !important`, `sticky`, offset absolute/fixed) and positioned or
       transformed DOM parents now use the Chromium 153 top-layer containing
-      block in 12 phone/tablet geometry and computed-style cases. Check author
+      block in 16 phone/tablet geometry and computed-style cases. Check author
       `inset:auto` and other untested positioning combinations, nested modal
       stacking, focus/semantics
       isolation and backdrop pointer/hover behavior beyond the tested gestures.
@@ -38,11 +38,13 @@ are available from Git through Historical records, not repeated here.
 - [ ] **Dynamic content compatibility:** wider synchronous DOM write/read layout,
       broader DOM APIs, Canvas font/ink coverage, inline-fragment measurements
       and common-library coverage. Broader image/framework flows remain
-      unverified; preserve explicit unsupported errors. A document supplied as
-      a fragment without `<html>/<body>` may leave the script DOM's first node
-      as `documentElement`; the layout bridge can then reject otherwise
-      connected descendant offset packets. Browser-style document wrapping
-      and its DOM/layout effects need a separate parity gate.
+      unverified; preserve explicit unsupported errors. Host-layout documents
+      now create connected `html/head/body` nodes for common rootless sources
+      and incomplete `<html>` markup before parser scripts run. Ten fixed
+      Chromium 153 document-tree cases and four phone/tablet modal geometry
+      cases cover the prior offset-packet crash. Less common HTML5 tree-builder
+      recovery, such as duplicate head/body tags and malformed table nesting,
+      remains unverified.
 - [ ] **Scripted resource lifecycle and device input:** static fetched documents
       retain native controls through complete workspace removal/remount,
       same-frame replacement and reparenting. Already-authorized script file
