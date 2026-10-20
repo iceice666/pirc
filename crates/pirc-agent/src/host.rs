@@ -2,14 +2,14 @@
 //! apart from it: auto mode takes the write lease and asks the human, the
 //! PTC surface lists the session's capabilities.
 
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use pirc_policy::PathGuard;
 
-use pirc_protocol::Message;
+use pirc_protocol::{Message, Models};
 
 use crate::LocalBoxFuture;
-use crate::agent::ResolvedModel;
+use crate::agent::{Agent, ResolvedModel};
 use crate::auto_mode::{ApprovalMode, default_approval_mode};
 use crate::config::AgentConfig;
 use crate::session_store::SessionEntry;
@@ -68,4 +68,35 @@ pub trait AgentHost {
     fn run_user_quotes(&self) -> Vec<String> {
         Vec::new()
     }
+}
+
+/// Builds a worker's model-facing wrappers (`ptc`, `ptc_docs`).
+pub type ModelTools = fn(Weak<dyn AgentHost>, Weak<Agent>) -> Vec<Rc<dyn Tool>>;
+
+/// Who runs the agent (plans/rewrite/02-brain-host.md).
+#[derive(Clone, Copy)]
+pub enum HostProfile {
+    /// A session on a node: the model reaches capabilities through `ptc`
+    /// scripts and the direct core capabilities, in a working directory.
+    Worker { model_tools: ModelTools },
+    /// The gateway's brain: no scripts (it has no sandbox for a guest), every
+    /// tool is a direct tool, and there is no working directory. Its PTC
+    /// surface is never referenced, so the gateway does not link it.
+    Brain,
+}
+
+impl HostProfile {
+    /// A node's session, with the PTC wrappers.
+    pub fn worker() -> Self {
+        Self::Worker {
+            model_tools: crate::ptc::model_tools,
+        }
+    }
+}
+
+/// The public model catalog of a host that has it at hand (the gateway);
+/// without one the agent asks its node (`refreshModels`).
+pub trait ModelCatalog {
+    /// `None` keeps what the agent has.
+    fn models(&self) -> Option<Models>;
 }

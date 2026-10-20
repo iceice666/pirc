@@ -276,7 +276,9 @@ async fn main(args: Vec<String>) -> Result<(), String> {
         features,
         acquire_write: process_write_lease(),
         allowed_tools,
-        stream_override: None,
+        stream: None,
+        models: None,
+        host: crate::host::HostProfile::worker(),
     });
     agent.refresh_models().await;
     if let Some(model) = string(&args.model)

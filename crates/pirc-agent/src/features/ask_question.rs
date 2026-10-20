@@ -724,7 +724,9 @@ mod tests {
             features: Vec::new(),
             acquire_write: None,
             allowed_tools: None,
-            stream_override: None,
+            stream: None,
+            models: None,
+            host: crate::host::HostProfile::worker(),
         })
     }
 

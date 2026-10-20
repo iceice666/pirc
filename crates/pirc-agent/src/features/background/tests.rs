@@ -28,7 +28,9 @@ fn agent(dir: &std::path::Path, off: bool) -> (Rc<Agent>, Rc<RefCell<Vec<Value>>
         features: vec![feature()],
         acquire_write: None,
         allowed_tools: None,
-        stream_override: None,
+        stream: None,
+        models: None,
+        host: crate::host::HostProfile::worker(),
     });
     (agent, lines)
 }

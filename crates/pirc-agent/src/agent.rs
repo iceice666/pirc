@@ -26,7 +26,7 @@ use crate::config::{AgentConfig, session_settings};
 use crate::context::{self, ContextInput, PromptSection, join_prompt, trim_sections};
 use crate::feature::{BeforeStart, Feature, PromptAddition};
 use crate::hooks::{HookName, HookRunner};
-use crate::host::AgentHost;
+use crate::host::{AgentHost, HostProfile, ModelCatalog};
 use crate::messages::empty_usage;
 use crate::ptc::{self, CapabilityRegistry, DIRECT_CAPABILITIES, WRAPPER_NAMES};
 use crate::roles::{AgentRole, expand_models, read_roles};
@@ -60,8 +60,11 @@ pub struct AgentOptions {
     pub acquire_write: Option<AcquireWrite>,
     /// Only these capabilities (a restricted kind).
     pub allowed_tools: Option<Vec<String>>,
-    /// Test seam: the model.
-    pub stream_override: Option<Rc<dyn StreamFn>>,
+    /// The model; `None` asks the node (`RemoteStream`).
+    pub stream: Option<Rc<dyn StreamFn>>,
+    /// The public catalog; `None` asks the node.
+    pub models: Option<Rc<dyn ModelCatalog>>,
+    pub host: HostProfile,
 }
 
 /// Which queue `send_now` takes from.
@@ -169,7 +172,11 @@ pub struct Agent {
     /// `ptc` and `ptc_docs`.
     wrappers: RefCell<IndexMap<String, Rc<dyn Tool>>>,
     registry: CapabilityRegistry,
-    stream_override: Option<Rc<dyn StreamFn>>,
+    stream: Option<Rc<dyn StreamFn>>,
+    catalog: Option<Rc<dyn ModelCatalog>>,
+    host: HostProfile,
+    /// Replaces `config.system_prompt` (`set_base_prompt`).
+    base_prompt: RefCell<Option<Vec<PromptSection>>>,
     write_lease: Option<AcquireWrite>,
     steering: RefCell<Vec<QueueItem>>,
     follow_ups: RefCell<Vec<QueueItem>>,
@@ -710,7 +717,10 @@ impl Agent {
                 tools: RefCell::new(tools),
                 wrappers: RefCell::new(IndexMap::new()),
                 registry: CapabilityRegistry::new(session_id.clone()),
-                stream_override: options.stream_override,
+                stream: options.stream,
+                catalog: options.models,
+                host: options.host,
+                base_prompt: RefCell::new(None),
                 write_lease: options.acquire_write,
                 steering: RefCell::new(Vec::new()),
                 follow_ups: RefCell::new(Vec::new()),
@@ -758,11 +768,13 @@ impl Agent {
             let weak: Weak<Agent> = Rc::downgrade(&agent);
             weak
         };
-        for tool in ptc::model_tools(host, Rc::downgrade(&agent)) {
-            agent
-                .wrappers
-                .borrow_mut()
-                .insert(tool.name().to_owned(), tool);
+        if let HostProfile::Worker { model_tools } = agent.host {
+            for tool in model_tools(host, Rc::downgrade(&agent)) {
+                agent
+                    .wrappers
+                    .borrow_mut()
+                    .insert(tool.name().to_owned(), tool);
+            }
         }
         // Apply the mode first: every later role/CLI/recorded allowlist can
         // only narrow it. PTC wrappers dispatch through this same operation map.
@@ -1147,7 +1159,11 @@ impl Agent {
 
     /// `modelToolList`: `ptc` and `ptc_docs` when any capability is
     /// available, then the direct core capabilities.
+    /// The brain has no scripts: every capability is a direct tool.
     fn model_tool_list(&self) -> Vec<Rc<dyn Tool>> {
+        if matches!(self.host, HostProfile::Brain) {
+            return self.available_tools();
+        }
         if self.available_tools().is_empty() {
             return Vec::new();
         }
@@ -1654,6 +1670,20 @@ impl Agent {
         self.emit_queue();
     }
 
+    /// Words someone said in a room (the brain): never a command, even
+    /// when they start with `/`. A run starts, or the running one is
+    /// steered.
+    pub fn say(self: &Rc<Self>, text: String, images: Vec<UserBlock>) {
+        self.user_input(&text);
+        let item = Self::user_item(text, images);
+        if !self.running.get() {
+            return self.start_run(vec![item]);
+        }
+        self.steering.borrow_mut().push(item);
+        self.completion_changed();
+        self.emit_queue();
+    }
+
     pub fn follow_up(self: &Rc<Self>, text: String, images: Vec<UserBlock>) {
         if self.try_command(&text) {
             return;
@@ -2033,6 +2063,13 @@ impl Agent {
         Ok(())
     }
 
+    /// Replace the base of the system prompt (`config.system_prompt`):
+    /// the brain's identity, read again before each turn. The next model
+    /// call uses it.
+    pub fn set_base_prompt(&self, sections: Vec<PromptSection>) {
+        *self.base_prompt.borrow_mut() = Some(sections);
+    }
+
     /// The system prompt with the latest run's feature additions.
     pub fn system_prompt(&self) -> String {
         join_prompt(&self.prompt_sections())
@@ -2040,7 +2077,11 @@ impl Agent {
 
     /// `promptSections`.
     pub fn prompt_sections(&self) -> Vec<PromptSection> {
-        let mut sections = self.config.system_prompt.clone();
+        let mut sections = self
+            .base_prompt
+            .borrow()
+            .clone()
+            .unwrap_or_else(|| self.config.system_prompt.clone());
         let extra = self.extra_system_prompt.borrow();
         if !extra.is_empty() {
             sections.push(PromptSection::new(
@@ -2051,6 +2092,9 @@ impl Agent {
             ));
         }
         sections.extend(self.run_prompt.borrow().iter().cloned());
+        if matches!(self.host, HostProfile::Brain) {
+            return sections;
+        }
         if let Some(index) = ptc::capability_index_prompt(self) {
             sections.push(PromptSection::new(
                 "capabilities",
@@ -2187,11 +2231,19 @@ impl Agent {
 
     /// `refreshModels`: the node's current public catalog.
     pub async fn refresh_models(&self) {
-        let Some(inference) = self.config.models.inference.clone() else {
-            return;
-        };
-        let Ok(latest) = crate::remote::fetch_remote_models(&inference).await else {
-            return;
+        let latest = if let Some(catalog) = &self.catalog {
+            let Some(latest) = catalog.models() else {
+                return;
+            };
+            latest
+        } else {
+            let Some(inference) = self.config.models.inference.clone() else {
+                return;
+            };
+            let Ok(latest) = crate::remote::fetch_remote_models(&inference).await else {
+                return;
+            };
+            latest
         };
         {
             let mut models = self.models.borrow_mut();
@@ -2216,7 +2268,7 @@ impl Agent {
 
     /// `streamFunction`: the gateway's inference (tests may override it).
     pub fn stream_function(&self) -> Rc<dyn StreamFn> {
-        if let Some(stream) = &self.stream_override {
+        if let Some(stream) = &self.stream {
             return stream.clone();
         }
         match &self.config.models.inference {
@@ -3293,6 +3345,9 @@ impl AgentHost for Agent {
 }
 
 #[cfg(test)]
+mod brain_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -3327,7 +3382,9 @@ mod tests {
             features: crate::features::builtin_features(),
             acquire_write: None,
             allowed_tools,
-            stream_override: None,
+            stream: None,
+            models: None,
+            host: crate::host::HostProfile::worker(),
         });
         (agent, ui)
     }
