@@ -486,6 +486,7 @@ impl BackendService {
         api_key: Option<String>,
     ) -> Result<Provider, BackendError> {
         let mut known: &[CatalogModel] = &[];
+        let mut catalog_routes = false;
         if let Some(preset) = &connection.preset {
             let entry = self
                 .presets()
@@ -495,6 +496,17 @@ impl BackendService {
                 return Err(invalid("Unknown backend preset"));
             }
             known = catalog_models(preset);
+            if let Some(base) = discovery::opencode_base_url(preset, connection.api) {
+                let configured = connection.base_url.trim_end_matches('/');
+                // A custom proxy keeps the user's endpoint and wire API. Never
+                // send its credentials to an implicit catalog destination.
+                let legacy = match preset.as_str() {
+                    "opencode" => "https://opencode.ai/zen/v1",
+                    "opencode-go" => "https://opencode.ai/zen/go/v1",
+                    _ => unreachable!(),
+                };
+                catalog_routes = configured == base || configured == legacy;
+            }
         }
         let models = models
             .iter()
@@ -515,6 +527,10 @@ impl BackendService {
                 };
                 if let Some(entry) = known.iter().find(|entry| entry.id == input.id) {
                     discovery::catalog_metadata(entry, &mut model);
+                    if catalog_routes {
+                        model.api = Some(entry.api);
+                        model.base_url = Some(entry.base_url.clone());
+                    }
                 }
                 model
             })

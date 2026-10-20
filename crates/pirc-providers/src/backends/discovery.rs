@@ -110,6 +110,7 @@ fn display_name(id: &str) -> Option<&'static str> {
         "zai" => "Z.ai Coding Plan",
         "minimax" => "MiniMax",
         "minimax-cn" => "MiniMax (China)",
+        "opencode" => "OpenCode Zen",
         "opencode-go" => "OpenCode Go",
         "vercel-ai-gateway" => "Vercel AI Gateway",
         "xiaomi" => "Xiaomi MiMo",
@@ -180,8 +181,28 @@ fn https_template_free(url: &str) -> bool {
         .is_some_and(|rest| !rest.is_empty() && !rest.contains(['{', '}']))
 }
 
-/// `catalogPresets`: catalog providers usable with a plain API key (one
-/// supported API and one concrete endpoint), then the local servers.
+/// The OpenCode catalog uses one account across three native wire APIs.
+/// Only these exact endpoints may receive catalog-derived route overrides.
+pub fn opencode_base_url(provider: &str, api: ModelApi) -> Option<&'static str> {
+    match (provider, api) {
+        ("opencode", ModelApi::OpenaiCompletions | ModelApi::OpenaiResponses) => {
+            Some("https://opencode.ai/inference/openai/v1")
+        }
+        ("opencode", ModelApi::AnthropicMessages) => {
+            Some("https://opencode.ai/inference/anthropic")
+        }
+        ("opencode-go", ModelApi::OpenaiCompletions | ModelApi::OpenaiResponses) => {
+            Some("https://opencode.ai/inference/go/openai/v1")
+        }
+        ("opencode-go", ModelApi::AnthropicMessages) => {
+            Some("https://opencode.ai/inference/go/anthropic")
+        }
+        _ => None,
+    }
+}
+
+/// `catalogPresets`: catalog providers usable with a plain API key, then
+/// local servers. OpenCode retains its model-specific native API routes.
 pub fn catalog_presets<'a>(providers: impl Iterator<Item = &'a str>) -> Vec<BackendPreset> {
     let mut presets = Vec::new();
     for id in providers {
@@ -189,18 +210,28 @@ pub fn catalog_presets<'a>(providers: impl Iterator<Item = &'a str>) -> Vec<Back
             continue;
         }
         let models = catalog_models(id);
-        let Some(first) = models.first() else {
-            continue;
+        let opencode = matches!(id, "opencode" | "opencode-go");
+        let first = if opencode {
+            models
+                .iter()
+                .find(|model| model.api == ModelApi::OpenaiCompletions)
+        } else {
+            models.first()
         };
+        let Some(first) = first else { continue };
         let preset_api = matches!(
             first.api,
             ModelApi::OpenaiCompletions | ModelApi::OpenaiResponses | ModelApi::AnthropicMessages
         );
         if !preset_api
             || !https_template_free(&first.base_url)
-            || models
-                .iter()
-                .any(|model| model.api != first.api || model.base_url != first.base_url)
+            || models.iter().any(|model| {
+                if opencode {
+                    opencode_base_url(id, model.api) != Some(model.base_url.as_str())
+                } else {
+                    model.api != first.api || model.base_url != first.base_url
+                }
+            })
         {
             continue;
         }
@@ -550,13 +581,13 @@ mod tests {
     use crate::catalog::catalog_providers;
 
     #[test]
-    fn presets_match_the_typescript_order() {
+    fn presets_keep_service_order_with_refreshed_opencode_catalogs() {
         let presets = catalog_presets(catalog_providers());
         let listed: Vec<String> = presets
             .iter()
             .map(|p| format!("{}|{}|{}", p.id, p.name, p.models.len()))
             .collect();
-        // `catalogPresets(getProviders(), getModels)` of the TS gateway.
+        // Original service order, with separately refreshed OpenCode catalogs.
         assert_eq!(
             listed,
             [
@@ -574,7 +605,8 @@ mod tests {
                 "minimax-cn|MiniMax (China)|2",
                 "moonshotai|Moonshot AI|7",
                 "moonshotai-cn|Moonshot AI (China)|7",
-                "opencode-go|OpenCode Go|12",
+                "opencode-go|OpenCode Go|34",
+                "opencode|OpenCode Zen|72",
                 "vercel-ai-gateway|Vercel AI Gateway|162",
                 "xiaomi|Xiaomi MiMo|5",
                 "xiaomi-token-plan-ams|xiaomi-token-plan-ams|5",

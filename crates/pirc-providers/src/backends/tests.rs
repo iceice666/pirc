@@ -977,3 +977,190 @@ async fn a_refresh_with_rotated_credentials_returns_the_saved_ones() {
     backends.close();
     assert!(backends.refresh("anthropic", saved).await.is_err());
 }
+
+#[tokio::test]
+async fn opencode_presets_persist_native_model_routes_and_keep_custom_endpoints() {
+    use pirc_protocol::ModelApi;
+    let dir = tempfile::tempdir().unwrap();
+    let (backends, _) = service(dir.path());
+    let cases = [
+        (
+            "deepseek-v4.1-flash",
+            ModelApi::OpenaiCompletions,
+            "openai/v1",
+        ),
+        ("gpt-6-luna", ModelApi::OpenaiResponses, "openai/v1"),
+        ("claude-haiku-5-5", ModelApi::AnthropicMessages, "anthropic"),
+    ];
+    for preset_id in ["opencode", "opencode-go"] {
+        let preset = backends
+            .presets()
+            .iter()
+            .find(|p| p.id == preset_id)
+            .unwrap();
+        let models: Vec<_> = cases
+            .iter()
+            .map(|(id, _, _)| {
+                preset
+                    .models
+                    .iter()
+                    .find(|m| m.id == *id)
+                    .unwrap()
+                    .to_json()
+            })
+            .collect();
+        let mut body = json!({ "api": preset.api, "baseUrl": format!("{}/", preset.base_url),
+            "preset": preset_id, "apiKey": SECRET, "models": models });
+        backends.save_provider(preset_id, &body, true).unwrap();
+        for (id, api, suffix) in cases {
+            let resolved = resolve(&backends, preset_id, id).await;
+            assert_eq!(resolved.model.api, Some(api));
+            let plan = if preset_id == "opencode-go" {
+                "/go"
+            } else {
+                ""
+            };
+            assert_eq!(
+                resolved.model.base_url.as_deref(),
+                Some(format!("https://opencode.ai/inference{plan}/{suffix}").as_str())
+            );
+            assert_eq!(resolved.api_key.as_deref(), Some(SECRET));
+        }
+        body["baseUrl"] = json!("https://proxy.example/custom/v1");
+        let proxy_id = format!("{preset_id}-proxy");
+        backends.save_provider(&proxy_id, &body, true).unwrap();
+        for (id, _, _) in cases {
+            let resolved = resolve(&backends, &proxy_id, id).await;
+            assert_eq!(resolved.model.api, None);
+            assert_eq!(resolved.model.base_url, None);
+            assert_eq!(
+                resolved.provider.base_url,
+                "https://proxy.example/custom/v1"
+            );
+        }
+        body["baseUrl"] = json!(if preset_id == "opencode-go" {
+            "https://opencode.ai/zen/go/v1"
+        } else {
+            "https://opencode.ai/zen/v1"
+        });
+        let legacy_id = format!("{preset_id}-legacy");
+        backends.save_provider(&legacy_id, &body, true).unwrap();
+        assert_eq!(
+            resolve(&backends, &legacy_id, "gpt-6-luna").await.model.api,
+            Some(ModelApi::OpenaiResponses)
+        );
+    }
+    let snapshot = backends.snapshot().to_string();
+    assert!(!snapshot.contains(SECRET));
+    assert!(!snapshot.contains("/inference/anthropic"));
+    drop(backends);
+    let (reopened, _) = service(dir.path());
+    for preset in ["opencode", "opencode-go"] {
+        assert_eq!(
+            resolve(&reopened, preset, "gpt-6-luna").await.model.api,
+            Some(ModelApi::OpenaiResponses)
+        );
+        assert_eq!(
+            resolve(&reopened, &format!("{preset}-proxy"), "gpt-6-luna")
+                .await
+                .model
+                .api,
+            None
+        );
+    }
+}
+
+#[tokio::test]
+async fn opencode_catalog_routes_stream_through_all_three_local_wire_apis() {
+    use axum::body::Bytes;
+    use axum::http::{HeaderMap, Uri};
+    use axum::response::IntoResponse;
+    use pirc_protocol::{InferenceRequest, StopReason};
+    let seen = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let captured = seen.clone();
+    let app = axum::Router::new().fallback(move |uri: Uri, headers: HeaderMap, body: Bytes| {
+        let captured = captured.clone();
+        async move {
+            let path = uri.path();
+            captured.lock().unwrap().push(json!({ "path": path,
+                "session": headers.get("x-opencode-session").unwrap().to_str().unwrap(),
+                "key": headers.get(if path.ends_with("/messages") { "x-api-key" } else { "authorization" }).unwrap().to_str().unwrap(),
+                "body": serde_json::from_slice::<Value>(&body).unwrap() }));
+            let group = if path.ends_with("/responses") { "responses" }
+                else if path.ends_with("/messages") { "anthropic" } else { "completions" };
+            let file = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("tests/parity/fixtures/{group}.json"));
+            let fixtures: Value = serde_json::from_slice(&fs::read(file).unwrap()).unwrap();
+            let chunks = fixtures[0]["responses"][0]["chunks"].as_array().unwrap()
+                .iter().map(|v| v.as_str().unwrap()).collect::<String>();
+            ([("content-type", "text/event-stream")], chunks).into_response()
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await });
+    let dir = tempfile::tempdir().unwrap();
+    let (backends, _) = service(dir.path());
+    let models = ["deepseek-v4.1-flash", "gpt-6-luna", "claude-haiku-5-5"];
+    let preset = backends
+        .presets()
+        .iter()
+        .find(|p| p.id == "opencode-go")
+        .unwrap();
+    backends.save_provider("go", &json!({ "api": preset.api, "baseUrl": preset.base_url,
+        "preset": preset.id, "apiKey": SECRET,
+        "models": models.iter().map(|id| preset.models.iter().find(|m| m.id == *id).unwrap().to_json()).collect::<Vec<_>>() }), true).unwrap();
+    let inference = Inference::new();
+    for id in models {
+        let mut resolved = resolve(&backends, "go", id).await;
+        let original = reqwest::Url::parse(resolved.model.base_url.as_deref().unwrap()).unwrap();
+        // Preserve the catalog's entire path and API, redirecting only the
+        // origin to our synthetic loopback server. No hosted inference runs.
+        resolved.model.base_url = Some(format!("http://{address}{}", original.path()));
+        resolved.provider.opencode_go = Some(true);
+        let request: InferenceRequest = serde_json::from_value(json!({
+            "providerName": "go", "modelId": id, "systemPrompt": "test",
+            "messages": [{ "role": "user", "content": "synthetic ping", "timestamp": 1 }],
+            "tools": [], "thinking": "off", "sessionId": "catalog-test" }))
+        .unwrap();
+        let reply = tokio::time::timeout(
+            Duration::from_secs(5),
+            inference.run(&resolved, &request, "test-node", &mut |_, _| {}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            reply.stop_reason,
+            StopReason::Stop,
+            "{id}: {:?}",
+            reply.error_message
+        );
+        assert!(
+            serde_json::to_string(&reply.content)
+                .unwrap()
+                .contains("Hello from the fake model.")
+        );
+    }
+    server.abort();
+    let requests = seen.lock().unwrap();
+    assert_eq!(requests.len(), 3);
+    for ((request, id), suffix) in requests.iter().zip(models).zip([
+        "openai/v1/chat/completions",
+        "openai/v1/responses",
+        "anthropic/v1/messages",
+    ]) {
+        assert_eq!(request["path"], format!("/inference/go/{suffix}"));
+        assert_eq!(
+            request["session"],
+            json!(["test-node", "catalog-test", "go"]).to_string()
+        );
+        assert_eq!(request["body"]["model"], id);
+        assert_eq!(
+            request["key"],
+            if suffix.ends_with("messages") {
+                SECRET.to_owned()
+            } else {
+                format!("Bearer {SECRET}")
+            }
+        );
+    }
+}

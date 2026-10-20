@@ -4,18 +4,22 @@
  *
  * Only providers whose every model uses a wire API the gateway implements are
  * kept (the others could be neither presets nor OAuth catalogs), and `cost`
- * is dropped (the gateway reports zero cost). Base URLs a provider has moved
- * since the pinned release are rewritten through BASE_URL_MOVES.
+ * is dropped (the gateway reports zero cost). OpenCode uses a separate pinned
+ * live-catalog snapshot; --refresh-opencode explicitly refreshes it. Base URLs
+ * moved since the pinned release are rewritten through BASE_URL_MOVES.
  *
  *   bun scripts/model-catalog.ts          write the snapshot
  *   bun scripts/model-catalog.ts --check  fail when the snapshot is stale
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { refreshOpenCodeCatalog } from './opencode-catalog.ts';
 
-const root = path.resolve(import.meta.dir, '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const piAi = path.join(root, 'node_modules/@mariozechner/pi-ai');
 const output = path.join(root, 'crates/pirc-providers/catalog.json');
+const openCodePath = path.join(root, 'scripts/catalog/opencode.json');
 
 export const SUPPORTED_APIS: ReadonlySet<string> = new Set([
   'anthropic-messages',
@@ -52,17 +56,42 @@ export function snapshot(
   version: string,
   providers: readonly string[],
   models: (provider: string) => CatalogModel[],
+  openCode: Record<string, CatalogModel[]> = JSON.parse(readFileSync(openCodePath, 'utf8'))
+    .providers,
 ): string {
   const kept: Record<string, Record<string, unknown>[]> = {};
-  for (const provider of providers) {
-    const entries = models(provider);
+  for (const provider of new Set([...providers, ...Object.keys(openCode)])) {
+    const entries = openCode[provider] ?? models(provider);
+    const legacy = new Map(models(provider).map((model) => [String(model.id), model]));
     if (!entries.length || !entries.every((model) => SUPPORTED_APIS.has(model.api))) continue;
-    kept[provider] = entries.map(({ cost: _cost, ...model }) => moveBaseUrl(provider, model));
+    kept[provider] = entries.map(({ cost: _cost, ...model }) => {
+      const old = legacy.get(String(model.id));
+      if (openCode[provider] && old?.api === model.api) {
+        // Retain pi-ai's tested wire compatibility, without retaining stale limits.
+        for (const key of ['compat', 'headers', 'thinkingLevelMap']) {
+          if (old[key])
+            model[key] =
+              key === 'compat' ? { ...(old[key] as object), ...(model[key] as object) } : old[key];
+        }
+      }
+      return moveBaseUrl(provider, model);
+    });
   }
   return `${JSON.stringify({ piAi: version, providers: kept })}\n`;
 }
 
 if (import.meta.main) {
+  if (process.argv.includes('--refresh-opencode')) {
+    if (process.argv.includes('--check'))
+      throw new Error('Refresh and --check are mutually exclusive');
+    const { format, resolveConfig } = await import('prettier');
+    const pin = await refreshOpenCodeCatalog();
+    const formatted = await format(JSON.stringify(pin, null, 2), {
+      ...(await resolveConfig(openCodePath)),
+      filepath: openCodePath,
+    });
+    writeFileSync(openCodePath, formatted);
+  }
   const { version } = JSON.parse(readFileSync(path.join(piAi, 'package.json'), 'utf8')) as {
     version: string;
   };

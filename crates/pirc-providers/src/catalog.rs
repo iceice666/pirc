@@ -1,6 +1,7 @@
 //! pi-ai's built-in model catalog (`getProviders`/`getModels`), embedded as
 //! the snapshot `scripts/model-catalog.ts` generates from the pinned pi-ai
-//! package. It feeds API-key presets and the subscription (OAuth) catalogs.
+//! package plus the separately pinned OpenCode live catalog. It feeds API-key
+//! presets and the subscription (OAuth) catalogs.
 
 use std::sync::LazyLock;
 
@@ -47,7 +48,7 @@ pub fn catalog_version() -> &'static str {
     &CATALOG.pi_ai
 }
 
-/// `getProviders()`: catalog provider IDs in pi-ai's order.
+/// Catalog provider IDs in pi-ai's order, followed by additional pinned catalogs.
 pub fn catalog_providers() -> impl Iterator<Item = &'static str> {
     CATALOG.providers.keys().map(String::as_str)
 }

@@ -8,6 +8,14 @@
 
   Endpoints must be reachable from the gateway (a model server that only listens on a node's `localhost` is not). Nodes have no provider settings of their own; `providers` and `defaultModel` in a node's `config.json` are ignored with a warning.
 
+## OpenCode Zen and Go
+
+**Settings → Model backends** includes separate **OpenCode Zen** and **OpenCode Go** presets. The gateway ships a dated catalog and lists models from OpenCode's official endpoint when you choose **Discover**. Updating the gateway refreshes the built-in choices for both Web and Android; existing saved model selections are retained. Edit the backend and select the new models you want to use.
+
+On the preset's official endpoint, known models use their cataloged Chat Completions, Responses or Anthropic Messages API automatically. The legacy official `/zen/v1` and `/zen/go/v1` base URLs also use current routes when saved again. A custom proxy base URL keeps the API and endpoint you configured; it must support those selected models itself.
+
+The built-in list includes live model IDs with verified OpenCode metadata and a supported wire API. Models needing Google's or Mistral's native API, and IDs lacking OpenCode metadata, are omitted. Input capabilities are limited to the text and image formats pirc supports. Catalog presence does not establish account access; real model calls are not exercised by automated tests.
+
 ## Subscription logins
 
 Open **Settings → Model backends** and choose **Log in**. The gateway runs the login flow (ported from pi-ai) as a time-limited task (10 minutes) and shows its steps in the browser: the authorization link and instructions, device codes, questions (such as a GitHub Enterprise domain), and progress. Nothing needs a CLI on a node.
