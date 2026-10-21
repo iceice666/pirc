@@ -19,9 +19,6 @@ export function seedApp(overrides: Partial<ClientSessionState> = {}): ClientSess
   engine.sessions = [state.session];
   engine.sessionState = state;
   engine.connection = 'connected';
-  engine.commandBusy = false;
-  engine.draft = '';
-  engine.uploads = [];
   engine.hiddenMessages = 0;
   return state;
 }

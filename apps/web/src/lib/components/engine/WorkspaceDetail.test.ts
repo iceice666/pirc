@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { engine } from '../engine.svelte';
-import { demoModes } from '../mock';
-import { reactiveProps } from '../testing/props.svelte';
-import type { SessionSummary, Workspace } from '../types';
-import WorkspacePage from './WorkspacePage.svelte';
+import { engine } from '../../engine.svelte';
+import { demoModes } from '../../mock';
+import { reactiveProps } from '../../testing/props.svelte';
+import type { SessionSummary, Workspace } from '../../types';
+import WorkspaceDetail from './WorkspaceDetail.svelte';
 
 const session = (id: string, name: string, extra: Partial<SessionSummary> = {}) => ({
   id,
@@ -40,8 +40,8 @@ beforeEach(() => {
   engine.workspaces = [directory];
   engine.sessions = [
     session('a', 'Alpha', { unread: true }),
-    session('b', 'Beta', { pinned: true, writeLease: true }),
-    session('c', 'Gamma', { settled: true }),
+    session('b', 'Beta', { writeLease: true }),
+    session('c', 'Gamma'),
     session('o', 'Elsewhere', { workspaceId: 'node:gpu' }),
   ];
   target = document.createElement('div');
@@ -76,9 +76,9 @@ afterEach(async () => {
   onselect.mockReset();
 });
 
-function render(workspace: Workspace, showSettled = false) {
-  const props = reactiveProps({ workspace, showSettled, onselect });
-  component = mount(WorkspacePage, { target, props });
+function render(workspace: Workspace) {
+  const props = reactiveProps({ workspace, onselect });
+  component = mount(WorkspaceDetail, { target, props });
   flushSync();
   return props;
 }
@@ -95,26 +95,24 @@ async function flush() {
   }
 }
 
-describe('WorkspacePage', () => {
-  it('lists every session of the workspace, pinned first, with done ones behind a toggle', () => {
+describe('WorkspaceDetail', () => {
+  it('lists every session of the workspace by activity, and opens one', () => {
     render(directory);
     expect(target.querySelector('h1')!.textContent).toBe('Code');
-    expect(names()).toEqual(['Beta', 'Alpha']);
+    expect(names()).toEqual(['Alpha', 'Beta', 'Gamma']);
     expect(tab('Sessions').querySelector('.tab-count')!.textContent).toBe('1');
-    const toggle = target.querySelector<HTMLButtonElement>('.done-toggle')!;
-    expect(toggle.textContent).toContain('Show done · 1');
-    toggle.click();
-    flushSync();
-    expect(names()).toEqual(['Beta', 'Alpha', 'Gamma']);
-    target.querySelectorAll<HTMLButtonElement>('.row-main')[1]!.click();
+    // Nothing to pin or settle: only a rename.
+    expect(
+      target.querySelector('[aria-label="Pin Alpha"], [aria-label="Settle Alpha"]'),
+    ).toBeNull();
+    target.querySelectorAll<HTMLButtonElement>('.row-main')[0]!.click();
     expect(onselect).toHaveBeenCalledWith('a');
     // pirc starts sessions when it hands work over: there is no "New session".
     expect(target.textContent).not.toContain('New session');
   });
 
-  it('starts with done sessions shown when Settings says so, and searches', () => {
-    render(directory, true);
-    expect(names()).toEqual(['Beta', 'Alpha', 'Gamma']);
+  it('searches', () => {
+    render(directory);
     const search = target.querySelector<HTMLInputElement>('.search input')!;
     search.value = 'gam';
     search.dispatchEvent(new Event('input', { bubbles: true }));
@@ -122,11 +120,9 @@ describe('WorkspacePage', () => {
     expect(names()).toEqual(['Gamma']);
   });
 
-  it('pins, settles and renames from the list', async () => {
-    const update = vi.spyOn(engine, 'updateSession').mockResolvedValue();
+  it('renames from the list', async () => {
+    const update = vi.spyOn(engine, 'renameSession').mockResolvedValue();
     render(directory);
-    target.querySelector<HTMLButtonElement>('[aria-label="Settle Alpha"]')!.click();
-    expect(update).toHaveBeenCalledWith('a', { settled: true });
     target.querySelector<HTMLButtonElement>('[aria-label="Rename Alpha"]')!.click();
     await tick();
     flushSync();
@@ -135,7 +131,7 @@ describe('WorkspacePage', () => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     flushSync();
-    expect(update).toHaveBeenCalledWith('a', { name: 'Renamed' });
+    expect(update).toHaveBeenCalledWith('a', 'Renamed');
   });
 
   it("shows a directory workspace's facts and project config under Settings", async () => {

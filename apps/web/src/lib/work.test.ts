@@ -24,17 +24,17 @@ describe('sidebarSessions', () => {
     session('new', { unread: true }),
     session('wait', { unread: true, runStatus: 'waiting_input' }),
     session('open'),
-    session('pin', { unread: true, pinned: true }),
+    session('late', { unread: true }),
     session('other', { workspaceId: 'n:other', unread: true }),
   ];
   const ids = (list: SessionSummary[]) => list.map((item) => item.id);
 
-  it('lists the unread sessions of one workspace and the open one, pinned first', () => {
-    expect(ids(sidebarSessions(sessions, 'n:ws', 'open'))).toEqual(['pin', 'new', 'wait', 'open']);
+  it('lists the unread sessions of one workspace and the open one, in the gateway’s order', () => {
+    expect(ids(sidebarSessions(sessions, 'n:ws', 'open'))).toEqual(['new', 'wait', 'open', 'late']);
   });
 
   it('can leave sessions waiting for an answer to "Needs you"', () => {
-    expect(ids(sidebarSessions(sessions, 'n:ws', undefined, true))).toEqual(['pin', 'new']);
+    expect(ids(sidebarSessions(sessions, 'n:ws', undefined, true))).toEqual(['new', 'late']);
   });
 });
 

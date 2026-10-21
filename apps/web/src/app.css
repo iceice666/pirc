@@ -2,7 +2,7 @@
  * Global styles: design tokens (light and dark), reset and element defaults,
  * and utilities shared across components (buttons, icon buttons, status dots,
  * sr-only, spin). Component styles live in each component's <style>; the
- * dock and side-panel building blocks sit next to them (dock.css, panel.css).
+ * side-panel building blocks sit next to them (panel.css).
  */
 :root {
   font-family:

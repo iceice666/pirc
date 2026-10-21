@@ -12,11 +12,6 @@ export const isRunning = (session: SessionSummary) =>
 
 export const needsInput = (session: SessionSummary) => session.runStatus === 'waiting_input';
 
-/** Pinned first, keeping the gateway's order (by activity) otherwise. */
-export function pinnedFirst(sessions: SessionSummary[]): SessionSummary[] {
-  return [...sessions.filter((item) => item.pinned), ...sessions.filter((item) => !item.pinned)];
-}
-
 /**
  * The sessions the sidebar lists under a workspace row: the unread
  * ones, and the open one so you can see where you are. The page lists the rest.
@@ -28,12 +23,10 @@ export function sidebarSessions(
   activeId: string | undefined,
   skipWaiting = false,
 ): SessionSummary[] {
-  return pinnedFirst(
-    sessions.filter(
-      (session) =>
-        session.workspaceId === workspaceId &&
-        (session.id === activeId || (session.unread && !(skipWaiting && needsInput(session)))),
-    ),
+  return sessions.filter(
+    (session) =>
+      session.workspaceId === workspaceId &&
+      (session.id === activeId || (session.unread && !(skipWaiting && needsInput(session)))),
   );
 }
 

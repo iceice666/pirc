@@ -50,7 +50,7 @@ internal data class ExternalDropBounds(
 
 internal data class ExternalDropCandidate<T>(val value: T, val mimeType: String?)
 
-/** Mirrors Composer.svelte's image-only filter while preserving drag order. */
+/** Mirrors the web composer's image-only filter (Composer.svelte, removed in plans/rewrite/11-web.md) while preserving drag order. */
 internal fun <T> imageDropCandidates(items: List<ExternalDropCandidate<T>>): List<ExternalDropCandidate<T>> =
     items.filter { it.mimeType?.startsWith("image/", ignoreCase = true) == true }
 

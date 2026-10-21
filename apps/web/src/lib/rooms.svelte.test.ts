@@ -248,6 +248,37 @@ describe('room state', () => {
     rooms.stop();
   });
 
+  it('shows demo rooms, faces and a thread in dev when there is no gateway', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    );
+    const rooms = new RoomsState();
+    await rooms.start();
+    expect(rooms.demo).toBeDefined();
+    expect(rooms.error).toBe('');
+    expect(rooms.rooms.map((item) => item.name)).toEqual(['SlimeOS', 'general']);
+    expect(rooms.messages.map((item) => item.kind)).toEqual(['text', 'text', 'line']);
+    expect(FakeSocket.all).toHaveLength(0);
+    await rooms.open('room_slime');
+    expect(rooms.messages.map((item) => item.kind)).toEqual([
+      'text',
+      'text',
+      'text',
+      'progress',
+      'question',
+    ]);
+    await rooms.openThread('thr-1');
+    expect(rooms.threadWorkers[0]?.targetSessionId).toBe('session-pwa');
+    await rooms.send('hello');
+    expect(rooms.messages[rooms.messages.length - 1]?.body.text).toBe('hello');
+    expect(rooms.faces.map((item) => item.name)).toEqual(['pirc', 'SlimeOS PM']);
+    rooms.stop();
+    history.replaceState(null, '', '/?room=general');
+  });
+
   it('keeps the cursor of the last numbered event for the next socket', async () => {
     const rooms = new RoomsState();
     await rooms.start();

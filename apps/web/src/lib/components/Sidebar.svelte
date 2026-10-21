@@ -1,7 +1,5 @@
 <script lang="ts">
   import {
-    Archive,
-    ArchiveRestore,
     ChevronLeft,
     Command,
     Ellipsis,
@@ -11,8 +9,6 @@
     Lock,
     PanelLeftClose,
     Pencil,
-    Pin,
-    PinOff,
     Plus,
     Search,
     Settings,
@@ -68,9 +64,7 @@
   const activeSessionId = $derived(engine.view === 'session' ? engine.activeSessionId : undefined);
   /** The workspace whose page is showing. */
   const pageId = $derived(engine.view === 'workspace' ? engine.workspaceViewId : undefined);
-  const onrename = (id: string, name: string) => engine.updateSession(id, { name });
-  const onpin = (id: string, pinned: boolean) => engine.updateSession(id, { pinned });
-  const onsettle = (id: string, settled: boolean) => engine.updateSession(id, { settled });
+  const onrename = (id: string, name: string) => engine.renameSession(id, name);
 
   const workspaceById = $derived(new Map(engine.workspaces.map((item) => [item.id, item])));
 
@@ -128,7 +122,7 @@
   }
 
   /**
-   * Touch screens have no hover: a row's pin/settle/rename buttons show on the
+   * Touch screens have no hover: a row's rename button shows on the
    * open session, or on the row whose "more" button was tapped.
    */
   let revealedId: string | undefined = $state();
@@ -347,7 +341,6 @@
   <div
     class="session-item"
     class:active={session.id === activeSessionId}
-    class:settled={session.settled}
     class:unread={session.unread}
     class:renaming={renamingId === session.id}
     class:revealed={revealedId === session.id}
@@ -416,7 +409,6 @@
               title="The delegated task {DELEGATION_STATUS[session.origin.status]}"
               >{session.origin.status === 'completed' ? 'Done' : 'Failed'}</span
             >{/if}
-          {#if session.pinned}<span class="pin-mark" title="Pinned"><Pin size={12} /></span>{/if}
           {#if showWorkspace && workspace}<span class="workspace-chip">{workspace.displayName}</span
             >{/if}
           {#if session.unread}<span class="unread-dot" role="img" aria-label="Unread"></span>{/if}
@@ -432,22 +424,6 @@
         >
       {/if}
       <div class="session-actions">
-        <button
-          type="button"
-          aria-label={session.pinned ? `Unpin ${session.name}` : `Pin ${session.name}`}
-          title={session.pinned ? 'Unpin' : 'Pin'}
-          onclick={() => onpin(session.id, !session.pinned)}
-          >{#if session.pinned}<PinOff size={14} />{:else}<Pin size={14} />{/if}</button
-        >
-        <button
-          type="button"
-          aria-label={session.settled ? `Reopen ${session.name}` : `Settle ${session.name}`}
-          title={session.settled ? 'Reopen' : 'Settle'}
-          onclick={() => onsettle(session.id, !session.settled)}
-          >{#if session.settled}<ArchiveRestore size={14} />{:else}<Archive
-              size={14}
-            />{/if}</button
-        >
         <button
           type="button"
           aria-label="Rename {session.name}"
@@ -751,9 +727,6 @@
     background: var(--bg-active);
     font-weight: 500;
   }
-  .session-item.settled .session-name {
-    color: var(--muted);
-  }
   .session-item.unread .session-name {
     font-weight: 600;
   }
@@ -762,10 +735,6 @@
     display: flex;
     align-items: center;
     gap: 6px;
-  }
-  .pin-mark {
-    display: grid;
-    color: var(--faint);
   }
   .lease-lock {
     display: grid;
@@ -816,7 +785,7 @@
   }
   .session-item:hover .session-card,
   .session-item:focus-within .session-card {
-    padding-right: calc(var(--action-count, 3) * 26px + 10px);
+    padding-right: calc(var(--action-count, 1) * 26px + 10px);
   }
   .session-item:hover .session-meta,
   .session-item:focus-within .session-meta {
@@ -833,7 +802,7 @@
     }
     .session-item.active .session-card,
     .session-item.revealed .session-card {
-      padding-right: calc(var(--action-count, 3) * 26px + 10px);
+      padding-right: calc(var(--action-count, 1) * 26px + 10px);
     }
     .session-item.active .session-meta,
     .session-item.revealed .session-meta {
@@ -862,7 +831,7 @@
   @media (hover: none) and (max-width: 650px) {
     .session-item.active .session-card,
     .session-item.revealed .session-card {
-      padding-right: calc(var(--action-count, 3) * 34px + 10px);
+      padding-right: calc(var(--action-count, 1) * 34px + 10px);
     }
   }
   .session-rename {
@@ -1106,7 +1075,7 @@
     }
     .session-item:hover .session-card,
     .session-item:focus-within .session-card {
-      padding-right: calc(var(--action-count, 3) * 34px + 10px);
+      padding-right: calc(var(--action-count, 1) * 34px + 10px);
     }
     .pill-button {
       height: 32px;

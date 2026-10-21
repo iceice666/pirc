@@ -2,8 +2,9 @@ package dev.pirc.android.core
 
 /*
  * Extension widgets the session state carries as plain text, turned back into
- * records for the docks above the composer. Ported from the web client
- * (`apps/web/src/lib/goal.ts`, `todo.ts`, `engine.svelte.ts`); change both together.
+ * records for the docks above the composer. Ported from the web client, which
+ * dropped its composer and docks in plans/rewrite/11-web.md (git history:
+ * `apps/web/src/lib/goal.ts`, `todo.ts`); plan 12 decides their fate here.
  */
 
 const val GOAL_WIDGET = "goal"

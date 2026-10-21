@@ -1,6 +1,7 @@
 import { uuid } from './id';
 
 const CLIENT_KEY = 'relay.client-id';
+/** Session drafts of the old composer (gone in plan 11): dropped first when storage is full. */
 const DRAFT_PREFIX = 'relay.draft.';
 const ROOM_DRAFT_PREFIX = 'relay.room-draft.';
 const LAYOUT_PREFIX = 'relay.layout.';
@@ -55,32 +56,6 @@ export function getClientId(): string {
     write(CLIENT_KEY, clientId);
   }
   return clientId;
-}
-
-export function loadDraft(sessionId: string): string {
-  return read(`${DRAFT_PREFIX}${sessionId}`) ?? '';
-}
-
-export function saveDraft(sessionId: string, draft: string): void {
-  const key = `${DRAFT_PREFIX}${sessionId}`;
-  if (!draft) {
-    remove(key);
-    return;
-  }
-  if (write(key, draft)) return;
-  // Probably over quota: other sessions' drafts are the only thing that grows.
-  for (const other of keys(DRAFT_PREFIX)) if (other !== key) remove(other);
-  write(key, draft);
-}
-
-export function removeDraft(sessionId: string): void {
-  remove(`${DRAFT_PREFIX}${sessionId}`);
-}
-
-/** Drop drafts of sessions that no longer exist. */
-export function pruneDrafts(sessionIds: Iterable<string>): void {
-  const known = new Set(Array.from(sessionIds, (id) => `${DRAFT_PREFIX}${id}`));
-  for (const key of keys(DRAFT_PREFIX)) if (!known.has(key)) remove(key);
 }
 
 /** What was being written in a room, kept across reloads and room switches. */

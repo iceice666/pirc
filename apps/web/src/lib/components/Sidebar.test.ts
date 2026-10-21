@@ -31,11 +31,7 @@ const handlers = {
 beforeEach(() => {
   engine.nodes = [{ id: 'node' } as never];
   engine.workspaces = [{ id: 'node:ws', hostId: 'node', displayName: 'Project' } as never];
-  engine.sessions = [
-    session('a', 'Alpha'),
-    session('b', 'Beta', { pinned: true }),
-    session('c', 'Gamma', { settled: true }),
-  ];
+  engine.sessions = [session('a', 'Alpha'), session('b', 'Beta'), session('c', 'Gamma')];
   engine.activeSessionId = 'a';
   engine.view = 'session';
   engine.workspaceViewId = undefined;
@@ -164,34 +160,39 @@ describe('Sidebar', () => {
   });
 
   it('selects a session and marks the open one as current', () => {
-    engine.sessions = [session('a', 'Alpha'), session('b', 'Beta', { unread: true, pinned: true })];
+    engine.sessions = [session('a', 'Alpha'), session('b', 'Beta', { unread: true })];
     render();
-    expect(names()).toEqual(['Beta', 'Alpha']);
+    expect(names()).toEqual(['Alpha', 'Beta']);
     const cards = target.querySelectorAll<HTMLButtonElement>('.session-card');
-    expect(cards[1]!.getAttribute('aria-current')).toBe('page');
-    expect(cards[0]!.querySelector('[aria-label="Unread"]')).not.toBeNull();
-    cards[0]!.click();
+    expect(cards[0]!.getAttribute('aria-current')).toBe('page');
+    expect(cards[1]!.querySelector('[aria-label="Unread"]')).not.toBeNull();
+    cards[1]!.click();
     expect(handlers.onselect).toHaveBeenCalledWith('b');
   });
 
-  it('reveals row actions of another session through its "more" button', () => {
-    const update = vi.spyOn(engine, 'updateSession').mockResolvedValue();
-    engine.sessions = [session('a', 'Alpha'), session('b', 'Beta', { unread: true, pinned: true })];
+  it('reveals the rename of another session through its "more" button', async () => {
+    const update = vi.spyOn(engine, 'renameSession').mockResolvedValue();
+    engine.sessions = [session('a', 'Alpha'), session('b', 'Beta', { unread: true })];
     render();
     // The open session needs no "more" button; the other row has one.
     expect(target.querySelector('[aria-label="Actions for Alpha"]')).toBeNull();
     const more = target.querySelector<HTMLButtonElement>('[aria-label="Actions for Beta"]')!;
     more.click();
     flushSync();
-    const row = target.querySelector('[aria-label="Unpin Beta"]')!.closest('.session-item')!;
+    const row = target.querySelector('[aria-label="Rename Beta"]')!.closest('.session-item')!;
     expect(row.classList.contains('revealed')).toBe(true);
     expect(target.querySelector('[aria-label="Actions for Beta"]')).toBeNull();
-    target.querySelector<HTMLButtonElement>('[aria-label="Unpin Beta"]')!.click();
-    expect(update).toHaveBeenCalledWith('b', { pinned: false });
+    // Nothing to pin or settle.
+    expect(target.querySelector('[aria-label="Pin Beta"], [aria-label="Settle Beta"]')).toBeNull();
+    target.querySelector<HTMLButtonElement>('[aria-label="Rename Beta"]')!.click();
+    await tick();
+    flushSync();
+    expect(target.querySelector('.session-rename input')).not.toBeNull();
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('renames with F2 and Enter', async () => {
-    const update = vi.spyOn(engine, 'updateSession').mockResolvedValue();
+    const update = vi.spyOn(engine, 'renameSession').mockResolvedValue();
     render();
     const card = target.querySelector<HTMLButtonElement>('.session-card')!;
     card.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true }));
@@ -203,7 +204,7 @@ describe('Sidebar', () => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     flushSync();
-    expect(update).toHaveBeenCalledWith('a', { name: 'Renamed' });
+    expect(update).toHaveBeenCalledWith('a', 'Renamed');
     expect(target.querySelector('.session-rename')).toBeNull();
   });
 
@@ -269,7 +270,7 @@ describe('Sidebar', () => {
       expect(node).toContain('read-only');
       // Nodes accepting no known mode host no workspaces.
       expect(target.querySelector('[aria-label="lab"]')).toBeNull();
-      // Sessions are settled, not deleted.
+      // Sessions are kept, never deleted.
       expect(namesIn('node')).toContain('Render image');
       expect(target.querySelector('[aria-label="Delete Render image"]')).toBeNull();
     });

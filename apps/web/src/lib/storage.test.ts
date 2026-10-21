@@ -2,7 +2,7 @@
 // @vitest-environment-options {"url":"http://localhost"}
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uuid } from './id';
-import { loadDraft, loadLayout, pruneDrafts, saveDraft, saveLayout } from './storage';
+import { loadLayout, loadRoomDraft, saveLayout, saveRoomDraft } from './storage';
 
 function memoryStorage(): Storage {
   const values = new Map<string, string>();
@@ -54,32 +54,33 @@ describe('storage', () => {
     vi.spyOn(storage, 'setItem').mockImplementation(() => {
       throw new DOMException('denied', 'SecurityError');
     });
-    expect(loadDraft('s1')).toBe('');
-    expect(() => saveDraft('s1', 'hi')).not.toThrow();
+    expect(loadRoomDraft('general')).toBe('');
+    expect(() => saveRoomDraft('general', 'hi')).not.toThrow();
     expect(loadLayout('panelWidth', 360)).toBe(360);
     expect(() => saveLayout('panelWidth', 400)).not.toThrow();
   });
 
   it('makes room for a draft by dropping other drafts on quota errors', () => {
-    saveDraft('old', 'old draft');
+    saveRoomDraft('old', 'old draft');
+    // A session draft of the old composer.
+    storage.setItem('relay.draft.s1', 'stale');
     const setItem = storage.setItem;
     let failures = 1;
     vi.spyOn(storage, 'setItem').mockImplementation(function (this: Storage, key, value) {
       if (failures-- > 0) throw new DOMException('full', 'QuotaExceededError');
       setItem.call(this, key, value);
     });
-    saveDraft('s1', 'new draft');
-    expect(loadDraft('s1')).toBe('new draft');
-    expect(loadDraft('old')).toBe('');
+    saveRoomDraft('general', 'new draft');
+    expect(loadRoomDraft('general')).toBe('new draft');
+    expect(loadRoomDraft('old')).toBe('');
+    expect(storage.getItem('relay.draft.s1')).toBeNull();
   });
 
-  it('prunes drafts of sessions that are gone', () => {
-    saveDraft('keep', 'a');
-    saveDraft('gone', 'b');
+  it('clears a room draft that was emptied, and keeps the layout apart', () => {
+    saveRoomDraft('general', 'a');
     saveLayout('panelWidth', 400);
-    pruneDrafts(['keep']);
-    expect(loadDraft('keep')).toBe('a');
-    expect(loadDraft('gone')).toBe('');
+    saveRoomDraft('general', '');
+    expect(storage.getItem('relay.room-draft.general')).toBeNull();
     expect(loadLayout('panelWidth', 360)).toBe(400);
   });
 });

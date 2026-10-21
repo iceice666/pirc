@@ -24,7 +24,7 @@
   import Message from './lib/components/Message.svelte';
   import MobileTabs, { type MobileTab, type MobileTabId } from './lib/components/MobileTabs.svelte';
   import RunCard from './lib/components/RunCard.svelte';
-  import WorkspacePage from './lib/components/WorkspacePage.svelte';
+  import WorkspaceDetail from './lib/components/engine/WorkspaceDetail.svelte';
   import EngineOverview from './lib/components/engine/EngineOverview.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import { timelineItems } from './lib/work';
@@ -69,8 +69,6 @@
   /** Room the conversation column keeps when the side panel is dragged wide. */
   const CONVERSATION_MIN = 380;
   let panelWidth = $state(loadLayout('panelWidth', PANEL_DEFAULT));
-  /** Sidebar hides settled sessions unless enabled in settings. */
-  let showSettled = $state(loadLayout('showSettled', false));
   let panelResizing = $state(false);
   let viewportWidth = $state(window.innerWidth);
   let panelTab: PanelTab = $state('files');
@@ -156,7 +154,6 @@
     // A dialog closes itself, and Escape belongs to programs in the terminal.
     if (panelOverlay && !target?.closest('dialog, .terminal-tab')) closePanel();
   }
-  $effect(() => saveLayout('showSettled', showSettled));
 
   function resizePanel(width: number) {
     panelWidth = width;
@@ -343,20 +340,14 @@
     const onVisibility = () => {
       schedule();
       if (document.visibilityState === 'visible') engine.resume(Date.now() - hiddenAt);
-      else {
-        hiddenAt = Date.now();
-        engine.flushDraft();
-      }
+      else hiddenAt = Date.now();
     };
     const onOnline = () => engine.retryBootstrap() || void engine.refreshControl();
-    const onPageHide = () => engine.flushDraft();
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('online', onOnline);
-    window.addEventListener('pagehide', onPageHide);
     return () => {
       clearInterval(nodeRefresh);
       clearInterval(leaseHeartbeat);
-      window.removeEventListener('pagehide', onPageHide);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('online', onOnline);
       engine.dispose();
@@ -445,10 +436,9 @@
         disabled={engine.usingDemo}
       />
     {:else if pageWorkspace}
-      <WorkspacePage
+      <WorkspaceDetail
         workspace={pageWorkspace}
         {sidebarCollapsed}
-        {showSettled}
         onexpand={() => (sidebarCollapsed = false)}
         onselect={openSession}
       />
@@ -656,7 +646,6 @@
   bind:open={settingsOpen}
   bind:tab={settingsTab}
   disabled={engine.usingDemo}
-  onmodelschanged={() => engine.loadModels()}
   onresetlayout={resetLayout}
 />
 {#if nativeManagementRequestId}

@@ -1,13 +1,202 @@
+/**
+ * Offline demo data for dev builds without a gateway (plans/rewrite/11-web.md):
+ * the rooms, faces and a worker's thread for the rooms page, and the sessions
+ * the engine shows behind them. Loaded on demand only in dev, and by tests.
+ */
+import type { Face, FacePresence } from './faces';
 import type { PanelState } from './panel-api';
 import { LEGACY_DIRECTORY } from './modes';
-import type {
-  ModeInfo,
-  ModelOption,
-  NodeSummary,
-  SessionSnapshot,
-  SessionSummary,
-  Workspace,
-} from './types';
+import type { RoomMessage, RoomView } from './rooms';
+import type { NodeSummary, ModeInfo, SessionSnapshot, SessionSummary, Workspace } from './types';
+import type { ThreadMessage, Worker } from './workers';
+
+const ago = (ms: number) => Date.now() - ms;
+
+/** Who the demo's rooms belong to. */
+export const demoUser = 'you@example.com';
+
+const face = (id: string, name: string, extra: Partial<Face> = {}): Face => ({
+  id,
+  name,
+  bio: '',
+  tone: '',
+  avatar: null,
+  color: null,
+  roleMd: '',
+  territory: { rooms: [], workspaces: [], sources: [] },
+  isHost: id === 'host',
+  createdAt: ago(30 * 86_400_000),
+  archivedAt: null,
+  hiddenAt: null,
+  ...extra,
+});
+
+export const demoFaces: Face[] = [
+  face('host', 'pirc', { bio: 'Runs the household and hands work out.' }),
+  face('face_pm', 'SlimeOS PM', {
+    bio: 'Keeps SlimeOS moving.',
+    color: '#3366cc',
+    avatar: 'PM',
+    territory: { rooms: ['room_slime'], workspaces: ['ws-pirc'], sources: [] },
+  }),
+];
+
+export const demoFacePresence: FacePresence[] = [
+  { faceId: 'host', state: 'idle' },
+  {
+    faceId: 'face_pm',
+    state: 'working',
+    roomId: 'room_slime',
+    line: 'Fix the lint job',
+    since: ago(120_000),
+  },
+];
+
+const room = (id: string, name: string, extra: Partial<RoomView> = {}): RoomView => ({
+  id,
+  name,
+  kind: id === 'general' ? 'general' : 'topic',
+  createdAt: ago(30 * 86_400_000),
+  archivedAt: null,
+  lastActivityAt: ago(60_000),
+  sourceScope: null,
+  movedToRoomId: null,
+  movedFromRoomId: null,
+  lastSeq: 0,
+  readSeq: 0,
+  unread: 0,
+  waiting: false,
+  waitingSince: null,
+  ...extra,
+});
+
+export const demoRooms: RoomView[] = [
+  room('room_slime', 'SlimeOS', { lastSeq: 5, readSeq: 3, unread: 2, waiting: true }),
+  room('general', 'general', { lastActivityAt: ago(3_600_000), lastSeq: 3, readSeq: 3 }),
+  room('room_old', 'Moving house', { archivedAt: ago(7 * 86_400_000), lastSeq: 1, readSeq: 1 }),
+];
+
+const message = (
+  roomId: string,
+  seq: number,
+  speaker: string,
+  body: RoomMessage['body'],
+  extra: Partial<RoomMessage> = {},
+): RoomMessage => ({
+  id: `${roomId}-${seq}`,
+  roomId,
+  seq,
+  speaker,
+  user: speaker === 'user' ? demoUser : null,
+  kind: 'text',
+  body,
+  threadId: null,
+  createdAt: ago((10 - seq) * 60_000),
+  editedAt: null,
+  pinnedAt: null,
+  ...extra,
+});
+
+export const demoMessages: Record<string, RoomMessage[]> = {
+  general: [
+    message('general', 1, 'user', { text: '明天早上提醒我繳電費' }),
+    message('general', 2, 'face:host', { text: '好，明早九點提醒你。' }),
+    message(
+      'general',
+      3,
+      'face:host',
+      { text: 'Remembered: you pay the power bill monthly' },
+      { kind: 'line' },
+    ),
+  ],
+  room_slime: [
+    message('room_slime', 1, 'user', { text: '@SlimeOS PM CI 怎麼又紅了' }),
+    message('room_slime', 2, 'face:face_pm', { text: '我叫個工人看看。' }),
+    message(
+      'room_slime',
+      3,
+      'face:face_pm',
+      {
+        text: 'Fix the lint job',
+        worker: {
+          delegationId: 'dlg-1',
+          threadId: 'thr-1',
+          status: 'running',
+          title: 'Fix the lint job',
+          workspace: 'pirc',
+          workers: 1,
+          readOnly: false,
+          note: null,
+        },
+      },
+      { threadId: 'thr-1' },
+    ),
+    message('room_slime', 4, 'face:face_pm', { text: 'Reading the CI log…' }, { kind: 'progress' }),
+    message(
+      'room_slime',
+      5,
+      'face:face_pm',
+      {
+        text: 'The worker wants to push to origin.',
+        worker: { delegationId: 'dlg-1', threadId: 'thr-1', event: 'question' },
+        question: {
+          interactionId: 'q-1',
+          threadMessageId: 'tm-3',
+          request: { title: 'git push origin fix-lint', allowAgain: true },
+          status: 'pending',
+        },
+      },
+      { kind: 'question', threadId: 'thr-1' },
+    ),
+  ],
+  room_old: [message('room_old', 1, 'user', { text: '箱子都封好了。' })],
+};
+
+const threadMessage = (
+  seq: number,
+  speaker: string,
+  kind: ThreadMessage['kind'],
+  body: ThreadMessage['body'],
+): ThreadMessage => ({
+  id: `tm-${seq}`,
+  threadId: 'thr-1',
+  seq,
+  speaker,
+  user: null,
+  kind,
+  body,
+  depth: 0,
+  createdAt: ago((6 - seq) * 30_000),
+  updatedAt: null,
+});
+
+export const demoThread: { messages: ThreadMessage[]; workers: Worker[] } = {
+  messages: [
+    threadMessage(1, 'face:face_pm', 'line', { text: 'Started in pirc' }),
+    threadMessage(2, 'worker:session-pwa', 'tool', { tool: 'bash', summary: 'bun run lint' }),
+    threadMessage(3, 'worker:session-pwa', 'text', { text: 'Fixed 3 lint errors; pushing.' }),
+  ],
+  workers: [
+    {
+      id: 'dlg-1',
+      roomId: 'room_slime',
+      faceId: 'face_pm',
+      threadId: 'thr-1',
+      anchorMessageId: 'room_slime-3',
+      title: 'Fix the lint job',
+      workspace: 'pirc',
+      workspaceId: 'ws-pirc',
+      status: 'running',
+      note: null,
+      readOnly: false,
+      follows: null,
+      for: demoUser,
+      targetSessionId: 'session-pwa',
+      createdAt: ago(180_000),
+      updatedAt: ago(30_000),
+    },
+  ],
+};
 
 /** Background work shown by the top-bar jobs menu in the offline demo. */
 export const demoPanelState: PanelState = {
@@ -147,25 +336,6 @@ export const demoSessions: SessionSummary[] = [
     runStatus: 'succeeded',
     runnerStatus: 'stopped',
     preview: 'Saved cover.png.',
-  },
-];
-
-export const demoModels: ModelOption[] = [
-  {
-    id: 'claude-sonnet',
-    provider: 'Anthropic',
-    displayName: 'Claude Sonnet',
-    contextWindow: 200000,
-    thinkingLevels: ['off', 'low', 'medium', 'high'],
-    available: true,
-  },
-  {
-    id: 'gpt-5-codex',
-    provider: 'OpenAI',
-    displayName: 'GPT-5 Codex',
-    contextWindow: 200000,
-    thinkingLevels: ['minimal', 'low', 'medium', 'high'],
-    available: true,
   },
 ];
 
@@ -389,28 +559,10 @@ export const demoSnapshot: SessionSnapshot = {
     },
   ],
   interactions: [],
-  queue: [
-    {
-      id: 'queue-1',
-      kind: 'follow_up',
-      index: 0,
-      content: 'After the UI, run the reducer tests and production build.',
-      createdAt: new Date().toISOString(),
-    },
-  ],
+  queue: [],
   control: { heldByCurrentClient: true, holderName: 'This browser', generation: 7 },
   cursor: 'demo-18',
   runnerEpoch: 'demo-epoch',
   selectedModelId: 'claude-sonnet',
   thinkingLevel: 'high',
-  widgets: {
-    'local-todo': [
-      'TODO · 2/5',
-      '✓ Read the transport plan',
-      '✓ Write the event reducer',
-      '▶ Building the composer modes',
-      '☐ [web] Wire the side panel',
-      '☐ Run tests and the production build (blocked)',
-    ],
-  },
 };

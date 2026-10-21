@@ -73,6 +73,8 @@ export class RoomsState {
   threadActivity = $state<Record<string, ThreadActivity>>({});
   #threadToken = 0;
 
+  /** Offline demo data (dev builds without a gateway): nothing is sent anywhere. */
+  demo = $state.raw<typeof import('./mock')>();
   #stream: RoomStream | undefined;
   #lastTyping = 0;
   #loadToken = 0;
@@ -85,6 +87,7 @@ export class RoomsState {
   async start(roomId = roomFromUrl()) {
     this.currentId = roomId ?? 'general';
     await this.reload();
+    if (this.demo) return;
     this.#stream = connectRooms({
       onEvent: (event) => this.apply(event),
       onReset: () => void this.reload(),
@@ -107,10 +110,23 @@ export class RoomsState {
       this.error = '';
       await Promise.all([this.open(this.currentId, { address: false }), this.loadFaces()]);
     } catch (error) {
-      this.error = message(error, 'Unable to load rooms.');
+      // Dev only: the import is left out of production builds.
+      if (import.meta.env.DEV && !this.demo) await this.#startDemo(await import('./mock'));
+      else this.error = message(error, 'Unable to load rooms.');
     } finally {
       this.loading = false;
     }
+  }
+
+  async #startDemo(demo: typeof import('./mock')) {
+    this.demo = demo;
+    this.user = demo.demoUser;
+    this.rooms = demo.demoRooms.filter((room) => !room.archivedAt).sort(byActivity);
+    this.faces = demo.demoFaces;
+    this.setFacePresence(demo.demoFacePresence);
+    this.connection = 'offline';
+    this.error = '';
+    await this.open(this.currentId, { address: false });
   }
 
   /** Show a room: its latest messages, and read them. */
@@ -119,6 +135,16 @@ export class RoomsState {
     if (this.threadId && roomId !== this.currentId) this.closeThread();
     this.currentId = roomId;
     if (address) setRoomInUrl(roomId);
+    const demo = this.demo;
+    if (demo) {
+      const room = demo.demoRooms.find((item) => item.id === roomId);
+      this.#detached = room && this.rooms.some((item) => item.id === room.id) ? undefined : room;
+      this.messages = demo.demoMessages[roomId] ?? [];
+      this.pinned = [];
+      this.hasMore = false;
+      this.error = room ? '' : 'This room does not exist.';
+      return;
+    }
     try {
       const [{ room, pinned }, page] = await Promise.all([
         roomsApi.get(roomId),
@@ -159,6 +185,23 @@ export class RoomsState {
    */
   async send(text: string, { immediate = false, files = [] as File[] } = {}) {
     const roomId = this.currentId;
+    if (this.demo) {
+      const last = this.messages[this.messages.length - 1];
+      this.#append({
+        id: `demo-${Date.now()}`,
+        roomId,
+        seq: (last?.seq ?? 0) + 1,
+        speaker: 'user',
+        user: this.user,
+        kind: 'text',
+        body: { text },
+        threadId: null,
+        createdAt: Date.now(),
+        editedAt: null,
+        pinnedAt: null,
+      });
+      return;
+    }
     const uploads = [];
     for (const file of files) uploads.push((await roomsApi.upload(roomId, file)).upload.id);
     const { message } = await roomsApi.send(roomId, text, uploads, immediate);
@@ -168,7 +211,7 @@ export class RoomsState {
 
   /** A keystroke in the composer: tell the others, at most every 3 s. */
   keystroke(now = Date.now()) {
-    if (now - this.#lastTyping < TYPING_THROTTLE_MS) return;
+    if (this.demo || now - this.#lastTyping < TYPING_THROTTLE_MS) return;
     this.#lastTyping = now;
     void roomsApi.typing(this.currentId).catch(() => {});
   }
@@ -176,7 +219,7 @@ export class RoomsState {
   /** Read the open room up to its newest message, if the page is visible. */
   async markRead() {
     const room = this.current;
-    if (!room || room.readSeq >= room.lastSeq) return;
+    if (!room || room.readSeq >= room.lastSeq || this.demo) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     try {
       const { room: read } = await roomsApi.read(room.id, room.lastSeq);
@@ -194,7 +237,7 @@ export class RoomsState {
 
   /** The archived rooms, newest activity first. */
   async loadArchived() {
-    const { rooms } = await roomsApi.list(true);
+    const { rooms } = this.demo ? { rooms: this.demo.demoRooms } : await roomsApi.list(true);
     this.archived = rooms.filter((room) => room.archivedAt).sort(byActivity);
     this.#archivedLoaded = true;
   }
@@ -353,6 +396,11 @@ export class RoomsState {
     const token = ++this.#threadToken;
     this.threadId = threadId;
     this.threadError = '';
+    if (this.demo) {
+      this.threadMessages = this.demo.demoThread.messages;
+      this.threadWorkers = this.demo.demoThread.workers;
+      return;
+    }
     try {
       const { messages, workers } = await workersApi.thread(threadId);
       if (token !== this.#threadToken) return;

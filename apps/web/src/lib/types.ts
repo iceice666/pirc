@@ -9,18 +9,6 @@ export type RunStatus =
   | 'failed'
   | 'cancelled'
   | 'interrupted';
-export type CommandKind =
-  | 'prompt'
-  | 'steer'
-  | 'follow_up'
-  | 'edit_message'
-  | 'switch_branch'
-  | 'stop'
-  | 'clear_queue'
-  | 'send_now'
-  | 'set_model'
-  | 'set_thinking'
-  | 'set_approval_mode';
 /**
  * How much the agent may do without asking: only reads (`read-only`), what
  * auto mode's rules and classifier allow (`auto`), or everything
@@ -348,19 +336,6 @@ export interface SessionSnapshot {
 /** A delegated session's confirm relayed to its chat: answered without the control lease. */
 export const isRelayed = (interactionId: string) => interactionId.startsWith('relay.');
 
-/** Stable selection key: model IDs are only unique within one backend. */
-export const modelKey = (model: { provider: string; id: string }) =>
-  JSON.stringify([model.provider, model.id]);
-
-export interface ModelOption {
-  id: string;
-  provider: string;
-  displayName: string;
-  contextWindow?: number;
-  thinkingLevels: ThinkingLevel[];
-  available: boolean;
-}
-
 /** Public gateway settings metadata. Credentials are deliberately never returned. */
 export interface BackendModel {
   id: string;
@@ -473,37 +448,8 @@ export type NewWorkspace =
   /** Older gateways: an existing directory. */
   | { nodeId: string; path: string; displayName: string };
 
-export interface CreateSessionInput {
-  workspaceId: string;
-  modelId?: string;
-  thinkingLevel?: ThinkingLevel;
-}
-
 export interface SessionUpdateInput {
   name?: string;
-  pinned?: boolean;
-  settled?: boolean;
-}
-
-export interface SessionCommandInput {
-  commandId: string;
-  kind: CommandKind;
-  controlGeneration: number;
-  entryId?: string;
-  content?: string;
-  modelId?: string;
-  provider?: string;
-  thinkingLevel?: ThinkingLevel;
-  approvalMode?: ApprovalMode;
-  attachmentIds?: string[];
-  /** `send_now`: the queued message to deliver immediately (`content` must match it). */
-  queued?: Pick<QueueItem, 'kind' | 'index'>;
-}
-
-export interface CommandReceipt {
-  commandId: string;
-  status: 'received' | 'dispatched' | 'accepted' | 'rejected' | 'outcome_unknown';
-  message?: string;
 }
 
 export type InteractionAnswer =

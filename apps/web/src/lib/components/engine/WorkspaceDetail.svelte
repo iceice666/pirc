@@ -1,25 +1,14 @@
 <script lang="ts">
-  import {
-    Archive,
-    ArchiveRestore,
-    Folder,
-    Forward,
-    Lock,
-    PanelLeftOpen,
-    Pencil,
-    Pin,
-    PinOff,
-    Search,
-  } from '@lucide/svelte';
+  import { Folder, Forward, Lock, PanelLeftOpen, Pencil, Search } from '@lucide/svelte';
   import { tick } from 'svelte';
-  import { rovingFocus } from '../a11y';
-  import { engine } from '../engine.svelte';
-  import { capitalized, isReadOnly } from '../modes';
-  import { shortAgo } from '../time';
-  import type { SessionSummary, Workspace } from '../types';
-  import { watch } from '../watch.svelte';
-  import { isRunning, needsInput, pinnedFirst } from '../work';
-  import ProjectTrust from './ProjectTrust.svelte';
+  import { rovingFocus } from '../../a11y';
+  import { engine } from '../../engine.svelte';
+  import { capitalized, isReadOnly } from '../../modes';
+  import { shortAgo } from '../../time';
+  import type { SessionSummary, Workspace } from '../../types';
+  import { watch } from '../../watch.svelte';
+  import { isRunning, needsInput } from '../../work';
+  import ProjectTrust from '../ProjectTrust.svelte';
 
   interface Props {
     workspace: Workspace;
@@ -27,17 +16,9 @@
     sidebarCollapsed?: boolean;
     onexpand?: () => void;
     onselect: (sessionId: string) => void;
-    /** Settled (done) sessions are listed (Settings → General). */
-    showSettled?: boolean;
   }
 
-  let {
-    workspace,
-    sidebarCollapsed = false,
-    onexpand,
-    onselect,
-    showSettled = false,
-  }: Props = $props();
+  let { workspace, sidebarCollapsed = false, onexpand, onselect }: Props = $props();
 
   /** What this workspace can do; the page shows only that. */
   const mode = $derived(engine.modeOf(workspace));
@@ -59,14 +40,12 @@
   type Tab = 'sessions' | 'settings';
   let tab = $state<Tab>('sessions');
   let query = $state('');
-  let showDone = $state(false);
-  // Each page starts on its list, with the done ones as Settings says.
+  // Each page starts on its list.
   watch(
     () => workspace.id,
     () => {
       tab = 'sessions';
       query = '';
-      showDone = showSettled;
     },
     { immediate: true },
   );
@@ -75,11 +54,8 @@
   const matching = $derived(
     query ? all.filter((session) => session.name.toLowerCase().includes(query.toLowerCase())) : all,
   );
-  const settledCount = $derived(matching.filter((session) => session.settled).length);
-  /** Pinned first, then by activity. */
-  const rows = $derived(
-    pinnedFirst(matching.filter((session) => showDone || query || !session.settled)),
-  );
+  /** By activity, as the gateway lists them. */
+  const rows = $derived(matching);
   const running = $derived(all.filter(isRunning).length);
   const unread = $derived(all.filter((session) => session.unread).length);
   const leaseHolder = $derived(all.find((session) => session.writeLease));
@@ -100,7 +76,7 @@
     renamingId = undefined;
     const name = renameValue.trim();
     const current = all.find((session) => session.id === id);
-    if (commit && name && current && name !== current.name) void engine.updateSession(id, { name });
+    if (commit && name && current && name !== current.name) void engine.renameSession(id, name);
   }
 
   function status(session: SessionSummary) {
@@ -167,22 +143,13 @@
               <span class="sr-only">Search {noun}s in {workspace.displayName}</span>
               <input bind:value={query} placeholder="Search {noun}s" />
             </label>
-            {#if settledCount || showDone}
-              <button
-                class="done-toggle"
-                type="button"
-                aria-pressed={showDone}
-                onclick={() => (showDone = !showDone)}
-                >{showDone ? 'Hide done' : `Show done · ${settledCount}`}</button
-              >
-            {/if}
           </div>
           <ul class="session-rows">
             {#each rows as session (session.id)}
               {@render row(session)}
             {:else}
               <li class="empty-note">
-                {#if query}Nothing matches.{:else if settledCount}Every {noun} here is done.{:else}No
+                {#if query}Nothing matches.{:else}No
                   {noun}s yet. pirc starts them when it hands work to this workspace.{/if}
               </li>
             {/each}
@@ -243,12 +210,7 @@
 </section>
 
 {#snippet row(session: SessionSummary)}
-  <li
-    class="session-row"
-    class:settled={session.settled}
-    class:unread={session.unread}
-    class:renaming={renamingId === session.id}
-  >
+  <li class="session-row" class:unread={session.unread} class:renaming={renamingId === session.id}>
     {#if renamingId === session.id}
       <form
         class="row-rename"
@@ -300,26 +262,9 @@
             aria-label="Holds the write lease"
             title="Holds the write lease"><Lock size={12} /></span
           >{/if}
-        {#if session.pinned}<span class="pin-mark" title="Pinned"><Pin size={12} /></span>{/if}
         <small>{shortAgo(session.lastActivityAt)}</small>
       </button>
       <div class="row-actions">
-        <button
-          type="button"
-          aria-label={session.pinned ? `Unpin ${session.name}` : `Pin ${session.name}`}
-          title={session.pinned ? 'Unpin' : 'Pin'}
-          onclick={() => engine.updateSession(session.id, { pinned: !session.pinned })}
-          >{#if session.pinned}<PinOff size={14} />{:else}<Pin size={14} />{/if}</button
-        >
-        <button
-          type="button"
-          aria-label={session.settled ? `Reopen ${session.name}` : `Settle ${session.name}`}
-          title={session.settled ? 'Reopen' : 'Settle'}
-          onclick={() => engine.updateSession(session.id, { settled: !session.settled })}
-          >{#if session.settled}<ArchiveRestore size={14} />{:else}<Archive
-              size={14}
-            />{/if}</button
-        >
         <button
           type="button"
           aria-label="Rename {session.name}"
@@ -444,20 +389,6 @@
     background: transparent;
     font-size: 13px;
   }
-  .done-toggle {
-    flex: none;
-    height: 30px;
-    padding: 0 10px;
-    border: 0;
-    border-radius: 6px;
-    color: var(--muted);
-    background: transparent;
-    font-size: 12px;
-  }
-  .done-toggle:hover {
-    color: var(--ink);
-    background: var(--bg-hover);
-  }
   .session-rows {
     display: grid;
     gap: 1px;
@@ -505,9 +436,6 @@
   .session-row.unread .row-name {
     font-weight: 600;
   }
-  .session-row.settled .row-name {
-    color: var(--muted);
-  }
   .row-main small {
     flex: none;
     color: var(--muted);
@@ -531,11 +459,6 @@
     background: var(--warning);
   }
   .origin-icon,
-  .pin-mark {
-    flex: none;
-    display: grid;
-    color: var(--muted);
-  }
   .lease-lock {
     flex: none;
     display: grid;

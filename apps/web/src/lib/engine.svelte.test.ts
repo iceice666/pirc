@@ -5,7 +5,6 @@ import { api, ApiError, normalizeEvent } from './api';
 import { engine } from './engine.svelte';
 import { demoSnapshot } from './mock';
 import { fromSnapshot, reduceEvent } from './state';
-import { loadDraft, saveDraft } from './storage';
 import type { SessionSnapshot, SessionSummary, Workspace } from './types';
 
 function deferred<T>() {
@@ -108,8 +107,6 @@ afterEach(() => {
   engine.sessionState = undefined;
   engine.sessions = [];
   engine.workspaces = [];
-  engine.draft = '';
-  engine.uploads = [];
   engine.pageError = '';
   engine.interactionNotice = '';
   engine.answeringInteractionIds = [];
@@ -118,166 +115,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('message branch commands', () => {
-  function setup() {
-    engine.connection = 'connected';
-    engine.demo = undefined;
-    engine.commandBusy = false;
-    engine.activeSessionId = demoSnapshot.session.id;
-    engine.sessionState = fromSnapshot({
-      ...demoSnapshot,
-      run: null,
-      partialMessage: undefined,
-      runnerStatus: 'ready',
-      control: { ...demoSnapshot.control, heldByCurrentClient: true, generation: 1 },
-      messages: [
-        {
-          id: 'user-1',
-          entryId: 'entry-1',
-          role: 'user',
-          content: 'Original',
-          createdAt: new Date(1).toISOString(),
-          branches: [
-            { entryId: 'entry-1', text: 'Original', selected: true },
-            { entryId: 'entry-2', text: 'Edited', selected: false },
-          ],
-        },
-      ],
-    });
-    const command = vi
-      .spyOn(api, 'command')
-      .mockResolvedValue({ commandId: 'branch', status: 'accepted' });
-    const refresh = vi
-      .spyOn(api, 'snapshot')
-      .mockResolvedValue({ ...demoSnapshot, run: null, messages: engine.sessionState!.messages });
-    return { command, refresh };
-  }
-  it('refreshes stable branch metadata after accepted editing and switching', async () => {
-    const { command, refresh } = setup();
-    expect(await engine.changeBranch('edit_message', 'entry-1', 'Revised')).toBe(true);
-    expect(command).toHaveBeenLastCalledWith(
-      engine.activeSessionId,
-      expect.objectContaining({ kind: 'edit_message', entryId: 'entry-1', content: 'Revised' }),
-    );
-    expect(await engine.changeBranch('switch_branch', 'entry-2')).toBe(true);
-    expect(refresh).toHaveBeenCalledTimes(2);
-  });
-  it('reports rejected edits without discarding the composer draft or refreshing', async () => {
-    const { command, refresh } = setup();
-    engine.draft = 'Unrelated unsent draft';
-    command.mockResolvedValue({ commandId: 'branch', status: 'rejected', message: 'Busy' });
-    expect(await engine.changeBranch('edit_message', 'entry-1', 'Revised')).toBe(false);
-    expect(engine.draft).toBe('Unrelated unsent draft');
-    expect(engine.pageError).toContain('Busy');
-    expect(refresh).not.toHaveBeenCalled();
-  });
-  it('keeps mutation controls gated until a post-edit snapshot arrives, including failed refreshes', async () => {
-    const { refresh } = setup();
-    const pending = deferred<SessionSnapshot>();
-    refresh.mockReturnValueOnce(pending.promise);
-    engine.hiddenMessages = 120;
-    const edit = engine.changeBranch('edit_message', 'entry-1', 'Revised');
-    await Promise.resolve();
-    expect(engine.canChangeBranch).toBe(false);
-    pending.resolve({ ...demoSnapshot, run: null, messages: [] });
-    expect(await edit).toBe(true);
-    expect(engine.hiddenMessages).toBe(0);
-    expect(engine.commandBusy).toBe(false);
-  });
-  it('does not offer to resubmit accepted edits when snapshot refresh fails', async () => {
-    const { refresh } = setup();
-    refresh.mockRejectedValueOnce(new Error('Refresh unavailable'));
-    expect(await engine.changeBranch('edit_message', 'entry-1', 'Revised')).toBe(true);
-    expect(engine.commandBusy).toBe(false);
-    expect(engine.canChangeBranch).toBe(false);
-    expect(engine.pageError).toContain('Refresh unavailable');
-    expect(await engine.changeBranch('edit_message', 'entry-1', 'Duplicate')).toBe(false);
-    await engine.refreshSnapshot();
-    expect(engine.canChangeBranch).toBe(true);
-  });
-  it('waits for its own authoritative fetch even if a lifecycle snapshot is pending', async () => {
-    const { refresh } = setup();
-    const before = deferred<SessionSnapshot>();
-    const after = deferred<SessionSnapshot>();
-    refresh.mockReturnValueOnce(before.promise).mockReturnValueOnce(after.promise);
-    const lifecycle = engine.refreshSnapshot();
-    const edit = engine.changeBranch('edit_message', 'entry-1', 'Revised');
-    await Promise.resolve();
-    before.resolve({ ...demoSnapshot, run: null, messages: [] });
-    await lifecycle;
-    expect(engine.canChangeBranch).toBe(false);
-    expect(engine.sessionState!.messages).toHaveLength(1);
-    after.resolve({ ...demoSnapshot, run: null, messages: [] });
-    expect(await edit).toBe(true);
-    expect(engine.sessionState!.messages).toEqual([]);
-  });
-  it('guards control, busy runs, unknown entries, and duplicate commands', async () => {
-    const { command } = setup();
-    expect(await engine.changeBranch('edit_message', 'missing', 'Revised')).toBe(false);
-    engine.sessionState = { ...engine.sessionState!, run: { id: 'run', status: 'running' } };
-    expect(await engine.changeBranch('switch_branch', 'entry-2')).toBe(false);
-    engine.sessionState = {
-      ...engine.sessionState!,
-      run: null,
-      control: { ...engine.sessionState!.control, heldByCurrentClient: false },
-    };
-    expect(await engine.changeBranch('edit_message', 'entry-1', 'Revised')).toBe(false);
-    engine.sessionState = {
-      ...engine.sessionState!,
-      control: { ...engine.sessionState!.control, heldByCurrentClient: true },
-    };
-    engine.commandBusy = true;
-    expect(await engine.changeBranch('switch_branch', 'entry-2')).toBe(false);
-    engine.commandBusy = false;
-    expect(command).not.toHaveBeenCalled();
-  });
-});
-
 describe('app asynchronous refreshes', () => {
-  it('ignores a session list fetched before creating and opening a session', async () => {
-    engine.demo = undefined;
-    vi.stubGlobal('WebSocket', TestWebSocket);
-    const existing = { ...demoSnapshot.session, id: 's-old', workspaceId: workspace.id };
-    const created = { ...existing, id: 's-new', name: 'New session' };
-    const list = deferred<SessionSummary[]>();
-    vi.spyOn(api, 'sessions').mockReturnValueOnce(list.promise);
-    vi.spyOn(api, 'createSession').mockResolvedValue(created);
-    vi.spyOn(api, 'snapshot').mockResolvedValue(snapshotFor(created));
-    vi.spyOn(api, 'models').mockResolvedValue([]);
-    vi.spyOn(api, 'heartbeatControl').mockResolvedValue(snapshotFor(created).control);
-
-    engine.workspaces = [workspace];
-    engine.sessions = [existing];
-    engine.activeSessionId = existing.id;
-    engine.sessionState = fromSnapshot(snapshotFor(existing));
-    const staleRefresh = engine.refreshSessions();
-
-    expect(await engine.createSession(workspace.id)).toBe(true);
-    saveDraft(created.id, 'keep this draft');
-    list.resolve([existing]);
-    await staleRefresh;
-
-    expect(engine.activeSessionId).toBe(created.id);
-    expect(engine.sessionState?.session.id).toBe(created.id);
-    expect(engine.sessions.some((session) => session.id === created.id)).toBe(true);
-    expect(loadDraft(created.id)).toBe('keep this draft');
-  });
-
-  it('removes a session and its draft when a fresh list confirms it is gone', async () => {
+  it('removes a session when a fresh list confirms it is gone', async () => {
     engine.demo = undefined;
     const gone = { ...demoSnapshot.session, id: 's-gone', workspaceId: workspace.id };
     engine.sessions = [gone];
     engine.workspaces = [workspace];
     engine.activeSessionId = gone.id;
     engine.sessionState = fromSnapshot(snapshotFor(gone));
-    saveDraft(gone.id, 'draft for deleted session');
     vi.spyOn(api, 'sessions').mockResolvedValue([]);
 
     await engine.refreshSessions();
 
     expect(engine.sessions).toEqual([]);
     expect(engine.activeSessionId).toBeUndefined();
-    expect(loadDraft(gone.id)).toBe('');
   });
 
   it('ignores an older session list when a newer refresh finishes first', async () => {
@@ -374,7 +225,6 @@ describe('app asynchronous refreshes', () => {
       .mockReturnValueOnce(oldSnapshot.promise)
       .mockResolvedValueOnce(snapshotFor(newSession))
       .mockReturnValueOnce(newRefresh.promise);
-    vi.spyOn(api, 'models').mockResolvedValue([]);
     vi.spyOn(api, 'heartbeatControl').mockResolvedValue(snapshotFor(newSession).control);
 
     const oldRefresh = engine.refreshSnapshot();

@@ -7,11 +7,9 @@ import {
   toolResultFields,
 } from './pi-messages';
 import { ApiError, request } from './http';
-import { uuid } from './id';
 import { getClientId } from './storage';
 import type {
   ApprovalMode,
-  Attachment,
   BackendModel,
   BackendPreset,
   BackendProbeInput,
@@ -21,20 +19,16 @@ import type {
   ConnectionTestResult,
   DiscoveredModel,
   ProviderAuthSession,
-  CommandReceipt,
   ControlLease,
-  CreateSessionInput,
   EventEnvelope,
   GatewayEvent,
   InteractionAnswer,
   ModeInfo,
-  ModelOption,
   NewWorkspace,
   NodeSummary,
   PendingInteraction,
   QueueItem,
   SessionOrigin,
-  SessionCommandInput,
   SessionSnapshot,
   SessionSummary,
   SessionUpdateInput,
@@ -356,19 +350,7 @@ export const api = {
     ).workspace,
   sessions: async () =>
     ((await request<any>('/api/sessions')).sessions as any[]).map(sessionSummary),
-  createSession: async (input: CreateSessionInput) =>
-    sessionSummary(
-      (
-        await request<any>('/api/sessions', {
-          method: 'POST',
-          // The agent titles the session from the first message.
-          body: JSON.stringify({ workspaceId: input.workspaceId }),
-        })
-      ).session,
-    ),
-  deleteSession: (sessionId: string) =>
-    request<void>(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }),
-  /** Rename, pin or settle a session. */
+  /** Rename a session (the engine keeps nothing else to change). */
   updateSession: async (sessionId: string, input: SessionUpdateInput) =>
     sessionSummary(
       (
@@ -391,62 +373,6 @@ export const api = {
     normalizeSnapshot(
       await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`),
     ),
-  command: async (sessionId: string, input: SessionCommandInput): Promise<CommandReceipt> => {
-    // A selection can be made before this browser acquires control, while a new
-    // session has no runner yet. Apply the visible settings before the prompt;
-    // putting modelId on a message payload does not change the agent's model.
-    if (input.kind === 'prompt' || input.kind === 'edit_message') {
-      const applySetting = async (setting: Partial<SessionCommandInput>) => {
-        const receipt = await api.command(sessionId, {
-          ...input,
-          ...setting,
-          commandId: uuid(),
-        });
-        if (receipt.status !== 'accepted')
-          throw new Error(receipt.message ?? 'Session settings were not accepted.');
-      };
-      if (input.modelId) {
-        if (!input.provider) throw new Error('The selected model has no provider.');
-        await applySetting({ kind: 'set_model' });
-      }
-      if (input.thinkingLevel) await applySetting({ kind: 'set_thinking' });
-    }
-    const payload =
-      input.kind === 'edit_message'
-        ? { type: input.kind, entryId: input.entryId, message: input.content ?? '' }
-        : input.kind === 'switch_branch'
-          ? { type: input.kind, entryId: input.entryId }
-          : input.kind === 'prompt' || input.kind === 'steer' || input.kind === 'follow_up'
-            ? { type: input.kind, message: input.content ?? '', uploadIds: input.attachmentIds }
-            : input.kind === 'send_now'
-              ? {
-                  type: input.kind,
-                  queue: input.queued?.kind === 'follow_up' ? 'followUp' : 'steering',
-                  index: input.queued?.index ?? 0,
-                  message: input.content ?? '',
-                }
-              : input.kind === 'set_model'
-                ? { type: input.kind, provider: input.provider ?? '', modelId: input.modelId ?? '' }
-                : input.kind === 'set_thinking'
-                  ? { type: input.kind, level: input.thinkingLevel ?? 'off' }
-                  : input.kind === 'set_approval_mode'
-                    ? { type: input.kind, mode: input.approvalMode ?? 'auto' }
-                    : { type: input.kind };
-    const response = await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/commands`, {
-      method: 'POST',
-      body: JSON.stringify({
-        commandId: input.commandId,
-        clientId: getClientId(),
-        generation: input.controlGeneration,
-        payload,
-      }),
-    });
-    return {
-      commandId: response.command.id,
-      status: response.command.status,
-      message: response.command.error ?? undefined,
-    };
-  },
   control: async (sessionId: string) =>
     controlLease(await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/control`)),
   takeControl: async (sessionId: string, clientId: string) =>
@@ -519,45 +445,6 @@ export const api = {
     request<{ status: string }>(`/api/delegations/${encodeURIComponent(delegationId)}/stop`, {
       method: 'POST',
     }),
-  /**
-   * Stored on the session's node. Images ride in the model's context;
-   * anything else is copied into the workspace for the agent's file tools —
-   * `filename` lets the node tell them apart and name the copy.
-   */
-  upload: async (sessionId: string, file: File): Promise<Attachment> => {
-    const query = `?filename=${encodeURIComponent(file.name)}`;
-    const raw = await request<any>(
-      `/api/sessions/${encodeURIComponent(sessionId)}/uploads${query}`,
-      {
-        method: 'POST',
-        headers: { 'content-type': file.type || 'application/octet-stream' },
-        body: file,
-      },
-    );
-    return {
-      id: raw.upload.id,
-      name: file.name,
-      mimeType: raw.upload.mimeType,
-      size: raw.upload.byteSize,
-      kind: raw.upload.kind ?? 'image',
-    };
-  },
-  /** The gateway's models; every session and node uses the same list. */
-  models: async (sessionId?: string): Promise<ModelOption[]> => {
-    const raw = await request<any>(
-      sessionId ? `/api/models?sessionId=${encodeURIComponent(sessionId)}` : '/api/models',
-    );
-    return (raw.models ?? []).map((model: any) => ({
-      id: model.id,
-      provider: model.provider,
-      displayName: model.name ?? model.id,
-      contextWindow: model.contextWindow,
-      thinkingLevels: (model.reasoning
-        ? ['off', 'minimal', 'low', 'medium', 'high', 'xhigh']
-        : ['off']) as ThinkingLevel[],
-      available: true,
-    }));
-  },
 };
 
 export interface EventConnection {

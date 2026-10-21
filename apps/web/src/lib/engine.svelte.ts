@@ -1,7 +1,8 @@
 /**
- * Session-wide client state: the gateway's workspaces, nodes and sessions, the
- * open session and its event stream, the draft and uploads, and every command
- * the UI sends. Components read it directly instead of receiving it as props.
+ * The engine's state (plans/rewrite/11-web.md): the gateway's workspaces,
+ * nodes and sessions, the open session (read-only) and its event stream, its
+ * control lease and the questions it asks. Components read it directly
+ * instead of receiving it as props. The rooms keep their own (rooms.svelte.ts).
  */
 import { api, connectEvents, ApiError, type EventConnection } from './api';
 import { isReadOnly, modeOf } from './modes';
@@ -14,37 +15,26 @@ import {
 } from './push';
 import { syncControl } from './control';
 import { errorMessage } from './errors';
-import { GOAL_WIDGET, parseGoalWidget } from './goal';
 import { PanelStateResource } from './panel-state.svelte';
 import { fromSnapshot, reduceEvent } from './state';
-import { uuid } from './id';
 import { isOverviewSection, type OverviewSection } from './routes';
-import { getClientId, loadDraft, pruneDrafts, removeDraft, saveDraft } from './storage';
+import { getClientId } from './storage';
 import { needsInput } from './work';
-import { parseTodoWidget, TODO_WIDGET } from './todo';
 import type {
-  ApprovalMode,
-  Attachment,
   ClientSessionState,
-  CommandKind,
   ConnectionState,
   InteractionAnswer,
   ModeInfo,
-  ModelOption,
   NewWorkspace,
   NodeSummary,
-  QueueItem,
   RelayedApproval,
   SessionSummary,
   SessionUpdateInput,
-  ThinkingLevel,
   Workspace,
 } from './types';
-import { isRelayed, modelKey } from './types';
+import { isRelayed } from './types';
 
-export type Upload = Attachment & { preview?: string; uploading?: boolean };
-
-/** What the main column shows: a session, or a workspace's page. */
+/** What the main column shows: a session, a workspace's page, or the front page. */
 export type MainView = 'session' | 'workspace' | 'overview';
 
 /** Something waiting for you, shown under "Needs you". */
@@ -70,13 +60,6 @@ export const MESSAGE_PAGE = 60;
 /** Returning after this long in the background reloads the open session's snapshot. */
 const RESUME_SNAPSHOT_AFTER = 15_000;
 
-const DOCKED_WIDGETS = new Set([TODO_WIDGET, GOAL_WIDGET]);
-/**
- * Status-line entries not already shown elsewhere: background tasks and team
- * members live in the jobs menu. Other extension widgets show their header.
- */
-const SHOWN_ELSEWHERE = new Set(['background-task', 'agent-team']);
-
 class EngineState {
   workspaces = $state.raw<Workspace[]>([]);
   nodes = $state.raw<NodeSummary[]>([]);
@@ -90,13 +73,9 @@ class EngineState {
   view = $state<MainView>('session');
   /** The workspace whose page is showing (view `workspace`). */
   workspaceViewId = $state<string>();
-  models = $state.raw<ModelOption[]>([]);
   activeSessionId = $state<string>();
   connection = $state<ConnectionState>(navigator.onLine ? 'reconnecting' : 'offline');
-  draft = $state('');
-  uploads = $state.raw<Upload[]>([]);
   loading = $state(true);
-  commandBusy = $state(false);
   pageError = $state('');
   interactionNotice = $state('');
   answeringInteractionIds = $state.raw<string[]>([]);
@@ -118,8 +97,6 @@ class EngineState {
   #sessionsRequest = 0;
   /** Snapshot requests coalesce per open session, so old requests cannot block a new one. */
   #snapshotLoading = new Set<number>();
-  #draftTimer: ReturnType<typeof setTimeout> | undefined;
-  #draftPending: { sessionId: string; value: string } | undefined;
   #snapshotAgain = new Set<number>();
   #panelListeners = new Set<(signal: PanelSignal) => void>();
   /** The start could not reach the gateway (e.g. an offline cold start from the cached shell). */
@@ -153,44 +130,11 @@ class EngineState {
   runStatus = $derived(this.#sessionState?.run?.status);
   hasControl = $derived(this.#sessionState?.control.heldByCurrentClient ?? false);
   generation = $derived(this.#sessionState?.control.generation);
-  selectedModelOption = $derived(
-    this.models.find(
-      (model) =>
-        model.id === this.#sessionState?.selectedModelId &&
-        (!this.#sessionState?.selectedModelProvider ||
-          model.provider === this.#sessionState.selectedModelProvider),
-    ) ?? this.models[0],
-  );
-  selectedModel = $derived(this.selectedModelOption ? modelKey(this.selectedModelOption) : '');
-  thinking = $derived<ThinkingLevel>(this.#sessionState?.thinkingLevel ?? 'medium');
-  /** The session's approval mode as its node last reported it (undefined: unknown). */
-  approvalMode = $derived<ApprovalMode | undefined>(this.#sessionState?.approvalMode);
-  todo = $derived(parseTodoWidget(this.#sessionState?.widgets?.[TODO_WIDGET]));
-  goal = $derived(parseGoalWidget(this.#sessionState?.widgets?.[GOAL_WIDGET]));
-  statusLine = $derived([
-    ...Object.entries(this.#sessionState?.widgets ?? {})
-      .filter(([key, lines]) => !DOCKED_WIDGETS.has(key) && lines.length)
-      .map(([, lines]) => lines[0]!),
-    ...Object.entries(this.#sessionState?.statuses ?? {})
-      .filter(([key, text]) => !SHOWN_ELSEWHERE.has(key) && text)
-      .map(([, text]) => text),
-  ]);
   pendingInteractions = $derived(
     this.#sessionState?.interactions.filter((item) => item.status === 'pending') ?? [],
   );
-  /** Commands need a live connection and the control lease. */
+  /** Answers need a live connection and the control lease. */
   canCommand = $derived(this.hasControl && this.connection === 'connected');
-  #historyRevision = 0;
-  #historyNeedsRefresh = $state<string>();
-  canChangeBranch = $derived(
-    this.#historyNeedsRefresh !== this.activeSessionId &&
-      this.canCommand &&
-      !this.demo &&
-      !this.commandBusy &&
-      !this.#sessionState?.partialMessage &&
-      !['queued', 'running', 'waiting_input', 'stopping'].includes(this.runStatus ?? '') &&
-      this.#sessionState?.runnerStatus !== 'starting',
-  );
 
   /** Everything waiting for you: sessions with a question. */
   inbox = $derived<InboxItem[]>(
@@ -204,10 +148,6 @@ class EngineState {
       .map((session) => ({ kind: 'session' as const, id: `session:${session.id}`, session })),
   );
 
-  /**
-   * Show a workspace's page: its sessions and its settings. The open session
-   * stays connected behind it, so going back is instant.
-   */
   /** Show the engine's front page, on one of its tabs. */
   showOverview(section: OverviewSection = this.overviewSection) {
     this.overviewSection = section;
@@ -215,6 +155,10 @@ class EngineState {
     this.#address(`?open=${section}`);
   }
 
+  /**
+   * Show a workspace's page: its sessions and its settings. The open session
+   * stays connected behind it, so going back is instant.
+   */
   showWorkspace(workspaceId: string) {
     const workspace = this.workspaces.find((item) => item.id === workspaceId);
     if (!workspace) return;
@@ -264,14 +208,12 @@ class EngineState {
     let linkedTarget: PushTarget | undefined;
     let linkedInteraction: PushInteraction | undefined;
     try {
-      [this.workspaces, this.sessions, this.models, this.nodes, this.modeCatalog] =
-        await Promise.all([
-          api.workspaces(),
-          api.sessions(),
-          api.models(),
-          api.nodes(),
-          this.#loadModes(),
-        ]);
+      [this.workspaces, this.sessions, this.nodes, this.modeCatalog] = await Promise.all([
+        api.workspaces(),
+        api.sessions(),
+        api.nodes(),
+        this.#loadModes(),
+      ]);
       this.#sessionsVersion++;
       this.activeSessionId = this.sessions[0]?.id;
       // A notification or a shared link names what to open.
@@ -283,7 +225,6 @@ class EngineState {
         if (this.sessions.some((session) => session.id === linkedSessionId))
           this.activeSessionId = linkedSessionId;
       }
-      pruneDrafts(this.sessions.map((session) => session.id));
     } catch (error) {
       if (import.meta.env.DEV) {
         const demo = await import('./mock');
@@ -294,7 +235,6 @@ class EngineState {
         this.modeCatalog = demo.demoModes;
         this.sessions = demo.demoSessions;
         this.#sessionsVersion++;
-        this.models = demo.demoModels;
         this.activeSessionId = demo.demoSnapshot.session.id;
       } else {
         this.#bootstrapFailed = true;
@@ -479,7 +419,6 @@ class EngineState {
       return;
     }
     this.#sessionsVersion++;
-    this.flushDraft();
     const seq = ++this.#openSeq;
     this.activeSessionId = id;
     this.markActiveRead();
@@ -487,8 +426,6 @@ class EngineState {
     this.#events = undefined;
     this.sessionState = undefined;
     this.pageError = '';
-    this.draft = loadDraft(id);
-    this.uploads = [];
     const demo = this.demo;
     this.panel.reset(id, demo?.demoPanelState);
     try {
@@ -501,10 +438,8 @@ class EngineState {
       // Switched to another session while this snapshot was loading.
       if (seq !== this.#openSeq) return;
       this.sessionState = fromSnapshot(snapshot);
-      if (this.#historyNeedsRefresh === id) this.#historyNeedsRefresh = undefined;
       this.hiddenMessages = Math.max(0, this.sessionState.messages.length - MESSAGE_PAGE);
       if (!demo) {
-        void this.loadModels(id);
         void this.refreshControl();
         let reconnecting = false;
         this.#events = connectEvents({
@@ -562,15 +497,6 @@ class EngineState {
     }
   }
 
-  async loadModels(id = this.activeSessionId) {
-    try {
-      const list = await api.models(id);
-      if (this.activeSessionId === id) this.models = list;
-    } catch {
-      /* keep the previous list; the runner may still be starting */
-    }
-  }
-
   /** Reload the open session. Bursts coalesce into one request plus one follow-up. */
   async refreshSnapshot() {
     const id = this.activeSessionId;
@@ -581,18 +507,11 @@ class EngineState {
       return;
     }
     this.#snapshotLoading.add(seq);
-    const historyRevision = this.#historyRevision;
     try {
       const snapshot = await api.snapshot(id);
-      if (
-        seq !== this.#openSeq ||
-        id !== this.activeSessionId ||
-        this.#snapshotAgain.has(seq) ||
-        historyRevision !== this.#historyRevision
-      )
+      if (seq !== this.#openSeq || id !== this.activeSessionId || this.#snapshotAgain.has(seq))
         return;
       this.sessionState = fromSnapshot(snapshot);
-      if (this.#historyNeedsRefresh === id) this.#historyNeedsRefresh = undefined;
       this.hiddenMessages = Math.min(
         this.hiddenMessages,
         Math.max(0, snapshot.messages.length - 1),
@@ -625,18 +544,14 @@ class EngineState {
       this.#events = undefined;
       this.sessionState = undefined;
       this.activeSessionId = undefined;
-      this.#draftPending = undefined;
-      clearTimeout(this.#draftTimer);
-      this.draft = '';
-      this.uploads = [];
       this.panel.reset('');
       if (session) this.showWorkspace(session.workspaceId);
     }
-    removeDraft(id);
   }
 
-  /** Rename, pin or settle from the sidebar. Applied at once and rolled back on failure. */
-  async updateSession(id: string, input: SessionUpdateInput) {
+  /** Rename from the sidebar. Applied at once and rolled back on failure. */
+  async renameSession(id: string, name: string) {
+    const input: SessionUpdateInput = { name };
     const previous = this.sessions.find((item) => item.id === id);
     if (!previous) return;
     const apply = (patch: Partial<SessionSummary>) => {
@@ -650,191 +565,10 @@ class EngineState {
     if (this.demo) return;
     try {
       const updated = await api.updateSession(id, input);
-      apply({ name: updated.name, pinned: updated.pinned, settled: updated.settled });
-      // A settled session's unsent draft is dropped (unless it is open right now).
-      if (updated.settled && id !== this.activeSessionId) removeDraft(id);
+      apply({ name: updated.name });
     } catch (error) {
-      apply({ name: previous.name, pinned: previous.pinned, settled: previous.settled });
-      this.pageError = errorMessage(error, 'Could not update the session.');
-    }
-  }
-
-  /**
-   * localStorage writes are synchronous; persist the draft after typing pauses
-   * (and on session switch / page hide via {@link flushDraft}), not per key.
-   */
-  setDraft(value: string) {
-    this.draft = value;
-    if (!this.activeSessionId) return;
-    this.#draftPending = { sessionId: this.activeSessionId, value };
-    clearTimeout(this.#draftTimer);
-    // Cleared drafts (sent messages) are removed at once.
-    if (!value) this.flushDraft();
-    else this.#draftTimer = setTimeout(() => this.flushDraft(), 250);
-  }
-
-  flushDraft() {
-    clearTimeout(this.#draftTimer);
-    this.#draftTimer = undefined;
-    const pending = this.#draftPending;
-    this.#draftPending = undefined;
-    if (pending) saveDraft(pending.sessionId, pending.value);
-  }
-
-  async sendCommand(kind: CommandKind, content = this.draft) {
-    const state = this.sessionState;
-    const sessionId = this.activeSessionId;
-    if (!state || !sessionId || !state.control.generation || this.connection !== 'connected')
-      return;
-    this.commandBusy = true;
-    this.pageError = '';
-    const attachmentIds = this.uploads.filter((item) => !item.uploading).map((item) => item.id);
-    try {
-      if (!this.demo) {
-        await api.command(sessionId, {
-          commandId: uuid(),
-          kind,
-          controlGeneration: state.control.generation,
-          content: content || undefined,
-          modelId: this.selectedModelOption?.id,
-          provider: this.selectedModelOption?.provider,
-          thinkingLevel: this.thinking,
-          attachmentIds: attachmentIds.length ? attachmentIds : undefined,
-        });
-      } else if (kind === 'follow_up') {
-        this.sessionState = {
-          ...state,
-          queue: [
-            ...state.queue,
-            {
-              id: uuid(),
-              kind,
-              index: state.queue.filter((item) => item.kind === kind).length,
-              content,
-              createdAt: new Date().toISOString(),
-            },
-          ],
-        };
-      } else if (kind === 'prompt' || kind === 'steer') {
-        this.sessionState = {
-          ...state,
-          messages: [
-            ...state.messages,
-            {
-              id: uuid(),
-              role: 'user',
-              content,
-              createdAt: new Date().toISOString(),
-              attachments: this.uploads,
-            },
-          ],
-        };
-      }
-      if (kind === 'prompt' || kind === 'steer' || kind === 'follow_up') {
-        this.setDraft('');
-        this.uploads = [];
-        await this.scroller?.toLatest();
-      }
-    } catch (error) {
-      this.pageError = errorMessage(error, 'The command was not accepted.');
-    } finally {
-      this.commandBusy = false;
-    }
-  }
-
-  /** Change only the conversation tree; tool effects in the workspace are not rolled back. */
-  async changeBranch(kind: 'edit_message' | 'switch_branch', entryId: string, content?: string) {
-    const state = this.sessionState;
-    const sessionId = this.activeSessionId;
-    if (!this.canChangeBranch || !state?.control.generation || !sessionId) return false;
-    const selection = this.#openSeq;
-    const message = state.messages.find((item) => item.role === 'user' && item.entryId === entryId);
-    const isVariant = state.messages.some((item) =>
-      item.branches?.some((branch) => branch.entryId === entryId),
-    );
-    if (kind === 'edit_message' ? !message || !content?.trim() : !isVariant) return false;
-    this.commandBusy = true;
-    this.pageError = '';
-    try {
-      const receipt = await api.command(sessionId, {
-        commandId: uuid(),
-        kind,
-        entryId,
-        content,
-        controlGeneration: state.control.generation,
-        ...(kind === 'edit_message'
-          ? {
-              modelId: this.selectedModelOption?.id,
-              provider: this.selectedModelOption?.provider,
-              thinkingLevel: this.thinking,
-            }
-          : {}),
-      });
-      if (receipt.status !== 'accepted')
-        throw new Error(receipt.message ?? 'The branch change was not accepted.');
-      // A coalesced lifecycle refresh may still be reading the old tree. Invalidate
-      // it and fetch our own authoritative snapshot before enabling another edit.
-      if (this.activeSessionId !== sessionId || selection !== this.#openSeq) return true;
-      const revision = ++this.#historyRevision;
-      this.#historyNeedsRefresh = sessionId;
-      try {
-        const snapshot = await api.snapshot(sessionId);
-        if (
-          this.activeSessionId === sessionId &&
-          selection === this.#openSeq &&
-          revision === this.#historyRevision
-        ) {
-          this.sessionState = fromSnapshot(snapshot);
-          this.hiddenMessages = Math.max(0, snapshot.messages.length - MESSAGE_PAGE);
-          this.#historyNeedsRefresh = undefined;
-        }
-      } catch (error) {
-        if (this.activeSessionId === sessionId)
-          this.pageError = errorMessage(
-            error,
-            'Message updated, but refreshing failed. Reload the session before editing again.',
-          );
-      }
-      // The mutation was accepted even when refreshing failed. Never offer to
-      // resubmit an already committed edit; keep history controls gated instead.
-      return true;
-    } catch (error) {
-      if (this.activeSessionId === sessionId)
-        this.pageError = errorMessage(error, 'The branch change was not accepted.');
-      return false;
-    } finally {
-      this.commandBusy = false;
-    }
-  }
-
-  /**
-   * Goal dock buttons send `/goal pause|resume`. As a steer it works both idle
-   * and mid-run, and it does not open a run record the way a prompt does.
-   */
-  async goalAction(action: 'pause' | 'resume') {
-    const state = this.sessionState;
-    const sessionId = this.activeSessionId;
-    if (
-      this.demo ||
-      !state ||
-      !sessionId ||
-      !state.control.generation ||
-      this.connection !== 'connected'
-    )
-      return;
-    this.commandBusy = true;
-    this.pageError = '';
-    try {
-      await api.command(sessionId, {
-        commandId: uuid(),
-        kind: 'steer',
-        controlGeneration: state.control.generation,
-        content: `/goal ${action}`,
-      });
-    } catch (error) {
-      this.pageError = errorMessage(error, 'The command was not accepted.');
-    } finally {
-      this.commandBusy = false;
+      apply({ name: previous.name });
+      this.pageError = errorMessage(error, 'Could not rename the session.');
     }
   }
 
@@ -855,44 +589,6 @@ class EngineState {
     } finally {
       if (this.#controlSyncing === id) this.#controlSyncing = undefined;
     }
-  }
-
-  async stopRun() {
-    await this.sendCommand('stop', '');
-  }
-
-  /** Deliver a queued message immediately, interrupting the current model call or tool. */
-  async sendQueuedNow(item: QueueItem) {
-    const state = this.sessionState;
-    const sessionId = this.activeSessionId;
-    if (!state || !sessionId || !state.control.generation || this.connection !== 'connected')
-      return;
-    if (this.demo) {
-      this.sessionState = { ...state, queue: state.queue.filter((queued) => queued !== item) };
-      return;
-    }
-    this.commandBusy = true;
-    this.pageError = '';
-    try {
-      await api.command(sessionId, {
-        commandId: uuid(),
-        kind: 'send_now',
-        controlGeneration: state.control.generation,
-        content: item.content,
-        queued: { kind: item.kind, index: item.index },
-      });
-    } catch (error) {
-      const text = errorMessage(error, 'The message could not be sent now.');
-      // The run delivered or cleared it meanwhile; the next queue update shows that.
-      if (!/no longer queued/.test(text)) this.pageError = text;
-    } finally {
-      this.commandBusy = false;
-    }
-  }
-
-  async clearQueue() {
-    await this.sendCommand('clear_queue', '');
-    if (this.demo && this.sessionState) this.sessionState = { ...this.sessionState, queue: [] };
   }
 
   async takeControl() {
@@ -1039,101 +735,6 @@ class EngineState {
     void this.refreshSessions();
   }
 
-  async uploadFiles(files: ArrayLike<File>) {
-    // Stored on the node that runs the session's agent: images ride in the
-    // model's context, other files are copied into the workspace for tools.
-    const sessionId = this.activeSessionId;
-    if (!sessionId) return;
-    for (const file of Array.from(files)) {
-      const isImage = file.type.startsWith('image/');
-      const localId = `local-${uuid()}`;
-      const preview = isImage ? URL.createObjectURL(file) : undefined;
-      this.uploads = [
-        ...this.uploads,
-        {
-          id: localId,
-          name: file.name,
-          mimeType: file.type,
-          size: file.size,
-          preview,
-          uploading: true,
-        },
-      ];
-      try {
-        const attachment = this.demo
-          ? {
-              id: localId,
-              name: file.name,
-              mimeType: file.type,
-              size: file.size,
-              kind: (isImage ? 'image' : 'file') as 'image' | 'file',
-            }
-          : await api.upload(sessionId, file);
-        this.uploads = this.uploads.map((item) =>
-          item.id === localId ? { ...attachment, preview } : item,
-        );
-      } catch (error) {
-        this.uploads = this.uploads.filter((item) => item.id !== localId);
-        if (preview) URL.revokeObjectURL(preview);
-        this.pageError = errorMessage(error, `Could not upload ${file.name}.`);
-      }
-    }
-  }
-  /** @deprecated use {@link uploadFiles}; kept as an alias for callers that only ever sent images. */
-  uploadImages(files: ArrayLike<File>) {
-    return this.uploadFiles(files);
-  }
-
-  removeUpload(id: string) {
-    const upload = this.uploads.find((item) => item.id === id);
-    if (upload?.preview) URL.revokeObjectURL(upload.preview);
-    this.uploads = this.uploads.filter((item) => item.id !== id);
-  }
-
-  async changeModel(key: string) {
-    const model = this.models.find((item) => modelKey(item) === key);
-    const state = this.sessionState;
-    if (!state || !model) return;
-    this.sessionState = {
-      ...state,
-      selectedModelId: model.id,
-      selectedModelProvider: model.provider,
-    };
-    // Without the lease the command would be refused; the choice rides with the next prompt.
-    if (!this.demo && this.activeSessionId && this.hasControl && state.control.generation) {
-      try {
-        await api.command(this.activeSessionId, {
-          commandId: uuid(),
-          kind: 'set_model',
-          controlGeneration: state.control.generation,
-          provider: model.provider,
-          modelId: model.id,
-        });
-      } catch (error) {
-        this.pageError = errorMessage(error, 'Model could not be changed.');
-      }
-    }
-  }
-
-  async changeThinking(level: ThinkingLevel) {
-    const state = this.sessionState;
-    if (!state) return;
-    this.sessionState = { ...state, thinkingLevel: level };
-    // Without the lease the command would be refused; the choice rides with the next prompt.
-    if (!this.demo && this.activeSessionId && this.hasControl && state.control.generation) {
-      try {
-        await api.command(this.activeSessionId, {
-          commandId: uuid(),
-          kind: 'set_thinking',
-          controlGeneration: state.control.generation,
-          thinkingLevel: level,
-        });
-      } catch (error) {
-        this.pageError = errorMessage(error, 'Thinking level could not be changed.');
-      }
-    }
-  }
-
   /** The catalog without a failed refresh's gap: an error keeps the last one. */
   #loadModes() {
     return api.modes().catch(() => this.modeCatalog);
@@ -1167,57 +768,9 @@ class EngineState {
     return workspace;
   }
 
-  /** Create a session in a workspace and open it. Returns false when it was not created. */
-  async createSession(workspaceId: string): Promise<boolean> {
-    const workspace = this.workspaces.find((item) => item.id === workspaceId);
-    if (workspace && !this.workspaceOnline(workspace)) {
-      this.pageError = `${workspace.displayName} is offline.`;
-      return false;
-    }
-    if (isReadOnly(workspace)) {
-      this.pageError = `${workspace!.displayName} is read-only: its mode is no longer available.`;
-      return false;
-    }
-    this.pageError = '';
-    try {
-      const demo = this.demo;
-      const created = demo
-        ? {
-            id: uuid(),
-            workspaceId,
-            name: 'New session',
-            lastActivityAt: new Date().toISOString(),
-            runnerStatus: 'stopped' as const,
-          }
-        : await api.createSession({ workspaceId });
-      this.sessions = [created, ...this.sessions];
-      this.#sessionsVersion++;
-      if (demo) {
-        this.view = 'session';
-        this.activeSessionId = created.id;
-        this.panel.reset(created.id, demo.demoPanelState);
-        this.sessionState = fromSnapshot({
-          ...demo.demoSnapshot,
-          session: created,
-          messages: [],
-          queue: [],
-          run: null,
-        });
-        this.hiddenMessages = 0;
-        this.draft = '';
-      } else await this.openSession(created.id);
-      return true;
-    } catch (error) {
-      this.pageError = errorMessage(error, 'Could not create the session.');
-      return false;
-    }
-  }
-
-  /** Release resources held for the page (event socket, upload previews). */
+  /** Release resources held for the page (the event socket). */
   dispose() {
-    this.flushDraft();
     this.#events?.close();
-    this.uploads.forEach((upload) => upload.preview && URL.revokeObjectURL(upload.preview));
   }
 }
 
