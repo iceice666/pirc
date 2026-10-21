@@ -15,6 +15,7 @@
   import { X } from '@lucide/svelte';
   import { rovingFocus } from '../../a11y';
   import { app } from '../../app.svelte';
+  import { describeNode } from '../../modes';
   import Modal from './Modal.svelte';
   import BackendSettings from '../BackendSettings.svelte';
   import LoopsSettings from '../LoopsSettings.svelte';
@@ -159,6 +160,7 @@
                       ? ''
                       : 's'}</small
                   >
+                  {#if describeNode(node)}<small class="node-caps">{describeNode(node)}</small>{/if}
                 </li>
               {/each}
             </ul>
@@ -304,6 +306,14 @@
   .settings-devices small {
     color: var(--muted);
     font-size: 11px;
+  }
+  .settings-devices li:has(.node-caps) {
+    flex-wrap: wrap;
+    padding-block: 6px;
+  }
+  .settings-devices .node-caps {
+    flex-basis: 100%;
+    padding-left: 18px;
   }
   .online-dot {
     flex: none;

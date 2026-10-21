@@ -70,6 +70,18 @@ export function creatableModes(node: NodeSummary | undefined, catalog: Catalog):
   return catalog.filter((mode) => accepted.includes(mode.id));
 }
 
+/** A node's machine in a few words: "linux x86_64 · 2× nvidia · 1 of 4 running". */
+export function describeNode(node: NodeSummary): string {
+  const caps = node.capabilities;
+  if (!caps) return '';
+  const parts = [`${caps.os} ${caps.arch}`];
+  const gpus = caps.gpus.map((gpu) => `${gpu.count}× ${gpu.vendor}`).join(', ');
+  if (gpus) parts.push(caps.sandbox.gpu ? gpus : `${gpus} (not in the sandbox)`);
+  if (caps.sandbox.status !== 'active') parts.push('no sandbox: no agents');
+  if (node.load) parts.push(`${node.load.running} of ${node.load.max ?? caps.maxRunning} running`);
+  return parts.join(' · ');
+}
+
 /**
  * Nodes that can host workspaces: those accepting a mode the catalog knows.
  * Without node modes (an older gateway), every node.

@@ -79,6 +79,20 @@ export interface NodeSummary {
   workspaces: Array<{ id: string; displayName: string }>;
   /** Mode ids the node accepts (absent from older gateways). */
   modes?: string[];
+  /** What its machine can do (plan 08); null when it did not say. */
+  capabilities?: NodeCapabilities | null;
+  /** Its agents running, against how many it means to run. */
+  load?: { running: number; max: number | null };
+}
+
+export interface NodeCapabilities {
+  os: string;
+  arch: string;
+  gpus: Array<{ vendor: string; count: number; model?: string; vramMb?: number }>;
+  browser: boolean;
+  terminals: boolean;
+  sandbox: { backend: string; status: string; gpu: boolean };
+  maxRunning: number;
 }
 
 export interface SessionSummary {

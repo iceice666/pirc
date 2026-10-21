@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { demoModes } from './mock';
-import { creatableModes, LEGACY_DIRECTORY, modeOf, UNAVAILABLE, workNodes } from './modes';
+import {
+  creatableModes,
+  describeNode,
+  LEGACY_DIRECTORY,
+  modeOf,
+  UNAVAILABLE,
+  workNodes,
+} from './modes';
 import type { NodeSummary, Workspace } from './types';
 
 const workspace = (extra: Partial<Workspace>): Workspace => ({
@@ -34,6 +41,31 @@ describe('modeOf', () => {
     const gone = workspace({ mode: 'research', available: false });
     expect(modeOf(gone, demoModes)).toBe(UNAVAILABLE);
     expect(modeOf(gone, [])).toBe(UNAVAILABLE);
+  });
+});
+
+describe('describeNode', () => {
+  it('says what a machine can do and how busy it is', () => {
+    const node: NodeSummary = {
+      id: 'work',
+      connectedAt: 0,
+      lastSeenAt: 0,
+      workspaces: [],
+      capabilities: {
+        os: 'linux',
+        arch: 'x86_64',
+        gpus: [{ vendor: 'nvidia', count: 2 }],
+        browser: true,
+        terminals: true,
+        sandbox: { backend: 'bubblewrap', status: 'active', gpu: false },
+        maxRunning: 4,
+      },
+      load: { running: 1, max: 4 },
+    };
+    expect(describeNode(node)).toBe(
+      'linux x86_64 · 2× nvidia (not in the sandbox) · 1 of 4 running',
+    );
+    expect(describeNode({ ...node, capabilities: null })).toBe('');
   });
 });
 
