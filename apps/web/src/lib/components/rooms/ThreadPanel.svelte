@@ -2,6 +2,7 @@
   import { Square, X } from '@lucide/svelte';
   import { ApiError } from '../../http';
   import {
+    questionOutcome,
     speakerName,
     statusLabel,
     stoppable,
@@ -127,11 +128,11 @@
             {/if}
             {#if message.body.status !== 'pending'}
               <p class="more">
-                {message.body.status === 'cancelled'
-                  ? 'No longer asked.'
-                  : message.body.answeredBy
-                    ? `Answered by ${message.body.answeredBy}.`
-                    : 'Answered.'}
+                {questionOutcome({
+                  status: message.body.status ?? 'answered',
+                  answeredBy: message.body.answeredBy,
+                  answer: message.body.answer,
+                })}
               </p>
             {:else if !mine}
               <p class="more">Waiting for {latest?.for ?? 'whom it works for'}.</p>
@@ -143,6 +144,14 @@
                   onclick={() => answer(message, { confirmed: true })}
                   >{message.body.request?.confirmLabel ?? 'Yes'}</button
                 >
+                {#if message.body.request?.allowAgain}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onclick={() => answer(message, { confirmed: true, again: true })}
+                    >Allow again this session</button
+                  >
+                {/if}
                 <button
                   type="button"
                   disabled={busy}

@@ -6,6 +6,7 @@ import ThreadPanel from './components/rooms/ThreadPanel.svelte';
 import type { RoomEvent, RoomMessage } from './rooms';
 import { RoomsState } from './rooms.svelte';
 import {
+  questionOutcome,
   speakerName,
   statusLabel,
   stoppable,
@@ -130,6 +131,58 @@ describe('workers in the web app', () => {
     component = undefined;
     target.remove();
     vi.unstubAllGlobals();
+  });
+
+  it('asks a red line in the room and answers it, once or again', async () => {
+    const message: RoomMessage = {
+      id: 'msg_q',
+      roomId: 'general',
+      seq: 5,
+      speaker: 'face:host',
+      user: null,
+      kind: 'question',
+      body: {
+        text: 'The worker for “Run the tests” asks: Auto mode: allow sending this out?',
+        question: {
+          interactionId: 'interaction-2',
+          threadMessageId: 'tmsg_5',
+          request: { title: 'Auto mode: allow sending this out?', allowAgain: true },
+          status: 'pending',
+        },
+        worker: { delegationId: 'd1', threadId: 'thread_1', event: 'question' },
+      },
+      threadId: null,
+      createdAt: NOW,
+      editedAt: null,
+      pinnedAt: null,
+    };
+    component = mount(RoomMessageRow, { target, props: { message } });
+    await flush();
+    expect(target.textContent).toContain('asks you');
+    button('Allow again this session').click();
+    await flush();
+    expect(calls[calls.length - 1]).toEqual({
+      url: '/api/threads/thread_1/answer',
+      method: 'POST',
+      body: { interactionId: 'interaction-2', answer: { confirmed: true, again: true } },
+    });
+    button('No').click();
+    await flush();
+    expect(calls[calls.length - 1]?.body).toEqual({
+      interactionId: 'interaction-2',
+      answer: { confirmed: false },
+    });
+    expect(
+      questionOutcome({
+        status: 'answered',
+        answeredBy: ME,
+        answer: { confirmed: true, again: true },
+      }),
+    ).toBe(`Allowed for the rest of its session by ${ME}.`);
+    expect(questionOutcome({ status: 'answered', answer: { confirmed: false } })).toBe('Declined.');
+    expect(questionOutcome({ status: 'expired' })).toBe(
+      'Nobody answered in time: the worker was told no.',
+    );
   });
 
   it('shows the anchor’s status, opens its thread and stops it', async () => {

@@ -5,7 +5,14 @@
   import { describeOrigin, forgetRemembered } from '../../memory';
   import { roomsApi, type RoomMessage } from '../../rooms';
   import { wakesApi } from '../../wakes';
-  import { statusLabel, stoppable, workersApi, type WorkerAnchor } from '../../workers';
+  import {
+    questionOutcome,
+    statusLabel,
+    stoppable,
+    workersApi,
+    type QuestionAnswer,
+    type WorkerAnchor,
+  } from '../../workers';
 
   interface Props {
     message: RoomMessage;
@@ -109,6 +116,25 @@
   );
   /** A line or report about a worker: it opens the thread. */
   const workerThread = $derived(message.threadId ?? message.body.worker?.threadId ?? undefined);
+
+  /** A worker's red line, asked here (plan 07). */
+  const question = $derived(message.kind === 'question' ? message.body.question : undefined);
+  let answering = $state(false);
+  let answerError = $state('');
+
+  async function answerQuestion(given: QuestionAnswer) {
+    if (!question || !workerThread || answering) return;
+    answering = true;
+    answerError = '';
+    try {
+      // The room's stream brings the settled question.
+      await workersApi.answer(workerThread, question.interactionId, given);
+    } catch (cause) {
+      answerError = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+    } finally {
+      answering = false;
+    }
+  }
 
   async function stopWorker() {
     if (!anchor || forgetting) return;
@@ -219,6 +245,42 @@
             >{/if}
         </p>
       {/if}
+      {#if question}
+        {#if question.status === 'pending'}
+          <div class="choices">
+            <button
+              type="button"
+              class="button dark small"
+              disabled={answering}
+              onclick={() => answerQuestion({ confirmed: true })}>Yes</button
+            >
+            {#if question.request.allowAgain}
+              <button
+                type="button"
+                class="button ghost small"
+                disabled={answering}
+                title="The same action, in the same place, runs without asking for the rest of the worker's session"
+                onclick={() => answerQuestion({ confirmed: true, again: true })}
+                >Allow again this session</button
+              >
+            {/if}
+            <button
+              type="button"
+              class="button ghost small"
+              disabled={answering}
+              onclick={() => answerQuestion({ confirmed: false })}>No</button
+            >
+            {#if workerThread}
+              <button type="button" class="link" onclick={() => onopenthread?.(workerThread)}
+                >Thread</button
+              >
+            {/if}
+          </div>
+        {:else}
+          <p class="muted small">{questionOutcome(question)}</p>
+        {/if}
+        {#if answerError}<p class="worker-error" role="alert">{answerError}</p>{/if}
+      {/if}
       {#if anchor}
         <div class="worker {anchor.status}">
           <span class="dot" aria-hidden="true"></span>
@@ -288,6 +350,18 @@
     border-left: 3px solid var(--accent);
     border-radius: var(--radius-sm);
     background: var(--bg-layer);
+  }
+  .choices {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .muted.small {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--muted);
   }
   .asks {
     font-size: 12px;

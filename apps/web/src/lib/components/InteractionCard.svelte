@@ -156,6 +156,17 @@
         <X size={15} />
         {interaction.kind === 'confirm' ? (interaction.cancelLabel ?? 'No') : 'Cancel'}
       </button>
+      {#if interaction.kind === 'confirm' && interaction.allowAgain}
+        <button
+          class="button ghost small"
+          type="button"
+          onclick={() => onanswer({ action: 'answer', value: true, again: true })}
+          disabled={locked}
+          title="The same action, in the same place, runs without asking for the rest of this session"
+        >
+          Allow again this session
+        </button>
+      {/if}
       <button
         class="button dark small"
         type="button"

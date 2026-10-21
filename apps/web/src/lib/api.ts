@@ -159,6 +159,7 @@ function interaction(raw: any): PendingInteraction {
       kind: 'confirm',
       ...(typeof request.confirmLabel === 'string' ? { confirmLabel: request.confirmLabel } : {}),
       ...(typeof request.cancelLabel === 'string' ? { cancelLabel: request.cancelLabel } : {}),
+      ...(request.allowAgain === true ? { allowAgain: true } : {}),
       ...(typeof request.relayed?.sessionId === 'string'
         ? {
             relayed: {
@@ -487,7 +488,7 @@ export const api = {
       answer.action === 'cancel'
         ? { cancelled: true }
         : typeof answer.value === 'boolean'
-          ? { confirmed: answer.value }
+          ? { confirmed: answer.value, ...(answer.value && answer.again ? { again: true } : {}) }
           : Array.isArray(answer.value)
             ? { value: answer.value.join(', '), values: answer.value }
             : { value: answer.value };

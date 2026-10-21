@@ -252,6 +252,8 @@ export interface ConfirmInteraction extends InteractionBase {
   kind: 'confirm';
   confirmLabel?: string;
   cancelLabel?: string;
+  /** A red line (plan 07) that may be allowed again for the session. */
+  allowAgain?: boolean;
   /**
    * A delegated session's confirm, relayed to the chat that started it. Its
    * id starts with `relay.`; answering needs no control lease.
@@ -491,8 +493,8 @@ export interface CommandReceipt {
 }
 
 export type InteractionAnswer =
-  | { action: 'answer'; value: string | string[] | boolean }
-  | { action: 'cancel' };
+  /** `again`: a confirm allowed again for the rest of the session. */
+  { action: 'answer'; value: string | string[] | boolean; again?: boolean } | { action: 'cancel' };
 
 export interface EventEnvelope<T extends GatewayEvent = GatewayEvent> {
   sessionId: string;

@@ -181,8 +181,13 @@
     {#if app.approvalMode === 'full-access'}
       <!-- Persistent while it lasts (security audit L14). -->
       <div class="full-access-note" role="status">
-        Full access: the agent runs commands and changes files without asking. Only your deny-list
-        still asks.
+        Full access: the agent pushes, publishes and sends without asking. Your deny-list and the
+        machine-destroying commands are still refused.
+      </div>
+    {:else if app.approvalMode === 'read-only'}
+      <!-- Shown, not chosen: a wake's workers are read-only (plan 07). -->
+      <div class="full-access-note" role="status">
+        Read-only: the agent only reads. Anything else is refused without asking.
       </div>
     {/if}
     {#if connection === 'offline'}

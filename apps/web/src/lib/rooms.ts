@@ -6,7 +6,7 @@ import { request } from './http';
 import type { LoopLine } from './loops';
 import type { RememberedLine } from './memory';
 import type { WakeLine } from './wakes';
-import type { WorkerAnchor, WorkerNote } from './workers';
+import type { QuestionAnswer, WorkerAnchor, WorkerNote } from './workers';
 
 export interface Room {
   id: string;
@@ -39,6 +39,16 @@ export interface RoomAttachment {
   byteSize: number;
 }
 
+export interface RoomQuestion {
+  interactionId: string;
+  threadMessageId: string;
+  request: { title?: string; message?: string; allowAgain?: boolean };
+  status: 'pending' | 'answered' | 'cancelled' | 'expired';
+  expiresAt?: number;
+  answeredBy?: string;
+  answer?: QuestionAnswer;
+}
+
 export interface RoomMessage {
   id: string;
   roomId: string;
@@ -65,6 +75,11 @@ export interface RoomMessage {
      * date), or a line or report about it.
      */
     worker?: WorkerAnchor | WorkerNote;
+    /**
+     * A worker's red-line question (plan 07): leaving its sandbox or sending
+     * something out, asked in the room and answered here or in words.
+     */
+    question?: RoomQuestion;
   };
   threadId: string | null;
   createdAt: number;

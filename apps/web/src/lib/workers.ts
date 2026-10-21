@@ -66,8 +66,12 @@ export interface WorkerQuestion {
     prefill?: string;
     confirmLabel?: string;
     cancelLabel?: string;
+    /** A red line (plan 07) that may be allowed again for the session. */
+    allowAgain?: boolean;
   };
-  status: 'pending' | 'answered' | 'cancelled';
+  status: 'pending' | 'answered' | 'cancelled' | 'expired';
+  /** A red line asked in the room too (plan 07). */
+  roomMessageId?: string;
   delegationId: string;
   answeredBy?: string;
   answer?: QuestionAnswer;
@@ -109,7 +113,31 @@ export interface Thread {
   closedAt: number | null;
 }
 
-export type QuestionAnswer = { value: string } | { confirmed: boolean } | { cancelled: true };
+export type QuestionAnswer =
+  | { value: string }
+  | { confirmed: boolean; again?: boolean }
+  | { cancelled: true };
+
+/** What became of a question that is no longer pending. */
+export function questionOutcome(question: {
+  status: string;
+  answeredBy?: string;
+  answer?: QuestionAnswer;
+}): string {
+  if (question.status === 'cancelled') return 'No longer asked.';
+  if (question.status === 'expired') return 'Nobody answered in time: the worker was told no.';
+  const answer = question.answer;
+  const how =
+    answer && 'confirmed' in answer
+      ? answer.confirmed
+        ? answer.again
+          ? 'allowed for the rest of its session'
+          : 'allowed'
+        : 'declined'
+      : 'answered';
+  const capitalized = how[0].toUpperCase() + how.slice(1);
+  return question.answeredBy ? `${capitalized} by ${question.answeredBy}.` : `${capitalized}.`;
+}
 
 const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
 const threadPath = (id: string, rest = '') => `/api/threads/${encodeURIComponent(id)}${rest}`;
