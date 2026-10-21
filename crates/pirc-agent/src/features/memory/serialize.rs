@@ -121,8 +121,41 @@ pub fn entry_origin(entries: &[SessionEntry], message: &Message) -> String {
     {
         return format!("tool:workspace:{workspace}");
     }
+    // The brain's reads of a source name the source
+    // (plans/rewrite/09-sources.md), and so does a wake a source caused.
+    if let Message::ToolResult {
+        tool_name,
+        tool_call_id,
+        ..
+    } = message
+        && SOURCE_TOOL_PREFIXES
+            .iter()
+            .any(|prefix| tool_name.starts_with(prefix))
+        && let Some(source) = tool_call_arguments(entries, tool_call_id)
+            .and_then(|arguments| arguments.get("source"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|source| !source.is_empty())
+    {
+        return format!("tool:{source}");
+    }
+    if let Message::Custom {
+        details: Some(details),
+        ..
+    } = message
+        && let Some(origin) = details
+            .get("origin")
+            .and_then(Value::as_str)
+            .filter(|origin| origin.starts_with("tool:"))
+    {
+        return origin.to_owned();
+    }
     message_origin(message)
 }
+
+/// Tools that read one of the gateway brain's sources, named by their
+/// `source` argument (`email:gmail` makes `tool:email:gmail`).
+const SOURCE_TOOL_PREFIXES: [&str; 4] = ["email_", "calendar_", "moodle_", "source_search"];
 
 /// `RECALL_OMITTED`: what the observer sees instead of recall output:
 /// recalled memory replays older evidence, and learning it again would let

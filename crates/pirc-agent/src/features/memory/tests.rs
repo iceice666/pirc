@@ -201,6 +201,54 @@ fn hides_recall_output_from_the_observer_and_records_origins() {
     assert_eq!(reflector.out[0].content, "The deploy key is sk-[REDACTED]");
 }
 
+/// The brain's reads of a source name it, and so does a wake a source
+/// caused (plans/rewrite/09-sources.md).
+#[test]
+fn source_reads_name_their_source() {
+    use super::serialize::entry_origin;
+    let message = |value: Value| -> Message { serde_json::from_value(value).unwrap() };
+    let call = message(json!({
+        "role": "assistant",
+        "content": [{ "type": "toolCall", "id": "c1", "name": "email_read",
+            "arguments": { "source": "email:school", "id": "7:4" } }],
+        "api": "a", "provider": "p", "model": "m",
+        "usage": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 0 },
+        "stopReason": "toolUse", "timestamp": 1
+    }));
+    let entries = vec![
+        entry(EntryData::Message(call)),
+        tool_result("email_read", "Subject: HW3"),
+    ];
+    let EntryData::Message(read) = &entries[1].data else {
+        unreachable!()
+    };
+    assert_eq!(entry_origin(&entries, read), "tool:email:school");
+    // Another tool with a `source` argument is only itself.
+    let EntryData::Message(other) = &tool_result("web_search", "x").data else {
+        unreachable!()
+    };
+    assert_eq!(entry_origin(&entries, other), "tool:web_search");
+    let wake = |details: Value| {
+        message(
+            json!({ "role": "custom", "customType": "wake", "content": "A source changed",
+            "display": false, "details": details, "timestamp": 1 }),
+        )
+    };
+    assert_eq!(
+        entry_origin(&[], &wake(json!({ "origin": "tool:email:school" }))),
+        "tool:email:school"
+    );
+    // Only a tool origin is taken from details.
+    assert_eq!(
+        entry_origin(&[], &wake(json!({ "origin": "user" }))),
+        "custom:wake"
+    );
+    assert_eq!(
+        entry_origin(&[], &wake(json!({ "kind": "anchor" }))),
+        "custom:wake"
+    );
+}
+
 #[test]
 fn computes_thresholds() {
     let mut config = MemoryConfig::default();
