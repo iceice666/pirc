@@ -51,7 +51,7 @@
 | 08   | ~~research profile；`scratch.md` 升格~~ 已定（2026-10-21）：task policy；升格                                  |
 | 09   | ~~第一版來源範圍~~ 已定（2026-10-21）：Gmail IMAP、ICS + CalDAV、Moodle API；學校 Gmail 的 app password 待確認 |
 | 10   | ~~「話題」怎麼判；面孔封存~~ 已定（2026-10-21）：頭腦用 `topic` 工具標；封存的面孔變灰、可隱藏                 |
-| 11   | 討論串是側欄還是第二欄；引擎蓋留不留 session rename                                                            |
+| 11   | ~~討論串是側欄還是第二欄；引擎蓋留不留 session rename~~ 已定（2026-10-21）：桌面共用右欄；只留 rename          |
 | 13   | 版本號 1.0.0 vs 0.10.0                                                                                         |
 
 ## 每份 plan 的格式

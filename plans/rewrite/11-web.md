@@ -6,19 +6,28 @@
 
 **依賴**：01–10（可在 06 之後就開始，與 09/10 平行收尾）。**被依賴**：12。
 
+## 決定（已定，2026-10-21 討論）
+
+- 討論串在桌面是**側欄**，與成員列表共用右欄（討論串優先，開著時成員列表讓位）；手機上討論串是全頁。
+- 引擎蓋的 session **只留 rename**；pin/settle 刪。
+- `progress` 訊息由 **web 自己推導**（討論串的工人狀態 + session 狀態），gateway 不寫也不更新 progress 訊息；`MessageKind::Progress` 繼續是保留值，等真的有需要才接。
+- 「這個房間靜音」存在**本機**（localStorage，跟 layout/draft 一起），不動 gateway；Android 之後各自做。
+- 引擎蓋的 session 詳情是**唯讀 transcript**，加「回它所屬的房間」的連結；送訊息只在房間。
+- 設定的分頁收成 **Models & sources / Devices / Notifications / About**；loops、wakes、記憶瀏覽移到引擎蓋，偏好留在主持人頁。
+
 ## 設計（對照盤點 §6.1）
 
 **版面**：左：房間列表（活動排序、未讀點、「等你回話」標記、封存折疊）+ 底部「引擎蓋」「設定」；中：房間（訊息列 + composer）；右（或 tab）：成員列表。手機：底部 tab 房間 / 成員 / 引擎蓋 / 設定（`MobileTabs` 改）。
 
-**訊息列**（`Message.svelte` 改）：頭像、名字（面孔色）、時間、內容；連續同 speaker 折疊頭像；`kind='line'` 小字可展開（記下了 / 掛上了 / 叫了工人 / 我晚點回來看），每種有一句話撤銷按鈕（呼叫對應 API）與「引擎蓋」連結；`kind='progress'` 原地更新（沿用 `RunCard`/`TodoDock` 的資料，呈現改成一則訊息）；`kind='question'` 突出顯示 + 「等你回話」。
+**訊息列**（`Message.svelte` 改）：頭像、名字（面孔色）、時間、內容；連續同 speaker 折疊頭像；`kind='line'` 小字可展開（記下了 / 掛上了 / 叫了工人 / 我晚點回來看），每種有一句話撤銷按鈕（呼叫對應 API）與「引擎蓋」連結；`kind='progress'` 由 web 推導後原地更新（討論串的工人狀態 + `RunCard`/`TodoDock` 的資料，呈現成一則訊息；gateway 不寫 progress 訊息）；`kind='question'` 突出顯示 + 「等你回話」。
 
 **討論串**（06 的面板收尾）：anchor 訊息下「進行中（3 人）/ 完成」摘要列，點開側欄：工人列表（名字、狀態點、縮排）、工人事件（`ToolCard` 沿用於 tool 摘要）、插話框；thread 內的 question。
 
 **成員列表 / 面孔頁**（10 的收尾）：presence 點四態；面孔頁即設定；主持人頁含 SOUL/CHAT 編輯（`AssistantPromptEditor` 沿用）、偏好、debounce 秒數。
 
-**引擎蓋**（`/engine`）：今天的 Work 面整個搬進來：sessions by node、`SidePanel` 的 files/git/diff/terminal/browser/memory/context/tasks tabs、`JobsMenu`、node 卡片（能力、load）、wakes 清單、brain turns、記憶瀏覽、loops 清單、sources 狀態。從房間的 line / 討論串可深連結到對應 session。不再有 Chat/Work 切換；`Sidebar.svelte` 的 workspace/session 樹只在這裡。
+**引擎蓋**（`/engine`）：今天的 Work 面整個搬進來：sessions by node、`SidePanel` 的 files/git/diff/terminal/browser/memory/context/tasks tabs、`JobsMenu`、node 卡片（能力、load）、wakes 清單、brain turns、記憶瀏覽、loops 清單、sources 狀態。從房間的 line / 討論串可深連結到對應 session（`?session=`）；session 詳情是唯讀 transcript + 「回房間」連結，沒有 composer。session 只留 rename。不再有 Chat/Work 切換；`Sidebar.svelte` 的 workspace/session 樹只在這裡。
 
-**設定**（`SettingsDialog` 改）：backends + 來源（09）、裝置、通知（目標改為房間；「這個房間靜音」）、PWA。刪 schedules / projects / memory approvals / assistant-node tabs（00 已刪多數）。
+**設定**（`SettingsDialog` 改）：四個分頁——Models & sources（backends + 09 的來源）、Devices、Notifications（目標改為房間；「這個房間靜音」存 localStorage）、About（含 PWA）。loops / wakes / 記憶瀏覽搬去引擎蓋，偏好留在主持人頁；schedules / projects / memory approvals / assistant-node tabs 由 00 刪掉。
 
 **狀態層**（`app.svelte.ts`、`state.ts`、`api.ts`、`types.ts` 重寫）：room-first；`EventEnvelope` 的 room / thread / face / presence / loop / wake 事件 reducer；worker session 狀態只在引擎蓋載入（`panel-api.ts` 沿用）；`storage.ts` 的 draft / read / 選取改以 room 為 key；`push.ts` 的 deep link → room。
 
@@ -47,5 +56,5 @@
 
 ## 實作前待決
 
-- 討論串是側欄還是 Discord 式的「開在右邊的第二欄」：手機上只能是全頁；桌面建議側欄（與成員列表共用右欄）。
-- 引擎蓋要不要保留 session 的 rename/pin/settle：建議只留 rename（引擎蓋內找 session 用），pin/settle 刪。
+- ~~討論串是側欄還是 Discord 式的「開在右邊的第二欄」~~ 已定（2026-10-21）：桌面側欄，與成員列表共用右欄（討論串優先，開著時成員列表讓位）；手機上討論串是全頁。
+- ~~引擎蓋要不要保留 session 的 rename/pin/settle~~ 已定（2026-10-21）：只留 rename（引擎蓋內找 session 用），pin/settle 刪。
