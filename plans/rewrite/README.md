@@ -50,7 +50,7 @@
 | 07   | ~~「Allow again in this session」for `unsandboxed_bash` / `Outbound`~~ 已定（2026-10-21）：做                  |
 | 08   | ~~research profile；`scratch.md` 升格~~ 已定（2026-10-21）：task policy；升格                                  |
 | 09   | ~~第一版來源範圍~~ 已定（2026-10-21）：Gmail IMAP、ICS + CalDAV、Moodle API；學校 Gmail 的 app password 待確認 |
-| 10   | 「話題」怎麼判（頭腦標 `topic` vs OM 聚類）                                                                    |
+| 10   | ~~「話題」怎麼判；面孔封存~~ 已定（2026-10-21）：頭腦用 `topic` 工具標；封存的面孔變灰、可隱藏                 |
 | 11   | 討論串是側欄還是第二欄；引擎蓋留不留 session rename                                                            |
 | 13   | 版本號 1.0.0 vs 0.10.0                                                                                         |
 
