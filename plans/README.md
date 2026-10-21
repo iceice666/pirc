@@ -62,6 +62,13 @@ deletion are not open work.
    agent proposals. Implementation is authorized locally; see the plan for
    verification and remaining device acceptance. Remote publication requires a
    later explicit request.
+9. **Agent checkpoints and safe recovery.** [Checkpoints](checkpoints.md):
+   planning proposal for Web and native Android. Preserve dirty baselines and
+   later user/agent changes, distinguish shared writer groups from independently
+   attributed agents, and prepare inverse merges in new recovery workspaces.
+   The original workspace is retained; no automatic in-place overwrite. Includes
+   concurrency, attribution, sandbox/storage, disk quotas and crash acceptance.
+   Implementation needs separate authorization.
 
 ## Shelved: project-only memory (B)
 
