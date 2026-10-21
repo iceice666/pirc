@@ -56,6 +56,13 @@ deletion are not open work.
    decisions. Remaining: phase 3 (session allows, soft/hard danger), only after
    reassessing with `scripts/approval-stats.ts`; plus real-device checks of
    relayed approvals and Stop.
+8. **Calendar for schedules and personal events.** [Calendar](calendar.md):
+   proposed month/week/day views for Web and Flutter Android, preserving the
+   existing pirc design system and schedule list. The user also requested ordinary
+   events and agent-assisted management, so the plan includes their data,
+   recurrence, exceptions, reminders and separately authorized approval workflow.
+   Design review comes first; implementation and remote publication are not
+   authorized by the plan itself.
 
 ## Shelved: project-only memory (B)
 
