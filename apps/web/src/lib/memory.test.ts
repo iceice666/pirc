@@ -272,6 +272,7 @@ describe('a line that says what was remembered', () => {
     buttons()[0].click();
     flushSync();
     expect(target.textContent).toContain('A fact: found again when it matters. From your words');
+    expect(target.querySelector('a[href="/engine?open=memory"]')?.textContent).toBe('Details');
     buttons()
       .find((button) => button.textContent === "Don't keep")!
       .click();

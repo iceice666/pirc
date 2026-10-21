@@ -8,7 +8,6 @@
     PanelLeftOpen,
     PanelRightClose,
     PanelRightOpen,
-    Plus,
     Radio,
     RefreshCw,
     ShieldCheck,
@@ -19,7 +18,6 @@
   import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
   import { engine } from './lib/engine.svelte';
-  import Composer from './lib/components/Composer.svelte';
   import InteractionCard from './lib/components/InteractionCard.svelte';
   import { isRelayed } from './lib/types';
   import JobsMenu from './lib/components/JobsMenu.svelte';
@@ -30,7 +28,6 @@
   import EngineOverview from './lib/components/engine/EngineOverview.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import { timelineItems } from './lib/work';
-  import NewSessionDialog from './lib/components/dialogs/NewSessionDialog.svelte';
   import NewWorkspaceDialog from './lib/components/dialogs/NewWorkspaceDialog.svelte';
   import SettingsDialog, { type SettingsTab } from './lib/components/dialogs/SettingsDialog.svelte';
   import NativeManagementConsent from './lib/components/dialogs/NativeManagementConsent.svelte';
@@ -108,10 +105,8 @@
     } else if (onOverview) sidebarOpen = true;
     else showOverview();
   }
-  let newSessionOpen = $state(false);
   let newWorkspaceOpen = $state(false);
   let newWorkspaceNodeId = $state('');
-  let creatingSession = false;
   let updateRegistration: ServiceWorkerRegistration | undefined = $state();
   let timeline: HTMLElement | undefined = $state();
 
@@ -398,21 +393,6 @@
     newWorkspaceOpen = true;
     sidebarOpen = false;
   }
-
-  /** With a workspace (its `+` button, or one just added) the session is created right away. */
-  async function showNewSession(workspaceId?: string) {
-    if (!workspaceId) {
-      newSessionOpen = true;
-      return;
-    }
-    if (creatingSession) return;
-    creatingSession = true;
-    try {
-      await engine.createSession(workspaceId);
-    } finally {
-      creatingSession = false;
-    }
-  }
 </script>
 
 <svelte:window bind:innerWidth={viewportWidth} onkeydown={onWindowKeydown} />
@@ -440,7 +420,6 @@
     collapsed={sidebarCollapsed}
     oncollapse={() => (sidebarCollapsed = true)}
     onselect={openSession}
-    onnew={showNewSession}
     onaddworkspace={showNewWorkspace}
     onclose={() => (sidebarOpen = false)}
     onopenworkspace={openWorkspace}
@@ -472,7 +451,6 @@
         {showSettled}
         onexpand={() => (sidebarCollapsed = false)}
         onselect={openSession}
-        onnew={showNewSession}
       />
     {:else if engine.loading}
       <div class="loading-state">
@@ -598,13 +576,7 @@
                         grouped
                       />{/each}
                   </RunCard>
-                {:else}<Message
-                    message={item.message}
-                    branchDisabled={!engine.canChangeBranch}
-                    onedit={(entryId, content) =>
-                      engine.changeBranch('edit_message', entryId, content)}
-                    onswitch={(entryId) => engine.changeBranch('switch_branch', entryId)}
-                  />{/if}
+                {:else}<Message message={item.message} />{/if}
               {/each}
               {#each engine.pendingInteractions as interaction (interaction.id)}
                 <!-- A relayed confirm needs no control lease. -->
@@ -629,17 +601,24 @@
               {/if}
               {#if sessionState.messages.length === 0}
                 <div class="empty-conversation">
-                  <span><Plus size={24} /></span>
-                  <h2>Start something useful</h2>
-                  <p>
-                    Describe a task, attach a reference image, or ask the agent to continue work in
-                    this workspace.
-                  </p>
+                  <h2>Nothing here yet</h2>
+                  <p>What this session's agent does shows up here as it works.</p>
                 </div>
               {/if}
             </div>
           </div>
-          <Composer />
+          <!-- Read-only: people talk to pirc in the rooms, and pirc to its workers. -->
+          <footer class="read-only" role="note">
+            {#if origin?.kind === 'delegation'}
+              <span>pirc runs this worker from a room. Talk to it there.</span>
+              <a href="/?room={encodeURIComponent(origin.roomId)}"
+                ><Forward size={14} /> Open the room</a
+              >
+            {:else}
+              <span>Sessions are read-only here. Conversations happen in the rooms.</span>
+              <a href="/"><Forward size={14} /> Rooms</a>
+            {/if}
+          </footer>
           <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
         </section>
 
@@ -685,9 +664,8 @@
 <NewWorkspaceDialog
   bind:open={newWorkspaceOpen}
   nodeId={newWorkspaceNodeId}
-  oncreated={(workspaceId) => showNewSession(workspaceId)}
+  oncreated={openWorkspace}
 />
-<NewSessionDialog bind:open={newSessionOpen} />
 {#if sidebarOpen || onPage}
   <MobileTabs tabs={mobileTabs} current={mobileTab} onpick={pickTab} />
 {/if}
@@ -988,6 +966,25 @@
   .jump-latest button:hover {
     background: var(--bg-subtle);
   }
+  .read-only {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    margin: 0 auto;
+    width: min(100%, 860px);
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .read-only a {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--accent);
+    text-decoration: none;
+  }
   .empty-conversation {
     flex: 1;
     min-height: 300px;
@@ -995,15 +992,6 @@
     place-items: center;
     align-content: center;
     text-align: center;
-  }
-  .empty-conversation > span {
-    width: 48px;
-    height: 48px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    color: var(--accent);
-    background: var(--accent-soft);
   }
   .empty-conversation h2 {
     margin: 16px 0 6px;

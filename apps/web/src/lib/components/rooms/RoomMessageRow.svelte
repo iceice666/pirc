@@ -6,6 +6,7 @@
   import { describeOrigin, forgetRemembered } from '../../memory';
   import type { ThreadActivity } from '../../room-events';
   import { roomsApi, type RoomMessage } from '../../rooms';
+  import { engineLink, type OverviewSection } from '../../routes';
   import { wakesApi } from '../../wakes';
   import {
     questionOutcome,
@@ -124,6 +125,17 @@
     }
   }
 
+  /** Where the engine shows what the line is about. */
+  const details = $derived<OverviewSection | undefined>(
+    message.body.memory
+      ? 'memory'
+      : message.body.loop
+        ? 'loops'
+        : message.body.wake
+          ? 'wakes'
+          : undefined,
+  );
+
   /** A worker's anchor: its thread's latest worker, kept up to date. */
   const anchor = $derived(
     message.body.worker && 'title' in message.body.worker
@@ -228,6 +240,9 @@
       {/if}
     {:else}
       <span>{message.body.text ?? ''}</span>
+    {/if}
+    {#if details}
+      <a class="link quiet" href={engineLink(details)} title="See it in the engine">Details</a>
     {/if}
     <time datetime={new Date(message.createdAt).toISOString()} title={fullTime}>{time}</time>
   </div>

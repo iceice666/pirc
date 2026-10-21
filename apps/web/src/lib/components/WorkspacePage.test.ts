@@ -33,7 +33,6 @@ const scratch: Workspace = {
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
 const onselect = vi.fn();
-const onnew = vi.fn();
 
 beforeEach(() => {
   engine.demo = undefined;
@@ -75,11 +74,10 @@ afterEach(async () => {
   vi.restoreAllMocks();
   engine.modeCatalog = [];
   onselect.mockReset();
-  onnew.mockReset();
 });
 
 function render(workspace: Workspace, showSettled = false) {
-  const props = reactiveProps({ workspace, showSettled, onselect, onnew });
+  const props = reactiveProps({ workspace, showSettled, onselect });
   component = mount(WorkspacePage, { target, props });
   flushSync();
   return props;
@@ -110,8 +108,8 @@ describe('WorkspacePage', () => {
     expect(names()).toEqual(['Beta', 'Alpha', 'Gamma']);
     target.querySelectorAll<HTMLButtonElement>('.row-main')[1]!.click();
     expect(onselect).toHaveBeenCalledWith('a');
-    target.querySelector<HTMLButtonElement>('.new-in')!.click();
-    expect(onnew).toHaveBeenCalledWith('node:ws');
+    // pirc starts sessions when it hands work over: there is no "New session".
+    expect(target.textContent).not.toContain('New session');
   });
 
   it('starts with done sessions shown when Settings says so, and searches', () => {
@@ -168,11 +166,6 @@ describe('WorkspacePage', () => {
     render(scratch);
     expect(target.querySelector('.page-title small')!.textContent).toBe('Scratch · node');
     expect(tab('Sessions')).toBeDefined();
-    expect(
-      [...target.querySelectorAll('button')].some((item) =>
-        item.textContent?.includes('New session'),
-      ),
-    ).toBe(true);
     // Its sessions are not deleted from the list.
     expect(target.querySelector('[aria-label="Delete Render"]')).toBeNull();
     tab('Settings').click();
@@ -191,10 +184,6 @@ describe('WorkspacePage', () => {
     render(gone);
     expect(target.querySelector('.page-title small')!.textContent).toContain('read-only');
     expect(target.textContent).toContain('no longer available');
-    const create = [...target.querySelectorAll('button')].find((item) =>
-      item.textContent?.includes('New session'),
-    );
-    expect(create?.disabled).toBe(true);
     tab('Settings').click();
     flushSync();
     await flush();

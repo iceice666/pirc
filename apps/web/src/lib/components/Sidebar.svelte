@@ -32,7 +32,6 @@
     collapsed?: boolean;
     oncollapse: () => void;
     onselect: (id: string) => void;
-    onnew: (workspaceId?: string) => void;
     /** Open a workspace's page: all its sessions and its settings. */
     onopenworkspace: (workspaceId: string) => void;
     onaddworkspace: (nodeId: string) => void;
@@ -47,7 +46,6 @@
     collapsed = false,
     oncollapse,
     onselect,
-    onnew,
     onopenworkspace,
     onaddworkspace,
     onclose,
@@ -295,13 +293,6 @@
           {#if unread}<span class="unread-count" aria-label="{unread} unread">{unread}</span>{/if}
         </span>
       </button>
-      <button
-        class="mini-action"
-        type="button"
-        aria-label="New {noun} in {workspace.displayName}"
-        disabled={!engine.acceptsSessions(workspace)}
-        onclick={() => onnew(workspace.id)}><Plus size={15} /></button
-      >
     </div>
     {#if list.length}
       <div class="session-list nested">
@@ -708,26 +699,6 @@
   .running-count .status-dot {
     margin-left: 0;
   }
-  .mini-action {
-    display: grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: 0;
-    border-radius: 6px;
-    color: var(--muted);
-    background: transparent;
-    opacity: 0;
-  }
-  .workspace-heading:hover .mini-action,
-  .mini-action:focus-visible {
-    opacity: 1;
-  }
-  .mini-action:hover {
-    color: var(--ink);
-    background: var(--bg-hover-strong);
-  }
   .session-list {
     display: grid;
     gap: 1px;
@@ -867,9 +838,6 @@
     .session-item.active .session-meta,
     .session-item.revealed .session-meta {
       display: none;
-    }
-    .mini-action {
-      opacity: 1;
     }
     /* Other rows: a "more" button after the time reveals the row's actions. */
     .session-more {
@@ -1132,7 +1100,6 @@
     .workspace-heading {
       height: 42px;
     }
-    .mini-action,
     .session-actions button {
       width: 32px;
       height: 32px;

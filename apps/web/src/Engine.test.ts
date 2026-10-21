@@ -181,6 +181,16 @@ describe('Engine header', () => {
   });
 });
 
+describe('Engine session', () => {
+  it('is read-only: no composer, a way to where conversations happen', async () => {
+    await start(2);
+    expect(target.querySelector('.conversation textarea')).toBeNull();
+    const footer = target.querySelector('.read-only')!;
+    expect(footer.textContent).toContain('read-only');
+    expect(footer.querySelector('a')!.getAttribute('href')).toBe('/');
+  });
+});
+
 describe('Engine front page', () => {
   it('shows the overview in place of the session, and goes back to a session', async () => {
     await start(2);

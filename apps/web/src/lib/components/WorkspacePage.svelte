@@ -10,7 +10,6 @@
     Pin,
     PinOff,
     Search,
-    SquarePen,
   } from '@lucide/svelte';
   import { tick } from 'svelte';
   import { rovingFocus } from '../a11y';
@@ -28,7 +27,6 @@
     sidebarCollapsed?: boolean;
     onexpand?: () => void;
     onselect: (sessionId: string) => void;
-    onnew: (workspaceId: string) => void;
     /** Settled (done) sessions are listed (Settings → General). */
     showSettled?: boolean;
   }
@@ -38,7 +36,6 @@
     sidebarCollapsed = false,
     onexpand,
     onselect,
-    onnew,
     showSettled = false,
   }: Props = $props();
 
@@ -129,12 +126,6 @@
       <h1 id="workspace-title">{workspace.displayName}</h1>
       <small>{subtitle}</small>
     </div>
-    <button
-      class="button dark new-in"
-      type="button"
-      disabled={!online || readOnly}
-      onclick={() => onnew(workspace.id)}><SquarePen size={15} /> New {noun}</button
-    >
   </header>
 
   <div
@@ -192,7 +183,7 @@
             {:else}
               <li class="empty-note">
                 {#if query}Nothing matches.{:else if settledCount}Every {noun} here is done.{:else}No
-                  {noun}s yet. Start one with “New {noun}”.{/if}
+                  {noun}s yet. pirc starts them when it hands work to this workspace.{/if}
               </li>
             {/each}
           </ul>
@@ -378,10 +369,6 @@
     flex: none;
     color: var(--muted);
     font-size: 12px;
-  }
-  .new-in {
-    flex: none;
-    gap: 6px;
   }
   /* The tabs line up with the centered list below them. */
   .page-tabs {

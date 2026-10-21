@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { Square, X } from '@lucide/svelte';
+  import { SquareTerminal, Square, X } from '@lucide/svelte';
   import { ApiError } from '../../http';
+  import { engineLink } from '../../routes';
   import {
     questionOutcome,
     speakerName,
@@ -89,6 +90,14 @@
         >
       {/if}
     </div>
+    {#if latest?.targetSessionId}
+      <a
+        class="icon"
+        href={engineLink({ session: latest.targetSessionId })}
+        aria-label="Its session in the engine"
+        title="Its session in the engine"><SquareTerminal size={16} /></a
+      >
+    {/if}
     {#if latest && mine && stoppable(latest.status)}
       <button
         type="button"
@@ -265,6 +274,10 @@
   button {
     font: inherit;
     cursor: pointer;
+  }
+  a.icon {
+    display: grid;
+    place-items: center;
   }
   .icon {
     padding: 4px;

@@ -21,7 +21,6 @@ let target: HTMLDivElement;
 const handlers = {
   oncollapse: vi.fn(),
   onselect: vi.fn(),
-  onnew: vi.fn(),
   onaddworkspace: vi.fn(),
   onopenworkspace: vi.fn(),
   onclose: vi.fn(),
@@ -88,8 +87,8 @@ describe('Sidebar', () => {
     expect(row.querySelector('[aria-label="A session holds the write lease"]')).not.toBeNull();
     row.querySelector<HTMLButtonElement>('button')!.click();
     expect(handlers.onopenworkspace).toHaveBeenCalledWith('node:ws');
-    target.querySelector<HTMLButtonElement>('[aria-label="New session in Project"]')!.click();
-    expect(handlers.onnew).toHaveBeenCalledWith('node:ws');
+    // Sessions start when pirc hands work over, never from here.
+    expect(target.querySelector('[aria-label="New session in Project"]')).toBeNull();
     target.querySelector<HTMLButtonElement>('[aria-label="Add workspace on node"]')!.click();
     expect(handlers.onaddworkspace).toHaveBeenCalledWith('node');
   });
@@ -270,16 +269,6 @@ describe('Sidebar', () => {
       expect(node).toContain('read-only');
       // Nodes accepting no known mode host no workspaces.
       expect(target.querySelector('[aria-label="lab"]')).toBeNull();
-      const gpu = target.querySelector<HTMLButtonElement>(
-        '[aria-label="New session in GPU jobs"]',
-      )!;
-      expect(gpu.disabled).toBe(false);
-      gpu.click();
-      expect(handlers.onnew).toHaveBeenCalledWith('node:gpu');
-      // An unavailable mode takes no new sessions.
-      expect(
-        target.querySelector<HTMLButtonElement>('[aria-label="New session in Old"]')!.disabled,
-      ).toBe(true);
       // Sessions are settled, not deleted.
       expect(namesIn('node')).toContain('Render image');
       expect(target.querySelector('[aria-label="Delete Render image"]')).toBeNull();
