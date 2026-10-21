@@ -454,6 +454,15 @@ fn while_waiting<'a, T: 'a>(
 }
 
 impl Ui for TrackingUi {
+    fn confirm_again<'a>(
+        &'a self,
+        title: &'a str,
+        message: &'a str,
+        opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<crate::ui::Allow>> {
+        let (opts, wait) = self.link(opts);
+        while_waiting(self.inner.confirm_again(title, message, opts), wait)
+    }
     fn select<'a>(
         &'a self,
         title: &'a str,
@@ -2782,6 +2791,7 @@ impl Agent {
             tool_call_id: tool_call_id.to_owned(),
             ui: self.ui.clone(),
             has_ui: self.has_ui,
+            approval_mode: self.approval_mode(),
             env: self.config.env.clone(),
             acquire_write: Rc::new(move |file: String| {
                 let agent = agent.clone();

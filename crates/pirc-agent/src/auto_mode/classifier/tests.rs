@@ -19,7 +19,7 @@ fn parses_classifier_verdicts() {
     );
     assert_eq!(
         parsed("<think>hmm</think><verdict>dangerous</verdict>"),
-        Some((Verdict::Danger, "classified as danger".to_owned()))
+        Some((Verdict::Outbound, "classified as outbound".to_owned()))
     );
     assert_eq!(
         parsed("read — only lists files").map(|(verdict, _)| verdict),
@@ -39,10 +39,16 @@ fn parses_classifier_verdicts() {
     assert_eq!(parsed("read <verdict>maybe</verdict>"), None);
     assert_eq!(
         parsed("<verdict>dangerously</verdict>").unwrap().0,
-        Verdict::Danger
+        Verdict::Outbound
     );
     assert_eq!(parsed("readonly"), None);
-    assert_eq!(parsed("  DANGER: no").unwrap().0, Verdict::Danger);
+    assert_eq!(parsed("  DANGER: no").unwrap().0, Verdict::Outbound);
+    assert_eq!(
+        parsed("<verdict>outbound</verdict><reason>pushes</reason>"),
+        Some((Verdict::Outbound, "pushes".to_owned()))
+    );
+    // The model cannot refuse outright.
+    assert_eq!(parsed("<verdict>deny</verdict>"), None);
     // An unclosed reason runs to the end; whitespace collapses; 300 units.
     assert_eq!(
         parsed("<verdict>read</verdict><reason>\n  lists\n\tfiles  ")
@@ -406,14 +412,14 @@ fn builds_the_prompt_from_requests_notes_and_the_action() {
 }
 
 #[test]
-fn keeps_the_system_prompt_verbatim() {
+fn keeps_the_system_prompt() {
     assert!(CLASSIFIER_SYSTEM_PROMPT.starts_with(
-        "You are the safety monitor of an autonomous coding agent running in auto mode."
+        "You are the safety monitor of an autonomous coding agent running in auto mode inside an OS sandbox."
     ));
     assert!(CLASSIFIER_SYSTEM_PROMPT.ends_with(
-        "Reply with <verdict>read|write|dangerous</verdict> followed by <reason>one short sentence</reason>, and nothing else."
+        "Reply with <verdict>read|write|outbound</verdict> followed by <reason>one short sentence</reason>, and nothing else."
     ));
-    assert_eq!(js::len16(CLASSIFIER_SYSTEM_PROMPT), 2_994);
+    assert_eq!(js::len16(CLASSIFIER_SYSTEM_PROMPT), 3336);
 }
 
 #[test]

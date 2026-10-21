@@ -56,7 +56,7 @@ async fn judges_keystrokes_together_with_the_rest_of_their_line() {
         .await
         .unwrap();
     assert!(refused.contains("deletes"), "{refused}");
-    assert!(refused.contains("no UI"), "{refused}");
+    assert!(refused.contains("never allowed here"), "{refused}");
     // Another task's line is separate.
     assert_eq!(
         gate(&auto, &host, "background_task", write("t2", "ls\n")).await,
@@ -209,18 +209,18 @@ async fn applies_the_deny_list_with_auto_mode_off_and_broken_settings() {
     );
     host.set_features(json!({ "autoMode": { "useModel": true, "deny": ["deploy-prod"] } }));
     let denied = classify(&auto, &host, &action).await.classification;
-    assert_eq!(denied.verdict, Verdict::Danger);
+    assert_eq!(denied.verdict, Verdict::Deny);
     assert!(denied.reason.contains("deny-list"));
     host.set_features(json!({ "autoMode": { "enabled": false, "deny": "deploy-prod" } }));
     assert_eq!(
         classify(&auto, &host, &action).await.classification.verdict,
-        Verdict::Danger
+        Verdict::Deny
     );
     // A broken setting elsewhere does not drop the deny-list.
     host.set_features(json!({ "autoMode": { "timeoutMs": "soon", "deny": ["deploy-prod"] } }));
     assert_eq!(
         classify(&auto, &host, &action).await.classification.verdict,
-        Verdict::Danger
+        Verdict::Deny
     );
 }
 
@@ -272,10 +272,10 @@ fn no_longer_gates_the_retired_code_tool() {
 }
 
 #[tokio::test]
-async fn asks_a_human_about_danger_when_there_is_one() {
+async fn asks_a_human_before_sending_out_when_there_is_one() {
     let host = host(json!({}), true);
     let auto = AutoMode::new();
-    let command = args(json!({ "command": "rm -rf ~" }));
+    let command = args(json!({ "command": "git push origin main" }));
     host.ui.answer.set(Some(false));
     let refused = gate(&auto, &host, "bash", command.clone()).await.unwrap();
     assert!(refused.ends_with(
@@ -285,8 +285,7 @@ async fn asks_a_human_about_danger_when_there_is_one() {
     assert_eq!(
         asked,
         format!(
-            "Command (bash, in {WORKSPACE}):\n\nrm -rf ~\n\nReason: deletes {}, outside the workspace",
-            real_resolve(&std::env::var("HOME").unwrap())
+            "Command (bash, in {WORKSPACE}):\n\ngit push origin main\n\nReason: git push sends commits to a remote"
         )
     );
     host.ui.answer.set(None);
@@ -681,19 +680,19 @@ async fn applies_the_deny_list_before_the_verdict_cache() {
     host.inner
         .set_features(json!({ "autoMode": { "useModel": true, "deny": ["deploy-prod"] } }));
     let denied = classify(&auto, &host, &action).await.classification;
-    assert_eq!(denied.verdict, Verdict::Danger);
+    assert_eq!(denied.verdict, Verdict::Deny);
     assert!(denied.reason.contains("deny-list"));
     host.inner
         .set_features(json!({ "autoMode": { "enabled": false, "deny": "deploy-prod" } }));
     assert_eq!(
         classify(&auto, &host, &action).await.classification.verdict,
-        Verdict::Danger
+        Verdict::Deny
     );
     host.inner
         .set_features(json!({ "autoMode": { "timeoutMs": "soon", "deny": ["deploy-prod"] } }));
     assert_eq!(
         classify(&auto, &host, &action).await.classification.verdict,
-        Verdict::Danger
+        Verdict::Deny
     );
 }
 
@@ -912,77 +911,140 @@ fn moded(mode: &str, has_ui: bool) -> TestHost {
 }
 
 #[tokio::test]
-async fn read_only_mode_asks_for_anything_that_may_write() {
-    let host = moded("read-only", false);
-    let auto = AutoMode::new();
-    // Reads run, without a lease.
-    assert_eq!(
-        gate(&auto, &host, "bash", args(json!({ "command": "ls -la" }))).await,
-        None
-    );
-    assert!(host.leases.borrow().is_empty());
-    // A known write, an unclear command and the file tools need a human.
-    for (tool, call) in [
-        ("bash", json!({ "command": "touch notes.txt" })),
-        ("bash", json!({ "command": "some-tool --frob" })),
-        ("write", json!({ "path": "a.txt", "content": "x" })),
-        ("edit", json!({ "path": "a.txt", "edits": [] })),
-    ] {
-        let refused = gate(&auto, &host, tool, args(call)).await.unwrap();
-        assert!(refused.contains("read-only mode"), "{refused}");
-        assert!(refused.contains("no UI"), "{refused}");
+async fn read_only_mode_refuses_anything_that_may_write_without_asking() {
+    for has_ui in [false, true] {
+        let host = moded("read-only", has_ui);
+        host.ui.answer.set(Some(true));
+        let auto = AutoMode::new();
+        // Reads run, without a lease.
+        assert_eq!(
+            gate(&auto, &host, "bash", args(json!({ "command": "ls -la" }))).await,
+            None
+        );
+        // A known write, an unclear command, something sent out, the file
+        // tools and leaving the sandbox are refused, never asked.
+        for (tool, call) in [
+            ("bash", json!({ "command": "touch notes.txt" })),
+            ("bash", json!({ "command": "some-tool --frob" })),
+            ("bash", json!({ "command": "git push" })),
+            ("write", json!({ "path": "a.txt", "content": "x" })),
+            ("edit", json!({ "path": "a.txt", "edits": [] })),
+            (
+                "unsandboxed_bash",
+                json!({ "command": "ls", "reason": "x" }),
+            ),
+            (
+                "sandbox_allow_domains",
+                json!({ "domains": ["a.com"], "reason": "x" }),
+            ),
+        ] {
+            let refused = gate(&auto, &host, tool, args(call)).await.unwrap();
+            assert!(refused.contains("read-only"), "{refused}");
+            assert!(refused.starts_with("Refused: "), "{refused}");
+        }
+        assert!(host.leases.borrow().is_empty());
+        assert!(host.ui.confirm_titles.borrow().is_empty());
+        let refused = gate(&auto, &host, "bash", args(json!({ "command": "rm -rf ~" })))
+            .await
+            .unwrap();
+        assert!(refused.contains("never allowed here"), "{refused}");
     }
-    assert!(host.leases.borrow().is_empty());
-    // Danger is still called dangerous.
-    let refused = gate(&auto, &host, "bash", args(json!({ "command": "rm -rf ~" })))
-        .await
-        .unwrap();
-    assert!(
-        refused.contains("Dangerous actions need a human"),
-        "{refused}"
-    );
 }
 
 #[tokio::test]
-async fn read_only_mode_runs_what_the_user_allows() {
-    let host = moded("read-only", true);
+async fn auto_mode_asks_only_before_sending_out_and_refuses_deny() {
+    let host = moded("auto", true);
     host.ui.answer.set(Some(true));
     let auto = AutoMode::new();
+    for command in ["git reset --hard", "git clean -fdx", "touch a"] {
+        assert_eq!(
+            gate(&auto, &host, "bash", args(json!({ "command": command }))).await,
+            None
+        );
+    }
+    assert!(host.ui.confirm_titles.borrow().is_empty());
     assert_eq!(
-        gate(
-            &auto,
-            &host,
-            "bash",
-            args(json!({ "command": "touch notes.txt" }))
-        )
-        .await,
-        None
-    );
-    assert_eq!(
-        gate(
-            &auto,
-            &host,
-            "write",
-            args(json!({ "path": "a.txt", "content": "x" }))
-        )
-        .await,
+        gate(&auto, &host, "bash", args(json!({ "command": "git push" }))).await,
         None
     );
     assert_eq!(
         *host.ui.confirm_titles.borrow(),
-        [
-            "Read-only mode: allow this action?",
-            "Read-only mode: allow this action?"
-        ]
+        ["Auto mode: allow sending this out?"]
     );
-    // The command still takes the lease; the file tool takes its own.
-    assert_eq!(host.leases.borrow().len(), 1);
+    let refused = gate(&auto, &host, "bash", args(json!({ "command": "rm -rf ~" })))
+        .await
+        .unwrap();
+    assert!(refused.starts_with("Refused: "), "{refused}");
+    assert!(refused.contains("the user was not asked"), "{refused}");
+    let listed = gate(
+        &auto,
+        &host,
+        "bash",
+        args(json!({ "command": "sh -c 'echo deploy-prod'" })),
+    )
+    .await
+    .unwrap();
+    assert!(listed.contains("deny-list"), "{listed}");
+    assert_eq!(host.ui.confirm_titles.borrow().len(), 1);
+    // Headless: sending out is refused.
+    let headless = moded("auto", false);
+    let refused = gate(
+        &auto,
+        &headless,
+        "bash",
+        args(json!({ "command": "npm publish" })),
+    )
+    .await
+    .unwrap();
+    assert!(refused.contains("no UI"), "{refused}");
+}
+
+#[tokio::test]
+async fn allow_again_covers_the_same_text_in_the_same_directory_only() {
+    let host = moded("auto", true);
+    host.ui.again.set(true);
+    let auto = AutoMode::new();
+    let push = || args(json!({ "command": "git push origin main" }));
+    assert_eq!(gate(&auto, &host, "bash", push()).await, None);
+    assert_eq!(gate(&auto, &host, "bash", push()).await, None);
+    assert_eq!(host.ui.confirm_titles.borrow().len(), 1);
+    // Another text, or another directory, asks again.
+    host.ui.again.set(false);
+    host.ui.answer.set(Some(false));
+    let refused = gate(
+        &auto,
+        &host,
+        "bash",
+        args(json!({ "command": "git push origin dev" })),
+    )
+    .await
+    .unwrap();
+    assert!(refused.contains("The user declined it"), "{refused}");
+    let elsewhere =
+        args(json!({ "action": "start", "command": "git push origin main", "cwd": "sub" }));
+    assert!(
+        gate(&auto, &host, "background_task", elsewhere)
+            .await
+            .is_some()
+    );
+    assert_eq!(host.ui.confirm_titles.borrow().len(), 3);
+    // A fresh session forgets.
+    let fresh = AutoMode::new();
+    assert!(gate(&fresh, &host, "bash", push()).await.is_some());
 }
 
 #[tokio::test]
 async fn full_access_mode_skips_the_gate_but_keeps_the_deny_list_and_the_lease() {
     let host = moded("full-access", false);
     let auto = AutoMode::new();
+    assert_eq!(
+        gate(&auto, &host, "bash", args(json!({ "command": "git push" }))).await,
+        None
+    );
+    let refused = gate(&auto, &host, "bash", args(json!({ "command": "rm -rf ~" })))
+        .await
+        .unwrap();
+    assert!(refused.starts_with("Refused: "), "{refused}");
     assert_eq!(
         gate(
             &auto,
@@ -1003,7 +1065,7 @@ async fn full_access_mode_skips_the_gate_but_keeps_the_deny_list_and_the_lease()
         .await,
         None
     );
-    assert_eq!(host.leases.borrow().len(), 1);
+    assert_eq!(host.leases.borrow().len(), 2);
     let refused = gate(
         &auto,
         &host,

@@ -1,32 +1,37 @@
 //! Auto mode (`agent/auto-mode/index.ts`, `rules.ts`): a pre-execution
 //! filter for shell actions (`bash`, `background_task` start/write) and for
-//! `ptc` scripts, which only the user's deny-list can stop.
+//! `ptc` scripts, which only the user's deny-list can stop. A worker asks
+//! for two things only, leaving the sandbox and sending something out
+//! (plans/rewrite/07-red-lines.md); everything else it does and reports.
 //!
 //! 1. Static rules ([`rules::classify_shell`]) sort the action into read /
-//!    write / danger, or `unknown`. The user's deny-list
-//!    (`features.autoMode.deny`) is matched first and always means danger.
+//!    write / outbound / deny, or `unknown`. The user's deny-list
+//!    (`features.autoMode.deny`) is matched first and always means deny.
 //! 2. `unknown` actions go to a model classifier ([`classifier`]; models
 //!    from `features.autoMode`, else observational memory's, then the
-//!    session model). It sees the human's recent requests and critical
-//!    observational-memory notes the human is the source of, never tool
-//!    output. If no model answers, the action is treated as a write.
-//! 3. `danger` needs a human: with a UI the user confirms; headless agents
-//!    are refused.
+//!    session model), which may answer read, write or outbound, never deny.
+//!    It sees the human's recent requests and critical observational-memory
+//!    notes the human is the source of, never tool output. If no model
+//!    answers, the action is treated as a write.
+//! 3. `outbound` needs a human: with a UI the user confirms (once, or for
+//!    the same text in the same directory for the rest of the session);
+//!    headless agents are refused. `deny` is refused without asking: the
+//!    model hears why.
 //! 4. Anything that may write takes the node's write lease first: only the
 //!    known targets when the rules know every path a command writes, else
 //!    the working directory.
 //!
 //! That is the `auto` approval mode, the default. The node config
-//! (`features.autoMode.mode`) and each session ([`AgentHost::approval_mode`])
-//! may pick another (security audit L14):
+//! (`features.autoMode.mode`) and each session ([`AgentHost::approval_mode`],
+//! narrowed by the gateway for a wake's workers) may pick another:
 //!
 //! - `read-only`: only actions the rules judge read-only run; anything else,
-//!   and every `write`/`edit`, waits for the user (headless agents are
-//!   refused). No classifier model is asked.
-//! - `full-access`: no classification gate at all.
+//!   every `write`/`edit`, leaving the sandbox and asking for more hosts are
+//!   refused without asking. No classifier model is asked.
+//! - `full-access`: no question at all; `deny` still holds.
 //!
-//! In every mode the deny-list still asks the user and writes still take the
-//! lease; the OS sandbox does not depend on the mode.
+//! In every mode writes still take the lease; the OS sandbox does not
+//! depend on the mode.
 //!
 //! Keystrokes for a tty task are judged together with the rest of the line
 //! they belong to, so a command cannot be smuggled in one harmless-looking
@@ -36,7 +41,7 @@ pub mod classifier;
 pub mod rules;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use indexmap::IndexMap;
@@ -47,7 +52,7 @@ use serde_json::{Map, Value};
 use crate::host::AgentHost;
 use crate::signal::AbortSignal;
 use crate::tools::js::{self, JsRegex};
-use crate::ui::{DialogOptions, NotifyLevel};
+use crate::ui::{Allow, DialogOptions, NotifyLevel};
 use classifier::{ClassifyResult, ModelChoice, classify_with_model};
 use rules::{Classification, RuleContext, Verdict, classify_shell, compile_deny, deny_match};
 
@@ -55,12 +60,12 @@ use rules::{Classification, RuleContext, Verdict, classify_shell, compile_deny, 
 /// a session's own choice).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ApprovalMode {
-    /// Only read-only actions run without the user.
+    /// Only read-only actions run; nothing asks.
     ReadOnly,
-    /// Rules, then the classifier; only danger asks.
+    /// Rules, then the classifier; only outbound asks.
     #[default]
     Auto,
-    /// No classification gate (the deny-list and the lease remain).
+    /// Nothing asks (deny and the lease remain).
     FullAccess,
 }
 
@@ -355,6 +360,9 @@ pub struct AutoMode {
     /// Model verdicts that need no human (read/write), by kind + cwd +
     /// action.
     cache: RefCell<IndexMap<String, Decision>>,
+    /// Outbound actions the user allowed again for this session, by kind +
+    /// cwd + exact text.
+    allowed: RefCell<HashSet<String>>,
     /// Per tty task: what was typed since the last Enter (or Ctrl-C).
     lines: RefCell<IndexMap<String, PendingLine>>,
     /// Per tty task: writes are judged one at a time, in order.
@@ -529,20 +537,14 @@ impl AutoMode {
             classification,
             source: Source::Rules,
         };
-        // The deny-list is the user's own rule: it holds in every mode.
-        if rules.denied {
+        // Deny (the deny-list among it) holds in every mode.
+        if rules.verdict == Verdict::Deny {
             return Ok(decided(rules));
         }
-        // No classifier outside auto mode. Full access: a lease decision
-        // only, so anything not clearly read-only writes. Read-only: an
-        // unclear action is a write, which asks the user there.
+        // No classifier outside auto mode. Full access: an unclear action
+        // writes (the lease). Read-only: it is refused there as it is.
         let mode = host.approval_mode();
-        let lease_only = match mode {
-            ApprovalMode::Auto => false,
-            ApprovalMode::ReadOnly => rules.verdict == Verdict::Unknown,
-            ApprovalMode::FullAccess => !matches!(rules.verdict, Verdict::Read | Verdict::Write),
-        };
-        if lease_only {
+        if mode == ApprovalMode::FullAccess && rules.verdict == Verdict::Unknown {
             return Ok(decided(Classification {
                 verdict: Verdict::Write,
                 reason: rules.reason,
@@ -567,12 +569,7 @@ impl AutoMode {
         }
         // Rules (and the deny-list) run before the cache, so a cached model
         // verdict never outlives a newly added deny pattern.
-        let kind = match action.kind {
-            ActionKind::Command => "command",
-            ActionKind::Script => "script",
-            ActionKind::Input => "input",
-        };
-        let key = format!("{kind}\0{}\0{}", action.cwd, action.text);
+        let key = action_key(action);
         if let Some(cached) = self.cache.borrow().get(&key) {
             return Ok(cached.clone());
         }
@@ -587,6 +584,12 @@ impl AutoMode {
         )
         .await?;
         let (verdict, reason) = match result {
+            // The model can only ask the human, never refuse.
+            ClassifyResult::Ok {
+                verdict: Verdict::Deny | Verdict::Unknown,
+                reason,
+                ..
+            } => (Verdict::Outbound, reason),
             ClassifyResult::Ok {
                 verdict, reason, ..
             } => (verdict, reason),
@@ -615,7 +618,7 @@ impl AutoMode {
             },
             source: Source::Model,
         };
-        if verdict != Verdict::Danger {
+        if verdict != Verdict::Outbound {
             let mut cache = self.cache.borrow_mut();
             if cache.len() >= CACHE_LIMIT {
                 cache.shift_remove_index(0);
@@ -668,29 +671,34 @@ impl AutoMode {
         signal: &AbortSignal,
     ) -> Result<Option<String>, String> {
         let mode = host.approval_mode();
-        if mode == ApprovalMode::ReadOnly && matches!(tool, "write" | "edit") {
-            // The file tools take their own lease; read-only asks first.
-            let path = args.get("path").map(js::string_of).unwrap_or_default();
-            let request = Approval {
-                label: "File change",
-                tool,
-                place: &host.config().workspace,
-                text: &path,
-                reason: &format!("{tool} changes {path}"),
-                read_only: true,
+        if mode == ApprovalMode::ReadOnly {
+            let path = || args.get("path").map(js::string_of).unwrap_or_default();
+            let refused = match tool {
+                // The file tools take their own lease.
+                "write" | "edit" => Some(format!("{tool} changes {}", path())),
+                "unsandboxed_bash" => Some("running a command outside the sandbox".to_owned()),
+                "sandbox_allow_domains" => Some("reaching more hosts".to_owned()),
+                _ => None,
             };
-            return Ok(self.approve(host, &request, signal).await);
+            if let Some(what) = refused {
+                return Ok(Some(read_only_refusal(&what)));
+            }
         }
         let Some(action) = self.action_for(host, tool, args) else {
             return Ok(None);
         };
         let decision = self.classify(host, &action, signal).await?;
         let verdict = decision.classification.verdict;
-        let ask = match mode {
-            ApprovalMode::ReadOnly => verdict != Verdict::Read,
-            ApprovalMode::Auto | ApprovalMode::FullAccess => verdict == Verdict::Danger,
-        };
-        if ask {
+        let reason = &decision.classification.reason;
+        if verdict == Verdict::Deny {
+            return Ok(Some(format!(
+                "Refused: {reason}. This is never allowed here, and the user was not asked. {ADVICE}"
+            )));
+        }
+        if mode == ApprovalMode::ReadOnly && verdict != Verdict::Read {
+            return Ok(Some(read_only_refusal(reason)));
+        }
+        if mode == ApprovalMode::Auto && verdict == Verdict::Outbound {
             let request = Approval {
                 label: match action.kind {
                     ActionKind::Input => "Input",
@@ -700,8 +708,8 @@ impl AutoMode {
                 tool: &action.tool,
                 place: &action.cwd,
                 text: &action.text,
-                reason: &decision.classification.reason,
-                read_only: verdict != Verdict::Danger,
+                reason,
+                key: action_key(&action),
             };
             if let Some(refusal) = self.approve(host, &request, signal).await {
                 return Ok(Some(refusal));
@@ -718,24 +726,22 @@ impl AutoMode {
         Ok(None)
     }
 
+    /// Ask the user about an outbound action, unless they allowed this
+    /// exact one again for the session: `None` when it may run.
     async fn approve(
         &self,
         host: &dyn AgentHost,
         request: &Approval<'_>,
         signal: &AbortSignal,
     ) -> Option<String> {
-        let advice = "Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.";
+        if self.allowed.borrow().contains(&request.key) {
+            return None;
+        }
         let reason = request.reason;
         if !host.has_ui() {
-            return Some(if request.read_only {
-                format!(
-                    "{reason}. This session is in read-only mode: anything that may change files needs a human, and this agent has no UI. {advice}"
-                )
-            } else {
-                format!(
-                    "{reason}. Dangerous actions need a human and this agent has no UI. {advice}"
-                )
-            });
+            return Some(format!(
+                "{reason}. Sending something out needs a human and this agent has no UI. {ADVICE}"
+            ));
         }
         let message = format!(
             "{} ({}, in {}):\n\n{}\n\nReason: {reason}",
@@ -746,12 +752,8 @@ impl AutoMode {
         );
         let answer = host
             .ui()
-            .confirm(
-                if request.read_only {
-                    "Read-only mode: allow this action?"
-                } else {
-                    "Auto mode: allow a potentially dangerous action?"
-                },
+            .confirm_again(
+                "Auto mode: allow sending this out?",
                 &message,
                 DialogOptions {
                     signal: Some(signal.clone()),
@@ -759,18 +761,34 @@ impl AutoMode {
                 },
             )
             .await;
-        if answer == Some(true) {
-            return None;
-        }
-        Some(format!(
-            "{reason}. The user {} it. {advice}",
-            if answer == Some(false) {
-                "declined"
-            } else {
-                "did not approve"
+        match answer {
+            Some(Allow::Once) => None,
+            Some(Allow::Again) => {
+                self.allowed.borrow_mut().insert(request.key.clone());
+                None
             }
-        ))
+            Some(Allow::No) => Some(format!("{reason}. The user declined it. {ADVICE}")),
+            None => Some(format!("{reason}. The user did not approve it. {ADVICE}")),
+        }
     }
+}
+
+const ADVICE: &str = "Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.";
+
+fn read_only_refusal(what: &str) -> String {
+    format!(
+        "Refused: {what}. This session is read-only: it may only read, and nothing is asked. {ADVICE}"
+    )
+}
+
+/// An action by kind, working directory and exact text.
+fn action_key(action: &ShellAction) -> String {
+    let kind = match action.kind {
+        ActionKind::Command => "command",
+        ActionKind::Script => "script",
+        ActionKind::Input => "input",
+    };
+    format!("{kind}\0{}\0{}", action.cwd, action.text)
 }
 
 /// What the user is asked to allow.
@@ -781,8 +799,8 @@ struct Approval<'a> {
     place: &'a str,
     text: &'a str,
     reason: &'a str,
-    /// Asked because of read-only mode, not because it is dangerous.
-    read_only: bool,
+    /// What "allow again" remembers ([`action_key`]).
+    key: String,
 }
 
 /// What a writing action's lease must cover: the exact targets when the

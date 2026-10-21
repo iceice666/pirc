@@ -1,7 +1,14 @@
 //! Static shell-command classifier for auto mode (`auto-mode/rules.ts`).
 //! It decides, without a model, whether a command only reads, writes inside
-//! the workspace, is dangerous, or cannot be judged statically (`unknown`,
-//! handed to the model classifier).
+//! the workspace, sends something out (`outbound`: a push, a publish, a
+//! request with a body to another host; the human is asked), is refused
+//! outright (`deny`: the user's deny-list, destroying or reconfiguring the
+//! machine, credentials), or cannot be judged statically (`unknown`, handed
+//! to the model classifier, which may not answer `deny`).
+//!
+//! Destructive git (`reset --hard`, `clean -f`, a force-push's local side)
+//! is a plain write: the sandbox and git are the boundary
+//! (plans/rewrite/07-red-lines.md).
 //!
 //! The rules err on the side of `unknown`: anything the lexer does not
 //! fully understand (command substitution, heredocs, interpreters,
@@ -22,7 +29,10 @@ use crate::tools::js::{self, JsRegex, js_regex};
 pub enum Verdict {
     Read,
     Write,
-    Danger,
+    /// Sends something beyond this machine: the human is asked.
+    Outbound,
+    /// Refused without asking.
+    Deny,
     Unknown,
 }
 
@@ -32,7 +42,8 @@ impl Verdict {
             Self::Read => 0,
             Self::Write => 1,
             Self::Unknown => 2,
-            Self::Danger => 3,
+            Self::Outbound => 3,
+            Self::Deny => 4,
         }
     }
 
@@ -40,7 +51,8 @@ impl Verdict {
         match self {
             Self::Read => "read",
             Self::Write => "write",
-            Self::Danger => "danger",
+            Self::Outbound => "outbound",
+            Self::Deny => "deny",
             Self::Unknown => "unknown",
         }
     }
@@ -51,8 +63,7 @@ impl Verdict {
 pub struct Classification {
     pub verdict: Verdict,
     pub reason: String,
-    /// Danger because of the user's deny-list (holds even with auto mode
-    /// disabled).
+    /// Deny because of the user's deny-list.
     pub denied: bool,
     /// With verdict `write`: every path the command writes, when the rules
     /// know all of them; `None` when any write has no known target.
@@ -116,8 +127,12 @@ fn write(reason: impl Into<String>) -> Classification {
     classification(Verdict::Write, reason)
 }
 
-fn danger(reason: impl Into<String>) -> Classification {
-    classification(Verdict::Danger, reason)
+fn deny(reason: impl Into<String>) -> Classification {
+    classification(Verdict::Deny, reason)
+}
+
+fn outbound(reason: impl Into<String>) -> Classification {
+    classification(Verdict::Outbound, reason)
 }
 
 fn unknown(reason: impl Into<String>) -> Classification {
@@ -1596,7 +1611,7 @@ fn check_writes(
             return unknown(format!("{what} a path that cannot be resolved statically"));
         };
         if let Some(risk) = state.paths.write_risk(&absolute, destructive) {
-            return danger(risk);
+            return deny(risk);
         }
         writes.push(absolute);
     }
@@ -1679,7 +1694,7 @@ fn classify_git(args: &[Word], state: &State<'_>) -> Classification {
         && inner.verdict != Verdict::Read
     {
         let what = js::trim(&format!("git {}", sub.unwrap_or(""))).to_owned();
-        return danger(format!("{what} in {cwd}: {risk}"));
+        return deny(format!("{what} in {cwd}: {risk}"));
     }
     inner
 }
@@ -1776,7 +1791,7 @@ fn classify_git_subcommand(sub: Option<&str>, rest: &[Word]) -> Classification {
             if has_flag(rest, &["-D"])
                 || (has_flag(rest, &["-d", "--delete"]) && has_flag(rest, &["-f", "--force"]))
             {
-                return danger("force-deletes a git branch, possibly losing unmerged commits");
+                return write("force-deletes a git branch, possibly losing unmerged commits");
             }
             let listing = rest.iter().all(|word| {
                 js_regex!(
@@ -1814,7 +1829,7 @@ fn classify_git_subcommand(sub: Option<&str>, rest: &[Word]) -> Classification {
                 return if has_flag(rest, &lookups) {
                     read("git config lookup")
                 } else {
-                    danger("changes global git configuration")
+                    deny("changes global git configuration")
                 };
             }
             let ops = operands(rest);
@@ -1846,18 +1861,21 @@ fn classify_git_subcommand(sub: Option<&str>, rest: &[Word]) -> Classification {
         }
         Some("stash") => match first {
             Some("list" | "show") => read("git stash listing"),
-            Some("drop" | "clear") => danger("permanently discards stashed changes"),
+            Some("drop" | "clear") => write("permanently discards stashed changes"),
             _ => write("git stash"),
         },
         Some("reflog") => {
             if words.is_empty() || first == Some("show") {
                 read("git reflog")
             } else {
-                danger("rewrites the reflog, removing recovery points")
+                write("rewrites the reflog, removing recovery points")
             }
         }
+        // Every push sends commits out (decision #1), a dry run only asks.
         Some("push") => {
-            if has_flag(
+            if has_flag(rest, &["--dry-run", "-n"]) || has_short(rest, "n") {
+                read("git push --dry-run")
+            } else if has_flag(
                 rest,
                 &[
                     "--force",
@@ -1873,14 +1891,14 @@ fn classify_git_subcommand(sub: Option<&str>, rest: &[Word]) -> Classification {
                     .iter()
                     .any(|word| word.text.starts_with('+') || word.text.starts_with(':'))
             {
-                danger("force-pushes or deletes remote refs, rewriting shared history")
+                outbound("force-pushes or deletes remote refs, rewriting shared history")
             } else {
-                write("git push")
+                outbound("git push sends commits to a remote")
             }
         }
         Some("reset") => {
             if has_flag(rest, &["--hard", "--merge", "--keep"]) {
-                danger("git reset --hard discards uncommitted work")
+                write("git reset --hard discards uncommitted work")
             } else {
                 write("git reset")
             }
@@ -1891,45 +1909,46 @@ fn classify_git_subcommand(sub: Option<&str>, rest: &[Word]) -> Classification {
             {
                 read("git clean dry run")
             } else {
-                danger("git clean permanently deletes untracked files")
+                write("git clean permanently deletes untracked files")
             }
         }
         Some("checkout") => {
             if has_flag(rest, &["-f", "--force"]) || words.contains(&"--") || words.contains(&".") {
-                danger("git checkout over paths discards uncommitted changes")
+                write("git checkout over paths discards uncommitted changes")
             } else {
                 write("git checkout")
             }
         }
         Some("restore") => {
             if !has_flag(rest, &["--staged", "-S"]) || has_flag(rest, &["--worktree", "-W"]) {
-                danger("git restore discards uncommitted changes")
+                write("git restore discards uncommitted changes")
             } else {
                 write("git restore --staged")
             }
         }
         Some("switch") => {
             if has_flag(rest, &["--discard-changes", "-f", "--force"]) {
-                danger("git switch --discard-changes discards uncommitted work")
+                write("git switch --discard-changes discards uncommitted work")
             } else {
                 write("git switch")
             }
         }
-        Some("filter-branch" | "filter-repo") => danger("rewrites the entire repository history"),
+        Some("filter-branch" | "filter-repo") => write("rewrites the entire repository history"),
         Some("update-ref") => {
             if has_flag(rest, &["-d"]) {
-                danger("deletes a git ref")
+                write("deletes a git ref")
             } else {
                 write("git update-ref")
             }
         }
         Some("gc" | "prune") => {
             if has_flag(rest, &["--prune", "--aggressive"]) || s == "prune" {
-                danger("prunes unreachable objects, removing recovery points")
+                write("prunes unreachable objects, removing recovery points")
             } else {
                 write("git gc")
             }
         }
+        Some("send-email") => outbound("git send-email sends mail"),
         Some(other) => {
             if GIT_WRITERS.contains(&other) {
                 write(format!("git {other}"))
@@ -1940,6 +1959,131 @@ fn classify_git_subcommand(sub: Option<&str>, rest: &[Word]) -> Classification {
             }
         }
     }
+}
+
+/// `gh <group> <action>` actions that change what others see on GitHub.
+const GH_OUTBOUND: &[&str] = &[
+    "create",
+    "merge",
+    "comment",
+    "review",
+    "close",
+    "reopen",
+    "delete",
+    "edit",
+    "ready",
+    "lock",
+    "unlock",
+    "transfer",
+    "upload",
+    "rename",
+    "archive",
+    "unarchive",
+    "pin",
+    "unpin",
+    "develop",
+    "fork",
+    "sync",
+    "approve",
+    "cancel",
+    "rerun",
+    "run",
+    "enable",
+    "disable",
+    "set",
+    "add",
+    "remove",
+];
+
+/// `gh api`: a GET reads; any other method, or fields without `-X GET`
+/// (gh then POSTs), changes GitHub state. A GraphQL query is a read unless
+/// its text says `mutation`; a body from a file or an expansion cannot be
+/// judged.
+fn classify_gh_api(args: &[Word]) -> Classification {
+    let method = args
+        .iter()
+        .position(|word| word.text == "-X" || word.text == "--method")
+        .and_then(|index| args.get(index + 1))
+        .map(|word| word.text.to_uppercase())
+        .or_else(|| {
+            args.iter().find_map(|word| {
+                word.text
+                    .strip_prefix("--method=")
+                    .or_else(|| word.text.strip_prefix("-X").filter(|rest| !rest.is_empty()))
+                    .map(str::to_uppercase)
+            })
+        });
+    let graphql = operands(args)
+        .iter()
+        .any(|word| word.text == "graphql" || word.text == "/graphql");
+    let fields = option_values(args, &["-f", "-F", "--field", "--raw-field"]);
+    let input = has_long_prefix(args, &["--input"]);
+    if let Some(verb) = &method
+        && !["GET", "HEAD"].contains(&verb.as_str())
+        && !graphql
+    {
+        return outbound(format!("gh api {verb} changes GitHub state"));
+    }
+    if graphql {
+        if input
+            || fields
+                .iter()
+                .any(|field| field.dynamic || field.text.contains("=@"))
+        {
+            return unknown("gh api graphql with a body that cannot be read statically");
+        }
+        if fields
+            .iter()
+            .any(|field| field.text.to_lowercase().contains("mutation"))
+        {
+            return outbound("gh api graphql sends a mutation");
+        }
+        return read("gh api graphql query");
+    }
+    if method.as_deref() == Some("GET") || method.as_deref() == Some("HEAD") {
+        return if input {
+            unknown("gh api with a body from a file")
+        } else {
+            read("gh api GET")
+        };
+    }
+    if input || !fields.is_empty() {
+        return outbound("gh api with fields sends a mutating request");
+    }
+    read("gh api GET")
+}
+
+/// Whether a curl/wget command may talk to another host: one of its URLs
+/// (operands with a scheme, or the values of `url_options`) is not this
+/// machine (decision #8: only `localhost`, `127.0.0.1` and `::1`), cannot
+/// be read statically, or no URL is recognisable at all.
+fn remote_urls(args: &[Word], url_options: &[&str]) -> bool {
+    let mut urls: Vec<Word> = option_values(args, url_options);
+    urls.extend(
+        args.iter()
+            .filter(|word| !word.text.starts_with('-') && word.text.contains("://"))
+            .cloned(),
+    );
+    if urls.is_empty() {
+        // `curl localhost:3000/x` has no scheme: the operands must all be
+        // local names then.
+        let hosts: Vec<&Word> = args
+            .iter()
+            .filter(|word| !word.text.starts_with('-') && !word.dynamic)
+            .filter(|word| {
+                js_regex!(
+                    r"^(\[[0-9a-fA-F:]+\]|[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+|localhost)(:\d+)?(/.*)?$"
+                )
+                .test(&word.text)
+            })
+            .collect();
+        return hosts.is_empty()
+            || hosts
+                .iter()
+                .any(|word| !pirc_policy::url_is_localhost(&word.text));
+    }
+    urls.iter()
+        .any(|url| url.dynamic || !pirc_policy::url_is_localhost(&url.text))
 }
 
 fn classify_package_manager(name: &str, args: &[Word]) -> Classification {
@@ -1953,15 +2097,13 @@ fn classify_package_manager(name: &str, args: &[Word]) -> Classification {
         "dist-tag",
         "owner",
         "access",
-        "token",
-        "login",
-        "adduser",
     ]
     .contains(&s)
     {
-        return danger(format!(
-            "{name} {s} changes a package registry or credentials"
-        ));
+        return outbound(format!("{name} {s} changes a package registry"));
+    }
+    if ["token", "login", "adduser", "logout"].contains(&s) {
+        return deny(format!("{name} {s} handles registry credentials"));
     }
     if name == "bun" && js_regex!(r"\.[cm]?[jt]sx?$").test(s) && sub.is_some() {
         return unknown("runs a script");
@@ -1997,7 +2139,7 @@ fn classify_package_manager(name: &str, args: &[Word]) -> Classification {
         return read(&format!("{name} {s}"));
     }
     if has_flag(args, &["-g", "--global"]) {
-        return danger(format!("{name} changes global packages"));
+        return deny(format!("{name} changes global packages"));
     }
     write(js::trim(&format!("{name} {s}")).to_owned())
 }
@@ -2079,7 +2221,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
             if let Some(source) = &source
                 && state.paths.is_secret(source)
             {
-                return danger(format!("reads credentials at {source}"));
+                return deny(format!("reads credentials at {source}"));
             }
             if source.is_none()
                 && let Some(risk) = state.paths.unresolved_risk(target, state.cwd.as_deref())
@@ -2121,7 +2263,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
         if let Some(absolute) = &absolute
             && state.paths.is_secret(absolute)
         {
-            return danger(format!("touches credentials at {absolute}"));
+            return deny(format!("touches credentials at {absolute}"));
         }
         if absolute.is_none()
             && !NON_PATH_ARGS.contains(&name)
@@ -2132,16 +2274,16 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
     }
 
     match deny_scripts(&head, args, state) {
-        Some(scripts) if scripts.verdict == Verdict::Danger => return scripts,
+        Some(scripts) if scripts.verdict == Verdict::Deny => return scripts,
         Some(scripts) => result = worst(result, scripts),
         None => {}
     }
 
     if PRIVILEGE.contains(&name) {
-        return danger(format!("{name} escalates privileges"));
+        return deny(format!("{name} escalates privileges"));
     }
     if SYSTEM_DANGER.contains(&name) || name.starts_with("mkfs") {
-        return danger(format!("{name} changes system configuration or storage"));
+        return deny(format!("{name} changes system configuration or storage"));
     }
 
     if name == "cd" || name == "pushd" {
@@ -2331,6 +2473,16 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
             );
         }
         "curl" => {
+            // A body or a method other than GET to another host sends
+            // something out (decision #1); to this machine it stays unclear.
+            let remote = remote_urls(args, &["--url"]);
+            let send = |what: &str| {
+                if remote {
+                    outbound(format!("curl {what} to another host"))
+                } else {
+                    unknown(format!("curl {what} to this machine"))
+                }
+            };
             // Headers and query parts read from a file (`-H @.env`), and
             // variables expanded into the URL, send local files too.
             if option_values(args, &["-H", "--header", "--proxy-header", "--url-query"])
@@ -2340,7 +2492,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
                     word.text.starts_with("--variable") || word.text.starts_with("--expand-")
                 })
             {
-                return worst(result, unknown("curl sends a local file to a remote host"));
+                return worst(result, send("sends a local file"));
             }
             if has_flag(args, &["-T", "--upload-file", "-F", "--form"])
                 || args
@@ -2349,7 +2501,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
                 // Clustered short options: `-sT FILE`, `-sd @FILE`.
                 || !option_values(args, &["-T", "-F", "-d"]).is_empty()
             {
-                return worst(result, unknown("curl sends data to a remote host"));
+                return worst(result, send("sends data"));
             }
             if has_flag(args, &["-K", "--config"])
                 || args
@@ -2371,10 +2523,15 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
                     check_writes(&[cwd_word()], state, false, "curl downloads into"),
                 );
             }
+            let method = option_values(args, &["-X", "--request"]);
             return worst(
                 result,
-                if has_short(args, "X") || has_flag(args, &["--request"]) {
+                if method.is_empty() && (has_short(args, "X") || has_flag(args, &["--request"])) {
                     unknown("curl with a custom method")
+                } else if method.iter().any(|verb| {
+                    verb.dynamic || !["GET", "HEAD"].contains(&verb.text.to_uppercase().as_str())
+                }) {
+                    send("sends a request with a custom method")
                 } else {
                     read("curl GET")
                 },
@@ -2387,8 +2544,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
             {
                 return worst(result, unknown("wget reads a local file"));
             }
-            // `--post-file`/`--body-file` upload a local file; `-e` and
-            // `--config` run wgetrc commands that can do the same.
+            // A body or another method sends something out (decision #1).
             if has_long_prefix(
                 args,
                 &[
@@ -2397,18 +2553,26 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
                     "--post-data",
                     "--body-data",
                     "--method",
-                    "--execute",
-                    "--config",
-                    "--use-askpass",
-                    "--save-cookies",
                 ],
+            ) {
+                return worst(
+                    result,
+                    if remote_urls(args, &[]) {
+                        outbound("wget sends data to another host")
+                    } else {
+                        unknown("wget sends data to this machine")
+                    },
+                );
+            }
+            // `-e` and `--config` run wgetrc commands that can upload files.
+            if has_long_prefix(
+                args,
+                &["--execute", "--config", "--use-askpass", "--save-cookies"],
             ) || !option_values(args, &["-e"]).is_empty()
             {
                 return worst(
                     result,
-                    unknown(
-                        "wget sends data, runs wgetrc commands or a program, or writes cookies",
-                    ),
+                    unknown("wget runs wgetrc commands or a program, or writes cookies"),
                 );
             }
             let mut out = outputs(args, output_options("wget"));
@@ -2433,7 +2597,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
                 return result;
             };
             if of.text.starts_with("of=/dev/") && !HARMLESS.contains(&&of.text[3..]) {
-                return danger("dd writes to a raw device");
+                return deny("dd writes to a raw device");
             }
             return worst(
                 result,
@@ -2442,7 +2606,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
         }
         "kill" => {
             if args.iter().any(|word| word.text == "-1") {
-                return danger("kills every process of the user");
+                return deny("kills every process of the user");
             }
             return worst(result, unknown("kill signals a process"));
         }
@@ -2453,7 +2617,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
             return if has_flag(args, &["-l"]) {
                 result
             } else {
-                danger("modifies scheduled jobs")
+                deny("modifies scheduled jobs")
             };
         }
         "systemctl" | "launchctl" | "service" => {
@@ -2471,7 +2635,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
             {
                 result
             } else {
-                danger(format!("{name} changes system services"))
+                deny(format!("{name} changes system services"))
             };
         }
         "npx" | "bunx" | "pnpx" => {
@@ -2480,11 +2644,14 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
         "cargo" => {
             let sub = first_operand();
             let s = sub.as_deref().unwrap_or("");
-            if ["publish", "yank", "login", "owner"].contains(&s) {
-                return danger(format!("cargo {s} changes a package registry"));
+            if ["publish", "yank", "owner"].contains(&s) {
+                return outbound(format!("cargo {s} changes a package registry"));
+            }
+            if s == "login" || s == "logout" {
+                return deny(format!("cargo {s} handles registry credentials"));
             }
             if s == "install" || s == "uninstall" {
-                return danger(format!("cargo {s} changes globally installed tools"));
+                return deny(format!("cargo {s} changes globally installed tools"));
             }
             return worst(
                 result,
@@ -2504,13 +2671,13 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
             let s = sub.as_deref().unwrap_or("");
             if ["env", "version", "list", "doc", "vet"].contains(&s) {
                 return if has_flag(args, &["-w"]) {
-                    danger("go env -w changes global Go settings")
+                    deny("go env -w changes global Go settings")
                 } else {
                     result
                 };
             }
             if s == "install" {
-                return danger("go install changes globally installed tools");
+                return deny("go install changes globally installed tools");
             }
             return worst(
                 result,
@@ -2532,14 +2699,14 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
                 return result;
             }
             if s == "upload" || s == "publish" {
-                return danger(format!("{name} {s} publishes a package"));
+                return outbound(format!("{name} {s} publishes a package"));
             }
             return worst(result, write(js::trim(&format!("{name} {s}")).to_owned()));
         }
         "twine" | "gem" => {
             let sub = first_operand();
             return if matches!(sub.as_deref(), Some("upload" | "push")) {
-                danger(format!("{name} publishes a package"))
+                outbound(format!("{name} publishes a package"))
             } else {
                 worst(result, unknown(name))
             };
@@ -2555,8 +2722,11 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
             {
                 return result;
             }
-            if s == "push" || s == "login" {
-                return danger(format!("{name} {s} changes a registry or credentials"));
+            if s == "push" {
+                return outbound(format!("{name} push publishes an image"));
+            }
+            if s == "login" || s == "logout" {
+                return deny(format!("{name} {s} handles registry credentials"));
             }
             if ["system", "volume", "rm", "rmi", "prune"].contains(&s) {
                 return worst(
@@ -2594,7 +2764,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
             } else {
                 format!("{name} {s}")
             };
-            return danger(format!("{what} changes a cluster"));
+            return outbound(format!("{what} changes a cluster"));
         }
         "terraform" | "tofu" | "pulumi" => {
             let sub = first_operand();
@@ -2622,7 +2792,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
             } else {
                 format!("{name} {s}")
             };
-            return danger(format!("{what} changes real infrastructure"));
+            return outbound(format!("{what} changes real infrastructure"));
         }
         "gh" => {
             let ops = operands(args);
@@ -2638,21 +2808,7 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
                 return result;
             }
             if group == Some("api") {
-                let method = args
-                    .iter()
-                    .position(|word| word.text == "-X" || word.text == "--method");
-                let verb = method
-                    .and_then(|index| args.get(index + 1))
-                    .map(|word| word.text.to_uppercase());
-                if let Some(verb) = verb
-                    && verb != "GET"
-                {
-                    return danger(format!("gh api {verb} changes GitHub state"));
-                }
-                if has_flag(args, &["-f", "-F", "--field", "--raw-field", "--input"]) {
-                    return danger("gh api with fields sends a mutating request");
-                }
-                return result;
+                return worst(result, classify_gh_api(args));
             }
             if [
                 "view", "list", "status", "diff", "checks", "search", "browse",
@@ -2663,15 +2819,21 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
             {
                 return result;
             }
-            if let Some(group @ ("auth" | "secret" | "ssh-key" | "gpg-key")) = group {
-                return if action == Some("status") {
+            if let Some(group @ ("auth" | "secret" | "ssh-key" | "gpg-key" | "variable")) = group {
+                return if action == Some("status") || action == Some("list") {
                     result
                 } else {
-                    danger(format!("gh {group} changes credentials"))
+                    deny(format!("gh {group} handles credentials or secrets"))
                 };
             }
-            if matches!(action, Some("delete" | "merge" | "close")) || group == Some("release") {
-                return danger(format!(
+            // Changing what others see on GitHub sends it out (decision #1).
+            let changes = match group {
+                Some("release") => action != Some("download"),
+                Some("gist") => action != Some("clone"),
+                _ => GH_OUTBOUND.contains(&action.unwrap_or("")),
+            };
+            if changes {
+                return outbound(format!(
                     "gh {} {} changes shared GitHub state",
                     group.unwrap_or("undefined"),
                     action.unwrap_or("undefined")
@@ -2824,12 +2986,13 @@ pub fn compile_deny(patterns: &[String]) -> (Vec<JsRegex>, Vec<String>) {
     (deny, invalid)
 }
 
-fn denied(deny: &[JsRegex], text: &str, place: &str) -> Option<Classification> {
-    deny.iter()
+fn denied(patterns: &[JsRegex], text: &str, place: &str) -> Option<Classification> {
+    patterns
+        .iter()
         .find(|pattern| pattern.test(text))
         .map(|pattern| Classification {
             denied: true,
-            ..danger(format!("{place} matches the deny-list pattern {pattern}"))
+            ..deny(format!("{place} matches the deny-list pattern {pattern}"))
         })
 }
 
@@ -3170,7 +3333,7 @@ fn search_valued(name: &str) -> &'static [&'static str] {
 
 /// A recursive content search (`grep -r`, `rg`, `ag`) over a directory
 /// holding credential stores prints them into the model's context, like
-/// `cat` of the store itself: danger. Without a path it searches the
+/// `cat` of the store itself: deny. Without a path it searches the
 /// working directory.
 fn recursive_search(name: &str, args: &[Word], state: &State<'_>) -> Option<Classification> {
     let valued = search_valued(name);
@@ -3196,7 +3359,7 @@ fn recursive_search(name: &str, args: &[Word], state: &State<'_>) -> Option<Clas
             )));
         };
         if let Some(secret) = state.paths.secret_within(&dir) {
-            return Some(danger(format!(
+            return Some(deny(format!(
                 "searches {dir} recursively, including credentials at {secret}"
             )));
         }
@@ -3403,11 +3566,11 @@ fn read_only_effects(name: &str, args: &[Word], state: &State<'_>) -> Option<Cla
                     )
                     .iter()
                     .any(|word| !word.text.starts_with('+')));
-            sets.then(|| danger("date sets the system clock"))
+            sets.then(|| deny("date sets the system clock"))
         }
         "hostname" => (!operands_skipping(args, &["-F", "--file"]).is_empty()
             || !option_values(args, &["-F", "--file"]).is_empty())
-        .then(|| danger("hostname changes the system's host name")),
+        .then(|| deny("hostname changes the system's host name")),
         // cloc's options run programs (`--vcs`, `--extract-with`,
         // `--files-from`), load config or write reports, and Getopt::Long
         // takes them abbreviated and with one dash: only a known-safe set,
@@ -3641,15 +3804,15 @@ fn creates_link(command: &Command) -> Option<&'static str> {
 }
 
 /// Patterns recognisable only on the raw text.
-fn raw_danger(command: &str) -> Option<Classification> {
+fn raw_deny(command: &str) -> Option<Classification> {
     if js_regex!(r":\s*\(\s*\)\s*\{[^}]*:\s*\|\s*:").test(command) {
-        return Some(danger("fork bomb"));
+        return Some(deny("fork bomb"));
     }
     if js_regex!(r">\s*\/dev\/(?:sd|nvme|disk|hd|mmcblk)").test(command) {
-        return Some(danger("overwrites a raw disk device"));
+        return Some(deny("overwrites a raw disk device"));
     }
     if js_regex!(r"\b(?:curl|wget)\b[^|;&]*\|\s*(?:sudo\s+)?(?:ba|z|da|k)?sh\b").test(command) {
-        return Some(danger("pipes a remote download into a shell"));
+        return Some(deny("pipes a remote download into a shell"));
     }
     None
 }
@@ -3663,7 +3826,7 @@ pub fn classify_shell(command: &str, context: &RuleContext<'_>) -> Classificatio
     if let Some(listed) = deny_match(trimmed, context.deny) {
         return listed;
     }
-    if let Some(raw) = raw_danger(trimmed) {
+    if let Some(raw) = raw_deny(trimmed) {
         return raw;
     }
     let pipelines = match lex(trimmed) {
@@ -3703,11 +3866,11 @@ pub fn classify_shell(command: &str, context: &RuleContext<'_>) -> Classificatio
                         .map_or("", |word| word.text.as_str()),
                 );
                 if source == "curl" || source == "wget" {
-                    return danger("pipes a remote download into an interpreter");
+                    return deny("pipes a remote download into an interpreter");
                 }
             }
             result = worst(result, classify_command(command, &mut state));
-            if result.verdict == Verdict::Danger {
+            if result.verdict == Verdict::Deny {
                 return result;
             }
             if let Some(linked) = linked {

@@ -39,8 +39,33 @@ impl NotifyLevel {
     }
 }
 
+/// The answer to a red-line question (plans/rewrite/07-red-lines.md).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Allow {
+    Once,
+    /// The same action again, for the rest of the session, without asking.
+    Again,
+    No,
+}
+
 /// `UiApi`. Dialogs resolve to `None` when cancelled.
 pub trait Ui {
+    /// A confirmation that may also be answered "allow again in this
+    /// session" (`allowAgain` on the request, `again` on the answer). A UI
+    /// that cannot offer it asks a plain confirmation.
+    fn confirm_again<'a>(
+        &'a self,
+        title: &'a str,
+        message: &'a str,
+        opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<Allow>> {
+        let confirm = self.confirm(title, message, opts);
+        Box::pin(async move {
+            confirm
+                .await
+                .map(|yes| if yes { Allow::Once } else { Allow::No })
+        })
+    }
     fn select<'a>(
         &'a self,
         title: &'a str,

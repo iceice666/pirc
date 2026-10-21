@@ -49,9 +49,33 @@ pub struct TestUi {
     pub confirms: RefCell<Vec<String>>,
     pub confirm_titles: RefCell<Vec<String>>,
     pub answer: Cell<Option<bool>>,
+    /// `confirm_again` answers "allow again" (over `answer`).
+    pub again: Cell<bool>,
 }
 
 impl Ui for TestUi {
+    fn confirm_again<'a>(
+        &'a self,
+        title: &'a str,
+        message: &'a str,
+        opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<crate::ui::Allow>> {
+        let again = self.again.get();
+        let confirm = self.confirm(title, message, opts);
+        Box::pin(async move {
+            if again {
+                confirm.await;
+                return Some(crate::ui::Allow::Again);
+            }
+            confirm.await.map(|yes| {
+                if yes {
+                    crate::ui::Allow::Once
+                } else {
+                    crate::ui::Allow::No
+                }
+            })
+        })
+    }
     fn select<'a>(
         &'a self,
         _title: &'a str,
@@ -145,6 +169,7 @@ pub fn context(config: AgentConfig, signal: AbortSignal) -> Context {
             tool_call_id: "call-1".to_owned(),
             ui: Rc::new(TestUi::default()),
             has_ui: false,
+            approval_mode: crate::auto_mode::ApprovalMode::Auto,
             env: Vec::new(),
             acquire_write,
             update: Rc::new(move |partial| sink.borrow_mut().push(partial)),

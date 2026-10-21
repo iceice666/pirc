@@ -375,19 +375,11 @@ expression: r.into_value()
         "type": "extension_ui_request"
       },
       {
-        "id": "<uuid:2>",
-        "message": "Command (bash, in <tmp>/workspace):\n\nrm -rf /opt/pirc-conformance-gone\n\nReason: deletes /opt/pirc-conformance-gone, outside the workspace",
-        "method": "confirm",
-        "title": "Auto mode: allow a potentially dangerous action?",
-        "toolCallId": "a1",
-        "type": "extension_ui_request"
-      },
-      {
         "isError": true,
         "result": {
           "content": [
             {
-              "text": "Blocked by auto mode: deletes /opt/pirc-conformance-gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: deletes /opt/pirc-conformance-gone, outside the workspace. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -401,7 +393,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: deletes /opt/pirc-conformance-gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: deletes /opt/pirc-conformance-gone, outside the workspace. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -417,7 +409,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: deletes /opt/pirc-conformance-gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: deletes /opt/pirc-conformance-gone, outside the workspace. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -438,31 +430,15 @@ expression: r.into_value()
         "type": "tool_execution_start"
       },
       {
-        "id": "<uuid:3>",
-        "message": "Command (bash, in <tmp>/workspace):\n\nrm -rf /opt/pirc-conformance-gone\n\nReason: deletes /opt/pirc-conformance-gone, outside the workspace",
-        "method": "confirm",
-        "title": "Auto mode: allow a potentially dangerous action?",
-        "toolCallId": "a2",
-        "type": "extension_ui_request"
-      },
-      {
-        "id": "<uuid:4>",
-        "path": "<tmp>/workspace",
-        "type": "write_lease_request"
-      },
-      {
-        "isError": false,
+        "isError": true,
         "result": {
           "content": [
             {
-              "text": "[exit 0]",
+              "text": "Blocked by auto mode: Refused: deletes /opt/pirc-conformance-gone, outside the workspace. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
-          "details": {
-            "exitCode": 0,
-            "truncated": false
-          }
+          "isError": true
         },
         "toolCallId": "a2",
         "toolName": "bash",
@@ -472,15 +448,11 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "[exit 0]",
+              "text": "Blocked by auto mode: Refused: deletes /opt/pirc-conformance-gone, outside the workspace. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
-          "details": {
-            "exitCode": 0,
-            "truncated": false
-          },
-          "isError": false,
+          "isError": true,
           "role": "toolResult",
           "timestamp": "<epoch-ms>",
           "toolCallId": "a2",
@@ -492,15 +464,11 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "[exit 0]",
+              "text": "Blocked by auto mode: Refused: deletes /opt/pirc-conformance-gone, outside the workspace. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
-          "details": {
-            "exitCode": 0,
-            "truncated": false
-          },
-          "isError": false,
+          "isError": true,
           "role": "toolResult",
           "timestamp": "<epoch-ms>",
           "toolCallId": "a2",
@@ -517,19 +485,11 @@ expression: r.into_value()
         "type": "tool_execution_start"
       },
       {
-        "id": "<uuid:5>",
-        "message": "Command (bash, in <tmp>/workspace):\n\necho deploy-prod\n\nReason: the command matches the deny-list pattern /deploy-prod/",
-        "method": "confirm",
-        "title": "Auto mode: allow a potentially dangerous action?",
-        "toolCallId": "a3",
-        "type": "extension_ui_request"
-      },
-      {
         "isError": true,
         "result": {
           "content": [
             {
-              "text": "Blocked by auto mode: the command matches the deny-list pattern /deploy-prod/. The user did not approve it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /deploy-prod/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -543,7 +503,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: the command matches the deny-list pattern /deploy-prod/. The user did not approve it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /deploy-prod/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -559,7 +519,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: the command matches the deny-list pattern /deploy-prod/. The user did not approve it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /deploy-prod/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -580,19 +540,11 @@ expression: r.into_value()
         "type": "tool_execution_start"
       },
       {
-        "id": "<uuid:6>",
-        "message": "Command (bash, in <tmp>/workspace):\n\nls; echo 'rm -rf ('\n\nReason: the command matches the deny-list pattern /rm -rf \\(/",
-        "method": "confirm",
-        "title": "Auto mode: allow a potentially dangerous action?",
-        "toolCallId": "a4",
-        "type": "extension_ui_request"
-      },
-      {
         "isError": true,
         "result": {
           "content": [
             {
-              "text": "Blocked by auto mode: the command matches the deny-list pattern /rm -rf \\(/. The user did not approve it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /rm -rf \\(/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -606,7 +558,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: the command matches the deny-list pattern /rm -rf \\(/. The user did not approve it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /rm -rf \\(/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -622,7 +574,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: the command matches the deny-list pattern /rm -rf \\(/. The user did not approve it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /rm -rf \\(/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -643,7 +595,7 @@ expression: r.into_value()
         "type": "tool_execution_start"
       },
       {
-        "id": "<uuid:7>",
+        "id": "<uuid:2>",
         "path": "<tmp>/workspace",
         "type": "write_lease_request"
       },
@@ -812,7 +764,7 @@ expression: r.into_value()
         "type": "tool_execution_start"
       },
       {
-        "id": "<uuid:8>",
+        "id": "<uuid:3>",
         "path": "<tmp>/workspace",
         "type": "write_lease_request"
       },
@@ -1283,7 +1235,7 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "Blocked by auto mode: deletes /opt/pirc-conformance-gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+                "text": "Blocked by auto mode: Refused: deletes /opt/pirc-conformance-gone, outside the workspace. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
                 "type": "text"
               }
             ],
@@ -1296,15 +1248,11 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "[exit 0]",
+                "text": "Blocked by auto mode: Refused: deletes /opt/pirc-conformance-gone, outside the workspace. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
                 "type": "text"
               }
             ],
-            "details": {
-              "exitCode": 0,
-              "truncated": false
-            },
-            "isError": false,
+            "isError": true,
             "role": "toolResult",
             "timestamp": "<epoch-ms>",
             "toolCallId": "a2",
@@ -1313,7 +1261,7 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "Blocked by auto mode: the command matches the deny-list pattern /deploy-prod/. The user did not approve it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+                "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /deploy-prod/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
                 "type": "text"
               }
             ],
@@ -1326,7 +1274,7 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "Blocked by auto mode: the command matches the deny-list pattern /rm -rf \\(/. The user did not approve it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+                "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /rm -rf \\(/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
                 "type": "text"
               }
             ],
@@ -1505,7 +1453,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: deletes /opt/pirc-conformance-gone, outside the workspace. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: deletes /opt/pirc-conformance-gone, outside the workspace. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -1524,15 +1472,11 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "[exit 0]",
+              "text": "Blocked by auto mode: Refused: deletes /opt/pirc-conformance-gone, outside the workspace. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
-          "details": {
-            "exitCode": 0,
-            "truncated": false
-          },
-          "isError": false,
+          "isError": true,
           "role": "toolResult",
           "timestamp": "<epoch-ms>",
           "toolCallId": "a2",
@@ -1547,7 +1491,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: the command matches the deny-list pattern /deploy-prod/. The user did not approve it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /deploy-prod/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -1566,7 +1510,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: the command matches the deny-list pattern /rm -rf \\(/. The user did not approve it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /rm -rf \\(/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],

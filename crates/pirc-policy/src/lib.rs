@@ -415,9 +415,94 @@ pub fn truncate_output(text: &str, max_bytes: usize) -> (String, bool) {
     (out, true)
 }
 
+/// Decision #8 of plans/rewrite/decisions.md: the only hosts that are this
+/// machine for the red lines (a browser action, a request with a body):
+/// `localhost`, `127.0.0.1` and `::1`. Anything else, `*.localhost` and
+/// private addresses included, counts as another host.
+pub fn is_localhost(host: &str) -> bool {
+    let host = host.trim().trim_end_matches('.').to_ascii_lowercase();
+    let host = host
+        .strip_prefix('[')
+        .and_then(|rest| rest.strip_suffix(']'))
+        .unwrap_or(&host);
+    matches!(host, "localhost" | "127.0.0.1" | "::1")
+}
+
+/// The host a URL names (its scheme is optional: `localhost:3000/x`),
+/// lowercased and without user info or port; `None` without one.
+pub fn url_host(url: &str) -> Option<String> {
+    let url = url.trim();
+    let rest = match url.find("://") {
+        Some(index) => &url[index + 3..],
+        None => url.strip_prefix("//").unwrap_or(url),
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let authority = authority.rsplit('@').next().unwrap_or_default();
+    let host = if let Some(bracketed) = authority.strip_prefix('[') {
+        format!("[{}]", bracketed.split(']').next().unwrap_or_default())
+    } else {
+        authority.split(':').next().unwrap_or_default().to_owned()
+    };
+    (!host.is_empty() && host != "[]").then(|| host.to_ascii_lowercase())
+}
+
+/// `scheme://host[:port]` of a URL, lowercased, without user info; the
+/// whole text when it has no `://` (`about:blank`).
+pub fn url_origin(url: &str) -> String {
+    let url = url.trim();
+    let Some(index) = url.find("://") else {
+        return url.to_owned();
+    };
+    let rest = &url[index + 3..];
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let authority = authority.rsplit('@').next().unwrap_or_default();
+    format!("{}://{}", &url[..index], authority).to_ascii_lowercase()
+}
+
+/// Whether a URL names this machine ([`is_localhost`]); `about:`, `data:`
+/// and other URLs without a host are not another host either.
+pub fn url_is_localhost(url: &str) -> bool {
+    let lower = url.trim().to_ascii_lowercase();
+    if ["about:", "data:", "blob:", "javascript:"]
+        .iter()
+        .any(|scheme| lower.starts_with(scheme))
+    {
+        return lower.starts_with("about:") || lower.starts_with("data:");
+    }
+    url_host(url).is_some_and(|host| is_localhost(&host))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn knows_only_three_names_for_this_machine() {
+        for url in [
+            "http://localhost:3000/x",
+            "https://127.0.0.1/",
+            "http://[::1]:8080/a?b",
+            "localhost:5173",
+            "http://user:pw@LOCALHOST./",
+            "about:blank",
+        ] {
+            assert!(url_is_localhost(url), "{url}");
+        }
+        for url in [
+            "https://example.com/",
+            "http://app.localhost/",
+            "http://192.168.1.2/",
+            "http://localhost.example.com/",
+            "http://127.0.0.2/",
+            "https://evil.com/?localhost",
+            "http://localhost@evil.com/",
+            "javascript:alert(1)",
+            "",
+        ] {
+            assert!(!url_is_localhost(url), "{url}");
+        }
+        assert_eq!(url_host("https://a.b:1/c"), Some("a.b".to_owned()));
+    }
 
     fn temp() -> (tempfile::TempDir, String) {
         let dir = tempfile::tempdir().unwrap();

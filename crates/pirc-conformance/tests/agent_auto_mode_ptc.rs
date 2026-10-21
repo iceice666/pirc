@@ -1,9 +1,11 @@
 //! Auto mode around `ptc` scripts (`agent-auto-mode.test.ts`,
-//! docs/architecture/ptc.md): shell calls a script makes are gated one by one
-//! (refused without a UI, asked about with one, withdrawn when the run is
-//! cancelled), the user's deny-list applies to the script text itself, and
-//! an ordinary script is neither classified nor leased. These need the PTC
-//! runtime (the `m5-ptc` port) to replay against the Rust agent.
+//! docs/architecture/ptc.md, plans/rewrite/07-red-lines.md): shell calls a
+//! script makes are gated one by one (sending something out is refused
+//! without a UI, asked about with one, once or again for the session, and
+//! withdrawn when the run is cancelled; deny is refused without asking), the
+//! user's deny-list applies to the script text itself, and an ordinary
+//! script is neither classified nor leased. These need the PTC runtime (the
+//! `m5-ptc` port) to replay against the Rust agent.
 
 use std::collections::VecDeque;
 use std::time::Duration;
@@ -83,8 +85,8 @@ fn exists(agent: &AgentRun, r: &mut Recorder, files: &[&str]) {
     r.note("files", json!(found));
 }
 
-/// Without a UI, a dangerous bash call from a script fails with
-/// `ApprovalDenied` and no dialog.
+/// Without a UI, a push from a script fails with `ApprovalDenied` and no
+/// dialog; `rm -rf ~` is refused outright, UI or not.
 #[tokio::test(flavor = "multi_thread")]
 async fn agent_auto_mode_ptc_headless() {
     let Some(mut agent) = AgentRun::start(options(json!({}), true)).await else {
@@ -94,7 +96,7 @@ async fn agent_auto_mode_ptc_headless() {
     agent.push([
         ptc(
             "p",
-            "const r = await tools.call(\"bash\", { command: \"rm -rf ~\" }); return r.ok ? \"ran\" : r.error.code + \": \" + r.error.message;",
+            "const r = await tools.call(\"bash\", { command: \"git push origin main\" }); return r.ok ? \"ran\" : r.error.code + \": \" + r.error.message;",
         ),
         ModelReply::tool("d", "bash", json!({ "command": "rm -rf ~" })),
         ModelReply::Text("Done.".to_owned()),
@@ -104,16 +106,20 @@ async fn agent_auto_mode_ptc_headless() {
     insta::assert_json_snapshot!("agent_auto_mode_ptc_headless", r.into_value());
 }
 
-/// With a UI, a dangerous bash call from a script asks the human and runs
-/// only when approved.
+/// With a UI, a push from a script asks the human and runs only when
+/// approved; allowed again, the same command in the same place runs without
+/// asking for the rest of the session.
 #[tokio::test(flavor = "multi_thread")]
 async fn agent_auto_mode_ptc_approval() {
     let Some(mut agent) = AgentRun::start(options(json!({}), false)).await else {
         return;
     };
     let mut r = Recorder::new(&agent);
-    agent.answers.lock().unwrap().dialogs =
-        VecDeque::from([json!({ "confirmed": false }), json!({ "confirmed": true })]);
+    agent.answers.lock().unwrap().dialogs = VecDeque::from([
+        json!({ "confirmed": false }),
+        json!({ "confirmed": true }),
+        json!({ "confirmed": true, "again": true }),
+    ]);
     let script = |file: &str| {
         format!(
             "return await tools.bash({{ command: \"git push --force nowhere 2>/dev/null; touch {file}\" }});"
@@ -122,10 +128,12 @@ async fn agent_auto_mode_ptc_approval() {
     agent.push([
         ptc("p1", &script("declined.txt")),
         ptc("p2", &script("ran.txt")),
+        ptc("p3", &script("again.txt")),
+        ptc("p4", &script("again.txt")),
         ModelReply::Text("Done.".to_owned()),
     ]);
     turn(&mut agent, &mut r, "asked", "go").await;
-    exists(&agent, &mut r, &["declined.txt", "ran.txt"]);
+    exists(&agent, &mut r, &["declined.txt", "ran.txt", "again.txt"]);
     session(&mut r, &agent);
     r.note("exit code", json!(agent.finish().await));
     insta::assert_json_snapshot!("agent_auto_mode_ptc_approval", r.into_value());
@@ -190,9 +198,9 @@ async fn agent_auto_mode_ptc_deny_headless() {
     insta::assert_json_snapshot!("agent_auto_mode_ptc_deny_headless", r.into_value());
 }
 
-/// With a UI, a denied script text asks the human; approved, it runs.
+/// With a UI too, a denied script text is refused without asking.
 #[tokio::test(flavor = "multi_thread")]
-async fn agent_auto_mode_ptc_deny_approval() {
+async fn agent_auto_mode_ptc_deny_with_ui() {
     let Some(mut agent) = AgentRun::start(options(deny_config(), false)).await else {
         return;
     };
@@ -206,7 +214,7 @@ async fn agent_auto_mode_ptc_deny_approval() {
     ]);
     turn(&mut agent, &mut r, "asked", "go").await;
     r.note("exit code", json!(agent.finish().await));
-    insta::assert_json_snapshot!("agent_auto_mode_ptc_deny_approval", r.into_value());
+    insta::assert_json_snapshot!("agent_auto_mode_ptc_deny_with_ui", r.into_value());
 }
 
 /// With the classifier on, a script's own text is neither classified nor

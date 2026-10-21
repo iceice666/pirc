@@ -132,7 +132,7 @@ expression: r.into_value()
         "result": {
           "content": [
             {
-              "text": "Blocked by auto mode: the command matches the deny-list pattern /forbidden-word/. Dangerous actions need a human and this agent has no UI. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /forbidden-word/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -146,7 +146,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: the command matches the deny-list pattern /forbidden-word/. Dangerous actions need a human and this agent has no UI. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /forbidden-word/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -162,7 +162,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Blocked by auto mode: the command matches the deny-list pattern /forbidden-word/. Dangerous actions need a human and this agent has no UI. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+              "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /forbidden-word/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
               "type": "text"
             }
           ],
@@ -535,7 +535,7 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "Blocked by auto mode: the command matches the deny-list pattern /forbidden-word/. Dangerous actions need a human and this agent has no UI. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
+                "text": "Blocked by auto mode: Refused: the command matches the deny-list pattern /forbidden-word/. This is never allowed here, and the user was not asked. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.",
                 "type": "text"
               }
             ],

@@ -256,6 +256,37 @@ fn request(method: &str, fields: Vec<(&str, Value)>) -> Map<String, Value> {
 }
 
 impl Ui for RpcUi {
+    fn confirm_again<'a>(
+        &'a self,
+        title: &'a str,
+        message: &'a str,
+        opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<crate::ui::Allow>> {
+        let dialog = self.dialog(
+            request(
+                "confirm",
+                vec![
+                    ("title", json!(title)),
+                    ("message", json!(message)),
+                    ("allowAgain", json!(true)),
+                ],
+            ),
+            opts,
+        );
+        Box::pin(async move {
+            let response = dialog.await;
+            if truthy(response.get("cancelled")) {
+                None
+            } else if !truthy(response.get("confirmed")) {
+                Some(crate::ui::Allow::No)
+            } else if truthy(response.get("again")) {
+                Some(crate::ui::Allow::Again)
+            } else {
+                Some(crate::ui::Allow::Once)
+            }
+        })
+    }
+
     fn select<'a>(
         &'a self,
         title: &'a str,

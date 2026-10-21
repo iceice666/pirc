@@ -14,6 +14,7 @@ use serde_json::{Map, Value, json};
 use super::web_search::feature_enabled;
 use crate::LocalBoxFuture;
 use crate::agent::Agent;
+use crate::auto_mode::ApprovalMode;
 use crate::channels::{ChannelError, NodeChannels, process_browser};
 use crate::feature::{BeforeStart, Feature, PromptAddition};
 use crate::signal::{AbortController, AbortSignal};
@@ -22,7 +23,7 @@ use crate::tools::result_schema::{
     arr, bool_, by_action, fields, int, nullable, obj, one_of_strings, str_,
 };
 use crate::tools::{Tool, ToolContext, ToolResult, ToolSpec, js};
-use crate::ui::DialogOptions;
+use crate::ui::{Allow, DialogOptions};
 
 const BROWSER_PROMPT: &str = "## Browser
 
@@ -37,6 +38,7 @@ You have a real Chromium browser (`web_fetch` and the `browser_*` tools). It kee
 /// `browserFeature()`.
 pub fn feature() -> Rc<dyn Feature> {
     let lifetime = Rc::new(RefCell::new(AbortController::new()));
+    let allowed = Rc::new(RefCell::new(std::collections::HashSet::new()));
     let tools: Vec<Rc<dyn Tool>> = browser_tools()
         .into_iter()
         .map(|(spec, kind)| {
@@ -44,6 +46,7 @@ pub fn feature() -> Rc<dyn Feature> {
                 spec,
                 kind,
                 lifetime: lifetime.clone(),
+                allowed: allowed.clone(),
             }) as Rc<dyn Tool>
         })
         .collect();
@@ -596,7 +599,14 @@ struct BrowserTool {
     spec: ToolSpec,
     kind: Kind,
     lifetime: Rc<RefCell<AbortController>>,
+    /// Actions the user allowed again for this session, by operation and
+    /// site.
+    allowed: Rc<RefCell<std::collections::HashSet<String>>>,
 }
+
+/// Operations that act on a page rather than read it: on another site they
+/// are sending something out (decision #8 of plans/rewrite/decisions.md).
+const ACTIONS: [&str; 4] = ["click", "type", "select", "press"];
 
 /// `channel()`.
 fn channel() -> Result<Rc<NodeChannels>, ChannelError> {
@@ -626,7 +636,26 @@ impl BrowserTool {
     ) -> Result<ToolResult, ChannelError> {
         match self.kind {
             Kind::Page(op) => {
-                let page = self.call(op, args, &ctx).await?;
+                let page = match self.call(op, args.clone(), &ctx).await {
+                    // The node saw the page on another site: the second red
+                    // line, asked here (or refused), then tried again for
+                    // that site only.
+                    Err(ChannelError::Coded { code, message, .. })
+                        if code == "needs_action" && ACTIONS.contains(&op) =>
+                    {
+                        let origin = message;
+                        if let Some(refusal) = self.approve_action(op, &origin, &args, &ctx).await {
+                            return Ok(ToolResult {
+                                details: Some(json!({ "error": "needs_action", "origin": origin })),
+                                ..ToolResult::error(refusal)
+                            });
+                        }
+                        let mut allowed = args;
+                        allowed.insert("allowAction".to_owned(), json!(origin));
+                        self.call(op, allowed, &ctx).await?
+                    }
+                    other => other?,
+                };
                 Ok(result(
                     format_page(&page),
                     subset(&page, &["url", "title"]),
@@ -806,6 +835,66 @@ impl BrowserTool {
                 ))
             }
             Kind::Handoff => self.handoff(args, ctx).await,
+        }
+    }
+
+    /// Whether the user lets `op` act on `origin`: `None` when it may.
+    async fn approve_action(
+        &self,
+        op: &str,
+        origin: &str,
+        args: &Map<String, Value>,
+        ctx: &ToolContext,
+    ) -> Option<String> {
+        let advice = "Do not try to reach the same effect another way; explain what you intended and ask the user to do it or approve it.";
+        let what = format!("{op} on {origin}");
+        match ctx.approval_mode {
+            ApprovalMode::FullAccess => return None,
+            ApprovalMode::ReadOnly => {
+                return Some(format!(
+                    "Refused: {what}. This session is read-only: it may look at other sites but not act on them. {advice}"
+                ));
+            }
+            ApprovalMode::Auto => {}
+        }
+        let key = format!("{op}\0{origin}");
+        if self.allowed.borrow().contains(&key) {
+            return None;
+        }
+        if !ctx.has_ui {
+            return Some(format!(
+                "{what} acts on another site: that needs a human and this agent has no UI. {advice}"
+            ));
+        }
+        let detail = match op {
+            "type" => format!("Text: {}", js::head16(&shown(args.get("text")), 500)),
+            "select" => format!("Values: {}", shown(args.get("values"))),
+            "press" => format!("Key: {}", shown(args.get("key"))),
+            _ => format!("Element: {}", shown(args.get("ref"))),
+        };
+        let message = format!(
+            "Browser {op} on {origin}:\n\n{detail}\n\nReason: an action on another site may send something out (a form, a message, a purchase)."
+        );
+        let answer = ctx
+            .ui
+            .confirm_again(
+                "Browser: allow an action on another site?",
+                &message,
+                DialogOptions {
+                    signal: Some(ctx.signal.clone()),
+                    tool_call_id: Some(ctx.tool_call_id.clone()),
+                    ..DialogOptions::default()
+                },
+            )
+            .await;
+        match answer {
+            Some(Allow::Once) => None,
+            Some(Allow::Again) => {
+                self.allowed.borrow_mut().insert(key);
+                None
+            }
+            Some(Allow::No) => Some(format!("{what}: the user declined it. {advice}")),
+            None => Some(format!("{what}: the user did not approve it. {advice}")),
         }
     }
 

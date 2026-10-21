@@ -153,10 +153,11 @@ expression: r.into_value()
         "type": "tool_execution_start"
       },
       {
+        "allowAgain": true,
         "id": "<uuid:2>",
         "message": "Command (bash, in <tmp>/workspace):\n\ngit push --force nowhere 2>/dev/null; touch declined.txt\n\nReason: force-pushes or deletes remote refs, rewriting shared history",
         "method": "confirm",
-        "title": "Auto mode: allow a potentially dangerous action?",
+        "title": "Auto mode: allow sending this out?",
         "toolCallId": "<uuid:1>:op1",
         "type": "extension_ui_request"
       },
@@ -574,10 +575,11 @@ expression: r.into_value()
         "type": "tool_execution_start"
       },
       {
+        "allowAgain": true,
         "id": "<uuid:4>",
         "message": "Command (bash, in <tmp>/workspace):\n\ngit push --force nowhere 2>/dev/null; touch ran.txt\n\nReason: force-pushes or deletes remote refs, rewriting shared history",
         "method": "confirm",
-        "title": "Auto mode: allow a potentially dangerous action?",
+        "title": "Auto mode: allow sending this out?",
         "toolCallId": "<uuid:3>:op1",
         "type": "extension_ui_request"
       },
@@ -869,6 +871,843 @@ expression: r.into_value()
           "role": "toolResult",
           "timestamp": "<epoch-ms>",
           "toolCallId": "p2",
+          "toolName": "ptc"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "id": "p3",
+          "toolName": "ptc",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"code\":\"return await tools.bash({ command: \\\"git push --force nowhere 2>/dev/null; touch again.txt\\\" });\"}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "arguments": {
+              "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+            },
+            "id": "p3",
+            "name": "ptc",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+              },
+              "id": "p3",
+              "name": "ptc",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "args": {
+          "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+        },
+        "toolCallId": "p3",
+        "toolName": "ptc",
+        "type": "tool_execution_start"
+      },
+      {
+        "args": {
+          "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+        },
+        "partialResult": {
+          "content": [
+            {
+              "text": "1 operation: 0 completed, 1 running",
+              "type": "text"
+            }
+          ]
+        },
+        "toolCallId": "p3",
+        "toolName": "ptc",
+        "type": "tool_execution_update"
+      },
+      {
+        "args": {
+          "command": "git push --force nowhere 2>/dev/null; touch again.txt"
+        },
+        "parentToolCallId": "p3",
+        "toolCallId": "<uuid:6>:op1",
+        "toolName": "bash",
+        "type": "tool_execution_start"
+      },
+      {
+        "allowAgain": true,
+        "id": "<uuid:7>",
+        "message": "Command (bash, in <tmp>/workspace):\n\ngit push --force nowhere 2>/dev/null; touch again.txt\n\nReason: force-pushes or deletes remote refs, rewriting shared history",
+        "method": "confirm",
+        "title": "Auto mode: allow sending this out?",
+        "toolCallId": "<uuid:6>:op1",
+        "type": "extension_ui_request"
+      },
+      {
+        "id": "<uuid:8>",
+        "path": "<tmp>/workspace",
+        "type": "write_lease_request"
+      },
+      {
+        "isError": false,
+        "parentToolCallId": "p3",
+        "result": {
+          "content": [
+            {
+              "text": "[exit 0]",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "exitCode": 0,
+            "truncated": false
+          }
+        },
+        "toolCallId": "<uuid:6>:op1",
+        "toolName": "bash",
+        "type": "tool_execution_end"
+      },
+      {
+        "isError": false,
+        "result": {
+          "content": [
+            {
+              "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:6>",
+            "manifest": [
+              "bash"
+            ],
+            "operations": [
+              {
+                "capability": "bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:6>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "p3",
+                "type": "execution"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
+                "parentNodeId": "<uuid:6>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "p3",
+                "type": "operation"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:6>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "p3",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "p3",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          }
+        },
+        "toolCallId": "p3",
+        "toolName": "ptc",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:6>",
+            "manifest": [
+              "bash"
+            ],
+            "operations": [
+              {
+                "capability": "bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:6>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "p3",
+                "type": "execution"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
+                "parentNodeId": "<uuid:6>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "p3",
+                "type": "operation"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:6>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "p3",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "p3",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "p3",
+          "toolName": "ptc"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:6>",
+            "manifest": [
+              "bash"
+            ],
+            "operations": [
+              {
+                "capability": "bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:6>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "p3",
+                "type": "execution"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
+                "parentNodeId": "<uuid:6>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "p3",
+                "type": "operation"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:6>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "p3",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "p3",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "p3",
+          "toolName": "ptc"
+        },
+        "type": "message_end"
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "turn_start"
+      },
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "id": "p4",
+          "toolName": "ptc",
+          "type": "toolcall_start"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "delta": "{\"code\":\"return await tools.bash({ command: \\\"git push --force nowhere 2>/dev/null; touch again.txt\\\" });\"}",
+          "type": "toolcall_delta"
+        },
+        "type": "message_update"
+      },
+      {
+        "assistantMessageEvent": {
+          "contentIndex": 0,
+          "toolCall": {
+            "arguments": {
+              "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+            },
+            "id": "p4",
+            "name": "ptc",
+            "type": "toolCall"
+          },
+          "type": "toolcall_end"
+        },
+        "type": "message_update"
+      },
+      {
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+              },
+              "id": "p4",
+              "name": "ptc",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "type": "message_end"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "args": {
+          "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+        },
+        "toolCallId": "p4",
+        "toolName": "ptc",
+        "type": "tool_execution_start"
+      },
+      {
+        "args": {
+          "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+        },
+        "partialResult": {
+          "content": [
+            {
+              "text": "1 operation: 0 completed, 1 running",
+              "type": "text"
+            }
+          ]
+        },
+        "toolCallId": "p4",
+        "toolName": "ptc",
+        "type": "tool_execution_update"
+      },
+      {
+        "args": {
+          "command": "git push --force nowhere 2>/dev/null; touch again.txt"
+        },
+        "parentToolCallId": "p4",
+        "toolCallId": "<uuid:9>:op1",
+        "toolName": "bash",
+        "type": "tool_execution_start"
+      },
+      {
+        "id": "<uuid:10>",
+        "path": "<tmp>/workspace",
+        "type": "write_lease_request"
+      },
+      {
+        "isError": false,
+        "parentToolCallId": "p4",
+        "result": {
+          "content": [
+            {
+              "text": "[exit 0]",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "exitCode": 0,
+            "truncated": false
+          }
+        },
+        "toolCallId": "<uuid:9>:op1",
+        "toolName": "bash",
+        "type": "tool_execution_end"
+      },
+      {
+        "isError": false,
+        "result": {
+          "content": [
+            {
+              "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:9>",
+            "manifest": [
+              "bash"
+            ],
+            "operations": [
+              {
+                "capability": "bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:9>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "p4",
+                "type": "execution"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
+                "parentNodeId": "<uuid:9>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "p4",
+                "type": "operation"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:9>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "p4",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "p4",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          }
+        },
+        "toolCallId": "p4",
+        "toolName": "ptc",
+        "type": "tool_execution_end"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:9>",
+            "manifest": [
+              "bash"
+            ],
+            "operations": [
+              {
+                "capability": "bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:9>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "p4",
+                "type": "execution"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
+                "parentNodeId": "<uuid:9>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "p4",
+                "type": "operation"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:9>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "p4",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "p4",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "p4",
+          "toolName": "ptc"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": [
+            {
+              "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:9>",
+            "manifest": [
+              "bash"
+            ],
+            "operations": [
+              {
+                "capability": "bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:9>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "p4",
+                "type": "execution"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
+                "parentNodeId": "<uuid:9>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "p4",
+                "type": "operation"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:9>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "p4",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "p4",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "p4",
           "toolName": "ptc"
         },
         "type": "message_end"
@@ -1570,6 +2409,831 @@ expression: r.into_value()
         "systemPrompt": "<unchanged>",
         "thinking": "low",
         "tools": "<unchanged>"
+      },
+      {
+        "messages": [
+          {
+            "content": "go",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch declined.txt\" });"
+                },
+                "id": "p1",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "[error] ApprovalDenied: Blocked by auto mode: force-pushes or deletes remote refs, rewriting shared history. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.\n\n[operations] 0 completed, 1 not started\n\n- bash: not_started (ApprovalDenied)\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: declined by the user",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:1>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op1",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "failed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 1,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "p1",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "p1",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "p1",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 3,
+                  "status": "failed",
+                  "turnId": "p1",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "p1",
+            "toolName": "ptc"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch ran.txt\" });"
+                },
+                "id": "p2",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:3>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:3>:op1",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 0,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "p2",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:op1",
+                  "parentNodeId": "<uuid:3>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "p2",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:op1",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:3>:root",
+                  "sequence": 2,
+                  "status": "completed",
+                  "turnId": "p2",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "p2",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "p2",
+            "toolName": "ptc"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+                },
+                "id": "p3",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:6>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:6>:op1",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 0,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "p3",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
+                  "parentNodeId": "<uuid:6>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "p3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:6>:root",
+                  "sequence": 2,
+                  "status": "completed",
+                  "turnId": "p3",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "p3",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "p3",
+            "toolName": "ptc"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "<unchanged>",
+        "thinking": "low",
+        "tools": "<unchanged>"
+      },
+      {
+        "messages": [
+          {
+            "content": "go",
+            "role": "user",
+            "timestamp": "<epoch-ms>"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch declined.txt\" });"
+                },
+                "id": "p1",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "[error] ApprovalDenied: Blocked by auto mode: force-pushes or deletes remote refs, rewriting shared history. The user declined it. Do not try to reach the same effect another way; explain what you intended and ask the user to run or approve it.\n\n[operations] 0 completed, 1 not started\n\n- bash: not_started (ApprovalDenied)\n\n[declined] Not allowed while this script ran; respect this and do not reach the same effect another way:\n- bash: declined by the user",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:1>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "operationId": "<uuid:1>:op1",
+                  "outcome": "not_started"
+                }
+              ],
+              "status": "failed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 0,
+                "failed": 0,
+                "notStarted": 1,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "p1",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "p1",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "errorCode": "ApprovalDenied",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:op1",
+                  "outcome": "not_started",
+                  "parentNodeId": "<uuid:1>:root",
+                  "sequence": 2,
+                  "status": "failed",
+                  "turnId": "p1",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:1>",
+                  "nodeId": "<uuid:1>:root",
+                  "sequence": 3,
+                  "status": "failed",
+                  "turnId": "p1",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": true,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "p1",
+            "toolName": "ptc"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch ran.txt\" });"
+                },
+                "id": "p2",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:3>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:3>:op1",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 0,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "p2",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:op1",
+                  "parentNodeId": "<uuid:3>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "p2",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:op1",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:3>:root",
+                  "sequence": 2,
+                  "status": "completed",
+                  "turnId": "p2",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:3>",
+                  "nodeId": "<uuid:3>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "p2",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "p2",
+            "toolName": "ptc"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+                },
+                "id": "p3",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:6>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:6>:op1",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 0,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "p3",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
+                  "parentNodeId": "<uuid:6>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "p3",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:op1",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:6>:root",
+                  "sequence": 2,
+                  "status": "completed",
+                  "turnId": "p3",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:6>",
+                  "nodeId": "<uuid:6>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "p3",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "p3",
+            "toolName": "ptc"
+          },
+          {
+            "api": "openai-completions",
+            "completedAt": "<epoch-ms>",
+            "content": [
+              {
+                "arguments": {
+                  "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+                },
+                "id": "p4",
+                "name": "ptc",
+                "type": "toolCall"
+              }
+            ],
+            "model": "fake-model",
+            "provider": "fake",
+            "role": "assistant",
+            "stopReason": "toolUse",
+            "timestamp": "<epoch-ms>",
+            "usage": {
+              "cacheRead": 40,
+              "cacheWrite": 0,
+              "input": 100,
+              "output": 10,
+              "totalTokens": 150
+            }
+          },
+          {
+            "content": [
+              {
+                "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+                "type": "text"
+              }
+            ],
+            "details": {
+              "activeMs": "<ms>",
+              "consoleTruncated": false,
+              "executionId": "<uuid:9>",
+              "manifest": [
+                "bash"
+              ],
+              "operations": [
+                {
+                  "capability": "bash",
+                  "delivered": true,
+                  "durationMs": "<ms>",
+                  "operationId": "<uuid:9>:op1",
+                  "outcome": "completed"
+                }
+              ],
+              "status": "completed",
+              "summary": {
+                "cancelled": 0,
+                "completed": 1,
+                "failed": 0,
+                "notStarted": 0,
+                "running": 0,
+                "total": 1,
+                "unknown": 0
+              },
+              "trace": [
+                {
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:root",
+                  "sequence": 0,
+                  "status": "running",
+                  "turnId": "p4",
+                  "type": "execution"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:op1",
+                  "parentNodeId": "<uuid:9>:root",
+                  "sequence": 1,
+                  "status": "running",
+                  "turnId": "p4",
+                  "type": "operation"
+                },
+                {
+                  "capability": "bash",
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:op1",
+                  "outcome": "completed",
+                  "parentNodeId": "<uuid:9>:root",
+                  "sequence": 2,
+                  "status": "completed",
+                  "turnId": "p4",
+                  "type": "operation"
+                },
+                {
+                  "createdAt": "<time>",
+                  "durationMs": "<ms>",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:root",
+                  "sequence": 3,
+                  "status": "completed",
+                  "turnId": "p4",
+                  "type": "execution"
+                }
+              ],
+              "truncated": false,
+              "waitedMs": "<ms>"
+            },
+            "isError": false,
+            "role": "toolResult",
+            "timestamp": "<epoch-ms>",
+            "toolCallId": "p4",
+            "toolName": "ptc"
+          }
+        ],
+        "modelId": "fake-model",
+        "providerName": "fake",
+        "sessionId": "<hex16:1>",
+        "systemPrompt": "<unchanged>",
+        "thinking": "low",
+        "tools": "<unchanged>"
       }
     ],
     "step": "asked: model requests"
@@ -1582,6 +3246,10 @@ expression: r.into_value()
       ],
       [
         "ran.txt",
+        true
+      ],
+      [
+        "again.txt",
         true
       ]
     ],
@@ -1918,6 +3586,310 @@ expression: r.into_value()
           "completedAt": "<epoch-ms>",
           "content": [
             {
+              "arguments": {
+                "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+              },
+              "id": "p3",
+              "name": "ptc",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "parentId": "<entry:8>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "customType": "ptc.operation",
+        "data": {
+          "args": {
+            "command": "git push --force nowhere 2>/dev/null; touch again.txt"
+          },
+          "content": [
+            {
+              "text": "[exit 0]",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "exitCode": 0,
+            "truncated": false
+          },
+          "isError": false,
+          "parentToolCallId": "p3",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "<uuid:6>:op1",
+          "toolName": "bash"
+        },
+        "id": "<entry:10>",
+        "parentId": "<entry:9>",
+        "timestamp": "<epoch-ms>",
+        "type": "custom"
+      },
+      {
+        "id": "<entry:11>",
+        "message": {
+          "content": [
+            {
+              "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:6>",
+            "manifest": [
+              "bash"
+            ],
+            "operations": [
+              {
+                "capability": "bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:6>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "p3",
+                "type": "execution"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
+                "parentNodeId": "<uuid:6>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "p3",
+                "type": "operation"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:6>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "p3",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:6>",
+                "nodeId": "<uuid:6>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "p3",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "p3",
+          "toolName": "ptc"
+        },
+        "parentId": "<entry:10>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:12>",
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
+              "arguments": {
+                "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch again.txt\" });"
+              },
+              "id": "p4",
+              "name": "ptc",
+              "type": "toolCall"
+            }
+          ],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "stopReason": "toolUse",
+          "timestamp": "<epoch-ms>",
+          "usage": {
+            "cacheRead": 40,
+            "cacheWrite": 0,
+            "input": 100,
+            "output": 10,
+            "totalTokens": 150
+          }
+        },
+        "parentId": "<entry:11>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "customType": "ptc.operation",
+        "data": {
+          "args": {
+            "command": "git push --force nowhere 2>/dev/null; touch again.txt"
+          },
+          "content": [
+            {
+              "text": "[exit 0]",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "exitCode": 0,
+            "truncated": false
+          },
+          "isError": false,
+          "parentToolCallId": "p4",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "<uuid:9>:op1",
+          "toolName": "bash"
+        },
+        "id": "<entry:13>",
+        "parentId": "<entry:12>",
+        "timestamp": "<epoch-ms>",
+        "type": "custom"
+      },
+      {
+        "id": "<entry:14>",
+        "message": {
+          "content": [
+            {
+              "text": "{\"text\":\"[exit 0]\",\"output\":\"\",\"exitCode\":0,\"timedOut\":false,\"aborted\":false,\"truncated\":false}",
+              "type": "text"
+            }
+          ],
+          "details": {
+            "activeMs": "<ms>",
+            "consoleTruncated": false,
+            "executionId": "<uuid:9>",
+            "manifest": [
+              "bash"
+            ],
+            "operations": [
+              {
+                "capability": "bash",
+                "delivered": true,
+                "durationMs": "<ms>",
+                "operationId": "<uuid:9>:op1",
+                "outcome": "completed"
+              }
+            ],
+            "status": "completed",
+            "summary": {
+              "cancelled": 0,
+              "completed": 1,
+              "failed": 0,
+              "notStarted": 0,
+              "running": 0,
+              "total": 1,
+              "unknown": 0
+            },
+            "trace": [
+              {
+                "createdAt": "<time>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
+                "sequence": 0,
+                "status": "running",
+                "turnId": "p4",
+                "type": "execution"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
+                "parentNodeId": "<uuid:9>:root",
+                "sequence": 1,
+                "status": "running",
+                "turnId": "p4",
+                "type": "operation"
+              },
+              {
+                "capability": "bash",
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
+                "outcome": "completed",
+                "parentNodeId": "<uuid:9>:root",
+                "sequence": 2,
+                "status": "completed",
+                "turnId": "p4",
+                "type": "operation"
+              },
+              {
+                "createdAt": "<time>",
+                "durationMs": "<ms>",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
+                "sequence": 3,
+                "status": "completed",
+                "turnId": "p4",
+                "type": "execution"
+              }
+            ],
+            "truncated": false,
+            "waitedMs": "<ms>"
+          },
+          "isError": false,
+          "role": "toolResult",
+          "timestamp": "<epoch-ms>",
+          "toolCallId": "p4",
+          "toolName": "ptc"
+        },
+        "parentId": "<entry:13>",
+        "timestamp": "<epoch-ms>",
+        "type": "message"
+      },
+      {
+        "id": "<entry:15>",
+        "message": {
+          "api": "openai-completions",
+          "completedAt": "<epoch-ms>",
+          "content": [
+            {
               "text": "Done.",
               "type": "text"
             }
@@ -1935,7 +3907,7 @@ expression: r.into_value()
             "totalTokens": 150
           }
         },
-        "parentId": "<entry:8>",
+        "parentId": "<entry:14>",
         "timestamp": "<epoch-ms>",
         "type": "message"
       }

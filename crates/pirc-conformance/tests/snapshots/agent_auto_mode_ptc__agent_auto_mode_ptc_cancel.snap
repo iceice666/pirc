@@ -192,10 +192,11 @@ expression: r.into_value()
         "type": "tool_execution_start"
       },
       {
+        "allowAgain": true,
         "id": "<uuid:3>",
         "message": "Command (bash, in <tmp>/workspace):\n\ngit push --force nowhere 2>/dev/null; touch cancelled.txt\n\nReason: force-pushes or deletes remote refs, rewriting shared history",
         "method": "confirm",
-        "title": "Auto mode: allow a potentially dangerous action?",
+        "title": "Auto mode: allow sending this out?",
         "toolCallId": "<uuid:1>:op2",
         "type": "extension_ui_request"
       },

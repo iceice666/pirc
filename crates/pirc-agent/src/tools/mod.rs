@@ -125,6 +125,9 @@ pub struct ToolContext {
     pub ui: Rc<dyn Ui>,
     /// Whether a human can answer dialogs.
     pub has_ui: bool,
+    /// The session's approval mode (the browser asks before an action on
+    /// another site, plans/rewrite/07-red-lines.md).
+    pub approval_mode: crate::auto_mode::ApprovalMode,
     pub env: Vec<(String, String)>,
     /// Call right before modifying `file` (an absolute path from
     /// `guard.resolve(…, write)`); `Err` when another session writes there.
