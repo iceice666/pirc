@@ -27,7 +27,7 @@ Scope, ownership, the linked-workspaces-first fallback (`Searched`), the `everyw
 - **PostgreSQL + pgvector.** It would replace the whole synchronous rusqlite store (`db.rs`, `schema.sql`, migrations, node store), the backup/restore procedure, `secure_delete` behavior and the NixOS module, all for a corpus of a few thousand notes. `tsvector` does not segment CJK without `pg_bigm` or zhparser either. It also breaks the "two native executables" deployment.
 - **sqlite-vec now.** The project is still pre-v1. Its own tracker has recent cosine ±Inf ranking, delete and musl build issues (asg017/sqlite-vec #324, #301, #314). Registering it requires `unsafe { sqlite3_auto_extension(..) }` under the workspace's `unsafe_code = "forbid"`. Brute-force cosine in Rust is fast enough at this size. See "Revisit" below.
 - **FTS5's `trigram` tokenizer.** It cannot match two-character Chinese words, which are the common case.
-- **A bundled local embedding model.** It does not fit the gateway's 16 MiB size budget (`crates/size-budget.json`).
+- **A bundled local embedding model.** It does not fit the gateway's 32 MiB size budget (`crates/size-budget.json`).
 
 ## Phase 0: evaluation set (prerequisite)
 
