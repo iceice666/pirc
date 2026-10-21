@@ -79,7 +79,7 @@ receive validated `PIRC_MODE` JSON; `PIRC_WORKSPACE_KIND` is retired. See
 └── skills/         Agent Skills: <name>/SKILL.md (optional)
 ```
 
-A role (`roles/<name>.md`) is what subagents, teammates and delegations start in; agents pick a role, never a model. Built-in `general` is followed by node-wide `$PIRC_CONFIG_DIR/roles/`, then workspace `.pirc/roles/`; a later file replaces the entire earlier role with the same filename. Every front matter key is optional:
+A role (`roles/<name>.md`) is what subagents, teammates and the brain's workers start in; agents pick a role, never a model. Built-in `general` is followed by node-wide `$PIRC_CONFIG_DIR/roles/`, then workspace `.pirc/roles/`; a later file replaces the entire earlier role with the same filename. Every front matter key is optional:
 
 ```markdown
 ---

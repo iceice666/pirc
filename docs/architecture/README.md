@@ -8,7 +8,7 @@
 | [Observational memory](observational-memory.md)      | Session/workspace memory, extraction, storage, recall and validation                       |
 | [Prompt and Context contracts](prompt-context.md)    | Prompt sections, node-local snapshots and authorized relays                                |
 
-- [Assistant memory and delegation](assistant-memory.md): memory ownership, repository identity and delegation contracts.
+- [Assistant memory and workers](assistant-memory.md): memory ownership, repository identity and the brain's workers.
 - [PTC runtime contracts](ptc.md): discovery, per-operation authority, attachments and execution lifecycle.
 - [Security decisions and accepted limits](security-decisions.md): current trust boundaries and accepted risks.
 

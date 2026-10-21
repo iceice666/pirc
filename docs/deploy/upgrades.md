@@ -49,6 +49,20 @@ The brain wakes up on its own (plans/rewrite/05-self-wake.md). On first start
 schema 5. `PIRC_WAKES_PER_DAY` (default 24, `0` off) limits it. The routes are
 `/api/wakes` and `/api/wakes/:id`; the rooms' stream gains `wake_changed`.
 
+The brain calls workers (plans/rewrite/06-workers.md). On first start
+`pirc.sqlite` migrates to schema 6: `delegations.assistant_session_id` becomes
+`room_id` (old rows keep their value), delegations gain `face_id`, `thread_id`,
+`anchor_message_id`, `read_only`, `context_json`, `wake_id` and `note`, and the
+`thread_messages` table holds the threads. An older gateway refuses schema 6.
+Upgrade every node with the gateway: a node from before this change refuses a
+read-only worker's task (`approvalMode`) and answers only confirmations from a
+thread. Agents lose `delegate`, `delegation_status`, `memory_note` and
+`memory_search` (a mode file naming them in `tools` no longer loads), and the
+`delegation.*` gateway operations are gone. The routes are `/api/workers`,
+`/api/threads/:id`, `/api/threads/:id/messages` and `/api/threads/:id/answer`;
+the rooms' stream gains `thread_message` and `thread_message_updated`; a
+session's snapshot no longer carries `delegations`.
+
 ## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13

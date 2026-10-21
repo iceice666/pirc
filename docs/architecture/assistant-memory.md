@@ -1,4 +1,4 @@
-# Memory, repositories and delegation
+# Memory, repositories and workers
 
 This reference describes the current Rust contracts. For session compaction and local repository handoffs, see [observational memory](observational-memory.md); for prompt composition, see [prompt context](prompt-context.md). Configuration and user workflows are in [Gateway and node](../development/gateway-and-node.md). The design is [direction §2.3–2.4](direction.md), [plans/rewrite/03-memory.md](../../plans/rewrite/03-memory.md) and [04-open-loops.md](../../plans/rewrite/04-open-loops.md).
 
@@ -51,7 +51,7 @@ A wake's replies are shown to nobody: it says something in the room only with `s
 
 Wakes queue in the `wakes` table behind people: one starts only when no batch is ready and no turn runs. A batch that becomes ready while a wake runs stops it (`preempted`); it is put back once behind that turn (`attempt: 2`), and taken over again it ends `silent`; one that already spoke is `spoke`. At most `PIRC_WAKES_PER_DAY` (default 24) start per calendar day in `PIRC_TIMEZONE` (reset at local midnight; a preempted one does not count); past that, a due wake ends `quota` without starting. A loop's time whose wake ended `quota` or `failed` is still said ("Reminder: …"). A wake running at a restart ends `failed` (`interrupted`).
 
-"Nothing writes unasked": a wake only reads and remembers. Tools that act for people (plan 06's workers, plan 09's actions) are not in a wake's tool list at all; a worker a wake calls will be read-only.
+"Nothing writes unasked": a wake only reads and remembers. Tools that act for people (`stop_worker`, plan 09's actions) are not in a wake's tool list at all; a worker a wake calls works read-only (see [Workers](#workers)).
 
 `GET /api/wakes?status=pending|ended|all&room=&limit=` lists pending and running wakes (the next first) and/or ended ones (the latest first, `limit` 1–200, default 50), with `today: {used, limit}`. `DELETE /api/wakes/:id` cancels one that has not started (`409 wake_running` while it runs; an ended one is returned as it is); cancelling an anchor wake of an `autoClose` loop closes the loop. Every change is sent on the rooms' stream as `wake_changed {wake}`. Replies are `no-store`.
 
@@ -92,7 +92,7 @@ Only the user edits links through authenticated `GET`/`PUT /api/workspaces/:id/l
 
 Links are defaults and ordering, **not permissions**:
 
-- Delegation without a target uses the sole link; multiple links require an explicit choice.
+- A worker always names its workspace (the brain has no project; links order nothing for it yet).
 - Search without a workspace tries the live linked workspaces/repositories first, then everything if empty. `everywhere: true` skips that preference; results say which scope was searched.
 - Unlinked workspaces remain reachable.
 
@@ -100,23 +100,23 @@ Links are defaults and ordering, **not permissions**:
 
 Skills are configuration, not memory. `SKILL.md` directories load from `~/.agents/skills/`, then `$PIRC_CONFIG_DIR/skills/`, then `<workspace>/.pirc/skills/`, with later sources taking precedence. Repository skills belong to that workspace and are labelled untrusted repository content. Only their names, descriptions and paths are listed initially; the model reads a skill on demand or the user loads `/skill:<name>`. Loaded skill text is not new observer evidence. Skill directories are protected from agent writes and are not synced from the gateway.
 
-## Roles and delegation
+## Roles and workers
 
 The agent selects a named role, not a model or thinking level. Role files come from built-in `general`, node configuration, then workspace configuration; later files replace earlier roles wholesale, with source/override information exposed to the user. Invalid roles or model patterns with no catalog match fail rather than silently widening access. Model-pattern fallback is restricted to the expanded candidates and does not guarantee provider credentials or entitlement. See the [configuration reference](../development/gateway-and-node.md) and `crates/pirc-agent/src/roles.rs`.
 
-`delegate({workspace, task, title?, role?, quote?})` or `delegate({follows, task, quote?})` creates a gateway-owned task that starts at once. The target must be a directory workspace on an online node. Roles come from the node's registration catalog, refreshed on reconnect. A follow-up keeps its session's role and cannot select another.
+### Workers
 
-Agent schemas reject model/thinking overrides. The gateway creates or reuses the target session, applies the role, then delivers a custom `assistant-delegation` message. Delivery does not take the user's control lease. The role's model or the workspace default runs it.
+The brain calls workers ([plans/rewrite/06-workers.md](../../plans/rewrite/06-workers.md)): `call_worker({task, workspace?, title?, read_only?, follows?, role?, quote?, context?: {fact_ids, loop_ids}})`, `worker_status({id?, offset?})` and `stop_worker({id})`, gateway tools in `crates/pirc-gateway/src/brain/worker_tools.rs`. Its prompt lists the workspaces workers can go to (online or not, with their roles) and the workers not done yet. A worker starts at once, without anyone's approval; at most 4 run (2 of them called by a wake) and the rest wait their turn, as do those whose node is offline. The target is a directory workspace (there is no scratch workspace before plan 08); a follow-up (`follows`) goes to a worker that ended, keeps its session and role, and cannot select another.
 
-By default a dangerous command waits for the user in the delegated session; delegated sessions use the node's default approval mode. A `quote` the chat's agent found verbatim in the user's last three messages reaches the delegated run as `details.userRequests`, and its classifier reads those words (never the task) as user requests for that run only. The delegated session's confirmations are relayed to the chat and answered there without a lease ([security decisions](security-decisions.md#delegation-approval)).
+A worker gets no memory of the people. It is given the task; the facts and loops the brain names by id, packed as text with where each came from (`## Context from the assistant`); and, when a person asked for it, their own words: `quote` must be verbatim in one of their last three messages (checked like a preference's quote), which also says whom the worker works for, and reaches the worker's run as `details.userRequests` so its classifier reads those words (never the task) as their request. Otherwise it works for the turn's first speaker. Agent schemas reject model and thinking overrides; the role's model or the workspace default runs it. The gateway creates or reuses the session, applies the role (and `read-only` for a wake's worker), then delivers a custom `assistant-delegation` message without the user's control lease. Dangerous commands still wait for a person; those questions are shown in the worker's thread and answered there without a lease ([security decisions](security-decisions.md#workers-without-approval)).
 
-The gateway tracks running, waiting-input, completed and failed states. Results are redacted; update messages carry up to 4,000 characters, while `delegation_status` reads the stored result in 12,000-character chunks (stored results are capped). Results are gateway data, never new user instructions. The user may take control of the coding session; completed sessions are left in place. Delegated main sessions may produce workspace memory, but never global assistant memory.
+Every worker is visible: the room gets the host's message about it (its anchor, whose status updates in place) with a thread under it, where its tool calls, its team's records (teammates and subagents, one level down) and its questions show; people can say more to it there. When it ends the room gets its report (up to 2,000 characters) or why it failed, with a push. The brain hears of it at its next turn in that room as a `worker-report` custom message after what people said, with up to 4,000 characters of the result; `worker_status` reads the stored result in 12,000-character chunks (stored results are capped and redacted). Results are gateway data, never instructions: a fact the brain keeps from a report or `worker_status` has origin `tool:delegation`. People may take control of a worker's session in the engine; ended sessions are left in place. Workers may produce workspace memory, never the household's.
 
-Finished delegation records older than 90 days are pruned hourly unless a later delegation follows them. This does not imply deletion of their node sessions, mirrored workspace records or forgotten-memory tombstones.
+Finished worker records older than 90 days are pruned hourly unless a later worker follows them. This does not imply deletion of their node sessions, mirrored workspace records or forgotten-memory tombstones.
 
 ## Implementation and provenance
 
-Primary contracts live in `crates/pirc-agent/src/origins.rs`, `features/memory/serialize.rs`, `crates/pirc-gateway/src/brain/memory.rs`, `crates/pirc-gateway/src/memory/`, `memory_records.rs` (and `memory_records/{index,person}.rs`), `delegations.rs`, `project_links.rs`, `crates/pirc-node/src/{repo,memory_mirror}.rs` and `crates/pirc-protocol/src/repo.rs`. Protocol versions and limits are defined in current Rust code; the old assistant plan's startup flags and protocol numbers are not current contracts.
+Primary contracts live in `crates/pirc-agent/src/origins.rs`, `features/memory/serialize.rs`, `crates/pirc-gateway/src/brain/memory.rs`, `crates/pirc-gateway/src/memory/`, `memory_records.rs` (and `memory_records/{index,person}.rs`), `delegations.rs`, `threads.rs`, `brain/worker_tools.rs`, `project_links.rs`, `crates/pirc-node/src/{repo,memory_mirror}.rs` and `crates/pirc-protocol/src/repo.rs`. Protocol versions and limits are defined in current Rust code; the old assistant plan's startup flags and protocol numbers are not current contracts.
 
 The original design/decision record is retrievable without a working-tree archive:
 

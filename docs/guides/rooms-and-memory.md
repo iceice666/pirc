@@ -1,4 +1,4 @@
-# Rooms, memory and open loops
+# Rooms, memory, open loops and workers
 
 [User guides](README.md) · [Assistant memory reference](../architecture/assistant-memory.md)
 
@@ -65,3 +65,17 @@ change when it speaks up.
   loop's time is still said, as "Reminder: …", without pirc thinking about it.
 
 Settings → Wakes lists what is coming and how recent wakes went.
+
+## Workers
+
+Ask pirc for work in one of your repositories ("run the tests in pirc") and it calls a
+worker: a coding agent with its own session in that workspace. It does not ask first. The
+room shows **I asked a worker to: …** with its status (**Working**, **Asking you**,
+**Done**) and a **Thread** where you can follow what the worker does, its helpers
+(indented), and answer its questions; a line in the room tells you when it asks
+something. Say something in the thread to steer it, or to give a finished worker more to
+do; **Stop** ends it. When it ends, pirc says in the room how it went, with a
+notification. At most four work at once; the others wait their turn, and a worker whose
+computer is offline waits for it. Only the person a worker works for (whose words called
+it) can answer, steer or stop it. Workers pirc calls while awake only look, never change
+anything. Each worker's session is also in the engine.
