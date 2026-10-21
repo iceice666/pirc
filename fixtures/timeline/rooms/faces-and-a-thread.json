@@ -1,0 +1,607 @@
+{
+  "description": "The PM face answers in its own room, calls a worker whose thread is open beside the room, and the host speaks in #general meanwhile. Covers presence (brain_presence, face_presence), thread messages (the open thread's, another thread's ignored), a renamed face, loops and wakes changing, another device reading #general, and a room the list does not know yet. The asking user is me@example.com.",
+  "user": "me@example.com",
+  "rooms": [
+    {
+      "id": "room_slime",
+      "name": "SlimeOS",
+      "kind": "topic",
+      "createdAt": 2,
+      "archivedAt": null,
+      "lastActivityAt": 20,
+      "sourceScope": null,
+      "movedToRoomId": null,
+      "movedFromRoomId": null,
+      "lastSeq": 1,
+      "readSeq": 1,
+      "unread": 0,
+      "waiting": false,
+      "waitingSince": null
+    },
+    {
+      "id": "general",
+      "name": "general",
+      "kind": "general",
+      "createdAt": 1,
+      "archivedAt": null,
+      "lastActivityAt": 10,
+      "sourceScope": null,
+      "movedToRoomId": null,
+      "movedFromRoomId": null,
+      "lastSeq": 1,
+      "readSeq": 1,
+      "unread": 0,
+      "waiting": false,
+      "waitingSince": null
+    }
+  ],
+  "open": "room_slime",
+  "messages": [
+    {
+      "id": "msg_1",
+      "roomId": "room_slime",
+      "seq": 1,
+      "speaker": "user",
+      "user": "me@example.com",
+      "kind": "text",
+      "body": {
+        "text": "@PM CI 怎麼又紅了"
+      },
+      "threadId": null,
+      "createdAt": 20,
+      "editedAt": null,
+      "pinnedAt": null
+    }
+  ],
+  "faces": [
+    {
+      "id": "host",
+      "name": "pirc",
+      "bio": "",
+      "tone": "",
+      "avatar": null,
+      "color": null,
+      "roleMd": "",
+      "territory": {
+        "rooms": ["general"],
+        "workspaces": [],
+        "sources": []
+      },
+      "isHost": true,
+      "createdAt": 1,
+      "archivedAt": null,
+      "hiddenAt": null
+    },
+    {
+      "id": "face_pm",
+      "name": "PM",
+      "bio": "",
+      "tone": "",
+      "avatar": null,
+      "color": null,
+      "roleMd": "",
+      "territory": {
+        "rooms": ["room_slime"],
+        "workspaces": ["work:slimeos"],
+        "sources": []
+      },
+      "isHost": false,
+      "createdAt": 1,
+      "archivedAt": null,
+      "hiddenAt": null
+    }
+  ],
+  "thread": "thr_1",
+  "threadMessages": [],
+  "events": [
+    {
+      "type": "brain_presence",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 0,
+      "timestamp": 21,
+      "data": {
+        "face": "face_pm",
+        "state": "thinking",
+        "since": 21
+      }
+    },
+    {
+      "type": "face_presence",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 0,
+      "timestamp": 21,
+      "data": {
+        "faceId": "face_pm",
+        "state": "thinking",
+        "roomId": "room_slime",
+        "since": 21
+      }
+    },
+    {
+      "type": "room_message",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 1,
+      "timestamp": 22,
+      "data": {
+        "message": {
+          "id": "msg_2",
+          "roomId": "room_slime",
+          "seq": 2,
+          "speaker": "face:face_pm",
+          "user": null,
+          "kind": "text",
+          "body": {
+            "text": "我叫個工人看看。"
+          },
+          "threadId": null,
+          "createdAt": 22,
+          "editedAt": null,
+          "pinnedAt": null
+        }
+      }
+    },
+    {
+      "type": "room_message",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 2,
+      "timestamp": 23,
+      "data": {
+        "message": {
+          "id": "msg_3",
+          "roomId": "room_slime",
+          "seq": 3,
+          "speaker": "face:face_pm",
+          "user": null,
+          "kind": "text",
+          "body": {
+            "text": "Fix lint",
+            "worker": {
+              "delegationId": "dlg_1",
+              "threadId": "thr_1",
+              "status": "running",
+              "title": "Fix lint",
+              "workspace": "slimeos",
+              "workers": 1,
+              "readOnly": false,
+              "note": null
+            }
+          },
+          "threadId": "thr_1",
+          "createdAt": 23,
+          "editedAt": null,
+          "pinnedAt": null
+        }
+      }
+    },
+    {
+      "type": "thread_message",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 3,
+      "timestamp": 23,
+      "data": {
+        "threadId": "thr_1",
+        "message": {
+          "id": "tm_1",
+          "threadId": "thr_1",
+          "seq": 1,
+          "speaker": "face:face_pm",
+          "user": null,
+          "kind": "line",
+          "body": {
+            "text": "Started in slimeos",
+            "event": "started",
+            "delegationId": "dlg_1"
+          },
+          "depth": 0,
+          "createdAt": 23,
+          "updatedAt": null
+        }
+      }
+    },
+    {
+      "type": "thread_message",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 4,
+      "timestamp": 24,
+      "data": {
+        "threadId": "thr_1",
+        "message": {
+          "id": "tm_2",
+          "threadId": "thr_1",
+          "seq": 2,
+          "speaker": "worker:s1",
+          "user": null,
+          "kind": "tool",
+          "body": {
+            "tool": "bash",
+            "summary": "bun run lint"
+          },
+          "depth": 0,
+          "createdAt": 24,
+          "updatedAt": null
+        }
+      }
+    },
+    {
+      "type": "thread_message_updated",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 5,
+      "timestamp": 25,
+      "data": {
+        "threadId": "thr_1",
+        "message": {
+          "id": "tm_2",
+          "threadId": "thr_1",
+          "seq": 2,
+          "speaker": "worker:s1",
+          "user": null,
+          "kind": "tool",
+          "body": {
+            "tool": "bash",
+            "summary": "bun run lint (3 errors)"
+          },
+          "depth": 0,
+          "createdAt": 24,
+          "updatedAt": 25
+        }
+      }
+    },
+    {
+      "type": "thread_message",
+      "roomId": "general",
+      "epoch": 9,
+      "sequence": 6,
+      "timestamp": 25,
+      "data": {
+        "threadId": "thr_2",
+        "message": {
+          "id": "tm_9",
+          "threadId": "thr_2",
+          "seq": 1,
+          "speaker": "worker:s2",
+          "user": null,
+          "kind": "text",
+          "body": {
+            "text": "elsewhere"
+          },
+          "depth": 0,
+          "createdAt": 25,
+          "updatedAt": null
+        }
+      }
+    },
+    {
+      "type": "face_presence",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 0,
+      "timestamp": 25,
+      "data": {
+        "faceId": "face_pm",
+        "state": "working",
+        "roomId": "room_slime",
+        "line": "Fix lint",
+        "since": 25
+      }
+    },
+    {
+      "type": "brain_presence",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 0,
+      "timestamp": 26,
+      "data": {
+        "face": "face_pm",
+        "state": "idle",
+        "since": 26
+      }
+    },
+    {
+      "type": "room_message_updated",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 7,
+      "timestamp": 27,
+      "data": {
+        "message": {
+          "id": "msg_3",
+          "roomId": "room_slime",
+          "seq": 3,
+          "speaker": "face:face_pm",
+          "user": null,
+          "kind": "text",
+          "body": {
+            "text": "Fix lint",
+            "worker": {
+              "delegationId": "dlg_1",
+              "threadId": "thr_1",
+              "status": "completed",
+              "title": "Fix lint",
+              "workspace": "slimeos",
+              "workers": 1,
+              "readOnly": false,
+              "note": null
+            }
+          },
+          "threadId": "thr_1",
+          "createdAt": 23,
+          "editedAt": null,
+          "pinnedAt": null
+        }
+      }
+    },
+    {
+      "type": "loop_changed",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 8,
+      "timestamp": 27,
+      "data": {
+        "loop": {
+          "id": "loop_1"
+        }
+      }
+    },
+    {
+      "type": "wake_changed",
+      "roomId": "room_slime",
+      "epoch": 9,
+      "sequence": 9,
+      "timestamp": 27,
+      "data": {
+        "wake": {
+          "id": "wake_1"
+        }
+      }
+    },
+    {
+      "type": "face_changed",
+      "roomId": "general",
+      "epoch": 9,
+      "sequence": 10,
+      "timestamp": 28,
+      "data": {
+        "face": {
+          "id": "face_pm",
+          "name": "SlimeOS PM",
+          "bio": "",
+          "tone": "",
+          "avatar": null,
+          "color": null,
+          "roleMd": "",
+          "territory": {
+            "rooms": ["room_slime"],
+            "workspaces": ["work:slimeos"],
+            "sources": []
+          },
+          "isHost": false,
+          "createdAt": 1,
+          "archivedAt": null,
+          "hiddenAt": null
+        }
+      }
+    },
+    {
+      "type": "room_message",
+      "roomId": "general",
+      "epoch": 9,
+      "sequence": 11,
+      "timestamp": 29,
+      "data": {
+        "message": {
+          "id": "msg_4",
+          "roomId": "general",
+          "seq": 2,
+          "speaker": "face:host",
+          "user": null,
+          "kind": "text",
+          "body": {
+            "text": "早安"
+          },
+          "threadId": null,
+          "createdAt": 29,
+          "editedAt": null,
+          "pinnedAt": null
+        }
+      }
+    },
+    {
+      "type": "room_read",
+      "roomId": "general",
+      "epoch": 9,
+      "sequence": 12,
+      "timestamp": 30,
+      "data": {
+        "user": "me@example.com",
+        "readSeq": 2
+      }
+    },
+    {
+      "type": "room_read",
+      "roomId": "general",
+      "epoch": 9,
+      "sequence": 13,
+      "timestamp": 30,
+      "data": {
+        "user": "other@example.com",
+        "readSeq": 2
+      }
+    },
+    {
+      "type": "room_changed",
+      "roomId": "room_new",
+      "epoch": 9,
+      "sequence": 14,
+      "timestamp": 31,
+      "data": {
+        "room": {
+          "id": "room_new",
+          "name": "new",
+          "kind": "topic",
+          "createdAt": 31,
+          "archivedAt": null,
+          "lastActivityAt": 31,
+          "sourceScope": null,
+          "movedToRoomId": null,
+          "movedFromRoomId": null,
+          "lastSeq": 0
+        }
+      }
+    }
+  ],
+  "typingAt": 30,
+  "expected": {
+    "afterLoad": {
+      "rooms": [
+        {
+          "id": "room_slime",
+          "lastSeq": 1,
+          "unread": 0,
+          "movedFromRoomId": null
+        },
+        {
+          "id": "general",
+          "lastSeq": 1,
+          "unread": 0,
+          "movedFromRoomId": null
+        }
+      ],
+      "open": "room_slime",
+      "messages": [
+        {
+          "seq": 1,
+          "speaker": "user",
+          "user": "me@example.com",
+          "kind": "text",
+          "text": "@PM CI 怎麼又紅了",
+          "pinned": false
+        }
+      ],
+      "pinned": [],
+      "typing": [],
+      "thinking": {},
+      "faces": [
+        {
+          "id": "host",
+          "name": "pirc"
+        },
+        {
+          "id": "face_pm",
+          "name": "PM"
+        }
+      ],
+      "facePresence": {},
+      "thread": "thr_1",
+      "threadMessages": [],
+      "loopsRevision": 0,
+      "wakesRevision": 0
+    },
+    "afterEvents": {
+      "rooms": [
+        {
+          "id": "room_slime",
+          "lastSeq": 3,
+          "unread": 2,
+          "movedFromRoomId": null
+        },
+        {
+          "id": "general",
+          "lastSeq": 2,
+          "unread": 1,
+          "movedFromRoomId": null
+        }
+      ],
+      "open": "room_slime",
+      "messages": [
+        {
+          "seq": 1,
+          "speaker": "user",
+          "user": "me@example.com",
+          "kind": "text",
+          "text": "@PM CI 怎麼又紅了",
+          "pinned": false
+        },
+        {
+          "seq": 2,
+          "speaker": "face:face_pm",
+          "user": null,
+          "kind": "text",
+          "text": "我叫個工人看看。",
+          "pinned": false
+        },
+        {
+          "seq": 3,
+          "speaker": "face:face_pm",
+          "user": null,
+          "kind": "text",
+          "text": "Fix lint",
+          "pinned": false
+        }
+      ],
+      "pinned": [],
+      "typing": [],
+      "thinking": {
+        "room_slime": []
+      },
+      "faces": [
+        {
+          "id": "host",
+          "name": "pirc"
+        },
+        {
+          "id": "face_pm",
+          "name": "SlimeOS PM"
+        }
+      ],
+      "facePresence": {
+        "face_pm": {
+          "state": "working",
+          "roomId": "room_slime",
+          "line": "Fix lint"
+        }
+      },
+      "thread": "thr_1",
+      "threadMessages": [
+        {
+          "seq": 1,
+          "speaker": "face:face_pm",
+          "kind": "line",
+          "text": "Started in slimeos"
+        },
+        {
+          "seq": 2,
+          "speaker": "worker:s1",
+          "kind": "tool",
+          "text": "bun run lint (3 errors)"
+        }
+      ],
+      "loopsRevision": 1,
+      "wakesRevision": 1
+    },
+    "effects": [
+      {
+        "type": "mark_read"
+      },
+      {
+        "type": "mark_read"
+      },
+      {
+        "type": "refresh_thread_workers"
+      },
+      {
+        "type": "refresh_room",
+        "roomId": "general"
+      },
+      {
+        "type": "refresh_list"
+      }
+    ]
+  }
+}

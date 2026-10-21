@@ -6,6 +6,18 @@
 import { facesApi, type Face, type FaceInput, type FacePresence as FaceState } from './faces';
 import { ApiError } from './http';
 import {
+  appendMessage,
+  byActivity,
+  facePresenceFrom,
+  mergeRoom,
+  reduceRoomEvent,
+  replaceMessage,
+  thinkingFrom,
+  upsertFace,
+  type RoomEffect,
+  type RoomsView,
+} from './room-events';
+import {
   connectRooms,
   roomsApi,
   type FacePresence,
@@ -22,9 +34,6 @@ import { workersApi, type ThreadMessage, type Worker } from './workers';
 export const ROOM_PAGE = 50;
 /** At most one typing signal this often (the gateway's signals last 6 s). */
 export const TYPING_THROTTLE_MS = 3_000;
-
-const byActivity = (a: RoomView, b: RoomView) =>
-  b.lastActivityAt - a.lastActivityAt || b.createdAt - a.createdAt;
 
 export class RoomsState {
   rooms = $state<RoomView[]>([]);
@@ -241,15 +250,11 @@ export class RoomsState {
   }
 
   setFacePresence(presence: FaceState[]) {
-    const next: Record<string, FaceState> = {};
-    for (const item of presence) next[item.faceId] = item;
-    this.facePresence = next;
+    this.facePresence = facePresenceFrom(presence);
   }
 
   #upsertFace(face: Face) {
-    this.faces = this.faces.some((item) => item.id === face.id)
-      ? this.faces.map((item) => (item.id === face.id ? face : item))
-      : [...this.faces, face];
+    this.faces = upsertFace(this.faces, face);
   }
 
   /** Which faces think in a room right now. */
@@ -259,92 +264,72 @@ export class RoomsState {
 
   /** Where faces think as the stream (re)starts. */
   setPresence(presence: FacePresence[]) {
-    const thinking: Record<string, string[]> = {};
-    for (const { face, roomId } of presence) thinking[roomId] = [...(thinking[roomId] ?? []), face];
-    this.thinking = thinking;
+    this.thinking = thinkingFrom(presence);
   }
 
-  /** One event of the stream. */
+  /** What the stream changes, as the reducer sees it. */
+  get view(): RoomsView {
+    return {
+      user: this.user,
+      currentId: this.currentId,
+      rooms: this.rooms,
+      detached: this.#detached,
+      messages: this.messages,
+      pinned: this.pinned,
+      typing: this.typing,
+      thinking: this.thinking,
+      faces: this.faces,
+      facePresence: this.facePresence,
+      loopsRevision: this.loopsRevision,
+      wakesRevision: this.wakesRevision,
+      threadId: this.threadId,
+      threadMessages: this.threadMessages,
+    };
+  }
+
+  /** One event of the stream (`room-events.ts`), then what it asks for. */
   apply(event: RoomEvent) {
-    switch (event.type) {
-      case 'brain_presence': {
-        const { face, state } = event.data;
-        const others = this.thinkingIn(event.roomId).filter((item) => item !== face);
-        this.thinking = {
-          ...this.thinking,
-          [event.roomId]: state === 'thinking' ? [...others, face] : others,
-        };
+    const { patch, effects } = reduceRoomEvent(this.view, event);
+    this.#patch(patch);
+    for (const effect of effects) this.#run(effect);
+  }
+
+  #patch(patch: Partial<RoomsView>) {
+    if (patch.user !== undefined) this.user = patch.user;
+    if (patch.currentId !== undefined) this.currentId = patch.currentId;
+    if (patch.rooms) this.rooms = patch.rooms;
+    if ('detached' in patch) this.#detached = patch.detached;
+    if (patch.messages) this.messages = patch.messages;
+    if (patch.pinned) this.pinned = patch.pinned;
+    if (patch.typing) this.typing = patch.typing;
+    if (patch.thinking) this.thinking = patch.thinking;
+    if (patch.faces) this.faces = patch.faces;
+    if (patch.facePresence) this.facePresence = patch.facePresence;
+    if (patch.loopsRevision !== undefined) this.loopsRevision = patch.loopsRevision;
+    if (patch.wakesRevision !== undefined) this.wakesRevision = patch.wakesRevision;
+    if ('threadId' in patch) this.threadId = patch.threadId;
+    if (patch.threadMessages) this.threadMessages = patch.threadMessages;
+  }
+
+  #run(effect: RoomEffect) {
+    switch (effect.type) {
+      case 'refresh_list':
+        void this.#refreshList();
         break;
-      }
-      case 'room_message': {
-        const message: RoomMessage = event.data.message;
-        if (message.roomId === this.currentId) this.#append(message);
-        const mine = message.speaker === 'user' && message.user === this.user;
-        if (!mine) this.#bump(message.roomId, message.seq);
-        if (message.speaker === 'user' && message.user)
-          this.#stopTyping(message.roomId, message.user);
-        if (message.roomId === this.currentId) void this.markRead();
+      case 'refresh_room':
+        void this.#refreshRoom(effect.roomId);
         break;
-      }
-      case 'room_message_updated':
-        this.#replace(event.data.message);
+      case 'mark_read':
+        void this.markRead();
         break;
-      case 'loop_changed':
-        this.loopsRevision++;
+      case 'refresh_thread_workers':
+        void this.#refreshThreadWorkers();
         break;
-      case 'face_changed':
-        this.#upsertFace(event.data.face);
-        break;
-      case 'face_presence': {
-        const presence: FaceState = event.data;
-        this.facePresence = { ...this.facePresence, [presence.faceId]: presence };
-        break;
-      }
-      case 'wake_changed':
-        this.wakesRevision++;
-        break;
-      case 'thread_message':
-      case 'thread_message_updated': {
-        if (event.data.threadId !== this.threadId) break;
-        const message: ThreadMessage = event.data.message;
-        const others = this.threadMessages.filter((item) => item.id !== message.id);
-        this.threadMessages = [...others, message].sort((a, b) => a.seq - b.seq);
-        // A worker started or ended: its list says so.
-        if (message.kind === 'line') void this.#refreshThreadWorkers();
-        break;
-      }
-      case 'room_changed': {
-        const room: Room = event.data.room;
-        if (!this.rooms.some((item) => item.id === room.id) && !room.archivedAt)
-          void this.#refreshList();
-        else this.#merge(room);
-        break;
-      }
-      case 'room_read': {
-        if (event.data.user !== this.user) break;
-        const room = this.rooms.find((item) => item.id === event.roomId);
-        // Another device read it: the count is the gateway's to say.
-        if (room && event.data.readSeq > room.readSeq) void this.#refreshRoom(room.id);
-        break;
-      }
-      case 'room_typing': {
-        const { user, expiresAt } = event.data;
-        this.typing = {
-          ...this.typing,
-          [event.roomId]: { ...this.typing[event.roomId], [user]: expiresAt },
-        };
-        break;
-      }
     }
   }
 
   #append(message: RoomMessage) {
-    if (this.messages.some((item) => item.id === message.id)) return;
-    const last = this.messages[this.messages.length - 1];
-    this.messages =
-      !last || message.seq > last.seq
-        ? [...this.messages, message]
-        : [...this.messages, message].sort((a, b) => a.seq - b.seq);
+    this.messages = appendMessage(this.messages, message);
   }
 
   /** Open a thread beside the room: its messages, live from then on. */
@@ -390,36 +375,12 @@ export class RoomsState {
   }
 
   #replace(message: RoomMessage) {
-    this.messages = this.messages.map((item) => (item.id === message.id ? message : item));
-    const pinned = this.pinned.filter((item) => item.id !== message.id);
-    this.pinned =
-      message.pinnedAt && message.roomId === this.currentId ? [...pinned, message] : pinned;
-  }
-
-  /** Someone else's new message: unread until read. A replayed one counts once. */
-  #bump(roomId: string, seq: number) {
-    this.rooms = this.rooms.map((room) =>
-      room.id === roomId && seq > room.readSeq && seq > room.lastSeq
-        ? { ...room, unread: room.unread + 1, lastSeq: seq }
-        : room,
-    );
-  }
-
-  #stopTyping(roomId: string, user: string) {
-    const { [user]: _gone, ...rest } = this.typing[roomId] ?? {};
-    this.typing = { ...this.typing, [roomId]: rest };
+    this.#patch(replaceMessage(this.view, message));
   }
 
   /** A room's shared fields changed: keep the user's own (reads, unread). */
   #merge(room: Room | RoomView) {
-    const keep = (old: RoomView): RoomView => ({ ...old, ...room });
-    if (this.rooms.some((item) => item.id === room.id)) {
-      this.rooms = this.rooms
-        .map((item) => (item.id === room.id ? keep(item) : item))
-        .filter((item) => !item.archivedAt || item.id === this.currentId)
-        .sort(byActivity);
-    }
-    if (this.#detached?.id === room.id) this.#detached = keep(this.#detached);
+    this.#patch(mergeRoom(this.view, room));
   }
 
   async #refreshRoom(roomId: string) {

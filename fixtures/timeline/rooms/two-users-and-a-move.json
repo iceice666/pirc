@@ -282,7 +282,14 @@
         }
       ],
       "pinned": [],
-      "typing": []
+      "typing": [],
+      "thinking": {},
+      "faces": [],
+      "facePresence": {},
+      "thread": null,
+      "threadMessages": [],
+      "loopsRevision": 0,
+      "wakesRevision": 0
     },
     "afterEvents": {
       "rooms": [
@@ -327,7 +334,25 @@
         }
       ],
       "pinned": ["msg_2"],
-      "typing": []
-    }
+      "typing": [],
+      "thinking": {},
+      "faces": [],
+      "facePresence": {},
+      "thread": null,
+      "threadMessages": [],
+      "loopsRevision": 0,
+      "wakesRevision": 0
+    },
+    "effects": [
+      {
+        "type": "mark_read"
+      },
+      {
+        "type": "mark_read"
+      },
+      {
+        "type": "mark_read"
+      }
+    ]
   }
 }
