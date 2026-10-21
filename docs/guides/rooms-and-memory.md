@@ -9,7 +9,22 @@ between conversations. The reference has the exact rules and routes.
 
 `#general` always exists; make a room per topic if you like. Messages you send close
 together are answered as one batch a few seconds after you stop typing (Cmd+Enter sends
-at once). Every device sees the same rooms.
+at once). Every device sees the same rooms. What you were writing stays in each room until
+you send it, even across reloads.
+
+Archived rooms are folded under the room list. The bell in a room's header mutes it on
+this device only: no notifications from it here, while your phone keeps its own choice
+(Settings → Notifications lists the muted rooms). On a phone the bottom tabs lead to the
+rooms, the members, the engine and Settings.
+
+The **Engine** (`/engine`, at the foot of the room list) is what runs behind the rooms:
+the computers pirc works on and what each can do, the brain's recent turns per room, open
+loops, wakes, memory and sources, and every worker's session, read-only. Lines in a room
+link to the matching page with **Details**; a thread links to its worker's session.
+
+Keyboard: arrows move through the room list; Tab into the messages and use the arrows (Home,
+End) to read them one by one; Alt+Up/Down opens the previous or next room; Escape closes a
+thread or the member list.
 
 ## Faces
 
@@ -44,8 +59,8 @@ writes one:
 - **Facts** ("uses TLP for power management") are kept without asking and brought up when
   what you say touches them.
 
-**Don't keep** on the line, or "forget that", forgets it for real. Settings → Memory lists
-both.
+**Don't keep** on the line, or "forget that", forgets it for real. The engine's Memory page
+lists both; your preferences are also on pirc's own page.
 
 ## Open loops
 
@@ -66,7 +81,7 @@ can come back to them.
   mentioned for the longest go into memory as facts ("This sat untouched for a while, so I
   put it in memory: …"); **Not done yet** brings one back.
 
-Settings → Open loops lists what is open, with the next time of each, and what closed
+The engine's Open loops page lists what is open, with the next time of each, and what closed
 recently. A loop pirc opened from something it read (a search, later an email) is marked as
 such, and never counts as your word for anything it does.
 
@@ -88,7 +103,7 @@ change when it speaks up.
 - It wakes at most 24 times a day (your gateway may set another number). Past that, a
   loop's time is still said, as "Reminder: …", without pirc thinking about it.
 
-Settings → Wakes lists what is coming and how recent wakes went.
+The engine's Wakes page lists what is coming and how recent wakes went.
 
 ## Sources
 
@@ -126,8 +141,9 @@ worker: a coding agent with its own session in that workspace. It does not ask f
 room shows **I asked a worker to: …** with its status (**Working**, **Asking you**,
 **Done**) and a **Thread** where you can follow what the worker does, its helpers
 (indented), and answer its questions; a line in the room tells you when it asks
-something. Say something in the thread to steer it, or to give a finished worker more to
-do; **Stop** ends it. When it ends, pirc says in the room how it went, with a
+something. While it works, its message shows what it is doing right now, and a question
+still waiting for you stays above the composer. Say something in the thread to steer it, or
+to give a finished worker more to do; **Stop** ends it. When it ends, pirc says in the room how it went, with a
 notification. At most four work at once; the others wait their turn, and a worker whose
 computer is offline waits for it. Only the person a worker works for (whose words called
 it) can answer, steer or stop it. Workers pirc calls while awake only look, never change
