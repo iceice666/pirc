@@ -37,9 +37,15 @@ An empty list is fine: the web's **Add workspace** (`POST /api/workspaces` with 
 
 Workspaces are an execution allowlist: sessions only ever run in a listed directory. Several sessions may share a workspace; concurrent writes are serialized by the node's write broker (a second session gets `workspace_busy` until the first run ends).
 
-## Accepted modes
+## Accepted modes and scratch
 
-By default a node accepts only the `directory` mode. Set comma-separated `PIRC_MODES` to accept additional gateway-defined ids, for example `directory,review`. Workspace creation follows the mode's workdir capability. An explicitly empty list accepts no modes.
+By default a node accepts the `directory` and `scratch` modes. Set comma-separated `PIRC_MODES` to accept others the gateway defines, for example `directory,scratch,review`. Workspace creation follows the mode's workdir capability. An explicitly empty list accepts no modes.
+
+A node that accepts `scratch` has a scratch workspace of its own, `scratch` in `$PIRC_STATE_DIR/scratch` (unless `PIRC_WORKSPACES` names one): each session there works in a fresh directory, `scratch/sessions/<session>/`, without a repository. The brain sends work that belongs to no repository there, on a machine that fits. A session's directory that nothing changed in for `PIRC_SCRATCH_RETENTION_DAYS` days (default `7`; `0` keeps them) is removed, unless its agent runs; the node looks every hour. Keep nothing there you need later: workers report what matters.
+
+## Capabilities
+
+A node tells the gateway what its machine can do when it registers (plans/rewrite/08-nodes.md): OS and architecture, its GPUs (vendor and count, from `/sys/class/drm` and `/dev/nvidia*` on Linux; Apple silicon's on macOS), whether agents get a browser and the panel terminals are on, its sandbox backend and status, whether its sandbox reaches the GPU (not yet: plans/sandbox-gpu.md), and `PIRC_MAX_RUNNING` (default `4`), how many agents it means to run at once. The gateway counts its running agents from its activity; a machine with fewer than that is idle when the brain chooses one (`node_hint`, a GPU, idle first). These are facts to choose by, not permissions, and `PIRC_MAX_RUNNING` is not enforced. Settings → Nodes in the web shows them.
 
 ## Agent process
 
@@ -55,6 +61,8 @@ The node executable supports the internal `agent` and `ptc-guest` commands and r
 | `PIRC_AGENT_ENV_ALLOW`                            | —                 | Comma-separated variables of the node's environment passed on to agents anyway (e.g. `GITHUB_TOKEN`). |
 | `PIRC_LEASE_TTL_MS`                               | `30000`           | Control-lease heartbeat timeout.                                                                      |
 | `PIRC_INTERACTION_TTL_MS`                         | `3600000`         | How long an unanswered question stays pending.                                                        |
+| `PIRC_MAX_RUNNING`                                | `4`               | Agents this machine means to run at once, for choosing a machine (advisory).                          |
+| `PIRC_SCRATCH_RETENTION_DAYS`                     | `7`               | Days a scratch session's directory is kept after its last change; `0` keeps them.                     |
 | `PIRC_RPC_MAX_LINE_BYTES`                         | `1048576`         | Node ↔ agent JSONL line limit.                                                                       |
 | `PIRC_SHUTDOWN_GRACE_MS`                          | `5000`            | Time agents get to exit on `SIGTERM` before being killed.                                             |
 | `PIRC_EVENT_BUFFER_SIZE`, `PIRC_UPLOAD_MAX_BYTES` | as gateway        | Keep them equal to the gateway's.                                                                     |

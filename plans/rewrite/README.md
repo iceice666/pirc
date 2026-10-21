@@ -42,17 +42,17 @@
 
 ## 實作前待決（掛在各 plan 的「實作前待決」節，動工前定）
 
-| Plan | 問題                                                                                                |
-| ---- | --------------------------------------------------------------------------------------------------- |
-| 02   | ~~頭腦用 direct tools 還是受限 script runtime~~ 已定（2026-10-20 spike）：direct tools              |
-| 03   | 偏好確認由頭腦判斷還是程式碼判斷                                                                    |
-| 04   | ~~「事情本身是時間」用 `auto_close` flag 還是頭腦判斷~~ 已定（2026-10-20）：anchor 上的 flag        |
-| 07   | ~~「Allow again in this session」for `unsandboxed_bash` / `Outbound`~~ 已定（2026-10-21）：做       |
-| 08   | research profile 是 mode 檔還是 task policy（existing-plans §7.1）；`scratch.md` 升格預設檔（§7.3） |
-| 09   | 第一版來源範圍（email IMAP + CalDAV + 研究瀏覽器；OAuth 第二步）                                    |
-| 10   | 「話題」怎麼判（頭腦標 `topic` vs OM 聚類）                                                         |
-| 11   | 討論串是側欄還是第二欄；引擎蓋留不留 session rename                                                 |
-| 13   | 版本號 1.0.0 vs 0.10.0                                                                              |
+| Plan | 問題                                                                                          |
+| ---- | --------------------------------------------------------------------------------------------- |
+| 02   | ~~頭腦用 direct tools 還是受限 script runtime~~ 已定（2026-10-20 spike）：direct tools        |
+| 03   | 偏好確認由頭腦判斷還是程式碼判斷                                                              |
+| 04   | ~~「事情本身是時間」用 `auto_close` flag 還是頭腦判斷~~ 已定（2026-10-20）：anchor 上的 flag  |
+| 07   | ~~「Allow again in this session」for `unsandboxed_bash` / `Outbound`~~ 已定（2026-10-21）：做 |
+| 08   | ~~research profile；`scratch.md` 升格~~ 已定（2026-10-21）：task policy；升格                 |
+| 09   | 第一版來源範圍（email IMAP + CalDAV + 研究瀏覽器；OAuth 第二步）                              |
+| 10   | 「話題」怎麼判（頭腦標 `topic` vs OM 聚類）                                                   |
+| 11   | 討論串是側欄還是第二欄；引擎蓋留不留 session rename                                           |
+| 13   | 版本號 1.0.0 vs 0.10.0                                                                        |
 
 ## 每份 plan 的格式
 

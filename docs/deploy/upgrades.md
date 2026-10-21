@@ -63,6 +63,28 @@ thread. Agents lose `delegate`, `delegation_status`, `memory_note` and
 the rooms' stream gains `thread_message` and `thread_message_updated`; a
 session's snapshot no longer carries `delegations`.
 
+Workers ask before two things only (plans/rewrite/07-red-lines.md): pushing,
+publishing or otherwise sending something out, and leaving the sandbox. The
+`features.autoMode.deny` list now refuses without asking, as do destroying or
+reconfiguring the machine; destructive git inside the workspace runs. A
+worker's confirmation is asked in its room too. Upgrade every node with the
+gateway.
+
+Nodes say what they can do (plans/rewrite/08-nodes.md): the node protocol
+moves to 15 (registration drops `role` and gains `capabilities`); upgrade the
+gateway and every node together, an older node is refused. `/api/nodes` lists
+`capabilities` and `load` instead of `role`. The node database migrates to
+schema 2002 (`sessions.read_only`: a wake's worker is read-only in its sandbox
+too, for good); an older node refuses it. Nodes accept `directory` and
+`scratch` by default and get a scratch workspace in `$PIRC_STATE_DIR/scratch`
+(`PIRC_SCRATCH_RETENTION_DAYS`, `PIRC_MAX_RUNNING`). A new gateway seeds
+`modes/scratch.md`; an existing modes directory is never changed, so add it
+yourself (`pirc-gateway modes --print-defaults` prints it) and reload, or the
+scratch workspaces stay unavailable. The sandbox no longer has protected paths
+for chat projects' instructions, nor follows `SOUL.md` / `CHAT.md` links out
+of a node's config directory to protect their targets (the brain's prompts live
+on the gateway; the config directory itself stays read-only to agents).
+
 ## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13

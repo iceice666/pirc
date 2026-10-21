@@ -3,8 +3,17 @@
 [Guides](README.md) · [Implementation plan](../../plans/modes.md)
 
 Workspace modes are gateway-managed combinations of capabilities, prompt
-sections, features and tools. Work (`directory`) is a default file, not a
-reserved built-in kind. Gateway and nodes must run **protocol 13 together**.
+sections, features and tools. Work (`directory`) and Scratch (`scratch`) are
+default files, not reserved built-in kinds. Gateway and nodes must run
+**protocol 15 together**.
+
+A mode says how a worker's session works (its directory, prompt, features and
+tools), never what it may do without asking: approvals are auto mode's, and
+read-only is a task's, not a mode's. A wake's research worker is read-only
+because the gateway delivers its task with `approvalMode: "read-only"`, which
+the node enforces in the agent and its sandbox (decided 2026-10-21,
+[plans/rewrite/08-nodes.md](../../plans/rewrite/08-nodes.md)); no mode file can
+widen that.
 
 Web and Android list workspaces under **Work**, grouped by device; a
 workspace whose mode is missing from the catalog appears under Work, read-only.
@@ -20,7 +29,7 @@ repository's `.pirc/`. The gateway distributes validated definitions to nodes
 after registration and on SIGHUP. Agents receive a validated JSON snapshot in
 `PIRC_MODE` and never read mode files.
 
-At first startup the gateway creates `directory.md` only when
+At first startup the gateway creates `directory.md` and `scratch.md` only when
 the modes directory is absent, with private `0600` files. An existing directory,
 including an empty or read-only Nix-provided one, is authoritative. Edits and
 deletions are never undone. Invalid files are skipped individually; diagnostics
@@ -103,37 +112,25 @@ per-session workspace.
 For a review mode, copy `directory.md` to `review.md`, change its display
 metadata and set `tools: [read, find, grep, ls]`. Add `review` to the node's
 `PIRC_MODES`, reload the gateway and create a workspace with mode `review` and
-a repository path. Select **read-only** approval separately through the
-node/session settings; a mode never silently changes approvals.
+a repository path. A mode never changes approvals: the node's
+`features.autoMode.mode` and a task's read-only delivery do.
 
-### Example: scratch workspaces on a coding node
+### Scratch
 
-A scratch mode gives each session its own empty node-managed directory on a
-coding node, without a repository. It suits one-off delegated jobs, such as a
-throwaway image-generation run on a GPU machine. Save as `scratch.md`:
+`scratch.md` is a default file (decided 2026-10-21, plans/rewrite/08-nodes.md):
+each session gets its own empty directory, without a repository, and workers
+can be sent there (`delegate_target`). Nodes accept `scratch` by default and
+each has a scratch workspace of its own in `$PIRC_STATE_DIR/scratch`; the brain
+sends work that belongs to no repository there (`call_worker` with
+`workspace: "scratch"` or none), on a machine that fits (`node_hint`, a GPU,
+idle first). A session's directory is removed some days after nothing in it
+changed (`PIRC_SCRATCH_RETENTION_DAYS`, [Node](../deploy/node.md)). In the web it
+appears under Work with Files but no Git or terminal. Files a scratch session
+needs across sessions (for example large models) belong in a directory listed
+in the node's sandbox `allowedPaths`.
 
-```yaml
----
-label: Scratch
-description: One-off sessions in a fresh directory, without a repository.
-ui:
-  noun: session
-workdir: per-session
-prompt: [base, agents:global, body]
-delegate_target: true
----
-Work in this session's own directory. Nothing here is a repository; keep
-results in the directory or report them.
-```
-
-Add `scratch` to the coding node's `PIRC_MODES` (for example
-`PIRC_MODES=directory,scratch`), restart it, reload the gateway, then add a
-workspace in mode **Scratch** on that device. It appears under Work with Files
-but no Git or terminal. Because `delegate_target` is set, delegations can target
-it; when delegation targets differ in mode, the assistant's workspace list
-names each target's mode and description. Files a scratch session needs to
-keep across sessions (for example large models) belong in a directory listed in
-the node's sandbox `allowedPaths`.
+An existing modes directory never gains the file on its own: add it from
+`pirc-gateway modes --print-defaults` and reload the gateway.
 
 ### Fields
 

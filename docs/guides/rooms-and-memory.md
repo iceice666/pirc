@@ -79,3 +79,13 @@ notification. At most four work at once; the others wait their turn, and a worke
 computer is offline waits for it. Only the person a worker works for (whose words called
 it) can answer, steer or stop it. Workers pirc calls while awake only look, never change
 anything. Each worker's session is also in the engine.
+
+A worker asks before two things only: sending something out (a push, a pull request, a
+publish, a message) and leaving its sandbox. Those questions appear in the room itself
+with **Yes**, **Allow again this session** and **No**, and a notification; you can also
+just answer in words ("yes, push it"), and pirc passes your answer on. Everything else it
+does and reports; some things (deleting outside its workspace, credentials, system
+settings) it is never allowed. Work that belongs to no repository goes to a fresh scratch
+directory on a computer that suits it ("on the mac", one with a GPU, an idle one). To
+just look at a repository ("what does the README say?") pirc reads it itself, without a
+worker.
