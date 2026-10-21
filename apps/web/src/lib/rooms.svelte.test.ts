@@ -108,7 +108,10 @@ beforeEach(() => {
       calls.push({ method, url: url.pathname + url.search, body });
       const [, , , id, rest] = url.pathname.split('/');
       if (url.pathname === '/api/rooms')
-        return reply({ rooms: listed.filter((item) => !item.archivedAt), user: ME });
+        return reply({
+          rooms: url.search === '?archived=1' ? listed : listed.filter((item) => !item.archivedAt),
+          user: ME,
+        });
       if (url.pathname === '/api/faces' && method === 'GET')
         return reply({
           faces,
@@ -289,6 +292,42 @@ describe('rooms page', () => {
     expect(target.querySelector('[aria-label="2 unread"]')).not.toBeNull();
     expect(target.querySelector('article .name')!.textContent).toBe(ME);
     expect(target.querySelector('a[href="/engine"]')).not.toBeNull();
+  });
+
+  it('folds the archived rooms under the list', async () => {
+    listed.push(room('old', { archivedAt: 5 }));
+    await show();
+    const names = () => [...target.querySelectorAll('.room-name')].map((item) => item.textContent);
+    expect(names()).not.toContain('old');
+    const fold = target.querySelector<HTMLButtonElement>('button.fold')!;
+    expect(fold.getAttribute('aria-expanded')).toBe('false');
+    fold.click();
+    await vi.waitFor(() =>
+      expect(target.querySelector('[aria-label="Archived rooms"]')?.textContent).toContain('old'),
+    );
+    expect(fold.getAttribute('aria-expanded')).toBe('true');
+    expect(calls.some((call) => call.url === '/api/rooms?archived=1')).toBe(true);
+  });
+
+  it('has bottom tabs for the phone: the rooms and what waits there, members, the engine', async () => {
+    listed[1] = room('topic', { waiting: true });
+    await show();
+    const tabs = target.querySelector('nav[aria-label="Sections"]')!;
+    expect(tabs.querySelector('a[href="/engine"]')?.textContent).toContain('Engine');
+    expect(tabs.querySelector('[aria-label="1 waiting for you"]')).not.toBeNull();
+    const tab = (label: string) =>
+      [...tabs.querySelectorAll<HTMLButtonElement>('button.tab')].find((item) =>
+        item.textContent?.includes(label),
+      )!;
+    tab('Members').click();
+    flushSync();
+    expect(target.querySelector('.members')).not.toBeNull();
+    expect(tab('Members').getAttribute('aria-current')).toBe('page');
+    tab('Rooms').click();
+    flushSync();
+    expect(target.querySelector('.rooms')!.classList.contains('list-open')).toBe(true);
+    expect(target.querySelector('.members')).toBeNull();
+    expect(tab('Rooms').getAttribute('aria-current')).toBe('page');
   });
 
   it('sends on Enter, sends now on Cmd+Enter, and leaves Enter to an IME', async () => {

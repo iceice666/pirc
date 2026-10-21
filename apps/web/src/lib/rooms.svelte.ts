@@ -37,6 +37,9 @@ export const TYPING_THROTTLE_MS = 3_000;
 
 export class RoomsState {
   rooms = $state<RoomView[]>([]);
+  /** Archived rooms, once the list's fold is opened. */
+  archived = $state<RoomView[]>([]);
+  #archivedLoaded = false;
   /** The asking user (the gateway says who): their own messages are read. */
   user = $state('');
   currentId = $state<string>('general');
@@ -186,9 +189,17 @@ export class RoomsState {
     await this.open(room.id);
   }
 
+  /** The archived rooms, newest activity first. */
+  async loadArchived() {
+    const { rooms } = await roomsApi.list(true);
+    this.archived = rooms.filter((room) => room.archivedAt).sort(byActivity);
+    this.#archivedLoaded = true;
+  }
+
   async setArchived(roomId: string, archived: boolean) {
     const { room } = await roomsApi.update(roomId, { archived });
     await this.#refreshList();
+    if (this.#archivedLoaded) await this.loadArchived();
     if (roomId === this.currentId)
       this.#detached = this.rooms.some((item) => item.id === roomId) ? undefined : room;
   }

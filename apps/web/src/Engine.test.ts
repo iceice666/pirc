@@ -181,6 +181,17 @@ describe('Engine header', () => {
   });
 });
 
+describe('Engine phone tabs', () => {
+  it('lead back to the rooms, and show what waits in the engine', async () => {
+    await start(2, 400);
+    const tabs = target.querySelector('nav[aria-label="Sections"]')!;
+    expect(tabs.querySelector('a[href="/"]')?.textContent).toContain('Rooms');
+    const labels = [...tabs.querySelectorAll('button.tab')].map((item) => item.textContent);
+    expect(labels).toEqual(['Engine', 'Settings']);
+    expect(tabs.querySelector('[aria-current="page"]')?.textContent).toContain('Engine');
+  });
+});
+
 describe('Engine workspace page', () => {
   it('opens from the breadcrumb, lists the sessions and goes back to one', async () => {
     await start(2);

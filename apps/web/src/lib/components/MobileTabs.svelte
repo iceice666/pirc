@@ -1,38 +1,59 @@
-<script lang="ts">
-  import { Settings, SquareTerminal } from '@lucide/svelte';
-  import { engine } from '../engine.svelte';
+<script lang="ts" module>
+  import { House, Settings, SquareTerminal, Users } from '@lucide/svelte';
 
-  type Tab = 'work' | 'settings';
+  export type MobileTabId = 'rooms' | 'members' | 'engine' | 'settings';
 
-  interface Props {
-    current: Tab;
-    onpick: (tab: Tab) => void;
+  export interface MobileTab {
+    id: MobileTabId;
+    /** A tab of another page is a link to it. */
+    href?: string;
+    /** Things waiting for you there. */
+    badge?: number;
   }
 
-  let { current, onpick }: Props = $props();
-  const waiting = $derived(engine.inbox.length);
+  const LABELS: Record<MobileTabId, string> = {
+    rooms: 'Rooms',
+    members: 'Members',
+    engine: 'Engine',
+    settings: 'Settings',
+  };
+  const ICONS = { rooms: House, members: Users, engine: SquareTerminal, settings: Settings };
 </script>
 
-<!-- The phone's bottom navigation (desktop has the sidebar's footer instead). -->
+<script lang="ts">
+  interface Props {
+    tabs: MobileTab[];
+    current: MobileTabId;
+    onpick: (tab: MobileTabId) => void;
+  }
+
+  let { tabs, current, onpick }: Props = $props();
+</script>
+
+<!-- The phone's bottom navigation (desktop has the room list's footer instead). -->
 <nav class="mobile-tabs" aria-label="Sections">
-  <button
-    type="button"
-    aria-current={current === 'work' ? 'page' : undefined}
-    class:chosen={current === 'work'}
-    onclick={() => onpick('work')}
-    ><span class="icon-wrap"
-      ><SquareTerminal size={20} />{#if waiting}<span
-          class="tab-badge"
-          aria-label="{waiting} waiting for you">{waiting}</span
-        >{/if}</span
-    ><span>Work</span></button
-  >
-  <button
-    type="button"
-    aria-current={current === 'settings' ? 'page' : undefined}
-    class:chosen={current === 'settings'}
-    onclick={() => onpick('settings')}><Settings size={20} /><span>Settings</span></button
-  >
+  {#each tabs as tab (tab.id)}
+    {@const Icon = ICONS[tab.id]}
+    {#snippet inner()}
+      <span class="icon-wrap"
+        ><Icon size={20} />{#if tab.badge}<span
+            class="tab-badge"
+            aria-label="{tab.badge} waiting for you">{tab.badge}</span
+          >{/if}</span
+      ><span>{LABELS[tab.id]}</span>
+    {/snippet}
+    {#if tab.href}
+      <a class="tab" href={tab.href}>{@render inner()}</a>
+    {:else}
+      <button
+        type="button"
+        class="tab"
+        aria-current={current === tab.id ? 'page' : undefined}
+        class:chosen={current === tab.id}
+        onclick={() => onpick(tab.id)}>{@render inner()}</button
+      >
+    {/if}
+  {/each}
 </nav>
 
 <style>
@@ -52,7 +73,7 @@
       border-top: 1px solid var(--line);
       background: var(--bg);
     }
-    .mobile-tabs button {
+    .mobile-tabs .tab {
       flex: 1;
       display: flex;
       flex-direction: column;
@@ -64,8 +85,9 @@
       color: var(--muted);
       background: transparent;
       font-size: 11px;
+      text-decoration: none;
     }
-    .mobile-tabs button.chosen {
+    .mobile-tabs .tab.chosen {
       color: var(--ink);
       font-weight: 500;
     }

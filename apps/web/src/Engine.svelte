@@ -24,7 +24,7 @@
   import { isRelayed } from './lib/types';
   import JobsMenu from './lib/components/JobsMenu.svelte';
   import Message from './lib/components/Message.svelte';
-  import MobileTabs from './lib/components/MobileTabs.svelte';
+  import MobileTabs, { type MobileTab, type MobileTabId } from './lib/components/MobileTabs.svelte';
   import RunCard from './lib/components/RunCard.svelte';
   import WorkspacePage from './lib/components/WorkspacePage.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
@@ -101,8 +101,13 @@
   const origin = $derived(
     engine.sessions.find((item) => item.id === sessionState?.session.id)?.origin,
   );
-  const mobileTab = $derived(settingsOpen ? 'settings' : 'work');
-  function pickTab(tab: 'work' | 'settings') {
+  const mobileTab = $derived<MobileTabId>(settingsOpen ? 'settings' : 'engine');
+  const mobileTabs = $derived<MobileTab[]>([
+    { id: 'rooms', href: '/' },
+    { id: 'engine', badge: engine.inbox.length },
+    { id: 'settings' },
+  ]);
+  function pickTab(tab: MobileTabId) {
     if (tab === 'settings') {
       settingsTab = 'general';
       settingsOpen = true;
@@ -673,7 +678,7 @@
 />
 <NewSessionDialog bind:open={newSessionOpen} />
 {#if sidebarOpen || onPage}
-  <MobileTabs current={mobileTab} onpick={pickTab} />
+  <MobileTabs tabs={mobileTabs} current={mobileTab} onpick={pickTab} />
 {/if}
 
 {#if updateRegistration}

@@ -2,8 +2,8 @@
   import {
     Archive,
     ArchiveRestore,
+    ChevronRight,
     Hash,
-    Menu,
     Paperclip,
     Plus,
     SendHorizontal,
@@ -21,8 +21,10 @@
     type Face,
   } from '../../faces';
   import { registerPwa } from '../../pwa';
+  import type { RoomView } from '../../rooms';
   import { rooms as defaultRooms, roomFromUrl, type RoomsState } from '../../rooms.svelte';
   import { loadRoomDraft, saveRoomDraft } from '../../storage';
+  import MobileTabs, { type MobileTab, type MobileTabId } from '../MobileTabs.svelte';
   import { trackViewportHeight } from '../../viewport';
   import FacePanel from './FacePanel.svelte';
   import MembersPanel from './MembersPanel.svelte';
@@ -76,6 +78,31 @@
   function openFace(id: string) {
     faceId = id;
     side = 'face';
+  }
+
+  /** The archived rooms, folded under the list. */
+  let showArchived = $state(false);
+  async function toggleArchived() {
+    showArchived = !showArchived;
+    if (showArchived) await rooms.loadArchived().catch(() => {});
+  }
+
+  /** Phone: the bottom tabs. A room is inside the Rooms tab. */
+  const mobileTab = $derived<MobileTabId>(!listOpen && sideOpen ? 'members' : 'rooms');
+  const mobileTabs = $derived<MobileTab[]>([
+    { id: 'rooms', badge: rooms.rooms.filter((room) => room.waiting).length },
+    { id: 'members' },
+    { id: 'engine', href: '/engine' },
+  ]);
+  function pickTab(tab: MobileTabId) {
+    if (tab === 'members') {
+      listOpen = false;
+      rooms.closeThread();
+      side = 'members';
+    } else if (tab === 'rooms') {
+      side = null;
+      listOpen = true;
+    }
   }
 
   /** `@name` completion in the composer. */
@@ -241,6 +268,24 @@
   }
 </script>
 
+{#snippet roomRow(room: RoomView)}
+  <button
+    type="button"
+    class="room"
+    class:chosen={room.id === rooms.currentId}
+    class:unread={room.unread > 0}
+    aria-current={room.id === rooms.currentId ? 'page' : undefined}
+    onclick={() => open(room.id)}
+  >
+    <Hash size={16} />
+    <span class="room-name">{room.name}</span>
+    {#if room.waiting}<span class="waiting" title="Waiting for your reply">Your turn</span>{/if}
+    {#if room.unread > 0 && room.id !== rooms.currentId}
+      <span class="dot" aria-label="{room.unread} unread"></span>
+    {/if}
+  </button>
+{/snippet}
+
 <div class="rooms" class:list-open={listOpen} class:thread-open={!!rooms.threadId || sideOpen}>
   <nav class="list" aria-label="Rooms">
     <div class="list-head">
@@ -265,39 +310,30 @@
         />
       </form>
     {/if}
-    <ul>
-      {#each rooms.rooms as room (room.id)}
-        <li>
-          <button
-            type="button"
-            class="room"
-            class:chosen={room.id === rooms.currentId}
-            class:unread={room.unread > 0}
-            aria-current={room.id === rooms.currentId ? 'page' : undefined}
-            onclick={() => open(room.id)}
-          >
-            <Hash size={16} />
-            <span class="room-name">{room.name}</span>
-            {#if room.waiting}<span class="waiting" title="Waiting for your reply">Your turn</span
-              >{/if}
-            {#if room.unread > 0 && room.id !== rooms.currentId}
-              <span class="dot" aria-label="{room.unread} unread"></span>
-            {/if}
-          </button>
-        </li>
-      {/each}
-    </ul>
+    <div class="list-scroll">
+      <ul>
+        {#each rooms.rooms as room (room.id)}
+          <li>{@render roomRow(room)}</li>
+        {/each}
+      </ul>
+      <button type="button" class="fold" aria-expanded={showArchived} onclick={toggleArchived}
+        ><ChevronRight size={14} />Archived</button
+      >
+      {#if showArchived}
+        <ul class="archived" aria-label="Archived rooms">
+          {#each rooms.archived as room (room.id)}
+            <li>{@render roomRow(room)}</li>
+          {:else}
+            <li class="none">No archived rooms.</li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
     <a class="engine" href="/engine"><SquareTerminal size={16} />Engine</a>
   </nav>
 
   <main class="room-view" aria-label={current ? `#${current.name}` : 'Room'}>
     <header class="room-head">
-      <button
-        type="button"
-        class="icon phone-only"
-        aria-label="Rooms"
-        onclick={() => (listOpen = true)}><Menu size={18} /></button
-      >
       <h1><Hash size={18} />{current?.name ?? rooms.currentId}</h1>
       {#if current?.archivedAt}<span class="badge">Archived</span>{/if}
       <span class="spacer"></span>
@@ -503,6 +539,7 @@
       onclose={() => rooms.closeThread()}
     />
   {/if}
+  <MobileTabs tabs={mobileTabs} current={mobileTab} onpick={pickTab} />
 </div>
 
 <style>
@@ -551,10 +588,42 @@
     padding: 0;
     list-style: none;
   }
-  .list ul {
+  .list-scroll {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
-    padding: 0 8px;
+    padding: 0 8px 8px;
+  }
+  .fold {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    margin-top: 12px;
+    padding: 4px 8px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .fold :global(svg) {
+    transition: transform 0.15s;
+  }
+  .fold[aria-expanded='true'] :global(svg) {
+    transform: rotate(90deg);
+  }
+  .archived .room {
+    opacity: 0.7;
+  }
+  .none {
+    padding: 4px 8px;
+    color: var(--muted);
+    font-size: 13px;
   }
   .room {
     width: 100%;
@@ -799,19 +868,18 @@
     color: var(--ink);
     font: inherit;
   }
-  .phone-only {
-    display: none;
-  }
   @media (max-width: 650px) {
     .rooms,
     .rooms.thread-open {
       grid-template-columns: 1fr;
+      /* Room for the bottom tabs. */
+      padding-bottom: calc(56px + env(safe-area-inset-bottom));
     }
     .thread-open :global(.thread),
     .thread-open :global(.members),
     .thread-open :global(.face-page) {
       position: fixed;
-      inset: 0;
+      inset: 0 0 calc(56px + env(safe-area-inset-bottom));
       z-index: 25;
     }
     .list {
@@ -819,12 +887,13 @@
     }
     .list-open .list {
       position: fixed;
-      inset: 0;
+      inset: 0 0 calc(56px + env(safe-area-inset-bottom));
       z-index: 30;
       display: flex;
     }
-    .phone-only {
-      display: grid;
+    /* The tabs lead there. */
+    .engine {
+      display: none;
     }
   }
 </style>
