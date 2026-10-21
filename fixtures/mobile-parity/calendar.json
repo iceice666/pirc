@@ -1,0 +1,35 @@
+{
+  "description": "Shared calendar projection: Taipei 2026-10-21, overlapping personal events, a trigger with no duration, and a multi-day all-day event. Synthetic data only.",
+  "timezone": "Asia/Taipei",
+  "from": 1792425600000,
+  "to": 1793030400000,
+  "limited": false,
+  "nextCursor": null,
+  "historyLimited": true,
+  "items": [
+    {
+      "id": "event:review:2026-10-21T09:00", "type": "event", "sourceId": "review",
+      "title": "Design review", "startAt": 1792544400000, "endAt": 1792549800000,
+      "allDay": false, "timezone": "Asia/Taipei", "revision": 1, "originalStart": "2026-10-21T09:00",
+      "event": {"id":"review","revision":1,"title":"Design review","description":"Review the calendar together.","location":"Studio","start":"2026-10-21T09:00","end":"2026-10-21T10:30","timezone":"Asia/Taipei","allDay":false,"recurrence":null,"reminderMinutes":[15],"createdAt":0,"updatedAt":0}
+    },
+    {
+      "id": "event:planning:2026-10-21T09:30", "type": "event", "sourceId": "planning",
+      "title": "Weekly planning", "startAt": 1792546200000, "endAt": 1792551600000,
+      "allDay": false, "timezone": "Asia/Taipei", "revision": 1, "originalStart": "2026-10-21T09:30",
+      "event": {"id":"planning","revision":1,"title":"Weekly planning","description":"","location":"","start":"2026-10-21T09:30","end":"2026-10-21T11:00","timezone":"Asia/Taipei","allDay":false,"recurrence":{"frequency":"weekly","interval":1,"weekdays":[3]},"reminderMinutes":[],"createdAt":0,"updatedAt":0}
+    },
+    {
+      "id": "schedule:summary:1792551600000", "type": "schedule", "sourceId": "summary",
+      "title": "Daily summary", "startAt": 1792551600000, "endAt": 1792551600000,
+      "allDay": false, "timezone": "Asia/Taipei", "revision": 1, "originalStart": "1792551600000", "state": "planned",
+      "schedule": {"id":"summary","title":"Daily summary","prompt":"Summarize project updates.","workspaceId":"work:demo","cron":"0 11 * * *","runAt":null,"timezone":"Asia/Taipei","model":null,"thinking":null,"notify":"all","status":"active","nextRunAt":1792551600000,"createdBySession":null,"lastRun":null,"attention":0,"createdAt":0,"updatedAt":1,"workspace":{"id":"work:demo","name":"Project","kind":"directory","node":"work","online":true}}
+    },
+    {
+      "id": "event:trip:2026-10-20", "type": "event", "sourceId": "trip",
+      "title": "Team retreat", "startAt": 1792425600000, "endAt": 1792684800000,
+      "allDay": true, "startDate": "2026-10-20", "endDate": "2026-10-23", "timezone": "Asia/Taipei", "revision": 1, "originalStart": "2026-10-20",
+      "event": {"id":"trip","revision":1,"title":"Team retreat","description":"","location":"","start":"2026-10-20","end":"2026-10-23","timezone":"Asia/Taipei","allDay":true,"recurrence":null,"reminderMinutes":[],"createdAt":0,"updatedAt":0}
+    }
+  ]
+}

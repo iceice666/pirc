@@ -2,6 +2,11 @@
 
 [User guides](README.md) · [All documentation](../README.md)
 
+The Web/Android **Calendar** also shows personal events and month/week/day views;
+its **List** retains schedule management. See [Calendar](calendar.md) for event
+editing, recurrence and the separate Agent calendar permissions. The schedule
+execution and approval rules below continue to apply.
+
 The gateway keeps each user's schedules and starts every run in a new session of the schedule's workspace, delivered as a scheduled-task message (never as your words). Manage them in the web app (Settings → Schedules), on Android (More → Schedules), with `/cron`, or by asking an agent. In the web and Android schedule forms, you may choose a model and thinking level per schedule; otherwise the normal default applies. An agent can propose a schedule, a change or a deletion, which you approve in the chat (`/cron delete` asks too); it can pause and resume on its own, but cannot choose a model or thinking level.
 
 - **Nothing runs unasked.** A fire time the gateway slept through, or whose node was offline, becomes one _missed_ run that starts only when you allow it; a fire time while the previous run is still going is _skipped_. A run that waits for an answer (a dangerous command, a question) stays waiting until you open its session.

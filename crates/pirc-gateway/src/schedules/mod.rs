@@ -22,7 +22,7 @@
 //! released, in the same order.
 
 mod api;
-mod cron;
+pub(crate) mod cron;
 mod fields;
 mod ops;
 mod timer;
@@ -65,6 +65,82 @@ const OPEN_RUNS: &str = "('running','waiting_input')";
 /// `/api/schedules*`.
 pub fn routes() -> Router<AppState> {
     api::routes()
+}
+
+/// Read-only calendar projection. Forecasts never dispatch or advance a task.
+/// Only positively identified automatic runs share a forecast's identity.
+pub fn calendar_projection(
+    conn: &Connection,
+    user: &str,
+    from: i64,
+    to: i64,
+    now: i64,
+    after: Option<&(i64, String)>,
+    mut emit: impl FnMut(Value),
+) -> ApiResult<()> {
+    let mut statement = conn.prepare("SELECT * FROM schedules WHERE owner_user=? ORDER BY id")?;
+    let schedules = statement
+        .query_map([user], Schedule::from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for schedule in schedules {
+        let mut view = schedule.json();
+        if let Ok(workspace) = conn.get_workspace(&schedule.spec.workspace_id) {
+            view.insert("workspace".into(),json!({"id":workspace.id,"name":workspace.display_name,"kind":workspace.mode,"node":workspace.host_id}));
+        }
+        let mut recorded = std::collections::HashSet::new();
+        let mut runs=conn.prepare("SELECT * FROM schedule_runs WHERE schedule_id=? AND owner_user=? AND due_at>=? AND due_at<? ORDER BY due_at,id")?;
+        for result in runs.query_map(params![schedule.id, user, from, to], |r| {
+            Ok((Run::from_row(r)?, r.get::<_, Option<String>>("origin")?))
+        })? {
+            let (run, origin) = result?;
+            let id = if origin.as_deref() == Some("scheduled") {
+                recorded.insert(run.due_at);
+                format!("schedule:{}:{}", schedule.id, run.due_at)
+            } else {
+                format!("run:{}", run.id)
+            };
+            emit(
+                json!({"id":id,"type":"schedule","sourceId":schedule.id,"title":schedule.spec.title,
+                "startAt":run.due_at,"endAt":run.due_at,"allDay":false,"timezone":schedule.spec.timezone,
+                "originalStart":run.due_at.to_string(),"revision":schedule.updated_at,"state":run.status,
+                "schedule":view,"run":run.json(),"origin":origin}),
+            );
+        }
+        if schedule.status != "active" {
+            continue;
+        }
+        let mut last = from
+            .max(now)
+            .max(after.map_or(from, |v| v.0))
+            .saturating_sub(1);
+        let mut emitted = 0;
+        while let Some(at) = fire(&schedule.spec, last)? {
+            if at >= to {
+                break;
+            }
+            if at <= last {
+                return Err(ApiError::internal());
+            }
+            last = at;
+            if recorded.contains(&at) {
+                continue;
+            }
+            let id = format!("schedule:{}:{}", schedule.id, at);
+            if after.is_some_and(|after| (at, id.clone()) <= *after) {
+                continue;
+            }
+            emit(json!({"id":id,"type":"schedule","sourceId":schedule.id,
+                "title":schedule.spec.title,"startAt":at,"endAt":at,"allDay":false,"timezone":schedule.spec.timezone,
+                "originalStart":at.to_string(),"revision":schedule.updated_at,"state":"planned","schedule":view}));
+            emitted += 1;
+            // One more than a response page per source suffices to merge the
+            // next global page. The caller returns an explicit continuation.
+            if emitted > crate::calendar::PAGE_SIZE {
+                break;
+            }
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1542,6 +1618,12 @@ impl Ctx<'_> {
             }
             None => self.insert_run(schedule, due_at, "running", None, Some(now_ms()), None)?,
         };
+        if manual && existing_run_id.is_none() {
+            self.conn.execute(
+                "UPDATE schedule_runs SET origin='manual' WHERE id=?",
+                [&run.id],
+            )?;
+        }
         self.fx.hint(&schedule.owner_user);
         self.fx.0.push(Effect::Dispatch(Box::new((
             schedule.clone(),
@@ -1644,7 +1726,7 @@ impl Ctx<'_> {
     ) -> ApiResult<Run> {
         let id = self.new_id("schedule_runs", "r")?;
         self.conn.execute(
-            "INSERT INTO schedule_runs (id,schedule_id,owner_user,due_at,status,result,started_at,finished_at,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO schedule_runs (id,schedule_id,owner_user,due_at,status,result,started_at,finished_at,created_at,origin) VALUES (?,?,?,?,?,?,?,?,?,'scheduled')",
             params![
                 id,
                 schedule.id,

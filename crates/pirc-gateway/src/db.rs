@@ -24,9 +24,12 @@ use crate::util::{new_id, now_ms, safe_json};
 pub const SCHEMA_VERSION: i64 = 1006;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
-const SCHEMA: &str = include_str!("schema.sql");
+const SCHEMA: &str = concat!(
+    include_str!("schema.sql"),
+    include_str!("calendar/schema.sql")
+);
 /// Each migration takes a database from the version before it to its own;
-/// `schema.sql` is always the newest whole.
+/// [`SCHEMA`] assembles the newest whole schema, including calendar tables.
 const MIGRATIONS: &[(i64, &str)] = &[
     (
         // Repository identity by normalized `origin` (docs/architecture/assistant-memory.md).
@@ -80,6 +83,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
          UPDATE delegations SET dispatch='approved' WHERE dispatched_at IS NOT NULL OR status IN ('running','waiting_input','completed','failed');",
     ),
     (1006, "ALTER TABLE memory_mirrors ADD COLUMN digest TEXT;"),
+    (1007, include_str!("calendar/schema.sql")),
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.
@@ -749,6 +753,10 @@ fn finish_deletion(conn: &Connection, session_id: &str) -> ApiResult<()> {
     )?;
     conn.execute(
         "DELETE FROM schedule_proposals WHERE session_id=?",
+        [session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM calendar_proposals WHERE session_id=?",
         [session_id],
     )?;
     conn.execute(
@@ -1612,6 +1620,7 @@ mod tests {
             .expect("schema.sql changed: update this test");
         let end = links + SCHEMA[links..].find("\n);\n").unwrap() + "\n);\n".len();
         let first = format!("{}{}", &SCHEMA[..links], &SCHEMA[end..])
+            .replace(include_str!("calendar/schema.sql"), "")
             .replace(
                 ",\n  -- The repository's normalized origin (pirc_protocol::normalize_origin), as the node reports it.\n  repo TEXT\n",
                 "\n",

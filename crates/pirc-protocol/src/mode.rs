@@ -113,6 +113,7 @@ pub const FEATURE_NAMES: &[&str] = &[
     "browser",
     "webSearch",
     "schedules",
+    "calendar",
     "background",
     "agentTeam",
     "goal",
@@ -145,6 +146,7 @@ pub const TOOL_NAMES: &[&str] = &[
     "browser_tabs",
     "browser_type",
     "browser_wait_for",
+    "calendar",
     "create_goal",
     "delegate",
     "delegation_status",
@@ -557,6 +559,7 @@ mod tests {
             "body prompt section",
         );
         let mut mode = default_work();
+        mode.features_on.push("calendar".into());
         mode.body = "😀".repeat(4000);
         mode.tools = Some(Vec::new());
         mode.validate().unwrap();

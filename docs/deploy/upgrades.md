@@ -1,5 +1,16 @@
 # Upgrades
 
+## Unreleased: calendar, gateway schema 1006
+
+The calendar adds user-owned events, recurrence exceptions, independent agent
+grants, confirmation proposals and reminder delivery attempts. The Gateway
+automatically migrates schemas 1000–1005 to 1006; existing schedules and runs
+remain intact. New run records distinguish manual and automatic origins, while
+legacy origins remain unknown. Back up the Gateway database before upgrading:
+older Gateways refuse schema 1006. Node schemas/protocol are unchanged. See
+[Calendar](../guides/calendar.md) for behavior and limits. This local change has
+not been published as a release.
+
 ## 0.9.0 / 0.9.1: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13

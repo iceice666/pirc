@@ -45,6 +45,7 @@ prompts!(
     browser_tabs,
     browser_type,
     browser_wait_for,
+    calendar,
     create_goal,
     delegate,
     delegation_status,

@@ -3688,7 +3688,7 @@ mod tests {
 
     #[test]
     fn mode_tool_registry_matches_actual_registered_operation_names() {
-        use crate::features::{assistant, browser, sandbox, schedules, web_search};
+        use crate::features::{assistant, browser, calendar, sandbox, schedules, web_search};
         let dir = tempfile::tempdir().unwrap();
         let agent = mode_agent(
             dir.path(),
@@ -3704,6 +3704,7 @@ mod tests {
         names.extend(browser::registered_tool_names());
         names.extend(sandbox::registered_tool_names());
         names.extend(schedules::registered_tool_names());
+        names.extend(calendar::registered_tool_names());
         names.extend(web_search::registered_tool_names());
         names.extend(assistant::registered_tool_names(&agent));
         let declared = pirc_protocol::mode::TOOL_NAMES

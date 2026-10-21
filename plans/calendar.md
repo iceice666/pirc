@@ -2,12 +2,38 @@
 
 [Plans](README.md) · [Schedules](../docs/guides/schedules.md) · [Mobile follow-up](mobile.md)
 
-Status: design proposal, 2026-10-21. The user requested a plan before
-implementation, with Web and Flutter Android following the existing pirc style.
+Status: approved design; implementation in progress, 2026-10-21. The user approved
+the month/week/day prototype for Web and Flutter Android in the existing pirc style.
 The user explicitly chose to include ordinary personal events as well as agent
 schedules, and to include agent management with user confirmation and separate
-calendar access permissions. This document does not authorize implementation or
-remote publication.
+calendar access permissions. Implementation and local commits are authorized;
+remote publication is not.
+
+## Implementation record (2026-10-21)
+
+- [x] Approved month/week/day Web and native App design.
+- [x] Gateway schema 1006, owner-scoped CRUD, bounded/paginated projection,
+  daily/weekly/monthly/yearly recurrence, exceptions and atomic series splits.
+- [x] Revision conflicts, idempotent creation, actual/forecast run identity,
+  independent default-deny calendar grants and human-confirmed agent proposals.
+- [x] Gateway reminder attempts, occurrence deduplication and rescheduling,
+  shared confirmation expiry/handled events. Reuse `schedules_changed` for
+  calendar invalidation; no new hint subscription is needed.
+- [ ] Final Web and Flutter interface regression/visual review.
+- [ ] Physical Android background/reminder acceptance when a device is available.
+
+Frozen recurrence policy: skip missing month days/leap dates; DST gaps move
+forward and overlaps use the first instant. All-day dates remain calendar dates
+in the selected display zone. Changing a whole series' start/zone/recurrence
+resets its old exceptions; time-changing edits rearm affected reminders. After
+downtime, remind only for events not yet ended; skip older reminders without
+sending a backlog. A persisted delivery attempt is not remote delivery proof.
+
+Gateway tests cover authenticated Web and paired-device HTTP, migration from
+1000/1005, ownership, stale/duplicate approvals, revoked grants/expiry, recurrence
+splits, DST, dense pagination, reminder rescheduling and the shared Web/App
+fixture `fixtures/mobile-parity/calendar.json`. See
+[Calendar](../docs/guides/calendar.md) for API contracts and limits.
 
 ## Goal and scope
 

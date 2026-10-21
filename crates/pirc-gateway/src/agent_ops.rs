@@ -6,7 +6,7 @@
 //! another session.
 //!
 //! Each area parses and runs its own operations (`memory`, `delegations`,
-//! `schedules`, `web_search`); this module does the common checks in the TS
+//! `schedules`, `calendar`, `web_search`); this module does the common checks in the TS
 //! order: unknown session, foreign session, unknown op, invalid arguments,
 //! capability, then the op.
 
@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use crate::app::AppState;
 use crate::db::{Capability, Session, Store, Workspace};
 use crate::error::ApiError;
-use crate::{delegations, memory, schedules, web_search};
+use crate::{calendar, delegations, memory, schedules, web_search};
 
 /// Who is asking.
 pub struct OpContext {
@@ -37,6 +37,7 @@ enum Parsed {
     Memory(memory::Op),
     Delegation(delegations::Op),
     Schedule(schedules::Op),
+    Calendar(calendar::agent::Op),
     Web(web_search::Op),
     WorkspaceMirror(String),
     HistoryAuthority,
@@ -75,6 +76,9 @@ fn parse(op: &str, args: &Value) -> Option<Result<Parsed, ()>> {
     if let Some(parsed) = schedules::parse_op(op, args) {
         return Some(parsed.map(Parsed::Schedule));
     }
+    if let Some(parsed) = calendar::agent::parse_op(op, args) {
+        return Some(parsed.map(Parsed::Calendar));
+    }
     web_search::parse_op(op, args).map(|parsed| parsed.map(Parsed::Web))
 }
 
@@ -91,6 +95,17 @@ fn capability(op: &str) -> Option<Capability> {
             _ => None,
         }
     }
+}
+
+fn mode_allows_operation(mode: &pirc_protocol::Mode, op: &str) -> bool {
+    let required_tool = op.starts_with("calendar.").then_some("calendar");
+    required_tool.is_none_or(|tool| {
+        !mode.feature_off(tool)
+            && mode
+                .tools
+                .as_ref()
+                .is_none_or(|allowed| allowed.iter().any(|name| name == tool))
+    })
 }
 
 /// Answer an agent's operation: `(status, body)`, `{result}` on success.
@@ -140,6 +155,13 @@ pub async fn run(
                 .require_workspace_capability(&workspace.id, capability)?;
         }
         let mode = app.require_mode(&workspace)?;
+        if !mode_allows_operation(&mode, op) {
+            return Err(ApiError::new(
+                403,
+                "tool_disabled",
+                "The calendar tool is disabled for this workspace.",
+            ));
+        }
         let context = OpContext {
             mode,
             session,
@@ -161,6 +183,7 @@ pub async fn run(
             Parsed::Memory(op) => memory::run_op(app, &context, op).await,
             Parsed::Delegation(op) => delegations::run_op(app, &context, op).await,
             Parsed::Schedule(op) => schedules::run_op(app, &context, op).await,
+            Parsed::Calendar(op) => calendar::agent::run_op(app, &context, op).await,
             Parsed::Web(op) => web_search::run_op(app, &context, op).await,
         }
     }
@@ -179,5 +202,25 @@ pub async fn run(
             }
             (status, json!({ "error": error }))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn calendar_operations_follow_the_mode_tool_allowlist() {
+        let mut mode = pirc_protocol::mode::default_work();
+        mode.tools = Some(vec!["read".into(), "calendar".into()]);
+        assert!(mode_allows_operation(&mode, "calendar.query"));
+        assert!(mode_allows_operation(&mode, "schedule.list"));
+        mode.tools = Some(vec!["read".into()]);
+        assert!(!mode_allows_operation(&mode, "calendar.query"));
+        assert!(mode_allows_operation(&mode, "schedule.list"));
+        mode.tools = None;
+        assert!(mode_allows_operation(&mode, "calendar.proposeCreate"));
+        mode.features_off.push("calendar".into());
+        assert!(!mode_allows_operation(&mode, "calendar.proposeCreate"));
     }
 }

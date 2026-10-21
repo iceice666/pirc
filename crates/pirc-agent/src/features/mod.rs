@@ -9,6 +9,7 @@ pub mod ask_question;
 pub mod assistant;
 pub mod background;
 pub mod browser;
+pub mod calendar;
 pub mod compact;
 pub mod goal;
 pub mod memory;
@@ -37,6 +38,7 @@ pub(crate) fn config_key(name: &str) -> Option<&'static str> {
         "browser" => Some("browser"),
         "web-search" => Some("webSearch"),
         "schedules" => Some("schedules"),
+        "calendar" => Some("calendar"),
         "background-task" => Some("background"),
         "agent-team" => Some("agentTeam"),
         "goal" => Some("goal"),
@@ -67,6 +69,8 @@ pub fn builtin_features() -> Vec<Rc<dyn Feature>> {
         web_search::feature(),
         // Node agents with a gateway only; the gateway runs the schedules.
         schedules::feature(),
+        // Node agents with a gateway only; user grants are checked by the gateway.
+        calendar::feature(),
         // Node agents inside the node's OS sandbox only (PIRC_SANDBOX=srt).
         sandbox::feature(),
         background::feature(),
@@ -155,6 +159,7 @@ mod tests {
                 "browser",
                 "web-search",
                 "schedules",
+                "calendar",
                 "sandbox",
                 "background-task",
                 "agent-team",

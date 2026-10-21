@@ -25,6 +25,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/delegations/{id}/stop", post(stop_delegation))
         .merge(crate::memory::routes())
         .merge(crate::schedules::routes())
+        .merge(crate::calendar::routes())
         .merge(crate::push::routes())
 }
 
@@ -34,6 +35,7 @@ fn no_store_route(method: &Method, path: &str) -> bool {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     let one = |s: &str| !s.is_empty();
     match (method.as_str(), segments.as_slice()) {
+        (_, ["api", "calendar", ..]) => true,
         ("GET" | "POST", ["api", "devices"]) => true,
         ("DELETE", ["api", "devices", id]) => one(id),
         ("GET" | "POST", ["api", "providers"]) => true,
@@ -155,11 +157,14 @@ impl App {
         crate::memory::forget_session(self, conn, user, session_id)
     }
 
-    /// Confirmations the gateway asks for itself (delegations, schedule
-    /// proposals, memory), shown with the node's interactions.
+    /// Confirmations the gateway asks for itself (delegations, schedule and
+    /// calendar proposals, memory), shown with the node's interactions.
     pub fn pending_gateway_interactions(&self, session_id: &str, user: &str) -> Vec<Value> {
         let mut pending = crate::delegations::pending_interactions(self, session_id);
         pending.extend(crate::schedules::pending_interactions(self, session_id));
+        pending.extend(crate::calendar::agent::pending_interactions(
+            self, session_id,
+        ));
         pending.extend(crate::memory::pending_interactions(self, session_id, user));
         pending
     }
@@ -183,8 +188,8 @@ impl App {
     }
 }
 
-/// Answer one of the gateway's own confirmations (memory, then delegations,
-/// then schedule proposals); `None` when the interaction is the node's.
+/// Answer one of the gateway's own confirmations; `None` when the interaction
+/// is the node's.
 pub fn answer_gateway_interaction(
     app: &AppState,
     session_id: &str,
@@ -203,7 +208,12 @@ pub fn answer_gateway_interaction(
     {
         return Ok(Some(answered));
     }
-    crate::schedules::answer(app, session_id, interaction_id, user, answer.as_ref())
+    if let Some(answered) =
+        crate::schedules::answer(app, session_id, interaction_id, user, answer.as_ref())?
+    {
+        return Ok(Some(answered));
+    }
+    crate::calendar::agent::answer(app, session_id, interaction_id, user, answer.as_ref())
 }
 
 /// Start the features' background work; fails on unusable push keys.
@@ -211,5 +221,6 @@ pub fn start(app: &AppState) -> Result<(), String> {
     crate::push::start(app)?;
     crate::delegations::start(app);
     crate::schedules::start(app);
+    crate::calendar::reminders::start(app);
     Ok(())
 }

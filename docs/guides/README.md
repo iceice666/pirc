@@ -11,6 +11,7 @@
 | [Session UI](session-ui.md)                    | Chat/Work navigation, Needs you, run cards, write leases and client differences                                                           |
 | [Browser](browser.md)                          | Fetching, interaction, takeover, recording and browser settings                                                                           |
 | [Schedules and notifications](schedules.md)    | Scheduled runs, approvals, missed runs, time zones and push notifications                                                                 |
+| [Calendar](calendar.md)                       | Month/week/day views, personal events, recurrence, reminders and agent confirmation grants                                                |
 
 [Workspace modes](modes.md) covers gateway-owned mode files, accepted node ids,
 prompt sections, feature/tool restrictions and reload behavior. Dynamic client

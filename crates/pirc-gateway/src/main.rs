@@ -8,6 +8,7 @@ mod agent_ops;
 mod app;
 mod auth;
 mod backends;
+mod calendar;
 mod db;
 mod delegations;
 mod devices;
