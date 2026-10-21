@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../l10n/app_i18n.dart';
 import 'keyboard_suggestions.dart';
 import 'web_length_formatter.dart';
@@ -10,6 +11,8 @@ import 'gateway.dart';
 import 'schedules_state.dart';
 import 'schedule_datetime_picker.dart';
 import 'web_controls.dart';
+import 'calendar_projection.dart';
+import 'calendar_view.dart';
 
 TextStyle scheduleText(
   BuildContext context, {
@@ -29,6 +32,11 @@ class SchedulesPage extends StatefulWidget {
     required this.controller,
     this.focusId,
     this.focusRevision = 0,
+    this.focusEventId,
+    this.focusEventDate,
+    this.focusEventStartAt,
+    this.focusOccurrenceStart,
+    this.focusEventRevision = 0,
     this.onOpenChat,
     this.sidebarCollapsed = false,
     this.onExpand,
@@ -36,7 +44,10 @@ class SchedulesPage extends StatefulWidget {
   });
   final LiveController controller;
   final String? focusId;
+  final String? focusEventId, focusEventDate, focusOccurrenceStart;
+  final int? focusEventStartAt;
   final int focusRevision;
+  final int focusEventRevision;
   final ValueChanged<String>? onOpenChat;
   final bool sidebarCollapsed;
   final VoidCallback? onExpand;
@@ -50,7 +61,157 @@ class _SchedulesPageState extends State<SchedulesPage> {
   String? editing;
   Json? existing;
   int editorKey = 0, epoch = 0;
+  String calendarMode = 'month', calendarFilter = 'all', calendarZone = '';
+  bool manageAgentSchedules = false;
+  int calendarFirstWeekday = DateTime.sunday, _calendarPreferenceRead = 0;
+  int _calendarModeRevision = 0,
+      _calendarZoneRevision = 0,
+      _calendarWeekStartRevision = 0;
+  bool _calendarLocaleWeekStartApplied = false;
+  Future<void> _calendarPreferenceWrite = Future.value();
+  late DateTime calendarDate = _initialCalendarDate();
+  late DateTime calendarSelected = calendarDate;
+  GlobalKey<CalendarViewBodyState> calendarViewKey =
+      GlobalKey<CalendarViewBodyState>();
   final prompts = <String>{};
+
+  DateTime _initialCalendarDate() {
+    final focused = calendarWall(widget.focusOccurrenceStart);
+    final rawDate = widget.focusOccurrenceStart;
+    final targetDate = DateTime.tryParse(widget.focusEventDate ?? '');
+    final hasTargetDate =
+        widget.focusEventDate != null &&
+        RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(widget.focusEventDate!);
+    final focusedDate =
+        (hasTargetDate ? targetDate : null) ??
+        focused ??
+        (rawDate != null && RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(rawDate)
+            ? DateTime.tryParse(rawDate)
+            : null);
+    return _dateOnly(focusedDate ?? widget.now?.call() ?? DateTime.now());
+  }
+
+  String get _calendarAccountKey =>
+      '${widget.controller.origin ?? ''}|${widget.controller.clientId ?? ''}|${widget.controller.pairingStamp ?? ''}';
+
+  int _localeFirstWeekday() =>
+      MaterialLocalizations.of(context).firstDayOfWeekIndex == 1
+      ? DateTime.monday
+      : DateTime.sunday;
+
+  Future<void> _loadCalendarPreferences() async {
+    final controller = widget.controller;
+    final account = _calendarAccountKey;
+    if (controller.origin == null) return;
+    final request = ++_calendarPreferenceRead;
+    final modeRevision = _calendarModeRevision;
+    final zoneRevision = _calendarZoneRevision;
+    final weekStartRevision = _calendarWeekStartRevision;
+    try {
+      final saved = obj(
+        await controller.gateway.call('calendarPreferences', {
+          'accountKey': account,
+        }),
+      );
+      if (!mounted ||
+          request != _calendarPreferenceRead ||
+          account != _calendarAccountKey) {
+        return;
+      }
+      final savedView = '${saved['view'] ?? ''}';
+      final savedZone = '${saved['timezone'] ?? ''}';
+      final savedWeekStart = '${saved['weekStart'] ?? ''}';
+      setState(() {
+        if (modeRevision == _calendarModeRevision &&
+            widget.focusEventId == null &&
+            widget.focusId == null) {
+          calendarMode =
+              const ['month', 'week', 'day', 'list'].contains(savedView)
+              ? savedView
+              : 'month';
+        }
+        if (zoneRevision == _calendarZoneRevision) {
+          calendarZone = savedZone.isNotEmpty ? savedZone : state.deviceZone;
+        }
+        if (weekStartRevision == _calendarWeekStartRevision) {
+          calendarFirstWeekday = savedWeekStart == 'monday'
+              ? DateTime.monday
+              : savedWeekStart == 'sunday'
+              ? DateTime.sunday
+              : _localeFirstWeekday();
+        }
+      });
+      if (widget.focusEventStartAt != null) {
+        unawaited(_resolveFocusedEventDate());
+      }
+    } catch (_) {
+      // Display defaults remain usable if local preferences cannot be read.
+    }
+  }
+
+  Future<void> _saveCalendarPreferences() async {
+    final controller = widget.controller;
+    final account = _calendarAccountKey;
+    final value = {
+      'view': calendarMode,
+      'timezone': calendarZone.isEmpty ? state.deviceZone : calendarZone,
+      'weekStart': calendarFirstWeekday == DateTime.monday
+          ? 'monday'
+          : 'sunday',
+    };
+    _calendarPreferenceWrite = _calendarPreferenceWrite.then((_) async {
+      if (!mounted ||
+          account != _calendarAccountKey ||
+          controller.origin == null) {
+        return;
+      }
+      try {
+        await controller.gateway.call('saveCalendarPreferences', {
+          'accountKey': account,
+          ...value,
+        });
+      } catch (error) {
+        if (mounted && account == _calendarAccountKey) {
+          showNotice(context, LiveController.describe(error));
+        }
+      }
+    });
+    await _calendarPreferenceWrite;
+  }
+
+  void _setCalendarMode(String value) {
+    if (value == calendarMode) return;
+    _calendarModeRevision++;
+    setState(() {
+      calendarMode = value;
+      manageAgentSchedules = false;
+    });
+    unawaited(_saveCalendarPreferences());
+  }
+
+  void _showAgentSchedules(bool show) =>
+      setState(() => manageAgentSchedules = show);
+
+  Future<void> _resolveFocusedEventDate() async {
+    final startAt = widget.focusEventStartAt;
+    if (widget.focusEventId == null || startAt == null) return;
+    final timezone = calendarZone.isNotEmpty ? calendarZone : state.deviceZone;
+    try {
+      final wall = await widget.controller.gateway.call('wallInput', {
+        'at': startAt,
+        'timezone': timezone,
+      });
+      final date = calendarWall(wall);
+      if (!mounted || date == null) return;
+      setState(() {
+        calendarDate = DateTime(date.year, date.month, date.day);
+        calendarSelected = calendarDate;
+      });
+    } catch (error) {
+      if (mounted) showNotice(context, LiveController.describe(error));
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -60,25 +221,69 @@ class _SchedulesPageState extends State<SchedulesPage> {
   void setup() {
     state = SchedulesState(widget.controller, clock: widget.now)
       ..addListener(changed);
+    unawaited(_loadCalendarPreferences());
     final initial = state;
-    state.initialize().then((_) {
-      if (mounted && identical(initial, state) && widget.focusId != null) {
-        state.focus(widget.focusId!);
+    state.initialize().then((_) async {
+      if (mounted && identical(initial, state)) {
+        setState(() {
+          if (calendarZone.isEmpty) calendarZone = state.deviceZone;
+        });
+        if (!mounted || !identical(initial, state)) return;
+        if (widget.focusEventId != null) {
+          setState(() {
+            calendarMode = 'month';
+            calendarDate = _initialCalendarDate();
+            calendarSelected = calendarDate;
+          });
+          if (widget.focusEventStartAt != null) {
+            unawaited(_resolveFocusedEventDate());
+          }
+        } else if (widget.focusId != null) {
+          setState(() {
+            calendarMode = 'list';
+            manageAgentSchedules = true;
+          });
+          state.focus(widget.focusId!);
+        }
       }
     });
   }
 
   void changed() {
     if (!mounted) return;
+    var accountChanged = false;
     setState(() {
       if (epoch != state.epoch) {
+        accountChanged = true;
         epoch = state.epoch;
+        calendarZone = state.deviceZone;
+        calendarMode = widget.focusId != null ? 'list' : 'month';
+        manageAgentSchedules = widget.focusId != null;
+        calendarFirstWeekday = _localeFirstWeekday();
+        _calendarLocaleWeekStartApplied = true;
+        _calendarModeRevision = 0;
+        _calendarZoneRevision = 0;
+        _calendarWeekStartRevision = 0;
+        calendarViewKey = GlobalKey<CalendarViewBodyState>();
         editing = null;
         existing = null;
         prompts.clear();
         editorKey++;
       }
     });
+    if (accountChanged) {
+      _calendarModeRevision = 0;
+      unawaited(_loadCalendarPreferences());
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_calendarLocaleWeekStartApplied) {
+      _calendarLocaleWeekStartApplied = true;
+      calendarFirstWeekday = _localeFirstWeekday();
+    }
   }
 
   @override
@@ -90,11 +295,28 @@ class _SchedulesPageState extends State<SchedulesPage> {
       editing = null;
       existing = null;
       epoch = 0;
+      calendarViewKey = GlobalKey<CalendarViewBodyState>();
       editorKey++;
       setup();
+    } else if (old.focusEventRevision != widget.focusEventRevision &&
+        widget.focusEventId != null) {
+      final date = _initialCalendarDate();
+      setState(() {
+        calendarMode = 'month';
+        calendarDate = date;
+        calendarSelected = date;
+        calendarViewKey = GlobalKey<CalendarViewBodyState>();
+      });
+      if (widget.focusEventStartAt != null) {
+        unawaited(_resolveFocusedEventDate());
+      }
     } else if ((old.focusId != widget.focusId ||
             old.focusRevision != widget.focusRevision) &&
         widget.focusId != null) {
+      setState(() {
+        calendarMode = 'list';
+        manageAgentSchedules = true;
+      });
       state.focus(widget.focusId!);
     }
   }
@@ -158,22 +380,270 @@ class _SchedulesPageState extends State<SchedulesPage> {
       ),
     ),
   );
-  @override
-  Widget build(BuildContext context) {
-    AppI18n.watch(context);
-    final phone = MediaQuery.sizeOf(context).width <= 650;
-    return DefaultTextStyle(
-      style: scheduleText(context, size: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SafeArea(
-            bottom: false,
+
+  static DateTime _dateOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
+
+  String _periodLabel() {
+    final local = DateTime(
+      calendarDate.year,
+      calendarDate.month,
+      calendarDate.day,
+    );
+    final material = MaterialLocalizations.of(context);
+    if (calendarMode == 'month' || calendarMode == 'list') {
+      return material.formatMonthYear(local);
+    }
+    if (calendarMode == 'day') return material.formatMediumDate(local);
+    final start = calendarWeekStart(
+      calendarDate,
+      firstWeekday: calendarFirstWeekday,
+    );
+    final end = start.add(const Duration(days: 6));
+    if (start.month == end.month) {
+      return tr("{0} {1}–{2}", [
+        material.formatMonthYear(start),
+        start.day,
+        end.day,
+      ]);
+    }
+    return '${material.formatMediumDate(start)} – ${material.formatMediumDate(end)}';
+  }
+
+  void _moveCalendar(int direction) {
+    setState(() {
+      if (calendarMode == 'month' || calendarMode == 'list') {
+        calendarDate = DateTime(
+          calendarDate.year,
+          calendarDate.month + direction,
+          1,
+        );
+      } else if (calendarMode == 'week') {
+        calendarDate = calendarDate.add(Duration(days: direction * 7));
+      } else {
+        calendarDate = calendarDate.add(Duration(days: direction));
+      }
+      calendarSelected = calendarDate;
+    });
+  }
+
+  Future<void> _goToday() async {
+    var today = _dateOnly(widget.now?.call() ?? DateTime.now());
+    if (calendarZone.isNotEmpty) {
+      try {
+        final wall = await widget.controller.gateway.call('wallInput', {
+          'at': (widget.now?.call() ?? DateTime.now()).millisecondsSinceEpoch,
+          'timezone': calendarZone,
+        });
+        final date = calendarWall(wall);
+        if (date == null) {
+          throw StateError(
+            tr("Unable to format calendar time in this time zone."),
+          );
+        }
+        today = DateTime(date.year, date.month, date.day);
+      } catch (error) {
+        if (mounted) showNotice(context, LiveController.describe(error));
+        return;
+      }
+    }
+    if (mounted) {
+      setState(() {
+        calendarDate = today;
+        calendarSelected = today;
+      });
+    }
+  }
+
+  Future<void> _newCalendarItem() async {
+    final kind = await showModalBottomSheet<String>(
+      context: context,
+      useRootNavigator: false,
+      showDragHandle: true,
+      backgroundColor: palette(context)['surface.page'],
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                tr("New calendar item"),
+                style: webText(context, size: 16, weight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              WebButton(
+                tr("Personal event"),
+                icon: LucideIcons.calendarDays,
+                onPressed: () => Navigator.pop(context, 'event'),
+                height: 42,
+                backgroundColor: palette(context)['web.bg-subtle'],
+              ),
+              const SizedBox(height: 8),
+              WebButton(
+                tr("Agent task"),
+                icon: LucideIcons.bot,
+                onPressed: () => Navigator.pop(context, 'schedule'),
+                height: 42,
+                backgroundColor: palette(context)['web.bg-subtle'],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || kind == null) return;
+    if (kind == 'schedule') {
+      _calendarModeRevision++;
+      setState(() {
+        calendarMode = 'list';
+        manageAgentSchedules = true;
+        editing = 'new';
+        existing = null;
+        editorKey++;
+      });
+      unawaited(_saveCalendarPreferences());
+      state.loadModels();
+      return;
+    }
+    if (calendarMode == 'list') {
+      _calendarModeRevision++;
+      setState(() => calendarMode = 'month');
+      unawaited(_saveCalendarPreferences());
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) calendarViewKey.currentState?.createEvent(calendarSelected);
+    });
+  }
+
+  Future<void> _pickDisplayZone() async {
+    final zone = await showCalendarTimezonePicker(
+      context,
+      calendarZone,
+      state.zones,
+    );
+    if (zone != null && mounted) {
+      _calendarZoneRevision++;
+      setState(() => calendarZone = zone);
+      unawaited(_saveCalendarPreferences());
+    }
+  }
+
+  Future<void> _showCalendarAccess() => showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: false,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: palette(context)['surface.page'],
+    builder: (context) =>
+        CalendarAccessSettingsSheet(controller: widget.controller),
+  );
+
+  Widget _calendarHeader({
+    required bool phone,
+    required double textScale,
+    required bool compactHeader,
+  }) {
+    final titleStyle = scheduleText(context, size: 15, weight: FontWeight.w600);
+    final title = Row(
+      children: [
+        if (widget.sidebarCollapsed && !phone) ...[
+          WebIconButton(
+            LucideIcons.panelLeftOpen,
+            tr("Show sidebar"),
+            onPressed: widget.onExpand,
+            iconSize: 19,
+          ),
+          const SizedBox(width: 10),
+        ],
+        Icon(
+          LucideIcons.calendarDays,
+          size: 18,
+          color: palette(context)['text.muted'],
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            tr("Calendar"),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: titleStyle,
+          ),
+        ),
+      ],
+    );
+    final zoneButton = calendarZone.isEmpty
+        ? null
+        : InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: _pickDisplayZone,
             child: Padding(
-              padding: EdgeInsets.only(left: phone ? 16 : 20, right: 20),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 56),
-                child: Row(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    LucideIcons.globe,
+                    size: 14,
+                    color: palette(context)['text.muted'],
+                  ),
+                  const SizedBox(width: 5),
+                  if (textScale < 1.5)
+                    Text(
+                      calendarZone == 'Asia/Taipei'
+                          ? tr("Taipei")
+                          : calendarZone.split('/').last.replaceAll('_', ' '),
+                      style: scheduleText(
+                        context,
+                        size: 11,
+                        color: 'text.muted',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+    final accessButton = WebIconButton(
+      LucideIcons.shield,
+      tr("Agent calendar access"),
+      onPressed: _showCalendarAccess,
+      size: 32,
+      iconSize: 16,
+    );
+    final newButton = WebButton(
+      compactHeader ? tr("New") : tr("New event"),
+      icon: LucideIcons.plus,
+      primary: true,
+      height: textScale >= 1.5 ? 40 : 32,
+      fontSize: 13,
+      horizontalPadding: compactHeader ? 8 : 12,
+      onPressed: _newCalendarItem,
+    );
+
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: EdgeInsets.only(left: phone ? 16 : 20, right: phone ? 16 : 20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56),
+          child: textScale >= 1.5
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 52, child: title),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        ?zoneButton,
+                        accessButton,
+                        const SizedBox(width: 4),
+                        newButton,
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
                   children: [
                     if (widget.sidebarCollapsed && !phone) ...[
                       WebIconButton(
@@ -185,93 +655,408 @@ class _SchedulesPageState extends State<SchedulesPage> {
                       const SizedBox(width: 10),
                     ],
                     Icon(
-                      LucideIcons.calendarClock,
+                      LucideIcons.calendarDays,
                       size: 18,
                       color: palette(context)['text.muted'],
                     ),
                     const SizedBox(width: 10),
-                    Text(
-                      tr("Schedules"),
-                      style: scheduleText(
-                        context,
-                        size: 15,
-                        weight: FontWeight.w600,
-                      ),
-                    ),
+                    Text(tr("Calendar"), style: titleStyle),
+                    const Spacer(),
+                    ?zoneButton,
+                    accessButton,
+                    newButton,
                   ],
                 ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 780),
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      phone ? 14 : 32,
-                      phone ? 4 : 8,
-                      phone ? 14 : 32,
-                      phone ? 72 + MediaQuery.paddingOf(context).bottom : 48,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'SCHEDULES',
-                          style: scheduleText(
-                            context,
-                            size: 12,
-                            weight: FontWeight.w600,
-                            color: 'text.secondary',
-                          ).copyWith(letterSpacing: .24),
-                        ),
-                        const SizedBox(height: 13),
-                        text(tr(scheduleExplanation)),
-                        if (state.loading)
-                          WebNotice(tr("Loading schedules…"))
-                        else ...[
-                          if (state.error != null && editing == null)
-                            WebNotice(state.error!, error: true),
-                          if (editing != null)
-                            ScheduleForm(
-                              key: ValueKey('$epoch:$editorKey'),
-                              state: state,
-                              existing: existing,
-                              onCancel: () => setState(() => editing = null),
-                              onSaved: () => setState(() => editing = null),
-                            )
-                          else
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: button(
-                                  tr("New schedule"),
-                                  state.busy == null ? () => edit(null) : null,
-                                  primary: true,
-                                ),
-                              ),
-                            ),
-                          if (state.schedules.isEmpty && editing == null)
-                            text(
-                              tr(
-                                "No schedules yet. Make one here, or ask your assistant: it asks you before it adds one.",
-                              ),
-                            ),
-                          for (final s in state.schedules)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: card(s),
-                            ),
-                        ],
-                      ],
-                    ),
+        ),
+      ),
+    );
+  }
+
+  Widget _calendarToolbar(bool phone) {
+    final tabLabels = <String, String>{
+      'month': tr("Calendar month view"),
+      'week': tr("Week"),
+      'day': tr("Calendar day view"),
+      'list': tr("List"),
+    };
+    return Padding(
+      padding: EdgeInsets.fromLTRB(phone ? 16 : 24, 4, phone ? 16 : 24, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _periodLabel(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: scheduleText(
+                    context,
+                    size: 19,
+                    weight: FontWeight.w600,
+                    color: 'text.primary',
                   ),
                 ),
               ),
+              WebIconButton(
+                LucideIcons.chevronLeft,
+                tr("Previous period"),
+                onPressed: () => _moveCalendar(-1),
+                size: 32,
+                iconSize: 17,
+              ),
+              WebButton(
+                tr("Today"),
+                onPressed: _goToday,
+                height: 32,
+                fontSize: 13,
+                horizontalPadding: 12,
+              ),
+              WebIconButton(
+                LucideIcons.chevronRight,
+                tr("Next period"),
+                onPressed: () => _moveCalendar(1),
+                size: 32,
+                iconSize: 17,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: 36,
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: palette(context)['web.bg-subtle'],
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              children: [
+                for (final mode in ['month', 'week', 'day', 'list'])
+                  Expanded(
+                    child: Semantics(
+                      button: true,
+                      selected: calendarMode == mode,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: () => _setCalendarMode(mode),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 120),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: calendarMode == mode
+                                ? palette(context)['surface.page']
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(999),
+                            boxShadow: calendarMode == mode
+                                ? [
+                                    BoxShadow(
+                                      color: palette(context)['line.hairline'],
+                                      blurRadius: 2,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Text(
+                            tabLabels[mode]!,
+                            style: scheduleText(
+                              context,
+                              size: 12,
+                              weight: calendarMode == mode
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              color: calendarMode == mode
+                                  ? 'text.primary'
+                                  : 'text.muted',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (calendarMode != 'list' || !manageAgentSchedules) ...[
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _filterChip('all', tr("All")),
+                  const SizedBox(width: 6),
+                  _filterChip(
+                    'event',
+                    tr("Personal events"),
+                    icon: LucideIcons.calendarDays,
+                  ),
+                  const SizedBox(width: 6),
+                  _filterChip(
+                    'schedule',
+                    tr("Agent tasks"),
+                    icon: LucideIcons.bot,
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (calendarMode == 'list') ...[
+            const SizedBox(height: 2),
+            Align(
+              alignment: Alignment.centerRight,
+              child: WebButton(
+                manageAgentSchedules
+                    ? tr("Calendar list")
+                    : tr("Manage agent tasks"),
+                icon: manageAgentSchedules
+                    ? LucideIcons.calendarDays
+                    : LucideIcons.bot,
+                onPressed: () => _showAgentSchedules(!manageAgentSchedules),
+                height: 30,
+                fontSize: 12,
+                horizontalPadding: 10,
+              ),
+            ),
+          ],
+          if (calendarMode != 'list') ...[
+            const SizedBox(height: 2),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              children: [
+                Text(
+                  tr("Week starts"),
+                  style: scheduleText(context, size: 11, color: 'text.muted'),
+                ),
+                const SizedBox(width: 4),
+                for (final entry in [
+                  (DateTime.sunday, tr("Sunday")),
+                  (DateTime.monday, tr("Monday")),
+                ]) ...[
+                  ChoiceChip(
+                    label: Text(entry.$2),
+                    selected: calendarFirstWeekday == entry.$1,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) {
+                      _calendarWeekStartRevision++;
+                      setState(() => calendarFirstWeekday = entry.$1);
+                      unawaited(_saveCalendarPreferences());
+                    },
+                  ),
+                  const SizedBox(width: 0),
+                ],
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String value, String label, {IconData? icon}) {
+    final selected = calendarFilter == value;
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () => setState(() => calendarFilter = value),
+      child: Container(
+        height: 30,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? palette(context)['web.bg-hover']
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (value == 'event') ...[
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: palette(context)['accent.default'],
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: palette(context)['text.muted']),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: scheduleText(
+                context,
+                size: 12,
+                color: selected ? 'text.primary' : 'text.muted',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    final phone = MediaQuery.sizeOf(context).width <= 650;
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final compactHeader = phone || textScale >= 1.25;
+    return DefaultTextStyle(
+      style: scheduleText(context, size: 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _calendarHeader(
+            phone: phone,
+            textScale: textScale,
+            compactHeader: compactHeader,
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _calendarToolbar(phone),
+                Expanded(
+                  child: calendarMode == 'list' && manageAgentSchedules
+                      ? SingleChildScrollView(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 780),
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  phone ? 14 : 32,
+                                  phone ? 4 : 8,
+                                  phone ? 14 : 32,
+                                  phone
+                                      ? 72 +
+                                            MediaQuery.paddingOf(context).bottom
+                                      : 48,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Text(
+                                      'SCHEDULES',
+                                      style: scheduleText(
+                                        context,
+                                        size: 12,
+                                        weight: FontWeight.w600,
+                                        color: 'text.secondary',
+                                      ).copyWith(letterSpacing: .24),
+                                    ),
+                                    const SizedBox(height: 13),
+                                    text(tr(scheduleExplanation)),
+                                    if (state.loading)
+                                      WebNotice(tr("Loading schedules…"))
+                                    else ...[
+                                      if (state.error != null &&
+                                          editing == null)
+                                        WebNotice(state.error!, error: true),
+                                      if (editing != null)
+                                        ScheduleForm(
+                                          key: ValueKey('$epoch:$editorKey'),
+                                          state: state,
+                                          existing: existing,
+                                          onCancel: () =>
+                                              setState(() => editing = null),
+                                          onSaved: () =>
+                                              setState(() => editing = null),
+                                        )
+                                      else
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 12,
+                                          ),
+                                          child: Align(
+                                            alignment: Alignment.centerRight,
+                                            child: button(
+                                              tr("New schedule"),
+                                              state.busy == null
+                                                  ? () => edit(null)
+                                                  : null,
+                                              primary: true,
+                                            ),
+                                          ),
+                                        ),
+                                      if (state.schedules.isEmpty &&
+                                          editing == null)
+                                        text(
+                                          tr(
+                                            "No schedules yet. Make one here, or ask your assistant: it asks you before it adds one.",
+                                          ),
+                                        ),
+                                      for (final s in state.schedules)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 6,
+                                          ),
+                                          child: card(s),
+                                        ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : CalendarViewBody(
+                          key: calendarViewKey,
+                          controller: widget.controller,
+                          mode: calendarMode,
+                          anchor: calendarDate,
+                          selectedDate: calendarSelected,
+                          filter: calendarFilter,
+                          timezone: calendarZone.isEmpty
+                              ? state.deviceZone
+                              : calendarZone,
+                          firstWeekday: calendarFirstWeekday,
+                          zones: state.zones,
+                          accountKey: '$epoch',
+                          focusEventId: widget.focusEventId,
+                          focusOccurrenceStart: widget.focusOccurrenceStart,
+                          focusRevision: widget.focusEventRevision,
+                          clock: widget.now,
+                          onAnchorChanged: (value) => setState(() {
+                            calendarDate = _dateOnly(value);
+                            calendarSelected = _dateOnly(value);
+                          }),
+                          onSelectedDate: (value) => setState(() {
+                            calendarSelected = _dateOnly(value);
+                            if (value.month != calendarDate.month ||
+                                value.year != calendarDate.year) {
+                              calendarDate = _dateOnly(value);
+                            }
+                          }),
+                          onOpenSchedule: (id) {
+                            _calendarModeRevision++;
+                            setState(() {
+                              calendarMode = 'list';
+                              manageAgentSchedules = true;
+                              state.focus(id);
+                            });
+                            unawaited(_saveCalendarPreferences());
+                          },
+                          onCreateAgentTask: () {
+                            _calendarModeRevision++;
+                            setState(() {
+                              calendarMode = 'list';
+                              manageAgentSchedules = true;
+                              editing = 'new';
+                              existing = null;
+                              editorKey++;
+                            });
+                            unawaited(_saveCalendarPreferences());
+                            state.loadModels();
+                          },
+                        ),
+                ),
+              ],
             ),
           ),
         ],

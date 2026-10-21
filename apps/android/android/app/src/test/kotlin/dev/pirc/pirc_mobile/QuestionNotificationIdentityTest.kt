@@ -128,4 +128,14 @@ class QuestionNotificationIdentityTest {
         )!!
         assertNull(versionless.interaction)
     }
+
+    @Test fun calendarReminderTargetsTheRequestedOccurrence() {
+        val reminder = PushNote.parse(
+            """{"title":"Design review","body":"15 minutes before","tag":"calendar:review:2026-10-21T09:00","target":{"calendar":true,"eventId":"review","occurrenceStart":"2026-10-21T09:00","date":"2026-11-01","startAt":1793494800000}}""".toByteArray(),
+        )!!
+        assertEquals(
+            PushTarget.OpenCalendar("review", "2026-10-21T09:00", "2026-11-01", 1793494800000),
+            reminder.target,
+        )
+    }
 }

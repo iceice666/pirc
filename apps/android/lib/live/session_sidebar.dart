@@ -1136,17 +1136,15 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (!chatMode) ...[
-                        footerEntry(
-                          tr("Schedules"),
-                          LucideIcons.calendarClock,
-                          'schedules',
-                          detail: c.attention.nextSchedule == null
-                              ? null
-                              : 'Next: ${c.attention.nextSchedule!['title']} · ${untilRun(c.attention.nextSchedule!['nextRunAt'] as num)}',
-                        ),
-                        const SizedBox(height: 2),
-                      ],
+                      footerEntry(
+                        tr("Calendar"),
+                        LucideIcons.calendarDays,
+                        'calendar',
+                        detail: c.attention.nextSchedule == null
+                            ? null
+                            : 'Next: ${c.attention.nextSchedule!['title']} · ${untilRun(c.attention.nextSchedule!['nextRunAt'] as num)}',
+                      ),
+                      const SizedBox(height: 2),
                       footerEntry(
                         tr("Settings"),
                         LucideIcons.settings,

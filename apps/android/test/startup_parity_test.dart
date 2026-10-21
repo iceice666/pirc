@@ -141,6 +141,88 @@ class StartupGateway extends FakeGateway {
   }
 }
 
+class CalendarRouteGateway extends StartupGateway {
+  static const movedStart = 1793494800000;
+  static const event = <String, dynamic>{
+    'id': 'review',
+    'revision': 1,
+    'title': 'Design review',
+    'description': 'Review the calendar together.',
+    'location': 'Studio',
+    'start': '2026-10-21T09:00',
+    'end': '2026-10-21T10:30',
+    'timezone': 'Asia/Taipei',
+    'allDay': false,
+    'recurrence': null,
+    'reminderMinutes': [15],
+    'createdAt': 0,
+    'updatedAt': 0,
+  };
+
+  @override
+  dynamic normal(String method, Json args) {
+    if (method == 'timeZoneInfo') {
+      return {
+        'default': 'Asia/Taipei',
+        'zones': ['Asia/Taipei', 'UTC'],
+      };
+    }
+    if (method == 'calendarPreferences') {
+      return {
+        'view': 'month',
+        'timezone': 'Asia/Taipei',
+        'weekStart': 'monday',
+      };
+    }
+    if (method == 'calendarDateStart') {
+      return DateTime.parse('${args['date']}T00:00:00Z').millisecondsSinceEpoch;
+    }
+    if (method == 'wallInput') {
+      final at = (args['at'] as num).toInt();
+      if (at == movedStart) return '2026-11-01T09:00';
+      if (at == movedStart + 90 * 60 * 1000) return '2026-11-01T10:30';
+      return '2026-10-21T09:00';
+    }
+    if (method == 'request') {
+      final path = '${args['path']}';
+      if (path.startsWith('/api/calendar?')) {
+        return {
+          'accountKey': 'fixture-account',
+          'from': movedStart,
+          'to': movedStart + 90 * 60 * 1000,
+          'timezone': 'Asia/Taipei',
+          'limited': false,
+          'nextCursor': null,
+          'historyLimited': true,
+          'items': [
+            {
+              'id': 'event:review:2026-10-21T09:00',
+              'type': 'event',
+              'sourceId': 'review',
+              'title': 'Design review',
+              'startAt': movedStart,
+              'endAt': movedStart + 90 * 60 * 1000,
+              'allDay': false,
+              'timezone': 'Asia/Taipei',
+              'revision': 1,
+              'originalStart': '2026-10-21T09:00',
+              'event': event,
+            },
+          ],
+        };
+      }
+      if (path == '/api/calendar/context') {
+        return {
+          'accountKey': 'fixture-account',
+          'reminderDeliveryAvailable': true,
+        };
+      }
+      if (path == '/api/calendar/events/review') return {'event': event};
+    }
+    return super.normal(method, args);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -163,6 +245,37 @@ void main() {
 
     await _disposeApp(tester, gateway);
   });
+
+  testWidgets(
+    'calendar notification route keeps focus through app navigation',
+    (tester) async {
+      _setSize(tester, 390);
+      final gateway = CalendarRouteGateway();
+      final controller = LiveController(gateway);
+      await _showApp(tester, controller);
+      await tester.pumpAndSettle();
+
+      gateway.stream.add({
+        'type': 'route',
+        'scope': 'account',
+        'data': {
+          'page': 'calendar',
+          'eventId': 'review',
+          'occurrenceStart': '2026-10-21T09:00',
+          'eventDate': '2026-11-01',
+          'eventStartAt': CalendarRouteGateway.movedStart,
+        },
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.text('November 2026'), findsOneWidget);
+      expect(find.text('Calendar item details'), findsOneWidget);
+      expect(find.text('Design review'), findsWidgets);
+      expect(tester.takeException(), isNull);
+
+      await _disposeApp(tester, gateway);
+    },
+  );
 
   testWidgets('tablet shows the automatic snapshot and marks it read', (
     tester,

@@ -26,8 +26,10 @@ object GatewayNotifications {
     private const val QUESTION_OVERLAY_STATE = "question_overlay_state"
     private val questionNotificationLock = Any()
     private val categories = mapOf("q" to "需要你回應", "missed" to "錯過的排程", "deleg" to "委派的工作", "mem" to "記憶提案", "done" to "完成或失敗", "live" to "即時進度")
-    fun intent(context: Context, session: String?, page: String? = null) = Intent(context, MainActivity::class.java)
+    fun intent(context: Context, session: String?, page: String? = null, eventId: String? = null, occurrenceStart: String? = null, eventDate: String? = null, eventStartAt: Long? = null) = Intent(context, MainActivity::class.java)
         .putExtra("gatewaySession", session).putExtra("gatewayRoute", page)
+        .putExtra("gatewayEventId", eventId).putExtra("gatewayOccurrenceStart", occurrenceStart)
+        .putExtra("gatewayEventDate", eventDate).apply { eventStartAt?.let { putExtra("gatewayEventStartAt", it) } }
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
     fun manager(context: Context) = context.getSystemService(NotificationManager::class.java).apply {
         createNotificationChannel(NotificationChannel(CHANNEL, NativeI18n.text("pirc 工作通知"), NotificationManager.IMPORTANCE_DEFAULT))
@@ -45,12 +47,14 @@ object GatewayNotifications {
         }
     }
     internal fun notification(context: Context, title: String, body: String, session: String?, page: String? = null, category: String = "q",
-        questionIdentity: QuestionNotificationIdentity? = null, questionPairingStamp: String? = null): Notification.Builder {
+        questionIdentity: QuestionNotificationIdentity? = null, questionPairingStamp: String? = null,
+        eventId: String? = null, occurrenceStart: String? = null,
+        eventDate: String? = null, eventStartAt: Long? = null): Notification.Builder {
         manager(context)
         val prefs = NotificationPreferences(context)
         val channel = if(category=="q") CHANNEL else "pirc_$category"
-        val contentIntent = intent(context,session,page).putQuestionIdentity(questionIdentity, questionPairingStamp)
-        val contentKey = questionIdentity?.notificationTag?.let { "open:$it" } ?: "open:$session:$page"
+        val contentIntent = intent(context,session,page,eventId,occurrenceStart,eventDate,eventStartAt).putQuestionIdentity(questionIdentity, questionPairingStamp)
+        val contentKey = questionIdentity?.notificationTag?.let { "open:$it" } ?: "open:$session:$page:$eventId:$occurrenceStart:$eventDate:$eventStartAt"
         val public = Notification.Builder(context, channel).setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(if(prefs.lock=="hide") "pirc" else title)
             .setContentText(if(prefs.lock=="all") body else NativeI18n.text("解鎖後查看內容")).build()
@@ -62,7 +66,9 @@ object GatewayNotifications {
     internal fun show(context: Context, title: String, body: String, session: String?, page: String? = null,
         category: String = "q", workspace: String? = null, question: dev.pirc.android.core.timeline.Interaction? = null,
         tag: String = session ?: page ?: title, questionIdentity: QuestionNotificationIdentity? = null,
-        questionPairingStamp: String? = null, allowQuestionActions: Boolean = false) {
+        questionPairingStamp: String? = null, allowQuestionActions: Boolean = false,
+        eventId: String? = null, occurrenceStart: String? = null,
+        eventDate: String? = null, eventStartAt: Long? = null) {
         val prefs = context.getSharedPreferences("recent_activity", Context.MODE_PRIVATE)
         val history = runCatching { org.json.JSONArray(prefs.getString("items", "[]")) }.getOrDefault(org.json.JSONArray())
         val next = org.json.JSONArray().put(org.json.JSONObject().put("title", title).put("body", body).put("sessionId", session).put("page", page).put("at", System.currentTimeMillis()))
@@ -73,7 +79,7 @@ object GatewayNotifications {
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val identity = questionIdentity ?: question?.takeIf { session != null && it.status == "pending" }
             ?.let { QuestionNotificationIdentity.from(session, it.id, it.runnerEpoch) }
-        val notification = notification(context,title,body,session,page,category,identity,questionPairingStamp)
+        val notification = notification(context,title,body,session,page,category,identity,questionPairingStamp,eventId,occurrenceStart,eventDate,eventStartAt)
         if(category=="q" && session!=null && allowQuestionActions) {
             val q=question
             val simple=q!=null && q.status=="pending" && (q.expiresAt == null || q.expiresAt > System.currentTimeMillis()) &&
@@ -319,7 +325,13 @@ class GatewayPushService : PushService() {
         }
         val suppressVisible = shouldSuppressVisibleSessionPush(session, runtime::hasVisibleSessionSubscriber)
         if (suppressVisible && pushedInteraction?.isCreated != true) return
-        val page = when(note.target) { is PushTarget.OpenSchedules -> (note.target as PushTarget.OpenSchedules).scheduleId?.let { "schedule:$it" } ?: "schedules"; PushTarget.OpenMemory -> "memory"; else -> null }
+        val calendarTarget = note.target as? PushTarget.OpenCalendar
+        val page = when(note.target) {
+            is PushTarget.OpenCalendar -> "calendar"
+            is PushTarget.OpenSchedules -> (note.target as PushTarget.OpenSchedules).scheduleId?.let { "schedule:$it" } ?: "schedules"
+            PushTarget.OpenMemory -> "memory"
+            else -> null
+        }
         val category=when { note.tag.startsWith("delegation:") -> "deleg"; page=="memory" -> "mem"; page?.startsWith("schedule")==true -> "missed"; else -> "q" }
         runtime.scope.launch {
             val captured = if (session != null) readPushValueOrNull {
@@ -354,7 +366,9 @@ class GatewayPushService : PushService() {
                 }) return@withCurrentPairingStampForPush
                 val q = if (disposition == CreatedQuestionDisposition.SHOW_ACTIONABLE) current else null
                 GatewayNotifications.show(applicationContext,note.title,note.body,session,page,category,snapshot?.session?.workspaceId,q,note.tag,identity,
-                    questionPairingStamp = pairingStamp, allowQuestionActions = disposition == CreatedQuestionDisposition.SHOW_ACTIONABLE)
+                    questionPairingStamp = pairingStamp, allowQuestionActions = disposition == CreatedQuestionDisposition.SHOW_ACTIONABLE,
+                    eventId = calendarTarget?.eventId, occurrenceStart = calendarTarget?.occurrenceStart,
+                    eventDate = calendarTarget?.date, eventStartAt = calendarTarget?.startAt)
             }
         }
     }

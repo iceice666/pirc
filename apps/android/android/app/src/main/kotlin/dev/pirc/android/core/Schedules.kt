@@ -3,6 +3,7 @@ package dev.pirc.android.core
 import kotlinx.serialization.Serializable
 import java.time.DateTimeException
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -141,6 +142,15 @@ fun formatWall(at: Long, timezone: String): String = WALL.format(Instant.ofEpoch
 
 /** The wall time the form edits (`2026-10-01T09:00`) for [at] in [timezone]. */
 fun wallInput(at: Long, timezone: String): String = INPUT.format(Instant.ofEpochMilli(at).atZone(zone(timezone)))
+
+/** The UTC instant at the start of a calendar date in [timezone]. */
+fun calendarDateStart(date: String, timezone: String): Long? =
+    runCatching { LocalDate.parse(date).atStartOfDay(zone(timezone)).toInstant().toEpochMilli() }.getOrNull()
+
+/** Resolve a calendar drag in the displayed zone. Java advances gaps and picks
+ * the earlier offset in an overlap, matching the gateway recurrence policy. */
+fun calendarWallInstant(value: String, timezone: String): Long? =
+    runCatching { LocalDateTime.parse(value, INPUT).atZone(ZoneId.of(timezone)).toInstant().toEpochMilli() }.getOrNull()
 
 /** A form's wall time back to a `LocalDateTime`, or null when it is not one. */
 fun parseWall(value: String): LocalDateTime? = runCatching { LocalDateTime.parse(value.trim(), INPUT) }.getOrNull()

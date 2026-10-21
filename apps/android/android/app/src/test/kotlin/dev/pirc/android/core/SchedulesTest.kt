@@ -64,6 +64,31 @@ class SchedulesTest {
     }
 
     @Test
+    fun calendarDayBoundariesFollowDaylightSavingTransitions() {
+        fun lengthMinutes(date: String): Long {
+            val start = calendarDateStart(date, "America/Los_Angeles")!!
+            val next = calendarDateStart(
+                java.time.LocalDate.parse(date).plusDays(1).toString(),
+                "America/Los_Angeles",
+            )!!
+            return (next - start) / 60_000
+        }
+        assertEquals(23 * 60L, lengthMinutes("2026-03-08"))
+        assertEquals(25 * 60L, lengthMinutes("2026-11-01"))
+        assertNull(calendarDateStart("not-a-date", "America/Los_Angeles"))
+    }
+
+    @Test
+    fun calendarDragsResolveDisplayZoneAndDaylightSaving() {
+        fun resolved(value: String, zone: String) = java.time.Instant.ofEpochMilli(calendarWallInstant(value, zone)!!).toString()
+        assertEquals("2026-10-21T01:30:00Z", resolved("2026-10-21T09:30", "Asia/Taipei"))
+        assertEquals("2026-03-08T10:30:00Z", resolved("2026-03-08T02:30", "America/Los_Angeles"))
+        assertEquals("2026-11-01T08:30:00Z", resolved("2026-11-01T01:30", "America/Los_Angeles"))
+        assertNull(calendarWallInstant("tomorrow", "UTC"))
+        assertNull(calendarWallInstant("2026-10-21T09:30", "Mars/Base"))
+    }
+
+    @Test
     fun readsSchedulesAndDescribesThem() = runTest {
         server.enqueue(MockResponse.Builder().body("""{"schedules":[$scheduleJson],"timezone":"UTC"}""").build())
         val schedule = api.schedules().single()

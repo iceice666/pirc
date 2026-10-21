@@ -2,7 +2,7 @@
 
 [Plans](README.md) · [Schedules](../docs/guides/schedules.md) · [Mobile follow-up](mobile.md)
 
-Status: approved design; implementation in progress, 2026-10-21. The user approved
+Status: implemented locally; device acceptance pending, 2026-10-21. The user approved
 the month/week/day prototype for Web and Flutter Android in the existing pirc style.
 The user explicitly chose to include ordinary personal events as well as agent
 schedules, and to include agent management with user confirmation and separate
@@ -21,10 +21,21 @@ remote publication is not.
       calendar invalidation; no new hint subscription is needed.
 - [x] Web month/week/day/list, event editor and schedule management, account
       preferences, permissions, reminders, move/resize drafts and English/Traditional
-      Chinese. Typecheck, 91 focused/regression tests, production build and pinned
+      Chinese. Typecheck, 92 focused/regression tests, production build and pinned
       Chromium span/point geometry checks pass.
-- [ ] Final Flutter interface regression/visual review.
+- [x] Native Flutter month/week/day/list and event/Agent-task management,
+      recurrence scopes/end rules, permissions, notification deep links,
+      long-press move and end-time resize drafts. Matching fixture screenshots,
+      keyboard/landscape/large-text checks, account re-pair isolation,
+      idempotent retries and stale-edit review are covered by local tests.
+- [x] Flutter static analysis and 69 focused regression tests; Android Kotlin
+      compilation and unit tests. Preserve projection revisions until explicit
+      conflict review on both clients. Disposable build/test output is cleaned
+      after verification, with release APKs and review screenshots preserved.
 - [ ] Physical Android background/reminder acceptance when a device is available.
+- [ ] True remote notification delivery; the previously declined third-party
+      relay remains untested. Local reminder claims and payload/deep-link tests
+      do not replace this acceptance step.
 
 Frozen recurrence policy: skip missing month days/leap dates; DST gaps move
 forward and overlaps use the first instant. All-day dates remain calendar dates

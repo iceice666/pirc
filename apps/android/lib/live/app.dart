@@ -648,7 +648,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
             _openWorkspace(route.substring(10));
           }
         } else {
-          _page(route);
+          _page(route, preserveCalendarFocus: route == 'calendar');
         }
       });
     }
@@ -701,7 +701,12 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  void _page(String name, {bool documentRoute = false, bool deferred = false}) {
+  void _page(
+    String name, {
+    bool documentRoute = false,
+    bool deferred = false,
+    bool preserveCalendarFocus = false,
+  }) {
     if (name != 'settings') c.discardDraftSession();
     final surface = _appSurface.currentState;
     final context = surface?.widget.activeIdentity == _appSurfaceIdentity
@@ -715,7 +720,12 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
           if (mounted &&
               account == _documents.accountIdentity &&
               identity == _appSurfaceIdentity) {
-            _page(name, documentRoute: documentRoute, deferred: true);
+            _page(
+              name,
+              documentRoute: documentRoute,
+              deferred: true,
+              preserveCalendarFocus: preserveCalendarFocus,
+            );
           }
         });
       }
@@ -776,6 +786,10 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     }
     if (name == 'schedules') {
       c.sessionVisible = false;
+      c.calendarFocusEventId = null;
+      c.calendarFocusOccurrenceStart = null;
+      c.calendarFocusDate = null;
+      c.calendarFocusStartAt = null;
       setState(() {
         section = name;
         scheduleFocus = null;
@@ -784,8 +798,29 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       });
       return;
     }
+    if (name == 'calendar') {
+      c.sessionVisible = false;
+      if (!preserveCalendarFocus) {
+        c.calendarFocusEventId = null;
+        c.calendarFocusOccurrenceStart = null;
+        c.calendarFocusDate = null;
+        c.calendarFocusStartAt = null;
+      }
+      setState(() {
+        section = 'schedules';
+        scheduleFocus = null;
+        scheduleFocusRevision++;
+        listOpen = false;
+        panelOpen = false;
+      });
+      return;
+    }
     if (name.startsWith('schedule:')) {
       c.sessionVisible = false;
+      c.calendarFocusEventId = null;
+      c.calendarFocusOccurrenceStart = null;
+      c.calendarFocusDate = null;
+      c.calendarFocusStartAt = null;
       setState(() {
         section = 'schedules';
         scheduleFocus = name.substring(9);
@@ -1123,6 +1158,16 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
                                                                 scheduleFocus,
                                                             focusRevision:
                                                                 scheduleFocusRevision,
+                                                            focusEventId: c
+                                                                .calendarFocusEventId,
+                                                            focusEventDate: c
+                                                                .calendarFocusDate,
+                                                            focusEventStartAt: c
+                                                                .calendarFocusStartAt,
+                                                            focusOccurrenceStart:
+                                                                c.calendarFocusOccurrenceStart,
+                                                            focusEventRevision:
+                                                                c.calendarFocusRevision,
                                                             onOpenChat:
                                                                 _openSession,
                                                             sidebarCollapsed:

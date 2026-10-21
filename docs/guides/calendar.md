@@ -4,8 +4,9 @@
 
 The Web and native Android Calendar combines **personal events** and **Agent
 tasks**. Switch between Month, Week, Day and List. Personal events never run an
-agent. List keeps the existing schedule editor, run history, Run now,
-pause/resume, missed-run approval and Open session actions.
+agent. List shows a date-grouped agenda. The separate schedule manager keeps the
+existing schedule editor, run history, Run now, pause/resume, missed-run approval
+and Open session actions.
 
 ## Personal events
 
@@ -31,6 +32,13 @@ remaining repetition count and carry applicable single-occurrence exceptions.
 Changing a whole series' starting time, time zone or recurrence resets its
 previous exceptions. A concurrent edit returns a conflict with the current
 version; the client keeps the draft for review.
+
+In Week/Day, drag a timed event to change its time or use its bottom edge to
+adjust the end. On Android, long-press to move; ordinary swipes scroll the
+timeline. Edits snap to 15 minutes and open a draft in the event editor: nothing
+changes until Save. Repeating events retain their original occurrence identity
+and require an explicit scope. Use the editor for all-day dates and schedule
+rules; a calendar gesture never turns a personal event into an Agent task.
 
 ## Agent access
 

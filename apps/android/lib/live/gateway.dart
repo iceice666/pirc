@@ -238,6 +238,12 @@ class LiveController extends ChangeNotifier {
   // Initial selection keeps the phone list open; explicit navigation reveals it.
   bool revealSelectedSession = true;
   int sessionNavigationRevision = 0;
+
+  /// Increased when the Gateway invalidates the signed-in user's calendar.
+  int calendarRevision = 0;
+  String? calendarFocusEventId, calendarFocusOccurrenceStart, calendarFocusDate;
+  int? calendarFocusStartAt;
+  int calendarFocusRevision = 0;
   bool _selectFirstSessionOnRefresh = false;
   final _reading = <String>{};
   final _deleting = <String>{};
@@ -374,6 +380,14 @@ class LiveController extends ChangeNotifier {
       pairingStamp = data['pairingStamp'] as String?;
       pairLink = data['pairLink'] as String?;
       routePage = data['route'] as String?;
+      calendarFocusEventId = data['eventId'] as String?;
+      calendarFocusOccurrenceStart = data['occurrenceStart'] as String?;
+      calendarFocusDate = data['eventDate'] as String?;
+      calendarFocusStartAt = (data['eventStartAt'] as num?)?.toInt();
+      if (calendarFocusEventId != null) {
+        routePage = 'calendar';
+        calendarFocusRevision++;
+      }
       initializing = origin != null;
       _selectFirstSessionOnRefresh =
           origin != null && data['targetSession'] == null && pairLink == null;
@@ -1149,6 +1163,11 @@ class LiveController extends ChangeNotifier {
       origin = next['origin'] as String?;
       clientId = next['clientId'] as String?;
       pairingStamp = next['pairingStamp'] as String?;
+      calendarFocusEventId = null;
+      calendarFocusOccurrenceStart = null;
+      calendarFocusDate = null;
+      calendarFocusStartAt = null;
+      calendarFocusRevision++;
       sessionId = null;
       state = {};
       control = {};
@@ -1184,6 +1203,15 @@ class LiveController extends ChangeNotifier {
       final data = obj(event['data']);
       pairLink = data['pairLink'];
       routePage = data['page'];
+      final eventId = data['eventId'];
+      if (eventId is String && eventId.isNotEmpty) {
+        calendarFocusEventId = eventId;
+        calendarFocusOccurrenceStart = data['occurrenceStart'] as String?;
+        calendarFocusDate = data['eventDate'] as String?;
+        calendarFocusStartAt = (data['eventStartAt'] as num?)?.toInt();
+        calendarFocusRevision++;
+        routePage = 'calendar';
+      }
       if (data['sessionId'] != null && origin != null) {
         unawaited(_openNotificationTarget(data));
       }
@@ -1207,7 +1235,12 @@ class LiveController extends ChangeNotifier {
             unawaited(attention.memoryChanged());
           }
           if (changes.contains('schedules_changed')) {
+            calendarRevision++;
             unawaited(attention.refreshSchedules());
+          }
+          if (changes.contains('calendar_changed')) {
+            calendarRevision++;
+            changed();
           }
           if (changes.contains('directory_changed') ||
               changes.contains('sessions_changed')) {

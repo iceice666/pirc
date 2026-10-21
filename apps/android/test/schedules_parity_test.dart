@@ -64,6 +64,13 @@ class ScheduleGateway extends FakeGateway {
   ];
   @override
   dynamic normal(String method, Json args) {
+    if (method == 'calendarPreferences') {
+      return {
+        'view': 'month',
+        'timezone': 'Asia/Taipei',
+        'weekStart': 'sunday',
+      };
+    }
     if (method == 'timeZoneInfo') {
       return {
         'default': 'Asia/Taipei',
@@ -98,6 +105,20 @@ Widget shell(Widget child, {double scale = 1}) => MaterialApp(
   home: Scaffold(body: child),
 );
 Future<void> tap(WidgetTester t, String label, {Finder? within}) async {
+  const scheduleActions = {
+    'Runs',
+    'Open session',
+    'Run now',
+    'Allow and run now',
+    'Dismiss',
+    'Pause',
+    'Resume',
+    'Edit',
+    'Delete',
+  };
+  if (label == 'New schedule' || scheduleActions.contains(label)) {
+    await selectScheduleList(t);
+  }
   final f = within == null
       ? find.widgetWithText(TextButton, label)
       : find.descendant(
@@ -110,6 +131,22 @@ Future<void> tap(WidgetTester t, String label, {Finder? within}) async {
   await t.pumpAndSettle();
   await t.tap(f);
   await t.pumpAndSettle();
+}
+
+Future<void> selectScheduleList(WidgetTester t) async {
+  if (find.text('Calendar list').evaluate().isNotEmpty) return;
+  final list = find.text('List');
+  if (list.evaluate().isNotEmpty) {
+    await t.ensureVisible(list);
+    await t.tap(list);
+    await t.pumpAndSettle();
+  }
+  final manage = find.text('Manage agent tasks');
+  if (manage.evaluate().isNotEmpty) {
+    await t.ensureVisible(manage);
+    await t.tap(manage);
+    await t.pumpAndSettle();
+  }
 }
 
 void main() {
@@ -547,7 +584,15 @@ void main() {
         shell(SchedulesPage(controller: c, onOpenChat: (id) => opened = id)),
       );
       await t.pumpAndSettle();
-      expect(t.takeException(), isNull);
+      await selectScheduleList(t);
+      final exception = t.takeException();
+      expect(
+        exception,
+        isNull,
+        reason: exception is FlutterError
+            ? exception.toStringDeep()
+            : '$exception',
+      );
       final daily = find.byKey(const ValueKey('schedule-Daily')),
           offline = find.byKey(const ValueKey('schedule-Offline')),
           finished = find.byKey(const ValueKey('schedule-Finished'));
@@ -845,6 +890,7 @@ void main() {
     final g = ScheduleGateway(), c = controller(g);
     await t.pumpWidget(shell(SchedulesPage(controller: c)));
     await t.pumpAndSettle();
+    await selectScheduleList(t);
     final card = find.byKey(const ValueKey('schedule-Daily'));
     final tops = [
       for (final label in ['Runs', 'Run now', 'Pause', 'Edit', 'Delete'])

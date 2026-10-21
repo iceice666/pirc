@@ -649,6 +649,9 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             htmlMedia.closeStalePairingStamp(it["pairingStamp"] as? String)
                         } + mapOf("onboardingComplete" to activity.permissionAccess.complete, "pairLink" to activity.intent?.dataString,
                             "route" to activity.intent?.getStringExtra("gatewayRoute"), "targetSession" to activity.intent?.getStringExtra("gatewaySession"),
+                            "eventId" to activity.intent?.getStringExtra("gatewayEventId"), "occurrenceStart" to activity.intent?.getStringExtra("gatewayOccurrenceStart"),
+                            "eventDate" to activity.intent?.getStringExtra("gatewayEventDate"),
+                            "eventStartAt" to activity.intent?.takeIf { it.hasExtra("gatewayEventStartAt") }?.getLongExtra("gatewayEventStartAt", 0),
                             "interactionId" to activity.intent?.getStringExtra("interactionId"), "interactionEpoch" to activity.intent?.getStringExtra("interactionEpoch"),
                             "interactionPairingStamp" to activity.intent?.getStringExtra("questionPairingStamp"),
                             "questionPairingStamp" to activity.intent?.getStringExtra("questionPairingStamp"),
@@ -684,6 +687,29 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             preferences.save(args)
                             if (args.containsKey("language")) GatewayNotifications.manager(activity)
                             preferences.read().also(runtime::notifyPreferencesChanged)
+                        }
+                        "calendarPreferences" -> {
+                            val digest = java.security.MessageDigest.getInstance("SHA-256")
+                                .digest(str("accountKey").toByteArray(Charsets.UTF_8))
+                                .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+                            val prefs = activity.getSharedPreferences("calendar_view_preferences", Context.MODE_PRIVATE)
+                            mapOf(
+                                "view" to prefs.getString("$digest:view", null),
+                                "timezone" to prefs.getString("$digest:timezone", null),
+                                "weekStart" to prefs.getString("$digest:weekStart", null),
+                            )
+                        }
+                        "saveCalendarPreferences" -> {
+                            val digest = java.security.MessageDigest.getInstance("SHA-256")
+                                .digest(str("accountKey").toByteArray(Charsets.UTF_8))
+                                .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+                            val prefs = activity.getSharedPreferences("calendar_view_preferences", Context.MODE_PRIVATE)
+                            val edit = prefs.edit()
+                            for (key in listOf("view", "timezone", "weekStart")) {
+                                (args[key] as? String)?.let { edit.putString("$digest:$key", it) }
+                            }
+                            edit.apply()
+                            null
                         }
                         "appSettings" -> {
                             activity.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
@@ -993,6 +1019,8 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                         "fileLink" -> parseFileLink(str("href"), args["base"] as? String ?: "")?.let { mapOf("path" to it.path, "line" to it.line) }
                         "timeZoneInfo" -> mapOf("default" to java.time.ZoneId.systemDefault().id, "zones" to java.time.ZoneId.getAvailableZoneIds().sorted())
                         "wallInput" -> wallInput((args["at"] as Number).toLong(), str("timezone"))
+                        "calendarDateStart" -> calendarDateStart(str("date"), str("timezone"))
+                        "calendarWallInstant" -> calendarWallInstant(str("value"), str("timezone"))
                         "unwatch" -> { runtime.unwatch(contextId, optionalString("watchTag")); null }
                         "refresh" -> runtime.snapshot(str("sessionId")).wire()
                         "draft" -> { runtime.local.saveDraft(str("sessionId"), str("text")); null }
@@ -1539,6 +1567,9 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
     }
     fun route(intent: Intent) {
         runtime.emit("route", mapOf("sessionId" to intent.getStringExtra("gatewaySession"), "page" to intent.getStringExtra("gatewayRoute"), "pairLink" to intent.dataString,
+            "eventId" to intent.getStringExtra("gatewayEventId"), "occurrenceStart" to intent.getStringExtra("gatewayOccurrenceStart"),
+            "eventDate" to intent.getStringExtra("gatewayEventDate"),
+            "eventStartAt" to intent.takeIf { it.hasExtra("gatewayEventStartAt") }?.getLongExtra("gatewayEventStartAt", 0),
             "interactionId" to intent.getStringExtra("interactionId"), "interactionEpoch" to intent.getStringExtra("interactionEpoch"),
             "interactionPairingStamp" to intent.getStringExtra("questionPairingStamp"), "questionPairingStamp" to intent.getStringExtra("questionPairingStamp"),
             "answerChoice" to intent.getStringExtra("answerChoice"), "confirmQuestion" to intent.getBooleanExtra("confirmQuestion",false)), sessionId = null)

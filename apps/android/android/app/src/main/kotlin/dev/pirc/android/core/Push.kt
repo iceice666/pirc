@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 /**
  * Push notifications (docs/guides/schedules.md). The gateway sends the same
@@ -16,6 +17,12 @@ import kotlinx.serialization.json.jsonPrimitive
 sealed interface PushTarget {
     data class OpenSession(val sessionId: String) : PushTarget
     data class OpenSchedules(val scheduleId: String? = null) : PushTarget
+    data class OpenCalendar(
+        val eventId: String,
+        val occurrenceStart: String? = null,
+        val date: String? = null,
+        val startAt: Long? = null,
+    ) : PushTarget
     data object OpenMemory : PushTarget
 
     companion object {
@@ -23,13 +30,25 @@ sealed interface PushTarget {
         private const val SCHEDULES = "dev.pirc.android.target.schedules"
         private const val SCHEDULE = "dev.pirc.android.target.schedule"
         private const val MEMORY = "dev.pirc.android.target.memory"
+        private const val CALENDAR = "dev.pirc.android.target.calendar"
+        private const val EVENT = "dev.pirc.android.target.event"
+        private const val OCCURRENCE_START = "dev.pirc.android.target.occurrence_start"
+        private const val EVENT_DATE = "dev.pirc.android.target.event_date"
+        private const val EVENT_START_AT = "dev.pirc.android.target.event_start_at"
 
         fun from(json: JsonElement?): PushTarget? {
             val target = json as? JsonObject ?: return null
             fun text(key: String) = runCatching { target[key]?.jsonPrimitive?.content }.getOrNull()
+            fun long(key: String) = runCatching { target[key]?.jsonPrimitive?.longOrNull }.getOrNull()
             fun flag(key: String) = runCatching { target[key]?.jsonPrimitive?.booleanOrNull }.getOrNull() == true
             return when {
                 !text("sessionId").isNullOrEmpty() -> OpenSession(text("sessionId")!!)
+                flag("calendar") && !text("eventId").isNullOrEmpty() -> OpenCalendar(
+                    text("eventId")!!,
+                    text("occurrenceStart"),
+                    text("date"),
+                    long("startAt"),
+                )
                 flag("schedules") -> OpenSchedules(text("scheduleId"))
                 flag("memory") -> OpenMemory
                 else -> null
@@ -40,6 +59,16 @@ sealed interface PushTarget {
         fun from(intent: Intent?): PushTarget? {
             intent ?: return null
             intent.getStringExtra(SESSION)?.let { return OpenSession(it) }
+            if (intent.getBooleanExtra(CALENDAR, false)) {
+                intent.getStringExtra(EVENT)?.takeIf { it.isNotBlank() }?.let {
+                    return OpenCalendar(
+                        it,
+                        intent.getStringExtra(OCCURRENCE_START),
+                        intent.getStringExtra(EVENT_DATE),
+                        intent.getLongExtra(EVENT_START_AT, Long.MIN_VALUE).takeUnless { value -> value == Long.MIN_VALUE },
+                    )
+                }
+            }
             if (intent.getBooleanExtra(SCHEDULES, false)) return OpenSchedules(intent.getStringExtra(SCHEDULE))
             if (intent.getBooleanExtra(MEMORY, false)) return OpenMemory
             return null
@@ -48,6 +77,13 @@ sealed interface PushTarget {
         fun Intent.putTarget(target: PushTarget): Intent = apply {
             when (target) {
                 is OpenSession -> putExtra(SESSION, target.sessionId)
+                is OpenCalendar -> {
+                    putExtra(CALENDAR, true)
+                    putExtra(EVENT, target.eventId)
+                    target.occurrenceStart?.let { putExtra(OCCURRENCE_START, it) }
+                    target.date?.let { putExtra(EVENT_DATE, it) }
+                    target.startAt?.let { putExtra(EVENT_START_AT, it) }
+                }
                 is OpenSchedules -> {
                     putExtra(SCHEDULES, true)
                     target.scheduleId?.let { putExtra(SCHEDULE, it) }

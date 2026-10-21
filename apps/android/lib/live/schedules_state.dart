@@ -103,6 +103,7 @@ class SchedulesState extends ChangeNotifier {
     : clock = clock ?? DateTime.now {
     _origin = controller.origin;
     _client = controller.clientId;
+    _stamp = controller.pairingStamp;
     _revision = controller.attention.scheduleRevision;
     controller.addListener(_external);
   }
@@ -116,7 +117,7 @@ class SchedulesState extends ChangeNotifier {
   String? error, runsError, busy, expanded, confirming;
   bool loading = true, runsLoading = false;
   int epoch = 0, _read = 0, _runsRead = 0, _revision = 0;
-  String? _origin, _client;
+  String? _origin, _client, _stamp;
   bool _disposed = false;
   void changed() {
     if (!_disposed) notifyListeners();
@@ -129,9 +130,12 @@ class SchedulesState extends ChangeNotifier {
           (a, b) => '${a['displayName']}'.compareTo('${b['displayName']}'),
         );
   void _external() {
-    if (_origin != controller.origin || _client != controller.clientId) {
+    if (_origin != controller.origin ||
+        _client != controller.clientId ||
+        _stamp != controller.pairingStamp) {
       _origin = controller.origin;
       _client = controller.clientId;
+      _stamp = controller.pairingStamp;
       epoch++;
       _read++;
       _runsRead++;
