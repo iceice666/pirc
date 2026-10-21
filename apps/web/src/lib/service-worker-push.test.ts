@@ -9,7 +9,13 @@ function deferred<T = void>() {
 }
 
 function serviceWorkerHarness(
-  harnessOptions: { showGate?: Promise<void>; noClients?: boolean; page?: string } = {},
+  harnessOptions: {
+    showGate?: Promise<void>;
+    noClients?: boolean;
+    page?: string;
+    /** The page is in front, being looked at. */
+    looking?: boolean;
+  } = {},
 ) {
   const navigated: string[] = [];
   const listeners = new Map<string, (event: any) => void>();
@@ -20,11 +26,11 @@ function serviceWorkerHarness(
   const notificationShowStarted = new Promise<void>((resolve) => (showStarted = resolve));
   const pageClient = {
     url: `https://pirc.test${harnessOptions.page ?? '/'}`,
-    focused: false,
+    focused: !!harnessOptions.looking,
     async navigate(url: string) {
       navigated.push(url);
     },
-    visibilityState: 'hidden',
+    visibilityState: harnessOptions.looking ? 'visible' : 'hidden',
     async focus() {
       this.focused = true;
     },
@@ -114,6 +120,10 @@ function serviceWorkerHarness(
   return {
     shown,
     messages,
+    /** Rooms muted on this device, as src/lib/mute.ts copies them. */
+    mute(rooms: string[]) {
+      records.set('https://pirc.test/__pirc_muted_rooms__', new Response(JSON.stringify(rooms)));
+    },
     openedWindows,
     navigated,
     notificationShowStarted,
@@ -261,4 +271,37 @@ it('moves an open window to the page the notification is about', async () => {
   const fresh = serviceWorkerHarness({ noClients: true });
   await fresh.clickNotification({ target: { memory: true } });
   expect(fresh.openedWindows).toEqual(['/engine?open=memory']);
+});
+
+it('shows a room’s message unless that room is on screen or muted on this device', async () => {
+  const room = (roomId: string) => ({
+    title: 'pirc',
+    body: 'Done.',
+    tag: `room:${roomId}`,
+    target: { roomId },
+  });
+  const away = serviceWorkerHarness({ page: '/?room=room_1' });
+  await away.push(room('room_1'));
+  expect(away.shown.map((item) => item.options.data.target)).toEqual([{ roomId: 'room_1' }]);
+
+  const looking = serviceWorkerHarness({ page: '/?room=room_1', looking: true });
+  await looking.push(room('room_1'));
+  await looking.push(room('room_2'));
+  expect(looking.shown.map((item) => item.options.tag)).toEqual(['room:room_2']);
+
+  // The rooms page without ?room= shows #general.
+  const general = serviceWorkerHarness({ page: '/', looking: true });
+  await general.push(room('general'));
+  expect(general.shown).toEqual([]);
+
+  // The engine on screen is not the room.
+  const engine = serviceWorkerHarness({ page: '/engine?room=room_1', looking: true });
+  await engine.push(room('room_1'));
+  expect(engine.shown).toHaveLength(1);
+
+  const muted = serviceWorkerHarness({ page: '/' });
+  muted.mute(['room_1']);
+  await muted.push(room('room_1'));
+  await muted.push(room('room_2'));
+  expect(muted.shown.map((item) => item.options.tag)).toEqual(['room:room_2']);
 });

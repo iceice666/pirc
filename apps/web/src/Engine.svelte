@@ -75,7 +75,7 @@
   let viewportWidth = $state(window.innerWidth);
   let panelTab: PanelTab = $state('files');
   let settingsOpen = $state(false);
-  let settingsTab: SettingsTab = $state('general');
+  let settingsTab: SettingsTab = $state('models');
   /** The workspace whose page is showing, if it still exists. */
   const pageWorkspace = $derived(
     engine.view === 'workspace'
@@ -100,7 +100,7 @@
   ]);
   function pickTab(tab: MobileTabId) {
     if (tab === 'settings') {
-      settingsTab = 'general';
+      settingsTab = 'models';
       settingsOpen = true;
     } else if (onOverview) sidebarOpen = true;
     else showOverview();
@@ -424,7 +424,7 @@
     onclose={() => (sidebarOpen = false)}
     onopenworkspace={openWorkspace}
     onsettings={() => {
-      settingsTab = 'general';
+      settingsTab = 'models';
       settingsOpen = true;
     }}
     onoverview={showOverview}
@@ -655,7 +655,8 @@
 <SettingsDialog
   bind:open={settingsOpen}
   bind:tab={settingsTab}
-  bind:showSettled
+  disabled={engine.usingDemo}
+  onmodelschanged={() => engine.loadModels()}
   onresetlayout={resetLayout}
 />
 {#if nativeManagementRequestId}

@@ -5,6 +5,9 @@ const SHELL_CACHE = 'relay-shell-v1';
 const RESOLVED_INTERACTION_CACHE = 'relay-interaction-resolved-v1';
 const RESOLVED_INTERACTION_TTL = 48 * 60 * 60 * 1000;
 const RESOLVED_INTERACTION_LIMIT = 500;
+/** Rooms muted on this device, as the pages keep them (src/lib/mute.ts). */
+const SETTINGS_CACHE = 'relay-settings-v1';
+const MUTED_ROOMS_KEY = '/__pirc_muted_rooms__';
 /** Serialize create/revoke handling for each exact question within this worker. */
 const interactionPushChains = new Map();
 const SHELL_KEY = '/';
@@ -206,6 +209,17 @@ async function rememberResolvedInteraction(identity) {
   await Promise.all(live.slice(RESOLVED_INTERACTION_LIMIT).map(({ key }) => cache.delete(key)));
 }
 
+async function roomMuted(roomId) {
+  try {
+    const cache = await caches.open(SETTINGS_CACHE);
+    const response = await cache.match(new URL(MUTED_ROOMS_KEY, self.location.origin).href);
+    const list = await response?.json();
+    return Array.isArray(list) && list.includes(roomId);
+  } catch {
+    return false;
+  }
+}
+
 function sameInteraction(a, b) {
   return (
     a?.sessionId === b.sessionId &&
@@ -225,8 +239,9 @@ function serializeInteractionPush(identity, operation) {
 }
 
 /**
- * A push from the gateway (daemon/push.ts). Nothing is shown when the user
- * is looking at the very session it is about.
+ * A push from the gateway (crates/pirc-gateway/src/push.rs). Nothing is shown
+ * when the user is looking at the very room or session it is about, or when
+ * this device muted the room.
  */
 self.addEventListener('push', (event) => {
   let message;
@@ -287,14 +302,18 @@ self.addEventListener('push', (event) => {
       }
       if (!message?.title) return;
       const sessionId = message.target?.sessionId;
-      if (sessionId) {
+      const roomId = message.target?.roomId;
+      // Muted on this device: the room's list still shows it unread.
+      if (roomId && (await roomMuted(roomId))) return;
+      if (sessionId || roomId) {
         const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-        const watching = windows.some(
-          (client) =>
-            client.focused &&
-            client.visibilityState === 'visible' &&
-            new URL(client.url).searchParams.get('session') === sessionId,
-        );
+        const watching = windows.some((client) => {
+          if (!client.focused || client.visibilityState !== 'visible') return false;
+          const params = new URL(client.url).searchParams;
+          return sessionId
+            ? params.get('session') === sessionId
+            : !onEngine(client.url) && (params.get('room') ?? 'general') === roomId;
+        });
         if (watching) return;
       }
       await self.registration.showNotification(message.title, {

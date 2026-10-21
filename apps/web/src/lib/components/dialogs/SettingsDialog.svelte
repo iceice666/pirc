@@ -1,45 +1,59 @@
 <script lang="ts" module>
   const SETTINGS_TABS = [
-    { id: 'general', label: 'General' },
-    { id: 'memory', label: 'Memory' },
-    { id: 'loops', label: 'Open loops' },
-    { id: 'wakes', label: 'Wakes' },
     { id: 'models', label: 'Models & sources' },
     { id: 'devices', label: 'Devices' },
+    { id: 'notifications', label: 'Notifications' },
     { id: 'about', label: 'About' },
   ] as const;
   export type SettingsTab = (typeof SETTINGS_TABS)[number]['id'];
 </script>
 
 <script lang="ts">
+  /**
+   * Settings, the same on the rooms and in the engine (plans/rewrite/11-web.md):
+   * the model backends and the sources, the paired devices, notifications
+   * (and the rooms muted here), and this browser. What pirc keeps (memory,
+   * loops, wakes) is on the engine's front page; preferences on the host's.
+   */
   import { X } from '@lucide/svelte';
   import { rovingFocus } from '../../a11y';
-  import { engine } from '../../engine.svelte';
-  import { describeNode } from '../../modes';
+  import { mutedRooms, setMuted } from '../../mute';
+  import { engineLink } from '../../routes';
+  import { getClientId } from '../../storage';
   import Modal from './Modal.svelte';
   import BackendSettings from '../BackendSettings.svelte';
-  import LoopsSettings from '../LoopsSettings.svelte';
-  import MemorySettings from '../MemorySettings.svelte';
   import NotificationSettings from '../NotificationSettings.svelte';
   import PairedDevices from '../PairedDevices.svelte';
   import SourceSettings from '../SourceSettings.svelte';
-  import WakesSettings from '../WakesSettings.svelte';
 
   interface Props {
     open: boolean;
-    /** The category shown; the opener may pick one (e.g. Memory). */
+    /** The category shown; the opener may pick one. */
     tab?: SettingsTab;
-    /** Workspace pages list settled sessions. */
-    showSettled: boolean;
-    onresetlayout: () => void;
+    /** Demo mode: nothing to ask the gateway. */
+    disabled?: boolean;
+    /** Room names by id, for the muted rooms. */
+    roomNames?: Record<string, string>;
+    /** The model backends changed (the engine reloads its model list). */
+    onmodelschanged?: () => void;
+    /** The engine's layout (sidebar, side panel) back to its defaults. */
+    onresetlayout?: () => void;
   }
 
   let {
     open = $bindable(),
-    tab: settingsTab = $bindable('general'),
-    showSettled = $bindable(),
+    tab: settingsTab = $bindable('models'),
+    disabled = false,
+    roomNames = {},
+    onmodelschanged,
     onresetlayout,
   }: Props = $props();
+
+  let muted = $state<string[]>([]);
+  $effect(() => {
+    if (open) muted = mutedRooms();
+  });
+  const clientId = getClientId();
 </script>
 
 <Modal bind:open labelledby="settings-title" class="settings">
@@ -79,69 +93,13 @@
       <!-- Panels stay mounted so switching tabs never cancels an in-flight provider login. -->
       <div
         role="tabpanel"
-        id="settings-panel-general"
-        aria-labelledby="settings-tab-general"
-        hidden={settingsTab !== 'general'}
-      >
-        <section class="settings-section">
-          <h3>Sessions</h3>
-          <label class="settings-toggle">
-            <span>Show done sessions</span>
-            <input type="checkbox" bind:checked={showSettled} />
-          </label>
-          <p>
-            Settled (done) sessions are hidden from workspace pages unless this is on. Workspace
-            settings are on their own pages.
-          </p>
-        </section>
-
-        <NotificationSettings disabled={engine.usingDemo} />
-
-        <section class="settings-section">
-          <h3>Layout</h3>
-          <div class="settings-row">
-            <span>Restore the sidebar and side panel to their default size and visibility.</span>
-            <button class="button ghost" type="button" onclick={onresetlayout}>Reset</button>
-          </div>
-        </section>
-      </div>
-
-      <div
-        role="tabpanel"
-        id="settings-panel-memory"
-        aria-labelledby="settings-tab-memory"
-        hidden={settingsTab !== 'memory'}
-      >
-        <MemorySettings disabled={engine.usingDemo} revision={engine.memoryRevision} />
-      </div>
-
-      <div
-        role="tabpanel"
-        id="settings-panel-loops"
-        aria-labelledby="settings-tab-loops"
-        hidden={settingsTab !== 'loops'}
-      >
-        <LoopsSettings disabled={engine.usingDemo} />
-      </div>
-
-      <div
-        role="tabpanel"
-        id="settings-panel-wakes"
-        aria-labelledby="settings-tab-wakes"
-        hidden={settingsTab !== 'wakes'}
-      >
-        <WakesSettings disabled={engine.usingDemo} />
-      </div>
-
-      <div
-        role="tabpanel"
         id="settings-panel-models"
         aria-labelledby="settings-tab-models"
         hidden={settingsTab !== 'models'}
       >
-        <BackendSettings disabled={engine.usingDemo} onchanged={() => engine.loadModels()} />
+        <BackendSettings {disabled} onchanged={() => onmodelschanged?.()} />
         <!-- The same page and grant as the backends (decision #6). -->
-        <SourceSettings disabled={engine.usingDemo} />
+        <SourceSettings {disabled} />
       </div>
 
       <div
@@ -150,30 +108,42 @@
         aria-labelledby="settings-tab-devices"
         hidden={settingsTab !== 'devices'}
       >
+        <PairedDevices {disabled} />
         <section class="settings-section">
           <h3>Nodes</h3>
-          {#if engine.nodes.length}
-            <ul class="settings-devices">
-              {#each engine.nodes as node (node.id)}
+          <p>
+            The machines pirc works on, and what each can do, are on the
+            <a href={engineLink('nodes')}>engine's front page</a>.
+          </p>
+        </section>
+      </div>
+
+      <div
+        role="tabpanel"
+        id="settings-panel-notifications"
+        aria-labelledby="settings-tab-notifications"
+        hidden={settingsTab !== 'notifications'}
+      >
+        <NotificationSettings {disabled} />
+        <section class="settings-section">
+          <h3>Muted rooms on this device</h3>
+          {#if muted.length}
+            <ul class="muted-rooms">
+              {#each muted as roomId (roomId)}
                 <li>
-                  <span class="online-dot"></span>
-                  <strong>{node.id}</strong>
-                  <small
-                    >{node.workspaces.length} workspace{node.workspaces.length === 1
-                      ? ''
-                      : 's'}</small
+                  <span>#{roomNames[roomId] ?? roomId}</span>
+                  <button
+                    type="button"
+                    class="button ghost small"
+                    onclick={() => (muted = setMuted(roomId, false))}>Unmute</button
                   >
-                  {#if describeNode(node)}<small class="node-caps">{describeNode(node)}</small>{/if}
                 </li>
               {/each}
             </ul>
           {:else}
-            <p>No nodes online.</p>
+            <p>None. Mute a room from its header: it stops notifying this device only.</p>
           {/if}
-          <p>{engine.nodes.length} online</p>
         </section>
-
-        <PairedDevices disabled={engine.usingDemo} />
       </div>
 
       <div
@@ -186,9 +156,18 @@
           <h3>This browser</h3>
           <div class="settings-row">
             <span>Client ID</span>
-            <code>{engine.clientId}</code>
+            <code>{clientId}</code>
           </div>
         </section>
+        {#if onresetlayout}
+          <section class="settings-section">
+            <h3>Layout</h3>
+            <div class="settings-row">
+              <span>Restore the engine's sidebar and side panel to their default size.</span>
+              <button class="button ghost" type="button" onclick={onresetlayout}>Reset</button>
+            </div>
+          </section>
+        {/if}
       </div>
     </div>
   </div>
@@ -265,66 +244,6 @@
       flex: none;
     }
   }
-  :global(.modal) label.settings-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin: 0;
-    color: var(--muted);
-    font-weight: 400;
-  }
-  :global(.modal) .settings-toggle input {
-    width: 16px;
-    height: 16px;
-    flex: none;
-    padding: 0;
-    accent-color: var(--accent);
-  }
-  .settings-devices {
-    display: grid;
-    gap: 2px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .settings-devices li {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 34px;
-    padding: 0 10px;
-    border-radius: var(--radius-sm);
-    background: var(--bg-subtle);
-  }
-  .settings-devices strong {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    font-size: 13px;
-    font-weight: 500;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .settings-devices small {
-    color: var(--muted);
-    font-size: 11px;
-  }
-  .settings-devices li:has(.node-caps) {
-    flex-wrap: wrap;
-    padding-block: 6px;
-  }
-  .settings-devices .node-caps {
-    flex-basis: 100%;
-    padding-left: 18px;
-  }
-  .online-dot {
-    flex: none;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--success);
-  }
   .settings-row {
     display: flex;
     align-items: center;
@@ -333,6 +252,24 @@
     color: var(--muted);
     font-size: 13px;
     line-height: 1.5;
+  }
+  .muted-rooms {
+    display: grid;
+    gap: 2px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .muted-rooms li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 34px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-subtle);
+    font-size: 13px;
   }
   .settings-row code {
     overflow: hidden;

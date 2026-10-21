@@ -2,11 +2,14 @@
   import {
     Archive,
     ArchiveRestore,
+    Bell,
+    BellOff,
     ChevronRight,
     Hash,
     Paperclip,
     Plus,
     SendHorizontal,
+    Settings,
     SquareTerminal,
     Users,
     X,
@@ -23,7 +26,9 @@
   import { registerPwa } from '../../pwa';
   import type { RoomView } from '../../rooms';
   import { rooms as defaultRooms, roomFromUrl, type RoomsState } from '../../rooms.svelte';
+  import { mutedRooms, setMuted, syncMuted } from '../../mute';
   import { loadRoomDraft, saveRoomDraft } from '../../storage';
+  import SettingsDialog, { type SettingsTab } from '../dialogs/SettingsDialog.svelte';
   import MobileTabs, { type MobileTab, type MobileTabId } from '../MobileTabs.svelte';
   import { trackViewportHeight } from '../../viewport';
   import FacePanel from './FacePanel.svelte';
@@ -103,15 +108,38 @@
     if (showArchived) await rooms.loadArchived().catch(() => {});
   }
 
+  /** Settings, the same dialog as the engine's. */
+  let settingsOpen = $state(false);
+  let settingsTab = $state<SettingsTab>('models');
+  const roomNames = $derived(
+    Object.fromEntries([...rooms.rooms, ...rooms.archived].map((room) => [room.id, room.name])),
+  );
+  function openSettings(tab: SettingsTab = 'models') {
+    settingsTab = tab;
+    settingsOpen = true;
+  }
+
+  /** Rooms muted on this device: no notifications from them here. */
+  let muted = $state(mutedRooms());
+  // Unmuted from Settings meanwhile.
+  $effect(() => {
+    if (!settingsOpen) muted = mutedRooms();
+  });
+  const mutedHere = $derived(muted.includes(rooms.currentId));
+
   /** Phone: the bottom tabs. A room is inside the Rooms tab. */
-  const mobileTab = $derived<MobileTabId>(!listOpen && sideOpen ? 'members' : 'rooms');
+  const mobileTab = $derived<MobileTabId>(
+    settingsOpen ? 'settings' : !listOpen && sideOpen ? 'members' : 'rooms',
+  );
   const mobileTabs = $derived<MobileTab[]>([
     { id: 'rooms', badge: rooms.rooms.filter((room) => room.waiting).length },
     { id: 'members' },
     { id: 'engine', href: '/engine' },
+    { id: 'settings' },
   ]);
   function pickTab(tab: MobileTabId) {
-    if (tab === 'members') {
+    if (tab === 'settings') openSettings();
+    else if (tab === 'members') {
       listOpen = false;
       rooms.closeThread();
       side = 'members';
@@ -154,6 +182,7 @@
     const removePwa = registerPwa(() => {});
     const removeViewport = trackViewportHeight();
     void rooms.start();
+    syncMuted();
     const clock = setInterval(() => (now = Date.now()), 1000);
     const visible = () => {
       if (document.visibilityState === 'visible') void rooms.markRead();
@@ -295,6 +324,7 @@
   >
     <Hash size={16} />
     <span class="room-name">{room.name}</span>
+    {#if muted.includes(room.id)}<BellOff size={13} aria-label="Muted" />{/if}
     {#if room.waiting}<span class="waiting" title="Waiting for your reply">Your turn</span>{/if}
     {#if room.unread > 0 && room.id !== rooms.currentId}
       <span class="dot" aria-label="{room.unread} unread"></span>
@@ -345,7 +375,12 @@
         </ul>
       {/if}
     </div>
-    <a class="engine" href="/engine"><SquareTerminal size={16} />Engine</a>
+    <div class="list-foot">
+      <a class="engine" href="/engine"><SquareTerminal size={16} />Engine</a>
+      <button type="button" class="engine" onclick={() => openSettings()}
+        ><Settings size={16} />Settings</button
+      >
+    </div>
   </nav>
 
   <main class="room-view" aria-label={current ? `#${current.name}` : 'Room'}>
@@ -374,6 +409,15 @@
       {#if rooms.connection !== 'connected' && !rooms.loading}
         <span class="badge" role="status">{rooms.connection}</span>
       {/if}
+      <button
+        type="button"
+        class="icon"
+        aria-label={mutedHere ? 'Unmute this room on this device' : 'Mute this room on this device'}
+        title={mutedHere ? 'Muted on this device' : 'Mute on this device'}
+        aria-pressed={mutedHere}
+        onclick={() => (muted = setMuted(rooms.currentId, !mutedHere))}
+        >{#if mutedHere}<BellOff size={18} />{:else}<Bell size={18} />{/if}</button
+      >
       {#if current && !current.archivedAt}
         <RoomSources
           roomName={current.name}
@@ -570,6 +614,8 @@
   <MobileTabs tabs={mobileTabs} current={mobileTab} onpick={pickTab} />
 </div>
 
+<SettingsDialog bind:open={settingsOpen} bind:tab={settingsTab} {roomNames} />
+
 <style>
   .rooms {
     display: grid;
@@ -698,14 +744,25 @@
     font-size: 11px;
     font-weight: 600;
   }
+  .list-foot {
+    display: flex;
+    border-top: 1px solid var(--line);
+  }
   .engine {
     display: flex;
+    flex: 1;
     align-items: center;
     gap: 6px;
     padding: 12px 16px;
-    border-top: 1px solid var(--line);
+    border: 0;
+    background: none;
     color: var(--muted);
+    font: inherit;
     text-decoration: none;
+    cursor: pointer;
+  }
+  .engine:hover {
+    color: var(--ink);
   }
   .room-view {
     display: flex;
@@ -947,7 +1004,7 @@
       display: flex;
     }
     /* The tabs lead there. */
-    .engine {
+    .list-foot {
       display: none;
     }
   }

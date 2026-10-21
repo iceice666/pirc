@@ -268,6 +268,13 @@ describe('rooms page', () => {
   let component: ReturnType<typeof mount> | undefined;
   beforeEach(() => {
     localStorage.clear();
+    // jsdom has no modal dialogs.
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+      this.open = false;
+    };
     target = document.createElement('div');
     document.body.append(target);
   });
@@ -309,6 +316,36 @@ describe('rooms page', () => {
     expect(calls.some((call) => call.url === '/api/rooms?archived=1')).toBe(true);
   });
 
+  it('mutes a room on this device, and unmutes it from Settings', async () => {
+    await show();
+    const bell = () =>
+      target.querySelector<HTMLButtonElement>('button[aria-pressed][aria-label*="this room"]')!;
+    expect(bell().getAttribute('aria-pressed')).toBe('false');
+    bell().click();
+    flushSync();
+    expect(bell().getAttribute('aria-pressed')).toBe('true');
+    expect(localStorage.getItem('relay.muted-rooms')).toBe('["general"]');
+    expect(target.querySelector('.room [aria-label="Muted"]')).not.toBeNull();
+    // Settings from the list's foot, on its notifications.
+    [...target.querySelectorAll<HTMLButtonElement>('.list-foot button')]
+      .find((item) => item.textContent?.includes('Settings'))!
+      .click();
+    flushSync();
+    const dialog = document.querySelector('dialog')!;
+    [...dialog.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+      .find((item) => item.textContent === 'Notifications')!
+      .click();
+    flushSync();
+    const unmute = [...dialog.querySelectorAll<HTMLButtonElement>('.muted-rooms button')];
+    expect(dialog.querySelector('.muted-rooms')!.textContent).toContain('#general');
+    unmute[0]!.click();
+    flushSync();
+    expect(localStorage.getItem('relay.muted-rooms')).toBeNull();
+    dialog.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click();
+    flushSync();
+    await vi.waitFor(() => expect(bell().getAttribute('aria-pressed')).toBe('false'));
+  });
+
   it('has bottom tabs for the phone: the rooms and what waits there, members, the engine', async () => {
     listed[1] = room('topic', { waiting: true });
     await show();
@@ -328,6 +365,10 @@ describe('rooms page', () => {
     expect(target.querySelector('.rooms')!.classList.contains('list-open')).toBe(true);
     expect(target.querySelector('.members')).toBeNull();
     expect(tab('Rooms').getAttribute('aria-current')).toBe('page');
+    tab('Settings').click();
+    flushSync();
+    expect(tab('Settings').getAttribute('aria-current')).toBe('page');
+    expect(document.querySelector('dialog #settings-title')).not.toBeNull();
   });
 
   it('sends on Enter, sends now on Cmd+Enter, and leaves Enter to an IME', async () => {

@@ -78,7 +78,10 @@
 
 <section class="settings-section" aria-labelledby="notifications-title">
   <h3 id="notifications-title">Notifications</h3>
-  <p>Sessions waiting for your answer and finished delegations.</p>
+  <p>
+    What pirc asks you and what it says when it comes back to you, each opening its room. A room
+    muted from its header stays quiet on this device.
+  </p>
 
   {#if status === 'loading'}
     <p role="status">Checking notifications…</p>
