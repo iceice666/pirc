@@ -1,5 +1,5 @@
 {
-  "description": "The PM face answers in its own room, calls a worker whose thread is open beside the room, and the host speaks in #general meanwhile. Covers presence (brain_presence, face_presence), thread messages (the open thread's, another thread's ignored), a renamed face, loops and wakes changing, another device reading #general, and a room the list does not know yet. The asking user is me@example.com.",
+  "description": "The PM face answers in its own room, calls a worker whose thread is open beside the room, and the host speaks in #general meanwhile. Covers presence (brain_presence, face_presence), thread messages (the open thread's kept, another thread's only as its workers' latest activity), a renamed face, loops and wakes changing, another device reading #general, and a room the list does not know yet. The asking user is me@example.com.",
   "user": "me@example.com",
   "rooms": [
     {
@@ -500,6 +500,7 @@
       "facePresence": {},
       "thread": "thr_1",
       "threadMessages": [],
+      "threadActivity": {},
       "loopsRevision": 0,
       "wakesRevision": 0
     },
@@ -582,6 +583,10 @@
           "text": "bun run lint (3 errors)"
         }
       ],
+      "threadActivity": {
+        "thr_1": "bun run lint (3 errors)",
+        "thr_2": "elsewhere"
+      },
       "loopsRevision": 1,
       "wakesRevision": 1
     },

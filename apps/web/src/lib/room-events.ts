@@ -35,6 +35,37 @@ export interface RoomsView {
   /** The thread open beside the room, and its messages in seq order. */
   threadId: string | undefined;
   threadMessages: ThreadMessage[];
+  /**
+   * What each thread's workers did last, from the stream (open or not): a
+   * worker's anchor shows it as its progress, updated in place.
+   */
+  threadActivity: Record<string, ThreadActivity>;
+}
+
+export interface ThreadActivity {
+  text: string;
+  at: number;
+}
+
+/** A thread message as one line of progress, if it says what a worker does. */
+export function activityOf(message: ThreadMessage): ThreadActivity | undefined {
+  if (!message.speaker.startsWith('worker:')) return undefined;
+  const raw =
+    message.kind === 'tool'
+      ? (message.body.summary ?? message.body.tool ?? '')
+      : message.kind === 'text'
+        ? (message.body.text ?? '')
+        : '';
+  const text =
+    raw
+      .split('\n')
+      .find((line) => line.trim())
+      ?.trim() ?? '';
+  if (!text) return undefined;
+  return {
+    text: text.length > 120 ? `${text.slice(0, 119)}…` : text,
+    at: message.updatedAt ?? message.createdAt,
+  };
 }
 
 /** What an event asks the client to fetch or send after it. */
@@ -128,10 +159,16 @@ export function reduceRoomEvent(view: RoomsView, event: RoomEvent): Reduced {
     }
     case 'thread_message':
     case 'thread_message_updated': {
-      if (event.data.threadId !== view.threadId) return none;
       const message: ThreadMessage = event.data.message;
+      const activity = activityOf(message);
+      const latest = view.threadActivity[event.data.threadId];
+      const patch: Partial<RoomsView> =
+        activity && (!latest || activity.at >= latest.at)
+          ? { threadActivity: { ...view.threadActivity, [event.data.threadId]: activity } }
+          : {};
+      if (event.data.threadId !== view.threadId) return { patch, effects: [] };
       return {
-        patch: { threadMessages: upsertBySeq(view.threadMessages, message) },
+        patch: { ...patch, threadMessages: upsertBySeq(view.threadMessages, message) },
         // A worker started or ended: its list says so.
         effects: message.kind === 'line' ? [{ type: 'refresh_thread_workers' }] : [],
       };

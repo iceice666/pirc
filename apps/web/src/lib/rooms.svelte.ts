@@ -16,6 +16,7 @@ import {
   upsertFace,
   type RoomEffect,
   type RoomsView,
+  type ThreadActivity,
 } from './room-events';
 import {
   connectRooms,
@@ -68,6 +69,8 @@ export class RoomsState {
   threadMessages = $state<ThreadMessage[]>([]);
   threadWorkers = $state<Worker[]>([]);
   threadError = $state('');
+  /** What each thread's workers did last (plan 11: the anchor's progress). */
+  threadActivity = $state<Record<string, ThreadActivity>>({});
   #threadToken = 0;
 
   #stream: RoomStream | undefined;
@@ -295,6 +298,7 @@ export class RoomsState {
       wakesRevision: this.wakesRevision,
       threadId: this.threadId,
       threadMessages: this.threadMessages,
+      threadActivity: this.threadActivity,
     };
   }
 
@@ -320,6 +324,7 @@ export class RoomsState {
     if (patch.wakesRevision !== undefined) this.wakesRevision = patch.wakesRevision;
     if ('threadId' in patch) this.threadId = patch.threadId;
     if (patch.threadMessages) this.threadMessages = patch.threadMessages;
+    if (patch.threadActivity) this.threadActivity = patch.threadActivity;
   }
 
   #run(effect: RoomEffect) {

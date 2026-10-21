@@ -440,6 +440,116 @@ describe('rooms page', () => {
     expect(question.getAttribute('aria-label')).toMatch(/^pirc asks/);
   });
 
+  it('shows a worker’s progress on its anchor, and a waiting question above the composer', async () => {
+    const store = await show();
+    const anchor: RoomMessage = {
+      ...message('general', 2, ME, 'Fix lint'),
+      id: 'anchor',
+      speaker: 'face:host',
+      user: null,
+      threadId: 'thr_1',
+      body: {
+        text: 'Fix lint',
+        worker: {
+          delegationId: 'dlg_1',
+          threadId: 'thr_1',
+          status: 'running',
+          title: 'Fix lint',
+          workspace: 'slimeos',
+          workers: 1,
+          readOnly: false,
+          note: null,
+        },
+      },
+    };
+    store.apply(event('room_message', 'general', { message: anchor }));
+    const tool = (seq: number, summary: string) => ({
+      threadId: 'thr_1',
+      message: {
+        id: `tm_${seq}`,
+        threadId: 'thr_1',
+        seq,
+        speaker: 'worker:s1',
+        user: null,
+        kind: 'tool',
+        body: { tool: 'bash', summary },
+        depth: 0,
+        createdAt: 100 + seq,
+        updatedAt: null,
+      },
+    });
+    store.apply(event('thread_message', 'general', tool(1, 'bun install')));
+    store.apply(event('thread_message', 'general', tool(2, 'bun run lint')));
+    await tick();
+    expect(target.querySelector('#message-anchor .progress')?.textContent).toBe('bun run lint');
+    // Done: the anchor says so instead.
+    store.apply(
+      event('room_message_updated', 'general', {
+        message: {
+          ...anchor,
+          body: { ...anchor.body, worker: { ...anchor.body.worker!, status: 'completed' } },
+        },
+      }),
+    );
+    await tick();
+    expect(target.querySelector('#message-anchor .progress')).toBeNull();
+
+    expect(target.querySelector('.asking')).toBeNull();
+    const asked: RoomMessage = {
+      ...anchor,
+      id: 'ask',
+      seq: 3,
+      kind: 'question',
+      body: {
+        text: 'May it push?',
+        worker: { delegationId: 'dlg_1', threadId: 'thr_1', event: 'question' },
+        question: {
+          interactionId: 'i1',
+          threadMessageId: 'tm_3',
+          request: { title: 'git push' },
+          status: 'pending',
+        },
+      },
+    };
+    store.apply(event('room_message', 'general', { message: asked }));
+    await tick();
+    expect(target.querySelector('.asking')?.textContent).toContain(
+      'pirc is waiting for your answer: git push',
+    );
+    store.apply(
+      event('room_message_updated', 'general', {
+        message: {
+          ...asked,
+          body: { ...asked.body, question: { ...asked.body.question!, status: 'answered' } },
+        },
+      }),
+    );
+    await tick();
+    expect(target.querySelector('.asking')).toBeNull();
+  });
+
+  it('shows a progress message as a line that changes in place', async () => {
+    const store = await show();
+    const progress: RoomMessage = {
+      ...message('general', 2, ME, 'Reading the inbox…'),
+      id: 'p',
+      speaker: 'face:host',
+      user: null,
+      kind: 'progress',
+    };
+    store.apply(event('room_message', 'general', { message: progress }));
+    await tick();
+    expect(target.querySelector('.progress-line')?.textContent).toContain('Reading the inbox…');
+    store.apply(
+      event('room_message_updated', 'general', {
+        message: { ...progress, body: { text: 'Read 12 mails' } },
+      }),
+    );
+    await tick();
+    expect(target.querySelectorAll('.progress-line')).toHaveLength(1);
+    expect(target.querySelector('.progress-line')?.textContent).toContain('Read 12 mails');
+  });
+
   it('names the face that spoke, and opens its page', async () => {
     pages.general = [
       message('general', 1),

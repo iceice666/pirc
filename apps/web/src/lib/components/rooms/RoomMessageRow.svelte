@@ -4,6 +4,7 @@
   import { ApiError } from '../../http';
   import { lineAction } from '../../loops';
   import { describeOrigin, forgetRemembered } from '../../memory';
+  import type { ThreadActivity } from '../../room-events';
   import { roomsApi, type RoomMessage } from '../../rooms';
   import { wakesApi } from '../../wakes';
   import {
@@ -27,6 +28,8 @@
     faces?: Face[];
     /** Open a face's page. */
     onopenface?: (faceId: string) => void;
+    /** What each thread's workers did last: a working anchor's progress. */
+    activity?: Record<string, ThreadActivity>;
   }
 
   let {
@@ -37,6 +40,7 @@
     onopenthread,
     faces = [],
     onopenface,
+    activity = {},
   }: Props = $props();
 
   const face = $derived(speakerFace(faces, message.speaker));
@@ -126,6 +130,12 @@
       ? (message.body.worker as WorkerAnchor)
       : undefined,
   );
+  /** While it works: what it did last, updated in place. */
+  const progress = $derived(
+    anchor && (anchor.status === 'running' || anchor.status === 'waiting_input')
+      ? activity[anchor.threadId]
+      : undefined,
+  );
   /** A line or report about a worker: it opens the thread. */
   const workerThread = $derived(message.threadId ?? message.body.worker?.threadId ?? undefined);
 
@@ -177,7 +187,13 @@
   }
 </script>
 
-{#if message.kind === 'line'}
+{#if message.kind === 'progress'}
+  <div class="line progress-line" role="status" aria-busy="true">
+    <span class="spinner" aria-hidden="true"></span>
+    <span>{message.body.text ?? ''}</span>
+    <time datetime={new Date(message.createdAt).toISOString()} title={fullTime}>{time}</time>
+  </div>
+{:else if message.kind === 'line'}
   <div class="line" role="note">
     {#if message.body.move}
       <button type="button" class="link" onclick={() => onopenroom?.(message.body.move!.roomId)}
@@ -221,6 +237,7 @@
   {#if forgetError}<div class="line error" role="alert">{forgetError}</div>{/if}
 {:else}
   <article
+    id="message-{message.id}"
     class="message"
     class:continued={sameRun}
     class:question={message.kind === 'question'}
@@ -320,6 +337,9 @@
             >
           {/if}
         </div>
+        {#if progress}
+          <p class="progress" title={progress.text}>{progress.text}</p>
+        {/if}
         {#if forgetError}<p class="worker-error" role="alert">{forgetError}</p>{/if}
       {:else if message.body.worker && 'report' in message.body.worker && workerThread}
         <button type="button" class="link small" onclick={() => onopenthread?.(workerThread)}
@@ -360,6 +380,32 @@
 {/if}
 
 <style>
+  .progress {
+    margin: 2px 0 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .spinner {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.3;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner {
+      animation: none;
+    }
+  }
   .message {
     position: relative;
     display: grid;

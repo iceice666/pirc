@@ -80,6 +80,22 @@
     side = 'face';
   }
 
+  /** A worker's question still waiting here: the newest, shown above the composer. */
+  const asking = $derived(
+    [...rooms.messages]
+      .reverse()
+      .find(
+        (message) => message.kind === 'question' && message.body.question?.status === 'pending',
+      ),
+  );
+  const askingTitle = $derived(asking?.body.question?.request.title);
+  function jumpTo(messageId: string) {
+    stuck = false;
+    document
+      .getElementById('message-' + messageId)
+      ?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }
+
   /** The archived rooms, folded under the list. */
   let showArchived = $state(false);
   async function toggleArchived() {
@@ -410,9 +426,21 @@
           onopenthread={(threadId) => void rooms.openThread(threadId)}
           faces={rooms.faces}
           onopenface={openFace}
+          activity={rooms.threadActivity}
         />
       {/each}
     </div>
+
+    {#if asking}
+      <div class="asking" role="status">
+        <span
+          >{faceName(asking.speaker.replace(/^face:/, ''))} is waiting for your answer{askingTitle
+            ? ': ' + askingTitle
+            : ''}</span
+        >
+        <button type="button" class="link" onclick={() => jumpTo(asking.id)}>Show</button>
+      </div>
+    {/if}
 
     <div class="typing" aria-live="polite">
       {#if thinkingNow.length}{thinkingNow.join(', ')} is thinking…{/if}
@@ -759,6 +787,33 @@
     .presence.thinking .presence-dot {
       animation: none;
     }
+  }
+  .asking {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 16px 6px;
+    padding: 6px 10px;
+    border-left: 3px solid var(--warning);
+    border-radius: var(--radius-sm);
+    background: var(--warning-soft);
+    color: var(--ink);
+    font-size: 13px;
+  }
+  .asking span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
   }
   .typing {
     min-height: 20px;

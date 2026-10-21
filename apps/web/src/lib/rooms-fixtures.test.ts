@@ -51,6 +51,9 @@ function project(view: RoomsView, typingAt: number) {
       kind: message.kind,
       text: message.body.text ?? message.body.summary ?? null,
     })),
+    threadActivity: Object.fromEntries(
+      Object.entries(view.threadActivity).map(([id, activity]) => [id, activity.text]),
+    ),
     loopsRevision: view.loopsRevision,
     wakesRevision: view.wakesRevision,
   };
@@ -72,6 +75,7 @@ function loaded(fixture: any): RoomsView {
     wakesRevision: 0,
     threadId: fixture.thread ?? undefined,
     threadMessages: fixture.threadMessages ?? [],
+    threadActivity: {},
   };
 }
 

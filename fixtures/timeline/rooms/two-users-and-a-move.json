@@ -288,6 +288,7 @@
       "facePresence": {},
       "thread": null,
       "threadMessages": [],
+      "threadActivity": {},
       "loopsRevision": 0,
       "wakesRevision": 0
     },
@@ -340,6 +341,7 @@
       "facePresence": {},
       "thread": null,
       "threadMessages": [],
+      "threadActivity": {},
       "loopsRevision": 0,
       "wakesRevision": 0
     },
