@@ -748,7 +748,10 @@
     const form = blankEventForm(item.startDate ?? dateInTimezone(item.startAt, timezone));
     setFormFromSpec(form, event);
     form.id = event.id;
-    form.revision = event.revision;
+    // The detail request may be newer than the revision shown in the range.
+    // Keep the projected revision until the user explicitly adopts a conflict's
+    // current version, so stale occurrence boundaries cannot overwrite a move.
+    form.revision = item.revision ?? event.revision;
     form.sourceEvent = event;
     form.occurrence = item.originalStart;
     form.occurrenceStart = item.allDay

@@ -318,6 +318,48 @@ describe('Calendar page', () => {
     expect(saved.body.event.recurrence).not.toHaveProperty('until');
   });
 
+  it('uses the projected revision when an occurrence projection is older than its detail', async () => {
+    const projected = fixture.items.find((item) => item.sourceId === 'planning')!;
+    const current = {
+      ...(projected.event as CalendarEvent),
+      revision: 2,
+      start: '2026-10-21T09:45',
+      end: '2026-10-21T11:15',
+    };
+    setFetch(async (url, init) => {
+      if (url.startsWith('/api/calendar?')) return response(fixture);
+      if (url === '/api/calendar/events/planning' && init.method === 'PATCH')
+        return response(
+          { error: { code: 'revision_conflict', message: 'Changed elsewhere' } },
+          409,
+        );
+      if (url === '/api/calendar/events/planning') return response({ event: current });
+      return response({ error: { message: `Unexpected request ${url}` } }, 404);
+    });
+
+    mountPage();
+    await flush();
+    const planningButton = Array.from(
+      target.querySelectorAll<HTMLButtonElement>('.month-item'),
+    ).find((item) => item.textContent?.includes('Weekly planning'))!;
+    planningButton.click();
+    await flush();
+    expect(target.querySelector('.detail-title')?.textContent).toContain('Weekly planning');
+    await click('Edit');
+    await choose('Apply to', 'occurrence');
+    target.querySelector<HTMLFormElement>('.event-editor-form')!.requestSubmit();
+    await flush();
+
+    const patch = calls.find(
+      (call) => call.url === '/api/calendar/events/planning' && call.method === 'PATCH',
+    )!;
+    expect(patch.body.revision).toBe(projected.revision);
+    expect(patch.body.revision).toBe(1);
+    expect(patch.body.event.start).toBe('2026-10-21T09:30');
+    expect(target.querySelector('.event-editor-form')).not.toBeNull();
+    expect(target.querySelector('.conflict-card')?.textContent).toContain('Weekly planning');
+  });
+
   it('paginates with the returned cursor and keeps the current page when the next page fails', async () => {
     let failNextPage = true;
     setFetch(async (url) => {
