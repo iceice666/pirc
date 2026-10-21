@@ -23,7 +23,9 @@
     roomFace,
     type Face,
   } from '../../faces';
+  import { listFocus, rovingFocus } from '../../a11y';
   import { registerPwa } from '../../pwa';
+  import { watch } from '../../watch.svelte';
   import type { RoomView } from '../../rooms';
   import { rooms as defaultRooms, roomFromUrl, type RoomsState } from '../../rooms.svelte';
   import { mutedRooms, setMuted, syncMuted } from '../../mute';
@@ -100,6 +102,62 @@
       .getElementById('message-' + messageId)
       ?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
   }
+
+  /**
+   * Screen readers hear each finished message from someone else once, from a
+   * separate live region, not every streamed piece of the log.
+   */
+  let announcement = $state('');
+  const lastHeard = $derived.by(() => {
+    const last = rooms.messages[rooms.messages.length - 1];
+    if (!last || last.body.streaming || last.kind === 'progress') return undefined;
+    if (last.speaker === 'user' && last.user === rooms.user) return undefined;
+    return last;
+  });
+  let announcedRoom = '';
+  watch(
+    () => lastHeard?.id,
+    (id) => {
+      const message = lastHeard;
+      // Not what a room shows as it opens.
+      if (rooms.currentId !== announcedRoom) {
+        announcedRoom = rooms.currentId;
+        return;
+      }
+      if (!id || !message) return;
+      const who =
+        message.speaker === 'user'
+          ? (message.user ?? 'someone')
+          : faceName(message.speaker.replace(/^face:/, ''));
+      const text = message.body.text ?? 'an attachment';
+      announcement = `${who}: ${text.length > 280 ? `${text.slice(0, 280)}…` : text}`;
+    },
+  );
+
+  /** The room above or below the open one in the list (Alt+ArrowUp/Down). */
+  function stepRoom(by: number) {
+    const list = rooms.rooms;
+    const at = list.findIndex((room) => room.id === rooms.currentId);
+    const next = list[at === -1 ? 0 : (at + by + list.length) % list.length];
+    if (next && next.id !== rooms.currentId) void open(next.id);
+  }
+  function onWindowKeydown(event: KeyboardEvent) {
+    if (event.defaultPrevented || settingsOpen) return;
+    if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      event.preventDefault();
+      stepRoom(event.key === 'ArrowUp' ? -1 : 1);
+    } else if (event.key === 'Escape' && !matches.length) {
+      if (rooms.threadId) rooms.closeThread();
+      else if (side) side = null;
+      else if (listOpen) listOpen = false;
+    }
+  }
+  /** The one room-list row in the tab order: the open room, or the first. */
+  const tabRoom = $derived(
+    [...rooms.rooms, ...rooms.archived].some((room) => room.id === rooms.currentId)
+      ? rooms.currentId
+      : rooms.rooms[0]?.id,
+  );
 
   /** The archived rooms, folded under the list. */
   let showArchived = $state(false);
@@ -319,6 +377,7 @@
     class="room"
     class:chosen={room.id === rooms.currentId}
     class:unread={room.unread > 0}
+    tabindex={room.id === tabRoom ? 0 : -1}
     aria-current={room.id === rooms.currentId ? 'page' : undefined}
     onclick={() => open(room.id)}
   >
@@ -331,6 +390,8 @@
     {/if}
   </button>
 {/snippet}
+
+<svelte:window onkeydown={onWindowKeydown} />
 
 <div class="rooms" class:list-open={listOpen} class:thread-open={!!rooms.threadId || sideOpen}>
   <nav class="list" aria-label="Rooms">
@@ -356,7 +417,10 @@
         />
       </form>
     {/if}
-    <div class="list-scroll">
+    <div
+      class="list-scroll"
+      use:rovingFocus={{ selector: 'button.room', orientation: 'vertical', wrap: false }}
+    >
       <ul>
         {#each rooms.rooms as room (room.id)}
           <li>{@render roomRow(room)}</li>
@@ -455,7 +519,17 @@
       </div>
     {/if}
 
-    <div class="messages" bind:this={scroller} onscroll={onScroll}>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <div
+      class="messages"
+      role="log"
+      aria-live="off"
+      aria-label="Messages in #{current?.name ?? rooms.currentId}"
+      tabindex="0"
+      use:listFocus={{ selector: '[data-row]' }}
+      bind:this={scroller}
+      onscroll={onScroll}
+    >
       {#if rooms.error}
         <p class="error" role="alert">{rooms.error}</p>
       {:else if !rooms.loading && !rooms.messages.length}
@@ -486,6 +560,7 @@
       </div>
     {/if}
 
+    <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
     <div class="typing" aria-live="polite">
       {#if thinkingNow.length}{thinkingNow.join(', ')} is thinking…{/if}
       {#if typingNow.length}{typingNow.join(', ')}

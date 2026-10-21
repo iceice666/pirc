@@ -200,13 +200,13 @@
 </script>
 
 {#if message.kind === 'progress'}
-  <div class="line progress-line" role="status" aria-busy="true">
+  <div class="line progress-line" role="status" aria-busy="true" data-row tabindex="-1">
     <span class="spinner" aria-hidden="true"></span>
     <span>{message.body.text ?? ''}</span>
     <time datetime={new Date(message.createdAt).toISOString()} title={fullTime}>{time}</time>
   </div>
 {:else if message.kind === 'line'}
-  <div class="line" role="note">
+  <div class="line" role="note" data-row tabindex="-1">
     {#if message.body.move}
       <button type="button" class="link" onclick={() => onopenroom?.(message.body.move!.roomId)}
         >{message.body.text ?? ''}</button
@@ -253,6 +253,8 @@
 {:else}
   <article
     id="message-{message.id}"
+    data-row
+    tabindex="-1"
     class="message"
     class:continued={sameRun}
     class:question={message.kind === 'question'}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { SquareTerminal, Square, X } from '@lucide/svelte';
+  import { listFocus } from '../../a11y';
   import { ApiError } from '../../http';
   import { engineLink } from '../../routes';
   import {
@@ -79,7 +80,7 @@
     <div class="title">
       <strong>{latest?.title ?? 'Thread'}</strong>
       {#if latest}
-        <span class="status {latest.status}"
+        <span class="status {latest.status}" role="status"
           ><span class="dot" aria-hidden="true"></span>{statusLabel(
             latest.status,
             speakers.length,
@@ -122,10 +123,17 @@
     </ul>
   {/if}
 
-  <ol class="messages">
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <ol
+    class="messages"
+    role="log"
+    aria-label="The thread's messages"
+    tabindex="0"
+    use:listFocus={{ selector: 'li.item' }}
+  >
     {#if error}<li class="error" role="alert">{error}</li>{/if}
     {#each messages as message (message.id)}
-      <li class="item {message.kind}" class:child={message.depth === 1}>
+      <li class="item {message.kind}" class:child={message.depth === 1} tabindex="-1">
         <span class="who">{speakerName(message)}</span>
         {#if message.kind === 'tool'}
           <code>{message.body.summary ?? message.body.tool}</code>

@@ -12,6 +12,44 @@ export interface RovingOptions {
 }
 
 /**
+ * Svelte action for a long list read item by item (a room's messages, a
+ * thread): from the list itself or one of its items, ArrowUp/ArrowDown move
+ * focus to the previous/next item, Home/End to the first/last. Entering from
+ * the list starts at the newest (ArrowUp, End) or the oldest (ArrowDown,
+ * Home). Items carry `tabindex="-1"`; the list itself is the tab stop.
+ */
+export function listFocus(node: HTMLElement, options: { selector: string }) {
+  let current = options;
+  const onKeydown = (event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const items = Array.from(node.querySelectorAll<HTMLElement>(current.selector));
+    if (!items.length) return;
+    const active = document.activeElement as HTMLElement | null;
+    const index = items.findIndex((item) => item === active);
+    if (index === -1 && active !== node) return;
+    const last = items.length - 1;
+    let next: number;
+    if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = last;
+    else if (index === -1) next = event.key === 'ArrowUp' ? last : 0;
+    else next = Math.min(last, Math.max(0, index + (event.key === 'ArrowUp' ? -1 : 1)));
+    event.preventDefault();
+    items[next]!.focus();
+    items[next]!.scrollIntoView?.({ block: 'nearest' });
+  };
+  node.addEventListener('keydown', onKeydown);
+  return {
+    update(next: { selector: string }) {
+      current = next;
+    },
+    destroy() {
+      node.removeEventListener('keydown', onKeydown);
+    },
+  };
+}
+
+/**
  * Svelte action: arrow keys, Home and End move focus between the items inside
  * `node` (the WAI-ARIA roving focus pattern). The items themselves keep one
  * `tabindex="0"` (the selected one) and `-1` on the rest.

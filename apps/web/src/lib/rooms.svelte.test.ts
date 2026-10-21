@@ -313,6 +313,8 @@ describe('rooms page', () => {
     if (component) unmount(component);
     component = undefined;
     target.remove();
+    // Opening a room writes it into the address; the next test starts in #general.
+    history.replaceState(null, '', '/?room=general');
   });
 
   async function show() {
@@ -400,6 +402,49 @@ describe('rooms page', () => {
     flushSync();
     expect(tab('Settings').getAttribute('aria-current')).toBe('page');
     expect(document.querySelector('dialog #settings-title')).not.toBeNull();
+  });
+
+  it('moves through rooms and messages by keyboard, and says what others wrote', async () => {
+    pages.general = [message('general', 1), message('general', 2, 'other', 'two')];
+    const store = await show();
+    // The room list: one tab stop, arrows move between rooms.
+    const rows = () => [...target.querySelectorAll<HTMLButtonElement>('button.room')];
+    expect(rows().map((row) => row.tabIndex)).toEqual([0, -1]);
+    rows()[0]!.focus();
+    rows()[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(document.activeElement).toBe(rows()[1]);
+    // The log: a tab stop; arrows go through its messages, newest first.
+    const log = target.querySelector<HTMLElement>('[role="log"]')!;
+    expect(log.getAttribute('aria-live')).toBe('off');
+    log.focus();
+    log.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    expect(document.activeElement?.textContent).toContain('two');
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }),
+    );
+    expect(document.activeElement?.textContent).toContain('m1');
+    // A finished message from someone else is announced once; your own is not.
+    const live = () => target.querySelector('p.sr-only[role="status"]')!.textContent;
+    store.apply(
+      event('room_message', 'general', { message: message('general', 3, 'other', 'hi') }),
+    );
+    await tick();
+    expect(live()).toBe('other: hi');
+    store.apply(event('room_message', 'general', { message: message('general', 4, ME, 'mine') }));
+    await tick();
+    expect(live()).toBe('other: hi');
+    // Alt+ArrowDown opens the next room.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true }));
+    await vi.waitFor(() => expect(store.currentId).toBe('topic'));
+  });
+
+  it('closes the thread with Escape', async () => {
+    const store = await show();
+    void store.openThread('thr_1');
+    await tick();
+    expect(store.threadId).toBe('thr_1');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(store.threadId).toBeUndefined();
   });
 
   it('sends on Enter, sends now on Cmd+Enter, and leaves Enter to an IME', async () => {

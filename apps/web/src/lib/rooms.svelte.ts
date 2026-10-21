@@ -103,6 +103,11 @@ export class RoomsState {
   }
 
   async reload() {
+    if (this.demo) {
+      await this.#startDemo(this.demo);
+      this.loading = false;
+      return;
+    }
     try {
       const { rooms, user } = await roomsApi.list();
       this.rooms = rooms.sort(byActivity);
