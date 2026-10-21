@@ -266,6 +266,20 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
         }
     }
 
+    // ---- rooms (plans/rewrite/12-android.md): replies stay the gateway's JSON ----
+
+    /** Any JSON route of the gateway: the reply, or null for 204. GET and HEAD send no body. */
+    open suspend fun json(method: String, path: String, body: JsonObject? = null): JsonElement? =
+        if (method == "GET" || method == "HEAD") send(method, path) else send(method, path, body ?: JsonObject(emptyMap()))
+
+    /** A file for a room message (`POST /api/rooms/:id/uploads`): its `upload`. */
+    open suspend fun uploadToRoom(roomId: String, bytes: ByteArray, mimeType: String, filename: String): JsonElement? =
+        send(
+            "POST",
+            "/api/rooms/${roomId.urlSegment()}/uploads?filename=${filename.urlSegment()}",
+            bytes.toRequestBody(mimeType.toMediaType()),
+        )["upload"]
+
     // ---- push notifications ----
 
     open suspend fun pushInfo(): PushInfo = get("/api/push")

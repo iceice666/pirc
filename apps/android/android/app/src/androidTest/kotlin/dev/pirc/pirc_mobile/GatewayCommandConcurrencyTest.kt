@@ -52,7 +52,7 @@ class GatewayCommandConcurrencyTest {
         try {
             assertTrue(pairingIdentity.edit().putString("stamp", initialStamp).commit())
             val steer = async(Dispatchers.IO) {
-                runCatching { runtime.command(sessionId, mapOf("type" to "steer"), steerId) }
+                runCatching { runtime.sessions.command(sessionId, mapOf("type" to "steer"), steerId) }
             }
             jobs += steer
             assertTrue("The held steer POST did not reach the gateway", server.steerReceived.await(5, TimeUnit.SECONDS))
@@ -60,7 +60,7 @@ class GatewayCommandConcurrencyTest {
             // Undispatched execution snapshots the current pairing before it suspends on commandLock.
             val queued = async(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
                 runCatching {
-                    runtime.command(sessionId, mapOf("type" to "set_model", "modelId" to "queued-model"), queuedId)
+                    runtime.sessions.command(sessionId, mapOf("type" to "set_model", "modelId" to "queued-model"), queuedId)
                 }
             }
             jobs += queued
@@ -73,7 +73,7 @@ class GatewayCommandConcurrencyTest {
             assertEquals("account_changed", (result.exceptionOrNull() as? ApiException)?.code)
             assertEquals(setOf(steerId), server.receivedCommandIds.toSet())
             assertEquals(marker, original.preferences.getString(original.commandKey, null))
-            assertTrue(runtime.unknownCommand(sessionId))
+            assertTrue(runtime.sessions.unknownCommand(sessionId))
         } finally {
             server.releaseSteer.countDown()
             withTimeoutOrNull(5_000) { jobs.joinAll() }
@@ -95,14 +95,14 @@ class GatewayCommandConcurrencyTest {
 
         try {
             val steer = async(Dispatchers.IO) {
-                runtime.command(sessionId, mapOf("type" to "steer", "message" to "continue"), steerId)
+                runtime.sessions.command(sessionId, mapOf("type" to "steer", "message" to "continue"), steerId)
             }
             jobs += steer
             assertTrue("The held steer POST did not reach the local gateway", server.steerReceived.await(5, TimeUnit.SECONDS))
             assertEquals(steerId, original.preferences.getString(original.commandKey, null))
 
             val stop = async(Dispatchers.IO) {
-                runtime.command(sessionId, mapOf("type" to "stop"), stopId)
+                runtime.sessions.command(sessionId, mapOf("type" to "stop"), stopId)
             }
             jobs += stop
             assertTrue("Stop did not reach the gateway on an independent request", server.stopReceived.await(5, TimeUnit.SECONDS))
@@ -113,11 +113,11 @@ class GatewayCommandConcurrencyTest {
                 original.preferences.getString(original.commandKey, null))
             assertNull("The accepted stop should clear only its own marker",
                 original.preferences.getString(original.stopKey, null))
-            assertTrue(runtime.unknownCommand(sessionId))
+            assertTrue(runtime.sessions.unknownCommand(sessionId))
 
             server.releaseSteer.countDown()
             assertEquals("accepted", withTimeout(5_000) { steer.await() }["status"])
-            assertFalse("The accepted steer should clear its marker", runtime.unknownCommand(sessionId))
+            assertFalse("The accepted steer should clear its marker", runtime.sessions.unknownCommand(sessionId))
         } finally {
             server.releaseSteer.countDown()
             withTimeoutOrNull(5_000) { jobs.joinAll() }
@@ -139,20 +139,20 @@ class GatewayCommandConcurrencyTest {
 
         try {
             val steer = async(Dispatchers.IO) {
-                runtime.command(sessionId, mapOf("type" to "steer", "message" to "continue"), steerId)
+                runtime.sessions.command(sessionId, mapOf("type" to "steer", "message" to "continue"), steerId)
             }
             jobs += steer
             assertTrue("The held steer POST did not reach the local gateway", server.steerReceived.await(5, TimeUnit.SECONDS))
             assertEquals(steerId, original.preferences.getString(original.commandKey, null))
 
             val stop = async(Dispatchers.IO) {
-                runtime.command(sessionId, mapOf("type" to "stop"), stopId)
+                runtime.sessions.command(sessionId, mapOf("type" to "stop"), stopId)
             }
             jobs += stop
             assertTrue("Stop did not reach the gateway on an independent request", server.stopReceived.await(5, TimeUnit.SECONDS))
             val receipt = withTimeout(5_000) { stop.await() }
             assertEquals("outcome_unknown", receipt["status"])
-            assertTrue("An uncertain stop must remain visible as uncertain", runtime.unknownCommand(sessionId))
+            assertTrue("An uncertain stop must remain visible as uncertain", runtime.sessions.unknownCommand(sessionId))
             assertEquals(steerId, original.preferences.getString(original.commandKey, null))
             assertEquals(stopId, original.preferences.getString(original.stopKey, null))
 
@@ -161,10 +161,10 @@ class GatewayCommandConcurrencyTest {
             assertNull("The accepted steer clears only its own marker", original.preferences.getString(original.commandKey, null))
             assertEquals("The uncertain stop must survive the later steer receipt", stopId,
                 original.preferences.getString(original.stopKey, null))
-            assertTrue(runtime.unknownCommand(sessionId))
+            assertTrue(runtime.sessions.unknownCommand(sessionId))
 
-            runtime.acknowledgeCommand(sessionId)
-            assertFalse(runtime.unknownCommand(sessionId))
+            runtime.sessions.acknowledgeCommand(sessionId)
+            assertFalse(runtime.sessions.unknownCommand(sessionId))
             assertNull(original.preferences.getString(original.commandKey, null))
             assertNull(original.preferences.getString(original.stopKey, null))
         } finally {

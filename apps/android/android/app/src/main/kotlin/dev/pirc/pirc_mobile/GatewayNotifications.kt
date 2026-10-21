@@ -301,7 +301,7 @@ class GatewayPushService : PushService() {
             if (session == null) return
             runtime.scope.launch {
                 val captured = readPushValueOrNull {
-                    withTimeout(8000) { runtime.snapshotForInteraction(session) }
+                    withTimeout(8000) { runtime.sessions.snapshotForInteraction(session) }
                 } ?: return@launch
                 runtime.withCurrentPairingStampForPush { stamp ->
                     if (!PushRegistration.acceptsMessage(applicationContext, instance) || stamp != captured.second) return@withCurrentPairingStampForPush
@@ -310,12 +310,12 @@ class GatewayPushService : PushService() {
             }
             return
         }
-        val suppressVisible = shouldSuppressVisibleSessionPush(session, runtime::hasVisibleSessionSubscriber)
+        val suppressVisible = shouldSuppressVisibleSessionPush(session, runtime.sessions::hasVisibleSessionSubscriber)
         if (suppressVisible && pushedInteraction?.isCreated != true) return
         val category = if (note.tag.startsWith("delegation:")) "deleg" else "q"
         runtime.scope.launch {
             val captured = if (session != null) readPushValueOrNull {
-                withTimeout(8000) { runtime.snapshotForInteraction(session) }
+                withTimeout(8000) { runtime.sessions.snapshotForInteraction(session) }
             } else null
             val snapshot = captured?.first
             runtime.withCurrentPairingStampForPush { pairingStamp ->
@@ -340,7 +340,7 @@ class GatewayPushService : PushService() {
                     else -> Unit
                 }
                 if (snapshot != null) GatewayNotifications.sync(applicationContext, snapshot, questionPairingStamp = pairingStamp)
-                if (suppressVisible || shouldSuppressVisibleSessionPush(session, runtime::hasVisibleSessionSubscriber)) return@withCurrentPairingStampForPush
+                if (suppressVisible || shouldSuppressVisibleSessionPush(session, runtime.sessions::hasVisibleSessionSubscriber)) return@withCurrentPairingStampForPush
                 if (snapshot != null && category == "q" && identity == null && snapshot.interactions.none {
                     it.status == "pending" && (it.expiresAt == null || it.expiresAt > System.currentTimeMillis())
                 }) return@withCurrentPairingStampForPush

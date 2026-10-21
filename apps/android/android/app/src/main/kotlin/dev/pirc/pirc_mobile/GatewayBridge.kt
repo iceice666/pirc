@@ -387,7 +387,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
     private val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "dev.pirc.mobile/gateway")
 
     private companion object {
-        const val MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
         const val FILE_PICKER_REQUEST_CODE = 81
         const val SCAN_PREPARATION_TIMEOUT_MS = 30_000L
     }
@@ -863,19 +862,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             if (expectedStamp == null) runtime.request(str("method"), str("path"), args["body"])
                             else runtime.requestWithApi(capturePairedApi(expectedStamp, contextId), str("method"), str("path"), args["body"])
                         }
-                        "watch" -> { runtime.watch(str("sessionId"), contextId, optionalString("watchTag")); runtime.local.draft(str("sessionId")) }
-                        "setWatchVisibility" -> runtime.setWatchVisibility(
-                            contextId,
-                            args["visible"] as? Boolean
-                                ?: throw IllegalArgumentException("visible must be a boolean"),
-                            requiredLong("visibilityRevision"),
-                            optionalString("watchTag"),
-                        )
-                        "commandStatus" -> runtime.unknownCommand(str("sessionId"))
-                        "stopDelegation" -> runtime.stopDelegation(str("delegationId"))
-                        "answerRelayed" -> runtime.answerRelayed(str("sessionId"), str("interactionId"), str("pairingStamp"),
-                            args["confirmed"] as? Boolean ?: throw IllegalArgumentException("confirmed must be a boolean"))
-                        "acknowledgeCommand" -> { runtime.acknowledgeCommand(str("sessionId")); null }
                         "recordingOpen" -> recordings.open(str("sessionId"), str("path"))
                         "recordingControl" -> recordings.control((args["id"] as Number).toLong(), str("action"), (args["position"] as? Number)?.toLong(), (args["volume"] as? Number)?.toDouble(), (args["rate"] as? Number)?.toDouble())
                         "recordingClose" -> { recordings.close((args["id"] as Number).toLong()); null }
@@ -932,32 +918,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             }
                             mapOf("text" to text, "files" to files)
                         }
-                        "uploadAttachment" -> {
-                            val sessionId = str("sessionId")
-                            val name = str("name")
-                            val mimeType = str("mimeType")
-                            val bytes = args["bytes"] as? ByteArray
-                                ?: throw IllegalArgumentException("bytes 必須是 Uint8List")
-                            require(bytes.size <= MAX_ATTACHMENT_BYTES) { "附件上限 8 MiB" }
-                            withContext(Dispatchers.IO) {
-                                val uploaded = runtime.api().upload(sessionId, bytes, mimeType, name)
-                                mapOf(
-                                    "id" to uploaded.id,
-                                    "name" to name,
-                                    "kind" to uploaded.kind,
-                                    "mimeType" to mimeType,
-                                    "size" to bytes.size,
-                                )
-                            }
-                        }
                         "fileLink" -> parseFileLink(str("href"), args["base"] as? String ?: "")?.let { mapOf("path" to it.path, "line" to it.line) }
-                        "unwatch" -> { runtime.unwatch(contextId, optionalString("watchTag")); null }
-                        "refresh" -> runtime.snapshot(str("sessionId")).wire()
-                        "draft" -> { runtime.local.saveDraft(str("sessionId"), str("text")); null }
-                        "control" -> runtime.lease(str("sessionId"), args["acquire"] == true, args["force"] == true)
-                        "command" -> runtime.command(str("sessionId"), args["payload"] as Map<*, *>, str("commandId"))
-                        "answer" -> runtime.answer(str("sessionId"), str("interactionId"), str("epoch"), str("pairingStamp"), args["answer"] as Map<*, *>)
-                        "reconcileAnswer" -> runtime.reconcileAnswer(str("sessionId"), str("interactionId"), str("epoch"), str("pairingStamp"))
                         "socketOpen" -> { runtime.openSocket(str("tag"), str("path"), contextId); null }
                         "socketSend" -> { runtime.sendSocket(str("tag"), args["data"] as Map<*, *>, contextId); null }
                         "socketClose" -> { runtime.closeSocket(str("tag"), contextId); null }
@@ -1035,7 +996,11 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             require(uri.scheme in listOf("https", "http"))
                             activity.startActivity(Intent(Intent.ACTION_VIEW, uri)); null
                         }
-                        else -> { result.notImplemented(); return@launch }
+                        else -> {
+                            val domain = runtime.domainCall(call.method, CallArgs(args), contextId)
+                            if (domain === NotDomain) { result.notImplemented(); return@launch }
+                            domain
+                        }
                     }
                     result.success(value)
                 } catch (e: CancellationException) { result.error("CANCELLED", "操作已取消，請檢查狀態", null) }

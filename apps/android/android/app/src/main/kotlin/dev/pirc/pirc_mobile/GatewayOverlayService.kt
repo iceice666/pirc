@@ -232,7 +232,7 @@ class GatewayOverlayService: Service() {
         expiryJob?.cancel(); ready=false; busy=true; handled=false; failed=false; status="確認最新狀態…"; render()
         refreshJob = scope.launch {
             try {
-                val (state, snapshotPairingStamp) = runtime.snapshotForInteraction(sessionId)
+                val (state, snapshotPairingStamp) = runtime.sessions.snapshotForInteraction(sessionId)
                 if (!isCurrentRefresh()) return@launch
                 if (entryPairingStamp != null && entryPairingStamp != snapshotPairingStamp) {
                     pairingStamp = null
@@ -273,7 +273,7 @@ class GatewayOverlayService: Service() {
                     else -> {
                         // A relayed delegation approval needs no control lease.
                         val relayed = isRelayedInteraction(next.id)
-                        val lease = if (relayed) null else runtime.lease(sessionId, acquire=true)
+                        val lease = if (relayed) null else runtime.sessions.lease(sessionId, acquire=true)
                         if (!isCurrentRefresh()) return@launch
                         ready=relayed || lease?.get("held")==true
                         status=if(relayed) "來自 ${next.relayed?.sessionName?.takeIf { it.isNotBlank() } ?: "委派的工作階段"}" else if(ready) "控制：此裝置" else "控制權在其他裝置，請開啟完整對話確認是否接管"
@@ -301,7 +301,7 @@ class GatewayOverlayService: Service() {
         busy=true; ready=false; status="送出中…"; render()
         pending=scope.launch {
             try {
-                runtime.answer(submitSessionId,q.id,q.runnerEpoch,submitPairingStamp, if(q.kind=="confirm") mapOf("confirmed" to (selected=="yes")) else mapOf("values" to listOf(selected)))
+                runtime.sessions.answer(submitSessionId,q.id,q.runnerEpoch,submitPairingStamp, if(q.kind=="confirm") mapOf("confirmed" to (selected=="yes")) else mapOf("values" to listOf(selected)))
                 if (!sameQuestionOverlayTargetAtGeneration(
                         current = currentQuestionIdentity(),
                         currentPairingStamp = activeQuestionPairingStamp(),
