@@ -37,6 +37,7 @@ class _CapturedScripts extends NativeDocumentScripts {
     String? submitter,
     Json? eventData,
     bool modalBackdrop = false,
+    bool modalTouchCompatibility = false,
   }) async => false;
 }
 

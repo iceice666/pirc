@@ -39,6 +39,14 @@ dialog { background:white; width:160px; height:120px; }
 <dialog id="second" closedby="any"><button id="two">Two</button></dialog>
 <script>
 window.clicks={outside:0,one:0,two:0};
+window.backdropEvents=[];
+for(const type of ['pointerdown','pointerup','mousedown','mouseup','click',
+  'focus','blur','focusin','focusout','cancel'])
+  document.addEventListener(type,event=>backdropEvents.push({
+    type,target:event.target.id||event.target.tagName.toLowerCase(),
+    activeElement:document.activeElement.id,
+    trusted:event.isTrusted,
+  }),true);
 for(const id of Object.keys(clicks))
   document.getElementById(id).addEventListener('click',()=>clicks[id]++);
 document.getElementById('first').showModal();
@@ -102,7 +110,7 @@ document.getElementById('second').showModal();
                 as List;
         focus = observed[0] as String;
         clicks = Map<String, dynamic>.from(observed[1] as Map);
-        if ((key == 'afterTopBackdrop' || focus == expected['activeElement']) &&
+        if (focus == expected['activeElement'] &&
             (expected['clicks'] as Map).entries.every(
               (entry) => clicks[entry.key] == entry.value,
             )) {
@@ -110,15 +118,7 @@ document.getElementById('second').showModal();
         }
         await t.pump(const Duration(milliseconds: 16));
       }
-      if (key == 'afterTopBackdrop') {
-        // Chromium touch synthesizes a mousedown on the remaining dialog
-        // after dismissing the upper one. Flutter has not retargeted that
-        // compatibility mouse sequence and still focuses its first button.
-        expect(expected['activeElement'], 'first');
-        expect(focus, 'one', reason: 'listed touch focus difference');
-      } else {
-        expect(focus, expected['activeElement'], reason: '$key touch focus');
-      }
+      expect(focus, expected['activeElement'], reason: '$key touch focus');
       expect(clicks, expected['clicks'], reason: '$key clicks');
     }
 
@@ -224,29 +224,88 @@ document.getElementById('second').showModal();
 
       await t.tapAt(t.getRect(button('One')).center);
       await expectState('blockedFirstClick');
+      await t.runAsync(() => g.inspect('(backdropEvents.length=0)'));
       await t.tapAt(const Offset(20, 200));
       await expectState('afterTopBackdrop');
+      final observedBackdropEvents =
+          jsonDecode(
+                await t.runAsync(
+                      () => g.inspect('JSON.stringify(backdropEvents)'),
+                    )
+                    as String,
+              )
+              as List;
+      final oracleBackdropEvents =
+          (fixture['touch'] as Map)['topBackdropEvents'] as List;
+      const comparableEvents = {
+        'pointerdown',
+        'pointerup',
+        'mousedown',
+        'mouseup',
+        'click',
+        'focus',
+        'blur',
+        'focusin',
+        'focusout',
+        'cancel',
+      };
+      expect(
+        observedBackdropEvents
+            .map(
+              (event) => {
+                'type': (event as Map)['type'],
+                'target': event['target'],
+                'activeElement': event['activeElement'],
+              },
+            )
+            .toList(),
+        oracleBackdropEvents
+            .where((event) => comparableEvents.contains((event as Map)['type']))
+            .map(
+              (event) => {
+                'type': (event as Map)['type'],
+                'target': event['target'],
+                'activeElement': event['activeElement'],
+              },
+            )
+            .toList(),
+        reason: 'touch compatibility mouse events retarget to remaining dialog',
+      );
+      expect(
+        observedBackdropEvents
+            .where(
+              (event) => const {
+                'mousedown',
+                'mouseup',
+                'click',
+              }.contains((event as Map)['type']),
+            )
+            .every((event) => (event as Map)['trusted'] == true),
+        isTrue,
+        reason: 'retargeted compatibility mouse events are trusted',
+      );
       expect(dialog('first'), findsOneWidget);
       expect(dialog('second'), findsNothing);
       expect(semanticTree(), contains('label: "One"'));
       expect(semanticTree(), isNot(contains('label: "Two"')));
       expect(semanticTree(), isNot(contains('label: "Outside"')));
       final lowerControl = t.widget<NativeHtmlButtonWidget>(button('One'));
+      final dialogFocusId = await t.runAsync(
+        () => g.inspect(
+          'document.getElementById("first").getAttribute("data-pirc-script-id")',
+        ),
+      );
       await driveDocumentVm(
         t,
-        () => lowerControl.state
-            .focusNodeFor(lowerControl.button.key)
-            .hasPrimaryFocus,
-        reason: 'restore lower native focus',
-        diagnostic: () =>
-            'primary=${FocusManager.instance.primaryFocus} lower=${lowerControl.state.focusNodeFor(lowerControl.button.key)}',
+        () =>
+            FocusManager.instance.primaryFocus?.debugLabel ==
+            'HTML script focus $dialogFocusId',
+        reason: 'retarget touch mouse focus to remaining dialog',
       );
       expect(
-        lowerControl.state
-            .focusNodeFor(lowerControl.button.key)
-            .hasPrimaryFocus,
-        isTrue,
-        reason: 'closing the upper modal restores native focus below',
+        lowerControl.state.focusNodeFor(lowerControl.button.key).hasFocus,
+        isFalse,
+        reason: 'touch mousedown focuses the dialog before Tab',
       );
       await t.sendKeyEvent(LogicalKeyboardKey.tab);
       await t.pump();
@@ -259,10 +318,87 @@ document.getElementById('second').showModal();
       );
       await t.tap(button('One'));
       await expectState('afterFirstClick');
+      await t.runAsync(() => g.inspect('(backdropEvents.length=0)'));
       await t.tapAt(const Offset(20, 200));
       await expectState('afterBothBackdrops');
+      final observedFinalEvents =
+          jsonDecode(
+                await t.runAsync(
+                      () => g.inspect('JSON.stringify(backdropEvents)'),
+                    )
+                    as String,
+              )
+              as List;
+      final oracleFinalEvents =
+          (fixture['touch'] as Map)['finalBackdropEvents'] as List;
+      expect(
+        observedFinalEvents
+            .map(
+              (event) => {
+                'type': (event as Map)['type'],
+                'target': event['target'],
+                'activeElement': event['activeElement'],
+              },
+            )
+            .toList(),
+        oracleFinalEvents
+            .where((event) => comparableEvents.contains((event as Map)['type']))
+            .map(
+              (event) => {
+                'type': (event as Map)['type'],
+                'target': event['target'],
+                'activeElement': event['activeElement'],
+              },
+            )
+            .toList(),
+        reason: 'final backdrop touch retargets blank area to document root',
+      );
       expect(semanticTree(), contains('label: "Outside"'));
-      await t.tap(button('Outside'));
+      await t.runAsync(
+        () => g.inspect(
+          '(document.getElementById("first").showModal(), document.getElementById("first").open)',
+        ),
+      );
+      await driveDocumentVm(
+        t,
+        () => doc.scripts!.modalDialogIds.length == 1,
+        reason: 'reopen modal over underlying button',
+      );
+      await t.runAsync(() => g.inspect('(backdropEvents.length=0)'));
+      await t.tapAt(t.getRect(button('Outside')).center);
+      await expectState('afterUnderlyingButtonBackdrop');
+      final underlyingEvents =
+          jsonDecode(
+                await t.runAsync(
+                      () => g.inspect('JSON.stringify(backdropEvents)'),
+                    )
+                    as String,
+              )
+              as List;
+      final underlyingOracle =
+          (fixture['touch'] as Map)['underlyingButtonBackdropEvents'] as List;
+      expect(
+        underlyingEvents
+            .map(
+              (event) => {
+                'type': (event as Map)['type'],
+                'target': event['target'],
+                'activeElement': event['activeElement'],
+              },
+            )
+            .toList(),
+        underlyingOracle
+            .where((event) => comparableEvents.contains((event as Map)['type']))
+            .map(
+              (event) => {
+                'type': (event as Map)['type'],
+                'target': event['target'],
+                'activeElement': event['activeElement'],
+              },
+            )
+            .toList(),
+        reason: 'last modal retargets touch click to exposed button',
+      );
       for (var i = 0; i < 30; i++) {
         if (await t.runAsync(() => g.inspect('window.clicks.outside')) == 1) {
           break;
@@ -270,6 +406,77 @@ document.getElementById('second').showModal();
         await t.pump(const Duration(milliseconds: 16));
       }
       expect(await t.runAsync(() => g.inspect('window.clicks.outside')), 1);
+      await t.runAsync(
+        () => g.inspect('''(() => {
+          const first = document.getElementById('first');
+          first.showModal();
+          first.addEventListener('pointerdown', event => event.preventDefault(), {once:true});
+          return first.open;
+        })()'''),
+      );
+      await driveDocumentVm(
+        t,
+        () => doc.scripts!.modalDialogIds.length == 1,
+        reason: 'reopen modal for canceled pointerdown',
+      );
+      await driveDocumentVm(
+        t,
+        () => t
+            .widget<NativeHtmlButtonWidget>(button('One'))
+            .state
+            .focusNodeFor(
+              t.widget<NativeHtmlButtonWidget>(button('One')).button.key,
+            )
+            .hasPrimaryFocus,
+        reason: 'reopened modal focus settles before canceled pointerdown',
+      );
+      await t.runAsync(() => g.inspect('(backdropEvents.length=0)'));
+      await t.tapAt(const Offset(20, 200));
+      await expectState('afterPreventedBackdrop');
+      for (var i = 0; i < 30; i++) {
+        if (await t.runAsync(
+              () => g.inspect(
+                'backdropEvents.some(event => event.type === "click" && event.target === "html")',
+              ),
+            ) ==
+            true) {
+          break;
+        }
+        await t.pump(const Duration(milliseconds: 16));
+      }
+      final preventedEvents =
+          jsonDecode(
+                await t.runAsync(
+                      () => g.inspect('JSON.stringify(backdropEvents)'),
+                    )
+                    as String,
+              )
+              as List;
+      final preventedOracle =
+          (fixture['touch'] as Map)['preventedBackdropEvents'] as List;
+      expect(
+        preventedEvents
+            .skipWhile((event) => (event as Map)['type'] != 'pointerdown')
+            .map(
+              (event) => {
+                'type': (event as Map)['type'],
+                'target': event['target'],
+                'activeElement': event['activeElement'],
+              },
+            )
+            .toList(),
+        preventedOracle
+            .where((event) => comparableEvents.contains((event as Map)['type']))
+            .map(
+              (event) => {
+                'type': (event as Map)['type'],
+                'target': event['target'],
+                'activeElement': event['activeElement'],
+              },
+            )
+            .toList(),
+        reason: 'prevented pointerdown suppresses mouse events but keeps click',
+      );
       expect(t.takeException(), isNull);
     } finally {
       semantics.dispose();

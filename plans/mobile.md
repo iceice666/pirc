@@ -37,11 +37,19 @@ are available from Git through Historical records, not repeated here.
       focus sentinel between Tab cycles with a single-control dialog, while
       Flutter loops on that control. After light-dismissing the final dialog,
       Chromium mouse input leaves that dialog element focused while Flutter
-      drops to body. On phone touch input both end at body, but dismissing the
-      upper modal focuses the lower dialog in Chromium and its first button in
-      Flutter: touch compatibility mouse events retarget after the upper dialog
-      closes. The separate touch fixture and widget gate assert this difference;
-      tablet/dark nested-modal visuals remain unverified.
+      drops to body. Phone touch now retargets the compatibility mousedown,
+      mouseup and click after light dismissal: the lower dialog receives them
+      after the upper closes, the document root receives a blank-area tap after
+      the final close, and an exposed button receives its tap. The script and
+      native focus sequence matches the pinned Chromium 153 touch fixture;
+      stale native blur from disposal is suppressed. The fixture and widget gate
+      compare pointer/compatibility-mouse/focus event order, target, active
+      element and resulting clicks, including the Chromium rule that canceling
+      `pointerdown` suppresses compatibility mousedown/mouseup but retains click.
+      The TouchEvent `touchstart`/`touchend`
+      objects are still absent from the document runtime; retargeted mouse
+      offset coordinates under differing target geometry and tablet/dark
+      nested-modal visuals remain unverified.
       Extend default dialog positioning beyond block-only flow to mixed inline
       runs and flex/grid static-position rectangles. Modern invoker and
       dialog task-source scheduling still need coverage. Dialog handler

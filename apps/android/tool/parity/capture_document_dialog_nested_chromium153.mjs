@@ -68,6 +68,21 @@ try {
   const touchPage=await touchContext.newPage();
   await touchPage.route('**/*',route=>route.abort());
   await touchPage.setContent(html);
+  await touchPage.evaluate(() => {
+    window.touchEvents = [];
+    for (const type of ['pointerdown', 'pointerup', 'touchstart', 'touchend',
+      'mousedown', 'mouseup', 'click', 'focus', 'blur', 'focusin', 'focusout',
+      'cancel', 'close']) {
+      document.addEventListener(type, event => {
+        touchEvents.push({
+          type, target: event.target.id || event.target.tagName.toLowerCase(),
+          activeElement: document.activeElement.id,
+          trusted: event.isTrusted,
+          modalIds: [...document.querySelectorAll(':modal')].map(dialog => dialog.id),
+        });
+      }, true);
+    }
+  });
   const touchSnapshot=()=>touchPage.evaluate(()=>({
     modalIds:[...document.querySelectorAll(':modal')].map(x=>x.id),
     activeElement:document.activeElement.id,
@@ -79,12 +94,33 @@ try {
   const touch={initial:await touchSnapshot()};
   await touchPage.touchscreen.tap(touchX,touchY);
   touch.blockedFirstClick=await touchSnapshot();
+  await touchPage.evaluate(() => { touchEvents.length = 0; });
   await touchPage.touchscreen.tap(20,200);
   touch.afterTopBackdrop=await touchSnapshot();
+  touch.topBackdropEvents=await touchPage.evaluate(() => touchEvents.slice());
   await touchPage.touchscreen.tap(touchX,touchY);
   touch.afterFirstClick=await touchSnapshot();
+  await touchPage.evaluate(() => { touchEvents.length = 0; });
   await touchPage.touchscreen.tap(20,200);
   touch.afterBothBackdrops=await touchSnapshot();
+  touch.finalBackdropEvents=await touchPage.evaluate(() => touchEvents.slice());
+  await touchPage.evaluate(() => first.showModal());
+  const touchOutside=await touchPage.locator('#outside').boundingBox();
+  await touchPage.evaluate(() => { touchEvents.length = 0; });
+  await touchPage.touchscreen.tap(
+    touchOutside.x+touchOutside.width/2,
+    touchOutside.y+touchOutside.height/2,
+  );
+  touch.afterUnderlyingButtonBackdrop=await touchSnapshot();
+  touch.underlyingButtonBackdropEvents=await touchPage.evaluate(() => touchEvents.slice());
+  await touchPage.evaluate(() => {
+    first.showModal();
+    first.addEventListener('pointerdown', event => event.preventDefault(), {once:true});
+    touchEvents.length = 0;
+  });
+  await touchPage.touchscreen.tap(20,200);
+  touch.afterPreventedBackdrop=await touchSnapshot();
+  touch.preventedBackdropEvents=await touchPage.evaluate(() => touchEvents.slice());
   await touchContext.close();
   const fixture={
     oracle:'Dedicated Playwright-pinned Chromium Headless Shell; no external requests or daily Chrome profile.',

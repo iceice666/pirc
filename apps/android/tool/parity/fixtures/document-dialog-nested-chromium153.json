@@ -69,6 +69,155 @@
         "two": 1
       }
     },
+    "topBackdropEvents": [
+      {
+        "type": "pointerdown",
+        "target": "second",
+        "activeElement": "two",
+        "trusted": true,
+        "modalIds": [
+          "first",
+          "second"
+        ]
+      },
+      {
+        "type": "touchstart",
+        "target": "second",
+        "activeElement": "two",
+        "trusted": true,
+        "modalIds": [
+          "first",
+          "second"
+        ]
+      },
+      {
+        "type": "cancel",
+        "target": "second",
+        "activeElement": "two",
+        "trusted": true,
+        "modalIds": [
+          "first",
+          "second"
+        ]
+      },
+      {
+        "type": "blur",
+        "target": "two",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "focusout",
+        "target": "two",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "focus",
+        "target": "one",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "focusin",
+        "target": "one",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "pointerup",
+        "target": "second",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "touchend",
+        "target": "second",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "mousedown",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "blur",
+        "target": "one",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "focusout",
+        "target": "one",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "focus",
+        "target": "first",
+        "activeElement": "first",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "focusin",
+        "target": "first",
+        "activeElement": "first",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "mouseup",
+        "target": "first",
+        "activeElement": "first",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "click",
+        "target": "first",
+        "activeElement": "first",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      }
+    ],
     "afterFirstClick": {
       "modalIds": [
         "first"
@@ -88,7 +237,291 @@
         "one": 1,
         "two": 1
       }
-    }
+    },
+    "finalBackdropEvents": [
+      {
+        "type": "pointerdown",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "touchstart",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "cancel",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "pointerup",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "touchend",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "mousedown",
+        "target": "html",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "blur",
+        "target": "one",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "focusout",
+        "target": "one",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "mouseup",
+        "target": "html",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "click",
+        "target": "html",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": []
+      }
+    ],
+    "afterUnderlyingButtonBackdrop": {
+      "modalIds": [],
+      "activeElement": "outside",
+      "clicks": {
+        "outside": 1,
+        "one": 1,
+        "two": 1
+      }
+    },
+    "underlyingButtonBackdropEvents": [
+      {
+        "type": "close",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "pointerdown",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "touchstart",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "cancel",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "pointerup",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "touchend",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "mousedown",
+        "target": "outside",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "blur",
+        "target": "one",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "focusout",
+        "target": "one",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "focus",
+        "target": "outside",
+        "activeElement": "outside",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "focusin",
+        "target": "outside",
+        "activeElement": "outside",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "mouseup",
+        "target": "outside",
+        "activeElement": "outside",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "click",
+        "target": "outside",
+        "activeElement": "outside",
+        "trusted": true,
+        "modalIds": []
+      }
+    ],
+    "afterPreventedBackdrop": {
+      "modalIds": [],
+      "activeElement": "outside",
+      "clicks": {
+        "outside": 1,
+        "one": 1,
+        "two": 1
+      }
+    },
+    "preventedBackdropEvents": [
+      {
+        "type": "close",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "pointerdown",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "touchstart",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "cancel",
+        "target": "first",
+        "activeElement": "one",
+        "trusted": true,
+        "modalIds": [
+          "first"
+        ]
+      },
+      {
+        "type": "blur",
+        "target": "one",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "focusout",
+        "target": "one",
+        "activeElement": "",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "focus",
+        "target": "outside",
+        "activeElement": "outside",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "focusin",
+        "target": "outside",
+        "activeElement": "outside",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "pointerup",
+        "target": "first",
+        "activeElement": "outside",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "touchend",
+        "target": "first",
+        "activeElement": "outside",
+        "trusted": true,
+        "modalIds": []
+      },
+      {
+        "type": "click",
+        "target": "html",
+        "activeElement": "outside",
+        "trusted": true,
+        "modalIds": []
+      }
+    ]
   },
   "blockedFirstClick": {
     "modalIds": [

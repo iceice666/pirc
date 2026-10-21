@@ -2810,6 +2810,19 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
         modalBackdrop: true,
       );
 
+  /// Touch compatibility mouse events retarget after light dismissal. The
+  /// original pointerup still goes to the dialog that received pointerdown.
+  Future<bool> dispatchModalBackdropTouchCompatibility(
+    String? id,
+    Json eventData,
+  ) => dispatch(
+    id ?? '',
+    'click',
+    const [],
+    eventData: eventData,
+    modalTouchCompatibility: true,
+  );
+
   Future<bool> dispatch(
     String id,
     String type,
@@ -2817,6 +2830,7 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
     String? submitter,
     Json? eventData,
     bool modalBackdrop = false,
+    bool modalTouchCompatibility = false,
   }) {
     final capturedEventData = eventData == null
         ? null
@@ -2883,7 +2897,11 @@ class NativeDocumentScripts extends ChangeNotifier with WidgetsBindingObserver {
       var prevented = false;
       try {
         final data = await _run(
-          '__pircDocument.${modalBackdrop ? 'dispatchModalBackdropPointerDown' : 'dispatch'}(${jsonEncode({'id': id, 'type': type, 'controls': capturedControls, 'submitter': ?submitter, 'eventData': ?capturedEventData, 'now': _now})})',
+          '__pircDocument.${modalBackdrop
+              ? 'dispatchModalBackdropPointerDown'
+              : modalTouchCompatibility
+              ? 'dispatchModalBackdropTouchCompatibility'
+              : 'dispatch'}(${jsonEncode({'id': id, 'type': type, 'controls': capturedControls, 'submitter': ?submitter, 'eventData': ?capturedEventData, 'now': _now})})',
           expectedActionGeneration: actionGeneration,
           expectedFocusEpoch: focusEpoch,
           allowPopups: const {'click', 'input', 'change'}.contains(type),

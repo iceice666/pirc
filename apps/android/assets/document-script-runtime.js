@@ -23378,6 +23378,15 @@ function createDocumentPointer(deps) {
     return new MouseEvent(type, init);
   }
 
+  function createMouseCompatibilityEvent(type, eventData) {
+    if (type !== 'mousedown' && type !== 'mouseup') return null;
+    const data = nativeEventData(eventData, type);
+    if (!data || data.pointerType !== 'touch') return null;
+    data.button = data.button === undefined ? 0 : data.button;
+    data.buttons = type === 'mouseup' ? 0 : 1;
+    return new MouseEvent(type, mouseEventInit(type, data));
+  }
+
   function createClickEvent(eventData, eventInit, target) {
     const metadata = readPointerMetadata(eventData);
     if (!metadata)
@@ -23420,6 +23429,7 @@ function createDocumentPointer(deps) {
     install: install,
     dispatch: dispatch,
     createClickEvent: createClickEvent,
+    createMouseCompatibilityEvent: createMouseCompatibilityEvent,
     createMouseBoundaryEvent: createMouseBoundaryEvent,
     nativeCanvasRect: nativeCanvasRect,
     withNativeDispatchGeometry: withNativeDispatchGeometry
@@ -45421,6 +45431,42 @@ function createPircDocumentLayout(options) {
     });
   }
 
+  function dispatchModalBackdropTouchCompatibility(input) {
+    const state = activeState;
+    const request = input && typeof input === 'object' ? input : {};
+    if (!state?.document || request.eventData?.pointerType !== 'touch')
+      return response({defaultPrevented: true, error: 'invalid_touch_compatibility'});
+    const top = state.modalDialogs[state.modalDialogs.length - 1];
+    const requested = String(request.id == null ? '' : request.id);
+    // An open modal owns the whole top layer, including its backdrop. Once
+    // the last one closes, the host supplies the freshly hit-tested element;
+    // an empty hit resolves to the document root, like Chromium's blank area.
+    const target = top || state.elementsById.get(requested) || state.document.documentElement;
+    if (!target || !target.isConnected ||
+        (top && requested && requested !== top.getAttribute(MARKER_ATTRIBUTE)))
+      return response({defaultPrevented: true, error: 'stale_touch_compatibility'});
+    // Canceling pointerdown suppresses mousedown/mouseup and their focus
+    // default, but Chromium still delivers the retargeted click.
+    if (request.eventData.suppressCompatibilityMouse !== true) {
+      const down = state.pointer.createMouseCompatibilityEvent('mousedown', request.eventData);
+      const up = state.pointer.createMouseCompatibilityEvent('mouseup', request.eventData);
+      if (!down || !up)
+        return response({defaultPrevented: true, error: 'invalid_touch_compatibility'});
+      defineEventMember(down, 'isTrusted', true);
+      defineEventMember(up, 'isTrusted', true);
+      target.dispatchEvent(down);
+      if (!down.defaultPrevented && activeState === state && target.isConnected) {
+        if (isFocusableHTMLElement(target, state)) focusElement(target);
+        else if (state.activeElement) blurElement(state.activeElement);
+      }
+      if (activeState !== state || !target.isConnected)
+        return response({defaultPrevented: true, error: 'touch_target_removed'});
+      target.dispatchEvent(up);
+    }
+    const id = ensureElementId(target);
+    return dispatchCore({id, type: 'click', eventData: request.eventData, now: request.now});
+  }
+
   function completeImageResource(state, id, completion) {
     if (state.pendingImageRequests.delete(id)) state.layout?.invalidate();
     const accepted = state.images.complete(completion);
@@ -45659,6 +45705,20 @@ function createPircDocumentLayout(options) {
       });
     }
 
+    if (type === 'blur' || type === 'focusout') {
+      // Dismissing a dialog can dispose its native FocusNode before the browser
+      // compatibility mouse sequence chooses the exposed target. Chromium
+      // keeps the old focus through pointerup; the native disposal is not a
+      // separate DOM blur.
+      for (let ancestor = element; ancestor && ancestor !== state.document;
+          ancestor = ancestor.parentNode) {
+        if (ancestor.localName === 'dialog' && !ancestor.hasAttribute('open')) {
+          return response({defaultPrevented: false, defaultHandled: false,
+            focusEventSuppressed: true, id, type});
+        }
+      }
+    }
+
     let staleHostFocusOut = false;
     if (type === 'focusin') {
       const pending = takeHostFocusCounterpart(state, 'focusin', element);
@@ -45677,6 +45737,25 @@ function createPircDocumentLayout(options) {
       const pending = takeHostFocusCounterpart(state, 'focusout', element);
       staleHostFocusOut = Boolean(pending &&
         pending.transitionVersion !== state.focusTransitionVersion);
+      if (!pending && state.activeElement !== element) {
+        return response({
+          defaultPrevented: false,
+          defaultHandled: false,
+          focusEventSuppressed: true,
+          id: id,
+          type: type
+        });
+      }
+    } else if (type === 'blur' && state.activeElement !== element) {
+      // A removed control can report native blur after scripted focus already
+      // emitted blur/focusout and moved to the newly exposed dialog.
+      return response({
+        defaultPrevented: false,
+        defaultHandled: false,
+        focusEventSuppressed: true,
+        id: id,
+        type: type
+      });
     }
 
     if (type === 'click' && isSubmittableControl(element) && isDisabledFormControl(element))
@@ -45979,6 +46058,7 @@ function createPircDocumentLayout(options) {
     snapshot: snapshot,
     requestTopModalClose: requestTopModalClose,
     dispatchModalBackdropPointerDown: dispatchModalBackdropPointerDown,
+    dispatchModalBackdropTouchCompatibility: dispatchModalBackdropTouchCompatibility,
     filePickerResult: filePickerResult,
     completeResource: completeResource,
     restoreControls: function(input) {

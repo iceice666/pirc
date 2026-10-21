@@ -187,6 +187,14 @@ document.getElementById('dialog').showModal();
           final insideControl = t.widget<NativeHtmlButtonWidget>(
             button('Inside'),
           );
+          await driveDocumentVm(
+            t,
+            () => insideControl.state
+                .focusNodeFor(insideControl.button.key)
+                .hasPrimaryFocus,
+            reason:
+                'reopened modal native focus settles after touch compatibility events',
+          );
           expect(
             insideControl.state
                 .focusNodeFor(insideControl.button.key)
@@ -264,6 +272,11 @@ document.getElementById('dialog').showModal();
             t,
             () => dialog.evaluate().length == 1,
             reason: 'reopened for canceled light dismiss',
+          );
+          await driveDocumentVm(
+            t,
+            () => !doc.scripts!.hasPendingPublication,
+            reason: 'reopened dialog event publication settled',
           );
           await t.runAsync(() => g.inspect('window.blockCancel=true'));
           await t.runAsync(() => g.inspect('window.backdropEvents=[]'));

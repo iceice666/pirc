@@ -1561,6 +1561,7 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       Rect dialogBounds,
       bool primary,
       int button,
+      Future<bool> downPrevented,
     })
   >
   _modalBackdropPointers = {};
@@ -1634,6 +1635,16 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
       dialogBounds: dialogBounds,
       primary: primary,
       button: button,
+      downPrevented: scripts.dispatchModalBackdropPointerDown(
+        scripts.modalDialogIds.last,
+        _modalBackdropEventData(
+          event,
+          dialogBounds,
+          point: event.localPosition,
+          primary: primary,
+          button: button,
+        ),
+      ),
     );
     if (_modalBackdropPointers.containsKey(event.pointer)) {
       GestureBinding.instance.pointerRouter.removeRoute(
@@ -1645,18 +1656,6 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
     GestureBinding.instance.pointerRouter.addRoute(
       event.pointer,
       _modalBackdropRoute,
-    );
-    unawaited(
-      scripts.dispatchModalBackdropPointerDown(
-        pointer.id,
-        _modalBackdropEventData(
-          event,
-          dialogBounds,
-          point: event.localPosition,
-          primary: primary,
-          button: button,
-        ),
-      ),
     );
   }
 
@@ -1697,15 +1696,40 @@ class _NativeFetchedDocumentViewState extends State<NativeFetchedDocumentView> {
           [],
           data,
         );
+        final downPrevented = await pointer.downPrevented;
         if (!mounted ||
             !identical(_scripts, pointer.scripts) ||
             pointer.button != 0 ||
-            (point - pointer.start).distance > 18 ||
-            (event.kind == PointerDeviceKind.touch &&
-                !pointer.scripts.modalDialogIds.contains(pointer.id))) {
+            (point - pointer.start).distance > 18) {
           return;
         }
-        await pointer.scripts.dispatchDetailed(pointer.id, 'click', [], data);
+        if (event.kind != PointerDeviceKind.touch) {
+          await pointer.scripts.dispatchDetailed(pointer.id, 'click', [], data);
+          return;
+        }
+        String? targetId = pointer.scripts.modalDialogIds.lastOrNull;
+        if (targetId == null) {
+          // Wait for the layout produced by closing the final dialog before
+          // choosing the newly exposed target. A blank hit resolves to <html>
+          // in the script runtime; a real control retains its measured ID.
+          for (var frame = 0; frame < 3; frame++) {
+            if (!mounted || !identical(_scripts, pointer.scripts)) return;
+            final hit = _layout.hitTestDocument(
+              event.position,
+              revision: pointer.scripts.layoutRevision,
+            );
+            if (hit != null) {
+              targetId = hit.elementId;
+              break;
+            }
+            await WidgetsBinding.instance.endOfFrame;
+          }
+        }
+        if (!mounted || !identical(_scripts, pointer.scripts)) return;
+        await pointer.scripts.dispatchModalBackdropTouchCompatibility(
+          targetId,
+          {...data, 'suppressCompatibilityMouse': downPrevented},
+        );
       }());
     } else if (event is PointerCancelEvent) {
       _modalBackdropPointers.remove(event.pointer);

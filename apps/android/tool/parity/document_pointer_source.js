@@ -657,6 +657,15 @@ function createDocumentPointer(deps) {
     return new MouseEvent(type, init);
   }
 
+  function createMouseCompatibilityEvent(type, eventData) {
+    if (type !== 'mousedown' && type !== 'mouseup') return null;
+    const data = nativeEventData(eventData, type);
+    if (!data || data.pointerType !== 'touch') return null;
+    data.button = data.button === undefined ? 0 : data.button;
+    data.buttons = type === 'mouseup' ? 0 : 1;
+    return new MouseEvent(type, mouseEventInit(type, data));
+  }
+
   function createClickEvent(eventData, eventInit, target) {
     const metadata = readPointerMetadata(eventData);
     if (!metadata)
@@ -699,6 +708,7 @@ function createDocumentPointer(deps) {
     install: install,
     dispatch: dispatch,
     createClickEvent: createClickEvent,
+    createMouseCompatibilityEvent: createMouseCompatibilityEvent,
     createMouseBoundaryEvent: createMouseBoundaryEvent,
     nativeCanvasRect: nativeCanvasRect,
     withNativeDispatchGeometry: withNativeDispatchGeometry
