@@ -15,6 +15,7 @@
   import { rooms as defaultRooms, type RoomsState } from '../../rooms.svelte';
   import { trackViewportHeight } from '../../viewport';
   import RoomMessageRow from './RoomMessageRow.svelte';
+  import RoomSources from './RoomSources.svelte';
   import ThreadPanel from './ThreadPanel.svelte';
 
   interface Props {
@@ -234,6 +235,13 @@
       >
       {#if rooms.connection !== 'connected' && !rooms.loading}
         <span class="badge" role="status">{rooms.connection}</span>
+      {/if}
+      {#if current && !current.archivedAt}
+        <RoomSources
+          roomName={current.name}
+          scope={current.sourceScope}
+          onchange={(scope) => rooms.setSources(current.id, scope)}
+        />
       {/if}
       {#if current && current.kind !== 'general'}
         <button

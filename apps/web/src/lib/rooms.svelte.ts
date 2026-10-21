@@ -183,6 +183,12 @@ export class RoomsState {
     this.#merge(room);
   }
 
+  /** The sources a room follows (plan 09): it hears of everything new in them. */
+  async setSources(roomId: string, sourceScope: Record<string, unknown> | null) {
+    const { room } = await roomsApi.update(roomId, { sourceScope });
+    this.#merge(room);
+  }
+
   async moveTo(toRoomId: string) {
     await roomsApi.move(this.currentId, toRoomId);
     await this.open(toRoomId);

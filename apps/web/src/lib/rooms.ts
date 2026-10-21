@@ -100,8 +100,10 @@ export const roomsApi = {
   get: (roomId: string) => request<{ room: RoomView; pinned: RoomMessage[] }>(path(roomId)),
   create: (name: string) =>
     request<{ room: Room }>('/api/rooms', { method: 'POST', ...json({ name }) }),
-  update: (roomId: string, patch: { name?: string; archived?: boolean }) =>
-    request<{ room: RoomView }>(path(roomId), { method: 'PATCH', ...json(patch) }),
+  update: (
+    roomId: string,
+    patch: { name?: string; archived?: boolean; sourceScope?: Record<string, unknown> | null },
+  ) => request<{ room: RoomView }>(path(roomId), { method: 'PATCH', ...json(patch) }),
   move: (roomId: string, toRoomId: string) =>
     request<{ from: Room; to: Room }>(path(roomId, '/move'), {
       method: 'POST',

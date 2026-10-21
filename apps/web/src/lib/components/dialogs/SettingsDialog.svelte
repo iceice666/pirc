@@ -4,7 +4,7 @@
     { id: 'memory', label: 'Memory' },
     { id: 'loops', label: 'Open loops' },
     { id: 'wakes', label: 'Wakes' },
-    { id: 'models', label: 'Models' },
+    { id: 'models', label: 'Models & sources' },
     { id: 'devices', label: 'Devices' },
     { id: 'about', label: 'About' },
   ] as const;
@@ -22,6 +22,7 @@
   import MemorySettings from '../MemorySettings.svelte';
   import NotificationSettings from '../NotificationSettings.svelte';
   import PairedDevices from '../PairedDevices.svelte';
+  import SourceSettings from '../SourceSettings.svelte';
   import WakesSettings from '../WakesSettings.svelte';
 
   interface Props {
@@ -139,6 +140,8 @@
         hidden={settingsTab !== 'models'}
       >
         <BackendSettings disabled={app.usingDemo} onchanged={() => app.loadModels()} />
+        <!-- The same page and grant as the backends (decision #6). -->
+        <SourceSettings disabled={app.usingDemo} />
       </div>
 
       <div

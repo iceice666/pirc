@@ -11,13 +11,20 @@ import { when } from './loops';
 export interface Wake {
   id: string;
   kind: 'anchor' | 'source' | 'self';
-  /** What woke it: `{loopId, moment, at, autoClose}` or `{at, why}`. */
+  /**
+   * What woke it: `{loopId, moment, at, autoClose}`, `{at, why}`, or a
+   * source's `{sourceId, name, reason, loopIds, items}`.
+   */
   trigger: {
     loopId?: string;
     moment?: 'due' | 'eve' | 'next';
     at?: number | null;
     autoClose?: boolean;
     why?: string;
+    sourceId?: string;
+    name?: string;
+    reason?: 'followed' | 'loop';
+    items?: { id: string; summary: string }[];
   };
   roomId: string;
   faceId: string | null;
@@ -67,7 +74,11 @@ export function describeTrigger(wake: Wake): string {
     if (wake.trigger.moment === 'next') return 'A recurring open loop came round';
     return "An open loop's time came";
   }
-  return 'A source changed';
+  const name = wake.trigger.name ?? wake.trigger.sourceId;
+  if (!name) return 'A source changed';
+  return wake.trigger.reason === 'loop'
+    ? `Something new in ${name} touched an open loop`
+    : `Something new in ${name}`;
 }
 
 /** The browser's own zone: when a wake comes, as the person reads it. */
