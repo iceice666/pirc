@@ -6,16 +6,19 @@
    */
   import { onMount } from 'svelte';
   import { ApiError } from '../http';
-  import { rooms } from '../rooms.svelte';
   import { ago } from '../time';
   import { watch } from '../watch.svelte';
   import { describeOutcome, describeTrigger, wakesApi, type Wake } from '../wakes';
 
   interface Props {
     disabled?: boolean;
+    /** Bumped when a wake changed somewhere: reload. */
+    revision?: number;
+    /** Room names by id; a room not in it shows its id. */
+    roomNames?: Record<string, string>;
   }
 
-  let { disabled = false }: Props = $props();
+  let { disabled = false, revision = 0, roomNames = {} }: Props = $props();
 
   /** Ended wakes listed at most. */
   const ENDED_PAGE = 30;
@@ -28,7 +31,7 @@
   let error = $state('');
   let alive = true;
 
-  const roomName = (id: string) => `#${rooms.rooms.find((room) => room.id === id)?.name ?? id}`;
+  const roomName = (id: string) => `#${roomNames[id] ?? id}`;
   const message = (cause: unknown) =>
     cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
 
@@ -70,7 +73,7 @@
   });
   // Wakes start, end and are scheduled in the rooms while this is open.
   watch(
-    () => rooms.wakesRevision,
+    () => revision,
     () => {
       if (!disabled) void load();
     },

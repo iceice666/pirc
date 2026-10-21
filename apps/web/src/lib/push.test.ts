@@ -149,10 +149,13 @@ describe('where a notification leads', () => {
     ).toBeUndefined();
   });
 
-  it('opens the memory in Settings', async () => {
+  it('opens the memory on the engine’s front page', async () => {
     engine.demo = undefined;
     await engine.openTarget({ memory: true });
-    expect(engine.requestedTarget).toEqual({ memory: true });
-    engine.requestedTarget = undefined;
+    expect(engine.view).toBe('overview');
+    expect(engine.overviewSection).toBe('memory');
+    expect(location.search).toBe('?open=memory');
+    engine.view = 'session';
+    history.replaceState(null, '', '/');
   });
 });

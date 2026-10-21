@@ -53,7 +53,8 @@ describe('state boundaries', () => {
   });
 
   it('keeps the rooms state out of the engine', () => {
-    const engine = reachable('lib/engine.svelte.ts');
+    const engine = reachable('Engine.svelte');
+    expect(engine).toContain('lib/components/engine/EngineOverview.svelte');
     expect([...engine].filter((file) => /rooms\.svelte|room-events/.test(file))).toEqual([]);
   });
 });

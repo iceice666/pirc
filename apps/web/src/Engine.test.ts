@@ -181,6 +181,24 @@ describe('Engine header', () => {
   });
 });
 
+describe('Engine front page', () => {
+  it('shows the overview in place of the session, and goes back to a session', async () => {
+    await start(2);
+    engine.nodes = [];
+    engine.showOverview('nodes');
+    flushSync();
+    expect(target.querySelector('.overview h1')?.textContent).toBe('Engine');
+    expect(target.textContent).toContain('No node is connected');
+    expect(target.querySelector('.conversation')).toBeNull();
+    expect(location.search).toBe('?open=nodes');
+    expect(document.title).toBe('Engine · pirc');
+    engine.view = 'session';
+    flushSync();
+    expect(target.querySelector('.overview')).toBeNull();
+    expect(target.querySelector('.conversation')).not.toBeNull();
+  });
+});
+
 describe('Engine phone tabs', () => {
   it('lead back to the rooms, and show what waits in the engine', async () => {
     await start(2, 400);

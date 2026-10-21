@@ -8,15 +8,16 @@
   import { ApiError } from '../http';
   import { describeAnchor, describeClosed, loopsApi, type OpenLoop } from '../loops';
   import { describeOrigin } from '../memory';
-  import { rooms } from '../rooms.svelte';
   import { ago } from '../time';
   import { watch } from '../watch.svelte';
 
   interface Props {
     disabled?: boolean;
+    /** Bumped when a loop changed somewhere: reload. */
+    revision?: number;
   }
 
-  let { disabled = false }: Props = $props();
+  let { disabled = false, revision = 0 }: Props = $props();
 
   /** Closed loops listed at most. */
   const CLOSED_PAGE = 20;
@@ -89,7 +90,7 @@
   });
   // pirc opens and closes loops in the rooms while this is open.
   watch(
-    () => rooms.loopsRevision,
+    () => revision,
     () => {
       if (!disabled) void load();
     },

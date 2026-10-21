@@ -5,7 +5,7 @@ import LoopsSettings from './components/LoopsSettings.svelte';
 import RoomMessageRow from './components/rooms/RoomMessageRow.svelte';
 import { describeAnchor, describeClosed, lineAction, type LoopLine, type OpenLoop } from './loops';
 import type { RoomMessage } from './rooms';
-import { rooms } from './rooms.svelte';
+import { reactiveProps } from './testing/props.svelte';
 
 /** Tuesday 2026-10-20 10:00 UTC. */
 const NOW = Date.UTC(2026, 9, 20, 10, 0);
@@ -144,7 +144,8 @@ describe('open loops in the web app', () => {
   });
 
   it('lists what is open and closed, and closes or reopens one', async () => {
-    component = mount(LoopsSettings, { target });
+    const props = reactiveProps({ revision: 0 });
+    component = mount(LoopsSettings, { target, props });
     await flush();
     expect(target.textContent).toContain('Tune the power policy');
     expect(target.textContent).toContain('From your words · battery dies by noon');
@@ -166,7 +167,7 @@ describe('open loops in the web app', () => {
     });
     // pirc changed a loop in a room: the list loads again.
     const before = calls.length;
-    rooms.loopsRevision++;
+    props.revision++;
     await flush();
     expect(calls.length).toBeGreaterThan(before);
   });

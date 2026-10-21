@@ -26,6 +26,7 @@ const handlers = {
   onopenworkspace: vi.fn(),
   onclose: vi.fn(),
   onsettings: vi.fn(),
+  onoverview: vi.fn(),
 };
 
 beforeEach(() => {
@@ -102,9 +103,6 @@ describe('Sidebar', () => {
     expect(heading.querySelector('[aria-current="page"]')).not.toBeNull();
     // The open session is behind the page: nothing unread to list.
     expect(names()).toEqual([]);
-    // New session goes straight into the workspace on screen.
-    target.querySelector<HTMLButtonElement>('.new-session')!.click();
-    expect(handlers.onnew).toHaveBeenCalledWith('node:ws');
   });
 
   it('answers sessions under "Needs you"', () => {
@@ -230,12 +228,17 @@ describe('Sidebar', () => {
     expect(handlers.onsettings).toHaveBeenCalled();
   });
 
-  it('starts new sessions from a dialog outside a workspace page', () => {
+  it('leads to the engine’s front page, marked while it shows', () => {
     render();
-    const button = target.querySelector<HTMLButtonElement>('.new-session')!;
-    expect(button.textContent).toContain('New session');
+    const button = target.querySelector<HTMLButtonElement>('.overview-entry')!;
+    expect(button.textContent).toContain('Overview');
+    expect(button.getAttribute('aria-current')).toBeNull();
     button.click();
-    expect(handlers.onnew).toHaveBeenCalledWith();
+    expect(handlers.onoverview).toHaveBeenCalled();
+    unmount(component!);
+    engine.view = 'overview';
+    render();
+    expect(target.querySelector('.overview-entry')!.getAttribute('aria-current')).toBe('page');
   });
 
   describe('with the mode catalog', () => {

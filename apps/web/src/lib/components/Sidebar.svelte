@@ -7,6 +7,7 @@
     Ellipsis,
     Folder,
     Forward,
+    Gauge,
     Lock,
     PanelLeftClose,
     Pencil,
@@ -15,7 +16,6 @@
     Plus,
     Search,
     Settings,
-    SquarePen,
     X,
   } from '@lucide/svelte';
   import { tick } from 'svelte';
@@ -38,6 +38,8 @@
     onaddworkspace: (nodeId: string) => void;
     onclose: () => void;
     onsettings: () => void;
+    /** The engine's front page: nodes, brain, loops, wakes, memory, sources. */
+    onoverview: () => void;
   }
 
   let {
@@ -50,6 +52,7 @@
     onaddworkspace,
     onclose,
     onsettings,
+    onoverview,
   }: Props = $props();
 
   const DELEGATION_STATUS: Record<DelegationStatus, string> = {
@@ -103,11 +106,6 @@
         workspaceById.has(session.workspaceId) && session.name.toLowerCase().includes(needle),
     );
   });
-  /** New session: straight into the workspace whose page is open, else a dialog to pick one. */
-  const pageWorkspace = $derived(pageId ? workspaceById.get(pageId) : undefined);
-  const newSessionTarget = $derived(
-    pageWorkspace && !isReadOnly(pageWorkspace) ? pageWorkspace : undefined,
-  );
 
   const unreadIn = (workspaceId: string) =>
     sessions.filter((session) => session.workspaceId === workspaceId && session.unread).length;
@@ -189,12 +187,11 @@
     >
   </div>
   <button
-    class="new-session"
+    class="overview-entry"
+    class:current={engine.view === 'overview'}
     type="button"
-    onclick={() => (newSessionTarget ? onnew(newSessionTarget.id) : onnew())}
-    ><SquarePen size={16} /> New {newSessionTarget
-      ? engine.modeOf(newSessionTarget).ui.noun
-      : 'session'}</button
+    aria-current={engine.view === 'overview' ? 'page' : undefined}
+    onclick={onoverview}><Gauge size={16} /> Overview</button
   >
   <label class="search">
     <Search size={16} />
@@ -530,7 +527,7 @@
   .mobile-menu {
     display: none;
   }
-  .new-session {
+  .overview-entry {
     flex: none;
     margin: 0 12px 8px;
     height: 40px;
@@ -547,8 +544,9 @@
     text-align: left;
     transition: filter var(--ease) 0.15s;
   }
-  .new-session:hover {
-    filter: brightness(0.97);
+  .overview-entry:hover,
+  .overview-entry.current {
+    filter: brightness(0.94);
   }
   .search {
     flex: none;

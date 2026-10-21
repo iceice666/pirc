@@ -27,6 +27,7 @@
   import MobileTabs, { type MobileTab, type MobileTabId } from './lib/components/MobileTabs.svelte';
   import RunCard from './lib/components/RunCard.svelte';
   import WorkspacePage from './lib/components/WorkspacePage.svelte';
+  import EngineOverview from './lib/components/engine/EngineOverview.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import { timelineItems } from './lib/work';
   import NewSessionDialog from './lib/components/dialogs/NewSessionDialog.svelte';
@@ -78,22 +79,15 @@
   let panelTab: PanelTab = $state('files');
   let settingsOpen = $state(false);
   let settingsTab: SettingsTab = $state('general');
-  // A notification or a `?open=` link asked for the memory.
-  $effect(() => {
-    const target = engine.requestedTarget;
-    if (!target) return;
-    settingsTab = 'memory';
-    settingsOpen = true;
-    engine.requestedTarget = undefined;
-  });
   /** The workspace whose page is showing, if it still exists. */
   const pageWorkspace = $derived(
     engine.view === 'workspace'
       ? engine.workspaces.find((workspace) => workspace.id === engine.workspaceViewId)
       : undefined,
   );
+  const onOverview = $derived(engine.view === 'overview');
   /** A page in the main column (not a conversation): the phone keeps its bottom tabs. */
-  const onPage = $derived(!!pageWorkspace);
+  const onPage = $derived(!!pageWorkspace || onOverview);
   // A page replaces the phone's list.
   $effect(() => {
     if (onPage) sidebarOpen = false;
@@ -111,7 +105,8 @@
     if (tab === 'settings') {
       settingsTab = 'general';
       settingsOpen = true;
-    } else sidebarOpen = true;
+    } else if (onOverview) sidebarOpen = true;
+    else showOverview();
   }
   let newSessionOpen = $state(false);
   let newWorkspaceOpen = $state(false);
@@ -382,6 +377,11 @@
     void engine.openSession(id);
   }
 
+  function showOverview() {
+    sidebarOpen = false;
+    engine.showOverview();
+  }
+
   function openWorkspace(id: string) {
     sidebarOpen = false;
     engine.showWorkspace(id);
@@ -419,11 +419,13 @@
 
 <svelte:head
   ><title
-    >{pageWorkspace
-      ? `${pageWorkspace.displayName} · pirc`
-      : sessionState
-        ? `${sessionState.session.name} · pirc`
-        : 'pirc'}</title
+    >{onOverview
+      ? 'Engine · pirc'
+      : pageWorkspace
+        ? `${pageWorkspace.displayName} · pirc`
+        : sessionState
+          ? `${sessionState.session.name} · pirc`
+          : 'pirc'}</title
   ></svelte:head
 >
 
@@ -446,6 +448,7 @@
       settingsTab = 'general';
       settingsOpen = true;
     }}
+    onoverview={showOverview}
   />
 
   <!-- The open phone drawer is modal: the page behind it is inert. -->
@@ -454,7 +457,15 @@
     class="workspace"
     inert={sidebarOpen && viewportWidth <= 650}
   >
-    {#if pageWorkspace}
+    {#if onOverview}
+      <EngineOverview
+        section={engine.overviewSection}
+        onsection={(section) => engine.showOverview(section)}
+        nodes={engine.nodes}
+        memoryRevision={engine.memoryRevision}
+        disabled={engine.usingDemo}
+      />
+    {:else if pageWorkspace}
       <WorkspacePage
         workspace={pageWorkspace}
         {sidebarCollapsed}

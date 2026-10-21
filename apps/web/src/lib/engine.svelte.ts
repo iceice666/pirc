@@ -18,6 +18,7 @@ import { GOAL_WIDGET, parseGoalWidget } from './goal';
 import { PanelStateResource } from './panel-state.svelte';
 import { fromSnapshot, reduceEvent } from './state';
 import { uuid } from './id';
+import { isOverviewSection, type OverviewSection } from './routes';
 import { getClientId, loadDraft, pruneDrafts, removeDraft, saveDraft } from './storage';
 import { needsInput } from './work';
 import { parseTodoWidget, TODO_WIDGET } from './todo';
@@ -44,7 +45,7 @@ import { isRelayed, modelKey } from './types';
 export type Upload = Attachment & { preview?: string; uploading?: boolean };
 
 /** What the main column shows: a session, or a workspace's page. */
-export type MainView = 'session' | 'workspace';
+export type MainView = 'session' | 'workspace' | 'overview';
 
 /** Something waiting for you, shown under "Needs you". */
 export type InboxItem = { kind: 'session'; id: string; session: SessionSummary };
@@ -83,11 +84,8 @@ class EngineState {
   modeCatalog = $state.raw<ModeInfo[]>([]);
   /** Bumped whenever the gateway says your memory changed; open memory views reload. */
   memoryRevision = $state(0);
-  /**
-   * A place in Settings to show (the memory), asked for by a notification or
-   * a `?open=` link (App opens Settings on it, then clears it).
-   */
-  requestedTarget = $state<{ memory: true } | undefined>();
+  /** The front page's tab (view `overview`), as `?open=` names it. */
+  overviewSection = $state<OverviewSection>('nodes');
   sessions = $state.raw<SessionSummary[]>([]);
   view = $state<MainView>('session');
   /** The workspace whose page is showing (view `workspace`). */
@@ -210,6 +208,13 @@ class EngineState {
    * Show a workspace's page: its sessions and its settings. The open session
    * stays connected behind it, so going back is instant.
    */
+  /** Show the engine's front page, on one of its tabs. */
+  showOverview(section: OverviewSection = this.overviewSection) {
+    this.overviewSection = section;
+    this.view = 'overview';
+    this.#address(`?open=${section}`);
+  }
+
   showWorkspace(workspaceId: string) {
     const workspace = this.workspaces.find((item) => item.id === workspaceId);
     if (!workspace) return;
@@ -277,7 +282,7 @@ class EngineState {
         const linkedSessionId = linkedTarget.sessionId;
         if (this.sessions.some((session) => session.id === linkedSessionId))
           this.activeSessionId = linkedSessionId;
-      } else if (linkedTarget && 'memory' in linkedTarget) this.requestedTarget = linkedTarget;
+      }
       pruneDrafts(this.sessions.map((session) => session.id));
     } catch (error) {
       if (import.meta.env.DEV) {
@@ -297,11 +302,17 @@ class EngineState {
       }
     }
     // A workspace page the address names stays in front of the session behind it.
-    const page = new URL(location.href).searchParams.get('workspace');
+    const address = new URL(location.href).searchParams;
+    const page = address.get('workspace');
     const pageWorkspace = page ? this.workspaces.find((item) => item.id === page) : undefined;
+    const open = address.get('open');
     if (pageWorkspace) {
       this.workspaceViewId = pageWorkspace.id;
       this.view = 'workspace';
+    } else if (isOverviewSection(open) || !address.has('session')) {
+      // The engine opens on its front page unless the address names a session.
+      this.overviewSection = isOverviewSection(open) ? open : 'nodes';
+      this.view = 'overview';
     }
     if (this.activeSessionId) {
       await this.openSession(this.activeSessionId, { show: this.view === 'session' });
@@ -378,7 +389,7 @@ class EngineState {
       location.assign(`/?room=${encodeURIComponent(target.roomId)}`);
       return;
     }
-    this.requestedTarget = target;
+    this.showOverview('memory');
   }
 
   /** Open an exact-question notification and check its status against a fresh snapshot. */

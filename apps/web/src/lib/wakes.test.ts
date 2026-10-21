@@ -4,7 +4,7 @@ import { mount, tick, unmount } from 'svelte';
 import WakesSettings from './components/WakesSettings.svelte';
 import RoomMessageRow from './components/rooms/RoomMessageRow.svelte';
 import type { RoomMessage } from './rooms';
-import { rooms } from './rooms.svelte';
+import { reactiveProps } from './testing/props.svelte';
 import { describeOutcome, describeTrigger, type Wake } from './wakes';
 
 /** Tuesday 2026-10-20 10:00 UTC. */
@@ -111,7 +111,8 @@ describe('wakes in the web app', () => {
   });
 
   it('lists what is coming and what happened, and cancels one', async () => {
-    component = mount(WakesSettings, { target });
+    const props = reactiveProps({ revision: 0 });
+    component = mount(WakesSettings, { target, props });
     await flush();
     expect(target.textContent).toContain('Today: 3 of 24');
     expect(target.textContent).toContain('Coming back to look at: look at the dotfiles');
@@ -126,7 +127,7 @@ describe('wakes in the web app', () => {
     expect(target.textContent).toContain('Cancelled');
     // A wake changed in a room: the list loads again.
     const before = calls.length;
-    rooms.wakesRevision++;
+    props.revision++;
     await flush();
     expect(calls.length).toBeGreaterThan(before);
   });
