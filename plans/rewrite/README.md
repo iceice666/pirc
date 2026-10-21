@@ -25,7 +25,7 @@
 | 06  | [工人](06-workers.md)          | 頭腦叫工人不問、討論串、回報、脈絡交付                                                    | 02–04；relay 等 07；挑手等 08                 |
 | 07  | [兩條紅線](07-red-lines.md)    | auto mode 的 outbound 類別、Deny 直接拒、瀏覽器 action、relay 進房間                      | 00（可早做）                                  |
 | 08  | [Node 是能力](08-nodes.md)     | 能力宣告、挑手、`workspace.read`、scratch 預設、mode 詞彙縮減                             | 00（可早做）                                  |
-| 09  | [來源](09-sources.md)          | connector 框架、email / 行事曆 / 研究模式瀏覽器、輪詢 → wake、憑證 UI                     | 02、05、07、08                                |
+| 09  | [來源](09-sources.md)          | connector 框架、email / 行事曆 / Moodle、輪詢 → Rust 篩 → wake、憑證 UI                   | 02、05、08（第二步的研究瀏覽器等 07）         |
 | 10  | [面孔](10-faces.md)            | 主持人與專案面孔、誰回話、presence、成員列表、搬家                                        | 02–04、06、08                                 |
 | 11  | [Web](11-web.md)               | Discord 形狀收尾、引擎蓋頁、刪舊導航                                                      | 01–10（06 後可開始）                          |
 | 12  | [Android](12-android.md)       | 跟著 API 走；renderer 全留                                                                | 11                                            |
@@ -42,17 +42,17 @@
 
 ## 實作前待決（掛在各 plan 的「實作前待決」節，動工前定）
 
-| Plan | 問題                                                                                          |
-| ---- | --------------------------------------------------------------------------------------------- |
-| 02   | ~~頭腦用 direct tools 還是受限 script runtime~~ 已定（2026-10-20 spike）：direct tools        |
-| 03   | 偏好確認由頭腦判斷還是程式碼判斷                                                              |
-| 04   | ~~「事情本身是時間」用 `auto_close` flag 還是頭腦判斷~~ 已定（2026-10-20）：anchor 上的 flag  |
-| 07   | ~~「Allow again in this session」for `unsandboxed_bash` / `Outbound`~~ 已定（2026-10-21）：做 |
-| 08   | ~~research profile；`scratch.md` 升格~~ 已定（2026-10-21）：task policy；升格                 |
-| 09   | 第一版來源範圍（email IMAP + CalDAV + 研究瀏覽器；OAuth 第二步）                              |
-| 10   | 「話題」怎麼判（頭腦標 `topic` vs OM 聚類）                                                   |
-| 11   | 討論串是側欄還是第二欄；引擎蓋留不留 session rename                                           |
-| 13   | 版本號 1.0.0 vs 0.10.0                                                                        |
+| Plan | 問題                                                                                                           |
+| ---- | -------------------------------------------------------------------------------------------------------------- |
+| 02   | ~~頭腦用 direct tools 還是受限 script runtime~~ 已定（2026-10-20 spike）：direct tools                         |
+| 03   | 偏好確認由頭腦判斷還是程式碼判斷                                                                               |
+| 04   | ~~「事情本身是時間」用 `auto_close` flag 還是頭腦判斷~~ 已定（2026-10-20）：anchor 上的 flag                   |
+| 07   | ~~「Allow again in this session」for `unsandboxed_bash` / `Outbound`~~ 已定（2026-10-21）：做                  |
+| 08   | ~~research profile；`scratch.md` 升格~~ 已定（2026-10-21）：task policy；升格                                  |
+| 09   | ~~第一版來源範圍~~ 已定（2026-10-21）：Gmail IMAP、ICS + CalDAV、Moodle API；學校 Gmail 的 app password 待確認 |
+| 10   | 「話題」怎麼判（頭腦標 `topic` vs OM 聚類）                                                                    |
+| 11   | 討論串是側欄還是第二欄；引擎蓋留不留 session rename                                                            |
+| 13   | 版本號 1.0.0 vs 0.10.0                                                                                         |
 
 ## 每份 plan 的格式
 
