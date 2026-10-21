@@ -51,17 +51,28 @@ pub(super) struct SideRequest {
     pub task: Option<AbortHandle>,
 }
 
+/// The human's answer to a node dialog.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct NodeAnswer {
+    pub confirmed: bool,
+    /// "Allow again in this session" (only where the dialog offered it).
+    pub again: bool,
+}
+
 #[derive(Default)]
 pub(super) struct Inner {
     pub closed: bool,
     pub state: ReducedState,
     pub pending: HashMap<String, oneshot::Sender<ApiResult<Map<String, Value>>>>,
     /// Node dialogs by rpc id: the human's yes or no.
-    pub node_dialogs: HashMap<String, oneshot::Sender<bool>>,
+    pub node_dialogs: HashMap<String, oneshot::Sender<NodeAnswer>>,
     pub sandbox_requests: HashMap<String, SideRequest>,
     pub browser_requests: HashMap<String, SideRequest>,
     /// Domains the human allowed for this session, beyond the policy.
     pub approved_domains: IndexSet<String>,
+    /// Commands outside the sandbox the human allowed again for this
+    /// session: exact text and the same directory (plans/rewrite/07).
+    pub approved_exec: std::collections::HashSet<(String, String)>,
     pub current_run: Option<String>,
     /// Error from the latest assistant turn; a later successful turn clears it.
     pub run_error: Option<String>,
@@ -303,7 +314,11 @@ impl Runner {
         let dialog = self.lock().node_dialogs.remove(rpc_id);
         if let Some(dialog) = dialog {
             answered();
-            let _ = dialog.send(answer.get("confirmed") == Some(&Value::Bool(true)));
+            let confirmed = answer.get("confirmed") == Some(&Value::Bool(true));
+            let _ = dialog.send(NodeAnswer {
+                confirmed,
+                again: confirmed && answer.get("again") == Some(&Value::Bool(true)),
+            });
             return self.update_current_run(RunStatus::Running);
         }
         if !self.writable() {
@@ -398,7 +413,7 @@ impl Runner {
                 let _ = self.update_current_run(RunStatus::Running);
             }
         }
-        let _ = dialog.send(false);
+        let _ = dialog.send(NodeAnswer::default());
     }
 
     /// `controller.abort()` of a side request.

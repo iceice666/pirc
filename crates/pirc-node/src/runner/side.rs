@@ -11,7 +11,7 @@ use pirc_protocol::{AGENT_OP_MAX_LENGTH, AGENT_REQUEST_MAX_BYTES, valid_agent_op
 use serde_json::{Map, Value, json};
 use tokio::sync::{oneshot, watch};
 
-use super::process::{Inner, NODE_DIALOG_PREFIX, Runner, SideRequest, session_root};
+use super::process::{Inner, NODE_DIALOG_PREFIX, NodeAnswer, Runner, SideRequest, session_root};
 use super::reducer::js_string;
 use crate::browser::{BrowserService, BrowserTarget};
 use crate::services::Node;
@@ -400,9 +400,10 @@ impl Runner {
         title: &str,
         message: &str,
         tool_call_id: Option<String>,
-    ) -> Result<bool, String> {
+        allow_again: bool,
+    ) -> Result<NodeAnswer, String> {
         if !self.side_live(&self.lock(), side) {
-            return Ok(false);
+            return Ok(NodeAnswer::default());
         }
         let node = self.node().ok_or("The node is closing")?;
         let rpc_id = format!("{NODE_DIALOG_PREFIX}{}", uuid());
@@ -412,6 +413,9 @@ impl Runner {
         dialog.insert("method".into(), json!("confirm"));
         dialog.insert("title".into(), json!(title));
         dialog.insert("message".into(), json!(message));
+        if allow_again {
+            dialog.insert("allowAgain".into(), json!(true));
+        }
         if let Some(tool_call_id) = tool_call_id {
             dialog.insert("toolCallId".into(), json!(tool_call_id));
         }
@@ -447,7 +451,7 @@ impl Runner {
                 // while the dialog opened: withdraw it at once.
                 self.lock().node_dialogs.insert(rpc_id.clone(), answer);
                 self.withdraw(&rpc_id);
-                return Ok(false);
+                return Ok(NodeAnswer::default());
             }
             inner.node_dialogs.insert(rpc_id.clone(), answer);
             // Linked under the same lock: a later cancel withdraws it.
@@ -457,12 +461,12 @@ impl Runner {
         }
         drop(node);
         match tokio::time::timeout(Duration::from_millis(ttl), answered).await {
-            Ok(Ok(confirmed)) => Ok(confirmed),
+            Ok(Ok(answer)) => Ok(answer),
             // Withdrawn (the dialog's sender went with it).
-            Ok(Err(_)) => Ok(false),
+            Ok(Err(_)) => Ok(NodeAnswer::default()),
             Err(_) => {
                 self.withdraw(&rpc_id);
-                Ok(false)
+                Ok(NodeAnswer::default())
             }
         }
     }
@@ -586,8 +590,15 @@ impl Runner {
                 .join("\n\n");
                 self.start_sandbox(id, move |runner, side| async move {
                     let confirmed = runner
-                        .confirm_from_node(&side, "Allow network access?", &text, tool_call_id)
-                        .await?;
+                        .confirm_from_node(
+                            &side,
+                            "Allow network access?",
+                            &text,
+                            tool_call_id,
+                            false,
+                        )
+                        .await?
+                        .confirmed;
                     if !confirmed {
                         runner.sandbox_ok(&side.id, json!({ "granted": [], "denied": missing }));
                         return Ok(());
@@ -651,16 +662,31 @@ impl Runner {
                         .to_owned(),
                 ]
                 .join("\n\n");
+                let key = (command.clone(), cwd.clone());
                 self.start_sandbox(id, move |runner, side| async move {
-                    let confirmed = runner
-                        .confirm_from_node(
-                            &side,
-                            "Run a command outside the sandbox?",
-                            &text,
-                            tool_call_id,
-                        )
-                        .await?;
-                    if !confirmed {
+                    // Allowed again for this session: the same text in the
+                    // same directory runs without asking.
+                    let remembered = runner.lock().approved_exec.contains(&key);
+                    let answer = if remembered {
+                        NodeAnswer {
+                            confirmed: true,
+                            again: true,
+                        }
+                    } else {
+                        runner
+                            .confirm_from_node(
+                                &side,
+                                "Run a command outside the sandbox?",
+                                &text,
+                                tool_call_id,
+                                true,
+                            )
+                            .await?
+                    };
+                    if answer.again && !remembered {
+                        runner.lock().approved_exec.insert(key);
+                    }
+                    if !answer.confirmed {
                         runner.sandbox_fail(
                             &side.id,
                             "denied",

@@ -232,6 +232,7 @@ expression: t.into_value()
   },
   {
     "observed": {
+      "allowAgain": true,
       "id": "node-sandbox-<uuid:9>",
       "message": "$ touch denied.txt\n\nin <tmp>/workspace\n\nReason: nix build\n\nIt runs with this node account's full access (without the node's own secrets).",
       "method": "confirm",

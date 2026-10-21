@@ -82,6 +82,57 @@ fn text_of(value: Value) -> String {
     }
 }
 
+/// An action (click, typing, choosing, a key) on a page of another site is
+/// sending something out (plans/rewrite/07-red-lines.md, decision #8: only
+/// `localhost`, `127.0.0.1` and `::1` are this machine): refused with
+/// `needs_action` and the page's origin, so the agent asks its human, unless
+/// the request says that origin is allowed (`allowAction`).
+fn needs_action(url: &str, args: &Value) -> OpResult<()> {
+    if pirc_policy::url_is_localhost(url) {
+        return Ok(());
+    }
+    let origin = pirc_policy::url_origin(url);
+    if arg(args, "allowAction").and_then(Value::as_str) == Some(origin.as_str()) {
+        return Ok(());
+    }
+    Err(ApiError::new(409, "needs_action", origin).into())
+}
+
+#[cfg(test)]
+#[test]
+fn actions_on_another_site_need_the_agents_human() {
+    assert!(needs_action("http://localhost:5173/form", &json!({})).is_ok());
+    assert!(needs_action("http://[::1]:8080/", &json!({})).is_ok());
+    assert!(needs_action("about:blank", &json!({})).is_ok());
+    let refused = |url: &str, args: Value| match needs_action(url, &args) {
+        Err(OpError::Api(error)) => Some((error.code.to_string(), error.message)),
+        _ => None,
+    };
+    assert_eq!(
+        refused("https://Shop.example.com/cart?x=1", json!({})),
+        Some((
+            "needs_action".to_owned(),
+            "https://shop.example.com".to_owned()
+        ))
+    );
+    // Allowed for that origin only.
+    assert!(
+        needs_action(
+            "https://shop.example.com/cart",
+            &json!({ "allowAction": "https://shop.example.com" })
+        )
+        .is_ok()
+    );
+    assert!(
+        refused(
+            "https://evil.example/",
+            json!({ "allowAction": "https://shop.example.com" })
+        )
+        .is_some()
+    );
+    assert!(refused("http://app.localhost/", json!({})).is_some());
+}
+
 impl Inner {
     /// `handle(target, op, args, signal)`: one agent `browser_request`.
     pub(super) async fn handle(
@@ -254,6 +305,9 @@ impl Inner {
             return Err(ApiError::new(500, "browser_error", "No active page").into());
         };
         let snapshot = arg(args, "snapshot") != Some(&Value::Bool(false));
+        if matches!(op, "click" | "type" | "select" | "press") {
+            needs_action(&page.url(), args)?;
+        }
         match op {
             "fetch" => {
                 let status = self.goto(&page, &check_url(arg(args, "url"))?).await?;

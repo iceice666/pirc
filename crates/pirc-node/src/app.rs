@@ -969,6 +969,10 @@ fn interaction_answer(value: &Value) -> ApiResult<Map<String, Value>> {
     }
     if let Some(Value::Bool(confirmed)) = map.get("confirmed") {
         answer.insert("confirmed".into(), Value::Bool(*confirmed));
+        // "Allow again in this session", where the dialog offers it.
+        if *confirmed && map.get("again") == Some(&Value::Bool(true)) {
+            answer.insert("again".into(), Value::Bool(true));
+        }
         return Ok(answer);
     }
     Err(ApiError::invalid_input())
