@@ -9,7 +9,6 @@ pub mod ask_question;
 // Seeds of plans/rewrite/06-workers.md: no session runs it until the brain
 // (plans/rewrite/02-brain-host.md) does.
 #[allow(dead_code)]
-pub mod assistant;
 pub mod background;
 pub mod browser;
 pub mod compact;

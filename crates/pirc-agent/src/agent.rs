@@ -1696,6 +1696,29 @@ impl Agent {
         self.emit_queue();
     }
 
+    /// [`Agent::say`], with custom messages admitted right after the words
+    /// in the same run (the brain's news of its workers): the model reads
+    /// them together, and what it does next counts them as where it came from.
+    pub fn say_with(self: &Rc<Self>, text: String, images: Vec<UserBlock>, notes: Vec<Delivery>) {
+        self.user_input(&text);
+        let mut items = vec![Self::user_item(text, images)];
+        items.extend(notes.into_iter().map(|note| {
+            QueueItem::Custom(Box::new(Message::Custom {
+                custom_type: note.custom_type,
+                content: note.content,
+                display: note.display,
+                details: note.details,
+                timestamp: now_ms(),
+            }))
+        }));
+        if !self.running.get() {
+            return self.start_run(items);
+        }
+        self.steering.borrow_mut().extend(items);
+        self.completion_changed();
+        self.emit_queue();
+    }
+
     pub fn follow_up(self: &Rc<Self>, text: String, images: Vec<UserBlock>) {
         if self.try_command(&text) {
             return;
@@ -3570,7 +3593,7 @@ mod tests {
 
     #[test]
     fn mode_tool_registry_matches_actual_registered_operation_names() {
-        use crate::features::{assistant, browser, sandbox, web_search};
+        use crate::features::{browser, sandbox, web_search};
         let dir = tempfile::tempdir().unwrap();
         let agent = mode_agent(
             dir.path(),
@@ -3586,7 +3609,6 @@ mod tests {
         names.extend(browser::registered_tool_names());
         names.extend(sandbox::registered_tool_names());
         names.extend(web_search::registered_tool_names());
-        names.extend(assistant::registered_tool_names(&agent));
         let declared = pirc_protocol::mode::TOOL_NAMES
             .iter()
             .map(|name| (*name).to_owned())

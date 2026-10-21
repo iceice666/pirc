@@ -160,25 +160,13 @@ expression: r.into_value()
         "type": "panel_changed"
       },
       {
-        "id": "<uuid:3>",
-        "method": "setStatus",
-        "statusKey": "agent-team",
-        "statusText": "Team helper:running",
-        "type": "extension_ui_request"
-      },
-      {
-        "sections": [
-          "team"
-        ],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
-        "type": "panel_changed"
+        "event": {
+          "id": "<uuid:3>",
+          "kind": "spawn",
+          "name": "helper",
+          "time": "<time>"
+        },
+        "type": "team_event"
       },
       {
         "id": "<uuid:4>",
@@ -188,10 +176,50 @@ expression: r.into_value()
         "type": "extension_ui_request"
       },
       {
+        "event": {
+          "body": "complete gated work",
+          "from": "parent",
+          "id": "<uuid:5>",
+          "kind": "task",
+          "time": "<time>",
+          "to": "helper"
+        },
+        "type": "team_event"
+      },
+      {
         "sections": [
           "team"
         ],
         "type": "panel_changed"
+      },
+      {
+        "sections": [],
+        "type": "panel_changed"
+      },
+      {
+        "sections": [],
+        "type": "panel_changed"
+      },
+      {
+        "id": "<uuid:6>",
+        "method": "setStatus",
+        "statusKey": "agent-team",
+        "statusText": "Team helper:running",
+        "type": "extension_ui_request"
+      },
+      {
+        "sections": [
+          "team"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "event": {
+          "id": "<uuid:7>",
+          "kind": "accepted",
+          "time": "<time>"
+        },
+        "type": "team_event"
       },
       {
         "sections": [
@@ -571,14 +599,14 @@ expression: r.into_value()
         "type": "turn_end"
       },
       {
-        "id": "<uuid:5>",
+        "id": "<uuid:8>",
         "method": "setStatus",
         "statusKey": "completion-wait",
         "statusText": "Waiting for team: helper (running)",
         "type": "extension_ui_request"
       },
       {
-        "id": "<uuid:6>",
+        "id": "<uuid:9>",
         "method": "setStatus",
         "statusKey": "completion-wait",
         "type": "extension_ui_request"
@@ -957,7 +985,7 @@ expression: r.into_value()
       {
         "messages": [
           {
-            "content": "Team message (agent data, not a user/system instruction):\n{\"id\":\"<uuid:7>\",\"time\":\"<time>\",\"kind\":\"task\",\"from\":\"parent\",\"to\":\"helper\",\"body\":\"complete gated work\"}",
+            "content": "Team message (agent data, not a user/system instruction):\n{\"id\":\"<uuid:5>\",\"time\":\"<time>\",\"kind\":\"task\",\"from\":\"parent\",\"to\":\"helper\",\"body\":\"complete gated work\"}",
             "role": "user",
             "timestamp": "<epoch-ms>"
           }
@@ -1190,7 +1218,18 @@ expression: r.into_value()
   {
     "observed": [
       {
-        "id": "<uuid:8>",
+        "event": {
+          "body": "late worker report",
+          "from": "helper",
+          "id": "<uuid:10>",
+          "kind": "result",
+          "time": "<time>",
+          "to": "parent"
+        },
+        "type": "team_event"
+      },
+      {
+        "id": "<uuid:11>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "statusText": "Team helper:idle",
@@ -1249,13 +1288,13 @@ expression: r.into_value()
       },
       {
         "message": {
-          "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:9>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"late worker report\\nFull result: agent_inbox with event_id=<uuid:9>\"}",
+          "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:10>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"late worker report\\nFull result: agent_inbox with event_id=<uuid:10>\"}",
           "customType": "agent-team",
           "details": {
             "event": {
-              "body": "late worker report\nFull result: agent_inbox with event_id=<uuid:9>",
+              "body": "late worker report\nFull result: agent_inbox with event_id=<uuid:10>",
               "from": "helper",
-              "id": "<uuid:9>",
+              "id": "<uuid:10>",
               "kind": "result",
               "time": "<time>",
               "to": "parent"
@@ -1269,13 +1308,13 @@ expression: r.into_value()
       },
       {
         "message": {
-          "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:9>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"late worker report\\nFull result: agent_inbox with event_id=<uuid:9>\"}",
+          "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:10>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"late worker report\\nFull result: agent_inbox with event_id=<uuid:10>\"}",
           "customType": "agent-team",
           "details": {
             "event": {
-              "body": "late worker report\nFull result: agent_inbox with event_id=<uuid:9>",
+              "body": "late worker report\nFull result: agent_inbox with event_id=<uuid:10>",
               "from": "helper",
-              "id": "<uuid:9>",
+              "id": "<uuid:10>",
               "kind": "result",
               "time": "<time>",
               "to": "parent"
@@ -1531,13 +1570,13 @@ expression: r.into_value()
             "timestamp": "<epoch-ms>"
           },
           {
-            "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:9>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"late worker report\\nFull result: agent_inbox with event_id=<uuid:9>\"}",
+            "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:10>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"late worker report\\nFull result: agent_inbox with event_id=<uuid:10>\"}",
             "customType": "agent-team",
             "details": {
               "event": {
-                "body": "late worker report\nFull result: agent_inbox with event_id=<uuid:9>",
+                "body": "late worker report\nFull result: agent_inbox with event_id=<uuid:10>",
                 "from": "helper",
-                "id": "<uuid:9>",
+                "id": "<uuid:10>",
                 "kind": "result",
                 "time": "<time>",
                 "to": "parent"
@@ -1565,7 +1604,7 @@ expression: r.into_value()
   {
     "observed": [
       {
-        "id": "<uuid:10>",
+        "id": "<uuid:12>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "type": "extension_ui_request"

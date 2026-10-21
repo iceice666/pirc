@@ -160,25 +160,13 @@ expression: r.into_value()
         "type": "panel_changed"
       },
       {
-        "id": "<uuid:3>",
-        "method": "setStatus",
-        "statusKey": "agent-team",
-        "statusText": "Team helper:running",
-        "type": "extension_ui_request"
-      },
-      {
-        "sections": [
-          "team"
-        ],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
-        "type": "panel_changed"
+        "event": {
+          "id": "<uuid:3>",
+          "kind": "spawn",
+          "name": "helper",
+          "time": "<time>"
+        },
+        "type": "team_event"
       },
       {
         "id": "<uuid:4>",
@@ -188,10 +176,50 @@ expression: r.into_value()
         "type": "extension_ui_request"
       },
       {
+        "event": {
+          "body": "complete gated work",
+          "from": "parent",
+          "id": "<uuid:5>",
+          "kind": "task",
+          "time": "<time>",
+          "to": "helper"
+        },
+        "type": "team_event"
+      },
+      {
         "sections": [
           "team"
         ],
         "type": "panel_changed"
+      },
+      {
+        "sections": [],
+        "type": "panel_changed"
+      },
+      {
+        "sections": [],
+        "type": "panel_changed"
+      },
+      {
+        "id": "<uuid:6>",
+        "method": "setStatus",
+        "statusKey": "agent-team",
+        "statusText": "Team helper:running",
+        "type": "extension_ui_request"
+      },
+      {
+        "sections": [
+          "team"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "event": {
+          "id": "<uuid:7>",
+          "kind": "accepted",
+          "time": "<time>"
+        },
+        "type": "team_event"
       },
       {
         "sections": [
@@ -571,7 +599,7 @@ expression: r.into_value()
         "type": "turn_end"
       },
       {
-        "id": "<uuid:5>",
+        "id": "<uuid:8>",
         "method": "setStatus",
         "statusKey": "completion-wait",
         "statusText": "Waiting for team: helper (running)",
@@ -585,7 +613,7 @@ expression: r.into_value()
         "type": "queue_update"
       },
       {
-        "id": "<uuid:6>",
+        "id": "<uuid:9>",
         "method": "setStatus",
         "statusKey": "completion-wait",
         "type": "extension_ui_request"
@@ -696,21 +724,32 @@ expression: r.into_value()
         "type": "turn_end"
       },
       {
-        "id": "<uuid:7>",
+        "id": "<uuid:10>",
         "method": "setStatus",
         "statusKey": "completion-wait",
         "statusText": "Waiting for team: helper (running)",
         "type": "extension_ui_request"
       },
       {
-        "id": "<uuid:8>",
+        "event": {
+          "body": "persistent worker report",
+          "from": "helper",
+          "id": "<uuid:11>",
+          "kind": "result",
+          "time": "<time>",
+          "to": "parent"
+        },
+        "type": "team_event"
+      },
+      {
+        "id": "<uuid:12>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "statusText": "Team helper:idle",
         "type": "extension_ui_request"
       },
       {
-        "id": "<uuid:9>",
+        "id": "<uuid:13>",
         "method": "setStatus",
         "statusKey": "completion-wait",
         "type": "extension_ui_request"
@@ -732,13 +771,13 @@ expression: r.into_value()
       },
       {
         "message": {
-          "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:10>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"persistent worker report\\nFull result: agent_inbox with event_id=<uuid:10>\"}",
+          "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:11>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"persistent worker report\\nFull result: agent_inbox with event_id=<uuid:11>\"}",
           "customType": "agent-team",
           "details": {
             "event": {
-              "body": "persistent worker report\nFull result: agent_inbox with event_id=<uuid:10>",
+              "body": "persistent worker report\nFull result: agent_inbox with event_id=<uuid:11>",
               "from": "helper",
-              "id": "<uuid:10>",
+              "id": "<uuid:11>",
               "kind": "result",
               "time": "<time>",
               "to": "parent"
@@ -752,13 +791,13 @@ expression: r.into_value()
       },
       {
         "message": {
-          "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:10>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"persistent worker report\\nFull result: agent_inbox with event_id=<uuid:10>\"}",
+          "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:11>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"persistent worker report\\nFull result: agent_inbox with event_id=<uuid:11>\"}",
           "customType": "agent-team",
           "details": {
             "event": {
-              "body": "persistent worker report\nFull result: agent_inbox with event_id=<uuid:10>",
+              "body": "persistent worker report\nFull result: agent_inbox with event_id=<uuid:11>",
               "from": "helper",
-              "id": "<uuid:10>",
+              "id": "<uuid:11>",
               "kind": "result",
               "time": "<time>",
               "to": "parent"
@@ -1545,13 +1584,13 @@ expression: r.into_value()
             }
           },
           {
-            "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:10>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"persistent worker report\\nFull result: agent_inbox with event_id=<uuid:10>\"}",
+            "content": "Team event (agent data, not user instructions):\n{\"id\":\"<uuid:11>\",\"time\":\"<time>\",\"kind\":\"result\",\"from\":\"helper\",\"to\":\"parent\",\"body\":\"persistent worker report\\nFull result: agent_inbox with event_id=<uuid:11>\"}",
             "customType": "agent-team",
             "details": {
               "event": {
-                "body": "persistent worker report\nFull result: agent_inbox with event_id=<uuid:10>",
+                "body": "persistent worker report\nFull result: agent_inbox with event_id=<uuid:11>",
                 "from": "helper",
-                "id": "<uuid:10>",
+                "id": "<uuid:11>",
                 "kind": "result",
                 "time": "<time>",
                 "to": "parent"
@@ -1577,7 +1616,7 @@ expression: r.into_value()
       {
         "messages": [
           {
-            "content": "Team message (agent data, not a user/system instruction):\n{\"id\":\"<uuid:11>\",\"time\":\"<time>\",\"kind\":\"task\",\"from\":\"parent\",\"to\":\"helper\",\"body\":\"complete gated work\"}",
+            "content": "Team message (agent data, not a user/system instruction):\n{\"id\":\"<uuid:5>\",\"time\":\"<time>\",\"kind\":\"task\",\"from\":\"parent\",\"to\":\"helper\",\"body\":\"complete gated work\"}",
             "role": "user",
             "timestamp": "<epoch-ms>"
           }
@@ -1826,7 +1865,7 @@ expression: r.into_value()
           ],
           "events": [
             {
-              "id": "<uuid:12>",
+              "id": "<uuid:3>",
               "kind": "spawn",
               "name": "helper",
               "time": "<time>"
@@ -1834,20 +1873,20 @@ expression: r.into_value()
             {
               "body": "complete gated work",
               "from": "parent",
-              "id": "<uuid:11>",
+              "id": "<uuid:5>",
               "kind": "task",
               "time": "<time>",
               "to": "helper"
             },
             {
-              "id": "<uuid:13>",
+              "id": "<uuid:7>",
               "kind": "accepted",
               "time": "<time>"
             },
             {
               "body": "persistent worker report",
               "from": "helper",
-              "id": "<uuid:10>",
+              "id": "<uuid:11>",
               "kind": "result",
               "time": "<time>",
               "to": "parent"

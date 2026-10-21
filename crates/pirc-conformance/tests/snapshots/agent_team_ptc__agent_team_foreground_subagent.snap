@@ -152,25 +152,13 @@ expression: r.into_value()
         "type": "panel_changed"
       },
       {
-        "id": "<uuid:3>",
-        "method": "setStatus",
-        "statusKey": "agent-team",
-        "statusText": "Team once:running",
-        "type": "extension_ui_request"
-      },
-      {
-        "sections": [
-          "team"
-        ],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
-        "type": "panel_changed"
+        "event": {
+          "id": "<uuid:3>",
+          "kind": "spawn",
+          "name": "once",
+          "time": "<time>"
+        },
+        "type": "team_event"
       },
       {
         "id": "<uuid:4>",
@@ -180,13 +168,56 @@ expression: r.into_value()
         "type": "extension_ui_request"
       },
       {
+        "event": {
+          "body": "report",
+          "from": "parent",
+          "id": "<uuid:5>",
+          "kind": "task",
+          "time": "<time>",
+          "to": "once"
+        },
+        "type": "team_event"
+      },
+      {
         "sections": [
           "team"
         ],
         "type": "panel_changed"
       },
       {
-        "id": "<uuid:5>",
+        "sections": [],
+        "type": "panel_changed"
+      },
+      {
+        "sections": [],
+        "type": "panel_changed"
+      },
+      {
+        "id": "<uuid:6>",
+        "method": "setStatus",
+        "statusKey": "agent-team",
+        "statusText": "Team once:running",
+        "type": "extension_ui_request"
+      },
+      {
+        "sections": [
+          "team"
+        ],
+        "type": "panel_changed"
+      },
+      {
+        "event": {
+          "body": "first report",
+          "from": "once",
+          "id": "<uuid:7>",
+          "kind": "result",
+          "time": "<time>",
+          "to": "parent"
+        },
+        "type": "team_event"
+      },
+      {
+        "id": "<uuid:8>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "type": "extension_ui_request"
@@ -207,12 +238,12 @@ expression: r.into_value()
         "result": {
           "content": [
             {
-              "text": "Subagent once done (agent_inbox event_id=<uuid:6>):\nfirst report",
+              "text": "Subagent once done (agent_inbox event_id=<uuid:7>):\nfirst report",
               "type": "text"
             }
           ],
           "details": {
-            "event_id": "<uuid:6>",
+            "event_id": "<uuid:7>",
             "name": "once",
             "status": "done"
           }
@@ -226,7 +257,7 @@ expression: r.into_value()
         "result": {
           "content": [
             {
-              "text": "Subagent once done (agent_inbox event_id=<uuid:6>):\nfirst report",
+              "text": "Subagent once done (agent_inbox event_id=<uuid:7>):\nfirst report",
               "type": "text"
             }
           ],
@@ -313,7 +344,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Subagent once done (agent_inbox event_id=<uuid:6>):\nfirst report",
+              "text": "Subagent once done (agent_inbox event_id=<uuid:7>):\nfirst report",
               "type": "text"
             }
           ],
@@ -403,7 +434,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "Subagent once done (agent_inbox event_id=<uuid:6>):\nfirst report",
+              "text": "Subagent once done (agent_inbox event_id=<uuid:7>):\nfirst report",
               "type": "text"
             }
           ],
@@ -592,12 +623,12 @@ expression: r.into_value()
           "task": "fail"
         },
         "parentToolCallId": "s2",
-        "toolCallId": "<uuid:7>:op1",
+        "toolCallId": "<uuid:9>:op1",
         "toolName": "subagent",
         "type": "tool_execution_start"
       },
       {
-        "id": "<uuid:8>",
+        "id": "<uuid:10>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "statusText": "Team twice:starting",
@@ -610,11 +641,31 @@ expression: r.into_value()
         "type": "panel_changed"
       },
       {
-        "id": "<uuid:9>",
+        "event": {
+          "id": "<uuid:11>",
+          "kind": "spawn",
+          "name": "twice",
+          "time": "<time>"
+        },
+        "type": "team_event"
+      },
+      {
+        "id": "<uuid:12>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "statusText": "Team twice:running",
         "type": "extension_ui_request"
+      },
+      {
+        "event": {
+          "body": "fail",
+          "from": "parent",
+          "id": "<uuid:13>",
+          "kind": "task",
+          "time": "<time>",
+          "to": "twice"
+        },
+        "type": "team_event"
       },
       {
         "sections": [
@@ -631,7 +682,7 @@ expression: r.into_value()
         "type": "panel_changed"
       },
       {
-        "id": "<uuid:10>",
+        "id": "<uuid:14>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "statusText": "Team twice:running",
@@ -644,7 +695,18 @@ expression: r.into_value()
         "type": "panel_changed"
       },
       {
-        "id": "<uuid:11>",
+        "event": {
+          "body": "boom",
+          "from": "twice",
+          "id": "<uuid:15>",
+          "kind": "error",
+          "time": "<time>",
+          "to": "parent"
+        },
+        "type": "team_event"
+      },
+      {
+        "id": "<uuid:16>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "type": "extension_ui_request"
@@ -665,18 +727,18 @@ expression: r.into_value()
         "result": {
           "content": [
             {
-              "text": "Subagent twice failed (agent_inbox event_id=<uuid:12>):\nboom",
+              "text": "Subagent twice failed (agent_inbox event_id=<uuid:15>):\nboom",
               "type": "text"
             }
           ],
           "details": {
-            "event_id": "<uuid:12>",
+            "event_id": "<uuid:15>",
             "name": "twice",
             "status": "failed"
           },
           "isError": true
         },
-        "toolCallId": "<uuid:7>:op1",
+        "toolCallId": "<uuid:9>:op1",
         "toolName": "subagent",
         "type": "tool_execution_end"
       },
@@ -685,14 +747,14 @@ expression: r.into_value()
         "result": {
           "content": [
             {
-              "text": "[error] OperationFailed: Subagent twice failed (agent_inbox event_id=<uuid:12>):\nboom\n\n[operations] 0 completed, 1 failed\n\n- subagent: failed (OperationFailed)",
+              "text": "[error] OperationFailed: Subagent twice failed (agent_inbox event_id=<uuid:15>):\nboom\n\n[operations] 0 completed, 1 failed\n\n- subagent: failed (OperationFailed)",
               "type": "text"
             }
           ],
           "details": {
             "activeMs": "<activeMs>",
             "consoleTruncated": false,
-            "executionId": "<uuid:7>",
+            "executionId": "<uuid:9>",
             "manifest": [
               "subagent"
             ],
@@ -702,7 +764,7 @@ expression: r.into_value()
                 "delivered": true,
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:7>:op1",
+                "operationId": "<uuid:9>:op1",
                 "outcome": "failed"
               }
             ],
@@ -719,8 +781,8 @@ expression: r.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s2",
@@ -729,9 +791,9 @@ expression: r.into_value()
               {
                 "capability": "subagent",
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
-                "parentNodeId": "<uuid:7>:root",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
+                "parentNodeId": "<uuid:9>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s2",
@@ -742,10 +804,10 @@ expression: r.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
                 "outcome": "failed",
-                "parentNodeId": "<uuid:7>:root",
+                "parentNodeId": "<uuid:9>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "s2",
@@ -754,8 +816,8 @@ expression: r.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "s2",
@@ -775,14 +837,14 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "[error] OperationFailed: Subagent twice failed (agent_inbox event_id=<uuid:12>):\nboom\n\n[operations] 0 completed, 1 failed\n\n- subagent: failed (OperationFailed)",
+              "text": "[error] OperationFailed: Subagent twice failed (agent_inbox event_id=<uuid:15>):\nboom\n\n[operations] 0 completed, 1 failed\n\n- subagent: failed (OperationFailed)",
               "type": "text"
             }
           ],
           "details": {
             "activeMs": "<activeMs>",
             "consoleTruncated": false,
-            "executionId": "<uuid:7>",
+            "executionId": "<uuid:9>",
             "manifest": [
               "subagent"
             ],
@@ -792,7 +854,7 @@ expression: r.into_value()
                 "delivered": true,
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:7>:op1",
+                "operationId": "<uuid:9>:op1",
                 "outcome": "failed"
               }
             ],
@@ -809,8 +871,8 @@ expression: r.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s2",
@@ -819,9 +881,9 @@ expression: r.into_value()
               {
                 "capability": "subagent",
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
-                "parentNodeId": "<uuid:7>:root",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
+                "parentNodeId": "<uuid:9>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s2",
@@ -832,10 +894,10 @@ expression: r.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
                 "outcome": "failed",
-                "parentNodeId": "<uuid:7>:root",
+                "parentNodeId": "<uuid:9>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "s2",
@@ -844,8 +906,8 @@ expression: r.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "s2",
@@ -867,14 +929,14 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "[error] OperationFailed: Subagent twice failed (agent_inbox event_id=<uuid:12>):\nboom\n\n[operations] 0 completed, 1 failed\n\n- subagent: failed (OperationFailed)",
+              "text": "[error] OperationFailed: Subagent twice failed (agent_inbox event_id=<uuid:15>):\nboom\n\n[operations] 0 completed, 1 failed\n\n- subagent: failed (OperationFailed)",
               "type": "text"
             }
           ],
           "details": {
             "activeMs": "<activeMs>",
             "consoleTruncated": false,
-            "executionId": "<uuid:7>",
+            "executionId": "<uuid:9>",
             "manifest": [
               "subagent"
             ],
@@ -884,7 +946,7 @@ expression: r.into_value()
                 "delivered": true,
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:7>:op1",
+                "operationId": "<uuid:9>:op1",
                 "outcome": "failed"
               }
             ],
@@ -901,8 +963,8 @@ expression: r.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s2",
@@ -911,9 +973,9 @@ expression: r.into_value()
               {
                 "capability": "subagent",
                 "createdAt": "<time>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
-                "parentNodeId": "<uuid:7>:root",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
+                "parentNodeId": "<uuid:9>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s2",
@@ -924,10 +986,10 @@ expression: r.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:op1",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:op1",
                 "outcome": "failed",
-                "parentNodeId": "<uuid:7>:root",
+                "parentNodeId": "<uuid:9>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "s2",
@@ -936,8 +998,8 @@ expression: r.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
-                "executionId": "<uuid:7>",
-                "nodeId": "<uuid:7>:root",
+                "executionId": "<uuid:9>",
+                "nodeId": "<uuid:9>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "s2",
@@ -1058,7 +1120,7 @@ expression: r.into_value()
           "task": "again"
         },
         "parentToolCallId": "s3",
-        "toolCallId": "<uuid:13>:op1",
+        "toolCallId": "<uuid:17>:op1",
         "toolName": "subagent",
         "type": "tool_execution_start"
       },
@@ -1074,7 +1136,7 @@ expression: r.into_value()
           ],
           "isError": true
         },
-        "toolCallId": "<uuid:13>:op1",
+        "toolCallId": "<uuid:17>:op1",
         "toolName": "subagent",
         "type": "tool_execution_end"
       },
@@ -1090,7 +1152,7 @@ expression: r.into_value()
           "details": {
             "activeMs": "<activeMs>",
             "consoleTruncated": false,
-            "executionId": "<uuid:13>",
+            "executionId": "<uuid:17>",
             "manifest": [
               "subagent"
             ],
@@ -1100,7 +1162,7 @@ expression: r.into_value()
                 "delivered": true,
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:13>:op1",
+                "operationId": "<uuid:17>:op1",
                 "outcome": "unknown"
               }
             ],
@@ -1117,8 +1179,8 @@ expression: r.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s3",
@@ -1127,9 +1189,9 @@ expression: r.into_value()
               {
                 "capability": "subagent",
                 "createdAt": "<time>",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:op1",
-                "parentNodeId": "<uuid:13>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s3",
@@ -1140,10 +1202,10 @@ expression: r.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:op1",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
                 "outcome": "unknown",
-                "parentNodeId": "<uuid:13>:root",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "s3",
@@ -1152,8 +1214,8 @@ expression: r.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "s3",
@@ -1180,7 +1242,7 @@ expression: r.into_value()
           "details": {
             "activeMs": "<activeMs>",
             "consoleTruncated": false,
-            "executionId": "<uuid:13>",
+            "executionId": "<uuid:17>",
             "manifest": [
               "subagent"
             ],
@@ -1190,7 +1252,7 @@ expression: r.into_value()
                 "delivered": true,
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:13>:op1",
+                "operationId": "<uuid:17>:op1",
                 "outcome": "unknown"
               }
             ],
@@ -1207,8 +1269,8 @@ expression: r.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s3",
@@ -1217,9 +1279,9 @@ expression: r.into_value()
               {
                 "capability": "subagent",
                 "createdAt": "<time>",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:op1",
-                "parentNodeId": "<uuid:13>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s3",
@@ -1230,10 +1292,10 @@ expression: r.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:op1",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
                 "outcome": "unknown",
-                "parentNodeId": "<uuid:13>:root",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "s3",
@@ -1242,8 +1304,8 @@ expression: r.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "s3",
@@ -1272,7 +1334,7 @@ expression: r.into_value()
           "details": {
             "activeMs": "<activeMs>",
             "consoleTruncated": false,
-            "executionId": "<uuid:13>",
+            "executionId": "<uuid:17>",
             "manifest": [
               "subagent"
             ],
@@ -1282,7 +1344,7 @@ expression: r.into_value()
                 "delivered": true,
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "operationId": "<uuid:13>:op1",
+                "operationId": "<uuid:17>:op1",
                 "outcome": "unknown"
               }
             ],
@@ -1299,8 +1361,8 @@ expression: r.into_value()
             "trace": [
               {
                 "createdAt": "<time>",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 0,
                 "status": "running",
                 "turnId": "s3",
@@ -1309,9 +1371,9 @@ expression: r.into_value()
               {
                 "capability": "subagent",
                 "createdAt": "<time>",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:op1",
-                "parentNodeId": "<uuid:13>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 1,
                 "status": "running",
                 "turnId": "s3",
@@ -1322,10 +1384,10 @@ expression: r.into_value()
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
                 "errorCode": "OperationFailed",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:op1",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:op1",
                 "outcome": "unknown",
-                "parentNodeId": "<uuid:13>:root",
+                "parentNodeId": "<uuid:17>:root",
                 "sequence": 2,
                 "status": "failed",
                 "turnId": "s3",
@@ -1334,8 +1396,8 @@ expression: r.into_value()
               {
                 "createdAt": "<time>",
                 "durationMs": "<durationMs>",
-                "executionId": "<uuid:13>",
-                "nodeId": "<uuid:13>:root",
+                "executionId": "<uuid:17>",
+                "nodeId": "<uuid:17>:root",
                 "sequence": 3,
                 "status": "failed",
                 "turnId": "s3",
@@ -1714,7 +1776,7 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "Subagent once done (agent_inbox event_id=<uuid:6>):\nfirst report",
+                "text": "Subagent once done (agent_inbox event_id=<uuid:7>):\nfirst report",
                 "type": "text"
               }
             ],
@@ -1842,7 +1904,7 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "Subagent once done (agent_inbox event_id=<uuid:6>):\nfirst report",
+                "text": "Subagent once done (agent_inbox event_id=<uuid:7>):\nfirst report",
                 "type": "text"
               }
             ],
@@ -1955,14 +2017,14 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "[error] OperationFailed: Subagent twice failed (agent_inbox event_id=<uuid:12>):\nboom\n\n[operations] 0 completed, 1 failed\n\n- subagent: failed (OperationFailed)",
+                "text": "[error] OperationFailed: Subagent twice failed (agent_inbox event_id=<uuid:15>):\nboom\n\n[operations] 0 completed, 1 failed\n\n- subagent: failed (OperationFailed)",
                 "type": "text"
               }
             ],
             "details": {
               "activeMs": "<activeMs>",
               "consoleTruncated": false,
-              "executionId": "<uuid:7>",
+              "executionId": "<uuid:9>",
               "manifest": [
                 "subagent"
               ],
@@ -1972,7 +2034,7 @@ expression: r.into_value()
                   "delivered": true,
                   "durationMs": "<durationMs>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:7>:op1",
+                  "operationId": "<uuid:9>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -1989,8 +2051,8 @@ expression: r.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s2",
@@ -1999,9 +2061,9 @@ expression: r.into_value()
                 {
                   "capability": "subagent",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
-                  "parentNodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:op1",
+                  "parentNodeId": "<uuid:9>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s2",
@@ -2012,10 +2074,10 @@ expression: r.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<durationMs>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:7>:root",
+                  "parentNodeId": "<uuid:9>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "s2",
@@ -2024,8 +2086,8 @@ expression: r.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<durationMs>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "s2",
@@ -2085,7 +2147,7 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "Subagent once done (agent_inbox event_id=<uuid:6>):\nfirst report",
+                "text": "Subagent once done (agent_inbox event_id=<uuid:7>):\nfirst report",
                 "type": "text"
               }
             ],
@@ -2198,14 +2260,14 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "[error] OperationFailed: Subagent twice failed (agent_inbox event_id=<uuid:12>):\nboom\n\n[operations] 0 completed, 1 failed\n\n- subagent: failed (OperationFailed)",
+                "text": "[error] OperationFailed: Subagent twice failed (agent_inbox event_id=<uuid:15>):\nboom\n\n[operations] 0 completed, 1 failed\n\n- subagent: failed (OperationFailed)",
                 "type": "text"
               }
             ],
             "details": {
               "activeMs": "<activeMs>",
               "consoleTruncated": false,
-              "executionId": "<uuid:7>",
+              "executionId": "<uuid:9>",
               "manifest": [
                 "subagent"
               ],
@@ -2215,7 +2277,7 @@ expression: r.into_value()
                   "delivered": true,
                   "durationMs": "<durationMs>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:7>:op1",
+                  "operationId": "<uuid:9>:op1",
                   "outcome": "failed"
                 }
               ],
@@ -2232,8 +2294,8 @@ expression: r.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s2",
@@ -2242,9 +2304,9 @@ expression: r.into_value()
                 {
                   "capability": "subagent",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
-                  "parentNodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:op1",
+                  "parentNodeId": "<uuid:9>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s2",
@@ -2255,10 +2317,10 @@ expression: r.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<durationMs>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:op1",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:op1",
                   "outcome": "failed",
-                  "parentNodeId": "<uuid:7>:root",
+                  "parentNodeId": "<uuid:9>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "s2",
@@ -2267,8 +2329,8 @@ expression: r.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<durationMs>",
-                  "executionId": "<uuid:7>",
-                  "nodeId": "<uuid:7>:root",
+                  "executionId": "<uuid:9>",
+                  "nodeId": "<uuid:9>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "s2",
@@ -2320,7 +2382,7 @@ expression: r.into_value()
             "details": {
               "activeMs": "<activeMs>",
               "consoleTruncated": false,
-              "executionId": "<uuid:13>",
+              "executionId": "<uuid:17>",
               "manifest": [
                 "subagent"
               ],
@@ -2330,7 +2392,7 @@ expression: r.into_value()
                   "delivered": true,
                   "durationMs": "<durationMs>",
                   "errorCode": "OperationFailed",
-                  "operationId": "<uuid:13>:op1",
+                  "operationId": "<uuid:17>:op1",
                   "outcome": "unknown"
                 }
               ],
@@ -2347,8 +2409,8 @@ expression: r.into_value()
               "trace": [
                 {
                   "createdAt": "<time>",
-                  "executionId": "<uuid:13>",
-                  "nodeId": "<uuid:13>:root",
+                  "executionId": "<uuid:17>",
+                  "nodeId": "<uuid:17>:root",
                   "sequence": 0,
                   "status": "running",
                   "turnId": "s3",
@@ -2357,9 +2419,9 @@ expression: r.into_value()
                 {
                   "capability": "subagent",
                   "createdAt": "<time>",
-                  "executionId": "<uuid:13>",
-                  "nodeId": "<uuid:13>:op1",
-                  "parentNodeId": "<uuid:13>:root",
+                  "executionId": "<uuid:17>",
+                  "nodeId": "<uuid:17>:op1",
+                  "parentNodeId": "<uuid:17>:root",
                   "sequence": 1,
                   "status": "running",
                   "turnId": "s3",
@@ -2370,10 +2432,10 @@ expression: r.into_value()
                   "createdAt": "<time>",
                   "durationMs": "<durationMs>",
                   "errorCode": "OperationFailed",
-                  "executionId": "<uuid:13>",
-                  "nodeId": "<uuid:13>:op1",
+                  "executionId": "<uuid:17>",
+                  "nodeId": "<uuid:17>:op1",
                   "outcome": "unknown",
-                  "parentNodeId": "<uuid:13>:root",
+                  "parentNodeId": "<uuid:17>:root",
                   "sequence": 2,
                   "status": "failed",
                   "turnId": "s3",
@@ -2382,8 +2444,8 @@ expression: r.into_value()
                 {
                   "createdAt": "<time>",
                   "durationMs": "<durationMs>",
-                  "executionId": "<uuid:13>",
-                  "nodeId": "<uuid:13>:root",
+                  "executionId": "<uuid:17>",
+                  "nodeId": "<uuid:17>:root",
                   "sequence": 3,
                   "status": "failed",
                   "turnId": "s3",
@@ -2907,7 +2969,7 @@ expression: r.into_value()
           ],
           "events": [
             {
-              "id": "<uuid:14>",
+              "id": "<uuid:3>",
               "kind": "spawn",
               "name": "once",
               "time": "<time>"
@@ -2915,7 +2977,7 @@ expression: r.into_value()
             {
               "body": "report",
               "from": "parent",
-              "id": "<uuid:15>",
+              "id": "<uuid:5>",
               "kind": "task",
               "time": "<time>",
               "to": "once"
@@ -2923,13 +2985,13 @@ expression: r.into_value()
             {
               "body": "first report",
               "from": "once",
-              "id": "<uuid:6>",
+              "id": "<uuid:7>",
               "kind": "result",
               "time": "<time>",
               "to": "parent"
             },
             {
-              "id": "<uuid:16>",
+              "id": "<uuid:11>",
               "kind": "spawn",
               "name": "twice",
               "time": "<time>"
@@ -2937,7 +2999,7 @@ expression: r.into_value()
             {
               "body": "fail",
               "from": "parent",
-              "id": "<uuid:17>",
+              "id": "<uuid:13>",
               "kind": "task",
               "time": "<time>",
               "to": "twice"
@@ -2945,7 +3007,7 @@ expression: r.into_value()
             {
               "body": "boom",
               "from": "twice",
-              "id": "<uuid:12>",
+              "id": "<uuid:15>",
               "kind": "error",
               "time": "<time>",
               "to": "parent"

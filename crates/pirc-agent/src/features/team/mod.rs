@@ -499,6 +499,27 @@ fn any(a: &AbortSignal, b: &AbortSignal) -> AbortSignal {
     AbortSignal::any(&[a, b])
 }
 
+/// A broker record as the panel and the `team_event` stream show it:
+/// who, what kind, and its body clipped.
+fn team_event(record: &Json) -> Value {
+    let mut event = Map::new();
+    for key in ["id", "time", "kind"] {
+        event.insert(
+            key.to_owned(),
+            record.get(key).cloned().unwrap_or(Value::Null),
+        );
+    }
+    for key in ["from", "to", "name"] {
+        if let Some(Value::String(value)) = record.get(key) {
+            event.insert(key.to_owned(), json!(value));
+        }
+    }
+    if let Some(Value::String(body)) = record.get("body") {
+        event.insert("body".to_owned(), json!(js::head16(body, 600)));
+    }
+    Value::Object(event)
+}
+
 /// The feature's state (the TS feature's closure).
 struct State {
     weak: Weak<State>,
@@ -729,6 +750,16 @@ impl State {
                         return;
                     };
                     agent.completion_changed();
+                    // Whoever follows the session (the gateway's thread of a
+                    // worker) hears of each record as it is made.
+                    let team = state.team.try_borrow().ok().and_then(|team| team.clone());
+                    if let Some(record) = team.and_then(|team| team.recent_records(1).pop()) {
+                        let mut event = team_event(&record);
+                        if let Some(topic) = record.get("topic").filter(|topic| topic.is_string()) {
+                            event["topic"] = topic.clone();
+                        }
+                        agent.emit(json!({ "type": "team_event", "event": event }));
+                    }
                     if !state.lifetime().aborted() {
                         state.panel_changed(&agent);
                     }
@@ -1385,28 +1416,7 @@ impl Feature for TeamFeature {
             })
             .collect();
         // Recent broker traffic (bodies clipped); full history is agent_inbox.
-        let events: Vec<Value> = team
-            .recent_records(40)
-            .iter()
-            .map(|record| {
-                let mut event = Map::new();
-                for key in ["id", "time", "kind"] {
-                    event.insert(
-                        key.to_owned(),
-                        record.get(key).cloned().unwrap_or(Value::Null),
-                    );
-                }
-                for key in ["from", "to", "name"] {
-                    if let Some(Value::String(value)) = record.get(key) {
-                        event.insert(key.to_owned(), json!(value));
-                    }
-                }
-                if let Some(Value::String(body)) = record.get("body") {
-                    event.insert("body".to_owned(), json!(js::head16(body, 600)));
-                }
-                Value::Object(event)
-            })
-            .collect();
+        let events: Vec<Value> = team.recent_records(40).iter().map(team_event).collect();
         out.insert(
             "team".to_owned(),
             json!({ "agents": agents, "tasks": tasks, "events": events }),

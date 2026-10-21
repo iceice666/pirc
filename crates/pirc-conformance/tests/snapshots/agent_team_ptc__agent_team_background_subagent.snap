@@ -163,11 +163,31 @@ expression: r.into_value()
         "type": "panel_changed"
       },
       {
-        "id": "<uuid:3>",
+        "event": {
+          "id": "<uuid:3>",
+          "kind": "spawn",
+          "name": "sub-<name>",
+          "time": "<time>"
+        },
+        "type": "team_event"
+      },
+      {
+        "id": "<uuid:4>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "statusText": "Team sub-<name>:running",
         "type": "extension_ui_request"
+      },
+      {
+        "event": {
+          "body": "gated work",
+          "from": "parent",
+          "id": "<uuid:5>",
+          "kind": "task",
+          "time": "<time>",
+          "to": "sub-<name>"
+        },
+        "type": "team_event"
       },
       {
         "sections": [
@@ -184,7 +204,7 @@ expression: r.into_value()
         "type": "panel_changed"
       },
       {
-        "id": "<uuid:4>",
+        "id": "<uuid:6>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "statusText": "Team sub-<name>:running",
@@ -568,20 +588,31 @@ expression: r.into_value()
         "type": "turn_end"
       },
       {
-        "id": "<uuid:5>",
+        "id": "<uuid:7>",
         "method": "setStatus",
         "statusKey": "completion-wait",
         "statusText": "Waiting for team: sub-<name> (running)",
         "type": "extension_ui_request"
       },
       {
-        "id": "<uuid:6>",
+        "event": {
+          "body": "gated background report",
+          "from": "sub-<name>",
+          "id": "<uuid:8>",
+          "kind": "result",
+          "time": "<time>",
+          "to": "parent"
+        },
+        "type": "team_event"
+      },
+      {
+        "id": "<uuid:9>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "type": "extension_ui_request"
       },
       {
-        "id": "<uuid:7>",
+        "id": "<uuid:10>",
         "method": "setStatus",
         "statusKey": "completion-wait",
         "type": "extension_ui_request"
@@ -1498,7 +1529,7 @@ expression: r.into_value()
   {
     "observed": [
       {
-        "id": "<uuid:9>",
+        "id": "<uuid:11>",
         "method": "setStatus",
         "statusKey": "agent-team",
         "type": "extension_ui_request"
