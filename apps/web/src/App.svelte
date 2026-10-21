@@ -130,7 +130,7 @@
       settingsTab = 'general';
       settingsOpen = true;
     } else if (tab === 'schedules') {
-      app.showSchedules();
+      app.showCalendar();
       sidebarOpen = false;
     } else {
       app.setMode(tab);
@@ -479,8 +479,8 @@
       settingsTab = 'general';
       settingsOpen = true;
     }}
-    onschedules={() => {
-      app.showSchedules();
+    oncalendar={() => {
+      app.showCalendar();
       sidebarOpen = false;
     }}
     onmemory={() => {

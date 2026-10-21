@@ -106,6 +106,10 @@ afterEach(() => {
   app.discardDraftSession();
   app.dispose();
   app.demo = undefined;
+  app.view = 'session';
+  app.scheduleFocus = undefined;
+  app.calendarFocus = undefined;
+  app.calendarNavigationRevision = 0;
   app.activeSessionId = undefined;
   app.sessionState = undefined;
   app.sessions = [];
@@ -116,8 +120,37 @@ afterEach(() => {
   app.interactionNotice = '';
   app.answeringInteractionIds = [];
   globalThis.localStorage?.clear();
+  history.replaceState(history.state, '', '/');
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it('clears notification focus when opening Calendar and preserves explicit schedule links', () => {
+  history.replaceState(
+    history.state,
+    '',
+    '/?open=calendar&view=list&date=2026-10-21&manage=schedules&schedule=old&item=event%3Ae1%3A2026-10-21T09%3A00',
+  );
+  app.scheduleFocus = 'stale-schedule';
+  app.calendarFocus = { eventId: 'stale-event', occurrenceStart: '2026-10-21T11:00' };
+
+  app.showCalendar();
+
+  expect(app.view).toBe('schedules');
+  expect(app.scheduleFocus).toBeUndefined();
+  expect(app.calendarFocus).toBeUndefined();
+  expect(app.calendarNavigationRevision).toBe(1);
+  const calendarUrl = new URL(location.href);
+  expect(calendarUrl.searchParams.get('open')).toBe('calendar');
+  expect(calendarUrl.searchParams.get('view')).toBe('list');
+  expect(calendarUrl.searchParams.get('date')).toBe('2026-10-21');
+  expect(calendarUrl.searchParams.has('manage')).toBe(false);
+  expect(calendarUrl.searchParams.has('schedule')).toBe(false);
+  expect(calendarUrl.searchParams.has('item')).toBe(false);
+
+  app.showSchedules('requested-schedule');
+  expect(app.scheduleFocus).toBe('requested-schedule');
+  expect(app.calendarFocus).toBeUndefined();
 });
 
 describe('message branch commands', () => {

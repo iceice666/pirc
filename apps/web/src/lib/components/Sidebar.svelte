@@ -50,8 +50,8 @@
     onaddproject: (nodeId: string) => void;
     onclose: () => void;
     onsettings: () => void;
-    /** Show the schedules page. */
-    onschedules?: () => void;
+    /** Show the personal Calendar. */
+    oncalendar?: () => void;
     /** Review memory changes in Settings. */
     onmemory?: () => void;
   }
@@ -67,7 +67,7 @@
     onaddproject,
     onclose,
     onsettings,
-    onschedules,
+    oncalendar,
     onmemory,
   }: Props = $props();
 
@@ -382,21 +382,19 @@
   </div>
 
   <div class="sidebar-footer">
-    {#if mode === 'work'}
-      <button
-        class="settings-entry schedules-entry"
-        class:current={app.view === 'schedules'}
-        type="button"
-        onclick={onschedules}
+    <button
+      class="settings-entry calendar-entry"
+      class:current={app.view === 'schedules'}
+      type="button"
+      onclick={oncalendar}
+    >
+      <CalendarClock size={17} />
+      <span class="entry-text"
+        ><span>{tr('Calendar')}</span>{#if nextRunText()}<small
+            >{tr('Next: {0}', [nextRunText()])}</small
+          >{/if}</span
       >
-        <CalendarClock size={17} />
-        <span class="entry-text"
-          ><span>{tr('Schedules')}</span>{#if nextRunText()}<small
-              >{tr('Next: {0}', [nextRunText()])}</small
-            >{/if}</span
-        >
-      </button>
-    {/if}
+    </button>
     <button class="settings-entry" type="button" onclick={onsettings}>
       <Settings size={17} />
       <span>{tr('Settings')}</span>

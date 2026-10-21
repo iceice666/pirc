@@ -114,6 +114,22 @@ function targetUrl(target, interaction) {
     return target.scheduleId
       ? `/?open=schedules&schedule=${encodeURIComponent(target.scheduleId)}`
       : '/?open=schedules';
+  if (target?.calendar) {
+    const url = new URL('/', self.location.origin);
+    url.searchParams.set('open', 'calendar');
+    if (typeof target.eventId === 'string' && target.eventId.length <= 100)
+      url.searchParams.set('event', target.eventId);
+    if (
+      typeof target.occurrenceStart === 'string' &&
+      /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?$/.test(target.occurrenceStart)
+    )
+      url.searchParams.set('occurrence', target.occurrenceStart);
+    if (typeof target.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(target.date))
+      url.searchParams.set('date', target.date);
+    if (Number.isSafeInteger(target.startAt) && Math.abs(target.startAt) <= 8_640_000_000_000_000)
+      url.searchParams.set('startAt', String(target.startAt));
+    return url.pathname + url.search;
+  }
   if (target?.memory) return '/?open=memory';
   return '/';
 }

@@ -116,6 +116,18 @@ class AppState {
   requestedTarget = $state<Exclude<PushTarget, { sessionId: string }> | undefined>();
   /** The schedule a notification was about; the Schedules page opens it once. */
   scheduleFocus = $state<string | undefined>();
+  /** A calendar reminder target is consumed by the Calendar page after it mounts. */
+  calendarFocus = $state<
+    | {
+        eventId: string;
+        occurrenceStart?: string;
+        date?: string;
+        startAt?: number;
+      }
+    | undefined
+  >();
+  /** Bumped whenever the user or a reminder explicitly navigates to Calendar. */
+  calendarNavigationRevision = $state(0);
   sessions = $state.raw<SessionSummary[]>([]);
   /** Your schedules (the Schedules entry shows the next run). */
   schedules = $state.raw<Schedule[]>([]);
@@ -288,8 +300,49 @@ class AppState {
   /** Show the schedules in the main column, optionally opening one. */
   showSchedules(scheduleId?: string) {
     this.discardDraftSession();
+    this.calendarFocus = undefined;
     if (scheduleId) this.scheduleFocus = scheduleId;
     this.view = 'schedules';
+  }
+
+  /** Show the Calendar, optionally at the occurrence named by a reminder. */
+  showCalendar(eventId?: string, occurrenceStart?: string, date?: string, startAt?: number) {
+    this.discardDraftSession();
+    this.scheduleFocus = undefined;
+    this.calendarNavigationRevision++;
+    this.calendarFocus = eventId
+      ? {
+          eventId,
+          ...(occurrenceStart ? { occurrenceStart } : {}),
+          ...(date ? { date } : {}),
+          ...(startAt !== undefined ? { startAt } : {}),
+        }
+      : undefined;
+    this.view = 'schedules';
+    if (eventId) {
+      const query = new URLSearchParams({ open: 'calendar', event: eventId });
+      if (occurrenceStart) query.set('occurrence', occurrenceStart);
+      if (date) query.set('date', date);
+      if (startAt !== undefined) query.set('startAt', String(startAt));
+      this.#address(`?${query.toString()}`);
+    } else {
+      const query = new URLSearchParams(location.search);
+      for (const key of [
+        'event',
+        'occurrence',
+        'startAt',
+        'item',
+        'manage',
+        'schedule',
+        'newSchedule',
+        'session',
+        'interactionId',
+        'interactionEpoch',
+      ])
+        query.delete(key);
+      query.set('open', 'calendar');
+      this.#address(`?${query.toString()}`);
+    }
   }
 
   /**
@@ -575,6 +628,8 @@ class AppState {
   #request(target: Exclude<PushTarget, { sessionId: string }>) {
     // Schedules have their own page; memory still lives in Settings.
     if ('schedules' in target) this.showSchedules(target.scheduleId);
+    else if ('calendar' in target)
+      this.showCalendar(target.eventId, target.occurrenceStart, target.date, target.startAt);
     else this.requestedTarget = target;
   }
 

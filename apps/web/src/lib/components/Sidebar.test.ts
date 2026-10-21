@@ -27,6 +27,7 @@ const handlers = {
   onopenworkspace: vi.fn(),
   onclose: vi.fn(),
   onsettings: vi.fn(),
+  oncalendar: vi.fn(),
 };
 
 beforeEach(() => {
@@ -247,14 +248,35 @@ describe('Sidebar', () => {
     expect(document.activeElement).toBe(menu);
   });
 
-  it('opens the schedules page and settings from the footer', () => {
-    const onschedules = vi.fn();
-    const reactive = reactiveProps({ open: false, ...handlers, onschedules });
+  it('keeps Calendar and settings in the footer in Chat and Work modes', () => {
+    const oncalendar = vi.fn();
+    app.workspaces = [
+      ...app.workspaces,
+      {
+        id: 'node:chats',
+        hostId: 'node',
+        displayName: 'Chats',
+        kind: 'chat',
+        mode: 'chat',
+        defaults: {},
+      } as never,
+    ];
+    app.mode = 'chat';
+    const reactive = reactiveProps({ open: false, ...handlers, oncalendar });
     component = mount(Sidebar, { target, props: reactive });
     flushSync();
-    target.querySelector<HTMLButtonElement>('.schedules-entry')!.click();
-    expect(onschedules).toHaveBeenCalled();
-    target.querySelector<HTMLButtonElement>('.settings-entry:not(.schedules-entry)')!.click();
+    const calendar = target.querySelector<HTMLButtonElement>('.calendar-entry');
+    expect(calendar).not.toBeNull();
+    calendar!.click();
+    expect(oncalendar).toHaveBeenCalledTimes(1);
+
+    app.mode = 'work';
+    flushSync();
+    const workCalendar = target.querySelector<HTMLButtonElement>('.calendar-entry');
+    expect(workCalendar).not.toBeNull();
+    workCalendar!.click();
+    expect(oncalendar).toHaveBeenCalledTimes(2);
+    target.querySelector<HTMLButtonElement>('.settings-entry:not(.calendar-entry)')!.click();
     expect(handlers.onsettings).toHaveBeenCalled();
   });
 

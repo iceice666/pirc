@@ -21,6 +21,7 @@ export interface PushPlace {
 export type PushTarget =
   | { sessionId: string }
   | { schedules: true; scheduleId?: string }
+  | { calendar: true; eventId?: string; occurrenceStart?: string; date?: string; startAt?: number }
   | { memory: true };
 
 /** Exact question identity carried by an interaction notification click. */
@@ -184,8 +185,40 @@ export function targetFromUrl(url: URL): PushTarget | undefined {
     const schedule = url.searchParams.get('schedule');
     return schedule ? { schedules: true, scheduleId: schedule } : { schedules: true };
   }
+  if (open === 'calendar' || url.searchParams.get('calendar') === '1') {
+    const eventId = url.searchParams.get('event');
+    const occurrenceStart = url.searchParams.get('occurrence');
+    const dateValue = url.searchParams.get('date');
+    const date = dateValue && validPushDate(dateValue) ? dateValue : undefined;
+    const startAtValue = url.searchParams.get('startAt');
+    const parsedStartAt = startAtValue && /^-?\d+$/.test(startAtValue) ? Number(startAtValue) : NaN;
+    const startAt =
+      Number.isSafeInteger(parsedStartAt) && Math.abs(parsedStartAt) <= 8_640_000_000_000_000
+        ? parsedStartAt
+        : undefined;
+    if (
+      eventId &&
+      eventId.length <= 100 &&
+      occurrenceStart &&
+      /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?$/.test(occurrenceStart)
+    )
+      return {
+        calendar: true,
+        eventId,
+        occurrenceStart,
+        ...(date ? { date } : {}),
+        ...(startAt !== undefined ? { startAt } : {}),
+      };
+    return { calendar: true };
+  }
   if (open === 'memory') return { memory: true };
   return undefined;
+}
+
+function validPushDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(Date.UTC(year!, month! - 1, day!)).toISOString().slice(0, 10) === value;
 }
 
 export function interactionFromUrl(url: URL): PushInteraction | undefined {

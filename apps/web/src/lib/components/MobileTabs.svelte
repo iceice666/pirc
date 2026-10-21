@@ -44,7 +44,7 @@
     aria-current={current === 'schedules' ? 'page' : undefined}
     class:chosen={current === 'schedules'}
     onclick={() => onpick('schedules')}
-    ><CalendarClock size={20} /><span>{tr('Schedules')}</span></button
+    ><CalendarClock size={20} /><span>{tr('Calendar')}</span></button
   >
   <button
     type="button"

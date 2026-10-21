@@ -13,13 +13,17 @@ remote publication is not.
 
 - [x] Approved month/week/day Web and native App design.
 - [x] Gateway schema 1006, owner-scoped CRUD, bounded/paginated projection,
-  daily/weekly/monthly/yearly recurrence, exceptions and atomic series splits.
+      daily/weekly/monthly/yearly recurrence, exceptions and atomic series splits.
 - [x] Revision conflicts, idempotent creation, actual/forecast run identity,
-  independent default-deny calendar grants and human-confirmed agent proposals.
+      independent default-deny calendar grants and human-confirmed agent proposals.
 - [x] Gateway reminder attempts, occurrence deduplication and rescheduling,
-  shared confirmation expiry/handled events. Reuse `schedules_changed` for
-  calendar invalidation; no new hint subscription is needed.
-- [ ] Final Web and Flutter interface regression/visual review.
+      shared confirmation expiry/handled events. Reuse `schedules_changed` for
+      calendar invalidation; no new hint subscription is needed.
+- [x] Web month/week/day/list, event editor and schedule management, account
+      preferences, permissions, reminders, move/resize drafts and English/Traditional
+      Chinese. Typecheck, 91 focused/regression tests, production build and pinned
+      Chromium span/point geometry checks pass.
+- [ ] Final Flutter interface regression/visual review.
 - [ ] Physical Android background/reminder acceptance when a device is available.
 
 Frozen recurrence policy: skip missing month days/leap dates; DST gaps move

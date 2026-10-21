@@ -32,11 +32,13 @@
 
   interface Props {
     disabled?: boolean;
+    createOnMount?: boolean;
+    initialScheduleId?: string;
     /** Open a run's session (the dialog closes). */
     onopenchat?: (sessionId: string) => void;
   }
 
-  let { disabled = false, onopenchat }: Props = $props();
+  let { disabled = false, createOnMount = false, initialScheduleId, onopenchat }: Props = $props();
 
   const THINKING: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -275,7 +277,33 @@
 
   onMount(() => {
     if (disabled) loading = false;
-    else void load();
+    else
+      void (async () => {
+        await load();
+        if (!alive) return;
+        if (createOnMount) {
+          startNew();
+          return;
+        }
+        if (!initialScheduleId) return;
+        let selected = schedules.find((item) => item.id === initialScheduleId);
+        if (!selected) {
+          try {
+            const detail = await schedulesApi.get(initialScheduleId);
+            if (!alive) return;
+            selected = detail.schedule;
+            show([...schedules, selected]);
+            runs = detail.runs;
+          } catch (cause) {
+            if (alive) error = message(cause);
+          }
+        }
+        if (selected && alive) {
+          expanded = selected.id;
+          startEdit(selected);
+          void loadRuns(selected.id);
+        }
+      })();
     return () => {
       alive = false;
     };

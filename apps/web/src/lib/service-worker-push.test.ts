@@ -229,3 +229,25 @@ it('keeps the exact interaction tuple in the URL when a click opens a new window
     '/?session=session%3Aone&interactionId=memory%3Ap1%3A0&interactionEpoch=0',
   ]);
 });
+
+it('opens a calendar reminder at its specific event occurrence', async () => {
+  const worker = serviceWorkerHarness({ noClients: true });
+  const target = {
+    calendar: true,
+    eventId: 'event/one',
+    occurrenceStart: '2026-10-22T09:00',
+    date: '2026-11-01',
+    startAt: Date.parse('2026-10-31T17:00:00Z'),
+  };
+  await worker.push({
+    kind: 'calendar_reminder',
+    title: 'Design review',
+    body: 'Starts in 15 minutes',
+    target,
+  });
+  await worker.clickNotification(worker.shown[0]!.options.data);
+
+  expect(worker.openedWindows).toEqual([
+    `/?open=calendar&event=event%2Fone&occurrence=2026-10-22T09%3A00&date=2026-11-01&startAt=${target.startAt}`,
+  ]);
+});

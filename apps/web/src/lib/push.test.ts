@@ -130,6 +130,24 @@ describe('where a notification leads', () => {
     expect(at('?session=s%201')).toEqual({ sessionId: 's 1' });
     expect(at('?open=schedules&schedule=s1')).toEqual({ schedules: true, scheduleId: 's1' });
     expect(at('?open=schedules')).toEqual({ schedules: true });
+    expect(at('?open=calendar&event=e1&occurrence=2026-10-21T09%3A00')).toEqual({
+      calendar: true,
+      eventId: 'e1',
+      occurrenceStart: '2026-10-21T09:00',
+    });
+    const movedStartAt = Date.parse('2026-10-31T17:00:00Z');
+    expect(
+      at(
+        `?open=calendar&event=e1&occurrence=2026-10-22T09%3A00&date=2026-11-01&startAt=${movedStartAt}`,
+      ),
+    ).toEqual({
+      calendar: true,
+      eventId: 'e1',
+      occurrenceStart: '2026-10-22T09:00',
+      date: '2026-11-01',
+      startAt: movedStartAt,
+    });
+    expect(at('?open=calendar&event=bad&occurrence=invalid')).toEqual({ calendar: true });
     expect(at('?open=memory')).toEqual({ memory: true });
     expect(at('')).toBeUndefined();
   });
@@ -158,6 +176,31 @@ describe('where a notification leads', () => {
     expect(app.scheduleFocus).toBe('s9');
     app.view = 'session';
     app.scheduleFocus = undefined;
+  });
+
+  it('opens a moved reminder at its effective date while retaining the original occurrence key', async () => {
+    app.demo = undefined;
+    const movedStartAt = Date.parse('2026-10-31T17:00:00Z');
+    await app.openTarget({
+      calendar: true,
+      eventId: 'e1',
+      occurrenceStart: '2026-10-22T09:00',
+      date: '2026-11-01',
+      startAt: movedStartAt,
+    });
+    expect(app.view).toBe('schedules');
+    expect(app.calendarFocus).toEqual({
+      eventId: 'e1',
+      occurrenceStart: '2026-10-22T09:00',
+      date: '2026-11-01',
+      startAt: movedStartAt,
+    });
+    expect(new URL(location.href).searchParams.get('open')).toBe('calendar');
+    expect(new URL(location.href).searchParams.get('date')).toBe('2026-11-01');
+    expect(new URL(location.href).searchParams.get('item')).toBeNull();
+    app.view = 'session';
+    app.calendarFocus = undefined;
+    history.replaceState(history.state, '', '/');
   });
 
   it('opens the memory in Settings', async () => {
