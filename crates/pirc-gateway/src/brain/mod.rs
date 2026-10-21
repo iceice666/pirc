@@ -13,6 +13,7 @@
 //! - [`store`]: the rooms' conversations on disk and the turn records.
 //! - [`loops`]: the open loops, always in its prompt.
 //! - [`waking`]: a wake turn (`crate::wake`): its prompt, input and tools.
+//! - [`worker_tools`]: calling workers (`crate::delegations`).
 
 pub mod identity;
 mod loop_tools;
@@ -27,6 +28,7 @@ mod tools;
 mod turn;
 mod ui;
 mod waking;
+mod worker_tools;
 
 use std::collections::HashMap;
 use std::rc::Rc;

@@ -272,7 +272,6 @@ expression: t.into_value()
   },
   {
     "body": {
-      "delegations": [],
       "history": [],
       "interactions": [
         {

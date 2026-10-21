@@ -38,7 +38,7 @@ use tokio::task::JoinHandle;
 use super::store::{Outcome, TurnStore};
 use super::turn::{RoomAgent, compose, post_line};
 use super::waking::{NOT_IN_WAKES, ONLY_IN_WAKES};
-use super::{Command, identity, loops, memory, presence, waking};
+use super::{Command, identity, loops, memory, presence, waking, worker_tools};
 use crate::app::AppState;
 use crate::db::rooms::{Pending, RoomInputStore, RoomStore};
 use crate::rooms::TYPING_TTL_MS;
@@ -319,6 +319,7 @@ impl Scheduler {
         let mut remembered = memory::sections(&self.app, &speakers, &format!("{said}\n{about}"));
         remembered.insert(1.min(remembered.len()), open_loops);
         prompt.extend(remembered);
+        prompt.push(worker_tools::section(&self.app, false));
         room.memory.set_speakers(speakers);
         room.agent.set_base_prompt(prompt);
         room.agent.set_hidden_tools(
@@ -336,7 +337,34 @@ impl Scheduler {
             }
         };
         presence(&self.app, room_id, true);
-        self.hand_over(&room, text, batches);
+        // How the room's workers ended since its last turn comes with
+        // what people said.
+        let reports = {
+            let conn = self.app.db.lock();
+            crate::delegations::untold(&conn, room_id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|delegation| {
+                    let note = Delivery {
+                        custom_type: crate::delegations::REPORT_TYPE.to_owned(),
+                        content: crate::delegations::update_message(&conn, &delegation),
+                        display: false,
+                        details: Some(json!({
+                            "delegationId": delegation.id,
+                            "status": delegation.status,
+                        })),
+                    };
+                    (delegation, note)
+                })
+                .collect::<Vec<_>>()
+        };
+        let notes = reports.iter().map(|(_, note)| note.clone()).collect();
+        self.hand_over(&room, text, batches, notes);
+        for (delegation, _) in &reports {
+            if let Err(error) = crate::delegations::told(&self.app.db.lock(), delegation) {
+                crate::log::warn(&format!("brain: cannot note a report: {}", error.message));
+            }
+        }
         let task = tokio::task::spawn_local(finish(
             self.app.clone(),
             room.clone(),
@@ -411,6 +439,7 @@ impl Scheduler {
         let mut remembered = memory::sections(&self.app, &speakers, &format!("{input}\n{about}"));
         remembered.insert(1.min(remembered.len()), open_loops);
         prompt.extend(remembered);
+        prompt.push(worker_tools::section(&self.app, true));
         room.memory.set_speakers(speakers);
         room.agent.set_base_prompt(prompt);
         room.agent
@@ -503,15 +532,21 @@ impl Scheduler {
         {
             crate::log::warn(&format!("brain: cannot record a steer: {}", error.message));
         }
-        self.hand_over(&room, text, batches);
+        self.hand_over(&room, text, batches, Vec::new());
     }
 
-    /// Say `text` in the room's conversation and take the batches out of
-    /// the pending input once it is admitted.
-    fn hand_over(&self, room: &Rc<RoomAgent>, text: String, batches: &[Pending]) {
+    /// Say `text` (with `notes` after it) in the room's conversation and
+    /// take the batches out of the pending input once it is admitted.
+    fn hand_over(
+        &self,
+        room: &Rc<RoomAgent>,
+        text: String,
+        batches: &[Pending],
+        notes: Vec<Delivery>,
+    ) {
         let ids = message_ids(batches);
         self.in_flight.borrow_mut().extend(ids.iter().cloned());
-        let ticket = room.say(text);
+        let ticket = room.say_with(text, notes);
         tokio::task::spawn_local(admit(
             self.app.clone(),
             room.clone(),

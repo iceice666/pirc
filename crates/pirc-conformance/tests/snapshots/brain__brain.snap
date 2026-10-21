@@ -148,7 +148,10 @@ expression: t.into_value()
           "update_loop",
           "reopen_loop",
           "schedule_wake",
-          "cancel_wake"
+          "cancel_wake",
+          "call_worker",
+          "worker_status",
+          "stop_worker"
         ]
       },
       "calls": 1
@@ -242,7 +245,10 @@ expression: t.into_value()
           "update_loop",
           "reopen_loop",
           "schedule_wake",
-          "cancel_wake"
+          "cancel_wake",
+          "call_worker",
+          "worker_status",
+          "stop_worker"
         ]
       },
       "calls": 3
@@ -379,6 +385,10 @@ expression: t.into_value()
         [
           "loops",
           "loops"
+        ],
+        [
+          "workers",
+          "built-in"
         ]
       ],
       "status": 200,
@@ -395,7 +405,10 @@ expression: t.into_value()
         "update_loop",
         "reopen_loop",
         "schedule_wake",
-        "cancel_wake"
+        "cancel_wake",
+        "call_worker",
+        "worker_status",
+        "stop_worker"
       ]
     },
     "step": "the latest call's context"

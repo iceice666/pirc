@@ -59,6 +59,9 @@ fn no_store_route(method: &Method, path: &str) -> bool {
         ("PATCH", ["api", "loops", id]) => one(id),
         ("GET", ["api", "wakes"]) => true,
         ("DELETE", ["api", "wakes", id]) => one(id),
+        ("GET", ["api", "workers"]) => true,
+        ("GET", ["api", "threads", id]) => one(id),
+        ("POST", ["api", "threads", id, "messages" | "answer"]) => one(id),
         _ => false,
     }
 }
@@ -133,7 +136,7 @@ async fn revoke_device(
     Ok(no_content())
 }
 
-/// Stop a delegation's run from the chat that started it.
+/// Stop a worker (its anchor's Stop), for whom it works for.
 async fn stop_delegation(
     State(app): State<AppState>,
     Extension(identity): Extension<Identity>,
@@ -142,21 +145,18 @@ async fn stop_delegation(
     if id.encode_utf16().count() > 40 {
         return Err(ApiError::invalid_input().into());
     }
-    Ok(ok(
-        crate::delegations::stop(&app, &identity.user, &id).await?
-    ))
+    Ok(ok(crate::delegations::stop(
+        &app,
+        Some(&identity.user),
+        &id,
+    )
+    .await?))
 }
 
 impl App {
     /// Memory hints (`memory=1`) for `user`, after memory's own update.
     pub fn memory_changed(&self, user: &str) {
         self.hints.memory.notify(&user.to_owned());
-    }
-
-    /// Confirmations the gateway asks for itself (delegations), shown with
-    /// the node's interactions.
-    pub fn pending_gateway_interactions(&self, session_id: &str) -> Vec<Value> {
-        crate::delegations::pending_interactions(self, session_id)
     }
 
     /// Byte offsets of a node's mirrored workspace-memory ledgers.

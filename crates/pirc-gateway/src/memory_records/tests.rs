@@ -247,7 +247,7 @@ fn notes_and_delegations_are_found_by_any_word_in_any_script() {
     app.db
         .lock()
         .execute(
-            "INSERT INTO delegations (id,owner_user,assistant_session_id,workspace_id,title,task,status,result,expires_at,created_at,updated_at) VALUES ('d12345678',?,'chat','n1:repo','Fix nginx','Reload it.','completed','nginx reloaded',0,0,?)",
+            "INSERT INTO delegations (id,owner_user,room_id,workspace_id,title,task,status,result,expires_at,created_at,updated_at) VALUES ('d12345678',?,'general','n1:repo','Fix nginx','Reload it.','completed','nginx reloaded',0,0,?)",
             rusqlite::params![ME, crate::util::now_ms()],
         )
         .unwrap();
@@ -436,7 +436,7 @@ fn clones_of_a_repository_find_each_others_notes() {
     app.db
         .lock()
         .execute(
-            "INSERT INTO delegations (id,owner_user,assistant_session_id,workspace_id,title,task,status,result,expires_at,created_at,updated_at) VALUES ('d87654321',?,'chat','n2:clone','Fix nginx','Reload it.','completed','nginx reloaded',0,0,?)",
+            "INSERT INTO delegations (id,owner_user,room_id,workspace_id,title,task,status,result,expires_at,created_at,updated_at) VALUES ('d87654321',?,'general','n2:clone','Fix nginx','Reload it.','completed','nginx reloaded',0,0,?)",
             rusqlite::params![ME, crate::util::now_ms()],
         )
         .unwrap();

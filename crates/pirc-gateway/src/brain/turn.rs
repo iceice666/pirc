@@ -5,7 +5,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use pirc_agent::agent::{Agent, AgentOptions};
+use pirc_agent::agent::{Agent, AgentOptions, Delivery};
 use pirc_agent::config::{AgentConfig, HooksConfig, Limits};
 use pirc_agent::host::{HostProfile, ModelCatalog};
 use pirc_agent::session_store::SessionStore;
@@ -21,6 +21,7 @@ use super::memory::{BrainPromoter, MemoryFeature, RoomMemory};
 use super::store::{brain_dir, room_dir};
 use super::ui::BrainUi;
 use super::waking::WakeFeature;
+use super::worker_tools::WorkerFeature;
 use crate::app::AppState;
 use crate::db::rooms::{HOST_FACE_ID, Message, MessageKind, Pending, RoomStore, Speaker};
 use crate::error::ApiResult;
@@ -106,6 +107,11 @@ impl RoomAgent {
                     memory: memory.clone(),
                     progress: progress.clone(),
                 }),
+                Rc::new(WorkerFeature {
+                    memory: memory.clone(),
+                    progress: progress.clone(),
+                    runtime: runtime.clone(),
+                }),
             ],
             acquire_write: None,
             allowed_tools: None,
@@ -122,12 +128,13 @@ impl RoomAgent {
         })
     }
 
-    /// Hand people's words to the agent: a run starts, or the running one
-    /// is steered. The ticket is admitted once `progress.admitted` reaches it.
-    pub fn say(&self, text: String) -> u64 {
+    /// Hand people's words to the agent, with custom messages right after
+    /// them (how workers ended): a run starts, or the running one is
+    /// steered. The ticket is admitted once `progress.admitted` reaches it.
+    pub fn say_with(&self, text: String, notes: Vec<Delivery>) -> u64 {
         let ticket = self.progress.said.get() + 1;
         self.progress.said.set(ticket);
-        self.agent.say(text, Vec::new());
+        self.agent.say_with(text, Vec::new(), notes);
         ticket
     }
 }

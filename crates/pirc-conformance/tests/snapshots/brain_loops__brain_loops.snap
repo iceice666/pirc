@@ -55,7 +55,10 @@ expression: stable(t.into_value())
         "update_loop",
         "reopen_loop",
         "schedule_wake",
-        "cancel_wake"
+        "cancel_wake",
+        "call_worker",
+        "worker_status",
+        "stop_worker"
       ]
     },
     "step": "the first call: no loops yet, and the tools"

@@ -8,131 +8,19 @@ expression: t.into_value()
       "answer": {
         "body": {
           "error": {
-            "code": "invalid_input",
-            "message": "Invalid arguments for delegation.create"
+            "code": "unknown_operation",
+            "message": "Unknown gateway operation: delegation.create"
           }
         },
-        "status": 400
+        "status": 404
       },
       "args": {
-        "task": 1,
-        "workspace": "Repo"
-      },
-      "op": "delegation.create"
-    },
-    "step": "invalid arguments"
-  },
-  {
-    "observed": {
-      "answer": {
-        "body": {
-          "error": {
-            "code": "invalid_input",
-            "message": "Invalid arguments for delegation.create"
-          }
-        },
-        "status": 400
-      },
-      "args": {
-        "model": "fake/fake-model",
-        "task": "x",
-        "workspace": "Repo"
-      },
-      "op": "delegation.create"
-    },
-    "step": "a model is the user's choice"
-  },
-  {
-    "observed": {
-      "answer": {
-        "body": {
-          "error": {
-            "code": "forbidden",
-            "message": "No session can delegate"
-          }
-        },
-        "status": 403
-      },
-      "args": {
-        "task": "x × 20001",
-        "workspace": "Repo"
-      },
-      "op": "delegation.create"
-    },
-    "step": "a task over 20000 characters"
-  },
-  {
-    "observed": {
-      "answer": {
-        "body": {
-          "error": {
-            "code": "forbidden",
-            "message": "No session can delegate"
-          }
-        },
-        "status": 403
-      },
-      "args": {
-        "role": "general",
         "task": "Fix the flaky test.",
         "workspace": "Repo"
       },
       "op": "delegation.create"
     },
-    "step": "a delegation: refused"
-  },
-  {
-    "observed": {
-      "answer": {
-        "body": {
-          "error": {
-            "code": "forbidden",
-            "message": "No session can delegate"
-          }
-        },
-        "status": 403
-      },
-      "args": {
-        "follows": "dmissing",
-        "task": "x"
-      },
-      "op": "delegation.create"
-    },
-    "step": "a follow-up: refused"
-  },
-  {
-    "observed": {
-      "answer": {
-        "body": {
-          "error": {
-            "code": "invalid_input",
-            "message": "Invalid arguments for delegation.status"
-          }
-        },
-        "status": 400
-      },
-      "args": {
-        "id": 5
-      },
-      "op": "delegation.status"
-    },
-    "step": "invalid status arguments"
-  },
-  {
-    "observed": {
-      "answer": {
-        "body": {
-          "error": {
-            "code": "forbidden",
-            "message": "No session can delegate"
-          }
-        },
-        "status": 403
-      },
-      "args": {},
-      "op": "delegation.status"
-    },
-    "step": "the status: refused"
+    "step": "delegation.create is gone"
   },
   {
     "observed": {
@@ -140,15 +28,15 @@ expression: t.into_value()
         "body": {
           "error": {
             "code": "unknown_operation",
-            "message": "Unknown gateway operation: delegation.cancel"
+            "message": "Unknown gateway operation: delegation.status"
           }
         },
         "status": 404
       },
       "args": {},
-      "op": "delegation.cancel"
+      "op": "delegation.status"
     },
-    "step": "an unknown operation"
+    "step": "delegation.status is gone"
   },
   {
     "observed": {
@@ -247,7 +135,7 @@ expression: t.into_value()
     "body": {
       "error": {
         "code": "not_found",
-        "message": "No delegation dnope"
+        "message": "No worker dnope"
       }
     },
     "headers": {
@@ -255,20 +143,48 @@ expression: t.into_value()
     },
     "request": "POST /api/delegations/dnope/stop",
     "status": 404,
-    "step": "stop an unknown delegation"
+    "step": "stop an unknown worker"
   },
   {
     "body": {
       "error": {
         "code": "not_found",
-        "message": "No interaction relay.dnope.x"
+        "message": "Thread not found"
       }
     },
     "headers": {
+      "cache-control": "no-store",
       "content-type": "application/json"
     },
-    "request": "POST /api/sessions/<session>/interactions/relay.dnope.x/answer",
+    "request": "POST /api/threads/thread_nope/messages",
     "status": 404,
-    "step": "answer the relayed approval of an unknown delegation"
+    "step": "say something in an unknown thread"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Thread not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/threads/thread_nope/answer",
+    "status": 404,
+    "step": "answer in an unknown thread"
+  },
+  {
+    "body": {
+      "workers": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workers?status=all",
+    "status": 200,
+    "step": "no workers"
   }
 ]

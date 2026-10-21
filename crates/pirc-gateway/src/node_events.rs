@@ -123,6 +123,7 @@ impl App {
             }
         }
         self.directory_changed();
+        crate::delegations::node_offline(self, node_id);
     }
 
     pub fn on_node_event(&self, node_id: &str, remote_id: &str, event: Map<String, Value>) {

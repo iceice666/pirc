@@ -5,9 +5,10 @@
 //! something, said in the room with a line that cancels it).
 //!
 //! "Nothing writes unasked": a wake only reads and remembers. The tools
-//! that act for people (plan 06's workers, plan 09's actions) are not in a
-//! wake's tool list at all ([`NOT_IN_WAKES`]); `speak` is not in a
-//! conversation's ([`ONLY_IN_WAKES`]): there the reply itself is said.
+//! that act for people (`stop_worker`, plan 09's actions) are not in a
+//! wake's tool list at all ([`NOT_IN_WAKES`]), and a worker it calls works
+//! read-only; `speak` is not in a conversation's ([`ONLY_IN_WAKES`]):
+//! there the reply itself is said.
 
 use std::rc::Rc;
 
@@ -27,9 +28,10 @@ use crate::memory::text::clip;
 use crate::util::now_ms;
 use crate::wake::{self, Kind, NewWake, Wake};
 
-/// Tools a wake does not have: the ones that act for people (plans 06 and
-/// 09 add theirs here; a worker a wake calls is read-only instead).
-pub const NOT_IN_WAKES: &[&str] = &[];
+/// Tools a wake does not have: the ones that act for people (plan 09 adds
+/// its actions here). A worker a wake calls is read-only instead, and it
+/// cannot stop one people asked for.
+pub const NOT_IN_WAKES: &[&str] = &["stop_worker"];
 /// Tools only a wake has.
 pub const ONLY_IN_WAKES: &[&str] = &["speak"];
 /// Room messages a wake is shown.

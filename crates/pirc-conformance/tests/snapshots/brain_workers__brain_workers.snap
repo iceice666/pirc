@@ -1,0 +1,829 @@
+---
+source: crates/pirc-conformance/tests/brain_workers.rs
+expression: stable(t.into_value())
+---
+[
+  {
+    "observed": [
+      {
+        "payload": {
+          "workspaceId": "repo"
+        },
+        "request": "POST /api/sessions"
+      },
+      {
+        "payload": {
+          "name": "Run the tests"
+        },
+        "request": "PATCH /api/sessions/<task:1>"
+      },
+      {
+        "payload": {
+          "content": "Task from the household's assistant, started without a separate approval (worker <worker:1>):\n\nRun the test suite of the repository and report what fails.\n\nWork on it here. When you are done, end with a short summary of what you did and anything left over: it is shown to the people who asked.",
+          "customType": "assistant-delegation",
+          "details": {
+            "delegationId": "<worker:1>",
+            "title": "Run the tests",
+            "userRequests": [
+              "run the tests in Repo"
+            ]
+          }
+        },
+        "request": "POST /api/sessions/<task:1>/deliver"
+      }
+    ],
+    "step": "the node: a session, named, then the task"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "text": "I asked a worker to: Run the tests (Repo on work)",
+          "worker": {
+            "delegationId": "<worker:1>",
+            "note": null,
+            "readOnly": false,
+            "status": "running",
+            "threadId": "thread_<uuid:1>",
+            "title": "Run the tests",
+            "workers": 1,
+            "workspace": "Repo on work"
+          }
+        },
+        "kind": "text",
+        "threadId": "thread_<uuid:1>"
+      },
+      {
+        "body": {
+          "text": "I asked a worker."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "the room: the call, with a thread, then the reply"
+  },
+  {
+    "observed": [
+      "recall",
+      "remember",
+      "memory_search",
+      "recall_note",
+      "save_preference",
+      "forget",
+      "open_loop",
+      "close_loop",
+      "touch_loop",
+      "update_loop",
+      "reopen_loop",
+      "schedule_wake",
+      "cancel_wake",
+      "call_worker",
+      "worker_status",
+      "stop_worker"
+    ],
+    "step": "a conversation's tools"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "delegationId": "<worker:1>",
+          "text": "Run the test suite of the repository and report what fails."
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 0,
+        "id": "tmsg_<uuid:2>",
+        "kind": "text",
+        "seq": 1,
+        "speaker": "face:host",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": null,
+        "user": null
+      },
+      {
+        "body": {
+          "delegationId": "<worker:1>",
+          "event": "started",
+          "sessionId": "session_<uuid:3>",
+          "text": "Started in Repo on work"
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 0,
+        "id": "tmsg_<uuid:4>",
+        "kind": "line",
+        "seq": 2,
+        "speaker": "worker:session_<uuid:3>",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": null,
+        "user": null
+      },
+      {
+        "body": {
+          "summary": "bash cargo test --workspace",
+          "tool": "bash"
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 0,
+        "id": "tmsg_<uuid:5>",
+        "kind": "tool",
+        "seq": 3,
+        "speaker": "worker:session_<uuid:3>",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": null,
+        "user": null
+      },
+      {
+        "body": {
+          "team": "spawn",
+          "text": "joined"
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 1,
+        "id": "tmsg_<uuid:6>",
+        "kind": "line",
+        "seq": 4,
+        "speaker": "worker:session_<uuid:3>/checker",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": null,
+        "user": null
+      },
+      {
+        "body": {
+          "team": "message",
+          "text": "clippy is clean",
+          "to": "parent"
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 1,
+        "id": "tmsg_<uuid:7>",
+        "kind": "text",
+        "seq": 5,
+        "speaker": "worker:session_<uuid:3>/checker",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": null,
+        "user": null
+      },
+      {
+        "body": {
+          "text": "Running the tests now."
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 0,
+        "id": "tmsg_<uuid:8>",
+        "kind": "text",
+        "seq": 6,
+        "speaker": "worker:session_<uuid:3>",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": null,
+        "user": null
+      }
+    ],
+    "step": "the thread: the task, the start, what it did, its team"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "text": "A worker is asking: Which suite? (answer in the thread)",
+          "worker": {
+            "delegationId": "<worker:1>",
+            "event": "question",
+            "threadId": "thread_<uuid:1>"
+          }
+        },
+        "kind": "line"
+      }
+    ],
+    "step": "the room is told"
+  },
+  {
+    "body": {
+      "interactionId": "interaction-1",
+      "status": "answered"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/threads/:id/answer",
+    "status": 200,
+    "step": "answer it in the thread"
+  },
+  {
+    "observed": {
+      "payload": {
+        "answer": {
+          "value": "all"
+        }
+      },
+      "request": "POST /api/sessions/<task:1>/interactions/interaction-1/relayed-answer"
+    },
+    "step": "relayed to the node"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "stale_interaction",
+        "message": "The worker no longer waits on this"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/threads/:id/answer",
+    "status": 409,
+    "step": "answered already"
+  },
+  {
+    "body": {
+      "handed": {
+        "as": "followUp",
+        "delegation": "<worker:1>"
+      },
+      "message": {
+        "body": {
+          "text": "also run clippy"
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 0,
+        "id": "tmsg_<uuid:9>",
+        "kind": "text",
+        "seq": 8,
+        "speaker": "user",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": null,
+        "user": "test@example.com"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/threads/:id/messages",
+    "status": 200,
+    "step": "say something in the thread"
+  },
+  {
+    "observed": [
+      {
+        "payload": {
+          "clientId": "gateway-thread-<worker:1>",
+          "force": false
+        },
+        "request": "POST /api/sessions/<task:1>/control/acquire"
+      },
+      {
+        "payload": {
+          "clientId": "gateway-thread-<worker:1>",
+          "commandId": "command_<uuid:10>",
+          "generation": 1,
+          "payload": {
+            "message": "also run clippy",
+            "type": "follow_up"
+          }
+        },
+        "request": "POST /api/sessions/<task:1>/commands"
+      },
+      {
+        "payload": {
+          "clientId": "gateway-thread-<worker:1>",
+          "generation": 1
+        },
+        "request": "POST /api/sessions/<task:1>/control/release"
+      }
+    ],
+    "step": "the node: control taken, the follow-up, control released"
+  },
+  {
+    "observed": [
+      [
+        "Run the tests",
+        "running",
+        false
+      ],
+      [
+        "Suite A",
+        "running",
+        false
+      ],
+      [
+        "Suite B",
+        "running",
+        false
+      ],
+      [
+        "Suite C",
+        "running",
+        false
+      ],
+      [
+        "Suite D",
+        "queued",
+        false
+      ]
+    ],
+    "step": "five workers: four run, one waits"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "text": "I asked a worker to: Suite A (Repo on work)",
+          "worker": {
+            "delegationId": "<worker:2>",
+            "note": null,
+            "readOnly": false,
+            "status": "running",
+            "threadId": "thread_<uuid:11>",
+            "title": "Suite A",
+            "workers": 1,
+            "workspace": "Repo on work"
+          }
+        },
+        "kind": "text",
+        "threadId": "thread_<uuid:11>"
+      },
+      {
+        "body": {
+          "text": "I asked a worker to: Suite B (Repo on work)",
+          "worker": {
+            "delegationId": "<worker:3>",
+            "note": null,
+            "readOnly": false,
+            "status": "running",
+            "threadId": "thread_<uuid:12>",
+            "title": "Suite B",
+            "workers": 1,
+            "workspace": "Repo on work"
+          }
+        },
+        "kind": "text",
+        "threadId": "thread_<uuid:12>"
+      },
+      {
+        "body": {
+          "text": "I asked a worker to: Suite C (Repo on work)",
+          "worker": {
+            "delegationId": "<worker:4>",
+            "note": null,
+            "readOnly": false,
+            "status": "running",
+            "threadId": "thread_<uuid:13>",
+            "title": "Suite C",
+            "workers": 1,
+            "workspace": "Repo on work"
+          }
+        },
+        "kind": "text",
+        "threadId": "thread_<uuid:13>"
+      },
+      {
+        "body": {
+          "text": "I asked a worker to: Suite D (Repo on work)",
+          "worker": {
+            "delegationId": "<worker:5>",
+            "note": "one of the 4 running workers to finish",
+            "readOnly": false,
+            "status": "queued",
+            "threadId": "thread_<uuid:14>",
+            "title": "Suite D",
+            "workers": 1,
+            "workspace": "Repo on work"
+          }
+        },
+        "kind": "text",
+        "threadId": "thread_<uuid:14>"
+      },
+      {
+        "body": {
+          "text": "The worker on “Suite D” waits its turn (4 running).",
+          "worker": {
+            "delegationId": "<worker:5>",
+            "event": "busy",
+            "threadId": "thread_<uuid:14>"
+          }
+        },
+        "kind": "line"
+      },
+      {
+        "body": {
+          "text": "Four more on it."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "the room: four calls, one waiting"
+  },
+  {
+    "observed": [
+      [
+        "Run the tests",
+        "completed",
+        false
+      ],
+      [
+        "Suite A",
+        "running",
+        false
+      ],
+      [
+        "Suite B",
+        "running",
+        false
+      ],
+      [
+        "Suite C",
+        "running",
+        false
+      ],
+      [
+        "Suite D",
+        "running",
+        false
+      ]
+    ],
+    "step": "the waiting one starts"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "text": "All 42 tests pass; clippy is clean.",
+          "worker": {
+            "delegationId": "<worker:1>",
+            "report": true,
+            "status": "completed",
+            "threadId": "thread_<uuid:1>"
+          }
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "the room: the report"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "text": "Running the tests now."
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 0,
+        "id": "tmsg_<uuid:8>",
+        "kind": "text",
+        "seq": 6,
+        "speaker": "worker:session_<uuid:3>",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": null,
+        "user": null
+      },
+      {
+        "body": {
+          "answer": {
+            "value": "all"
+          },
+          "answeredBy": "test@example.com",
+          "delegationId": "<worker:1>",
+          "expiresAt": null,
+          "interactionId": "interaction-1",
+          "kind": "select",
+          "request": {
+            "method": "select",
+            "options": [
+              "unit",
+              "all"
+            ],
+            "title": "Which suite?"
+          },
+          "status": "answered"
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 0,
+        "id": "tmsg_<uuid:15>",
+        "kind": "question",
+        "seq": 7,
+        "speaker": "worker:session_<uuid:3>",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": "<epoch-ms>",
+        "user": null
+      },
+      {
+        "body": {
+          "text": "also run clippy"
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 0,
+        "id": "tmsg_<uuid:9>",
+        "kind": "text",
+        "seq": 8,
+        "speaker": "user",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": null,
+        "user": "test@example.com"
+      },
+      {
+        "body": {
+          "delegationId": "<worker:1>",
+          "event": "completed",
+          "text": "Done."
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 0,
+        "id": "tmsg_<uuid:16>",
+        "kind": "line",
+        "seq": 9,
+        "speaker": "worker:session_<uuid:3>",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": null,
+        "user": null
+      }
+    ],
+    "step": "the thread ends"
+  },
+  {
+    "observed": [
+      {
+        "anchorMessageId": "msg_<uuid:17>",
+        "createdAt": "<epoch-ms>",
+        "faceId": "host",
+        "follows": null,
+        "for": "test@example.com",
+        "id": "<worker:1>",
+        "note": null,
+        "readOnly": false,
+        "roomId": "general",
+        "status": "completed",
+        "targetSessionId": "session_<uuid:3>",
+        "threadId": "thread_<uuid:1>",
+        "title": "Run the tests",
+        "updatedAt": "<epoch-ms>",
+        "workspace": "Repo on work",
+        "workspaceId": "work:repo"
+      }
+    ],
+    "step": "the thread's workers"
+  },
+  {
+    "observed": {
+      "report": true,
+      "result": true
+    },
+    "step": "the brain is told"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "memory": {
+            "id": "<fact:1>",
+            "kind": "fact",
+            "origin": "tool:delegation",
+            "user": "test@example.com"
+          },
+          "text": "Noted: The Repo test suite passes (42 tests)."
+        },
+        "kind": "line"
+      },
+      {
+        "body": {
+          "text": "Good news."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "kept, from the delegation"
+  },
+  {
+    "body": {
+      "status": "stopping"
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/delegations/:id/stop",
+    "status": 200,
+    "step": "stop a worker"
+  },
+  {
+    "observed": [
+      {
+        "type": "stop"
+      }
+    ],
+    "step": "the node: stopped"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "text": "The worker could not finish “Suite A”: The run cancelled",
+          "worker": {
+            "delegationId": "<worker:2>",
+            "report": true,
+            "status": "failed",
+            "threadId": "thread_<uuid:11>"
+          }
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "the room: it ended"
+  },
+  {
+    "observed": {
+      "approvalMode": "read-only",
+      "readOnly": true,
+      "userRequests": null
+    },
+    "step": "a wake's worker: read-only"
+  },
+  {
+    "observed": {
+      "conversation": [
+        "recall",
+        "remember",
+        "memory_search",
+        "recall_note",
+        "save_preference",
+        "forget",
+        "open_loop",
+        "close_loop",
+        "touch_loop",
+        "update_loop",
+        "reopen_loop",
+        "schedule_wake",
+        "cancel_wake",
+        "call_worker",
+        "worker_status",
+        "stop_worker"
+      ],
+      "wake": [
+        "recall",
+        "remember",
+        "memory_search",
+        "recall_note",
+        "save_preference",
+        "forget",
+        "open_loop",
+        "close_loop",
+        "touch_loop",
+        "update_loop",
+        "reopen_loop",
+        "speak",
+        "schedule_wake",
+        "cancel_wake",
+        "call_worker",
+        "worker_status"
+      ]
+    },
+    "step": "a wake's tools have no stop_worker"
+  },
+  {
+    "observed": [
+      [
+        "CI logs",
+        "running",
+        true
+      ],
+      [
+        "Run the tests",
+        "completed",
+        false
+      ],
+      [
+        "Suite A",
+        "failed",
+        false
+      ],
+      [
+        "Suite B",
+        "running",
+        false
+      ],
+      [
+        "Suite C",
+        "running",
+        false
+      ],
+      [
+        "Suite D",
+        "running",
+        false
+      ]
+    ],
+    "step": "the workers"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "text": "I'll come back <weekday> <local-time> (UTC) to look at: look at the CI",
+          "wake": {
+            "event": "scheduled",
+            "id": "wake_<uuid:18>"
+          }
+        },
+        "kind": "line"
+      },
+      {
+        "body": {
+          "text": "Later."
+        },
+        "kind": "text"
+      },
+      {
+        "body": {
+          "text": "I asked a worker to: CI logs (Repo on work, read-only)",
+          "worker": {
+            "delegationId": "<worker:6>",
+            "note": null,
+            "readOnly": true,
+            "status": "running",
+            "threadId": "thread_<uuid:19>",
+            "title": "CI logs",
+            "workers": 1,
+            "workspace": "Repo on work"
+          }
+        },
+        "kind": "text",
+        "threadId": "thread_<uuid:19>"
+      }
+    ],
+    "step": "the room"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Thread not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/threads/thread_none",
+    "status": 404,
+    "step": "an unknown thread"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "A message holds 1 to 20000 characters"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/threads/thread_<uuid:1>/messages",
+    "status": 400,
+    "step": "an empty message"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "No question interaction-9"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/threads/thread_<uuid:1>/answer",
+    "status": 404,
+    "step": "an unknown question"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/workers?status=nope",
+    "status": 400,
+    "step": "a status that is not one"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "Worker <worker:2> is not running"
+      }
+    },
+    "headers": {
+      "content-type": "application/json"
+    },
+    "request": "POST /api/delegations/<worker:2>/stop",
+    "status": 409,
+    "step": "stop a worker that ended"
+  }
+]

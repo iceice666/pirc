@@ -151,10 +151,12 @@ pub enum SessionOrigin {
     Delegation {
         delegation_id: String,
         title: String,
-        from_session_id: String,
-        /// The delegation's status (`running`, `waiting_input`,
-        /// `completed`, `failed`): delegated sessions are left as they are
-        /// once their result is delivered, so the list says how they ended.
+        /// The room the brain called the worker in, and its thread there.
+        room_id: String,
+        thread_id: Option<String>,
+        /// The worker's status (`running`, `waiting_input`, `completed`,
+        /// `failed`): its session is left as it is once it reported, so the
+        /// list says how it ended.
         status: String,
     },
 }
@@ -478,14 +480,15 @@ impl Store for Connection {
     fn session_origins(&self, owner_user: &str) -> ApiResult<Vec<(String, SessionOrigin)>> {
         let mut origins = Vec::new();
         let mut delegated = self.prepare(
-            "SELECT id, target_session_id, assistant_session_id, title, status FROM delegations WHERE owner_user=? AND target_session_id IS NOT NULL ORDER BY created_at",
+            "SELECT id, target_session_id, room_id, title, status, thread_id FROM delegations WHERE owner_user=? AND target_session_id IS NOT NULL ORDER BY created_at",
         )?;
         for row in delegated.query_map([owner_user], |row| {
             Ok((
                 row.get::<_, String>(1)?,
                 SessionOrigin::Delegation {
                     delegation_id: row.get(0)?,
-                    from_session_id: row.get(2)?,
+                    room_id: row.get(2)?,
+                    thread_id: row.get(5)?,
                     title: row.get(3)?,
                     status: row.get(4)?,
                 },

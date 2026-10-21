@@ -846,6 +846,8 @@ impl LinkSession {
             },
         );
         self.app.on_node_register(&node);
+        // Workers waiting for this node can start.
+        crate::delegations::node_online(&self.app);
     }
 
     fn dispatch(&mut self, message: NodeMessage) {

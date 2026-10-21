@@ -69,27 +69,37 @@ CREATE TABLE memory_tombstones (
   PRIMARY KEY (owner_user, content_hash)
 );
 
--- Tasks the assistant hands to other workspaces (daemon/delegations.ts).
+-- Workers (plans/rewrite/06-workers.md): tasks the brain hands to a
+-- workspace's session, at once. room_id/face_id: where it was asked for and
+-- who said so; thread_id: the thread under its message (anchor_message_id).
+-- status: queued (more than 4 run, or its node is offline: note says why),
+-- running, waiting_input, completed or failed. notified_status: the status
+-- the brain was last told of.
 CREATE TABLE delegations (
-  id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, assistant_session_id TEXT NOT NULL,
+  id TEXT PRIMARY KEY, owner_user TEXT NOT NULL, room_id TEXT NOT NULL,
   workspace_id TEXT NOT NULL, title TEXT NOT NULL, task TEXT NOT NULL, follows TEXT,
   status TEXT NOT NULL, target_session_id TEXT, result TEXT, notified_status TEXT,
   expires_at INTEGER NOT NULL, dispatched_at INTEGER,
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
   -- The model (and thinking level) it runs on, and the role its new session starts in.
   model_json TEXT, thinking TEXT, role TEXT,
-  -- 1: the user approved it as their own request for auto mode, for the run it starts.
+  -- 1: the task counts as the user's own request for auto mode, for the run it starts.
   as_user_request INTEGER NOT NULL DEFAULT 0,
-  -- How it started: 'approved' (the user's card), 'auto' (the chat's delegation
-  -- approval policy), NULL before it started. The origins of the chat's context
-  -- the agent reported (JSON array), and the user's own words it verified
-  -- (quote, JSON array of their message entry ids).
-  dispatch TEXT, origins_json TEXT, quote TEXT, quote_entry_ids TEXT
+  -- How it started ('auto'); the origins of the brain's context when it
+  -- called (JSON array), and the user's own words it verified (quote, JSON
+  -- array of their message entry ids).
+  dispatch TEXT, origins_json TEXT, quote TEXT, quote_entry_ids TEXT,
+  face_id TEXT, thread_id TEXT, anchor_message_id TEXT,
+  -- 1: it works read-only (a wake called it).
+  read_only INTEGER NOT NULL DEFAULT 0,
+  -- What the brain handed it besides the task: {facts, loops} as given.
+  context_json TEXT, wake_id TEXT, note TEXT
 );
 CREATE INDEX delegations_owner ON delegations(owner_user, status);
 CREATE INDEX delegations_follows ON delegations(follows);
-CREATE INDEX delegations_assistant ON delegations(assistant_session_id, status);
 CREATE INDEX delegations_target ON delegations(target_session_id, status);
+CREATE INDEX delegations_room ON delegations(room_id, status);
+CREATE INDEX delegations_thread ON delegations(thread_id);
 
 -- Facts: a repository's notes, mirrored from the nodes' workspace ledgers
 -- (scope 'repo'), and the household's facts the brain writes (scope
@@ -202,7 +212,8 @@ CREATE TABLE room_pending (
   PRIMARY KEY (room_id, user)
 );
 
--- Threads under a message (plan 06); created here, unused until then.
+-- Threads under a message (plan 06): a worker's progress, its team's talk
+-- and its questions, under the message that handed the work out.
 CREATE TABLE threads (
   id TEXT PRIMARY KEY, room_id TEXT NOT NULL REFERENCES rooms(id),
   anchor_message_id TEXT NOT NULL, created_at INTEGER NOT NULL, closed_at INTEGER
@@ -283,3 +294,17 @@ CREATE TABLE wakes (
 CREATE INDEX wakes_pending ON wakes(scheduled_at) WHERE outcome IS NULL;
 CREATE INDEX wakes_room ON wakes(room_id, scheduled_at);
 CREATE INDEX wakes_started ON wakes(started_at) WHERE started_at IS NOT NULL;
+
+-- A thread's messages, numbered from 1 within the thread. speaker:
+-- 'worker:<session>' (the worker's own session), 'worker:<session>/<name>'
+-- (a teammate or subagent it started, depth 1), 'user' (user says who) or
+-- 'face:<id>'. kind 'tool' is one thing a worker did, 'question' asks the
+-- user (body.status pending|answered|cancelled).
+CREATE TABLE thread_messages (
+  id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(id), seq INTEGER NOT NULL,
+  speaker TEXT NOT NULL, user TEXT,
+  kind TEXT NOT NULL CHECK (kind IN ('text', 'line', 'tool', 'question')),
+  body_json TEXT NOT NULL, depth INTEGER NOT NULL DEFAULT 0 CHECK (depth IN (0, 1)),
+  created_at INTEGER NOT NULL, updated_at INTEGER,
+  UNIQUE (thread_id, seq)
+);

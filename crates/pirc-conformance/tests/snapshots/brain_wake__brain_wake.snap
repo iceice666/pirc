@@ -101,7 +101,10 @@ expression: stable(t.into_value())
           "update_loop",
           "reopen_loop",
           "schedule_wake",
-          "cancel_wake"
+          "cancel_wake",
+          "call_worker",
+          "worker_status",
+          "stop_worker"
         ]
       },
       "wake": {
@@ -120,7 +123,9 @@ expression: stable(t.into_value())
           "reopen_loop",
           "speak",
           "schedule_wake",
-          "cancel_wake"
+          "cancel_wake",
+          "call_worker",
+          "worker_status"
         ]
       }
     },

@@ -10,7 +10,8 @@
 //!
 //! Who a memory came from is the gateway's to say, never the model's: a
 //! fact's origin is `user` when nothing but people's messages came since
-//! the last one, else the latest tool it read (`tool:<name>`); a
+//! the last one, else the latest tool it read (`tool:<name>`; what a
+//! worker reported is `tool:delegation`); a
 //! preference needs a quote of what a person said, which also says whose
 //! it is; forgetting needs one too, so nothing the brain reads can make it
 //! forget. Each memory written is said in the room as a line that undoes
@@ -44,7 +45,7 @@ use crate::memory_records::{self, Scopes};
 
 /// The tools that write memory or open loops: their results are not where
 /// a memory came from.
-const WRITING_TOOLS: [&str; 8] = [
+pub(super) const WRITING_TOOLS: [&str; 10] = [
     "remember",
     "save_preference",
     "forget",
@@ -53,7 +54,13 @@ const WRITING_TOOLS: [&str; 8] = [
     "touch_loop",
     "update_loop",
     "reopen_loop",
+    "call_worker",
+    "stop_worker",
 ];
+/// What a worker reported (its report, or `worker_status`): one origin,
+/// `tool:delegation`, whichever way it came.
+const FROM_WORKERS: [&str; 2] = ["custom:worker-report", "tool:worker_status"];
+const DELEGATION: &str = "tool:delegation";
 /// A quote must come from people's last this many messages.
 const QUOTE_MESSAGES: usize = 3;
 /// Facts recalled before a turn, at most, and their length.
@@ -605,6 +612,15 @@ fn hit_line(hit: &Value) -> String {
 /// Where what the brain knows now came from: `user` when only people's
 /// messages came since the last one, else the latest tool result's origin.
 pub(super) fn origin_now(branch: &[SessionEntry], running: &[String]) -> String {
+    let origin = latest_origin(branch, running);
+    if FROM_WORKERS.contains(&origin.as_str()) {
+        DELEGATION.to_owned()
+    } else {
+        origin
+    }
+}
+
+fn latest_origin(branch: &[SessionEntry], running: &[String]) -> String {
     let origins = current_origins(branch, running, &WRITING_TOOLS);
     let tools: Vec<&String> = origins
         .iter()
@@ -650,7 +666,11 @@ pub(super) fn turn_entry_ids(branch: &[SessionEntry]) -> Vec<String> {
 /// Who said `quote` in one of the last messages people sent (each
 /// `name: text` line of the brain's input), and that message's entry: a
 /// quote holds two characters or more, or is all the person wrote ("ok").
-fn quoted(branch: &[SessionEntry], quote: &str, speakers: &[String]) -> Option<(String, String)> {
+pub(super) fn quoted(
+    branch: &[SessionEntry],
+    quote: &str,
+    speakers: &[String],
+) -> Option<(String, String)> {
     let wanted = quote_words(quote);
     if wanted.is_empty() {
         return None;
@@ -803,6 +823,30 @@ mod tests {
             person::history(&app.db.lock(), "me@example.com", &fact.id).unwrap()[0].actor,
             "om"
         );
+    }
+
+    #[test]
+    fn what_a_worker_reported_is_from_the_delegation() {
+        let custom = |id: &str, custom_type: &str| SessionEntry {
+            id: id.to_owned(),
+            parent_id: None,
+            timestamp: 0,
+            data: EntryData::Message(AgentMessage::Custom {
+                custom_type: custom_type.to_owned(),
+                content: "Worker report".to_owned(),
+                display: false,
+                details: None,
+                timestamp: 0,
+            }),
+        };
+        let branch = vec![
+            user("e1", "ann@x: how did the tests go?"),
+            custom("e2", "worker-report"),
+        ];
+        assert_eq!(origin_now(&branch, &[]), "tool:delegation");
+        // Before the person's words, it is not what this turn knows from.
+        let branch = vec![custom("e2", "worker-report"), user("e3", "ann@x: thanks")];
+        assert_eq!(origin_now(&branch, &[]), "user");
     }
 
     #[test]

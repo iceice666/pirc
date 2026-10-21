@@ -30,7 +30,7 @@ pub use engine::*;
 /// files numbered their schemas 1 to 1005.
 const APPLICATION_ID: i32 = 0x7069_7263;
 /// `PRAGMA user_version` of `schema.sql`.
-pub const SCHEMA_VERSION: i64 = 5;
+pub const SCHEMA_VERSION: i64 = 6;
 const SCHEMA: &str = include_str!("schema.sql");
 /// Each migration takes a database from the version before it to its own;
 /// `schema.sql` is always the newest whole.
@@ -39,6 +39,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (3, include_str!("migrations/3-memory.sql")),
     (4, include_str!("migrations/4-open-loops.sql")),
     (5, include_str!("migrations/5-wakes.sql")),
+    (6, include_str!("migrations/6-workers.sql")),
 ];
 
 /// The database file in a state directory when `PIRC_DATABASE_PATH` does
@@ -415,6 +416,18 @@ mod tests {
 
     /// The schema of plan 01 (version 1), from today's.
     const PLAN_01: &str = "
+        DROP TABLE thread_messages;
+        DROP INDEX delegations_thread;
+        DROP INDEX delegations_room;
+        ALTER TABLE delegations DROP COLUMN face_id;
+        ALTER TABLE delegations DROP COLUMN thread_id;
+        ALTER TABLE delegations DROP COLUMN anchor_message_id;
+        ALTER TABLE delegations DROP COLUMN read_only;
+        ALTER TABLE delegations DROP COLUMN context_json;
+        ALTER TABLE delegations DROP COLUMN wake_id;
+        ALTER TABLE delegations DROP COLUMN note;
+        ALTER TABLE delegations RENAME COLUMN room_id TO assistant_session_id;
+        CREATE INDEX delegations_assistant ON delegations(assistant_session_id, status);
         DROP TABLE wakes;
         DROP TABLE open_loops;
         ALTER TABLE memory_records DROP COLUMN open_loop_id;

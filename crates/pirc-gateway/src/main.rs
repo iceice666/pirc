@@ -31,6 +31,7 @@ mod rooms;
 mod routes;
 mod slots;
 mod sockets;
+mod threads;
 mod time;
 mod util;
 mod wake;

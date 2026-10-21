@@ -4,21 +4,19 @@
 //! belongs to that node and to a user who is still allowed; an agent can
 //! never act as another session.
 //!
-//! Each area parses and runs its own operations (`memory`, `delegations`,
-//! `web_search`); this module does the common checks in the TS
+//! Each area parses and runs its own operations (`memory`, `web_search`); this module does the common checks in the TS
 //! order: unknown session, foreign session, unknown op, invalid arguments,
 //! then the op.
 
 use serde_json::{Value, json};
 
 use crate::app::AppState;
-use crate::db::{Session, Store, Workspace};
+use crate::db::{Store, Workspace};
 use crate::error::ApiError;
-use crate::{delegations, memory, web_search};
+use crate::{memory, web_search};
 
 /// Who is asking.
 pub struct OpContext {
-    pub session: Session,
     pub workspace: Workspace,
     pub user: String,
 }
@@ -33,7 +31,6 @@ fn agent_error(status: u16, code: &str, message: &str) -> (u16, Value) {
 /// One area's parsed operation.
 enum Parsed {
     Memory(memory::Op),
-    Delegation(delegations::Op),
     Web(web_search::Op),
 }
 
@@ -41,9 +38,6 @@ enum Parsed {
 fn parse(op: &str, args: &Value) -> Option<Result<Parsed, ()>> {
     if let Some(parsed) = memory::parse_op(op, args) {
         return Some(parsed.map(Parsed::Memory));
-    }
-    if let Some(parsed) = delegations::parse_op(op, args) {
-        return Some(parsed.map(Parsed::Delegation));
     }
     web_search::parse_op(op, args).map(|parsed| parsed.map(Parsed::Web))
 }
@@ -90,14 +84,9 @@ pub async fn run(
     let outcome = async {
         let workspace = app.db.lock().get_workspace(&session.workspace_id)?;
         app.require_mode(&workspace)?;
-        let context = OpContext {
-            session,
-            workspace,
-            user,
-        };
+        let context = OpContext { workspace, user };
         match parsed {
             Parsed::Memory(op) => memory::run_op(app, &context, op).await,
-            Parsed::Delegation(op) => delegations::run_op(app, &context, op).await,
             Parsed::Web(op) => web_search::run_op(app, &context, op).await,
         }
     }

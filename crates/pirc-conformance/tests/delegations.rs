@@ -1,10 +1,9 @@
-//! Delegations and web search (`apps/gateway/src/daemon/delegations.ts`,
-//! `web-search.ts`, their operations in `agent-ops.ts`) while no session is
-//! the assistant (plans/rewrite/02-brain-host.md): `delegation.create` and
-//! `delegation.status` are refused once their arguments parse, web search
-//! answers without a key, and the routes that act on existing delegations
-//! (Stop, relayed answers) find none. The test plays `work`, a directory
-//! node.
+//! What node agents may still ask the gateway for, now that only the brain
+//! calls workers (plans/rewrite/06-workers.md): the `delegation.*`
+//! operations are gone, web search answers without a key, and the routes
+//! that act on workers (Stop, a thread's words and answers) find none. The
+//! brain's own workers are `brain_workers.rs`. The test plays `work`, a
+//! directory node.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -207,47 +206,16 @@ async fn delegations() {
     work.request().await;
     let session = created.body["session"]["id"].as_str().unwrap().to_owned();
 
-    // Arguments are checked first; then no session may delegate.
+    // Agents no longer delegate: the brain calls workers itself.
     for (step, op, args) in [
         (
-            "invalid arguments",
+            "delegation.create is gone",
             "delegation.create",
-            json!({ "workspace": "Repo", "task": 1 }),
+            json!({ "workspace": "Repo", "task": "Fix the flaky test." }),
         ),
-        (
-            "a model is the user's choice",
-            "delegation.create",
-            json!({ "workspace": "Repo", "task": "x", "model": "fake/fake-model" }),
-        ),
-        (
-            "a task over 20000 characters",
-            "delegation.create",
-            json!({ "workspace": "Repo", "task": "x".repeat(20_001) }),
-        ),
-        (
-            "a delegation: refused",
-            "delegation.create",
-            json!({ "workspace": "Repo", "task": "Fix the flaky test.", "role": "general" }),
-        ),
-        (
-            "a follow-up: refused",
-            "delegation.create",
-            json!({ "follows": "dmissing", "task": "x" }),
-        ),
-        (
-            "invalid status arguments",
-            "delegation.status",
-            json!({ "id": 5 }),
-        ),
-        ("the status: refused", "delegation.status", json!({})),
-        ("an unknown operation", "delegation.cancel", json!({})),
+        ("delegation.status is gone", "delegation.status", json!({})),
     ] {
         let answer = work.op("task-1", op, args.clone()).await;
-        let args = if step == "a task over 20000 characters" {
-            json!({ "workspace": "Repo", "task": "x × 20001" })
-        } else {
-            args
-        };
         t.note(step, json!({ "op": op, "args": args, "answer": answer }));
     }
 
@@ -272,28 +240,35 @@ async fn delegations() {
         t.note(step, json!({ "args": args, "answer": answer }));
     }
 
-    // Routes for delegations that exist: there are none.
+    // Routes for workers that exist: there are none.
     let stopped = api
         .send("POST", "/api/delegations/dnope/stop", &browser, None)
         .await;
     t.response(
-        "stop an unknown delegation",
+        "stop an unknown worker",
         "POST /api/delegations/dnope/stop",
         &stopped,
     );
-    let answered = api
-        .send(
-            "POST",
-            &format!("/api/sessions/{session}/interactions/relay.dnope.x/answer"),
-            &browser,
-            Some(json!({ "answer": { "confirmed": true } })),
-        )
+    for (step, path, body) in [
+        (
+            "say something in an unknown thread",
+            "/api/threads/thread_nope/messages",
+            json!({ "text": "hello" }),
+        ),
+        (
+            "answer in an unknown thread",
+            "/api/threads/thread_nope/answer",
+            json!({ "interactionId": "x", "answer": { "confirmed": true } }),
+        ),
+    ] {
+        let refused = api.send("POST", path, &browser, Some(body)).await;
+        t.response(step, &format!("POST {path}"), &refused);
+    }
+    let listed = api
+        .send("GET", "/api/workers?status=all", &browser, None)
         .await;
-    t.response(
-        "answer the relayed approval of an unknown delegation",
-        "POST /api/sessions/<session>/interactions/relay.dnope.x/answer",
-        &answered,
-    );
+    t.response("no workers", "GET /api/workers?status=all", &listed);
+    let _ = session;
 
     work.close();
     insta::assert_json_snapshot!("delegations", t.into_value());
