@@ -2,6 +2,7 @@
  * The rooms API and its event stream (plans/rewrite/01-rooms.md): the
  * gateway's `/api/rooms` routes and `/api/events?rooms=1`.
  */
+import type { FacePresence as FaceState } from './faces';
 import { request } from './http';
 import type { LoopLine } from './loops';
 import type { RememberedLine } from './memory';
@@ -81,6 +82,8 @@ export interface RoomMessage {
      */
     question?: RoomQuestion;
   };
+  /** What the brain said the conversation was about (plan 10). */
+  topic?: string;
   threadId: string | null;
   createdAt: number;
   editedAt: number | null;
@@ -104,10 +107,11 @@ export const roomsApi = {
     roomId: string,
     patch: { name?: string; archived?: boolean; sourceScope?: Record<string, unknown> | null },
   ) => request<{ room: RoomView }>(path(roomId), { method: 'PATCH', ...json(patch) }),
-  move: (roomId: string, toRoomId: string) =>
-    request<{ from: Room; to: Room }>(path(roomId, '/move'), {
+  /** With the conversation's `topic` (plan 10), its open loops go along. */
+  move: (roomId: string, toRoomId: string, topic?: string) =>
+    request<{ from: Room; to: Room; loops: string[] }>(path(roomId, '/move'), {
       method: 'POST',
-      ...json({ toRoomId }),
+      ...json(topic ? { toRoomId, topic } : { toRoomId }),
     }),
   messages: (roomId: string, before?: number, limit?: number) => {
     const query = new URLSearchParams();
@@ -158,7 +162,9 @@ export interface RoomEvent {
     | 'loop_changed'
     | 'wake_changed'
     | 'thread_message'
-    | 'thread_message_updated';
+    | 'thread_message_updated'
+    | 'face_changed'
+    | 'face_presence';
   roomId: string;
   epoch: number;
   sequence: number;
@@ -192,6 +198,8 @@ export function connectRooms(options: {
   onState: (state: RoomsConnection) => void;
   /** Where faces are thinking as the socket starts (presence is not replayed). */
   onPresence?: (presence: FacePresence[]) => void;
+  /** What each face is doing as the socket starts (plan 10). */
+  onFaces?: (faces: FaceState[]) => void;
   socket?: (url: string) => WebSocket;
 }): RoomStream {
   let socket: WebSocket | undefined;
@@ -226,6 +234,7 @@ export function connectRooms(options: {
       if (frame?.type === 'ready') {
         cursor = at(frame.watermark);
         options.onPresence?.(Array.isArray(frame.presence) ? frame.presence : []);
+        if (Array.isArray(frame.faces)) options.onFaces?.(frame.faces);
       } else if (frame?.type === 'reset') {
         cursor = at(frame.watermark);
         options.onReset();
@@ -235,7 +244,8 @@ export function connectRooms(options: {
           frame.type === 'brain_presence' ||
           frame.type === 'loop_changed' ||
           frame.type === 'wake_changed' ||
-          frame.type.startsWith('thread_'))
+          frame.type.startsWith('thread_') ||
+          frame.type.startsWith('face_'))
       ) {
         if (frame.sequence > 0) cursor = `${frame.epoch}:${frame.sequence}`;
         options.onEvent(frame as RoomEvent);

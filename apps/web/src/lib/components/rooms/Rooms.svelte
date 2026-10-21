@@ -8,12 +8,23 @@
     Plus,
     SendHorizontal,
     SquareTerminal,
+    Users,
     X,
   } from '@lucide/svelte';
   import { onMount, tick } from 'svelte';
+  import {
+    completeMention,
+    HOST_FACE_ID,
+    mentionAt,
+    mentionMatches,
+    roomFace,
+    type Face,
+  } from '../../faces';
   import { registerPwa } from '../../pwa';
   import { rooms as defaultRooms, type RoomsState } from '../../rooms.svelte';
   import { trackViewportHeight } from '../../viewport';
+  import FacePanel from './FacePanel.svelte';
+  import MembersPanel from './MembersPanel.svelte';
   import RoomMessageRow from './RoomMessageRow.svelte';
   import RoomSources from './RoomSources.svelte';
   import ThreadPanel from './ThreadPanel.svelte';
@@ -40,11 +51,49 @@
 
   const current = $derived(rooms.current);
   const typingNow = $derived(rooms.typingIn(rooms.currentId, now));
-  /** Faces by id until plan 10 lists them: only the host exists. */
-  const FACES: Record<string, string> = { host: 'pirc' };
-  const thinkingNow = $derived(
-    rooms.thinkingIn(rooms.currentId).map((face) => FACES[face] ?? face),
+  /** A face's name; the host is pirc until the faces are loaded. */
+  const faceName = (id: string) => rooms.face(id)?.name ?? (id === HOST_FACE_ID ? 'pirc' : id);
+  const thinkingNow = $derived(rooms.thinkingIn(rooms.currentId).map(faceName));
+  /** Who answers here when nobody is named (plan 10). */
+  const here = $derived(roomFace(rooms.faces, rooms.currentId)?.name ?? faceName(HOST_FACE_ID));
+  /** Beside the room: the members, or one face's page (a thread comes first). */
+  let side = $state<'members' | 'face' | null>(null);
+  let faceId = $state('');
+  const shownFace = $derived<Face | undefined>(side === 'face' ? rooms.face(faceId) : undefined);
+  const sideOpen = $derived(!rooms.threadId && (side === 'members' || !!shownFace));
+
+  function openFace(id: string) {
+    faceId = id;
+    side = 'face';
+  }
+
+  /** `@name` completion in the composer. */
+  let textarea: HTMLTextAreaElement | undefined = $state();
+  let caret = $state(0);
+  let choice = $state(0);
+  let mentionDismissed = $state(false);
+  const mention = $derived(mentionAt(draft, caret));
+  const matches = $derived(
+    mention && !mentionDismissed ? mentionMatches(rooms.faces, mention.query) : [],
   );
+  $effect(() => {
+    void mention?.start;
+    choice = 0;
+  });
+
+  function trackCaret() {
+    caret = textarea?.selectionStart ?? draft.length;
+  }
+
+  async function pick(face: Face) {
+    if (!mention) return;
+    const done = completeMention(draft, caret, mention.start, face.name);
+    draft = done.text;
+    caret = done.caret;
+    await tick();
+    textarea?.focus();
+    textarea?.setSelectionRange(done.caret, done.caret);
+  }
   const otherRooms = $derived(rooms.rooms.filter((room) => room.id !== rooms.currentId));
 
   onMount(() => {
@@ -138,7 +187,26 @@
 
   function onKeydown(event: KeyboardEvent) {
     // An IME composing (Chinese, Japanese) uses Enter to pick characters.
-    if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+    if (event.isComposing || event.keyCode === 229) return;
+    if (matches.length) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : matches.length - 1;
+        choice = (choice + step) % matches.length;
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        void pick(matches[choice] ?? matches[0]!);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        mentionDismissed = true;
+        return;
+      }
+    }
+    if (event.key !== 'Enter') return;
     if (event.shiftKey) return;
     event.preventDefault();
     void send(event.metaKey || event.ctrlKey);
@@ -164,7 +232,7 @@
   }
 </script>
 
-<div class="rooms" class:list-open={listOpen} class:thread-open={!!rooms.threadId}>
+<div class="rooms" class:list-open={listOpen} class:thread-open={!!rooms.threadId || sideOpen}>
   <nav class="list" aria-label="Rooms">
     <div class="list-head">
       <a class="brand" href="/" aria-label="pirc">pirc</a>
@@ -228,10 +296,19 @@
         class="presence"
         class:thinking={thinkingNow.length > 0}
         role="status"
-        title={thinkingNow.length ? 'pirc is thinking' : 'pirc is here'}
-        ><span class="presence-dot" aria-hidden="true"></span>pirc<span class="sr-only"
-          >{thinkingNow.length ? ' is thinking' : ' is here'}</span
+        title={thinkingNow.length ? `${thinkingNow.join(', ')} thinking` : `${here} is here`}
+        ><span class="presence-dot" aria-hidden="true"></span>{thinkingNow.length
+          ? thinkingNow.join(', ')
+          : here}<span class="sr-only">{thinkingNow.length ? ' is thinking' : ' is here'}</span
         ></span
+      >
+      <button
+        type="button"
+        class="icon"
+        aria-label="Members"
+        title="Members"
+        aria-pressed={sideOpen}
+        onclick={() => (side = sideOpen ? null : 'members')}><Users size={18} /></button
       >
       {#if rooms.connection !== 'connected' && !rooms.loading}
         <span class="badge" role="status">{rooms.connection}</span>
@@ -286,6 +363,8 @@
           onopenroom={open}
           onpin={(item, pinned) => rooms.pin(item, pinned)}
           onopenthread={(threadId) => void rooms.openThread(threadId)}
+          faces={rooms.faces}
+          onopenface={openFace}
         />
       {/each}
     </div>
@@ -320,6 +399,21 @@
             {/each}
           </ul>
         {/if}
+        {#if matches.length}
+          <ul class="mentions" role="listbox" aria-label="Faces">
+            {#each matches as face, index (face.id)}
+              <li role="option" aria-selected={index === choice}>
+                <button
+                  type="button"
+                  class:chosen={index === choice}
+                  onmousedown={(event) => event.preventDefault()}
+                  onclick={() => pick(face)}
+                  >@{face.name}{#if face.bio}<span class="bio">{face.bio}</span>{/if}</button
+                >
+              </li>
+            {/each}
+          </ul>
+        {/if}
         <div class="compose-row">
           <button
             type="button"
@@ -343,8 +437,16 @@
             placeholder="Message #{current.name}"
             rows="1"
             bind:value={draft}
-            oninput={() => rooms.keystroke()}
+            bind:this={textarea}
+            oninput={() => {
+              rooms.keystroke();
+              mentionDismissed = false;
+              trackCaret();
+            }}
+            onkeyup={trackCaret}
+            onclick={trackCaret}
             onkeydown={onKeydown}
+            aria-autocomplete="list"
           ></textarea>
           <button
             type="submit"
@@ -361,6 +463,27 @@
       <p class="archived-note">This room is archived. Unarchive it to write here.</p>
     {/if}
   </main>
+  {#if !rooms.threadId && shownFace}
+    <FacePanel
+      face={shownFace}
+      faces={rooms.faces}
+      presence={rooms.facePresence[shownFace.id]}
+      rooms={rooms.rooms}
+      onsave={(input) => rooms.updateFace(shownFace.id, input)}
+      onback={() => (side = 'members')}
+      onclose={() => (side = null)}
+    />
+  {:else if !rooms.threadId && side === 'members'}
+    <MembersPanel
+      faces={rooms.faces}
+      presence={rooms.facePresence}
+      roomId={rooms.currentId}
+      onopen={openFace}
+      onadd={async (name) => openFace((await rooms.createFace(name)).id)}
+      onhide={(id, hidden) => rooms.updateFace(id, { hidden })}
+      onclose={() => (side = null)}
+    />
+  {/if}
   {#if rooms.threadId}
     <ThreadPanel
       threadId={rooms.threadId}
@@ -590,6 +713,36 @@
     field-sizing: content;
     outline: none;
   }
+  .mentions {
+    margin: 0;
+    padding: 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .mentions button {
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .mentions button.chosen,
+  .mentions button:hover {
+    background: var(--bg-hover);
+  }
+  .bio {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .files {
     display: flex;
     flex-wrap: wrap;
@@ -645,7 +798,9 @@
     .rooms.thread-open {
       grid-template-columns: 1fr;
     }
-    .thread-open :global(.thread) {
+    .thread-open :global(.thread),
+    .thread-open :global(.members),
+    .thread-open :global(.face-page) {
       position: fixed;
       inset: 0;
       z-index: 25;

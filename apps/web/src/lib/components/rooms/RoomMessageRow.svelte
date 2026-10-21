@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Paperclip, Pin } from '@lucide/svelte';
+  import { hueOf, initialOf, speakerFace, type Face } from '../../faces';
   import { ApiError } from '../../http';
   import { lineAction } from '../../loops';
   import { describeOrigin, forgetRemembered } from '../../memory';
@@ -22,17 +23,28 @@
     onpin?: (message: RoomMessage, pinned: boolean) => void;
     /** Open a worker's thread (plan 06). */
     onopenthread?: (threadId: string) => void;
+    /** The faces (plan 10): who a face's message is from, and how it looks. */
+    faces?: Face[];
+    /** Open a face's page. */
+    onopenface?: (faceId: string) => void;
   }
 
-  let { message, previous, onopenroom, onpin, onopenthread }: Props = $props();
+  let {
+    message,
+    previous,
+    onopenroom,
+    onpin,
+    onopenthread,
+    faces = [],
+    onopenface,
+  }: Props = $props();
 
-  /** Faces by id until plan 10 lists them: only the host exists. */
-  const FACES: Record<string, string> = { host: 'pirc' };
-
+  const face = $derived(speakerFace(faces, message.speaker));
   const name = $derived(
     message.speaker === 'user'
       ? (message.user ?? 'someone')
-      : (FACES[message.speaker.replace(/^face:/, '')] ?? message.speaker.replace(/^face:/, '')),
+      : (face?.name ??
+          (message.speaker === 'face:host' ? 'pirc' : message.speaker.replace(/^face:/, ''))),
   );
   const isFace = $derived(message.speaker !== 'user');
   const sameRun = $derived(
@@ -49,9 +61,9 @@
     ),
   );
   const fullTime = $derived(new Date(message.createdAt).toLocaleString());
-  /** A stable hue per speaker. */
-  const hue = $derived([...name].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % 360, 7));
-  const initial = $derived([...name][0]?.toUpperCase() ?? '?');
+  /** A stable hue per speaker; a face may have its own color and avatar. */
+  const hue = $derived(hueOf(name));
+  const initial = $derived(initialOf(name, face?.avatar));
 
   /** What the line remembered: shown on expanding it, undone by "Don't keep". */
   const remembered = $derived(message.body.memory?.forgotten ? undefined : message.body.memory);
@@ -223,15 +235,28 @@
           title={fullTime}>{time}</time
         >
       {:else}
-        <span class="avatar" class:face={isFace} style:--hue={hue} aria-hidden="true"
-          >{initial}</span
+        <span
+          class="avatar"
+          class:face={isFace && !face?.color && (face?.isHost ?? true)}
+          style:--hue={hue}
+          style:background={face?.color ?? undefined}
+          aria-hidden="true">{initial}</span
         >
       {/if}
     </div>
     <div class="content">
       {#if !sameRun}
         <header>
-          <span class="name">{name}</span>
+          {#if face && onopenface}
+            <button
+              type="button"
+              class="name face-name"
+              style:color={face.color ?? undefined}
+              onclick={() => onopenface(face.id)}>{name}</button
+            >
+          {:else}
+            <span class="name">{name}</span>
+          {/if}
           <time datetime={new Date(message.createdAt).toISOString()} title={fullTime}>{time}</time>
           {#if message.kind === 'question'}<span class="asks">asks you</span>{/if}
           {#if message.pinnedAt}<Pin size={12} aria-label="Pinned" />{/if}
@@ -417,6 +442,18 @@
   }
   .name {
     font-weight: 600;
+  }
+  .face-name {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .face-name:hover {
+    text-decoration: underline;
   }
   time {
     font-size: 12px;

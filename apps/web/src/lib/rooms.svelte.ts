@@ -3,6 +3,7 @@
  * activity order with unread counts, the open room's messages, who is
  * typing, and the live stream that keeps them current on every device.
  */
+import { facesApi, type Face, type FaceInput, type FacePresence as FaceState } from './faces';
 import { ApiError } from './http';
 import {
   connectRooms,
@@ -40,8 +41,12 @@ export class RoomsState {
   connection = $state<RoomsConnection>('connecting');
   /** Others typing in each room: user → when their signal lapses. */
   typing = $state<Record<string, Record<string, number>>>({});
-  /** Faces thinking in each room now: room → face ids (plan 02: the host). */
+  /** Faces thinking in each room now: room → face ids. */
   thinking = $state<Record<string, string[]>>({});
+  /** Every face (plan 10), hidden ones too: old messages still name them. */
+  faces = $state<Face[]>([]);
+  /** What each face is doing now: face id → its presence. */
+  facePresence = $state<Record<string, FaceState>>({});
   /** Bumped whenever an open loop changes (plan 04), for lists that show them. */
   loopsRevision = $state(0);
   /** Bumped whenever a wake changes (plan 05), for lists that show them. */
@@ -70,6 +75,7 @@ export class RoomsState {
       onReset: () => void this.reload(),
       onState: (state) => (this.connection = state),
       onPresence: (presence) => this.setPresence(presence),
+      onFaces: (presence) => this.setFacePresence(presence),
     });
   }
 
@@ -84,7 +90,7 @@ export class RoomsState {
       this.rooms = rooms.sort(byActivity);
       this.user = user;
       this.error = '';
-      await this.open(this.currentId, { address: false });
+      await Promise.all([this.open(this.currentId, { address: false }), this.loadFaces()]);
     } catch (error) {
       this.error = message(error, 'Unable to load rooms.');
     } finally {
@@ -206,6 +212,46 @@ export class RoomsState {
       .map(([user]) => user);
   }
 
+  /** The faces and what they are doing; the list keeps what it had on failure. */
+  async loadFaces() {
+    try {
+      const { faces, presence } = await facesApi.list(true);
+      this.faces = faces;
+      this.setFacePresence(presence);
+    } catch {
+      // Names fall back to ids until the next reload.
+    }
+  }
+
+  face(id: string): Face | undefined {
+    return this.faces.find((face) => face.id === id);
+  }
+
+  /** Make a face (the member list's "Add"); it shows up through its event too. */
+  async createFace(name: string): Promise<Face> {
+    const { face } = await facesApi.create({ name });
+    this.#upsertFace(face);
+    return face;
+  }
+
+  async updateFace(id: string, input: FaceInput): Promise<Face> {
+    const { face } = await facesApi.update(id, input);
+    this.#upsertFace(face);
+    return face;
+  }
+
+  setFacePresence(presence: FaceState[]) {
+    const next: Record<string, FaceState> = {};
+    for (const item of presence) next[item.faceId] = item;
+    this.facePresence = next;
+  }
+
+  #upsertFace(face: Face) {
+    this.faces = this.faces.some((item) => item.id === face.id)
+      ? this.faces.map((item) => (item.id === face.id ? face : item))
+      : [...this.faces, face];
+  }
+
   /** Which faces think in a room right now. */
   thinkingIn(roomId: string): string[] {
     return this.thinking[roomId] ?? [];
@@ -246,6 +292,14 @@ export class RoomsState {
       case 'loop_changed':
         this.loopsRevision++;
         break;
+      case 'face_changed':
+        this.#upsertFace(event.data.face);
+        break;
+      case 'face_presence': {
+        const presence: FaceState = event.data;
+        this.facePresence = { ...this.facePresence, [presence.faceId]: presence };
+        break;
+      }
       case 'wake_changed':
         this.wakesRevision++;
         break;

@@ -3,6 +3,7 @@
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Rooms from './components/rooms/Rooms.svelte';
+import type { Face } from './faces';
 import type { RoomEvent, RoomMessage, RoomView } from './rooms';
 import { RoomsState, TYPING_THROTTLE_MS, roomFromUrl } from './rooms.svelte';
 
@@ -66,8 +67,25 @@ const event = (
   timestamp: 0,
 });
 
+const face = (id: string, name: string, extra: Partial<Face> = {}): Face => ({
+  id,
+  name,
+  bio: '',
+  tone: '',
+  avatar: null,
+  color: null,
+  roleMd: '',
+  territory: { rooms: [], workspaces: [], sources: [] },
+  isHost: id === 'host',
+  createdAt: 1,
+  archivedAt: null,
+  hiddenAt: null,
+  ...extra,
+});
+
 let calls: Array<{ method: string; url: string; body: any }>;
 let listed: RoomView[];
+let faces: Face[];
 let pages: Record<string, RoomMessage[]>;
 
 function reply(value: unknown, status = 200) {
@@ -79,6 +97,7 @@ beforeEach(() => {
   calls = [];
   listed = [room('general', { lastSeq: 1, readSeq: 1 }), room('topic')];
   pages = { general: [message('general', 1)], topic: [] };
+  faces = [face('host', 'pirc'), face('face_pm', 'PM', { color: '#3366cc', bio: 'Runs SlimeOS' })];
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal(
     'fetch',
@@ -90,6 +109,25 @@ beforeEach(() => {
       const [, , , id, rest] = url.pathname.split('/');
       if (url.pathname === '/api/rooms')
         return reply({ rooms: listed.filter((item) => !item.archivedAt), user: ME });
+      if (url.pathname === '/api/faces' && method === 'GET')
+        return reply({
+          faces,
+          presence: faces.map((item) => ({ faceId: item.id, state: 'idle' })),
+        });
+      if (url.pathname === '/api/faces') {
+        const made = face(`face_${body.name.toLowerCase()}`, body.name);
+        faces.push(made);
+        return reply({ face: made }, 201);
+      }
+      if (url.pathname.startsWith('/api/faces/') && method === 'PATCH') {
+        const at = faces.findIndex((item) => item.id === id);
+        const patch = { ...body };
+        if ('hidden' in patch) patch.hiddenAt = patch.hidden ? 9 : null;
+        delete patch.hidden;
+        faces[at] = { ...faces[at]!, ...patch };
+        return reply({ face: faces[at] });
+      }
+      if (url.pathname.endsWith('/activity')) return reply({ loops: [], workers: [], wakes: [] });
       const found = listed.find((item) => item.id === id);
       if (!found) return reply({ error: { code: 'not_found', message: 'Room not found' } }, 404);
       if (!rest && method === 'GET') return reply({ room: found, pinned: [] });
@@ -183,6 +221,27 @@ describe('room state', () => {
     // A new socket's start replaces what was known.
     socket.frame({ type: 'ready', watermark: { epoch: 5, sequence: 3 }, presence: [] });
     expect(rooms.thinkingIn('general')).toEqual([]);
+    rooms.stop();
+  });
+
+  it('knows the faces and what each is doing', async () => {
+    const rooms = new RoomsState();
+    await rooms.start();
+    expect(rooms.faces.map((item) => item.name)).toEqual(['pirc', 'PM']);
+    expect(rooms.facePresence.face_pm?.state).toBe('idle');
+    const socket = FakeSocket.all[0]!;
+    socket.frame({
+      type: 'ready',
+      watermark: { epoch: 5, sequence: 3 },
+      presence: [],
+      faces: [{ faceId: 'face_pm', state: 'working', line: 'the PR', roomId: 'topic' }],
+    });
+    expect(rooms.facePresence.face_pm).toMatchObject({ state: 'working', line: 'the PR' });
+    socket.frame(event('face_presence', 'topic', { faceId: 'face_pm', state: 'thinking' }, 0));
+    expect(rooms.facePresence.face_pm?.state).toBe('thinking');
+    socket.frame(event('face_changed', 'general', { face: face('face_pm', 'Lead') }, 4));
+    socket.frame(event('face_changed', 'general', { face: face('face_ops', 'Ops') }, 5));
+    expect(rooms.faces.map((item) => item.name)).toEqual(['pirc', 'Lead', 'Ops']);
     rooms.stop();
   });
 
@@ -316,6 +375,81 @@ describe('rooms page', () => {
     await tick();
     const question = target.querySelector('article.question')!;
     expect(question.getAttribute('aria-label')).toMatch(/^pirc asks/);
+  });
+
+  it('names the face that spoke, and opens its page', async () => {
+    pages.general = [
+      message('general', 1),
+      { ...message('general', 2, ME, 'Two reviews left.'), speaker: 'face:face_pm', user: null },
+    ];
+    await show();
+    await vi.waitFor(() => expect(target.textContent).toContain('Two reviews left.'));
+    const name = target.querySelector<HTMLButtonElement>('article button.face-name')!;
+    expect(name.textContent).toBe('PM');
+    name.click();
+    await vi.waitFor(() =>
+      expect(target.querySelector('[aria-label="PM\'s page"]')).not.toBeNull(),
+    );
+    const bio = target.querySelector<HTMLTextAreaElement>('.face-page textarea')!;
+    expect(bio.value).toBe('Runs SlimeOS');
+    bio.value = 'Runs SlimeOS and its releases';
+    bio.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    target.querySelector<HTMLFormElement>('.face-page form')!.requestSubmit();
+    await vi.waitFor(() =>
+      expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
+        bio: 'Runs SlimeOS and its releases',
+      }),
+    );
+  });
+
+  it('lists the members, greys out an archived face and hides it', async () => {
+    faces.push(face('face_old', 'Old', { archivedAt: 5 }));
+    await show();
+    target.querySelector<HTMLButtonElement>('button[aria-label="Members"]')!.click();
+    await tick();
+    const members = () =>
+      [...target.querySelectorAll('.members li')].map((item) => ({
+        name: item.querySelector('.name')!.textContent,
+        archived: item.classList.contains('archived'),
+      }));
+    expect(members()).toEqual([
+      { name: 'pirchost', archived: false },
+      { name: 'PM', archived: false },
+      { name: 'Old', archived: true },
+    ]);
+    const hide = [...target.querySelectorAll<HTMLButtonElement>('.members li button')].find(
+      (button) => button.textContent === 'Hide',
+    )!;
+    hide.click();
+    await vi.waitFor(() => expect(members()).toHaveLength(2));
+    expect(calls.find((call) => call.method === 'PATCH')).toMatchObject({
+      url: '/api/faces/face_old',
+      body: { hidden: true },
+    });
+    expect(target.textContent).toContain('Show hidden (1)');
+  });
+
+  it('completes @ with a face’s name', async () => {
+    await show();
+    await vi.waitFor(() => expect(target.textContent).toContain('m1'));
+    const box = target.querySelector('textarea')!;
+    box.value = 'hi @p';
+    box.setSelectionRange(5, 5);
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    const options = () =>
+      [...target.querySelectorAll('[role="option"]')].map((item) => item.textContent);
+    expect(options()).toEqual(['@pirc', '@PMRuns SlimeOS']);
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    flushSync();
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await tick();
+    expect(box.value).toBe('hi @PM ');
+    expect(options()).toEqual([]);
+    expect(calls.some((call) => call.method === 'POST' && call.url.endsWith('/messages'))).toBe(
+      false,
+    );
   });
 
   it('reads an archived room from its URL but takes nothing new', async () => {
