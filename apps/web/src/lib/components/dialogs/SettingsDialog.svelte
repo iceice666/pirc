@@ -14,7 +14,7 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { rovingFocus } from '../../a11y';
-  import { app } from '../../app.svelte';
+  import { engine } from '../../engine.svelte';
   import { describeNode } from '../../modes';
   import Modal from './Modal.svelte';
   import BackendSettings from '../BackendSettings.svelte';
@@ -95,7 +95,7 @@
           </p>
         </section>
 
-        <NotificationSettings disabled={app.usingDemo} />
+        <NotificationSettings disabled={engine.usingDemo} />
 
         <section class="settings-section">
           <h3>Layout</h3>
@@ -112,7 +112,7 @@
         aria-labelledby="settings-tab-memory"
         hidden={settingsTab !== 'memory'}
       >
-        <MemorySettings disabled={app.usingDemo} />
+        <MemorySettings disabled={engine.usingDemo} revision={engine.memoryRevision} />
       </div>
 
       <div
@@ -121,7 +121,7 @@
         aria-labelledby="settings-tab-loops"
         hidden={settingsTab !== 'loops'}
       >
-        <LoopsSettings disabled={app.usingDemo} />
+        <LoopsSettings disabled={engine.usingDemo} />
       </div>
 
       <div
@@ -130,7 +130,7 @@
         aria-labelledby="settings-tab-wakes"
         hidden={settingsTab !== 'wakes'}
       >
-        <WakesSettings disabled={app.usingDemo} />
+        <WakesSettings disabled={engine.usingDemo} />
       </div>
 
       <div
@@ -139,9 +139,9 @@
         aria-labelledby="settings-tab-models"
         hidden={settingsTab !== 'models'}
       >
-        <BackendSettings disabled={app.usingDemo} onchanged={() => app.loadModels()} />
+        <BackendSettings disabled={engine.usingDemo} onchanged={() => engine.loadModels()} />
         <!-- The same page and grant as the backends (decision #6). -->
-        <SourceSettings disabled={app.usingDemo} />
+        <SourceSettings disabled={engine.usingDemo} />
       </div>
 
       <div
@@ -152,9 +152,9 @@
       >
         <section class="settings-section">
           <h3>Nodes</h3>
-          {#if app.nodes.length}
+          {#if engine.nodes.length}
             <ul class="settings-devices">
-              {#each app.nodes as node (node.id)}
+              {#each engine.nodes as node (node.id)}
                 <li>
                   <span class="online-dot"></span>
                   <strong>{node.id}</strong>
@@ -170,10 +170,10 @@
           {:else}
             <p>No nodes online.</p>
           {/if}
-          <p>{app.nodes.length} online</p>
+          <p>{engine.nodes.length} online</p>
         </section>
 
-        <PairedDevices disabled={app.usingDemo} />
+        <PairedDevices disabled={engine.usingDemo} />
       </div>
 
       <div
@@ -186,7 +186,7 @@
           <h3>This browser</h3>
           <div class="settings-row">
             <span>Client ID</span>
-            <code>{app.clientId}</code>
+            <code>{engine.clientId}</code>
           </div>
         </section>
       </div>

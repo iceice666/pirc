@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { app } from '../../app.svelte';
+import { engine } from '../../engine.svelte';
 import { demoModes } from '../../mock';
 import type { Workspace } from '../../types';
 import NewWorkspaceDialog from './NewWorkspaceDialog.svelte';
@@ -25,8 +25,8 @@ afterEach(async () => {
   if (component) await unmount(component);
   component = undefined;
   target.remove();
-  app.modeCatalog = [];
-  app.nodes = [];
+  engine.modeCatalog = [];
+  engine.nodes = [];
   oncreated.mockReset();
   vi.restoreAllMocks();
 });
@@ -54,13 +54,13 @@ const options = (label: string) =>
 
 describe('NewWorkspaceDialog', () => {
   it("offers the node's modes and asks for a path only for a workspace directory", async () => {
-    app.modeCatalog = demoModes;
-    app.nodes = [
+    engine.modeCatalog = demoModes;
+    engine.nodes = [
       { id: 'home', modes: ['unknown'] } as never,
       { id: 'gpu', modes: ['unknown', 'directory', 'scratch'] } as never,
     ];
     const create = vi
-      .spyOn(app, 'createWorkspace')
+      .spyOn(engine, 'createWorkspace')
       .mockResolvedValue({ id: 'gpu:jobs' } as Workspace);
     show('gpu');
     // A node with no mode the catalog knows hosts no workspaces; unknown modes are not offered.
@@ -89,10 +89,10 @@ describe('NewWorkspaceDialog', () => {
   });
 
   it('hides the mode choice with one mode and sends it with the path', async () => {
-    app.modeCatalog = demoModes;
-    app.nodes = [{ id: 'work', modes: ['directory'] } as never];
+    engine.modeCatalog = demoModes;
+    engine.nodes = [{ id: 'work', modes: ['directory'] } as never];
     const create = vi
-      .spyOn(app, 'createWorkspace')
+      .spyOn(engine, 'createWorkspace')
       .mockResolvedValue({ id: 'work:pirc' } as Workspace);
     show('work');
     expect(field('Mode')).toBeUndefined();
@@ -110,9 +110,9 @@ describe('NewWorkspaceDialog', () => {
   });
 
   it('keeps the path-only request for an older gateway', async () => {
-    app.nodes = [{ id: 'home' } as never, { id: 'work' } as never];
+    engine.nodes = [{ id: 'home' } as never, { id: 'work' } as never];
     const create = vi
-      .spyOn(app, 'createWorkspace')
+      .spyOn(engine, 'createWorkspace')
       .mockResolvedValue({ id: 'work:pirc' } as Workspace);
     show('work');
     expect(options('Device')).toEqual(['home', 'work']);

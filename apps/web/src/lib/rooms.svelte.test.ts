@@ -264,6 +264,7 @@ describe('rooms page', () => {
   let target: HTMLElement;
   let component: ReturnType<typeof mount> | undefined;
   beforeEach(() => {
+    localStorage.clear();
     target = document.createElement('div');
     document.body.append(target);
   });
@@ -315,6 +316,29 @@ describe('rooms page', () => {
     type('now', { metaKey: true });
     await vi.waitFor(() => expect(sends()).toHaveLength(2));
     expect(sends()[1]!.body.immediate).toBe(true);
+  });
+
+  it('keeps what was being written in each room, across room switches and reloads', async () => {
+    await show();
+    const box = () => target.querySelector('textarea')!;
+    const roomButton = (name: string) =>
+      [...target.querySelectorAll('.room-name')]
+        .find((item) => item.textContent === name)!
+        .closest('button')!;
+    box().value = 'half a thought';
+    box().dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    roomButton('topic').click();
+    await vi.waitFor(() => expect(box().value).toBe(''));
+    roomButton('general').click();
+    await vi.waitFor(() => expect(box().value).toBe('half a thought'));
+    unmount(component!);
+    component = undefined;
+    await show();
+    expect(box().value).toBe('half a thought');
+    box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    flushSync();
+    expect(localStorage.getItem('relay.room-draft.general')).toBeNull();
   });
 
   it('sends quick short messages in a row, in order, without losing any', async () => {

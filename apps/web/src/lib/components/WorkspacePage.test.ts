@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { app } from '../app.svelte';
+import { engine } from '../engine.svelte';
 import { demoModes } from '../mock';
 import { reactiveProps } from '../testing/props.svelte';
 import type { SessionSummary, Workspace } from '../types';
@@ -36,10 +36,10 @@ const onselect = vi.fn();
 const onnew = vi.fn();
 
 beforeEach(() => {
-  app.demo = undefined;
-  app.nodes = [{ id: 'node' } as never];
-  app.workspaces = [directory];
-  app.sessions = [
+  engine.demo = undefined;
+  engine.nodes = [{ id: 'node' } as never];
+  engine.workspaces = [directory];
+  engine.sessions = [
     session('a', 'Alpha', { unread: true }),
     session('b', 'Beta', { pinned: true, writeLease: true }),
     session('c', 'Gamma', { settled: true }),
@@ -73,7 +73,7 @@ afterEach(async () => {
   target.remove();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  app.modeCatalog = [];
+  engine.modeCatalog = [];
   onselect.mockReset();
   onnew.mockReset();
 });
@@ -125,7 +125,7 @@ describe('WorkspacePage', () => {
   });
 
   it('pins, settles and renames from the list', async () => {
-    const update = vi.spyOn(app, 'updateSession').mockResolvedValue();
+    const update = vi.spyOn(engine, 'updateSession').mockResolvedValue();
     render(directory);
     target.querySelector<HTMLButtonElement>('[aria-label="Settle Alpha"]')!.click();
     expect(update).toHaveBeenCalledWith('a', { settled: true });
@@ -162,9 +162,9 @@ describe('WorkspacePage', () => {
   });
 
   it("shows a scratch workspace's capabilities only", async () => {
-    app.modeCatalog = demoModes;
-    app.workspaces = [directory, scratch];
-    app.sessions = [session('g', 'Render', { workspaceId: scratch.id })];
+    engine.modeCatalog = demoModes;
+    engine.workspaces = [directory, scratch];
+    engine.sessions = [session('g', 'Render', { workspaceId: scratch.id })];
     render(scratch);
     expect(target.querySelector('.page-title small')!.textContent).toBe('Scratch · node');
     expect(tab('Sessions')).toBeDefined();
@@ -186,7 +186,7 @@ describe('WorkspacePage', () => {
   });
 
   it('keeps a workspace whose mode is gone read-only', async () => {
-    app.modeCatalog = demoModes;
+    engine.modeCatalog = demoModes;
     const gone: Workspace = { ...directory, mode: 'review', available: false };
     render(gone);
     expect(target.querySelector('.page-title small')!.textContent).toContain('read-only');

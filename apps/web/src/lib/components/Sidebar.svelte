@@ -19,7 +19,7 @@
     X,
   } from '@lucide/svelte';
   import { tick } from 'svelte';
-  import { app, type InboxItem } from '../app.svelte';
+  import { engine, type InboxItem } from '../engine.svelte';
   import { isReadOnly, workNodes } from '../modes';
   import { shortAgo } from '../time';
   import type { DelegationStatus, SessionSummary, Workspace } from '../types';
@@ -58,20 +58,20 @@
     completed: 'finished',
     failed: 'failed',
   };
-  const nodes = $derived(app.nodes);
-  const catalog = $derived(app.modeCatalog);
+  const nodes = $derived(engine.nodes);
+  const catalog = $derived(engine.modeCatalog);
   /** Nodes that can host workspaces (those accepting a mode the catalog knows). */
   const deviceNodes = $derived(workNodes(nodes, catalog));
-  const sessions = $derived(app.sessions);
+  const sessions = $derived(engine.sessions);
   /** The open session, unless a page covers it. */
-  const activeSessionId = $derived(app.view === 'session' ? app.activeSessionId : undefined);
+  const activeSessionId = $derived(engine.view === 'session' ? engine.activeSessionId : undefined);
   /** The workspace whose page is showing. */
-  const pageId = $derived(app.view === 'workspace' ? app.workspaceViewId : undefined);
-  const onrename = (id: string, name: string) => app.updateSession(id, { name });
-  const onpin = (id: string, pinned: boolean) => app.updateSession(id, { pinned });
-  const onsettle = (id: string, settled: boolean) => app.updateSession(id, { settled });
+  const pageId = $derived(engine.view === 'workspace' ? engine.workspaceViewId : undefined);
+  const onrename = (id: string, name: string) => engine.updateSession(id, { name });
+  const onpin = (id: string, pinned: boolean) => engine.updateSession(id, { pinned });
+  const onsettle = (id: string, settled: boolean) => engine.updateSession(id, { settled });
 
-  const workspaceById = $derived(new Map(app.workspaces.map((item) => [item.id, item])));
+  const workspaceById = $derived(new Map(engine.workspaces.map((item) => [item.id, item])));
 
   let query = $state('');
   let renamingId: string | undefined = $state();
@@ -81,7 +81,7 @@
   /** Devices with their workspaces (connected devices without any too), online first. */
   const hosts = $derived.by(() => {
     const ids = [
-      ...new Set([...app.workspaces.map((w) => w.hostId), ...deviceNodes.map((n) => n.id)]),
+      ...new Set([...engine.workspaces.map((w) => w.hostId), ...deviceNodes.map((n) => n.id)]),
     ];
     const online = (id: string) => nodes.some((node) => node.id === id);
     return ids
@@ -89,10 +89,10 @@
       .map((id) => ({
         id,
         online: online(id),
-        workspaces: app.workspaces.filter((w) => w.hostId === id),
+        workspaces: engine.workspaces.filter((w) => w.hostId === id),
       }));
   });
-  const inbox = $derived(app.inbox);
+  const inbox = $derived(engine.inbox);
 
   /** Searching lists every matching session, whatever its workspace. */
   const results = $derived.by(() => {
@@ -193,7 +193,7 @@
     type="button"
     onclick={() => (newSessionTarget ? onnew(newSessionTarget.id) : onnew())}
     ><SquarePen size={16} /> New {newSessionTarget
-      ? app.modeOf(newSessionTarget).ui.noun
+      ? engine.modeOf(newSessionTarget).ui.noun
       : 'session'}</button
   >
   <label class="search">
@@ -273,8 +273,8 @@
   {@const list = sidebarSessions(sessions, workspace.id, activeSessionId, true)}
   {@const unread = unreadIn(workspace.id)}
   {@const running = runningIn(workspace.id)}
-  {@const online = app.workspaceOnline(workspace)}
-  {@const noun = app.modeOf(workspace).ui.noun}
+  {@const online = engine.workspaceOnline(workspace)}
+  {@const noun = engine.modeOf(workspace).ui.noun}
   <section class="workspace-group">
     <div class="workspace-heading" class:current={pageId === workspace.id}>
       <button
@@ -302,7 +302,7 @@
         class="mini-action"
         type="button"
         aria-label="New {noun} in {workspace.displayName}"
-        disabled={!app.acceptsSessions(workspace)}
+        disabled={!engine.acceptsSessions(workspace)}
         onclick={() => onnew(workspace.id)}><Plus size={15} /></button
       >
     </div>
@@ -317,7 +317,7 @@
 {#snippet inboxRow(item: InboxItem)}
   {@const session = item.session}
   {@const approval = session.origin?.kind === 'delegation' ? session.origin.approval : undefined}
-  {@const answering = !!approval && app.answeringInteractionIds.includes(approval.interactionId)}
+  {@const answering = !!approval && engine.answeringInteractionIds.includes(approval.interactionId)}
   <div class="inbox-item" data-kind={item.kind}>
     <button class="inbox-main" type="button" onclick={() => onselect(session.id)}>
       <span class="status-dot waiting"></span>
@@ -340,13 +340,13 @@
           type="button"
           class="pill-button primary"
           disabled={answering}
-          onclick={() => app.answerApproval(approval, true)}>Allow</button
+          onclick={() => engine.answerApproval(approval, true)}>Allow</button
         >
         <button
           type="button"
           class="pill-button"
           disabled={answering}
-          onclick={() => app.answerApproval(approval, false)}>Deny</button
+          onclick={() => engine.answerApproval(approval, false)}>Deny</button
         >
       {/if}
       <button type="button" class="pill-button" onclick={() => onselect(session.id)}>Reply</button>

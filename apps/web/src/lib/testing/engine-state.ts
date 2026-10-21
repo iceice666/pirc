@@ -1,11 +1,11 @@
 import { vi } from 'vitest';
-import { app } from '../app.svelte';
+import { engine } from '../engine.svelte';
 import { demoSnapshot } from '../mock';
 import { fromSnapshot } from '../state';
 import type { ClientSessionState } from '../types';
 
 /**
- * Put the `app` singleton into a connected session this browser controls
+ * Put the `engine` singleton into a connected session this browser controls
  * (the demo snapshot unless overridden), without a gateway.
  */
 export function seedApp(overrides: Partial<ClientSessionState> = {}): ClientSessionState {
@@ -14,15 +14,15 @@ export function seedApp(overrides: Partial<ClientSessionState> = {}): ClientSess
     control: { heldByCurrentClient: true, generation: 1 },
   });
   const state = { ...base, ...overrides };
-  app.demo = undefined;
-  app.activeSessionId = state.session.id;
-  app.sessions = [state.session];
-  app.sessionState = state;
-  app.connection = 'connected';
-  app.commandBusy = false;
-  app.draft = '';
-  app.uploads = [];
-  app.hiddenMessages = 0;
+  engine.demo = undefined;
+  engine.activeSessionId = state.session.id;
+  engine.sessions = [state.session];
+  engine.sessionState = state;
+  engine.connection = 'connected';
+  engine.commandBusy = false;
+  engine.draft = '';
+  engine.uploads = [];
+  engine.hiddenMessages = 0;
   return state;
 }
 

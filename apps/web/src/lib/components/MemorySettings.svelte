@@ -5,7 +5,6 @@
    * where each came from, take preferences out or back, and forget for good.
    */
   import { onMount } from 'svelte';
-  import { app } from '../app.svelte';
   import { ApiError } from '../http';
   import {
     describeOrigin,
@@ -23,9 +22,11 @@
 
   interface Props {
     disabled?: boolean;
+    /** Bumped when the gateway says memory changed: reload. */
+    revision?: number;
   }
 
-  let { disabled = false }: Props = $props();
+  let { disabled = false, revision = 0 }: Props = $props();
 
   let view: PreferencesView | undefined = $state();
   let records: MemoryRecord[] = $state([]);
@@ -140,7 +141,7 @@
   });
   // What pirc remembers in a room arrives while this is open.
   watch(
-    () => app.memoryRevision,
+    () => revision,
     () => {
       if (!disabled) void load();
     },

@@ -18,7 +18,7 @@
   } from '@lucide/svelte';
   import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
-  import { app } from './lib/app.svelte';
+  import { engine } from './lib/engine.svelte';
   import Composer from './lib/components/Composer.svelte';
   import InteractionCard from './lib/components/InteractionCard.svelte';
   import { isRelayed } from './lib/types';
@@ -39,7 +39,7 @@
   import { loadHighlighter } from './lib/markdown';
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { loadLayout, saveLayout } from './lib/storage';
-  import { MESSAGE_PAGE } from './lib/app.svelte';
+  import { MESSAGE_PAGE } from './lib/engine.svelte';
   import { motion } from './lib/motion';
   import { trackViewportHeight } from './lib/viewport';
   import { watch } from './lib/watch.svelte';
@@ -80,16 +80,16 @@
   let settingsTab: SettingsTab = $state('general');
   // A notification or a `?open=` link asked for the memory.
   $effect(() => {
-    const target = app.requestedTarget;
+    const target = engine.requestedTarget;
     if (!target) return;
     settingsTab = 'memory';
     settingsOpen = true;
-    app.requestedTarget = undefined;
+    engine.requestedTarget = undefined;
   });
   /** The workspace whose page is showing, if it still exists. */
   const pageWorkspace = $derived(
-    app.view === 'workspace'
-      ? app.workspaces.find((workspace) => workspace.id === app.workspaceViewId)
+    engine.view === 'workspace'
+      ? engine.workspaces.find((workspace) => workspace.id === engine.workspaceViewId)
       : undefined,
   );
   /** A page in the main column (not a conversation): the phone keeps its bottom tabs. */
@@ -99,7 +99,7 @@
     if (onPage) sidebarOpen = false;
   });
   const origin = $derived(
-    app.sessions.find((item) => item.id === sessionState?.session.id)?.origin,
+    engine.sessions.find((item) => item.id === sessionState?.session.id)?.origin,
   );
   const mobileTab = $derived(settingsOpen ? 'settings' : 'work');
   function pickTab(tab: 'work' | 'settings') {
@@ -115,12 +115,12 @@
   let updateRegistration: ServiceWorkerRegistration | undefined = $state();
   let timeline: HTMLElement | undefined = $state();
 
-  const sessionState = $derived(app.sessionState);
+  const sessionState = $derived(engine.sessionState);
   // This consent URL is an additive overlay. The normal app bootstrap still runs on mount.
   const nativeManagementRequestId =
     new URLSearchParams(location.search).get('nativeManagement')?.trim() || undefined;
-  const hasControl = $derived(app.hasControl);
-  const connection = $derived(app.connection);
+  const hasControl = $derived(engine.hasControl);
+  const connection = $derived(engine.connection);
 
   let panelMax = $derived(
     Math.max(PANEL_MIN, viewportWidth - (sidebarCollapsed ? 0 : 264) - CONVERSATION_MIN),
@@ -171,18 +171,18 @@
   let revealingEarlier = false;
   let visibleMessages = $derived(
     sessionState
-      ? sessionState.messages.slice(Math.min(app.hiddenMessages, sessionState.messages.length))
+      ? sessionState.messages.slice(Math.min(engine.hiddenMessages, sessionState.messages.length))
       : [],
   );
   /** Consecutive tool-only turns fold into one run card. */
   let visibleItems = $derived(timelineItems(visibleMessages));
 
   async function showEarlier() {
-    if (!app.hiddenMessages || revealingEarlier) return;
+    if (!engine.hiddenMessages || revealingEarlier) return;
     revealingEarlier = true;
     const previousHeight = timeline?.scrollHeight ?? 0;
     const previousTop = timeline?.scrollTop ?? 0;
-    app.hiddenMessages = Math.max(0, app.hiddenMessages - MESSAGE_PAGE);
+    engine.hiddenMessages = Math.max(0, engine.hiddenMessages - MESSAGE_PAGE);
     await tick();
     // Keep the entry the reader was looking at in place.
     if (timeline) timeline.scrollTop = previousTop + (timeline.scrollHeight - previousHeight);
@@ -242,7 +242,7 @@
   };
   watch(() => sessionState?.messages[sessionState.messages.length - 1], markUnseen);
   watch(
-    () => app.pendingInteractions.length,
+    () => engine.pendingInteractions.length,
     (count, previous) => count > (previous ?? 0) && markUnseen(),
   );
 
@@ -271,7 +271,7 @@
     },
   );
   watch(
-    () => app.pendingInteractions.length,
+    () => engine.pendingInteractions.length,
     (count, previous) => {
       if (count > (previous ?? 0) && sessionState?.session.id === announcedSession)
         announcement = 'The agent needs your input.';
@@ -287,7 +287,7 @@
     { immediate: true },
   );
 
-  app.scroller = {
+  engine.scroller = {
     toLatest: async (smooth = true) => {
       following = true;
       unseenContent = false;
@@ -299,17 +299,17 @@
   onMount(() => {
     const removePwa = registerPwa((registration) => (updateRegistration = registration));
     const removeViewport = trackViewportHeight();
-    void app.bootstrap();
+    void engine.bootstrap();
     // A notification clicked while this window is open (public/sw.js).
     const onWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type === 'OPEN_TARGET') {
         sidebarOpen = false;
-        void app.openNotificationTarget(event.data.target ?? undefined, event.data.interaction);
+        void engine.openNotificationTarget(event.data.target ?? undefined, event.data.interaction);
       } else if (
         event.data?.type === 'INTERACTION_REFRESH' &&
-        event.data.sessionId === app.activeSessionId
+        event.data.sessionId === engine.activeSessionId
       ) {
-        void app.refreshSnapshot();
+        void engine.refreshSnapshot();
       }
     };
     navigator.serviceWorker?.addEventListener('message', onWorkerMessage);
@@ -333,12 +333,12 @@
       clearInterval(leaseHeartbeat);
       clearInterval(nodeRefresh);
       const visible = document.visibilityState === 'visible';
-      leaseHeartbeat = setInterval(() => void app.refreshControl(), visible ? 10_000 : 15_000);
+      leaseHeartbeat = setInterval(() => void engine.refreshControl(), visible ? 10_000 : 15_000);
       // Sessions changes are pushed only while a session is open: poll as a fallback.
       nodeRefresh = visible
         ? setInterval(() => {
-            void app.refreshNodes();
-            void app.refreshSessions();
+            void engine.refreshNodes();
+            void engine.refreshSessions();
           }, 60_000)
         : undefined;
     };
@@ -347,14 +347,14 @@
     let hiddenAt = 0;
     const onVisibility = () => {
       schedule();
-      if (document.visibilityState === 'visible') app.resume(Date.now() - hiddenAt);
+      if (document.visibilityState === 'visible') engine.resume(Date.now() - hiddenAt);
       else {
         hiddenAt = Date.now();
-        app.flushDraft();
+        engine.flushDraft();
       }
     };
-    const onOnline = () => app.retryBootstrap() || void app.refreshControl();
-    const onPageHide = () => app.flushDraft();
+    const onOnline = () => engine.retryBootstrap() || void engine.refreshControl();
+    const onPageHide = () => engine.flushDraft();
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('online', onOnline);
     window.addEventListener('pagehide', onPageHide);
@@ -364,7 +364,7 @@
       window.removeEventListener('pagehide', onPageHide);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('online', onOnline);
-      app.dispose();
+      engine.dispose();
       removePwa();
       navigator.serviceWorker?.removeEventListener('message', onWorkerMessage);
       removeViewport();
@@ -374,12 +374,12 @@
 
   function openSession(id: string) {
     sidebarOpen = false;
-    void app.openSession(id);
+    void engine.openSession(id);
   }
 
   function openWorkspace(id: string) {
     sidebarOpen = false;
-    app.showWorkspace(id);
+    engine.showWorkspace(id);
   }
 
   function resetLayout() {
@@ -403,7 +403,7 @@
     if (creatingSession) return;
     creatingSession = true;
     try {
-      await app.createSession(workspaceId);
+      await engine.createSession(workspaceId);
     } finally {
       creatingSession = false;
     }
@@ -458,7 +458,7 @@
         onselect={openSession}
         onnew={showNewSession}
       />
-    {:else if app.loading}
+    {:else if engine.loading}
       <div class="loading-state">
         <span class="large-mark"><Sparkles size={24} /></span>
         <p>Connecting to your sessions…</p>
@@ -477,12 +477,12 @@
         {/if}
         <div class="title-block">
           <div class="breadcrumb">
-            {#if app.activeWorkspace}<button
+            {#if engine.activeWorkspace}<button
                 class="crumb"
                 type="button"
-                title="Open {app.activeWorkspace.displayName}"
-                onclick={() => openWorkspace(app.activeWorkspace!.id)}
-                >{app.activeWorkspace.displayName}</button
+                title="Open {engine.activeWorkspace.displayName}"
+                onclick={() => openWorkspace(engine.activeWorkspace!.id)}
+                >{engine.activeWorkspace.displayName}</button
               >{:else}<span>Workspace</span>{/if}<span>/</span><span
               >{sessionState.session.name}</span
             >
@@ -519,7 +519,7 @@
               /> Offline{:else}<RefreshCw class="spin" size={13} /> Reconnecting{/if}
           </span>
           {#if !hasControl}
-            <button class="button takeover" type="button" onclick={() => app.takeControl()}
+            <button class="button takeover" type="button" onclick={() => engine.takeControl()}
               ><ShieldCheck size={15} /> Take control</button
             >
           {:else}
@@ -539,24 +539,24 @@
         </div>
       </header>
 
-      {#if app.pageError}
+      {#if engine.pageError}
         <div class="error-banner" role="alert">
-          <CircleAlert size={16} /><span>{app.pageError}</span><button
+          <CircleAlert size={16} /><span>{engine.pageError}</span><button
             type="button"
             aria-label="Dismiss error"
-            onclick={() => (app.pageError = '')}><X size={15} /></button
+            onclick={() => (engine.pageError = '')}><X size={15} /></button
           >
         </div>
       {/if}
-      {#if app.interactionNotice}
-        <div class="viewer-banner" role="status">{app.interactionNotice}</div>
+      {#if engine.interactionNotice}
+        <div class="viewer-banner" role="status">{engine.interactionNotice}</div>
       {/if}
       {#if !hasControl}
         <div class="viewer-banner">
           <span
             >You’re viewing this session. {sessionState.control.holderName ?? 'Another device'} currently
             has control.</span
-          ><button type="button" onclick={() => app.takeControl()}>Take control</button>
+          ><button type="button" onclick={() => engine.takeControl()}>Take control</button>
         </div>
       {/if}
 
@@ -564,14 +564,14 @@
         <section class="conversation" aria-label="Conversation" inert={panelOverlay}>
           <div class="timeline" bind:this={timeline} onscroll={onTimelineScroll}>
             <div class="timeline-inner" use:followContent>
-              {#if app.hiddenMessages > 0}
+              {#if engine.hiddenMessages > 0}
                 <button
                   type="button"
                   class="earlier-messages"
                   use:revealEarlier
                   onclick={showEarlier}
                 >
-                  Show earlier messages ({app.hiddenMessages} more)
+                  Show earlier messages ({engine.hiddenMessages} more)
                 </button>
               {/if}
               {#each visibleItems as item (item.kind === 'run' ? item.id : item.message.id)}
@@ -584,20 +584,20 @@
                   </RunCard>
                 {:else}<Message
                     message={item.message}
-                    branchDisabled={!app.canChangeBranch}
+                    branchDisabled={!engine.canChangeBranch}
                     onedit={(entryId, content) =>
-                      app.changeBranch('edit_message', entryId, content)}
-                    onswitch={(entryId) => app.changeBranch('switch_branch', entryId)}
+                      engine.changeBranch('edit_message', entryId, content)}
+                    onswitch={(entryId) => engine.changeBranch('switch_branch', entryId)}
                   />{/if}
               {/each}
-              {#each app.pendingInteractions as interaction (interaction.id)}
+              {#each engine.pendingInteractions as interaction (interaction.id)}
                 <!-- A relayed confirm needs no control lease. -->
                 <InteractionCard
                   {interaction}
-                  disabled={(!app.canCommand && !isRelayed(interaction.id)) ||
-                    app.answeringInteractionIds.includes(interaction.id)}
+                  disabled={(!engine.canCommand && !isRelayed(interaction.id)) ||
+                    engine.answeringInteractionIds.includes(interaction.id)}
                   onanswer={(answer) =>
-                    app.answerInteraction(interaction.id, answer, interaction.runnerEpoch)}
+                    engine.answerInteraction(interaction.id, answer, interaction.runnerEpoch)}
                   onopen={openSession}
                 />
               {/each}
@@ -606,7 +606,7 @@
                   <button
                     type="button"
                     transition:fade={{ duration: motion(120) }}
-                    onclick={() => app.scroller?.toLatest()}
+                    onclick={() => engine.scroller?.toLatest()}
                     ><ArrowDown size={15} /> New messages</button
                   >
                 </div>

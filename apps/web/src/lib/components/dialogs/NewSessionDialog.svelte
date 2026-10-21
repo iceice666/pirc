@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
-  import { app } from '../../app.svelte';
+  import { engine } from '../../engine.svelte';
   import { isReadOnly } from '../../modes';
   import Modal from './Modal.svelte';
   import { watch } from '../../watch.svelte';
@@ -19,20 +19,21 @@
     () => open,
     (isOpen) => {
       if (isOpen)
-        workspaceId = app.workspaces.find((workspace) => app.acceptsSessions(workspace))?.id ?? '';
+        workspaceId =
+          engine.workspaces.find((workspace) => engine.acceptsSessions(workspace))?.id ?? '';
     },
     { immediate: true },
   );
 
   const chosenOnline = $derived(
-    app.acceptsSessions(app.workspaces.find((workspace) => workspace.id === workspaceId)),
+    engine.acceptsSessions(engine.workspaces.find((workspace) => workspace.id === workspaceId)),
   );
 
   async function create() {
     if (!workspaceId || creating) return;
     creating = true;
     try {
-      if (await app.createSession(workspaceId)) open = false;
+      if (await engine.createSession(workspaceId)) open = false;
     } finally {
       creating = false;
     }
@@ -51,10 +52,10 @@
   </header>
   <label
     ><span>Workspace</span><select bind:value={workspaceId}
-      >{#each app.workspaces as workspace (workspace.id)}<option
+      >{#each engine.workspaces as workspace (workspace.id)}<option
           value={workspace.id}
-          disabled={!app.acceptsSessions(workspace)}
-          >{workspace.displayName} · {workspace.hostId}{!app.workspaceOnline(workspace)
+          disabled={!engine.acceptsSessions(workspace)}
+          >{workspace.displayName} · {workspace.hostId}{!engine.workspaceOnline(workspace)
             ? ' (offline)'
             : isReadOnly(workspace)
               ? ' (read-only)'

@@ -18,7 +18,7 @@
   import { onDestroy } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { rovingFocus } from '../../a11y';
-  import { app } from '../../app.svelte';
+  import { engine } from '../../engine.svelte';
   import { onFilePreviewRequest, type FileTarget } from '../../file-links';
   import type { PanelTab } from '../../panel-api';
   import FilesTab from './FilesTab.svelte';
@@ -69,14 +69,16 @@
     { id: 'browser', label: 'Browser', icon: Globe },
   ];
 
-  const sessionId = $derived(app.sessionState?.session.id ?? '');
+  const sessionId = $derived(engine.sessionState?.session.id ?? '');
   /**
    * Every session keeps Files (its directory, where uploads and outputs land);
    * Git needs a repository, the terminal a workspace directory (not one per session).
    */
   const mode = $derived(
-    app.modeOf(
-      app.workspaces.find((workspace) => workspace.id === app.sessionState?.session.workspaceId),
+    engine.modeOf(
+      engine.workspaces.find(
+        (workspace) => workspace.id === engine.sessionState?.session.workspaceId,
+      ),
     ),
   );
   const shownTabs = $derived(
@@ -143,9 +145,9 @@
   }
 
   const badge = $derived({
-    tasks: (app.panel.value?.backgroundTasks ?? []).filter((task) => task.status === 'running')
+    tasks: (engine.panel.value?.backgroundTasks ?? []).filter((task) => task.status === 'running')
       .length,
-    memory: app.panel.value?.memoryRuntime?.phase ? 1 : 0,
+    memory: engine.panel.value?.memoryRuntime?.phase ? 1 : 0,
   } as Record<string, number>);
 </script>
 
@@ -199,7 +201,7 @@
   </div>
 
   <div class="panel-body">
-    {#if app.usingDemo}
+    {#if engine.usingDemo}
       <p class="panel-empty">Connect to a gateway to use this panel.</p>
     {:else if sessionId}
       {#each shownTabs as item (item.id)}
@@ -224,15 +226,15 @@
             {:else if item.id === 'browser'}
               <BrowserTab
                 {sessionId}
-                generation={app.generation}
-                hasControl={app.hasControl}
+                generation={engine.generation}
+                hasControl={engine.hasControl}
                 active={open && tab === 'browser'}
               />
             {:else}
               <TerminalTab
                 {sessionId}
-                generation={app.generation}
-                hasControl={app.hasControl}
+                generation={engine.generation}
+                hasControl={engine.hasControl}
                 active={open && tab === 'terminal'}
               />
             {/if}

@@ -14,7 +14,7 @@
   } from '@lucide/svelte';
   import { tick } from 'svelte';
   import { rovingFocus } from '../a11y';
-  import { app } from '../app.svelte';
+  import { engine } from '../engine.svelte';
   import { capitalized, isReadOnly } from '../modes';
   import { shortAgo } from '../time';
   import type { SessionSummary, Workspace } from '../types';
@@ -43,8 +43,8 @@
   }: Props = $props();
 
   /** What this workspace can do; the page shows only that. */
-  const mode = $derived(app.modeOf(workspace));
-  const online = $derived(app.workspaceOnline(workspace));
+  const mode = $derived(engine.modeOf(workspace));
+  const online = $derived(engine.workspaceOnline(workspace));
   /** Its mode left the catalog: the history stays readable, nothing new starts. */
   const readOnly = $derived(isReadOnly(workspace));
   const noun = $derived(mode.ui.noun);
@@ -74,7 +74,7 @@
     { immediate: true },
   );
 
-  const all = $derived(app.sessions.filter((session) => session.workspaceId === workspace.id));
+  const all = $derived(engine.sessions.filter((session) => session.workspaceId === workspace.id));
   const matching = $derived(
     query ? all.filter((session) => session.name.toLowerCase().includes(query.toLowerCase())) : all,
   );
@@ -103,7 +103,7 @@
     renamingId = undefined;
     const name = renameValue.trim();
     const current = all.find((session) => session.id === id);
-    if (commit && name && current && name !== current.name) void app.updateSession(id, { name });
+    if (commit && name && current && name !== current.name) void engine.updateSession(id, { name });
   }
 
   function status(session: SessionSummary) {
@@ -235,7 +235,7 @@
             </dl>
           </section>
           {#if mode.project_config}
-            {#if app.usingDemo}
+            {#if engine.usingDemo}
               <p class="note">The project config is unavailable in demo mode.</p>
             {:else if !online}
               <p class="note">
@@ -317,14 +317,14 @@
           type="button"
           aria-label={session.pinned ? `Unpin ${session.name}` : `Pin ${session.name}`}
           title={session.pinned ? 'Unpin' : 'Pin'}
-          onclick={() => app.updateSession(session.id, { pinned: !session.pinned })}
+          onclick={() => engine.updateSession(session.id, { pinned: !session.pinned })}
           >{#if session.pinned}<PinOff size={14} />{:else}<Pin size={14} />{/if}</button
         >
         <button
           type="button"
           aria-label={session.settled ? `Reopen ${session.name}` : `Settle ${session.name}`}
           title={session.settled ? 'Reopen' : 'Settle'}
-          onclick={() => app.updateSession(session.id, { settled: !session.settled })}
+          onclick={() => engine.updateSession(session.id, { settled: !session.settled })}
           >{#if session.settled}<ArchiveRestore size={14} />{:else}<Archive
               size={14}
             />{/if}</button

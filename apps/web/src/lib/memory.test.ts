@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import { app } from './app.svelte';
+import { reactiveProps } from './testing/props.svelte';
 import MemorySettings from './components/MemorySettings.svelte';
 import RoomMessageRow from './components/rooms/RoomMessageRow.svelte';
 import {
@@ -212,10 +212,11 @@ describe('MemorySettings', () => {
   });
 
   it('reloads when the gateway says memory changed, and never calls it in demo mode', async () => {
-    component = mount(MemorySettings, { target, props: {} });
+    const props = reactiveProps({ revision: 0 });
+    component = mount(MemorySettings, { target, props });
     await flush();
     const before = calls.length;
-    app.memoryRevision++;
+    props.revision++;
     await flush();
     expect(calls.length).toBe(before + 2);
     unmount(component);

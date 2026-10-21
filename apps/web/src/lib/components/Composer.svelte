@@ -14,7 +14,7 @@
   } from '@lucide/svelte';
   import { slide } from 'svelte/transition';
   import { motion } from '../motion';
-  import { app } from '../app.svelte';
+  import { engine } from '../engine.svelte';
   import type { ThinkingLevel } from '../types';
   import { modelKey } from '../types';
   import ComposerSelect from './ComposerSelect.svelte';
@@ -22,16 +22,16 @@
   import DockSection from './DockSection.svelte';
   import TodoDock from './TodoDock.svelte';
 
-  const value = $derived(app.draft);
-  const connection = $derived(app.connection);
-  const runStatus = $derived(app.runStatus);
-  const hasControl = $derived(app.hasControl);
-  const attachments = $derived(app.uploads);
+  const value = $derived(engine.draft);
+  const connection = $derived(engine.connection);
+  const runStatus = $derived(engine.runStatus);
+  const hasControl = $derived(engine.hasControl);
+  const attachments = $derived(engine.uploads);
   /** Messages waiting for the current run; shown as a dock above the input. */
-  const queue = $derived(app.sessionState?.queue ?? []);
-  const busy = $derived(app.commandBusy);
+  const queue = $derived(engine.sessionState?.queue ?? []);
+  const busy = $derived(engine.commandBusy);
   const modelOptions = $derived(
-    app.models
+    engine.models
       .filter((model) => model.available)
       .map((model) => ({
         value: modelKey(model),
@@ -91,7 +91,7 @@
   function keydown(event: KeyboardEvent) {
     if (event.key !== 'Enter' || event.shiftKey || event.isComposing || touchKeyboard()) return;
     event.preventDefault();
-    if (canSubmit) void app.sendCommand(mode);
+    if (canSubmit) void engine.sendCommand(mode);
   }
 
   /** Images pasted or dropped into the text box are attached like picked files. */
@@ -103,13 +103,13 @@
     if (!files.length) return;
     // Keep pasted text; only an image-only paste is taken over.
     if (!event.clipboardData?.getData('text/plain')) event.preventDefault();
-    void app.uploadImages(files);
+    void engine.uploadImages(files);
   }
   function drop(event: DragEvent) {
     const files = imageFiles(event.dataTransfer);
     if (!files.length) return;
     event.preventDefault();
-    void app.uploadImages(files);
+    void engine.uploadImages(files);
   }
 
   /**
@@ -127,15 +127,15 @@
 </script>
 
 <div class="composer-wrap">
-  {#if app.goal || app.todo || queue.length > 0}
+  {#if engine.goal || engine.todo || queue.length > 0}
     <!-- Cards tucked on top of the composer: the goal, the task list, then queued messages. -->
     <div class="composer-dock" transition:slide={{ duration: motion(180) }}>
-      {#if app.goal}<GoalDock
-          goal={app.goal}
-          disabled={!app.canCommand || busy}
-          onaction={(action) => app.goalAction(action)}
+      {#if engine.goal}<GoalDock
+          goal={engine.goal}
+          disabled={!engine.canCommand || busy}
+          onaction={(action) => engine.goalAction(action)}
         />{/if}
-      {#if app.todo}<TodoDock list={app.todo} />{/if}
+      {#if engine.todo}<TodoDock list={engine.todo} />{/if}
       {#if queue.length > 0}
         <DockSection label="Queued messages" class="queue-dock" bind:expanded={queueExpanded}>
           {#snippet head()}
@@ -146,7 +146,7 @@
             <button
               class="dock-action"
               type="button"
-              onclick={() => app.clearQueue()}
+              onclick={() => engine.clearQueue()}
               disabled={!hasControl}>Clear</button
             >
           {/snippet}
@@ -162,7 +162,7 @@
                 <button
                   class="queue-send-now touch-target"
                   type="button"
-                  onclick={() => app.sendQueuedNow(item)}
+                  onclick={() => engine.sendQueuedNow(item)}
                   disabled={!hasControl || busy}
                   aria-label="Send now: {item.content}"
                   title="Send now — interrupts the current step"
@@ -178,13 +178,13 @@
   {/if}
 
   <div class:offline={connection === 'offline'} class="composer">
-    {#if app.approvalMode === 'full-access'}
+    {#if engine.approvalMode === 'full-access'}
       <!-- Persistent while it lasts (security audit L14). -->
       <div class="full-access-note" role="status">
         Full access: the agent pushes, publishes and sends without asking. Your deny-list and the
         machine-destroying commands are still refused.
       </div>
-    {:else if app.approvalMode === 'read-only'}
+    {:else if engine.approvalMode === 'read-only'}
       <!-- Shown, not chosen: a wake's workers are read-only (plan 07). -->
       <div class="full-access-note" role="status">
         Read-only: the agent only reads. Anything else is refused without asking.
@@ -210,7 +210,7 @@
                 class="touch-target"
                 type="button"
                 aria-label="Remove {attachment.name}"
-                onclick={() => app.removeUpload(attachment.id)}><X size={14} /></button
+                onclick={() => engine.removeUpload(attachment.id)}><X size={14} /></button
               >{/if}
           </div>
         {/each}
@@ -223,7 +223,7 @@
       rows="2"
       {placeholder}
       {value}
-      oninput={(event) => app.setDraft(event.currentTarget.value)}
+      oninput={(event) => engine.setDraft(event.currentTarget.value)}
       onkeydown={keydown}
       onpaste={paste}
       ondrop={drop}
@@ -239,7 +239,7 @@
         multiple
         onchange={(event) => {
           const input = event.currentTarget;
-          if (input.files?.length) void app.uploadFiles(Array.from(input.files));
+          if (input.files?.length) void engine.uploadFiles(Array.from(input.files));
           // Clear the selection so picking the same file again fires `change`.
           input.value = '';
         }}
@@ -256,18 +256,18 @@
       <div class="model-select">
         <ComposerSelect
           label="Model"
-          value={app.selectedModel}
+          value={engine.selectedModel}
           options={modelOptions}
           disabled={active}
-          onselect={(key) => app.changeModel(key)}
+          onselect={(key) => engine.changeModel(key)}
         />
       </div>
       <div class="thinking-select">
         <ComposerSelect
           label="Reasoning effort"
-          value={app.thinking}
+          value={engine.thinking}
           options={thinkingOptions}
-          onselect={(level) => app.changeThinking(level as ThinkingLevel)}
+          onselect={(level) => engine.changeThinking(level as ThinkingLevel)}
         />
       </div>
       <span class="spacer"></span>
@@ -276,7 +276,7 @@
         <button
           class="stop-button secondary"
           type="button"
-          onclick={() => app.stopRun()}
+          onclick={() => engine.stopRun()}
           disabled={!hasControl || stopping}
           aria-label="Stop run"
           title="Stop run"
@@ -288,7 +288,7 @@
         <button
           class="send-button stop-button"
           type="button"
-          onclick={() => app.stopRun()}
+          onclick={() => engine.stopRun()}
           disabled={!hasControl || stopping}
           aria-label={stopping ? 'Stopping run' : 'Stop run'}
           title={stopping ? 'Stopping…' : 'Stop run'}
@@ -302,7 +302,7 @@
         <button
           class="send-button"
           type="button"
-          onclick={() => app.sendCommand(mode)}
+          onclick={() => engine.sendCommand(mode)}
           disabled={!canSubmit}
           aria-label="Send message"
           title="Send message"
@@ -315,8 +315,8 @@
       {/if}
     </div>
   </div>
-  {#if app.statusLine.length}
-    <p class="composer-status" role="status">{app.statusLine.join(' · ')}</p>
+  {#if engine.statusLine.length}
+    <p class="composer-status" role="status">{engine.statusLine.join(' · ')}</p>
   {/if}
 </div>
 

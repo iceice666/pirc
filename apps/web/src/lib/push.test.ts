@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // @vitest-environment-options {"url":"http://localhost"}
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { app } from './app.svelte';
+import { engine } from './engine.svelte';
 import {
   currentSubscriptionId,
   disablePush,
@@ -150,9 +150,9 @@ describe('where a notification leads', () => {
   });
 
   it('opens the memory in Settings', async () => {
-    app.demo = undefined;
-    await app.openTarget({ memory: true });
-    expect(app.requestedTarget).toEqual({ memory: true });
-    app.requestedTarget = undefined;
+    engine.demo = undefined;
+    await engine.openTarget({ memory: true });
+    expect(engine.requestedTarget).toEqual({ memory: true });
+    engine.requestedTarget = undefined;
   });
 });

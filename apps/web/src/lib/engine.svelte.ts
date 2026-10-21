@@ -76,7 +76,7 @@ const DOCKED_WIDGETS = new Set([TODO_WIDGET, GOAL_WIDGET]);
  */
 const SHOWN_ELSEWHERE = new Set(['background-task', 'agent-team']);
 
-class AppState {
+class EngineState {
   workspaces = $state.raw<Workspace[]>([]);
   nodes = $state.raw<NodeSummary[]>([]);
   /** The gateway's workspace modes (empty from older gateways: the legacy `kind` decides). */
@@ -1210,4 +1210,4 @@ class AppState {
   }
 }
 
-export const app = new AppState();
+export const engine = new EngineState();

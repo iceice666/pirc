@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, ChevronRight, Code, Eye, File, Folder, RefreshCw } from '@lucide/svelte';
   import { onDestroy, tick } from 'svelte';
-  import { app } from '../../app.svelte';
+  import { engine } from '../../engine.svelte';
   import { errorMessage } from '../../errors';
   import type { FileTarget } from '../../file-links';
   import { Loader } from '../../loader.svelte';
@@ -40,7 +40,7 @@
   const fileLoader = new Loader();
   const error = $derived(fileLoader.error || dirLoader.error);
 
-  /** `.code-view pre`: 12px font × 1.55 line height, 8px top padding (app.css). */
+  /** `.code-view pre`: 12px font × 1.55 line height, 8px top padding (engine.css). */
   const LINE_HEIGHT = 12 * 1.55;
   const CODE_PAD = 8;
 
@@ -197,7 +197,7 @@
   );
   // A finished run may have changed the working tree.
   onDestroy(
-    app.onPanel((signal) => {
+    engine.onPanel((signal) => {
       if (signal.type !== 'run-finished') return;
       if (active) reload();
       else stale = true;

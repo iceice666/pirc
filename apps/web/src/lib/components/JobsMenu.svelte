@@ -12,17 +12,17 @@
   import { motion } from '../motion';
   import { tick } from 'svelte';
   import { rovingFocus } from '../a11y';
-  import { app } from '../app.svelte';
+  import { engine } from '../engine.svelte';
   import { errorMessage } from '../errors';
   import { Loader } from '../loader.svelte';
   import { panelApi, type BackgroundTask, type TeamMember } from '../panel-api';
   import { duration } from '../time';
   import { watch } from '../watch.svelte';
 
-  const sessionId = $derived(app.sessionState?.session.id ?? '');
-  const hasControl = $derived(app.hasControl);
-  const generation = $derived(app.generation);
-  const panelState = $derived(app.panel.value);
+  const sessionId = $derived(engine.sessionState?.session.id ?? '');
+  const hasControl = $derived(engine.hasControl);
+  const generation = $derived(engine.generation);
+  const panelState = $derived(engine.panel.value);
 
   let open = $state(false);
   let root: HTMLDivElement | undefined = $state();
@@ -48,10 +48,10 @@
   });
   // Background tasks or team members changed (or a run ended, which may stop them).
   onDestroy(
-    app.onPanel((signal) => {
-      if (signal.type === 'run-finished') app.panel.schedule(100);
+    engine.onPanel((signal) => {
+      if (signal.type === 'run-finished') engine.panel.schedule(100);
       else if (signal.sections.some((section) => section === 'background' || section === 'team'))
-        app.panel.schedule();
+        engine.panel.schedule();
     }),
   );
 
@@ -60,7 +60,7 @@
     open = !open;
     now = Date.now();
     if (!open) return;
-    void app.panel.refresh();
+    void engine.panel.refresh();
     // Move focus into the popover; arrow keys then walk its rows.
     await tick();
     popover?.querySelector<HTMLElement>('button')?.focus();
@@ -83,7 +83,7 @@
     const id = expanded;
     const session = sessionId;
     if (!id) return false;
-    if (app.usingDemo) {
+    if (engine.usingDemo) {
       output = '$ bun run dev\n  VITE ready in 412 ms\n  ➜  Local: http://localhost:5173/';
       return false;
     }
@@ -114,7 +114,7 @@
     const session = sessionId;
     try {
       const { task: next } = await panelApi.stopBackground(session, task.id, generation);
-      if (session === sessionId) app.panel.updateTask(next);
+      if (session === sessionId) engine.panel.updateTask(next);
     } catch (cause) {
       if (session === sessionId) stopError = errorMessage(cause, 'Could not stop the task.');
     }
@@ -171,7 +171,7 @@
       open = false;
       collapse();
       cleared = new Set();
-      void app.panel.refresh();
+      void engine.panel.refresh();
     },
     { immediate: true },
   );

@@ -3,10 +3,10 @@
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Engine from './Engine.svelte';
-import { app, MESSAGE_PAGE } from './lib/app.svelte';
+import { engine, MESSAGE_PAGE } from './lib/engine.svelte';
 import { panelApi } from './lib/panel-api';
 import { demoWorkspaces } from './lib/mock';
-import { seedApp, stubMatchMedia } from './lib/testing/app-state';
+import { seedApp, stubMatchMedia } from './lib/testing/engine-state';
 import type { ConversationMessage } from './lib/types';
 
 /** ResizeObserver for jsdom; `resizeAll()` plays a layout change. */
@@ -70,10 +70,10 @@ function scrollable(element: HTMLElement) {
 
 async function start(count = 100, width = 1400) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
-  vi.spyOn(app, 'bootstrap').mockImplementation(async () => {
+  vi.spyOn(engine, 'bootstrap').mockImplementation(async () => {
     seedApp({ messages: messages(count), run: null });
-    app.hiddenMessages = Math.max(0, count - MESSAGE_PAGE);
-    app.loading = false;
+    engine.hiddenMessages = Math.max(0, count - MESSAGE_PAGE);
+    engine.loading = false;
   });
   component = mount(Engine, { target });
   await tick();
@@ -84,8 +84,8 @@ beforeEach(() => {
   stubMatchMedia(false, true);
   vi.stubGlobal('ResizeObserver', FakeResizeObserver);
   vi.stubGlobal('localStorage', memoryStorage());
-  vi.spyOn(app, 'refreshControl').mockResolvedValue();
-  vi.spyOn(app, 'refreshNodes').mockResolvedValue();
+  vi.spyOn(engine, 'refreshControl').mockResolvedValue();
+  vi.spyOn(engine, 'refreshNodes').mockResolvedValue();
   vi.spyOn(panelApi, 'state').mockResolvedValue({
     agentRunning: false,
     memory: null,
@@ -102,7 +102,7 @@ afterEach(async () => {
   component = undefined;
   target.remove();
   observers.clear();
-  app.view = 'session';
+  engine.view = 'session';
   history.replaceState(null, '', '/');
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -136,7 +136,7 @@ describe('Engine transcript', () => {
     resizeAll();
     expect(box.top).toBe(1000);
     expect(target.querySelector('.jump-latest')).toBeNull();
-    app.sessionState = { ...app.sessionState!, messages: messages(11) };
+    engine.sessionState = { ...engine.sessionState!, messages: messages(11) };
     flushSync();
     const jump = target.querySelector<HTMLButtonElement>('.jump-latest button')!;
     expect(jump.textContent).toContain('New messages');
@@ -167,15 +167,15 @@ describe('Engine header', () => {
   it('keeps a badge up while the agent runs unsandboxed', async () => {
     await start(2);
     expect(target.querySelector('.unsandboxed')).toBeNull();
-    app.sessionState = {
-      ...app.sessionState!,
+    engine.sessionState = {
+      ...engine.sessionState!,
       sandbox: { active: false, reason: 'srt is not installed' },
     };
     flushSync();
     const badge = target.querySelector<HTMLElement>('.unsandboxed')!;
     expect(badge.textContent).toContain('Not sandboxed');
     expect(badge.title).toContain('srt is not installed');
-    app.sessionState = { ...app.sessionState!, sandbox: { active: true } };
+    engine.sessionState = { ...engine.sessionState!, sandbox: { active: true } };
     flushSync();
     expect(target.querySelector('.unsandboxed')).toBeNull();
   });
@@ -184,19 +184,19 @@ describe('Engine header', () => {
 describe('Engine workspace page', () => {
   it('opens from the breadcrumb, lists the sessions and goes back to one', async () => {
     await start(2);
-    app.workspaces = demoWorkspaces;
+    engine.workspaces = demoWorkspaces;
     flushSync();
-    const session = app.sessionState!.session;
+    const session = engine.sessionState!.session;
     target.querySelector<HTMLButtonElement>('.breadcrumb .crumb')!.click();
     flushSync();
-    expect(app.view).toBe('workspace');
+    expect(engine.view).toBe('workspace');
     expect(location.search).toBe(`?workspace=${session.workspaceId}`);
     expect(target.querySelector('.workspace-page h1')!.textContent).toBe('pirc');
     expect(target.querySelector('.conversation')).toBeNull();
     expect(document.title).toBe('pirc · pirc');
 
-    const open = vi.spyOn(app, 'openSession').mockImplementation(async () => {
-      app.view = 'session';
+    const open = vi.spyOn(engine, 'openSession').mockImplementation(async () => {
+      engine.view = 'session';
     });
     target.querySelector<HTMLButtonElement>('.workspace-page .row-main')!.click();
     flushSync();
@@ -209,22 +209,22 @@ describe('Engine workspace page', () => {
 describe('Engine unread sessions', () => {
   it('marks the session on screen read, but not one behind a page', async () => {
     await start(2);
-    const id = app.sessionState!.session.id;
+    const id = engine.sessionState!.session.id;
     const fetch = vi.fn(async () => new Response(JSON.stringify({ session: { id } })));
     vi.stubGlobal('fetch', fetch);
-    app.view = 'workspace';
-    app.sessions = app.sessions.map((item) => ({ ...item, unread: true }));
-    app.markActiveRead();
+    engine.view = 'workspace';
+    engine.sessions = engine.sessions.map((item) => ({ ...item, unread: true }));
+    engine.markActiveRead();
     expect(fetch).not.toHaveBeenCalled();
-    app.view = 'session';
-    app.markActiveRead();
-    expect(app.sessions.find((item) => item.id === id)!.unread).toBe(false);
+    engine.view = 'session';
+    engine.markActiveRead();
+    expect(engine.sessions.find((item) => item.id === id)!.unread).toBe(false);
     expect(fetch).toHaveBeenCalledWith(
       `/api/sessions/${encodeURIComponent(id)}/read`,
       expect.objectContaining({ method: 'POST' }),
     );
     // Already read: nothing more to tell the gateway.
-    app.markActiveRead();
+    engine.markActiveRead();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
@@ -293,7 +293,7 @@ describe('Engine native management link', () => {
       expect(target.textContent).toContain('Test phone');
     });
 
-    expect(app.bootstrap).toHaveBeenCalledTimes(1);
+    expect(engine.bootstrap).toHaveBeenCalledTimes(1);
     expect(location.search).toBe('?nativeManagement=req%2Fone&session=existing-session');
     expect(fetch.mock.calls.map(([, init]) => init?.method ?? 'GET')).toEqual(['GET']);
   });

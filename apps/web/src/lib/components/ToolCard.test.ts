@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { snapshotFromRaw } from '../api';
-import { app } from '../app.svelte';
+import { engine } from '../engine.svelte';
 import { MAX_HIGHLIGHT } from '../markdown';
 import { fromSnapshot } from '../state';
 import type { ToolCall } from '../types';
@@ -17,7 +17,7 @@ afterEach(async () => {
   if (component) await unmount(component);
   component = undefined;
   target?.remove();
-  app.sessionState = undefined;
+  engine.sessionState = undefined;
 });
 
 function render(tool: ToolCall) {
@@ -127,8 +127,9 @@ describe('ToolCard', () => {
         'utf8',
       ),
     );
-    app.sessionState = fromSnapshot(snapshotFromRaw(fixture.snapshot, null));
-    const script = app.sessionState.messages.find((message) => message.tools?.length)!.tools![0]!;
+    engine.sessionState = fromSnapshot(snapshotFromRaw(fixture.snapshot, null));
+    const script = engine.sessionState.messages.find((message) => message.tools?.length)!
+      .tools![0]!;
     render(script);
     const cards = [...target.querySelectorAll('.tool-operations .tool-card')];
     expect(cards.map((card) => card.getAttribute('data-tool'))).toEqual(['read', 'edit']);

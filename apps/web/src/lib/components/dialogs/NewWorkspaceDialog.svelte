@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
-  import { app } from '../../app.svelte';
+  import { engine } from '../../engine.svelte';
   import { creatableModes, workNodes } from '../../modes';
   import { errorMessage } from '../../errors';
   import type { NewWorkspace } from '../../types';
@@ -17,9 +17,9 @@
 
   let { open = $bindable(), nodeId, oncreated }: Props = $props();
 
-  const catalog = $derived(app.modeCatalog);
+  const catalog = $derived(engine.modeCatalog);
   // Only nodes accepting a mode the catalog knows.
-  const deviceNodes = $derived(workNodes(app.nodes, catalog));
+  const deviceNodes = $derived(workNodes(engine.nodes, catalog));
 
   let chosenNode = $state('');
   let chosenMode = $state('');
@@ -73,7 +73,7 @@
         }
       : { nodeId: chosenNode, path: path.trim(), displayName };
     try {
-      const workspace = await app.createWorkspace(input);
+      const workspace = await engine.createWorkspace(input);
       open = false;
       oncreated(workspace.id);
     } catch (cause) {

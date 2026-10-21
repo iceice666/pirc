@@ -2,6 +2,7 @@ import { uuid } from './id';
 
 const CLIENT_KEY = 'relay.client-id';
 const DRAFT_PREFIX = 'relay.draft.';
+const ROOM_DRAFT_PREFIX = 'relay.room-draft.';
 const LAYOUT_PREFIX = 'relay.layout.';
 
 /*
@@ -80,6 +81,24 @@ export function removeDraft(sessionId: string): void {
 export function pruneDrafts(sessionIds: Iterable<string>): void {
   const known = new Set(Array.from(sessionIds, (id) => `${DRAFT_PREFIX}${id}`));
   for (const key of keys(DRAFT_PREFIX)) if (!known.has(key)) remove(key);
+}
+
+/** What was being written in a room, kept across reloads and room switches. */
+export function loadRoomDraft(roomId: string): string {
+  return read(`${ROOM_DRAFT_PREFIX}${roomId}`) ?? '';
+}
+
+export function saveRoomDraft(roomId: string, draft: string): void {
+  const key = `${ROOM_DRAFT_PREFIX}${roomId}`;
+  if (!draft) {
+    remove(key);
+    return;
+  }
+  if (write(key, draft)) return;
+  // Probably over quota: drop the other drafts, sessions' and rooms'.
+  for (const other of [...keys(ROOM_DRAFT_PREFIX), ...keys(DRAFT_PREFIX)])
+    if (other !== key) remove(other);
+  write(key, draft);
 }
 
 /** Persisted layout preferences (panel width, collapsed sidebars). */

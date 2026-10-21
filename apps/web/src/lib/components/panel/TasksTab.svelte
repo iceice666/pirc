@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, Bot, ListChecks, RefreshCw, SquareTerminal, Users } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
-  import { app } from '../../app.svelte';
+  import { engine } from '../../engine.svelte';
   import { Loader } from '../../loader.svelte';
   import { panelApi, type BackgroundTask } from '../../panel-api';
   import { duration } from '../../time';
@@ -19,7 +19,7 @@
   let output = $state('');
   let outputEl: HTMLPreElement | undefined = $state();
   const outputLoader = new Loader();
-  const panelState = $derived(app.panel.value);
+  const panelState = $derived(engine.panel.value);
 
   // The tab outlives a session switch; a task id means nothing in another session.
   watch(
@@ -73,16 +73,16 @@
   watch(
     () => active,
     (shown) => {
-      if (shown) void app.panel.refresh();
+      if (shown) void engine.panel.refresh();
     },
     { immediate: true },
   );
   onDestroy(
-    app.onPanel((signal) => {
+    engine.onPanel((signal) => {
       if (!active) return;
-      if (signal.type === 'run-finished') app.panel.schedule(100);
+      if (signal.type === 'run-finished') engine.panel.schedule(100);
       else if (signal.sections.some((section) => section === 'background' || section === 'team'))
-        app.panel.schedule();
+        engine.panel.schedule();
     }),
   );
 </script>
@@ -107,8 +107,8 @@
     <pre class="task-command">{selected.command}</pre>
     {#if outputLoader.error}<p class="panel-error">{outputLoader.error}</p>{/if}
     <pre class="task-output" bind:this={outputEl}>{output || 'No output yet.'}</pre>
-  {:else if app.panel.error && !panelState}
-    <p class="panel-error">{app.panel.error}</p>
+  {:else if engine.panel.error && !panelState}
+    <p class="panel-error">{engine.panel.error}</p>
   {:else if !panelState}
     <p class="panel-empty">Loading…</p>
   {:else if !panelState.agentRunning && !tasks.length && !agents.length}

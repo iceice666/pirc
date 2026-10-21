@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Settings, SquareTerminal } from '@lucide/svelte';
-  import { app } from '../app.svelte';
+  import { engine } from '../engine.svelte';
 
   type Tab = 'work' | 'settings';
 
@@ -10,7 +10,7 @@
   }
 
   let { current, onpick }: Props = $props();
-  const waiting = $derived(app.inbox.length);
+  const waiting = $derived(engine.inbox.length);
 </script>
 
 <!-- The phone's bottom navigation (desktop has the sidebar's footer instead). -->

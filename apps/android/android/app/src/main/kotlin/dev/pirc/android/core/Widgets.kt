@@ -3,7 +3,7 @@ package dev.pirc.android.core
 /*
  * Extension widgets the session state carries as plain text, turned back into
  * records for the docks above the composer. Ported from the web client
- * (`apps/web/src/lib/goal.ts`, `todo.ts`, `app.svelte.ts`); change both together.
+ * (`apps/web/src/lib/goal.ts`, `todo.ts`, `engine.svelte.ts`); change both together.
  */
 
 const val GOAL_WIDGET = "goal"

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
-import { app } from '../../app.svelte';
+import { engine } from '../../engine.svelte';
 import ContextTab from './ContextTab.svelte';
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -57,7 +57,7 @@ afterEach(async () => {
   component = undefined;
   target?.remove();
   vi.unstubAllGlobals();
-  app.sessionState = undefined;
+  engine.sessionState = undefined;
 });
 it('shows saved sections, tool schemas, scaled usage, source links and copy-all', async () => {
   vi.stubGlobal(
@@ -112,7 +112,7 @@ it('shows the send-first error without fabricating an empty snapshot', async () 
 });
 
 it('refreshes when an idle runner stops while the inspector stays open', async () => {
-  app.sessionState = { session: { id: 's' }, runnerStatus: 'ready' } as never;
+  engine.sessionState = { session: { id: 's' }, runnerStatus: 'ready' } as never;
   vi.stubGlobal(
     'fetch',
     vi.fn(
@@ -127,7 +127,7 @@ it('refreshes when an idle runner stops while the inspector stays open', async (
   vi.mocked(fetch).mockResolvedValueOnce(
     new Response(JSON.stringify({ snapshot, agentRunning: false, source: 'snapshot' })),
   );
-  app.sessionState = { session: { id: 's' }, runnerStatus: 'stopped' } as never;
+  engine.sessionState = { session: { id: 's' }, runnerStatus: 'stopped' } as never;
   await flush();
   expect(target.textContent).toContain('agent stopped');
 });

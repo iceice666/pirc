@@ -18,7 +18,7 @@
     Terminal,
     Wrench,
   } from '@lucide/svelte';
-  import { app } from '../app.svelte';
+  import { engine } from '../engine.svelte';
   import { clipText, highlightCode, languageForPath, rendererTick } from '../markdown';
   import { panelApi } from '../panel-api';
   import { elapsed } from '../time';
@@ -136,13 +136,17 @@
   /** A question or approval this operation waits for (the card itself sits at the bottom). */
   const waiting = $derived(
     tool.status === 'running'
-      ? app.pendingInteractions.find((item) => item.toolCallId === tool.id)
+      ? engine.pendingInteractions.find((item) => item.toolCallId === tool.id)
       : undefined,
   );
   /** Refused because another session holds the workspace's write lease. */
   const blocked = $derived(writeBlock(tool));
-  const holder = $derived(blocked ? blockingSession(app.sessions, blocked.holderName) : undefined);
-  const recordingSession = $derived(app.usingDemo ? '' : (app.sessionState?.session.id ?? ''));
+  const holder = $derived(
+    blocked ? blockingSession(engine.sessions, blocked.holderName) : undefined,
+  );
+  const recordingSession = $derived(
+    engine.usingDemo ? '' : (engine.sessionState?.session.id ?? ''),
+  );
   let fileLanguage = $derived(languageForPath(args.path));
   let duration = $derived(elapsed(tool.startedAt, tool.endedAt));
   let extraInput = $derived(
@@ -232,8 +236,8 @@
           told to wait until that run finishes.</span
         >
       </p>
-      {#if holder && holder.id !== app.activeSessionId}
-        <button type="button" onclick={() => app.openSession(holder.id)}
+      {#if holder && holder.id !== engine.activeSessionId}
+        <button type="button" onclick={() => engine.openSession(holder.id)}
           >{#if holder.writeLease}<span class="holder-dot"></span>{/if}{holder.name}
           <SquareArrowOutUpRight size={13} /></button
         >

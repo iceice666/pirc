@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { app } from '../app.svelte';
+import { engine } from '../engine.svelte';
 import { demoModes } from '../mock';
 import { reactiveProps } from '../testing/props.svelte';
 import type { SessionSummary } from '../types';
@@ -29,16 +29,16 @@ const handlers = {
 };
 
 beforeEach(() => {
-  app.nodes = [{ id: 'node' } as never];
-  app.workspaces = [{ id: 'node:ws', hostId: 'node', displayName: 'Project' } as never];
-  app.sessions = [
+  engine.nodes = [{ id: 'node' } as never];
+  engine.workspaces = [{ id: 'node:ws', hostId: 'node', displayName: 'Project' } as never];
+  engine.sessions = [
     session('a', 'Alpha'),
     session('b', 'Beta', { pinned: true }),
     session('c', 'Gamma', { settled: true }),
   ];
-  app.activeSessionId = 'a';
-  app.view = 'session';
-  app.workspaceViewId = undefined;
+  engine.activeSessionId = 'a';
+  engine.view = 'session';
+  engine.workspaceViewId = undefined;
   target = document.createElement('div');
   document.body.append(target);
 });
@@ -47,7 +47,7 @@ afterEach(async () => {
   component = undefined;
   target.remove();
   vi.restoreAllMocks();
-  app.modeCatalog = [];
+  engine.modeCatalog = [];
   Object.values(handlers).forEach((handler) => handler.mockReset());
 });
 
@@ -71,7 +71,7 @@ describe('Sidebar', () => {
     );
 
   it('shows workspaces as rows that open their page, with only unread and open sessions under them', () => {
-    app.sessions = [
+    engine.sessions = [
       session('a', 'Alpha'),
       session('n', 'Newer', { unread: true }),
       session('r', 'Runner', { runStatus: 'running', writeLease: true }),
@@ -94,8 +94,8 @@ describe('Sidebar', () => {
   });
 
   it('marks the page that is showing instead of the session behind it', () => {
-    app.view = 'workspace';
-    app.workspaceViewId = 'node:ws';
+    engine.view = 'workspace';
+    engine.workspaceViewId = 'node:ws';
     render();
     const heading = target.querySelector('.workspace-heading')!;
     expect(heading.classList.contains('current')).toBe(true);
@@ -108,7 +108,7 @@ describe('Sidebar', () => {
   });
 
   it('answers sessions under "Needs you"', () => {
-    app.sessions = [session('w', 'Waiter', { runStatus: 'waiting_input' })];
+    engine.sessions = [session('w', 'Waiter', { runStatus: 'waiting_input' })];
     render();
     const buttons = Array.from(
       target.querySelectorAll<HTMLButtonElement>('[data-kind="session"] .pill-button'),
@@ -119,14 +119,14 @@ describe('Sidebar', () => {
   });
 
   it('allows or denies a delegated session\'s relayed confirm from "Needs you"', () => {
-    const answerApproval = vi.spyOn(app, 'answerApproval').mockResolvedValue();
+    const answerApproval = vi.spyOn(engine, 'answerApproval').mockResolvedValue();
     const approval = {
       sessionId: 'chat',
       interactionId: 'relay.d1.interaction_1',
       title: 'Allow network access?',
       message: 'curl example.com',
     };
-    app.sessions = [
+    engine.sessions = [
       session('w', 'Worker', {
         runStatus: 'waiting_input',
         origin: {
@@ -167,7 +167,7 @@ describe('Sidebar', () => {
   });
 
   it('selects a session and marks the open one as current', () => {
-    app.sessions = [session('a', 'Alpha'), session('b', 'Beta', { unread: true, pinned: true })];
+    engine.sessions = [session('a', 'Alpha'), session('b', 'Beta', { unread: true, pinned: true })];
     render();
     expect(names()).toEqual(['Beta', 'Alpha']);
     const cards = target.querySelectorAll<HTMLButtonElement>('.session-card');
@@ -178,8 +178,8 @@ describe('Sidebar', () => {
   });
 
   it('reveals row actions of another session through its "more" button', () => {
-    const update = vi.spyOn(app, 'updateSession').mockResolvedValue();
-    app.sessions = [session('a', 'Alpha'), session('b', 'Beta', { unread: true, pinned: true })];
+    const update = vi.spyOn(engine, 'updateSession').mockResolvedValue();
+    engine.sessions = [session('a', 'Alpha'), session('b', 'Beta', { unread: true, pinned: true })];
     render();
     // The open session needs no "more" button; the other row has one.
     expect(target.querySelector('[aria-label="Actions for Alpha"]')).toBeNull();
@@ -194,7 +194,7 @@ describe('Sidebar', () => {
   });
 
   it('renames with F2 and Enter', async () => {
-    const update = vi.spyOn(app, 'updateSession').mockResolvedValue();
+    const update = vi.spyOn(engine, 'updateSession').mockResolvedValue();
     render();
     const card = target.querySelector<HTMLButtonElement>('.session-card')!;
     card.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true }));
@@ -240,19 +240,19 @@ describe('Sidebar', () => {
 
   describe('with the mode catalog', () => {
     beforeEach(() => {
-      app.modeCatalog = demoModes;
-      app.nodes = [
+      engine.modeCatalog = demoModes;
+      engine.nodes = [
         { id: 'node', modes: ['directory', 'scratch'] } as never,
         // Accepts no mode the catalog knows: no workspaces there.
         { id: 'lab', modes: ['unknown'] } as never,
       ];
-      app.workspaces = [
+      engine.workspaces = [
         { id: 'node:ws', hostId: 'node', displayName: 'Project', mode: 'directory' },
         { id: 'node:gpu', hostId: 'node', displayName: 'GPU jobs', mode: 'scratch' },
         // Its mode left the catalog.
         { id: 'node:old', hostId: 'node', displayName: 'Old', mode: 'review', available: false },
       ].map((workspace) => ({ defaults: {}, ...workspace })) as never;
-      app.sessions = [
+      engine.sessions = [
         session('g', 'Render image', { workspaceId: 'node:gpu', unread: true }),
         session('o', 'Old review', { workspaceId: 'node:old', unread: true }),
       ];

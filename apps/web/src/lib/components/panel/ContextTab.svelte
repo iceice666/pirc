@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { app } from '../../app.svelte';
+  import { engine } from '../../engine.svelte';
   import { Loader } from '../../loader.svelte';
   import { panelApi, type ContextPanel } from '../../panel-api';
   import { watch } from '../../watch.svelte';
@@ -43,13 +43,13 @@
     },
   );
   watch(
-    () => app.sessionState?.runnerStatus,
+    () => engine.sessionState?.runnerStatus,
     () => {
       if (active) void load();
     },
   );
   onDestroy(
-    app.onPanel((signal) => {
+    engine.onPanel((signal) => {
       if (!active || (signal.type !== 'run-finished' && !signal.sections.includes('context')))
         return;
       clearTimeout(timer);

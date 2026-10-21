@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { app } from '../app.svelte';
+import { engine } from '../engine.svelte';
 import { panelApi, type PanelState } from '../panel-api';
-import { seedApp } from '../testing/app-state';
+import { seedApp } from '../testing/engine-state';
 import JobsMenu from './JobsMenu.svelte';
 
 const started = new Date(Date.now() - 60_000).toISOString();
@@ -20,9 +20,9 @@ let target: HTMLDivElement;
 
 beforeEach(() => {
   const state = seedApp();
-  vi.spyOn(panelApi, 'state').mockImplementation(async () => app.panel.value!);
-  app.panel.reset(state.session.id);
-  app.panel.value = panelState([
+  vi.spyOn(panelApi, 'state').mockImplementation(async () => engine.panel.value!);
+  engine.panel.reset(state.session.id);
+  engine.panel.value = panelState([
     {
       id: 'done',
       command: 'bun test',
@@ -73,7 +73,7 @@ describe('JobsMenu', () => {
     expect(stop).not.toHaveBeenCalled();
     expect(button().getAttribute('aria-label')).toBe('Confirm stop');
     button().click();
-    expect(stop).toHaveBeenCalledWith(app.activeSessionId, 'dev', 1);
+    expect(stop).toHaveBeenCalledWith(engine.activeSessionId, 'dev', 1);
     await tick();
     flushSync();
     expect(target.querySelector('[aria-label="Stopping"]')).not.toBeNull();
@@ -88,7 +88,7 @@ describe('JobsMenu', () => {
   });
 
   it('hides while the session has no background work', () => {
-    app.panel.value = { ...panelState([]), team: { agents: [] } };
+    engine.panel.value = { ...panelState([]), team: { agents: [] } };
     component = mount(JobsMenu, { target });
     flushSync();
     expect(target.querySelector('.jobs-trigger')).toBeNull();

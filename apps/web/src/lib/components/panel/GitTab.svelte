@@ -2,7 +2,7 @@
   import { ArrowLeft, GitBranch, GitCommitHorizontal, RefreshCw } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { rovingFocus } from '../../a11y';
-  import { app } from '../../app.svelte';
+  import { engine } from '../../engine.svelte';
   import { Loader } from '../../loader.svelte';
   import {
     panelApi,
@@ -159,7 +159,7 @@
   );
   // The working tree may have changed.
   onDestroy(
-    app.onPanel((signal) => {
+    engine.onPanel((signal) => {
       if (signal.type === 'changed' && !signal.sections.includes('git')) return;
       if (active) void load();
       else stale = true;

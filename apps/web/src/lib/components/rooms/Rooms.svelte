@@ -21,7 +21,8 @@
     type Face,
   } from '../../faces';
   import { registerPwa } from '../../pwa';
-  import { rooms as defaultRooms, type RoomsState } from '../../rooms.svelte';
+  import { rooms as defaultRooms, roomFromUrl, type RoomsState } from '../../rooms.svelte';
+  import { loadRoomDraft, saveRoomDraft } from '../../storage';
   import { trackViewportHeight } from '../../viewport';
   import FacePanel from './FacePanel.svelte';
   import MembersPanel from './MembersPanel.svelte';
@@ -36,7 +37,9 @@
 
   let { store: rooms = defaultRooms }: Props = $props();
 
-  let draft = $state('');
+  /** Each room keeps what was being written in it. */
+  let draftRoom = roomFromUrl() ?? 'general';
+  let draft = $state(loadRoomDraft(draftRoom));
   let files = $state<File[]>([]);
   let sending = $state(false);
   let sendError = $state('');
@@ -50,6 +53,14 @@
   let now = $state(Date.now());
 
   const current = $derived(rooms.current);
+  $effect(() => {
+    const roomId = rooms.currentId;
+    if (roomId === draftRoom) return;
+    draftRoom = roomId;
+    draft = loadRoomDraft(roomId);
+    files = [];
+  });
+  $effect(() => saveRoomDraft(draftRoom, draft));
   const typingNow = $derived(rooms.typingIn(rooms.currentId, now));
   /** A face's name; the host is pirc until the faces are loaded. */
   const faceName = (id: string) => rooms.face(id)?.name ?? (id === HOST_FACE_ID ? 'pirc' : id);
@@ -148,8 +159,6 @@
   async function open(roomId: string) {
     listOpen = false;
     stuck = true;
-    draft = '';
-    files = [];
     await rooms.open(roomId);
   }
 

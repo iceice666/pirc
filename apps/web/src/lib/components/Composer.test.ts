@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { app } from '../app.svelte';
-import { seedApp, stubMatchMedia } from '../testing/app-state';
+import { engine } from '../engine.svelte';
+import { seedApp, stubMatchMedia } from '../testing/engine-state';
 import Composer from './Composer.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
@@ -50,7 +50,7 @@ function enter(textarea: HTMLTextAreaElement, init: KeyboardEventInit = {}) {
 
 describe('Composer', () => {
   it('sends a prompt with Enter and keeps Shift+Enter as a newline', () => {
-    const send = vi.spyOn(app, 'sendCommand').mockResolvedValue();
+    const send = vi.spyOn(engine, 'sendCommand').mockResolvedValue();
     const { textarea } = render();
     type(textarea, 'hello');
     expect(enter(textarea, { shiftKey: true }).defaultPrevented).toBe(false);
@@ -60,7 +60,7 @@ describe('Composer', () => {
   });
 
   it('does not send on Enter while an IME composes', () => {
-    const send = vi.spyOn(app, 'sendCommand').mockResolvedValue();
+    const send = vi.spyOn(engine, 'sendCommand').mockResolvedValue();
     const { textarea } = render();
     type(textarea, 'こんにちは');
     enter(textarea, { isComposing: true });
@@ -69,7 +69,7 @@ describe('Composer', () => {
 
   it('leaves Enter as a newline on touch keyboards; the button sends', () => {
     stubMatchMedia(true);
-    const send = vi.spyOn(app, 'sendCommand').mockResolvedValue();
+    const send = vi.spyOn(engine, 'sendCommand').mockResolvedValue();
     const { textarea, button } = render();
     type(textarea, 'line one');
     expect(enter(textarea).defaultPrevented).toBe(false);
@@ -79,12 +79,12 @@ describe('Composer', () => {
   });
 
   it('cannot send without control, a connection or text', () => {
-    const send = vi.spyOn(app, 'sendCommand').mockResolvedValue();
+    const send = vi.spyOn(engine, 'sendCommand').mockResolvedValue();
     const { textarea, button } = render();
     expect(button('Send message')!.disabled).toBe(true);
     type(textarea, 'hello');
     expect(button('Send message')!.disabled).toBe(false);
-    app.connection = 'offline';
+    engine.connection = 'offline';
     flushSync();
     expect(button('Send message')!.disabled).toBe(true);
     expect(target.textContent).toContain('You’re offline');
@@ -94,8 +94,8 @@ describe('Composer', () => {
 
   it('turns the primary button into stop during a run, and steers once text is typed', async () => {
     seedApp({ run: { id: 'run-1', status: 'running' } });
-    const send = vi.spyOn(app, 'sendCommand').mockResolvedValue();
-    const stop = vi.spyOn(app, 'stopRun').mockResolvedValue();
+    const send = vi.spyOn(engine, 'sendCommand').mockResolvedValue();
+    const stop = vi.spyOn(engine, 'stopRun').mockResolvedValue();
     const { textarea, button } = render();
     expect(button('Send message')).toBeNull();
     button('Stop run')!.click();
@@ -118,7 +118,7 @@ describe('Composer', () => {
   });
 
   it('attaches pasted images and keeps pasted text', () => {
-    const upload = vi.spyOn(app, 'uploadImages').mockResolvedValue();
+    const upload = vi.spyOn(engine, 'uploadImages').mockResolvedValue();
     const { textarea } = render();
     const image = new File(['x'], 'shot.png', { type: 'image/png' });
     const paste = (text: string) => {
@@ -140,7 +140,7 @@ describe('Composer', () => {
       run: { id: 'run-1', status: 'running' },
       queue: [{ id: 'follow-0', kind: 'follow_up', index: 0, content: 'next', createdAt: '' }],
     });
-    const sendNow = vi.spyOn(app, 'sendQueuedNow').mockResolvedValue();
+    const sendNow = vi.spyOn(engine, 'sendQueuedNow').mockResolvedValue();
     const { button } = render();
     expect(target.textContent).toContain('1 queued');
     button('Send now: next')!.click();
