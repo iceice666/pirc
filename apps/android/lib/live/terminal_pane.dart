@@ -676,8 +676,9 @@ class _NativeTerminalViewState extends State<NativeTerminalView>
                                   }
                                 },
                                 child: TerminalView(
+                                  // Preserve CustomTextEdit's IME connection
+                                  // while RenderTerminal swaps in a PTY replay.
                                   session.terminal,
-                                  key: ObjectKey(session.terminal),
                                   focusNode: focus,
                                   onKeyEvent: _zoomKey,
                                   autoResize: widget.visible,

@@ -114,6 +114,65 @@ void main() {
       );
     });
   });
+  testWidgets(
+    'terminal reconnect restores focused IME input on the new replay',
+    (t) async {
+      await withTerminal(t, (g) async {
+        TerminalView view() =>
+            t.widget<TerminalView>(find.byType(TerminalView));
+        await t.tap(find.byType(TerminalView));
+        await t.pump(const Duration(milliseconds: 350));
+        await t.pumpAndSettle();
+        expect(view().focusNode!.hasPrimaryFocus, isTrue);
+        expect(t.testTextInput.hasAnyClients, isTrue);
+        t.view.viewInsets = const FakeViewPadding(bottom: 280);
+        await t.pumpAndSettle();
+        final oldTerminal = view().terminal;
+        final oldTag = g.calls
+            .lastWhere((call) => call.$1 == 'socketOpen')
+            .$2['tag'];
+        g.stream.add({
+          'type': 'socketClosed',
+          'data': {'tag': oldTag, 'code': 1006},
+        });
+        await t.pump();
+        await t.pump(const Duration(milliseconds: 550));
+        await t.pump();
+        final newTag = g.calls
+            .lastWhere((call) => call.$1 == 'socketOpen')
+            .$2['tag'];
+        expect(newTag, isNot(oldTag));
+        g.stream.add({
+          'type': 'socket',
+          'data': {
+            'tag': newTag,
+            'frame': {'type': 'ready', 'replay': 'restored\r\n'},
+          },
+        });
+        await t.pumpAndSettle();
+        expect(identical(view().terminal, oldTerminal), isFalse);
+        expect(view().focusNode!.hasPrimaryFocus, isTrue);
+        expect(t.testTextInput.hasAnyClients, isTrue);
+        final before = g.calls
+            .where(
+              (call) =>
+                  call.$1 == 'socketSend' && call.$2['data']['type'] == 'input',
+            )
+            .length;
+        t.testTextInput.enterText('中文 after reconnect');
+        await t.pump();
+        final inputs = g.calls
+            .where(
+              (call) =>
+                  call.$1 == 'socketSend' && call.$2['data']['type'] == 'input',
+            )
+            .toList();
+        expect(inputs.length, before + 1);
+        expect(inputs.last.$2['tag'], newTag);
+        expect(inputs.last.$2['data']['data'], '中文 after reconnect');
+      });
+    },
+  );
   testWidgets('extra keys adapt to keyboard-sized and landscape viewports', (
     t,
   ) async {

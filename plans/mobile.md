@@ -158,9 +158,11 @@ prioritize the terminal surface and omit the helper row. Large font scales use
 horizontal scrolling rather than clipping labels. Dedicated gates cover emitted
 VT sequences, modifier consumption, paste, lease loss and small-height layouts.
 Actual OEM keyboard/CJK composing, sustained-output stress, latency and gesture
-feel still require the physical acceptance above. The existing reconnect replay
-replaces the terminal view/input connection; keyboard restoration across that
-replacement is not covered by the helper-key input-retention gate.
+feel still require the physical acceptance above. PTY reconnect/replay now swaps
+the terminal model while retaining xterm's input widget and its focused IME
+connection. A widget gate holds an open keyboard inset through reconnect and
+confirms CJK input reaches the new socket tag; OS process and OEM keyboard
+restoration still require physical acceptance.
 
 ## Deferred presentation and compatibility boundaries
 
