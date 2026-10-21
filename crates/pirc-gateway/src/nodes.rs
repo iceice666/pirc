@@ -15,8 +15,8 @@ use std::time::{Duration, Instant};
 use axum::extract::ws::WebSocket;
 use pirc_protocol::{
     AssistantDelta, InferenceRequest, Message, NODE_FRAME_MAX_BYTES, NODE_PROTOCOL_VERSION,
-    NodeHttpRequest, NodeHttpResponse, NodeMessage, NodeRole, PROTOCOL_MISMATCH_CLOSE,
-    RegisteredWorkspace, Registration,
+    NodeHttpRequest, NodeHttpResponse, NodeMessage, PROTOCOL_MISMATCH_CLOSE, RegisteredWorkspace,
+    Registration,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -99,7 +99,11 @@ impl Link {
 #[derive(Clone, Debug)]
 pub struct ConnectedNode {
     pub id: String,
-    pub role: NodeRole,
+    /// What its machine can do (plans/rewrite/08-nodes.md); `None` when it
+    /// did not say.
+    pub capabilities: Option<pirc_protocol::Capabilities>,
+    /// Its agents with an open run, from its latest activity.
+    pub running: usize,
     pub modes: Vec<pirc_protocol::ModeId>,
     pub workspaces: Vec<RegisteredWorkspace>,
     pub connected_at: i64,
@@ -122,9 +126,17 @@ impl Serialize for ConnectedNode {
                 None => serde_json::to_value(workspace).unwrap_or(Value::Null),
             })
             .collect();
-        let mut node = serializer.serialize_struct("ConnectedNode", 6)?;
+        let mut node = serializer.serialize_struct("ConnectedNode", 8)?;
         node.serialize_field("id", &self.id)?;
-        node.serialize_field("role", &self.role)?;
+        node.serialize_field("capabilities", &self.capabilities)?;
+        // Idle while `running < max`.
+        node.serialize_field(
+            "load",
+            &json!({
+                "running": self.running,
+                "max": self.capabilities.as_ref().map(|caps| caps.max_running),
+            }),
+        )?;
         // The mode ids this node accepts (`PIRC_MODES`), for create dialogs.
         node.serialize_field("modes", &self.modes)?;
         node.serialize_field("workspaces", &workspaces)?;
@@ -254,6 +266,13 @@ impl NodeRegistry {
 
     pub fn count(&self) -> usize {
         self.lock().connections.len()
+    }
+
+    /// The node's agents with an open run, from its activity.
+    pub fn set_running(&self, node_id: &str, running: usize) {
+        if let Some(connection) = self.lock().connections.get_mut(node_id) {
+            connection.node.running = running;
+        }
     }
 
     /// `raw` is the node's answer the workspace was parsed from, listed
@@ -668,8 +687,20 @@ fn valid_registration(registration: &Registration) -> bool {
             && name.len() <= 40
             && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
     };
+    let capabilities = registration.capabilities.as_ref().is_none_or(|caps| {
+        let short = |text: &str| chars(text) <= 40;
+        short(&caps.os)
+            && short(&caps.arch)
+            && short(&caps.sandbox.backend)
+            && short(&caps.sandbox.status)
+            && caps.gpus.len() <= 16
+            && caps.gpus.iter().all(|gpu| {
+                short(&gpu.vendor) && gpu.model.as_deref().is_none_or(|model| chars(model) <= 200)
+            })
+    });
     let mut ids = std::collections::HashSet::new();
-    registration.workspaces.len() <= 100
+    capabilities
+        && registration.workspaces.len() <= 100
         && registration.workspaces.iter().all(|workspace| {
             ids.insert(workspace.id.as_str())
                 && pirc_config::valid_node_id(&workspace.id)
@@ -820,7 +851,8 @@ impl LinkSession {
         let stamp = now_ms();
         let node = ConnectedNode {
             id: self.node_id.clone(),
-            role: parsed.role,
+            capabilities: parsed.capabilities,
+            running: 0,
             modes: parsed.modes,
             workspaces: parsed.workspaces,
             connected_at: stamp,

@@ -195,6 +195,10 @@ impl App {
     }
 
     pub fn on_node_activity(&self, node_id: &str, sessions: &[SessionActivity]) {
+        self.nodes.set_running(
+            node_id,
+            sessions.iter().filter(|item| item.run.is_some()).count(),
+        );
         let mut next = HashMap::new();
         for item in sessions {
             if let Ok(Some(session_id)) = self.db.lock().resolve_remote_session(node_id, &item.id) {

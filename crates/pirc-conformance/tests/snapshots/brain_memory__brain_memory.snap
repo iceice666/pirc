@@ -55,7 +55,8 @@ expression: stable(t.into_value())
         "call_worker",
         "worker_status",
         "stop_worker",
-        "answer_worker_question"
+        "answer_worker_question",
+        "workspace_read"
       ]
     },
     "step": "the first call's tools and preferences"

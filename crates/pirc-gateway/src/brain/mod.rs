@@ -15,6 +15,7 @@
 //! - [`waking`]: a wake turn (`crate::wake`): its prompt, input and tools.
 //! - [`worker_tools`]: calling workers (`crate::delegations`).
 
+pub mod hands;
 pub mod identity;
 mod loop_tools;
 pub mod loops;

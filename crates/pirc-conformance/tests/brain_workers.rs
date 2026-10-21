@@ -113,12 +113,16 @@ impl FakeNode {
             ("authorization", format!("Bearer {WORK_TOKEN}")),
         ];
         let mut socket: WebSocket = api.connect("/node/connect", &headers).await.open();
-        let register = json!({ "type": "register", "role": "node",
-            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
+        let register = json!({ "type": "register",
+            "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory", "scratch"],
             "workspaces": [
                 { "id": "repo", "displayName": "Repo", "mode": "directory",
                     "roles": [{ "name": "general", "description": "General work" }] },
-            ] });
+                { "id": "scratch", "displayName": "Scratch", "mode": "scratch" },
+            ],
+            "capabilities": { "os": "linux", "arch": "x86_64", "gpus": [], "browser": false,
+                "terminals": true, "sandbox": { "backend": "srt", "status": "active", "gpu": false },
+                "maxRunning": 4 } });
         assert_node_frame(&register);
         socket.send_json(&register).await;
         let registered = socket.next_json().await.expect("registered");
@@ -856,6 +860,50 @@ async fn brain_workers() {
         })
         .await,
     );
+    let (room, last) = room_since(&api, seen).await;
+    seen = last;
+    t.note("the room", room);
+
+    // No repository: a machine's scratch (plans/rewrite/08-nodes.md); a GPU
+    // nobody's sandbox reaches: no machine fits.
+    cluster.llm.push([
+        Reply::Tool {
+            id: "call_9".into(),
+            name: "call_worker".into(),
+            args: json!({ "task": "Plot last month's numbers.", "title": "A plot",
+                "node_hint": "linux" }),
+        },
+        Reply::Tool {
+            id: "call_10".into(),
+            name: "call_worker".into(),
+            args: json!({ "task": "Train a small model.", "gpu": true }),
+        },
+        Reply::Text("On it.".to_owned()),
+    ]);
+    let before = cluster.llm.requests().len();
+    send(&api, "plot last month's numbers, and train a small model").await;
+    socket.until(host_idle).await;
+    let listed = api.send("GET", "/api/workers?status=all", &me, None).await;
+    t.note(
+        "scratch, on a machine that fits",
+        json!(
+            listed.body["workers"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|w| w["title"] == "A plot")
+                .map(|w| json!([w["workspace"], w["workspaceId"]]))
+                .collect::<Vec<_>>()
+        ),
+    );
+    let results: Vec<Value> = cluster.llm.requests()[before + 2]["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["role"] == "tool" && m["tool_call_id"] == "call_10")
+        .map(|m| m["content"].clone())
+        .collect();
+    t.note("no machine fits", json!(results));
     let (room, _) = room_since(&api, seen).await;
     t.note("the room", room);
 

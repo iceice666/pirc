@@ -80,7 +80,8 @@ expression: stable(t.into_value())
       "call_worker",
       "worker_status",
       "stop_worker",
-      "answer_worker_question"
+      "answer_worker_question",
+      "workspace_read"
     ],
     "step": "a conversation's tools"
   },
@@ -785,7 +786,8 @@ expression: stable(t.into_value())
         "call_worker",
         "worker_status",
         "stop_worker",
-        "answer_worker_question"
+        "answer_worker_question",
+        "workspace_read"
       ],
       "wake": [
         "recall",
@@ -803,7 +805,8 @@ expression: stable(t.into_value())
         "schedule_wake",
         "cancel_wake",
         "call_worker",
-        "worker_status"
+        "worker_status",
+        "workspace_read"
       ]
     },
     "step": "a wake's tools have no stop_worker"
@@ -877,6 +880,60 @@ expression: stable(t.into_value())
         },
         "kind": "text",
         "threadId": "thread_<uuid:22>"
+      }
+    ],
+    "step": "the room"
+  },
+  {
+    "observed": [
+      [
+        "Scratch on work",
+        "work:scratch"
+      ]
+    ],
+    "step": "scratch, on a machine that fits"
+  },
+  {
+    "observed": [
+      "No machine fits (with a GPU its sandbox can use); say so in the room"
+    ],
+    "step": "no machine fits"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "text": "I asked a worker to: A plot (Scratch on work)",
+          "worker": {
+            "delegationId": "<worker:7>",
+            "note": "one of the 4 running workers to finish",
+            "readOnly": false,
+            "status": "queued",
+            "threadId": "thread_<uuid:23>",
+            "title": "A plot",
+            "workers": 1,
+            "workspace": "Scratch on work"
+          }
+        },
+        "kind": "text",
+        "threadId": "thread_<uuid:23>"
+      },
+      {
+        "body": {
+          "text": "The worker on “A plot” waits its turn (4 running).",
+          "worker": {
+            "delegationId": "<worker:7>",
+            "event": "busy",
+            "threadId": "thread_<uuid:23>"
+          }
+        },
+        "kind": "line"
+      },
+      {
+        "body": {
+          "text": "On it."
+        },
+        "kind": "text"
       }
     ],
     "step": "the room"

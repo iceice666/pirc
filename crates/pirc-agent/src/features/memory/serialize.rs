@@ -105,6 +105,22 @@ pub fn entry_origin(entries: &[SessionEntry], message: &Message) -> String {
     {
         return format!("tool:{BASH_NETWORK}");
     }
+    // The brain's look into a workspace names the workspace
+    // (plans/rewrite/08-nodes.md).
+    if let Message::ToolResult {
+        tool_name,
+        tool_call_id,
+        ..
+    } = message
+        && tool_name == "workspace_read"
+        && let Some(workspace) = tool_call_arguments(entries, tool_call_id)
+            .and_then(|arguments| arguments.get("workspace"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|workspace| !workspace.is_empty())
+    {
+        return format!("tool:workspace:{workspace}");
+    }
     message_origin(message)
 }
 

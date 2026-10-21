@@ -30,7 +30,7 @@ use crate::db::rooms::{HOST_FACE_ID, MessageKind, RoomStore, Speaker};
 use crate::db::{Store, Workspace, atomic};
 use crate::dispatch::{
     Progress, clip, deliver, is_watched_event, one_line, read_progress, redact_secrets,
-    resolve_directory_workspace, start_session, workspace_online,
+    start_session, workspace_online,
 };
 use crate::error::{ApiError, ApiResult};
 use crate::events::GatewayEvent;
@@ -484,8 +484,11 @@ pub struct NewWorker {
     pub user: String,
     pub task: String,
     pub title: Option<String>,
-    /// A workspace id, or a name only one workspace has.
+    /// A workspace id, a name (several of it: chosen by `hint`), or
+    /// `scratch`; none is a scratch workspace too.
     pub workspace: Option<String>,
+    /// Which machine suits it (`node_hint`, a GPU).
+    pub hint: crate::brain::hands::Hint,
     pub follows: Option<String>,
     pub role: Option<String>,
     pub read_only: bool,
@@ -565,22 +568,12 @@ pub fn call(app: &App, input: NewWorker) -> ApiResult<Delegation> {
         }
         (conn.get_workspace(&previous.workspace_id)?, Some(previous))
     } else {
-        let reference = input.workspace.as_deref().map(js_trim).unwrap_or_default();
-        if reference.is_empty() {
-            return Err(ApiError::new(
-                400,
-                "invalid_input",
-                "Name a workspace (they are listed under Workers in your prompt)",
-            ));
-        }
-        if reference == "scratch" {
-            return Err(ApiError::new(
-                400,
-                "invalid_input",
-                "There is no scratch workspace yet; name a directory workspace",
-            ));
-        }
-        (resolve_directory_workspace(app, reference)?, None)
+        // Its workspace, or a machine's scratch when it names none
+        // (plans/rewrite/08-nodes.md).
+        (
+            crate::brain::hands::choose(app, input.workspace.as_deref(), &input.hint)?,
+            None,
+        )
     };
     // The node is connected but no longer has the workspace (a link outlives
     // it on purpose): not a reason to wait for the node.
@@ -914,6 +907,7 @@ pub async fn interject(
                     task: text.clone(),
                     title: None,
                     workspace: None,
+                    hint: Default::default(),
                     follows: Some(delegation.id.clone()),
                     role: None,
                     read_only: delegation.read_only,
