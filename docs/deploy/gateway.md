@@ -101,6 +101,16 @@ The gateway runs the brain, the agent that answers in the rooms ([reference](../
 
 Each room's conversation with the brain is kept in `$PIRC_STATE_DIR/brain/rooms/<room>/`; back it up with the rest of the state directory.
 
+## Sources
+
+Sources are what the brain reads beyond the rooms ([guide](../guides/rooms-and-memory.md#sources), plans/rewrite/09-sources.md): a mailbox over IMAP, a calendar (an ICS address or CalDAV), a Moodle site through its web service API, a workspace's commits. They are added in **Web Settings → Models & sources**, on the same page and with the same device-management grant as the model backends; device tokens without that grant cannot reach `/api/sources`. No environment variable is needed.
+
+- **Credentials** (passwords, app passwords, ICS addresses, Moodle tokens) are kept in `$PIRC_STATE_DIR/sources/secrets.json` (directory 0700, file 0600, written whole through a rename). They are never returned by the API or shown to the brain, and nodes never get them. A Moodle password is used once to get a token and not kept.
+- **Gmail** works over IMAP with an app password (2-Step Verification on, [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)); a Google Workspace account whose admin turned app passwords off cannot be added yet (Gmail's API with your own OAuth client is a later step). Google Calendar works through its secret iCal address. Mailboxes are opened read-only and nothing is marked read.
+- **Moodle**: the user name and password the Moodle app takes, or, for a school that signs in on another page, the app login: Settings gives a link to the site's `admin/tool/mobile/launch.php`, and you paste back the `moodlemobile://token=…` address it ends at. The site must allow the Moodle app (if the official app signs in, this does). Only seven read-only web service functions are ever called.
+- **Polling**: email every 5 minutes, calendars every 15, Moodle every hour, workspaces once a day; a source that failed three times in a row is read half as often and said once in the room. Adding or changing a source tries it and takes a baseline, which wakes nobody; after that, the brain wakes only when a room follows the source or something new touches an open loop (within `PIRC_WAKES_PER_DAY`). What the polls saw (headers, never message bodies) is kept in `pirc.sqlite` (`source_items`) and deleted with its source.
+- **Network**: the gateway connects to the servers you give it: IMAP over TLS (port 993; plain text only to this machine), https only (plain http only to this machine).
+
 `PIRC_CONFIG_DIR` also holds gateway-owned [workspace modes](../guides/modes.md)
 in `modes/<id>.md`. The gateway seeds a missing directory with the
 default files, loads valid files at startup and on SIGHUP, and distributes the

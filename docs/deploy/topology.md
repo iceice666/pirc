@@ -60,6 +60,7 @@ The gateway host has no workspaces (`services.pirc.localNode.enable = false`, or
 | Rooms and their messages, session index, control leases, command outcomes, device tokens | gateway | `$PIRC_STATE_DIR/pirc.sqlite`, room uploads in `PIRC_UPLOADS_DIR`           |
 | Assistant memory, delegations, push subscriptions                                        | gateway | same database                                                               |
 | Web-managed model backends and subscription logins                                       | gateway | `$PIRC_STATE_DIR/backends/settings.json` (0600)                             |
+| Sources' credentials (mail, calendars, Moodle)                                           | gateway | `$PIRC_STATE_DIR/sources/secrets.json` (0600)                               |
 | VAPID key pair for push (unless given by environment)                                    | gateway | `$PIRC_STATE_DIR/vapid.json`                                                |
 | Session transcripts (the conversation source of truth), runs, interactions               | node    | `$PIRC_STATE_DIR/sessions/<id>/`, `gateway.sqlite`                          |
 | Uploads                                                                                  | node    | `$PIRC_STATE_DIR/uploads/`, and `<workspace>/.pirc/uploads/` for non-images |

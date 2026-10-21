@@ -1,4 +1,4 @@
-# Rooms, memory, open loops and workers
+# Rooms, memory, open loops, workers and sources
 
 [User guides](README.md) · [Assistant memory reference](../architecture/assistant-memory.md)
 
@@ -49,8 +49,9 @@ such, and never counts as your word for anything it does.
 
 ## When pirc speaks up by itself
 
-pirc wakes up on its own when an open loop's time comes, the day before a deadline, and
-when it said it would come back to something ("I'll look at your dotfiles tonight"). Awake,
+pirc wakes up on its own when an open loop's time comes, the day before a deadline,
+when it said it would come back to something ("I'll look at your dotfiles tonight"), and
+when one of your [sources](#sources) has something new that matters. Awake,
 it only reads and remembers: it never does anything for you that you did not ask for. It
 says something in the room, with a notification, only when it is worth saying: a loop's
 time always, the day before a deadline too, a look it took only when it found something.
@@ -65,6 +66,35 @@ change when it speaks up.
   loop's time is still said, as "Reminder: …", without pirc thinking about it.
 
 Settings → Wakes lists what is coming and how recent wakes went.
+
+## Sources
+
+pirc can read your mail, your calendars, Moodle and your repositories' commits. Add them in
+Settings → Models & sources:
+
+- **Email**: Gmail with an [app password](https://myaccount.google.com/apppasswords)
+  (2-Step Verification must be on), or another IMAP mailbox. pirc only reads; nothing is
+  marked read.
+- **Calendar**: an ICS address (Google Calendar's "Secret address in iCal format", Moodle's
+  calendar export) or a CalDAV calendar.
+- **Moodle**: your school's Moodle address with your user name and password, the way the
+  Moodle app signs in; only the token Moodle gives back is kept. If your school signs in on
+  another page, choose the app login and paste back the `moodlemobile://…` address it ends at.
+- **Workspace**: a repository; once a day pirc looks at its new commits.
+
+Adding one tries it first. pirc reads mail every 5 minutes, calendars every 15, Moodle every
+hour. Most of what it sees it only keeps (you can ask "did Prof. Lin write about HW3?"); it
+wakes up for something new only when it touches one of your open loops ("HW3 extended to
+Friday" when HW3 is open), or when the room follows the source: the **feed icon** in a room's
+header lists your sources, and a room that follows one hears of everything new in it. You can
+also just say "follow my school mail here". **Pause** stops pirc reading a source at all;
+**Read now** reads it at once; **What it saw** lists what it kept.
+
+What a source says is never your word: an email can say anything. pirc may remind you of it
+and remember it (the memory line says it came from the source), but it does nothing because an
+email said so. Passwords, tokens and calendar addresses stay on your gateway and are never
+shown again; to change one, use **Sign in again**. If a source cannot be read three times in a
+row, pirc says so once in the room.
 
 ## Workers
 

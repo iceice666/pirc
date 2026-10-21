@@ -66,16 +66,18 @@ trait Source {
 
 ## 工作項目
 
-- [ ] `sources/{mod,poller,store,secrets,items}.rs`；`source_items` + FTS（gateway migration）；API `GET/POST/PUT/DELETE /api/sources`、`POST /api/sources/:id/{test,pause,resume}`。
-- [ ] Rust 篩選：房間訂閱 / open loop FTS 命中 → 一次 poll 一個 wake；其餘只記。
-- [ ] Email（IMAP + app password，Gmail 擴充）；工具與 prompt 文案；body HTML → 純文字與截斷（02 的 bytes 上限）。
-- [ ] 行事曆（ICS + CalDAV）；工具。
-- [ ] Moodle（token 兩條登入路、白名單、輪詢）；工具。
-- [ ] Web search、workspace 包成 Source。
-- [ ] 房間 `sourceScope` 的 API（01 已有欄位）與頭腦工具 `room_sources`。
-- [ ] Web：Settings 來源區（含 Moodle SSO 貼回）；房間設定的來源勾選。
-- [ ] conformance：`sources.rs`（fake IMAP / ICS / Moodle server）：輪詢 → 命中 loop 才 wake、沒命中只進 `source_items`；暫停不輪詢；origin 標記；白名單外的 Moodle 函式不會被呼叫；憑證與 token 不出現在任何 API 回應。
-- [ ] 量 gateway 大小（`bun run size:check`，budget 32 MiB）。
+- [x] `sources/{mod,poller,store,secrets,items}.rs`；`source_items` + FTS（gateway migration）；API `GET/POST/PUT/DELETE /api/sources`、`POST /api/sources/:id/{test,pause,resume}`。（2026-10-21）`crates/pirc-gateway/src/sources.rs` + `sources/{store,secrets,poller,filter,tools,net}.rs`；items 在 `store.rs`（沒有另開 `items.rs`）。pirc.sqlite schema 7（`migrations/7-sources.sql`：`sources` 多了 `failures`、`noted_at`；`source_items` + `source_items_fts`，索引重建時一起重建）。憑證 `$PIRC_STATE_DIR/sources/secrets.json`（目錄 0700、檔案 0600、rename 寫入）。API 另加 `POST /api/sources/:id/poll`（立刻讀，等進行中的那次）、`GET /api/sources/:id/items?q=&limit=`、`POST /api/sources/moodle/launch`；device token 擋在 `auth::device_denied`，management grant 走 `Providers`（#6）。新增 / 改設定時先試、再**當場**取 baseline（計畫是下一次 poll 才取）：避免 poller 與 API 撞在一起，也讓來源一加就有東西。poller 是一個每 ≤60 秒看一次的迴圈（不是每來源一個 timer）；連 3 次失敗後間隔加倍。
+- [x] Rust 篩選：房間訂閱 / open loop FTS 命中 → 一次 poll 一個 wake；其餘只記。（2026-10-21）`sources/filter.rs`：「命中」是共用一個特徵詞（含數字的詞如 `hw3`、三字母以上的非常見詞、CJK 雙字，切法同搜尋索引），loop 超過兩個詞時要兩個；房間訂閱優先（wake 在該房間），否則 loop 的房間。wake trigger `{sourceId, name, sourceKind, reason, loopIds, items(≤10), more}`；baseline 不 wake。
+- [x] Email（IMAP + app password，Gmail 擴充）；工具與 prompt 文案；body HTML → 純文字與截斷（02 的 bytes 上限）。（2026-10-21）偏離：沒用 `async-imap`，`sources/imap.rs` 是自寫的小 client（LOGIN / EXAMINE / UID SEARCH / FETCH BODY.PEEK / LOGOUT，literal 收發、TLS 用 platform verifier，明文只限 loopback），gateway 少一串依賴；MIME 用 `mail-parser`（`full_encoding`，Big5 等）。Gmail 用 `X-GM-RAW`、`X-GM-THRID`（item 的 url 指向 Gmail 討論串）。工具 `email_list`、`email_search`、`email_read`（本文 20k 字、讀 512 KiB）。
+- [x] 行事曆（ICS + CalDAV）；工具。（2026-10-21）`sources/ics.rs` 自寫 parser 與重複展開（DAILY–YEARLY、INTERVAL、COUNT、UNTIL、BYDAY 含序數、BYMONTHDAY、BYMONTH、EXDATE、RECURRENCE-ID 覆寫；其他部分只給第一次並註明），時區用 chrono-tz（TZID 取 IANA 名，其他與浮動時間用家裡的時區）。一個事件一個 item（不是每次發生），被刪的事件 summary 前加 `Removed:`。CalDAV 要填 calendar collection 的網址（沒做 discovery）。工具 `calendar_list`（預設 7 天、最多 92 天、不給 source 就全部）、`calendar_read`。
+- [x] Moodle（token 兩條登入路、白名單、輪詢）；工具。（2026-10-21）`sources/moodle.rs`：`call()` 拒絕 `READ_ONLY` 以外的函式；帳密只換 token 不存；launch 驗簽 `md5(siteurl + passport)`（passport 30 分鐘）。輪詢 = action events（60 天）差異 + 比上次新的通知。工具 `moodle_deadlines`、`moodle_courses`、`moodle_course`、`moodle_assignment`、`moodle_forum`、`moodle_notifications`。
+- [x] Web search、workspace 包成 Source。（2026-10-21）偏離：workspace 來源要自己加（`kind: workspace`，`config {workspace}`），不是每個 workspace 自動都是；一天一次用 08 的 `git_log` 比對 head。web search 不是一列 source：`GET /api/sources` 回 `webSearch.available`，工具仍是 02 的 `web_search`。另加 `source_search`（搜 `source_items`）。
+- [x] 房間 `sourceScope` 的 API（01 已有欄位）與頭腦工具 `room_sources`。（2026-10-21）格式 `{sources: [id…]}`（其他鍵保留）；`room_sources {follow?, unfollow?}` 改了就在房間出一行，wake 時不在工具清單（`NOT_IN_WAKES`）。沒有該類來源的工具整組藏起來（`sources::tools::unused`）；prompt 有 `sources` 節（沒來源時沒有）。
+- [x] Web：Settings 來源區（含 Moodle SSO 貼回）；房間設定的來源勾選。（2026-10-21）`SourceSettings.svelte` 在 Settings 的「Models & sources」頁（原 Models）：新增（試過才存）、Read now、Test、Pause / Resume、Sign in again、Remove（再按一次確認）、What it saw。房間頂列的 feed 圖示（`RoomSources.svelte`）勾選要訂閱的來源。wake 列表的來源 wake 寫出來源名。
+- [x] conformance：`sources.rs`（fake IMAP / ICS / Moodle server）：輪詢 → 命中 loop 才 wake、沒命中只進 `source_items`；暫停不輪詢；origin 標記；白名單外的 Moodle 函式不會被呼叫；憑證與 token 不出現在任何 API 回應。（2026-10-21）另驗：錯的密碼 400；房間訂閱的行事曆有變化 → wake（無聲）；連 3 次失敗房間出一行；Moodle 帳密錯 400 `invalid_login`；不是這裡開始的 app login 被拒；頭腦讀 Moodle；fake IMAP 只收到 LOGIN / EXAMINE / FETCH / UID FETCH / LOGOUT；四個 secret 也不在任何一次 model request 裡。
+- [x] 量 gateway 大小（`bun run size:check`，budget 32 MiB）。（2026-10-21）release gateway 15.88 → 17.22 MiB（budget 32 MiB）；node 不變。
+
+另外（計畫沒寫、做了）：來源內容一律圍起來當不可信內容（`<<<SOURCE_CONTENT id=…>>>`，同 web results 的作法），工具結果、`source_search` 與 wake 收到的變化清單都是；source wake 的輸入以 `details.origin` 帶 `tool:<source>`（`pirc-agent` `entry_origin` 認這個與工具的 `source` 參數）。
 
 ### 第二步（不在第一版）
 
@@ -85,9 +87,13 @@ trait Source {
 ## 驗證
 
 - conformance `sources`、`brain_wake`（來源觸發）。
-- 手動：接真 Gmail（個人與學校），寄一封信給自己 → 5 分內進 `source_items`；有相關 loop 時 `#general` 出現摘要，否則無聲；暫停後不再。接真 Moodle，`moodle_deadlines` 列出這週的作業。
+- 手動（待做，要真帳號）：接真 Gmail（個人與學校），寄一封信給自己 → 5 分內進 `source_items`；有相關 loop 時 `#general` 出現摘要，否則無聲；暫停後不再。接真 Moodle，`moodle_deadlines` 列出這週的作業。
+
+**結果（2026-10-21）**：`cargo test -p pirc-gateway` 167 passed（新增 `sources::*` 23 個：IMAP parser 與對 loopback 假 server 的整段 session、ICS 解析與重複規則、CalDAV 回應、Moodle 網址 / launch 驗簽 / 白名單、篩選、store、secrets 權限、圍欄；`auth`、`management` 的來源路由）；`-p pirc-agent` 341 + 34（新增 `source_reads_name_their_source`）、`-p pirc-config` 39；`cargo clippy --workspace --all-targets` 無警告；web `vitest` 334 passed（新增 `sources.test.ts`、`SourceSettings.test.ts`）、`svelte-check` 0；`bun run --filter @pirc/web build` + release build 後完整 conformance 全過（新快照 `sources`，既有快照沒變）。手動接真 Gmail / Moodle 還沒做。
 
 ## 文件
+
+（2026-10-21）`docs/deploy/gateway.md`（Sources 節）、`secrets.md`、`backup-and-recovery.md`、`topology.md`、`upgrades.md`（schema 7）、`docs/architecture/security-decisions.md`（Sources are read-only and untrusted）、`prompt-context.md`、`docs/development/gateway-and-node.md`（Sources API）、`docs/guides/rooms-and-memory.md`（Sources 節，guide 改名含 sources）。
 
 - `docs/deploy/gateway.md` 來源設定與憑證位置；`security-decisions.md`：來源內容不可信、origin 是防線、app password 是整個信箱的權限（程式只讀，憑證在 gateway）、Moodle token 只呼叫白名單；`docs/guides/` 新 guide 的來源段。
 

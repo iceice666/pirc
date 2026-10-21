@@ -85,6 +85,14 @@ for chat projects' instructions, nor follows `SOUL.md` / `CHAT.md` links out
 of a node's config directory to protect their targets (the brain's prompts live
 on the gateway; the config directory itself stays read-only to agents).
 
+The brain reads sources (plans/rewrite/09-sources.md): mailboxes over IMAP,
+calendars, Moodle and workspaces, added in Settings → Models & sources. On first
+start `pirc.sqlite` migrates to schema 7: the `sources`, `source_items` and
+`source_items_fts` tables. An older gateway refuses schema 7. Credentials go to
+`$PIRC_STATE_DIR/sources/secrets.json` (0600); back it up with the state
+directory. The routes are `/api/sources` and below, reachable by device tokens
+only with the backends' management grant. Nothing changes for nodes.
+
 ## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13
