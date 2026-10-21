@@ -31,6 +31,7 @@ mod rooms;
 mod routes;
 mod slots;
 mod sockets;
+mod sources;
 mod threads;
 mod time;
 mod util;
@@ -147,6 +148,8 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
         log::warn("PIRC_BRAIN=false: no brain answers in the rooms");
     }
     app.devices.start_sweeper();
+    // Sources are read whether or not the brain runs (it only wakes for them).
+    sources::poller::start(&app);
     let listener = tokio::net::TcpListener::bind((host.as_str(), port))
         .await
         .map_err(|error| format!("cannot listen on {}:{}: {error}", host, port))?;

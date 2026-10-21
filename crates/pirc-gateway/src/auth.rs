@@ -135,16 +135,22 @@ fn bearer_token(authorization: &str) -> &str {
     token
 }
 
-/// Routes a device token may not reach: device management and model backends/credentials.
+/// Routes a device token may not reach: device management, model
+/// backends/credentials and the sources' credentials.
 fn device_denied(path: &str) -> bool {
     let decoded = percent_decode(path);
     [path, decoded.as_str()].iter().any(|path| {
-        ["/api/devices", "/api/providers", "/api/provider-auth"]
-            .iter()
-            .any(|prefix| {
-                path.strip_prefix(prefix)
-                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
-            })
+        [
+            "/api/devices",
+            "/api/providers",
+            "/api/provider-auth",
+            "/api/sources",
+        ]
+        .iter()
+        .any(|prefix| {
+            path.strip_prefix(prefix)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+        })
     })
 }
 
@@ -465,6 +471,8 @@ mod tests {
             "/api/devices/x",
             "/api/providers",
             "/api/%64evices",
+            "/api/sources",
+            "/api/sources/email:gmail/test",
         ] {
             assert_eq!(
                 check("127.0.0.1", &device, path, None, false)

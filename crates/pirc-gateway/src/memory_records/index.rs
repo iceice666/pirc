@@ -69,6 +69,35 @@ pub fn put_delegation(
     Ok(())
 }
 
+/// Index (or index again) what a source saw (plans/rewrite/09-sources.md):
+/// its title, who and summary, as one text.
+pub fn put_source_item(conn: &Connection, id: &str, text: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM source_items_fts WHERE id=?", [id])?;
+    conn.execute(
+        "INSERT INTO source_items_fts (id, terms) VALUES (?,?)",
+        params![id, index_terms(text)],
+    )?;
+    Ok(())
+}
+
+/// Drop the index rows of a source's items (the source is deleted).
+pub fn delete_source_items(conn: &Connection, source_id: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM source_items_fts WHERE id IN (SELECT id FROM source_items WHERE source_id=?)",
+        [source_id],
+    )?;
+    Ok(())
+}
+
+/// Merge the source items' index segments (after a source is deleted).
+pub fn optimize_source_items(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO source_items_fts(source_items_fts) VALUES('optimize')",
+        [],
+    )?;
+    Ok(())
+}
+
 /// Drop the index rows of delegations that are gone.
 pub fn prune_delegations(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute(
@@ -106,6 +135,7 @@ pub fn ensure(conn: &Connection) -> rusqlite::Result<()> {
     }
     conn.execute("DELETE FROM memory_records_fts", [])?;
     conn.execute("DELETE FROM delegations_fts", [])?;
+    conn.execute("DELETE FROM source_items_fts", [])?;
     let records: Vec<(String, String, String, String)> = {
         let mut statement = conn.prepare(
             "SELECT node_id, ledger_key, id, content FROM memory_records WHERE status IN ('active','superseded')",
@@ -132,6 +162,18 @@ pub fn ensure(conn: &Connection) -> rusqlite::Result<()> {
     };
     for (id, title, task, result) in delegations {
         put_delegation(conn, &id, &title, &task, result.as_deref())?;
+    }
+    let items: Vec<(String, String)> = {
+        let mut statement = conn.prepare(&format!(
+            "SELECT id, {} FROM source_items",
+            crate::sources::store::ITEM_TERMS_SQL
+        ))?;
+        statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<_, _>>()?
+    };
+    for (id, text) in items {
+        put_source_item(conn, &id, &text)?;
     }
     optimize(conn)?;
     conn.execute(

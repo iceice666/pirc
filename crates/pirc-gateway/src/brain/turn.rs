@@ -18,6 +18,7 @@ use tokio::sync::Notify;
 
 use super::loop_tools::LoopsFeature;
 use super::memory::{BrainPromoter, MemoryFeature, RoomMemory};
+use super::source_tools::SourcesFeature;
 use super::store::{brain_dir, room_dir};
 use super::ui::BrainUi;
 use super::waking::WakeFeature;
@@ -110,6 +111,10 @@ impl RoomAgent {
                 Rc::new(WorkerFeature {
                     memory: memory.clone(),
                     progress: progress.clone(),
+                    runtime: runtime.clone(),
+                }),
+                Rc::new(SourcesFeature {
+                    memory: memory.clone(),
                     runtime: runtime.clone(),
                 }),
             ],

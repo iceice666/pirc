@@ -31,14 +31,14 @@ use pirc_agent::agent::Delivery;
 use pirc_agent::stream::StreamFn;
 use pirc_agent::tools::Tool;
 use pirc_protocol::StopReason;
-use serde_json::json;
+use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use super::store::{Outcome, TurnStore};
 use super::turn::{RoomAgent, compose, post_line};
 use super::waking::{NOT_IN_WAKES, ONLY_IN_WAKES};
-use super::{Command, identity, loops, memory, presence, waking, worker_tools};
+use super::{Command, identity, loops, memory, presence, source_tools, waking, worker_tools};
 use crate::app::AppState;
 use crate::db::rooms::{Pending, RoomInputStore, RoomStore};
 use crate::rooms::TYPING_TTL_MS;
@@ -320,14 +320,15 @@ impl Scheduler {
         remembered.insert(1.min(remembered.len()), open_loops);
         prompt.extend(remembered);
         prompt.push(worker_tools::section(&self.app, false));
+        prompt.extend(source_tools::section(&self.app, room_id));
         room.memory.set_speakers(speakers);
         room.agent.set_base_prompt(prompt);
-        room.agent.set_hidden_tools(
-            ONLY_IN_WAKES
-                .iter()
-                .map(|name| (*name).to_owned())
-                .collect(),
-        );
+        let mut hidden: Vec<String> = ONLY_IN_WAKES
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect();
+        hidden.extend(crate::sources::tools::unused(&self.app));
+        room.agent.set_hidden_tools(hidden);
         room.agent.refresh_models().await;
         let turn = match self.app.db.lock().start_turn(room_id, "user", &ids) {
             Ok(turn) => turn,
@@ -440,10 +441,12 @@ impl Scheduler {
         remembered.insert(1.min(remembered.len()), open_loops);
         prompt.extend(remembered);
         prompt.push(worker_tools::section(&self.app, true));
+        prompt.extend(source_tools::section(&self.app, &due.room_id));
         room.memory.set_speakers(speakers);
         room.agent.set_base_prompt(prompt);
-        room.agent
-            .set_hidden_tools(NOT_IN_WAKES.iter().map(|name| (*name).to_owned()).collect());
+        let mut hidden: Vec<String> = NOT_IN_WAKES.iter().map(|name| (*name).to_owned()).collect();
+        hidden.extend(crate::sources::tools::unused(&self.app));
+        room.agent.set_hidden_tools(hidden);
         room.agent.refresh_models().await;
         let turn = match self.app.db.lock().start_turn(&due.room_id, "wake", &[]) {
             Ok(turn) => turn,
@@ -470,7 +473,14 @@ impl Scheduler {
                 custom_type: "wake".to_owned(),
                 content: input,
                 display: false,
-                details: Some(serde_json::json!({ "wakeId": started.id, "kind": started.kind })),
+                // What a source woke it with is the source's: its origin
+                // goes with what the brain keeps from it.
+                details: Some(match started.trigger.get("sourceId").and_then(Value::as_str) {
+                    Some(source) if started.kind == wake::Kind::Source.as_str() => serde_json::json!({
+                        "wakeId": started.id, "kind": started.kind, "origin": format!("tool:{source}"),
+                    }),
+                    _ => serde_json::json!({ "wakeId": started.id, "kind": started.kind }),
+                }),
             },
             true,
             false,

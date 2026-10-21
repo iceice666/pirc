@@ -26,6 +26,7 @@ use crate::util::{payload_hash, present};
 pub mod brain;
 pub mod loops;
 pub mod rooms;
+pub mod sources;
 pub mod threads;
 pub mod wakes;
 

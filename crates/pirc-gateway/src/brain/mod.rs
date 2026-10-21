@@ -14,6 +14,7 @@
 //! - [`loops`]: the open loops, always in its prompt.
 //! - [`waking`]: a wake turn (`crate::wake`): its prompt, input and tools.
 //! - [`worker_tools`]: calling workers (`crate::delegations`).
+//! - [`source_tools`]: reading the sources (`crate::sources`).
 
 pub mod hands;
 pub mod identity;
@@ -21,6 +22,7 @@ mod loop_tools;
 pub mod loops;
 mod memory;
 mod scheduler;
+mod source_tools;
 pub mod store;
 mod stream;
 #[cfg(test)]
@@ -30,6 +32,8 @@ mod turn;
 mod ui;
 mod waking;
 mod worker_tools;
+
+pub(crate) use worker_tools::readable as readable_workspace;
 
 use std::collections::HashMap;
 use std::rc::Rc;

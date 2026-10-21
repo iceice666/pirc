@@ -49,7 +49,7 @@ const MAX_PHRASES: usize = 32;
 
 /// Han, kana and Hangul: scripts written without spaces, indexed as
 /// overlapping character pairs.
-fn spaceless(c: char) -> bool {
+pub fn spaceless(c: char) -> bool {
     matches!(c,
         '\u{3040}'..='\u{30ff}' // hiragana, katakana
         | '\u{31f0}'..='\u{31ff}' // katakana extensions

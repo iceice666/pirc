@@ -600,6 +600,7 @@ fn capability_for_route(method: &str, pathname: &str) -> Option<ManagementCapabi
         || ((method == "GET" || method == "DELETE")
             && one_segment_after(pathname, "/api/provider-auth/sessions/"))
         || (method == "POST" && one_segment_before_input(pathname))
+        || source_route(&method, pathname)
     {
         return Some(ManagementCapability::Providers);
     }
@@ -609,6 +610,25 @@ fn capability_for_route(method: &str, pathname: &str) -> Option<ManagementCapabi
         return Some(ManagementCapability::Devices);
     }
     None
+}
+
+/// The sources API (plans/rewrite/09-sources.md) goes with the model
+/// backends' grant (decision #6): the same page, the same credentials file
+/// permissions.
+fn source_route(method: &str, pathname: &str) -> bool {
+    let Some(rest) = pathname.strip_prefix("/api/sources") else {
+        return false;
+    };
+    let segments: Vec<&str> = rest.split('/').skip(1).collect();
+    match (method, segments.as_slice()) {
+        ("GET" | "POST", []) => rest.is_empty(),
+        ("POST", ["moodle", "launch"]) => true,
+        ("PUT" | "DELETE", [id]) => !id.is_empty(),
+        ("POST", [id, "test" | "pause" | "resume" | "poll"]) | ("GET", [id, "items"]) => {
+            !id.is_empty()
+        }
+        _ => false,
+    }
 }
 
 fn one_segment_after(pathname: &str, prefix: &str) -> bool {
@@ -1132,6 +1152,25 @@ mod tests {
             Some(ManagementCapability::Devices)
         );
         for (method, path) in [
+            ("GET", "/api/sources"),
+            ("POST", "/api/sources"),
+            ("POST", "/api/sources/moodle/launch"),
+            ("PUT", "/api/sources/email:gmail"),
+            ("DELETE", "/api/sources/email:gmail"),
+            ("POST", "/api/sources/email:gmail/poll"),
+            ("GET", "/api/sources/email:gmail/items"),
+        ] {
+            assert_eq!(
+                capability_for_route(method, path),
+                Some(ManagementCapability::Providers),
+                "{method} {path}"
+            );
+        }
+        for (method, path) in [
+            ("GET", "/api/sources/"),
+            ("GET", "/api/sourcesx"),
+            ("POST", "/api/sources/email:gmail/delete"),
+            ("PUT", "/api/sources/a/b"),
             ("HEAD", "/api/providers"),
             ("GET", "/api/providers/"),
             ("POST", "/api/devices/x"),

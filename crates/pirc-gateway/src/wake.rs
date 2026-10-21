@@ -1,7 +1,7 @@
 //! Waking up (plans/rewrite/05-self-wake.md): the brain wakes when nobody
 //! called it — an open loop's time came (or the day before an `autoClose`
 //! time: a deadline, a meeting), it asked to come back (`schedule_wake`),
-//! or (plan 09) a source changed. A wake only reads and remembers; it says
+//! or a source changed (`crate::sources`). A wake only reads and remembers; it says
 //! something in the room only when it calls `speak`, and otherwise nothing
 //! shows there (the engine lists it).
 //!
@@ -39,8 +39,8 @@ const PUSH_MAX: usize = 180;
 pub enum Kind {
     /// An open loop's time anchor (`trigger: {loopId, moment, at, autoClose}`).
     Anchor,
-    /// A source changed (plan 09).
-    #[allow(dead_code, reason = "sources start in plan 09")]
+    /// A source changed (plans/rewrite/09-sources.md: `trigger: {sourceId,
+    /// name, sourceKind, reason, loopIds, items, more}`).
     Source,
     /// It asked to come back (`trigger: {at, why}`).
     SelfScheduled,
@@ -443,7 +443,7 @@ pub fn say(app: &App, wake: &Wake, cancelled: bool) {
     );
 }
 
-fn post_line(app: &App, room_id: &str, body: &Value) {
+pub(crate) fn post_line(app: &App, room_id: &str, body: &Value) {
     let posted = app.db.lock().post_message(
         room_id,
         Speaker::Face(HOST_FACE_ID),
@@ -529,7 +529,7 @@ pub fn describe(app: &App, wake: &Wake) -> String {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
         ),
-        _ => format!("A source changed: {}", wake.trigger),
+        _ => crate::sources::poller::describe(app, &wake.trigger),
     }
 }
 

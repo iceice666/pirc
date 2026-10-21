@@ -571,7 +571,10 @@ impl WorkerTool {
 /// A workspace `workspace_read` may look into: a worker's target whose
 /// mode works in the workspace itself (a repository, not a per-session
 /// directory), on a node that is online.
-fn readable(app: &App, reference: &str) -> crate::error::ApiResult<crate::db::Workspace> {
+pub(crate) fn readable(
+    app: &App,
+    reference: &str,
+) -> crate::error::ApiResult<crate::db::Workspace> {
     let workspace = crate::dispatch::resolve_directory_workspace(app, reference)?;
     let mode = app.mode(&workspace.mode);
     if !mode.is_some_and(|mode| mode.workdir == pirc_protocol::mode::Workdir::Workspace) {
