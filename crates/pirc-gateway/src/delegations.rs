@@ -998,6 +998,7 @@ pub async fn answer(
     body["answer"] = given.clone();
     let updated = threads::update(&app.db.lock(), &question.id, &body)?;
     app.thread_message_updated(&updated);
+    settle_room_question(app, &delegation, &updated.body);
     schedule(app, delegation.id.clone());
     Ok(json!({ "interactionId": interaction_id, "status": "answered" }))
 }
@@ -1517,11 +1518,25 @@ fn questions(app: &App, delegation: &Delegation, dialogs: &[Value]) {
     for question in &pending {
         let id = question.body["interactionId"].as_str().unwrap_or_default();
         if !ids.contains(&id) {
+            // Gone unanswered from here once its time was up: the node
+            // withdrew it and the worker heard no.
+            let expired = question.body["expiresAt"]
+                .as_i64()
+                .is_some_and(|at| at <= now_ms());
             let mut body = question.body.clone();
-            body["status"] = json!("answered");
+            body["status"] = json!(if expired { "expired" } else { "answered" });
             let updated = threads::update(&app.db.lock(), &question.id, &body);
             if let Ok(updated) = updated {
                 app.thread_message_updated(&updated);
+                settle_room_question(app, delegation, &updated.body);
+            }
+            if expired && question.body["roomMessageId"].is_string() {
+                room_line(
+                    app,
+                    delegation,
+                    "Nobody answered in time, so the worker was told no.",
+                    "question_expired",
+                );
             }
         }
     }
@@ -1546,6 +1561,7 @@ fn questions(app: &App, delegation: &Delegation, dialogs: &[Value]) {
             "prefill",
             "confirmLabel",
             "cancelLabel",
+            "allowAgain",
         ] {
             if let Some(value) = dialog["request"].get(key).filter(|value| !value.is_null()) {
                 request.insert(key.into(), value.clone());
@@ -1573,7 +1589,15 @@ fn questions(app: &App, delegation: &Delegation, dialogs: &[Value]) {
                 depth: 0,
             },
         );
-        if posted.is_some() {
+        let Some(posted) = posted else {
+            continue;
+        };
+        // A confirmation is one of the two red lines (leaving the sandbox,
+        // sending something out; plans/rewrite/07-red-lines.md): it is
+        // asked in the room itself, where a person's next words answer it.
+        if dialog["kind"] == "confirm" || request.get("method") == Some(&json!("confirm")) {
+            ask_in_room(app, delegation, &posted, &request);
+        } else {
             let text = format!(
                 "A worker is asking: {} (answer in the thread)",
                 clip(&asked, 300)
@@ -1655,6 +1679,7 @@ fn finish(app: &AppState, id: &str, status: &str, result: &str) {
             let updated = threads::update(&app.db.lock(), &question.id, &body);
             if let Ok(updated) = updated {
                 app.thread_message_updated(&updated);
+                settle_room_question(app, &delegation, &updated.body);
             }
         }
         let text = if status == "completed" {
@@ -1761,6 +1786,161 @@ fn room_line(app: &App, delegation: &Delegation, text: &str, event: &str) {
             delegation.id, delegation.room_id, error.message
         )),
     }
+}
+
+/// A worker's red-line question (`question`, already in its thread) asked
+/// in its room as a `question` message, with a push: "may it?" The room
+/// message carries the thread question's state and is kept in step with it
+/// ([`settle_room_question`]).
+fn ask_in_room(
+    app: &App,
+    delegation: &Delegation,
+    question: &threads::ThreadMessage,
+    request: &Map<String, Value>,
+) {
+    let field = |key: &str| request.get(key).and_then(Value::as_str).unwrap_or_default();
+    let mut text = format!(
+        "The worker for “{}” asks: {}",
+        delegation.title,
+        field("title")
+    );
+    let message = field("message");
+    if !message.is_empty() {
+        text.push_str("\n\n");
+        text.push_str(&clip(message, 1_200));
+    }
+    let posted = app.db.lock().post_message(
+        &delegation.room_id,
+        Speaker::Face(delegation.face()),
+        MessageKind::Question,
+        &json!({
+            "text": text,
+            "question": {
+                "interactionId": question.body["interactionId"],
+                "threadMessageId": question.id,
+                "request": request,
+                "status": "pending",
+                "expiresAt": question.body["expiresAt"],
+            },
+            "worker": {
+                "delegationId": delegation.id,
+                "threadId": delegation.thread_id,
+                "event": "question",
+            },
+        }),
+    );
+    let message = match posted {
+        Ok(message) => message,
+        Err(error) => {
+            crate::log::warn(&format!(
+                "worker {}: cannot ask in {}: {}",
+                delegation.id, delegation.room_id, error.message
+            ));
+            return;
+        }
+    };
+    app.room_message(&message);
+    let room = app.db.lock().get_room(&delegation.room_id);
+    if let Ok(room) = room {
+        app.room_changed(&room);
+    }
+    let mut body = question.body.clone();
+    body["roomMessageId"] = json!(message.id);
+    let updated = threads::update(&app.db.lock(), &question.id, &body);
+    if let Ok(updated) = updated {
+        app.thread_message_updated(&updated);
+    }
+    push(
+        app,
+        delegation,
+        &format!(
+            "A worker waits for your answer: {}",
+            clip(&one_line(field("title")), 200)
+        ),
+    );
+}
+
+/// The room's copy of a red-line question follows its thread question:
+/// answered (and how), expired or cancelled.
+fn settle_room_question(app: &App, delegation: &Delegation, question: &Value) {
+    let Some(message_id) = question["roomMessageId"].as_str() else {
+        return;
+    };
+    let updated = {
+        let conn = app.db.lock();
+        let Ok(message) = conn.get_message(&delegation.room_id, message_id) else {
+            return;
+        };
+        let mut body = message.body.clone();
+        body["question"]["status"] = question["status"].clone();
+        for key in ["answer", "answeredBy"] {
+            if let Some(value) = question.get(key) {
+                body["question"][key] = value.clone();
+            }
+        }
+        if body == message.body {
+            return;
+        }
+        conn.update_message(&delegation.room_id, message_id, &body, false)
+    };
+    match updated {
+        Ok(message) => app.room_message_updated(&message),
+        Err(error) => crate::log::warn(&format!(
+            "worker {}: cannot update its question: {}",
+            delegation.id, error.message
+        )),
+    }
+}
+
+/// Red-line questions still waiting, for the brain's prompt: `(interaction
+/// id, room, worker title, what it asks)`.
+pub fn waiting_questions(app: &App, limit: usize) -> Vec<(String, String, String, String)> {
+    let conn = app.db.lock();
+    let pending = threads::pending_questions(&conn, limit).unwrap_or_default();
+    pending
+        .into_iter()
+        .filter(|question| question.body["roomMessageId"].is_string())
+        .filter_map(|question| {
+            let delegation = get(&conn, question.body["delegationId"].as_str()?).ok()?;
+            let request = &question.body["request"];
+            let asked = [request["title"].as_str(), request["message"].as_str()]
+                .into_iter()
+                .flatten()
+                .map(one_line)
+                .collect::<Vec<_>>()
+                .join(": ");
+            Some((
+                question.body["interactionId"].as_str()?.to_owned(),
+                delegation.room_id,
+                delegation.title,
+                clip(&asked, 400),
+            ))
+        })
+        .collect()
+}
+
+/// The thread and owner of a waiting red-line question, for the brain's
+/// `answer_worker_question`: `(thread id, whom the worker works for)`.
+pub fn question_target(app: &App, interaction_id: &str) -> ApiResult<(String, String, String)> {
+    let conn = app.db.lock();
+    let question = threads::question_anywhere(&conn, interaction_id)?
+        .ok_or_else(|| ApiError::not_found(format!("No question {interaction_id}")))?;
+    if question.body["status"] != "pending" {
+        return Err(ApiError::new(
+            409,
+            "stale_interaction",
+            "That question is no longer waiting",
+        ));
+    }
+    let delegation = get(
+        &conn,
+        question.body["delegationId"].as_str().unwrap_or_default(),
+    )?;
+    Ok((
+        question.thread_id,
+        delegation.owner_user,
+        delegation.room_id,
+    ))
 }
 
 /// A notification to whom the worker works for, opening its room.

@@ -104,7 +104,8 @@ expression: stable(t.into_value())
           "cancel_wake",
           "call_worker",
           "worker_status",
-          "stop_worker"
+          "stop_worker",
+          "answer_worker_question"
         ]
       },
       "wake": {

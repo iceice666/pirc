@@ -201,6 +201,29 @@ pub fn question(
         .optional()?)
 }
 
+/// The latest question about `interaction_id` in any thread.
+pub fn question_anywhere(
+    conn: &Connection,
+    interaction_id: &str,
+) -> ApiResult<Option<ThreadMessage>> {
+    Ok(conn
+        .query_row(
+            "SELECT * FROM thread_messages WHERE kind='question' AND json_extract(body_json,'$.interactionId')=? ORDER BY created_at DESC, seq DESC LIMIT 1",
+            [interaction_id],
+            ThreadMessage::from_row,
+        )
+        .optional()?)
+}
+
+/// Questions still waiting for an answer, in every thread, newest first.
+pub fn pending_questions(conn: &Connection, limit: usize) -> ApiResult<Vec<ThreadMessage>> {
+    let mut statement = conn.prepare(
+        "SELECT * FROM thread_messages WHERE kind='question' AND json_extract(body_json,'$.status')='pending' ORDER BY created_at DESC LIMIT ?",
+    )?;
+    let rows = statement.query_map([limit as i64], ThreadMessage::from_row)?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
 /// The distinct speakers of a thread that are workers (`worker:...`).
 pub fn workers(conn: &Connection, thread_id: &str) -> ApiResult<Vec<String>> {
     let mut statement = conn.prepare(

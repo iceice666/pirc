@@ -10,6 +10,12 @@
 //! them (verified in their last messages, as for preferences), which its
 //! auto mode reads as their request. A worker a wake calls works read-only,
 //! and a wake cannot stop one.
+//!
+//! A worker asks before two things only, leaving its sandbox and sending
+//! something out (plans/rewrite/07-red-lines.md). Those questions are asked
+//! in the room; `answer_worker_question` passes on the answer of whom the
+//! worker works for, quoted from their own words (verified by code), and the
+//! node still decides. A wake cannot answer.
 
 use std::rc::{Rc, Weak};
 
@@ -51,7 +57,7 @@ impl Feature for WorkerFeature {
     }
 
     fn tools(&self, agent: &Rc<Agent>) -> Vec<Rc<dyn Tool>> {
-        [Which::Call, Which::Status, Which::Stop]
+        [Which::Call, Which::Status, Which::Stop, Which::Answer]
             .into_iter()
             .map(|which| {
                 Rc::new(WorkerTool::new(
@@ -116,6 +122,15 @@ pub fn section(app: &App, waking: bool) -> PromptSection {
             text.push_str(&line);
         }
     }
+    let waiting = delegations::waiting_questions(app, LISTED);
+    if !waiting.is_empty() {
+        text.push_str(
+            "\n\nWorkers waiting for an answer (asked in their room; when whom it works for answers in their words, pass it on with `answer_worker_question`, quoting them; do not answer for them):",
+        );
+        for (id, room, title, asked) in &waiting {
+            text.push_str(&format!("\n- [{id}] {title} · in {room}: {asked}"));
+        }
+    }
     let active = delegations::list(&app.db.lock(), None, true, LISTED).unwrap_or_default();
     if !active.is_empty() {
         text.push_str("\n\nWorkers not done yet:");
@@ -140,6 +155,7 @@ enum Which {
     Call,
     Status,
     Stop,
+    Answer,
 }
 
 struct WorkerTool {
@@ -200,6 +216,19 @@ impl WorkerTool {
             Which::Stop => (
                 "Stop a worker that is waiting or working, when it is no longer wanted. The room is told how it ended.",
                 object(json!({ "id": { "type": "string" } }), &["id"]),
+            ),
+            Which::Answer => (
+                "Pass on a person's answer to a worker's question (listed under Workers waiting for an answer): whether it may leave its sandbox or send something out. \
+                 Only whom the worker works for can answer, in their own words: quote them exactly. Never answer on your own judgement.",
+                object(
+                    json!({
+                        "id": { "type": "string", "description": "The question's id, as listed." },
+                        "yes": { "type": "boolean", "description": "They allow it." },
+                        "again": { "type": "boolean", "description": "They allow the same action again for the rest of the worker's session." },
+                        "quote": { "type": "string", "description": "Their own words answering, exactly as they wrote them in one of their last messages." },
+                    }),
+                    &["id", "yes", "quote"],
+                ),
             ),
         };
         Self {
@@ -347,6 +376,56 @@ impl WorkerTool {
                     Err(error) => ToolResult::error(error.message),
                 })
             }
+            Which::Answer => {
+                let (Some(id), Some(quote)) = (text("id"), text("quote")) else {
+                    return Ok(ToolResult::error("`id` and `quote` are required"));
+                };
+                let Some(yes) = args.get("yes").and_then(Value::as_bool) else {
+                    return Ok(ToolResult::error("`yes` is required"));
+                };
+                if waking.is_some() {
+                    return Ok(ToolResult::error(
+                        "Nobody answered while you are awake: only a person's own words answer a worker",
+                    ));
+                }
+                let (thread_id, owner, _) = match delegations::question_target(&app, &id) {
+                    Ok(target) => target,
+                    Err(error) => return Ok(ToolResult::error(error.message)),
+                };
+                let mut people: Vec<String> =
+                    app.config.auth.allowed_users.iter().cloned().collect();
+                people.sort();
+                let Some((who, _)) = quoted(&agent.branch(), &quote, &people) else {
+                    return Ok(ToolResult::error(
+                        "That quote is not in what anyone here said in their last messages; quote them exactly",
+                    ));
+                };
+                if who != owner {
+                    return Ok(ToolResult::error(format!(
+                        "Only {owner}, whom the worker works for, can answer it"
+                    )));
+                }
+                let again = yes && args.get("again") == Some(&Value::Bool(true));
+                let given = json!({ "confirmed": yes, "again": again });
+                let answering = app.clone();
+                let answered = self
+                    .runtime
+                    .spawn(async move {
+                        delegations::answer(&answering, &who, &thread_id, &id, &given).await
+                    })
+                    .await;
+                Ok(match answered {
+                    Ok(Ok(_)) => ToolResult::text(if !yes {
+                        "Told the worker no."
+                    } else if again {
+                        "Told the worker yes, for the rest of its session."
+                    } else {
+                        "Told the worker yes."
+                    }),
+                    Ok(Err(error)) => ToolResult::error(error.message),
+                    Err(_) => ToolResult::error("The answer could not be passed on"),
+                })
+            }
             Which::Stop => {
                 let Some(id) = text("id") else {
                     return Ok(ToolResult::error("`id` is required"));
@@ -441,6 +520,7 @@ impl Tool for WorkerTool {
             Which::Call => "call_worker",
             Which::Status => "worker_status",
             Which::Stop => "stop_worker",
+            Which::Answer => "answer_worker_question",
         }
     }
 

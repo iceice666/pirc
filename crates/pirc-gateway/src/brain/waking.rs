@@ -31,7 +31,7 @@ use crate::wake::{self, Kind, NewWake, Wake};
 /// Tools a wake does not have: the ones that act for people (plan 09 adds
 /// its actions here). A worker a wake calls is read-only instead, and it
 /// cannot stop one people asked for.
-pub const NOT_IN_WAKES: &[&str] = &["stop_worker"];
+pub const NOT_IN_WAKES: &[&str] = &["stop_worker", "answer_worker_question"];
 /// Tools only a wake has.
 pub const ONLY_IN_WAKES: &[&str] = &["speak"];
 /// Room messages a wake is shown.

@@ -79,7 +79,8 @@ expression: stable(t.into_value())
       "cancel_wake",
       "call_worker",
       "worker_status",
-      "stop_worker"
+      "stop_worker",
+      "answer_worker_question"
     ],
     "step": "a conversation's tools"
   },
@@ -236,6 +237,121 @@ expression: stable(t.into_value())
     "step": "answered already"
   },
   {
+    "observed": [
+      {
+        "body": {
+          "question": {
+            "expiresAt": 4000000000000,
+            "interactionId": "interaction-2",
+            "request": {
+              "allowAgain": true,
+              "message": "Command (bash, in /repo):\n\ngit push origin main\n\nReason: git push sends commits to a remote",
+              "method": "confirm",
+              "title": "Auto mode: allow sending this out?"
+            },
+            "status": "pending",
+            "threadMessageId": "tmsg_<uuid:9>"
+          },
+          "text": "The worker for “Run the tests” asks: Auto mode: allow sending this out?\n\nCommand (bash, in /repo):\n\ngit push origin main\n\nReason: git push sends commits to a remote",
+          "worker": {
+            "delegationId": "<worker:1>",
+            "event": "question",
+            "threadId": "thread_<uuid:1>"
+          }
+        },
+        "kind": "question"
+      }
+    ],
+    "step": "a red line is asked in the room"
+  },
+  {
+    "observed": true,
+    "step": "the brain sees what waits"
+  },
+  {
+    "observed": {
+      "payload": {
+        "answer": {
+          "again": true,
+          "confirmed": true
+        }
+      },
+      "request": "POST /api/sessions/<task:1>/interactions/interaction-2/relayed-answer"
+    },
+    "step": "the person's yes, relayed to the node"
+  },
+  {
+    "observed": [
+      {
+        "answer": {
+          "again": true,
+          "confirmed": true
+        },
+        "answeredBy": "test@example.com",
+        "expiresAt": 4000000000000,
+        "interactionId": "interaction-2",
+        "request": {
+          "allowAgain": true,
+          "message": "Command (bash, in /repo):\n\ngit push origin main\n\nReason: git push sends commits to a remote",
+          "method": "confirm",
+          "title": "Auto mode: allow sending this out?"
+        },
+        "status": "answered",
+        "threadMessageId": "tmsg_<uuid:9>"
+      }
+    ],
+    "step": "the room's question, answered"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "text": "Told it yes."
+        },
+        "kind": "text"
+      }
+    ],
+    "step": "the brain's reply"
+  },
+  {
+    "observed": [
+      {
+        "body": {
+          "question": {
+            "expiresAt": "<epoch-ms>",
+            "interactionId": "interaction-3",
+            "request": {
+              "message": "The agent asks to reach registry.example.com from its sandbox.",
+              "method": "confirm",
+              "title": "Allow network access?"
+            },
+            "status": "expired",
+            "threadMessageId": "tmsg_<uuid:10>"
+          },
+          "text": "The worker for “Run the tests” asks: Allow network access?\n\nThe agent asks to reach registry.example.com from its sandbox.",
+          "worker": {
+            "delegationId": "<worker:1>",
+            "event": "question",
+            "threadId": "thread_<uuid:1>"
+          }
+        },
+        "kind": "question"
+      },
+      {
+        "body": {
+          "text": "Nobody answered in time, so the worker was told no.",
+          "worker": {
+            "delegationId": "<worker:1>",
+            "event": "question_expired",
+            "threadId": "thread_<uuid:1>"
+          }
+        },
+        "kind": "line"
+      }
+    ],
+    "step": "nobody answered in time"
+  },
+  {
     "body": {
       "handed": {
         "as": "followUp",
@@ -247,9 +363,9 @@ expression: stable(t.into_value())
         },
         "createdAt": "<epoch-ms>",
         "depth": 0,
-        "id": "tmsg_<uuid:9>",
+        "id": "tmsg_<uuid:11>",
         "kind": "text",
-        "seq": 8,
+        "seq": 10,
         "speaker": "user",
         "threadId": "thread_<uuid:1>",
         "updatedAt": null,
@@ -266,6 +382,8 @@ expression: stable(t.into_value())
   },
   {
     "observed": [
+      "GET /api/sessions/<task:1>/snapshot",
+      "GET /api/sessions/<task:1>/snapshot",
       {
         "payload": {
           "clientId": "gateway-thread-<worker:1>",
@@ -276,7 +394,7 @@ expression: stable(t.into_value())
       {
         "payload": {
           "clientId": "gateway-thread-<worker:1>",
-          "commandId": "command_<uuid:10>",
+          "commandId": "command_<uuid:12>",
           "generation": 1,
           "payload": {
             "message": "also run clippy",
@@ -335,42 +453,8 @@ expression: stable(t.into_value())
             "note": null,
             "readOnly": false,
             "status": "running",
-            "threadId": "thread_<uuid:11>",
-            "title": "Suite A",
-            "workers": 1,
-            "workspace": "Repo on work"
-          }
-        },
-        "kind": "text",
-        "threadId": "thread_<uuid:11>"
-      },
-      {
-        "body": {
-          "text": "I asked a worker to: Suite B (Repo on work)",
-          "worker": {
-            "delegationId": "<worker:3>",
-            "note": null,
-            "readOnly": false,
-            "status": "running",
-            "threadId": "thread_<uuid:12>",
-            "title": "Suite B",
-            "workers": 1,
-            "workspace": "Repo on work"
-          }
-        },
-        "kind": "text",
-        "threadId": "thread_<uuid:12>"
-      },
-      {
-        "body": {
-          "text": "I asked a worker to: Suite C (Repo on work)",
-          "worker": {
-            "delegationId": "<worker:4>",
-            "note": null,
-            "readOnly": false,
-            "status": "running",
             "threadId": "thread_<uuid:13>",
-            "title": "Suite C",
+            "title": "Suite A",
             "workers": 1,
             "workspace": "Repo on work"
           }
@@ -380,14 +464,14 @@ expression: stable(t.into_value())
       },
       {
         "body": {
-          "text": "I asked a worker to: Suite D (Repo on work)",
+          "text": "I asked a worker to: Suite B (Repo on work)",
           "worker": {
-            "delegationId": "<worker:5>",
-            "note": "one of the 4 running workers to finish",
+            "delegationId": "<worker:3>",
+            "note": null,
             "readOnly": false,
-            "status": "queued",
+            "status": "running",
             "threadId": "thread_<uuid:14>",
-            "title": "Suite D",
+            "title": "Suite B",
             "workers": 1,
             "workspace": "Repo on work"
           }
@@ -397,11 +481,45 @@ expression: stable(t.into_value())
       },
       {
         "body": {
+          "text": "I asked a worker to: Suite C (Repo on work)",
+          "worker": {
+            "delegationId": "<worker:4>",
+            "note": null,
+            "readOnly": false,
+            "status": "running",
+            "threadId": "thread_<uuid:15>",
+            "title": "Suite C",
+            "workers": 1,
+            "workspace": "Repo on work"
+          }
+        },
+        "kind": "text",
+        "threadId": "thread_<uuid:15>"
+      },
+      {
+        "body": {
+          "text": "I asked a worker to: Suite D (Repo on work)",
+          "worker": {
+            "delegationId": "<worker:5>",
+            "note": "one of the 4 running workers to finish",
+            "readOnly": false,
+            "status": "queued",
+            "threadId": "thread_<uuid:16>",
+            "title": "Suite D",
+            "workers": 1,
+            "workspace": "Repo on work"
+          }
+        },
+        "kind": "text",
+        "threadId": "thread_<uuid:16>"
+      },
+      {
+        "body": {
           "text": "The worker on “Suite D” waits its turn (4 running).",
           "worker": {
             "delegationId": "<worker:5>",
             "event": "busy",
-            "threadId": "thread_<uuid:14>"
+            "threadId": "thread_<uuid:16>"
           }
         },
         "kind": "line"
@@ -466,43 +584,53 @@ expression: stable(t.into_value())
     "observed": [
       {
         "body": {
-          "text": "Running the tests now."
-        },
-        "createdAt": "<epoch-ms>",
-        "depth": 0,
-        "id": "tmsg_<uuid:8>",
-        "kind": "text",
-        "seq": 6,
-        "speaker": "worker:session_<uuid:3>",
-        "threadId": "thread_<uuid:1>",
-        "updatedAt": null,
-        "user": null
-      },
-      {
-        "body": {
           "answer": {
-            "value": "all"
+            "again": true,
+            "confirmed": true
           },
           "answeredBy": "test@example.com",
           "delegationId": "<worker:1>",
-          "expiresAt": null,
-          "interactionId": "interaction-1",
-          "kind": "select",
+          "expiresAt": 4000000000000,
+          "interactionId": "interaction-2",
+          "kind": "confirm",
           "request": {
-            "method": "select",
-            "options": [
-              "unit",
-              "all"
-            ],
-            "title": "Which suite?"
+            "allowAgain": true,
+            "message": "Command (bash, in /repo):\n\ngit push origin main\n\nReason: git push sends commits to a remote",
+            "method": "confirm",
+            "title": "Auto mode: allow sending this out?"
           },
+          "roomMessageId": "msg_<uuid:17>",
           "status": "answered"
         },
         "createdAt": "<epoch-ms>",
         "depth": 0,
-        "id": "tmsg_<uuid:15>",
+        "id": "tmsg_<uuid:9>",
         "kind": "question",
-        "seq": 7,
+        "seq": 8,
+        "speaker": "worker:session_<uuid:3>",
+        "threadId": "thread_<uuid:1>",
+        "updatedAt": "<epoch-ms>",
+        "user": null
+      },
+      {
+        "body": {
+          "delegationId": "<worker:1>",
+          "expiresAt": "<epoch-ms>",
+          "interactionId": "interaction-3",
+          "kind": "confirm",
+          "request": {
+            "message": "The agent asks to reach registry.example.com from its sandbox.",
+            "method": "confirm",
+            "title": "Allow network access?"
+          },
+          "roomMessageId": "msg_<uuid:18>",
+          "status": "expired"
+        },
+        "createdAt": "<epoch-ms>",
+        "depth": 0,
+        "id": "tmsg_<uuid:10>",
+        "kind": "question",
+        "seq": 9,
         "speaker": "worker:session_<uuid:3>",
         "threadId": "thread_<uuid:1>",
         "updatedAt": "<epoch-ms>",
@@ -514,9 +642,9 @@ expression: stable(t.into_value())
         },
         "createdAt": "<epoch-ms>",
         "depth": 0,
-        "id": "tmsg_<uuid:9>",
+        "id": "tmsg_<uuid:11>",
         "kind": "text",
-        "seq": 8,
+        "seq": 10,
         "speaker": "user",
         "threadId": "thread_<uuid:1>",
         "updatedAt": null,
@@ -530,9 +658,9 @@ expression: stable(t.into_value())
         },
         "createdAt": "<epoch-ms>",
         "depth": 0,
-        "id": "tmsg_<uuid:16>",
+        "id": "tmsg_<uuid:19>",
         "kind": "line",
-        "seq": 9,
+        "seq": 11,
         "speaker": "worker:session_<uuid:3>",
         "threadId": "thread_<uuid:1>",
         "updatedAt": null,
@@ -544,7 +672,7 @@ expression: stable(t.into_value())
   {
     "observed": [
       {
-        "anchorMessageId": "msg_<uuid:17>",
+        "anchorMessageId": "msg_<uuid:20>",
         "createdAt": "<epoch-ms>",
         "faceId": "host",
         "follows": null,
@@ -622,7 +750,7 @@ expression: stable(t.into_value())
             "delegationId": "<worker:2>",
             "report": true,
             "status": "failed",
-            "threadId": "thread_<uuid:11>"
+            "threadId": "thread_<uuid:13>"
           }
         },
         "kind": "text"
@@ -656,7 +784,8 @@ expression: stable(t.into_value())
         "cancel_wake",
         "call_worker",
         "worker_status",
-        "stop_worker"
+        "stop_worker",
+        "answer_worker_question"
       ],
       "wake": [
         "recall",
@@ -721,7 +850,7 @@ expression: stable(t.into_value())
           "text": "I'll come back <weekday> <local-time> (UTC) to look at: look at the CI",
           "wake": {
             "event": "scheduled",
-            "id": "wake_<uuid:18>"
+            "id": "wake_<uuid:21>"
           }
         },
         "kind": "line"
@@ -740,14 +869,14 @@ expression: stable(t.into_value())
             "note": null,
             "readOnly": true,
             "status": "running",
-            "threadId": "thread_<uuid:19>",
+            "threadId": "thread_<uuid:22>",
             "title": "CI logs",
             "workers": 1,
             "workspace": "Repo on work"
           }
         },
         "kind": "text",
-        "threadId": "thread_<uuid:19>"
+        "threadId": "thread_<uuid:22>"
       }
     ],
     "step": "the room"

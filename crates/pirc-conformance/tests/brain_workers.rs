@@ -545,6 +545,104 @@ async fn brain_workers() {
         .await;
     t.response("answered already", "POST /api/threads/:id/answer", &again);
 
+    // A red line (plans/rewrite/07-red-lines.md): asked in the room itself;
+    // the person's words answer it through the brain, quoted.
+    let push = json!({ "id": "interaction-2", "kind": "confirm", "createdAt": 0,
+        "expiresAt": 4_000_000_000_000u64,
+        "request": { "method": "confirm", "title": "Auto mode: allow sending this out?",
+            "message": "Command (bash, in /repo):\n\ngit push origin main\n\nReason: git push sends commits to a remote",
+            "allowAgain": true } });
+    work.set(
+        &task1,
+        snapshot(&w1, "waiting_input", &[], std::slice::from_ref(&push)),
+    );
+    work.event(&task1, "interaction_created", push);
+    socket
+        .until(|frame| {
+            frame["type"] == "room_message" && frame["data"]["message"]["kind"] == "question"
+        })
+        .await;
+    let (room, last) = room_since(&api, seen).await;
+    seen = last;
+    t.note("a red line is asked in the room", room);
+    cluster.llm.push([
+        Reply::Tool {
+            id: "call_r1".into(),
+            name: "answer_worker_question".into(),
+            args: json!({ "id": "interaction-2", "yes": true, "again": true,
+                "quote": "yes, push it, and again later" }),
+        },
+        Reply::Text("Told it yes.".to_owned()),
+    ]);
+    let before = cluster.llm.requests().len();
+    send(&api, "yes, push it, and again later").await;
+    socket.until(host_idle).await;
+    t.note(
+        "the brain sees what waits",
+        json!(
+            cluster.llm.requests()[before]
+                .to_string()
+                .contains("[interaction-2] Run the tests")
+        ),
+    );
+    let relayed = work
+        .until(|request| is(request, "POST", "/relayed-answer"))
+        .await;
+    t.note(
+        "the person's yes, relayed to the node",
+        shown(relayed.last().unwrap()),
+    );
+    work.set(&task1, snapshot(&w1, "running", &[], &[]));
+    let listed = api
+        .send("GET", "/api/rooms/general/messages?limit=200", &me, None)
+        .await;
+    let asked: Vec<Value> = listed.body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|message| message["kind"] == "question")
+        .map(|message| message["body"]["question"].clone())
+        .collect();
+    t.note("the room's question, answered", json!(asked));
+    let (room, last) = room_since(&api, seen).await;
+    seen = last;
+    t.note("the brain's reply", room);
+
+    // Unanswered in time: the node withdraws it, the room says so.
+    let soon = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+        + 300;
+    let domains = json!({ "id": "interaction-3", "kind": "confirm", "createdAt": 0,
+        "expiresAt": soon,
+        "request": { "method": "confirm", "title": "Allow network access?",
+            "message": "The agent asks to reach registry.example.com from its sandbox." } });
+    work.set(
+        &task1,
+        snapshot(&w1, "waiting_input", &[], std::slice::from_ref(&domains)),
+    );
+    work.event(&task1, "interaction_created", domains);
+    socket
+        .until(|frame| {
+            frame["type"] == "room_message"
+                && frame["data"]["message"]["body"]["question"]["interactionId"] == "interaction-3"
+        })
+        .await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    work.set(&task1, snapshot(&w1, "running", &[], &[]));
+    work.event(
+        &task1,
+        "interaction_answered",
+        json!({ "interactionId": "interaction-3", "cancelled": true }),
+    );
+    socket
+        .until(|frame| frame["data"]["message"]["body"]["worker"]["event"] == "question_expired")
+        .await;
+    let (room, last) = room_since(&api, seen).await;
+    seen = last;
+    t.note("nobody answered in time", room);
+
     // Words in the thread reach the running session as a follow-up.
     let added = api
         .send(

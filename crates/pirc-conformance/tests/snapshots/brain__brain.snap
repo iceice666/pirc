@@ -151,7 +151,8 @@ expression: t.into_value()
           "cancel_wake",
           "call_worker",
           "worker_status",
-          "stop_worker"
+          "stop_worker",
+          "answer_worker_question"
         ]
       },
       "calls": 1
@@ -248,7 +249,8 @@ expression: t.into_value()
           "cancel_wake",
           "call_worker",
           "worker_status",
-          "stop_worker"
+          "stop_worker",
+          "answer_worker_question"
         ]
       },
       "calls": 3
@@ -408,7 +410,8 @@ expression: t.into_value()
         "cancel_wake",
         "call_worker",
         "worker_status",
-        "stop_worker"
+        "stop_worker",
+        "answer_worker_question"
       ]
     },
     "step": "the latest call's context"
