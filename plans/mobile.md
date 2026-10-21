@@ -59,9 +59,15 @@ are available from Git through Historical records, not repeated here.
       inert even after moving. `Range.createContextualFragment()` now parses
       ordinary HTML containers and table rows; connected scripts and click
       handlers work through the native document host at phone/tablet widths.
-      Its SVG context still produces HTML-namespace children instead of SVG
-      children, an explicit remaining difference. Pinned Chromium 153 fixtures,
-      runtime tests and a Flutter widget gate cover the supported behavior.
+      SVG contexts now preserve SVG-namespace descendants and live
+      `ownerSVGElement` through insertion, cloning and reparenting;
+      `foreignObject` contexts produce HTML children. The
+      phone/tablet native SVG gate matches the fixed Chromium 153 dimensions
+      and solid center pixel. The native renderer still treats SVG as one
+      image, so per-shape pointer activation inside that image is not routed
+      to SVG descendants. Broader SVG parsing and foreign-content visual
+      integration remain unverified. Pinned Chromium 153 fixtures,
+      runtime tests and Flutter widget gates cover these cases.
       Ten fixed Chromium 153 document-tree cases and four
       phone/tablet modal geometry cases cover the prior offset-packet crash.
       Less common HTML5 tree-builder recovery, such as duplicate head/body

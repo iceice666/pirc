@@ -54,7 +54,80 @@ try {
     const child = range.createContextualFragment('<circle cx="10" cy="10" r="5"/>').firstChild;
     return { tag: child.localName, namespace: child.namespaceURI };
   });
-  const fixture = { schemaVersion: 1, browserVersion: browser.version(), html, table, svg };
+  await page.setContent(
+    '<svg id="host" xmlns="http://www.w3.org/2000/svg">' +
+    '<foreignObject id="foreign"></foreignObject></svg>',
+  );
+  const svgNested = await page.evaluate(() => {
+    const host = document.querySelector('#host');
+    const range = document.createRange();
+    range.selectNodeContents(host);
+    const fragment = range.createContextualFragment(
+      '<g id="group"><circle id="circle" cx="10"/></g>',
+    );
+    const group = fragment.firstChild;
+    const circle = group.firstChild;
+    const beforeOwner = [group.ownerSVGElement?.id || null, circle.ownerSVGElement?.id || null];
+    host.appendChild(fragment);
+    const afterOwner = [group.ownerSVGElement?.id || null, circle.ownerSVGElement?.id || null];
+    const foreign = document.querySelector('#foreign');
+    const foreignRange = document.createRange();
+    foreignRange.selectNodeContents(foreign);
+    const htmlChild = foreignRange.createContextualFragment('<div>Text</div>').firstChild;
+    return {
+      beforeOwner, afterOwner,
+      namespaces: [group.namespaceURI, circle.namespaceURI, htmlChild.namespaceURI],
+      foreignTag: htmlChild.localName,
+    };
+  });
+  await page.setContent('<svg id="a"></svg><svg id="b"></svg>');
+  const svgClone = await page.evaluate(() => {
+    const first = document.getElementById('a');
+    const second = document.getElementById('b');
+    const range = document.createRange();
+    range.selectNodeContents(first);
+    first.appendChild(range.createContextualFragment('<g><circle/></g>'));
+    const clone = first.firstChild.cloneNode(true);
+    const before = clone.firstChild.ownerSVGElement?.id || null;
+    second.appendChild(clone);
+    return {
+      before,
+      after: clone.firstChild.ownerSVGElement?.id || null,
+      namespace: clone.firstChild.namespaceURI,
+    };
+  });
+  const svgPaint = [];
+  for (const width of [390, 768]) {
+    await page.setViewportSize({ width, height: 796 });
+    await page.setContent(`<!doctype html><style>html,body{margin:0}</style>
+      <svg id="vector" width="40" height="40" viewBox="0 0 40 40"></svg>
+      <script>
+        (function(){
+          const vector=document.getElementById('vector');
+          const range=document.createRange();range.selectNodeContents(vector);
+          vector.appendChild(range.createContextualFragment(
+            '<circle cx="20" cy="20" r="12" fill="#ff0000"/>'));
+        })();
+      <\/script>`);
+
+    await page.evaluate(() => new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const rect = await page.locator('#vector').boundingBox();
+    const screenshot = await page.screenshot();
+    const centerPixel = await page.evaluate(async base64 => {
+      const image = new Image();
+      image.src = 'data:image/png;base64,' + base64;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0);
+      return Array.from(context.getImageData(20, 20, 1, 1).data);
+    }, screenshot.toString('base64'));
+    svgPaint.push({ width, rect: [rect.x, rect.y, rect.width, rect.height], centerPixel });
+  }
+  const fixture = { schemaVersion: 1, browserVersion: browser.version(), html, table, svg, svgNested, svgClone, svgPaint };
   await writeFile(
     new URL('./fixtures/document-contextual-fragment-chromium153.json', import.meta.url),
     JSON.stringify(fixture) + '\n',

@@ -1247,21 +1247,67 @@ test('Range.createContextualFragment parses ordinary table rows like Chromium', 
   assert.deepEqual(actual, contextualFragmentWebFixture.table);
 });
 
-test('SVG contextual fragment namespace is an explicit unsupported difference', () => {
+test('SVG contextual fragments keep Chromium namespace and live owner', () => {
   const context = createRuntime();
   invoke(context, 'init', {
     hostLayout: true,
     url: 'https://example.test/page',
-    html: '<svg id="host" xmlns="http://www.w3.org/2000/svg"></svg>'
+    html: '<svg id="host" xmlns="http://www.w3.org/2000/svg"><foreignObject id="foreign"></foreignObject></svg>'
   });
-  const actual = jsonEvaluate(context, `(() => {
+  const simple = jsonEvaluate(context, `(() => {
     const range = document.createRange();
     range.selectNodeContents(document.querySelector('#host'));
     const child = range.createContextualFragment('<circle cx="10" cy="10" r="5"/>').firstChild;
     return { tag: child.localName, namespace: child.namespaceURI };
   })()`);
-  assert.equal(actual.tag, contextualFragmentWebFixture.svg.tag);
-  assert.notEqual(actual.namespace, contextualFragmentWebFixture.svg.namespace);
+  assert.deepEqual(simple, contextualFragmentWebFixture.svg);
+  const nested = jsonEvaluate(context, `(() => {
+    const host = document.querySelector('#host');
+    const range = document.createRange();
+    range.selectNodeContents(host);
+    const fragment = range.createContextualFragment(
+      '<g id="group"><circle id="circle" cx="10"/></g>');
+    const group = fragment.firstChild;
+    const circle = group.firstChild;
+    const beforeOwner = [group.ownerSVGElement?.id || null, circle.ownerSVGElement?.id || null];
+    host.appendChild(fragment);
+    const afterOwner = [group.ownerSVGElement?.id || null, circle.ownerSVGElement?.id || null];
+    const foreign = document.querySelector('#foreign');
+    const foreignRange = document.createRange();
+    foreignRange.selectNodeContents(foreign);
+    const htmlChild = foreignRange.createContextualFragment('<div>Text</div>').firstChild;
+    return {
+      beforeOwner, afterOwner,
+      namespaces: [group.namespaceURI, circle.namespaceURI, htmlChild.namespaceURI],
+      foreignTag: htmlChild.localName,
+    };
+  })()`);
+  assert.deepEqual(nested, contextualFragmentWebFixture.svgNested);
+});
+
+test('cloned contextual SVG descendants follow the new owner after reparenting', () => {
+  const context = createRuntime();
+  invoke(context, 'init', {
+    hostLayout: true,
+    url: 'https://example.test/page',
+    html: '<svg id="a"></svg><svg id="b"></svg>'
+  });
+  const actual = jsonEvaluate(context, `(() => {
+    const first = document.getElementById('a');
+    const second = document.getElementById('b');
+    const range = document.createRange();
+    range.selectNodeContents(first);
+    first.appendChild(range.createContextualFragment('<g><circle/></g>'));
+    const clone = first.firstChild.cloneNode(true);
+    const before = clone.firstChild.ownerSVGElement?.id || null;
+    second.appendChild(clone);
+    return {
+      before,
+      after: clone.firstChild.ownerSVGElement?.id || null,
+      namespace: clone.firstChild.namespaceURI,
+    };
+  })()`);
+  assert.deepEqual(actual, contextualFragmentWebFixture.svgClone);
 });
 
 test('scripts in a connected DocumentFragment execute once after insertion', () => {

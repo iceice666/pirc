@@ -4747,10 +4747,41 @@
       });
     }
 
+    function trackSvgOwners(root) {
+      const stack = [root];
+      while (stack.length) {
+        const node = stack.pop();
+        if (node?.namespaceURI === SVG_NAMESPACE) {
+          // SVGElement in LinkeDOM stores a parser-time reference that does not
+          // follow fragments, reparenting or cloneNode. Derive it from the tree.
+          Object.defineProperty(node, 'ownerSVGElement', {
+            get: function() {
+              for (let parent = this.parentNode; parent; parent = parent.parentNode) {
+                if (parent.namespaceURI === SVG_NAMESPACE && parent.localName === 'svg')
+                  return parent;
+              }
+              return null;
+            },
+            set: function() {},
+            configurable: true,
+            enumerable: true
+          });
+        }
+        if (node?.childNodes)
+          for (const child of node.childNodes) stack.push(child);
+      }
+    }
+
+    const originalSvgCloneNode = SVGElement$1.prototype.cloneNode;
+    SVGElement$1.prototype.cloneNode = function(deep) {
+      const clone = originalSvgCloneNode.call(this, deep);
+      trackSvgOwners(clone);
+      return clone;
+    };
+
     // LinkeDOM treats a selected Element as the owner document here and throws.
-    // Parse ordinary HTML fragments without innerHTML's inert-script wrapper:
-    // scripts from Range.createContextualFragment become executable only after
-    // the caller connects the returned fragment, matching Chromium.
+    // Parse without innerHTML's inert-script wrapper: contextual scripts become
+    // executable only when the returned fragment connects to the document.
     const originalCreateContextualFragment = Range.prototype.createContextualFragment;
     Range.prototype.createContextualFragment = function(markup) {
       const state = activeState;
@@ -4758,11 +4789,22 @@
       const ownerDocument = context?.nodeType === 9 ? context : context?.ownerDocument;
       if (!state || ownerDocument !== state.document)
         return originalCreateContextualFragment.call(this, markup);
+      let parsingContext = context;
+      while (parsingContext && parsingContext.nodeType !== 1)
+        parsingContext = parsingContext.parentNode;
+      const svgContext = parsingContext?.namespaceURI === SVG_NAMESPACE &&
+        !['foreignobject', 'desc', 'title'].includes(
+          String(parsingContext.localName).toLowerCase());
       const parser = ownerDocument.createElement('');
-      originalInnerHtml.set.call(parser, String(markup));
+      const source = String(markup);
+      originalInnerHtml.set.call(parser,
+        svgContext ? '<svg xmlns="' + SVG_NAMESPACE + '">' + source + '</svg>' : source);
+      const sourceParent = svgContext ? parser.firstChild : parser;
       const fragment = ownerDocument.createDocumentFragment();
-      while (parser.firstChild)
-        fragment.appendChild(parser.firstChild);
+      while (sourceParent?.firstChild)
+        fragment.appendChild(sourceParent.firstChild);
+      if (svgContext)
+        trackSvgOwners(fragment);
       return fragment;
     };
 
