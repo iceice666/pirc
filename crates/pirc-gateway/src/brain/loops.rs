@@ -857,7 +857,7 @@ pub fn changed(app: &App, open_loop: &OpenLoop) {
 /// The open loops section of a turn's prompt, after demoting what is past
 /// the limit (said in each loop's room); and what the loops are about, for
 /// recall.
-pub fn section(app: &App) -> (pirc_agent::context::PromptSection, String) {
+pub fn section(app: &App, face_id: &str) -> (pirc_agent::context::PromptSection, String) {
     let now = now_ms();
     let demoted = demote_overflow(&app.db.lock(), now);
     match demoted {
@@ -875,10 +875,16 @@ pub fn section(app: &App) -> (pirc_agent::context::PromptSection, String) {
             error.message
         )),
     }
-    let open = list_open(&app.db.lock()).unwrap_or_else(|error| {
+    let mut open = list_open(&app.db.lock()).unwrap_or_else(|error| {
         crate::log::warn(&format!("brain: cannot read open loops: {}", error.message));
         Vec::new()
     });
+    // A project's face sees its own loops first (plan 10); memory is
+    // shared, so it sees the others too.
+    let mine = |open_loop: &OpenLoop| {
+        face_id != HOST_FACE_ID && open_loop.face_id.as_deref() == Some(face_id)
+    };
+    open.sort_by_key(|open_loop| !mine(open_loop));
     let clock = json!({ "zone": app.config.timezone });
     let mut text = format!(
         "## Open loops\n\nIt is {} now. These are the things still open between you and the people here: always in front of you until they are closed. \
@@ -908,6 +914,9 @@ pub fn section(app: &App) -> (pirc_agent::context::PromptSection, String) {
         }
         if let Some(check) = &open_loop.next_check {
             line.push_str(&format!(" · next check: {check}"));
+        }
+        if mine(open_loop) {
+            line.push_str(" · yours");
         }
         text.push_str(&line);
     }

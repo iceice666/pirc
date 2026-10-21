@@ -13,7 +13,7 @@ use serde_json::{Map, Value, json};
 
 use super::loops::{self, AnchorInput, Changes, Event, NewLoop, OpenLoop};
 use super::memory::{RoomMemory, object, origin_now, turn_entry_ids};
-use crate::db::rooms::{HOST_FACE_ID, RoomStore};
+use crate::db::rooms::RoomStore;
 use crate::util::now_ms;
 
 /// The feature that gives a room's agent the loop tools.
@@ -196,7 +196,7 @@ impl LoopTool {
                     &NewLoop {
                         user: &owner,
                         room_id: Some(&room_id),
-                        face_id: Some(HOST_FACE_ID),
+                        face_id: Some(&memory.face()),
                         what: &what,
                         why,
                         origin: &origin,

@@ -38,7 +38,7 @@ pub(super) fn seed(connection: &Connection) -> rusqlite::Result<()> {
         params![GENERAL_ROOM_ID, stamp],
     )?;
     connection.execute(
-        "INSERT INTO faces (id,name,created_at) VALUES (?1,'pirc',?2)",
+        "INSERT INTO faces (id,name,created_at,is_host) VALUES (?1,'pirc',?2,1)",
         params![HOST_FACE_ID, stamp],
     )?;
     Ok(())
@@ -112,6 +112,9 @@ pub struct Message {
     pub created_at: i64,
     pub edited_at: Option<i64>,
     pub pinned_at: Option<i64>,
+    /// What the brain said the turn was about (plan 10).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topic: Option<String>,
 }
 
 impl Message {
@@ -128,6 +131,7 @@ impl Message {
             created_at: row.get("created_at")?,
             edited_at: row.get("edited_at")?,
             pinned_at: row.get("pinned_at")?,
+            topic: row.get("topic")?,
         })
     }
 }

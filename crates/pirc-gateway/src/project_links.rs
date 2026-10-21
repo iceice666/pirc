@@ -1,15 +1,13 @@
-//! Links from a project to the directory workspaces it is about
-//! (docs/architecture/assistant-memory.md). A link is a default and an
+//! Links from a face to the directory workspaces it is about (its
+//! territory, plans/rewrite/10-faces.md; chat projects owned them before,
+//! docs/architecture/assistant-memory.md). A link is a default and an
 //! ordering, never a permission: an unlinked workspace stays reachable.
 //!
-//! - `assistant.context` lists linked workspaces first, and the other
-//!   clones of their repositories after them.
-//! - `delegate` without a workspace goes to the only linked one.
-//! - `memory_search` without a workspace looks in the linked workspaces
-//!   (and their clones) first.
-//!
-//! Chat projects, which owned the links, are gone (plans/rewrite/00-demolition.md);
-//! links already stored are read, and the faces of 10-faces.md will own them.
+//! - The brain's list of workspaces, as a face, has the face's linked
+//!   workspaces first, and the other clones of their repositories after
+//!   them.
+//! - Memory search for a face looks in its linked workspaces (and their
+//!   clones) first.
 
 use rusqlite::{Connection, OptionalExtension};
 
@@ -45,12 +43,12 @@ impl Linked {
     }
 }
 
-/// A project's links, oldest first; none for anything that is not a project.
-pub fn links(conn: &Connection, project_id: &str) -> ApiResult<Vec<Link>> {
+/// A face's links, oldest first.
+pub fn links(conn: &Connection, face_id: &str) -> ApiResult<Vec<Link>> {
     let mut statement = conn.prepare(
-        "SELECT workspace_id, repo, created_at FROM project_links WHERE project_workspace_id=? ORDER BY created_at, workspace_id",
+        "SELECT workspace_id, repo, created_at FROM project_links WHERE face_id=? ORDER BY created_at, workspace_id",
     )?;
-    let rows = statement.query_map([project_id], |row| {
+    let rows = statement.query_map([face_id], |row| {
         Ok(Link {
             workspace_id: row.get(0)?,
             repo: row.get(1)?,
@@ -155,11 +153,11 @@ mod tests {
         let conn = db.lock();
         // Linked before its node reported the repository.
         conn.execute(
-            "INSERT INTO project_links (project_workspace_id,workspace_id,repo,created_at) VALUES ('home:trip','work:pirc',NULL,1)",
+            "INSERT INTO project_links (face_id,workspace_id,repo,created_at) VALUES ('host','work:pirc',NULL,1)",
             [],
         )
         .unwrap();
-        assert_eq!(links(&conn, "home:trip").unwrap()[0].repo, None);
+        assert_eq!(links(&conn, "host").unwrap()[0].repo, None);
         conn.set_workspace_repos(
             "work",
             &[("pirc".into(), Some("github.com/me/pirc".into()))],
@@ -170,7 +168,7 @@ mod tests {
             &[("clone".into(), Some("github.com/me/pirc".into()))],
         )
         .unwrap();
-        let stored = links(&conn, "home:trip").unwrap();
+        let stored = links(&conn, "host").unwrap();
         assert_eq!(stored[0].repo.as_deref(), Some("github.com/me/pirc"));
         let repos = repos(&conn, &stored).unwrap();
         assert_eq!(repos, ["github.com/me/pirc"]);

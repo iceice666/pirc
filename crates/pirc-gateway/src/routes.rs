@@ -24,6 +24,7 @@ use crate::node_events::run_name;
 use crate::util::{payload_hash, present};
 
 pub mod brain;
+pub mod faces;
 pub mod loops;
 pub mod rooms;
 pub mod sources;

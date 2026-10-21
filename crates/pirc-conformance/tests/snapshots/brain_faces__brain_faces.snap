@@ -1,0 +1,785 @@
+---
+source: crates/pirc-conformance/tests/brain_faces.rs
+expression: stable(t.into_value())
+---
+[
+  {
+    "observed": [
+      {
+        "faceId": "host",
+        "state": "idle"
+      }
+    ],
+    "step": "ready: what each face is doing"
+  },
+  {
+    "body": {
+      "faces": [
+        {
+          "archivedAt": null,
+          "avatar": null,
+          "bio": "",
+          "color": null,
+          "createdAt": "<epoch-ms>",
+          "hiddenAt": null,
+          "id": "host",
+          "isHost": true,
+          "name": "pirc",
+          "roleMd": "",
+          "territory": {
+            "rooms": [],
+            "sources": [],
+            "workspaces": []
+          },
+          "tone": ""
+        }
+      ],
+      "presence": [
+        {
+          "faceId": "host",
+          "state": "idle"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/faces",
+    "status": 200,
+    "step": "only the host"
+  },
+  {
+    "body": {
+      "face": {
+        "archivedAt": null,
+        "avatar": null,
+        "bio": "Runs the SlimeOS project.",
+        "color": "#3366cc",
+        "createdAt": "<epoch-ms>",
+        "hiddenAt": null,
+        "id": "face_<uuid:1>",
+        "isHost": false,
+        "name": "PM",
+        "roleMd": "Track the PRs and the releases.",
+        "territory": {
+          "rooms": [
+            "room_<uuid:2>"
+          ],
+          "sources": [],
+          "workspaces": [
+            "work:repo"
+          ]
+        },
+        "tone": "brief"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/faces",
+    "status": 201,
+    "step": "PM, for SlimeOS"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "There is a face called pm already"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/faces",
+    "status": 409,
+    "step": "a name taken, in another case"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "A face's name has 1 to 40 characters, without @ or #"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/faces",
+    "status": 400,
+    "step": "a name with @"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "#general is the host's"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/faces",
+    "status": 409,
+    "step": "#general is the host's"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "#slimeos is PM's already"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/faces",
+    "status": 409,
+    "step": "a room that is PM's"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "No directory workspace work:none"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/faces",
+    "status": 400,
+    "step": "a workspace that is not there"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "POST /api/faces",
+    "status": 400,
+    "step": "an unknown field"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "The host cannot be archived"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/faces/:id",
+    "status": 409,
+    "step": "the host is not archived"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "The host answers in #general and wherever nobody else does"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/faces/:id",
+    "status": 409,
+    "step": "the host's territory is fixed"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "conflict",
+        "message": "Only an archived face can be hidden"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/faces/:id",
+    "status": 409,
+    "step": "only an archived face is hidden"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Invalid request"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/faces/:id",
+    "status": 400,
+    "step": "a change that changes nothing"
+  },
+  {
+    "observed": [
+      {
+        "face_changed": [
+          "PM",
+          false
+        ]
+      },
+      {
+        "kind": "text",
+        "room": "general",
+        "speaker": "face:PM",
+        "text": "Two reviews left on the PR."
+      }
+    ],
+    "step": "@PM: PM answers"
+  },
+  {
+    "observed": {
+      "rules": [
+        "## Faces",
+        "",
+        "These are the defaults; the house rules come after them and win where they differ.",
+        "- You are one mind with several faces; people see which face said each message. Memory is shared: what one face knows, all of them know.",
+        "- Answer as the face you are now. When another face should answer (it is about its room, its workspaces or its sources), say in one short line as the face you are that you hand it over, then `speak_as` that face and answer.",
+        "- Faces never talk with each other: they only hand over and report back.",
+        "- A face named with `@` answers for itself.",
+        "- Once the topic of the conversation is clear, say it with `topic` (a few words, the same name while it stays the same), with the workspace or source it is about."
+      ],
+      "tools": [
+        "recall",
+        "remember",
+        "memory_search",
+        "recall_note",
+        "save_preference",
+        "forget",
+        "open_loop",
+        "close_loop",
+        "touch_loop",
+        "update_loop",
+        "reopen_loop",
+        "schedule_wake",
+        "cancel_wake",
+        "call_worker",
+        "worker_status",
+        "stop_worker",
+        "answer_worker_question",
+        "workspace_read",
+        "speak_as",
+        "topic",
+        "create_face",
+        "move_room"
+      ],
+      "workers": [
+        "## Workers",
+        "",
+        "`call_worker` hands work to a worker: a coding agent in one of the workspaces below, with its own session, tools and judgement. It starts at once, without asking anyone; at most 4 run at a time and the others wait their turn. It knows nothing of the people or of what you remember: write the task in full, hand it the facts and loops that bear on it (`context`, by id), and when a person asked for it, `quote` their own words so it may act on their request. The room is shown your message about it, with a thread under it where its progress shows; when it ends, its report is said in the room and you hear of it at your next turn here. Give a finished worker more to do with `follows`; look at them with `worker_status`. Work that belongs to no repository goes to `scratch`, a fresh directory on a machine that fits (`node_hint`, `gpu`); to only look at a repository, `workspace_read` it yourself instead. `stop_worker` stops one.",
+        "",
+        "Workspaces (`workspace` takes the id):",
+        "- work:repo: SlimeOS on work (online; yours)",
+        "",
+        "Machines (`node_hint` takes the id):",
+        "- work"
+      ],
+      "you": [
+        "## You are now",
+        "",
+        "You speak as PM (face face_<uuid:1>). Runs the SlimeOS project.",
+        "How PM talks: brief",
+        "What PM does:",
+        "Track the PRs and the releases.",
+        "Its territory: rooms #slimeos (room_<uuid:2>); workspaces work:repo.",
+        "People named it with @.",
+        "",
+        "The other faces (`speak_as` takes the id):",
+        "- pirc (host): the host · #general, and every room no other face has"
+      ]
+    },
+    "step": "PM's prompt: who it is, the faces' rules, its workspaces first"
+  },
+  {
+    "observed": [
+      {
+        "kind": "text",
+        "room": "general",
+        "speaker": "face:PM",
+        "text": "CI is green."
+      }
+    ],
+    "step": "no @: the face that spoke last"
+  },
+  {
+    "observed": [
+      {
+        "kind": "text",
+        "room": "general",
+        "speaker": "face:pirc",
+        "text": "I'll ask PM."
+      },
+      {
+        "kind": "text",
+        "room": "general",
+        "speaker": "face:PM",
+        "text": "The release is on Friday."
+      }
+    ],
+    "step": "one turn, the host then PM"
+  },
+  {
+    "observed": {
+      "switched": [
+        "You speak as PM now: what you write next is theirs."
+      ],
+      "you": [
+        "## You are now",
+        "",
+        "You speak as pirc (face host), the host.",
+        "Its territory: #general, and every room no other face has.",
+        "People named it with @.",
+        "",
+        "The other faces (`speak_as` takes the id):",
+        "- PM (face_<uuid:1>): Runs the SlimeOS project. · rooms #slimeos (room_<uuid:2>); workspaces work:repo"
+      ]
+    },
+    "step": "speak_as, as the model hears it"
+  },
+  {
+    "observed": [
+      {
+        "kind": "line",
+        "room": "room_<uuid:2>",
+        "speaker": "face:pirc",
+        "text": "I'll come back <weekday> <local-time> (UTC) to look at: look at the CI again"
+      },
+      {
+        "kind": "text",
+        "room": "room_<uuid:2>",
+        "speaker": "face:PM",
+        "text": "I'll look again in a moment."
+      }
+    ],
+    "step": "its own room: PM answers"
+  },
+  {
+    "observed": [
+      {
+        "kind": "text",
+        "room": "room_<uuid:2>",
+        "speaker": "face:PM",
+        "text": "CI is still green."
+      }
+    ],
+    "step": "the wake wears PM"
+  },
+  {
+    "observed": [
+      {
+        "kind": "line",
+        "room": "room_<uuid:3>",
+        "speaker": "face:pirc",
+        "text": "Holding on to: Ship the SlimeOS release"
+      },
+      {
+        "loop_changed": [
+          "Ship the SlimeOS release",
+          "open",
+          "room_<uuid:3>"
+        ]
+      },
+      {
+        "kind": "text",
+        "room": "room_<uuid:3>",
+        "speaker": "face:pirc",
+        "text": "Noted, all of it."
+      }
+    ],
+    "step": "13 messages and a reply on the topic"
+  },
+  {
+    "observed": null,
+    "step": "the turn after 14: nothing to suggest yet"
+  },
+  {
+    "observed": [
+      {
+        "kind": "text",
+        "room": "room_<uuid:3>",
+        "speaker": "face:pirc",
+        "text": "Shall we continue in #slimeos?"
+      }
+    ],
+    "step": "after 16: the host is asked to suggest it"
+  },
+  {
+    "observed": [
+      "## Maybe move",
+      "",
+      "The conversation here about \"slimeos release\" has gone on for 16 messages, and it belongs in #slimeos (room_<uuid:2>). Speaking as the host, ask once, briefly, whether to continue there; do not ask again if they do not want to. Only when someone says yes, call `move_room` with `to` set to room_<uuid:2> and their words as `quote`."
+    ],
+    "step": "the hint"
+  },
+  {
+    "observed": [
+      {
+        "kind": "line",
+        "room": "room_<uuid:3>",
+        "speaker": "face:pirc",
+        "text": "Continued in #slimeos"
+      },
+      {
+        "kind": "line",
+        "room": "room_<uuid:2>",
+        "speaker": "face:pirc",
+        "text": "Continued from #random"
+      },
+      {
+        "loop_changed": [
+          "Ship the SlimeOS release",
+          "open",
+          "room_<uuid:2>"
+        ]
+      },
+      {
+        "kind": "text",
+        "room": "room_<uuid:3>",
+        "speaker": "face:pirc",
+        "text": "See you there."
+      }
+    ],
+    "step": "yes: it moves, with its loop"
+  },
+  {
+    "observed": {
+      "hint": null,
+      "moved": [
+        "Noted: this is about \"slimeos release\".",
+        "Opened [<loop:1>] Ship the SlimeOS release (from user)",
+        "Noted: this is about \"slimeos release\".",
+        "Noted: this is about \"slimeos release\".",
+        "Moved: the conversation continues in #slimeos, with its open loop."
+      ]
+    },
+    "step": "suggested once a day"
+  },
+  {
+    "observed": {
+      "frames": [
+        {
+          "face_changed": [
+            "Gardener",
+            false
+          ]
+        },
+        {
+          "kind": "line",
+          "room": "general",
+          "speaker": "face:pirc",
+          "text": "Gardener is here now, answering in #garden."
+        },
+        {
+          "kind": "text",
+          "room": "general",
+          "speaker": "face:pirc",
+          "text": "Gardener is here."
+        }
+      ],
+      "results": [
+        "You speak as PM now: what you write next is theirs.",
+        "That quote is not in what anyone here said in their last messages; ask them first",
+        "Made Gardener (face_<uuid:4>), answering in #garden (room_<uuid:5>)."
+      ]
+    },
+    "step": "a face made in the room"
+  },
+  {
+    "body": {
+      "face": {
+        "archivedAt": "<epoch-ms>",
+        "avatar": null,
+        "bio": "Runs the SlimeOS project.",
+        "color": "#3366cc",
+        "createdAt": "<epoch-ms>",
+        "hiddenAt": null,
+        "id": "face_<uuid:1>",
+        "isHost": false,
+        "name": "PM",
+        "roleMd": "Track the PRs and the releases.",
+        "territory": {
+          "rooms": [
+            "room_<uuid:2>"
+          ],
+          "sources": [],
+          "workspaces": [
+            "work:repo"
+          ]
+        },
+        "tone": "brief"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/faces/:id",
+    "status": 200,
+    "step": "PM archived"
+  },
+  {
+    "observed": [
+      {
+        "face_changed": [
+          "PM",
+          true
+        ]
+      },
+      {
+        "kind": "text",
+        "room": "room_<uuid:2>",
+        "speaker": "face:pirc",
+        "text": "PM is archived; I can help."
+      }
+    ],
+    "step": "an archived face answers nowhere: the host does"
+  },
+  {
+    "body": {
+      "face": {
+        "archivedAt": "<epoch-ms>",
+        "avatar": null,
+        "bio": "Runs the SlimeOS project.",
+        "color": "#3366cc",
+        "createdAt": "<epoch-ms>",
+        "hiddenAt": "<epoch-ms>",
+        "id": "face_<uuid:1>",
+        "isHost": false,
+        "name": "PM",
+        "roleMd": "Track the PRs and the releases.",
+        "territory": {
+          "rooms": [
+            "room_<uuid:2>"
+          ],
+          "sources": [],
+          "workspaces": [
+            "work:repo"
+          ]
+        },
+        "tone": "brief"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "PATCH /api/faces/:id",
+    "status": 200,
+    "step": "hidden"
+  },
+  {
+    "body": {
+      "faces": [
+        {
+          "archivedAt": null,
+          "avatar": null,
+          "bio": "",
+          "color": null,
+          "createdAt": "<epoch-ms>",
+          "hiddenAt": null,
+          "id": "host",
+          "isHost": true,
+          "name": "pirc",
+          "roleMd": "",
+          "territory": {
+            "rooms": [],
+            "sources": [],
+            "workspaces": []
+          },
+          "tone": ""
+        },
+        {
+          "archivedAt": null,
+          "avatar": null,
+          "bio": "Looks after the plants.",
+          "color": null,
+          "createdAt": "<epoch-ms>",
+          "hiddenAt": null,
+          "id": "face_<uuid:4>",
+          "isHost": false,
+          "name": "Gardener",
+          "roleMd": "",
+          "territory": {
+            "rooms": [
+              "room_<uuid:5>"
+            ],
+            "sources": [],
+            "workspaces": []
+          },
+          "tone": ""
+        }
+      ],
+      "presence": [
+        {
+          "faceId": "host",
+          "state": "idle"
+        },
+        {
+          "faceId": "face_<uuid:4>",
+          "state": "idle"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/faces",
+    "status": 200,
+    "step": "the list without it"
+  },
+  {
+    "body": {
+      "faces": [
+        {
+          "archivedAt": null,
+          "avatar": null,
+          "bio": "",
+          "color": null,
+          "createdAt": "<epoch-ms>",
+          "hiddenAt": null,
+          "id": "host",
+          "isHost": true,
+          "name": "pirc",
+          "roleMd": "",
+          "territory": {
+            "rooms": [],
+            "sources": [],
+            "workspaces": []
+          },
+          "tone": ""
+        },
+        {
+          "archivedAt": null,
+          "avatar": null,
+          "bio": "Looks after the plants.",
+          "color": null,
+          "createdAt": "<epoch-ms>",
+          "hiddenAt": null,
+          "id": "face_<uuid:4>",
+          "isHost": false,
+          "name": "Gardener",
+          "roleMd": "",
+          "territory": {
+            "rooms": [
+              "room_<uuid:5>"
+            ],
+            "sources": [],
+            "workspaces": []
+          },
+          "tone": ""
+        },
+        {
+          "archivedAt": "<epoch-ms>",
+          "avatar": null,
+          "bio": "Runs the SlimeOS project.",
+          "color": "#3366cc",
+          "createdAt": "<epoch-ms>",
+          "hiddenAt": "<epoch-ms>",
+          "id": "face_<uuid:1>",
+          "isHost": false,
+          "name": "PM",
+          "roleMd": "Track the PRs and the releases.",
+          "territory": {
+            "rooms": [
+              "room_<uuid:2>"
+            ],
+            "sources": [],
+            "workspaces": [
+              "work:repo"
+            ]
+          },
+          "tone": "brief"
+        }
+      ],
+      "presence": [
+        {
+          "faceId": "host",
+          "state": "idle"
+        },
+        {
+          "faceId": "face_<uuid:4>",
+          "state": "idle"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/faces?hidden=1",
+    "status": 200,
+    "step": "with the hidden ones"
+  },
+  {
+    "body": {
+      "loops": [],
+      "wakes": [
+        {
+          "attempt": 1,
+          "createdAt": "<epoch-ms>",
+          "endedAt": "<epoch-ms>",
+          "faceId": "face_<uuid:1>",
+          "id": "wake_<uuid:6>",
+          "kind": "self",
+          "note": null,
+          "outcome": "spoke",
+          "roomId": "room_<uuid:2>",
+          "scheduledAt": "<epoch-ms>",
+          "startedAt": "<epoch-ms>",
+          "trigger": {
+            "at": "<epoch-ms>",
+            "why": "look at the CI again"
+          },
+          "turnId": "turn_<uuid:7>",
+          "user": "test@example.com"
+        }
+      ],
+      "workers": []
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/faces/:id/activity",
+    "status": 200,
+    "step": "what PM did"
+  },
+  {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "No face face_none"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "request": "GET /api/faces/:id",
+    "status": 404,
+    "step": "a face that is not there"
+  }
+]

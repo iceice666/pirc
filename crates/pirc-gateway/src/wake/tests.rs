@@ -11,6 +11,7 @@ fn new_wake(at: i64) -> NewWake<'static> {
         kind: Kind::SelfScheduled,
         trigger: json!({ "at": at, "why": "look at the dotfiles" }),
         room_id: GENERAL_ROOM_ID,
+        face_id: None,
         user: Some(ME),
         scheduled_at: at,
     }

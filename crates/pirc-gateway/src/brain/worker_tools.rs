@@ -38,7 +38,6 @@ use super::loops;
 use super::memory::{RoomMemory, WRITING_TOOLS, object, quoted};
 use super::turn::Progress;
 use crate::app::App;
-use crate::db::rooms::HOST_FACE_ID;
 use crate::delegations::{self, NewWorker};
 use crate::memory::text::clip;
 use crate::memory_records::person;
@@ -86,7 +85,7 @@ impl Feature for WorkerFeature {
 
 /// The workers section of a turn's prompt: what workers are, where they
 /// can go (online or not), and those not done yet.
-pub fn section(app: &App, waking: bool) -> PromptSection {
+pub fn section(app: &App, waking: bool, face_id: &str) -> PromptSection {
     let mut text = String::from(
         "## Workers\n\n\
          `call_worker` hands work to a worker: a coding agent in one of the workspaces below, with its own session, tools and judgement. \
@@ -103,7 +102,8 @@ pub fn section(app: &App, waking: bool) -> PromptSection {
     } else {
         text.push_str(" `stop_worker` stops one.");
     }
-    let listed = delegations::workspaces(app, None).unwrap_or_else(|_| json!([]));
+    // The face's own workspaces first (its links, plan 10).
+    let listed = delegations::workspaces(app, Some(face_id)).unwrap_or_else(|_| json!([]));
     let workspaces = listed.as_array().map(Vec::as_slice).unwrap_or_default();
     if workspaces.is_empty() {
         text.push_str("\n\nWorkspaces: none yet, so no worker can be called now.");
@@ -131,6 +131,11 @@ pub fn section(app: &App, waking: bool) -> PromptSection {
                     .filter_map(|role| role["name"].as_str())
                     .collect();
                 line.push_str(&format!("; roles: {}", names.join(", ")));
+            }
+            match workspace["linked"].as_str() {
+                Some("workspace") => line.push_str("; yours"),
+                Some("repository") => line.push_str("; a clone of yours"),
+                _ => {}
             }
             line.push(')');
             text.push_str(&line);
@@ -373,7 +378,7 @@ impl WorkerTool {
                     &app,
                     NewWorker {
                         room_id: self.memory.room_id.clone(),
-                        face_id: HOST_FACE_ID.to_owned(),
+                        face_id: self.memory.face(),
                         user: owner.clone(),
                         task,
                         title: text("title"),

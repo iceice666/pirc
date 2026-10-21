@@ -106,7 +106,11 @@ expression: stable(t.into_value())
           "worker_status",
           "stop_worker",
           "answer_worker_question",
-          "workspace_read"
+          "workspace_read",
+          "speak_as",
+          "topic",
+          "create_face",
+          "move_room"
         ]
       },
       "wake": {
@@ -128,7 +132,8 @@ expression: stable(t.into_value())
           "cancel_wake",
           "call_worker",
           "worker_status",
-          "workspace_read"
+          "workspace_read",
+          "speak_as"
         ]
       }
     },

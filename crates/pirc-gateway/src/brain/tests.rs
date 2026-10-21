@@ -273,12 +273,22 @@ async fn a_turn_streams_the_reply_into_the_room() {
             .messages
             .contains("me@example.com: hi brain")
     );
-    let kinds: Vec<(String, Value)> = events
+    let all: Vec<(String, Value)> = events
         .lock()
         .unwrap()
         .iter()
-        .filter(|event| event.kind != "room_changed")
         .map(|event| (event.kind.clone(), event.data.clone()))
+        .collect();
+    // What the host is doing, for the member list (plan 10).
+    let faces: Vec<&Value> = all
+        .iter()
+        .filter(|(kind, _)| kind == "face_presence")
+        .map(|(_, data)| &data["state"])
+        .collect();
+    assert_eq!(faces, [&json!("thinking"), &json!("idle")]);
+    let kinds: Vec<(String, Value)> = all
+        .into_iter()
+        .filter(|(kind, _)| kind != "room_changed" && kind != "face_presence")
         .collect();
     // (The test sends without the route, so its own message has no event.)
     assert_eq!(
@@ -737,6 +747,7 @@ fn wake_now(app: &AppState) -> crate::wake::Wake {
             kind: crate::wake::Kind::SelfScheduled,
             trigger: json!({ "at": crate::util::now_ms(), "why": "look at the dotfiles" }),
             room_id: GENERAL_ROOM_ID,
+            face_id: None,
             user: Some(ME),
             scheduled_at: crate::util::now_ms(),
         },

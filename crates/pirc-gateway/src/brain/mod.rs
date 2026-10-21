@@ -9,6 +9,8 @@
 //! runtime ([`stream`], [`tools`]).
 //!
 //! - [`identity`]: `SOUL.md`, `CHAT.md` and `brain.json`.
+//! - [`faces`]: the faces it speaks through, and who answers.
+//! - [`moving`]: topics, and moving a conversation to its room.
 //! - [`turn`]: a room's agent, its streamed reply, its input.
 //! - [`store`]: the rooms' conversations on disk and the turn records.
 //! - [`loops`]: the open loops, always in its prompt.
@@ -16,11 +18,14 @@
 //! - [`worker_tools`]: calling workers (`crate::delegations`).
 //! - [`source_tools`]: reading the sources (`crate::sources`).
 
+mod face_tools;
+pub mod faces;
 pub mod hands;
 pub mod identity;
 mod loop_tools;
 pub mod loops;
 mod memory;
+pub mod moving;
 mod scheduler;
 mod source_tools;
 pub mod store;
@@ -131,27 +136,56 @@ impl Brain {
     }
 }
 
-/// Where the brain is thinking now: room id → since when.
+/// Where the brain is thinking now: room id → the face it speaks as, and
+/// since when.
 #[derive(Default)]
-struct Presence(Mutex<HashMap<String, i64>>);
+struct Presence(Mutex<HashMap<String, (String, i64)>>);
 
-/// The host face starts (`thinking`) or stops thinking in a room: an
-/// ephemeral `brain_presence` event `{face, state}` for everyone there.
-fn presence(app: &App, room_id: &str, thinking: bool) {
+/// A face starts thinking in a room (`Some`, which ends the one before
+/// there, as `speak_as` does), or the brain stops thinking there (`None`):
+/// ephemeral `brain_presence` events `{face, state}` for everyone in the
+/// room, and `face_presence` for the faces whose state changed.
+fn presence(app: &App, room_id: &str, face: Option<&str>) {
     let slot = app.slots.get_or_init(Presence::default);
-    {
+    let before = {
         let mut rooms = slot.0.lock().unwrap_or_else(|p| p.into_inner());
-        if thinking {
-            rooms.insert(room_id.to_owned(), crate::util::now_ms());
-        } else {
-            rooms.remove(room_id);
+        match face {
+            Some(face) => rooms
+                .insert(room_id.to_owned(), (face.to_owned(), crate::util::now_ms()))
+                .map(|(face, _)| face),
+            None => rooms.remove(room_id).map(|(face, _)| face),
         }
+    };
+    // Stopping where nothing was recorded still says the host is idle.
+    let before = before.or_else(|| face.is_none().then(|| HOST_FACE_ID.to_owned()));
+    if let Some(before) = before
+        && face != Some(before.as_str())
+    {
+        app.rooms.publish_ephemeral(
+            room_id,
+            "brain_presence",
+            json!({ "face": before, "state": "idle" }),
+        );
+        faces::presence_changed(app, &before, room_id);
     }
-    app.rooms.publish_ephemeral(
-        room_id,
-        "brain_presence",
-        json!({ "face": HOST_FACE_ID, "state": if thinking { "thinking" } else { "idle" } }),
-    );
+    if let Some(face) = face {
+        app.rooms.publish_ephemeral(
+            room_id,
+            "brain_presence",
+            json!({ "face": face, "state": "thinking" }),
+        );
+        faces::presence_changed(app, face, room_id);
+    }
+}
+
+/// Where a face is thinking now, if it is: the room, and since when.
+pub fn thinking_as(app: &App, face_id: &str) -> Option<(String, i64)> {
+    let slot = app.slots.get::<Presence>()?;
+    let rooms = slot.0.lock().unwrap_or_else(|p| p.into_inner());
+    rooms
+        .iter()
+        .find(|(_, (face, _))| face == face_id)
+        .map(|(room_id, (_, since))| (room_id.clone(), *since))
 }
 
 /// The rooms where a face is thinking now, for a room socket's `ready`
@@ -161,12 +195,12 @@ pub fn current_presence(app: &App) -> Value {
         return json!([]);
     };
     let rooms = slot.0.lock().unwrap_or_else(|p| p.into_inner());
-    let mut list: Vec<(&String, &i64)> = rooms.iter().collect();
+    let mut list: Vec<(&String, &(String, i64))> = rooms.iter().collect();
     list.sort();
     Value::Array(
         list.into_iter()
-            .map(|(room_id, since)| {
-                json!({ "face": HOST_FACE_ID, "roomId": room_id, "state": "thinking", "since": since })
+            .map(|(room_id, (face, since))| {
+                json!({ "face": face, "roomId": room_id, "state": "thinking", "since": since })
             })
             .collect(),
     )

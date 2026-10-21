@@ -30,7 +30,7 @@ pub use engine::*;
 /// files numbered their schemas 1 to 1005.
 const APPLICATION_ID: i32 = 0x7069_7263;
 /// `PRAGMA user_version` of `schema.sql`.
-pub const SCHEMA_VERSION: i64 = 7;
+pub const SCHEMA_VERSION: i64 = 8;
 const SCHEMA: &str = include_str!("schema.sql");
 /// Each migration takes a database from the version before it to its own;
 /// `schema.sql` is always the newest whole.
@@ -41,6 +41,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (5, include_str!("migrations/5-wakes.sql")),
     (6, include_str!("migrations/6-workers.sql")),
     (7, include_str!("migrations/7-sources.sql")),
+    (8, include_str!("migrations/8-faces.sql")),
 ];
 
 /// The database file in a state directory when `PIRC_DATABASE_PATH` does
@@ -417,6 +418,21 @@ mod tests {
 
     /// The schema of plan 01 (version 1), from today's.
     const PLAN_01: &str = "
+        DROP TABLE room_topics;
+        DROP INDEX room_messages_topic;
+        ALTER TABLE room_messages DROP COLUMN topic;
+        DROP TABLE project_links;
+        CREATE TABLE project_links (
+          project_workspace_id TEXT NOT NULL REFERENCES workspaces(id), workspace_id TEXT NOT NULL,
+          repo TEXT, created_at INTEGER NOT NULL,
+          PRIMARY KEY (project_workspace_id, workspace_id)
+        );
+        DROP INDEX faces_one_host;
+        ALTER TABLE faces DROP COLUMN role_md;
+        ALTER TABLE faces DROP COLUMN territory_json;
+        ALTER TABLE faces DROP COLUMN is_host;
+        ALTER TABLE faces DROP COLUMN archived_at;
+        ALTER TABLE faces DROP COLUMN hidden_at;
         DROP TABLE source_items_fts;
         DROP TABLE source_items;
         DROP TABLE sources;

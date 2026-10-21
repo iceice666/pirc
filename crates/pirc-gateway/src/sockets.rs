@@ -220,6 +220,8 @@ fn follow_rooms(
                     "watermark": replay.watermark,
                     // Presence events are not replayed: where faces think now.
                     "presence": crate::brain::current_presence(app),
+                    // And what each face is doing (plan 10).
+                    "faces": crate::brain::faces::presences(app),
                 })
                 .to_string(),
                 replay.watermark,

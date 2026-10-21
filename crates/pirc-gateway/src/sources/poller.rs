@@ -203,6 +203,7 @@ fn woke(app: &AppState, source: &Source, decision: filter::Decision) -> Option<w
             kind: Kind::Source,
             trigger,
             room_id: &room_id,
+            face_id: None,
             user: Some(&user),
             scheduled_at: now_ms(),
         },

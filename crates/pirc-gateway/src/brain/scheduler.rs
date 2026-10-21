@@ -38,7 +38,9 @@ use tokio::task::JoinHandle;
 use super::store::{Outcome, TurnStore};
 use super::turn::{RoomAgent, compose, post_line};
 use super::waking::{NOT_IN_WAKES, ONLY_IN_WAKES};
-use super::{Command, identity, loops, memory, presence, source_tools, waking, worker_tools};
+use super::{
+    Command, faces, identity, loops, memory, moving, presence, source_tools, waking, worker_tools,
+};
 use crate::app::AppState;
 use crate::db::rooms::{Pending, RoomInputStore, RoomStore};
 use crate::rooms::TYPING_TTL_MS;
@@ -311,17 +313,47 @@ impl Scheduler {
         };
         room.progress.reset_turn();
         let speakers = speakers(batches);
+        let said = memory::without_names(&text, &speakers);
+        // Who answers (plan 10), and a move to suggest after the last turn.
+        let (route, hint) = {
+            let conn = self.app.db.lock();
+            let route = faces::route(&conn, room_id, &said);
+            let hint = moving::take_hint(&conn, room_id)
+                .ok()
+                .flatten()
+                .map(|(name, to)| {
+                    let messages =
+                        moving::count(&conn, room_id, &name).unwrap_or(moving::MIN_MESSAGES);
+                    moving::hint_section(&name, &to, messages)
+                });
+            (
+                route.map(|route| (faces::sections(&conn, &route), route)),
+                hint,
+            )
+        };
+        let (face_sections, route) = match route {
+            Ok(route) => route,
+            Err(error) => {
+                crate::log::warn(&format!("brain: cannot read the faces: {}", error.message));
+                return;
+            }
+        };
         let mut prompt = identity::sections(&self.config_dir, &room_row);
+        // Who it is now, after the room, before the house rules.
+        let at = 2.min(prompt.len());
+        prompt.splice(at..at, face_sections);
         // Preferences, open loops, then what may be remembered: recall
         // looks for what was said and what the loops are about.
-        let (open_loops, about) = loops::section(&self.app);
-        let said = memory::without_names(&text, &speakers);
+        let (open_loops, about) = loops::section(&self.app, &route.face.id);
         let mut remembered = memory::sections(&self.app, &speakers, &format!("{said}\n{about}"));
         remembered.insert(1.min(remembered.len()), open_loops);
         prompt.extend(remembered);
-        prompt.push(worker_tools::section(&self.app, false));
+        prompt.push(worker_tools::section(&self.app, false, &route.face.id));
         prompt.extend(source_tools::section(&self.app, room_id));
+        prompt.extend(hint);
         room.memory.set_speakers(speakers);
+        room.memory.start_turn(&route.face.id);
+        room.memory.add_turn_messages(&ids);
         room.agent.set_base_prompt(prompt);
         let mut hidden: Vec<String> = ONLY_IN_WAKES
             .iter()
@@ -337,7 +369,7 @@ impl Scheduler {
                 return;
             }
         };
-        presence(&self.app, room_id, true);
+        presence(&self.app, room_id, Some(&route.face.id));
         // How the room's workers ended since its last turn comes with
         // what people said.
         let reports = {
@@ -432,17 +464,40 @@ impl Scheduler {
         };
         let speakers: Vec<String> = due.user.iter().cloned().collect();
         let input = waking::input(&self.app, &due, &room_row);
+        // The face it wears (plan 10).
+        let route = {
+            let conn = self.app.db.lock();
+            faces::wake_face(&conn, &due).map(|face| {
+                let route = faces::Route {
+                    face,
+                    why: faces::Why::Woke,
+                    mentioned: Vec::new(),
+                };
+                (faces::sections(&conn, &route), route)
+            })
+        };
+        let (face_sections, route) = match route {
+            Ok(route) => route,
+            Err(error) => {
+                crate::log::warn(&format!("brain: cannot read the faces: {}", error.message));
+                end_now(wake::Outcome::Failed, Some("the faces cannot be read"));
+                return false;
+            }
+        };
         let mut prompt = identity::sections(&self.config_dir, &room_row);
-        // Waking up and when to speak, before the house rules.
+        // Who it is, waking up and when to speak, before the house rules.
         let at = 2.min(prompt.len());
-        prompt.splice(at..at, waking::sections(&self.app, &due));
-        let (open_loops, about) = loops::section(&self.app);
+        let mut inserted = face_sections;
+        inserted.extend(waking::sections(&self.app, &due));
+        prompt.splice(at..at, inserted);
+        let (open_loops, about) = loops::section(&self.app, &route.face.id);
         let mut remembered = memory::sections(&self.app, &speakers, &format!("{input}\n{about}"));
         remembered.insert(1.min(remembered.len()), open_loops);
         prompt.extend(remembered);
-        prompt.push(worker_tools::section(&self.app, true));
+        prompt.push(worker_tools::section(&self.app, true, &route.face.id));
         prompt.extend(source_tools::section(&self.app, &due.room_id));
         room.memory.set_speakers(speakers);
+        room.memory.start_turn(&route.face.id);
         room.agent.set_base_prompt(prompt);
         let mut hidden: Vec<String> = NOT_IN_WAKES.iter().map(|name| (*name).to_owned()).collect();
         hidden.extend(crate::sources::tools::unused(&self.app));
@@ -542,6 +597,7 @@ impl Scheduler {
         {
             crate::log::warn(&format!("brain: cannot record a steer: {}", error.message));
         }
+        room.memory.add_turn_messages(&message_ids(batches));
         self.hand_over(&room, text, batches, Vec::new());
     }
 
@@ -701,7 +757,30 @@ async fn finish(
             error.message
         ));
     }
-    presence(&app, &room_id, false);
+    after_topic(&app, &room, &room_id);
+    presence(&app, &room_id, None);
+}
+
+/// Tag the turn's messages with the topic it said, and see whether moving
+/// it elsewhere is to be suggested next time (plan 10).
+fn after_topic(app: &AppState, room: &RoomAgent, room_id: &str) {
+    let Some((topic, ids)) = room.memory.take_topic() else {
+        return;
+    };
+    let conn = app.db.lock();
+    let now = now_ms();
+    let checked = moving::tag(&conn, room_id, &topic, &ids, now).and_then(|()| {
+        moving::check(
+            &conn,
+            room_id,
+            &topic.name,
+            now,
+            quota::zone(&app.config.timezone),
+        )
+    });
+    if let Err(error) = checked {
+        crate::log::warn(&format!("brain: cannot keep a topic: {}", error.message));
+    }
 }
 
 /// Run a wake to its end, within the time limit, and record how it went:

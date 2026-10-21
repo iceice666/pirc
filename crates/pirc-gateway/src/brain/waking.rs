@@ -23,7 +23,7 @@ use super::loops::AnchorInput;
 use super::memory::{RoomMemory, object};
 use super::turn::Progress;
 use crate::app::App;
-use crate::db::rooms::{HOST_FACE_ID, MessageKind, Room, RoomStore, Speaker};
+use crate::db::rooms::{MessageKind, Room, RoomStore, Speaker};
 use crate::memory::text::clip;
 use crate::util::now_ms;
 use crate::wake::{self, Kind, NewWake, Wake};
@@ -31,7 +31,14 @@ use crate::wake::{self, Kind, NewWake, Wake};
 /// Tools a wake does not have: the ones that act for people, or change
 /// what they set up (which sources a room follows). A worker a wake calls
 /// is read-only instead, and it cannot stop one people asked for.
-pub const NOT_IN_WAKES: &[&str] = &["stop_worker", "answer_worker_question", "room_sources"];
+pub const NOT_IN_WAKES: &[&str] = &[
+    "stop_worker",
+    "answer_worker_question",
+    "room_sources",
+    "create_face",
+    "move_room",
+    "topic",
+];
 /// Tools only a wake has.
 pub const ONLY_IN_WAKES: &[&str] = &["speak"];
 /// Room messages a wake is shown.
@@ -220,7 +227,7 @@ impl WakeTool {
                 }
                 let posted = app.db.lock().post_message(
                     &wake.room_id,
-                    Speaker::Face(HOST_FACE_ID),
+                    Speaker::Face(&self.memory.face()),
                     MessageKind::Text,
                     &json!({ "text": said }),
                 );
@@ -284,12 +291,14 @@ impl WakeTool {
                         .as_ref()
                         .and_then(|wake| wake.user.clone())
                 });
+                let face = self.memory.face();
                 let scheduled = wake::schedule(
                     app,
                     &NewWake {
                         kind: Kind::SelfScheduled,
                         trigger: json!({ "at": at, "why": why }),
                         room_id: &room_id,
+                        face_id: Some(&face),
                         user: user.as_deref(),
                         scheduled_at: at,
                     },

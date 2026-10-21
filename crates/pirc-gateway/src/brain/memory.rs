@@ -45,7 +45,7 @@ use crate::memory_records::{self, Scopes};
 
 /// The tools that write memory or open loops: their results are not where
 /// a memory came from.
-pub(super) const WRITING_TOOLS: [&str; 10] = [
+pub(super) const WRITING_TOOLS: [&str; 14] = [
     "remember",
     "save_preference",
     "forget",
@@ -56,6 +56,11 @@ pub(super) const WRITING_TOOLS: [&str; 10] = [
     "reopen_loop",
     "call_worker",
     "stop_worker",
+    // The faces' tools (plan 10) only say what the brain did.
+    "speak_as",
+    "topic",
+    "create_face",
+    "move_room",
 ];
 /// What a worker reported (its report, or `worker_status`): one origin,
 /// `tool:delegation`, whichever way it came.
@@ -70,12 +75,19 @@ const RECALLED_CHARS: usize = 300;
 const RECALL_BUDGET_MS: u128 = 200;
 
 /// A room's memory: who is talking there, for the tools, the promoter and
-/// the prompt.
+/// the prompt, and the face the brain speaks as (plans/rewrite/10-faces.md):
+/// what it writes and opens is labelled with it.
 pub struct RoomMemory {
     pub(super) app: AppState,
     pub(super) room_id: String,
     /// The people of the room's latest turn, in the order they spoke.
     speakers: RefCell<Vec<String>>,
+    /// The face the brain speaks as now.
+    face: RefCell<String>,
+    /// The people's messages the turn took, and the messages it wrote.
+    turn_messages: RefCell<Vec<String>>,
+    /// What the turn was about (`topic`), once the brain said.
+    topic: RefCell<Option<super::moving::Topic>>,
 }
 
 impl RoomMemory {
@@ -84,12 +96,56 @@ impl RoomMemory {
             app,
             room_id: room_id.to_owned(),
             speakers: RefCell::default(),
+            face: RefCell::new(HOST_FACE_ID.to_owned()),
+            turn_messages: RefCell::default(),
+            topic: RefCell::default(),
         })
     }
 
     /// A new turn's people (its batches' senders).
     pub fn set_speakers(&self, speakers: Vec<String>) {
         *self.speakers.borrow_mut() = speakers;
+    }
+
+    /// A new turn, as `face`.
+    pub fn start_turn(&self, face: &str) {
+        *self.face.borrow_mut() = face.to_owned();
+        self.turn_messages.borrow_mut().clear();
+        self.topic.borrow_mut().take();
+    }
+
+    /// The face the brain speaks as now.
+    pub fn face(&self) -> String {
+        self.face.borrow().clone()
+    }
+
+    pub fn set_face(&self, face: &str) {
+        *self.face.borrow_mut() = face.to_owned();
+    }
+
+    /// Messages of the turn: what people said, what it wrote.
+    pub fn add_turn_messages(&self, ids: &[String]) {
+        let mut messages = self.turn_messages.borrow_mut();
+        for id in ids {
+            if !messages.contains(id) {
+                messages.push(id.clone());
+            }
+        }
+    }
+
+    pub fn set_topic(&self, topic: super::moving::Topic) {
+        *self.topic.borrow_mut() = Some(topic);
+    }
+
+    /// The turn's topic, if the brain said it.
+    pub fn current_topic(&self) -> Option<String> {
+        self.topic.borrow().as_ref().map(|topic| topic.name.clone())
+    }
+
+    /// The turn's topic and its messages, once it ends.
+    pub fn take_topic(&self) -> Option<(super::moving::Topic, Vec<String>)> {
+        let topic = self.topic.borrow_mut().take()?;
+        Some((topic, self.turn_messages.borrow().clone()))
     }
 
     fn speakers(&self) -> Vec<String> {
@@ -219,6 +275,7 @@ impl Promoter for BrainPromoter {
             ));
             return Ok(());
         };
+        let face = memory.face();
         let conn = memory.app.db.lock();
         for observation in observations {
             let mut sources = vec![observation.id.clone()];
@@ -229,7 +286,7 @@ impl Promoter for BrainPromoter {
                 content: &content,
                 origin: "om:promoted",
                 room_id: Some(&memory.room_id),
-                face_id: Some(HOST_FACE_ID),
+                face_id: Some(&face),
                 source_entry_ids: &sources,
                 actor: "om",
             };
@@ -413,9 +470,9 @@ impl MemoryTool {
                         content: &fact,
                         origin: &origin,
                         room_id: Some(&memory.room_id),
-                        face_id: Some(HOST_FACE_ID),
+                        face_id: Some(&memory.face()),
                         source_entry_ids: &sources,
-                        actor: &format!("face:{HOST_FACE_ID}"),
+                        actor: &format!("face:{}", memory.face()),
                     },
                 );
                 let (fact, unchanged) = match written {
@@ -503,7 +560,7 @@ impl MemoryTool {
                     ));
                 };
                 let change = crate::memory::store::Change {
-                    actor: format!("face:{HOST_FACE_ID}"),
+                    actor: format!("face:{}", memory.face()),
                     origins: json!(["user"]),
                     sources: json!({ "roomId": memory.room_id, "entryIds": [entry_id], "quote": quote }),
                 };
@@ -550,7 +607,8 @@ impl MemoryTool {
                 let forgotten = if id.starts_with('p') {
                     lines::forget_preference(app, &owner, &id)
                 } else {
-                    lines::forget_fact(app, &owner, &id, &format!("face:{HOST_FACE_ID}")).map(drop)
+                    lines::forget_fact(app, &owner, &id, &format!("face:{}", memory.face()))
+                        .map(drop)
                 };
                 match forgotten {
                     Ok(()) => Ok(ToolResult::text(format!("Forgot [{id}].",))),

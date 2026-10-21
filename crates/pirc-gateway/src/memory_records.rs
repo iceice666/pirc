@@ -492,7 +492,7 @@ fn placeholders(count: usize) -> String {
     }
 }
 
-/// Where a search without a workspace looked, in a project with links.
+/// Where a search without a workspace looked, for a face with links.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Searched {
     /// The linked workspaces and the other clones of their repositories.
@@ -582,7 +582,7 @@ pub fn search(
     search_in(app, user, query, workspace, limit, None, false).map(|(hits, _)| hits)
 }
 
-/// [`search`] from a chat in `project`: without a workspace, and unless
+/// [`search`] for a face (`face`, its id): without a workspace, and unless
 /// `everywhere`, the workspaces it is linked to (and their clones) first,
 /// then every workspace if nothing is found there.
 pub fn search_in(
@@ -591,7 +591,7 @@ pub fn search_in(
     query: &str,
     workspace: Option<&str>,
     limit: Option<i64>,
-    project: Option<&str>,
+    face: Option<&str>,
     everywhere: bool,
 ) -> ApiResult<(Vec<Value>, Option<Searched>)> {
     let terms = Terms::of(query)?;
@@ -606,10 +606,10 @@ pub fn search_in(
         };
         return Ok((find(Some(&scope))?, None));
     }
-    if !everywhere && let Some(project) = project {
+    if !everywhere && let Some(face) = face {
         let scope = {
             let conn = app.db.lock();
-            let links = crate::project_links::links(&conn, project)?;
+            let links = crate::project_links::links(&conn, face)?;
             Scope {
                 repos: crate::project_links::repos(&conn, &links)?,
                 ids: links.into_iter().map(|link| link.workspace_id).collect(),

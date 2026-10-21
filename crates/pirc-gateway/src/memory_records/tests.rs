@@ -559,7 +559,7 @@ fn a_project_searches_its_linked_workspaces_first() {
         conn.set_workspace_repos("n2", &[("clone".into(), Some("github.com/me/pirc".into()))])
             .unwrap();
         conn.execute(
-            "INSERT INTO project_links (project_workspace_id,workspace_id,repo,created_at) VALUES ('home:trip','n1:repo',NULL,1)",
+            "INSERT INTO project_links (face_id,workspace_id,repo,created_at) VALUES ('host','n1:repo',NULL,1)",
             [],
         )
         .unwrap();
@@ -601,25 +601,25 @@ fn a_project_searches_its_linked_workspaces_first() {
 
     // The linked workspace, its ledger and the clones of its repository.
     assert_eq!(
-        run("nginx", None, Some("home:trip"), false),
+        run("nginx", None, Some("host"), false),
         (in_project.clone(), Some(Searched::Linked))
     );
     // Nothing there: every workspace, said so.
     assert_eq!(
-        run("postgres", None, Some("home:trip"), false),
+        run("postgres", None, Some("host"), false),
         (vec![id(&elsewhere)], Some(Searched::Everywhere))
     );
     assert_eq!(
-        run("redis", None, Some("home:trip"), false),
+        run("redis", None, Some("host"), false),
         (vec![], Some(Searched::Everywhere))
     );
     // Asked for everything, or for one workspace: links play no part.
     assert_eq!(
-        run("nginx", None, Some("home:trip"), true),
+        run("nginx", None, Some("host"), true),
         (everything.clone(), None)
     );
     assert_eq!(
-        run("nginx", Some("n2:else"), Some("home:trip"), false),
+        run("nginx", Some("n2:else"), Some("host"), false),
         (vec![id(&elsewhere)], None)
     );
     // A project without links, and the top-level chats, search everything.
@@ -633,7 +633,7 @@ fn a_project_searches_its_linked_workspaces_first() {
     );
     // Never someone else's.
     assert!(
-        search_in(&app, OTHER, "nginx", None, None, Some("home:trip"), false)
+        search_in(&app, OTHER, "nginx", None, None, Some("host"), false)
             .unwrap()
             .0
             .is_empty()

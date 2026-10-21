@@ -34,6 +34,13 @@ pub enum Reply {
         name: String,
         args: Value,
     },
+    /// Say this text, then call one tool, in the same reply.
+    TextThenTool {
+        text: String,
+        id: String,
+        name: String,
+        args: Value,
+    },
     /// Answer with a non-streaming HTTP error.
     Status(u16, String),
     /// Wait for a permit of the semaphore (none: until the client goes
@@ -221,6 +228,22 @@ fn chunks(reply: &Reply) -> Vec<String> {
                 }
             }
             out.push(chunk(json!({}), json!("stop")));
+        }
+        Reply::TextThenTool {
+            text,
+            id,
+            name,
+            args,
+        } => {
+            out.push(chunk(json!({ "content": text }), Value::Null));
+            let mut tool = chunks(&Reply::Tool {
+                id: id.clone(),
+                name: name.clone(),
+                args: args.clone(),
+            });
+            // Its own usage and end come after.
+            out.append(&mut tool);
+            return out;
         }
         Reply::Tool { id, name, args } => {
             let args = args.to_string();

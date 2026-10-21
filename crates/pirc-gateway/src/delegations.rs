@@ -162,7 +162,7 @@ impl Delegation {
         }
     }
 
-    fn face(&self) -> &str {
+    pub fn face(&self) -> &str {
         self.face_id.as_deref().unwrap_or(HOST_FACE_ID)
     }
 }
@@ -392,14 +392,14 @@ pub fn public(conn: &Connection, delegation: &Delegation) -> Value {
 }
 
 /// The directory workspaces workers can go to, and whether their node is
-/// online now. In a project, those it is linked to come first (`linked`),
+/// online now. For a face, those it is linked to come first (`linked`),
 /// then the other clones of their repositories; a linked one whose node no
 /// longer has it stays listed, marked `removed`.
-pub fn workspaces(app: &App, project: Option<&str>) -> ApiResult<Value> {
+pub fn workspaces(app: &App, face: Option<&str>) -> ApiResult<Value> {
     let (all, links, repos) = {
         let conn = app.db.lock();
-        let links = match project {
-            Some(project) => project_links::links(&conn, project)?,
+        let links = match face {
+            Some(face) => project_links::links(&conn, face)?,
             None => Vec::new(),
         };
         let repos = project_links::repos(&conn, &links)?;
@@ -1988,7 +1988,11 @@ fn anchor_changed(app: &App, delegation: &Delegation) {
         conn.update_message(&delegation.room_id, anchor_id, &body, false)
     };
     match updated {
-        Ok(message) => app.room_message_updated(&message),
+        Ok(message) => {
+            app.room_message_updated(&message);
+            // What its face is doing changed with it (plan 10).
+            crate::brain::faces::presence_changed(app, delegation.face(), &delegation.room_id);
+        }
         Err(error) => crate::log::warn(&format!(
             "worker {}: cannot update its message: {}",
             delegation.id, error.message

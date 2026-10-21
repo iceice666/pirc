@@ -252,7 +252,8 @@ expression: "stable(t.into_value(), &[imap_port, site_port])"
           "email_list",
           "email_search",
           "email_read",
-          "source_search"
+          "source_search",
+          "speak_as"
         ]
       }
     },
@@ -695,7 +696,8 @@ expression: "stable(t.into_value(), &[imap_port, site_port])"
         "email_read",
         "calendar_list",
         "calendar_read",
-        "source_search"
+        "source_search",
+        "speak_as"
       ]
     },
     "step": "what woke it"
@@ -949,7 +951,8 @@ expression: "stable(t.into_value(), &[imap_port, site_port])"
         "moodle_forum",
         "moodle_notifications",
         "source_search",
-        "room_sources"
+        "room_sources",
+        "speak_as"
       ]
     },
     "step": "the brain reads Moodle"

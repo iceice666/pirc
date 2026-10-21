@@ -153,15 +153,6 @@ CREATE TABLE push_subscriptions (
 );
 CREATE INDEX push_subscriptions_owner ON push_subscriptions(owner_user);
 
--- The directory workspaces a chat project is about (docs/architecture/assistant-memory.md): a
--- default and an ordering, never a permission. No foreign key on workspace_id: a
--- link to a workspace that went away stays, shown as such. repo is the workspace's
--- normalized origin, so a link also covers the other clones of its repository.
-CREATE TABLE project_links (
-  project_workspace_id TEXT NOT NULL REFERENCES workspaces(id), workspace_id TEXT NOT NULL,
-  repo TEXT, created_at INTEGER NOT NULL,
-  PRIMARY KEY (project_workspace_id, workspace_id)
-);
 
 -- Rooms (docs/architecture/direction.md §2.2): every room is one thread that
 -- is always there. Rooms are the household's, not one user's; reads are per
@@ -190,9 +181,12 @@ CREATE TABLE room_messages (
   kind TEXT NOT NULL CHECK (kind IN ('text', 'line', 'progress', 'question')),
   body_json TEXT NOT NULL, thread_id TEXT REFERENCES threads(id),
   created_at INTEGER NOT NULL, edited_at INTEGER, pinned_at INTEGER,
+  -- What the brain said the turn was about (its `topic` tool, plan 10).
+  topic TEXT,
   UNIQUE (room_id, seq)
 );
 CREATE INDEX room_messages_pinned ON room_messages(room_id, pinned_at) WHERE pinned_at IS NOT NULL;
+CREATE INDEX room_messages_topic ON room_messages(room_id, topic) WHERE topic IS NOT NULL;
 
 -- What each user has read of a room, and since when it waits for their reply.
 CREATE TABLE room_reads (
@@ -219,10 +213,41 @@ CREATE TABLE threads (
   anchor_message_id TEXT NOT NULL, created_at INTEGER NOT NULL, closed_at INTEGER
 );
 
--- Faces the brain speaks through (plan 10); only the host, seeded with the schema.
+-- Faces the brain speaks through (plans/rewrite/10-faces.md). role_md is
+-- what the face does (its instructions); territory_json holds the rooms it
+-- answers in and the sources it watches ({"rooms": [...], "sources": [...]});
+-- the workspaces it is about are its project_links. Exactly one face is the
+-- host (is_host), seeded with the schema; it is never archived. An archived
+-- face stays listed, greyed out, until someone hides it (hidden_at).
 CREATE TABLE faces (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, bio TEXT NOT NULL DEFAULT '', tone TEXT NOT NULL DEFAULT '',
-  avatar TEXT, color TEXT, created_at INTEGER NOT NULL
+  avatar TEXT, color TEXT, created_at INTEGER NOT NULL,
+  role_md TEXT NOT NULL DEFAULT '', territory_json TEXT NOT NULL DEFAULT '{}',
+  is_host INTEGER NOT NULL DEFAULT 0, archived_at INTEGER, hidden_at INTEGER
+);
+CREATE UNIQUE INDEX faces_one_host ON faces(is_host) WHERE is_host = 1;
+
+-- The directory workspaces a face is about (plan 10; the chat projects'
+-- links before, docs/architecture/assistant-memory.md): a default and an
+-- ordering, never a permission. No foreign key on workspace_id: a link to a
+-- workspace that went away stays, shown as such. repo is the workspace's
+-- normalized origin, so a link also covers the other clones of its repository.
+CREATE TABLE project_links (
+  face_id TEXT NOT NULL REFERENCES faces(id), workspace_id TEXT NOT NULL,
+  repo TEXT, created_at INTEGER NOT NULL,
+  PRIMARY KEY (face_id, workspace_id)
+);
+
+-- Topics (decision #18): the brain tags what a turn was about with its
+-- `topic` tool, and the turn's messages carry the name (room_messages.topic).
+-- What each topic touches (a workspace or a source, as the brain said), and
+-- when moving it elsewhere was last suggested (once a day at most, decision
+-- #11). hint_room_id: the room the next turn's host is asked to suggest.
+CREATE TABLE room_topics (
+  room_id TEXT NOT NULL REFERENCES rooms(id), name TEXT NOT NULL,
+  workspace_id TEXT, source_id TEXT, updated_at INTEGER NOT NULL,
+  suggested_at INTEGER, hint_room_id TEXT REFERENCES rooms(id),
+  PRIMARY KEY (room_id, name)
 );
 
 -- Files sent into rooms, kept by the gateway (it has no node to keep them

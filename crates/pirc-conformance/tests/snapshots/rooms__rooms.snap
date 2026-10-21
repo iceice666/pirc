@@ -41,6 +41,12 @@ expression: t.into_value()
   },
   {
     "observed": {
+      "faces": [
+        {
+          "faceId": "host",
+          "state": "idle"
+        }
+      ],
       "presence": [],
       "type": "ready",
       "watermark": {
@@ -882,6 +888,7 @@ expression: t.into_value()
         "threadId": null,
         "user": null
       },
+      "loops": [],
       "to": {
         "archivedAt": null,
         "createdAt": "<epoch-ms>",
@@ -1476,6 +1483,12 @@ expression: t.into_value()
         "type": "room_changed"
       },
       {
+        "faces": [
+          {
+            "faceId": "host",
+            "state": "idle"
+          }
+        ],
         "presence": [],
         "type": "ready",
         "watermark": {
@@ -1497,6 +1510,12 @@ expression: t.into_value()
         }
       },
       {
+        "faces": [
+          {
+            "faceId": "host",
+            "state": "idle"
+          }
+        ],
         "presence": [],
         "type": "ready",
         "watermark": {

@@ -56,7 +56,11 @@ expression: stable(t.into_value())
         "worker_status",
         "stop_worker",
         "answer_worker_question",
-        "workspace_read"
+        "workspace_read",
+        "speak_as",
+        "topic",
+        "create_face",
+        "move_room"
       ]
     },
     "step": "the first call's tools and preferences"
@@ -125,6 +129,14 @@ expression: stable(t.into_value())
       [
         "room",
         "built-in"
+      ],
+      [
+        "face",
+        "faces"
+      ],
+      [
+        "face-rules",
+        "built-in default"
       ],
       [
         "memory:preferences",

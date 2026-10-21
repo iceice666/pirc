@@ -156,8 +156,19 @@ pub struct NewWake<'a> {
     pub kind: Kind,
     pub trigger: Value,
     pub room_id: &'a str,
+    /// The face it wears; the host, or whoever answers there, when none.
+    pub face_id: Option<&'a str>,
     pub user: Option<&'a str>,
     pub scheduled_at: i64,
+}
+
+/// A face's latest wakes, newest first.
+pub fn of_face(conn: &Connection, face_id: &str, limit: usize) -> ApiResult<Vec<Wake>> {
+    let mut statement = conn.prepare(
+        "SELECT * FROM wakes WHERE COALESCE(face_id, 'host')=? ORDER BY created_at DESC, rowid DESC LIMIT ?",
+    )?;
+    let rows = statement.query_map(params![face_id, limit as i64], Wake::from_row)?;
+    Ok(rows.collect::<Result<_, _>>()?)
 }
 
 pub fn get(conn: &Connection, id: &str) -> ApiResult<Wake> {
@@ -179,7 +190,7 @@ fn insert(conn: &Connection, new: &NewWake<'_>, attempt: i64, now: i64) -> ApiRe
             new.kind.as_str(),
             new.trigger.to_string(),
             new.room_id,
-            HOST_FACE_ID,
+            new.face_id.unwrap_or(HOST_FACE_ID),
             new.user,
             new.scheduled_at,
             attempt,
@@ -259,6 +270,7 @@ pub fn put_back(conn: &Connection, wake: &Wake, now: i64) -> ApiResult<Wake> {
             },
             trigger: wake.trigger.clone(),
             room_id: &wake.room_id,
+            face_id: wake.face_id.as_deref(),
             user: wake.user.as_deref(),
             scheduled_at: now,
         },
@@ -345,6 +357,7 @@ pub fn for_loop(app: &App, open_loop: &OpenLoop, moment: &str, at: Option<i64>) 
         kind: Kind::Anchor,
         trigger: json!({ "loopId": open_loop.id, "moment": moment, "at": at, "autoClose": auto_close }),
         room_id: &room,
+        face_id: open_loop.face_id.as_deref(),
         user: Some(&open_loop.user),
         scheduled_at: crate::util::now_ms(),
     };

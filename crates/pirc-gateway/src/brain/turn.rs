@@ -16,6 +16,7 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 use tokio::sync::Notify;
 
+use super::face_tools::FacesFeature;
 use super::loop_tools::LoopsFeature;
 use super::memory::{BrainPromoter, MemoryFeature, RoomMemory};
 use super::source_tools::SourcesFeature;
@@ -84,6 +85,7 @@ impl RoomAgent {
             app.clone(),
             room_id.to_owned(),
             progress.clone(),
+            memory.clone(),
         ));
         let agent = Agent::new(AgentOptions {
             config: config(&home),
@@ -116,6 +118,10 @@ impl RoomAgent {
                 Rc::new(SourcesFeature {
                     memory: memory.clone(),
                     runtime: runtime.clone(),
+                }),
+                Rc::new(FacesFeature {
+                    memory: memory.clone(),
+                    progress: progress.clone(),
                 }),
             ],
             acquire_write: None,
@@ -187,22 +193,25 @@ fn brain_mode() -> pirc_protocol::mode::Mode {
 }
 
 /// The reply being streamed into the room: one room message per assistant
-/// message that has text, `streaming: true` until it ends.
+/// message that has text, `streaming: true` until it ends, spoken by the
+/// face the brain speaks as when it starts.
 struct Reply {
     app: AppState,
     room_id: String,
     progress: Rc<Progress>,
+    memory: Rc<RoomMemory>,
     message_id: Option<String>,
     text: String,
     written_at: i64,
 }
 
 impl Reply {
-    fn new(app: AppState, room_id: String, progress: Rc<Progress>) -> Self {
+    fn new(app: AppState, room_id: String, progress: Rc<Progress>, memory: Rc<RoomMemory>) -> Self {
         Self {
             app,
             room_id,
             progress,
+            memory,
             message_id: None,
             text: String::new(),
             written_at: 0,
@@ -292,7 +301,7 @@ impl Reply {
                 None => db
                     .post_message(
                         &self.room_id,
-                        Speaker::Face(HOST_FACE_ID),
+                        Speaker::Face(&self.memory.face()),
                         MessageKind::Text,
                         &body,
                     )
@@ -305,6 +314,8 @@ impl Reply {
         match result {
             Ok((message, true)) => {
                 self.message_id = Some(message.id.clone());
+                self.memory
+                    .add_turn_messages(std::slice::from_ref(&message.id));
                 self.app.room_message(&message);
                 room_changed(&self.app, &self.room_id);
             }

@@ -186,6 +186,8 @@ async fn update_room(
 #[serde(rename_all = "camelCase")]
 struct MoveRoom {
     to_room_id: String,
+    /// The conversation's topic (plan 10): its open loops go along.
+    topic: Option<String>,
 }
 
 async fn move_room(
@@ -193,13 +195,19 @@ async fn move_room(
     Path(room_id): Path<String>,
     ReqBody(body): ReqBody,
 ) -> Handled {
-    let MoveRoom { to_room_id } = body.parse()?;
-    let moved = app.db.lock().move_room(id(&room_id)?, id(&to_room_id)?)?;
-    app.room_message(&moved.from_line);
-    app.room_message(&moved.to_line);
-    app.room_changed(&moved.from);
-    app.room_changed(&moved.to);
-    Ok(ok(json!(moved)))
+    let MoveRoom { to_room_id, topic } = body.parse()?;
+    let topic = topic
+        .map(|topic| crate::brain::moving::topic_name(&topic))
+        .transpose()
+        .map_err(|message| ApiError::new(400, "invalid_input", message))?;
+    let done = crate::brain::moving::move_room(
+        &app.db.lock(),
+        id(&room_id)?,
+        id(&to_room_id)?,
+        topic.as_deref(),
+    )?;
+    crate::brain::moving::moved(&app, &done);
+    Ok(ok(crate::brain::moving::public(&done)))
 }
 
 async fn list_messages(

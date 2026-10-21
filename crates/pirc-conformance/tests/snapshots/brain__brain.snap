@@ -153,7 +153,11 @@ expression: t.into_value()
           "worker_status",
           "stop_worker",
           "answer_worker_question",
-          "workspace_read"
+          "workspace_read",
+          "speak_as",
+          "topic",
+          "create_face",
+          "move_room"
         ]
       },
       "calls": 1
@@ -252,7 +256,11 @@ expression: t.into_value()
           "worker_status",
           "stop_worker",
           "answer_worker_question",
-          "workspace_read"
+          "workspace_read",
+          "speak_as",
+          "topic",
+          "create_face",
+          "move_room"
         ]
       },
       "calls": 3
@@ -383,6 +391,14 @@ expression: t.into_value()
           "built-in"
         ],
         [
+          "face",
+          "faces"
+        ],
+        [
+          "face-rules",
+          "built-in default"
+        ],
+        [
           "memory:preferences",
           "memory"
         ],
@@ -414,7 +430,11 @@ expression: t.into_value()
         "worker_status",
         "stop_worker",
         "answer_worker_question",
-        "workspace_read"
+        "workspace_read",
+        "speak_as",
+        "topic",
+        "create_face",
+        "move_room"
       ]
     },
     "step": "the latest call's context"
