@@ -164,6 +164,11 @@ pub struct Delivery {
     pub model: Option<DeliveryModel>,
     #[serde(default)]
     pub thinking: Option<String>,
+    /// `read-only`: the session works read-only from now on (a worker the
+    /// brain called while awake, plans/rewrite/06-workers.md). The gateway
+    /// can only narrow a session this way, never widen it.
+    #[serde(default)]
+    pub approval_mode: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -625,7 +630,8 @@ impl RunnerManager {
     }
 
     /// `deliver`: start the agent if needed; `set_role`, `set_model`,
-    /// `set_thinking_level` (each must succeed, else 503), then `deliver`.
+    /// `set_thinking_level`, `set_approval_mode` (each must succeed, else
+    /// 503), then `deliver`.
     /// The message runs next, after any run in progress.
     pub async fn deliver(&self, session_id: &str, delivery: &Delivery) -> ApiResult<()> {
         let lock = self.command_lock(session_id);
@@ -649,6 +655,9 @@ impl RunnerManager {
             .filter(|level| !level.is_empty())
         {
             commands.push(json!({ "type": "set_thinking_level", "level": thinking }));
+        }
+        if let Some(mode) = &delivery.approval_mode {
+            commands.push(json!({ "type": "set_approval_mode", "mode": mode }));
         }
         for command in commands {
             let Value::Object(command) = command else {

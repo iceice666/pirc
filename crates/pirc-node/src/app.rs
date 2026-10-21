@@ -669,7 +669,7 @@ fn next_agent_settings(
 fn delivery(body: &Value) -> ApiResult<Delivery> {
     // `.optional()` refuses `null`, which serde would read as `None`.
     if let Value::Object(map) = body
-        && ["details", "role", "model", "thinking"]
+        && ["details", "role", "model", "thinking", "approvalMode"]
             .iter()
             .any(|key| map.get(*key).is_some_and(Value::is_null))
     {
@@ -693,7 +693,11 @@ fn delivery(body: &Value) -> ApiResult<Delivery> {
         && delivery
             .thinking
             .as_deref()
-            .is_none_or(|level| THINKING_LEVELS.contains(&level));
+            .is_none_or(|level| THINKING_LEVELS.contains(&level))
+        && delivery
+            .approval_mode
+            .as_deref()
+            .is_none_or(|mode| mode == "read-only");
     if !ok {
         return Err(ApiError::invalid_input());
     }
@@ -982,17 +986,18 @@ async fn answer(node: Node, request: Request) -> ApiResult<Response> {
     answer_interaction(&node, &session, &interaction_id, answer).await
 }
 
-/// The gateway relays the session owner's answer from the chat that
-/// delegated this session's task, without a control lease (the gateway
-/// checks the user and the delegation; docs/architecture/security-decisions.md).
-/// Only a confirmation's yes or no.
+/// The gateway relays the session owner's answer from the thread of the
+/// worker this session is (plans/rewrite/06-workers.md), without a control
+/// lease (the gateway checks the user and the worker;
+/// docs/architecture/security-decisions.md). A confirmation takes only a
+/// yes or no; a question its answer, or cancelling it.
 async fn relayed_answer(node: Node, request: Request) -> ApiResult<Response> {
     let session = claim_mutable(&node, &request)?;
     let interaction_id = param(&request, "interactionId").to_owned();
     let map = object(request.json())?;
     let answer = interaction_answer(map.get("answer").unwrap_or(&Value::Null))?;
     let confirm = node.db.lock().get_interaction(&interaction_id)?.kind == "confirm";
-    if !confirm || !answer.get("confirmed").is_some_and(Value::is_boolean) {
+    if confirm && !answer.get("confirmed").is_some_and(Value::is_boolean) {
         return Err(ApiError::invalid_input());
     }
     answer_interaction(&node, &session, &interaction_id, answer).await
@@ -1517,7 +1522,7 @@ mod tests {
         assert!(
             delivery(
                 &json!({ "customType": "assistant-delegation", "content": "c",
-            "role": "reviewer", "thinking": "high" })
+            "role": "reviewer", "thinking": "high", "approvalMode": "read-only" })
             )
             .is_ok()
         );
@@ -1530,6 +1535,8 @@ mod tests {
             json!({ "customType": "assistant-delegation", "content": "c", "role": null }),
             json!({ "customType": "assistant-delegation", "content": "c", "model": null }),
             json!({ "customType": "assistant-delegation", "content": "c", "thinking": null }),
+            json!({ "customType": "assistant-delegation", "content": "c", "approvalMode": "full-access" }),
+            json!({ "customType": "assistant-delegation", "content": "c", "approvalMode": null }),
         ] {
             assert!(delivery(&bad).is_err(), "{bad}");
         }
