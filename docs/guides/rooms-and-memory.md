@@ -1,4 +1,4 @@
-# Rooms, memory, open loops, workers and sources
+# Rooms, faces, memory, open loops, workers and sources
 
 [User guides](README.md) · [Assistant memory reference](../architecture/assistant-memory.md)
 
@@ -10,6 +10,29 @@ between conversations. The reference has the exact rules and routes.
 `#general` always exists; make a room per topic if you like. Messages you send close
 together are answered as one batch a few seconds after you stop typing (Cmd+Enter sends
 at once). Every device sees the same rooms.
+
+## Faces
+
+pirc is one mind with several faces. **pirc**, the host, is always there and answers in
+`#general` and in every room nobody else has. A project can have a face of its own ("make
+SlimeOS a lead", or **Add** in the member list): its name, who it is, how it talks, what it
+does, the rooms it answers in, the workspaces it is about and the sources it watches. Every
+message shows which face said it; they share one memory.
+
+Who answers: the face you name with `@` (type `@` for a list), else the one that spoke
+last in the room, else the room's own face, else pirc. The host may hand something over
+and the project's face answers in the same turn; faces never chat with each other.
+
+The **Members** button beside the room lists the faces and what each is doing (thinking,
+working on something, waiting for your answer). Click one, or a face's name on a message,
+for its page: change anything there and it applies from its next reply; see the loops it
+holds and what it did lately. pirc's own page also holds `SOUL.md`, `CHAT.md` and your
+preferences. **Archive** a face when its project is done: it stays in the list, greyed
+out, until you **Hide** it, and answers nowhere.
+
+When a conversation in one room keeps going about something another room covers (15
+messages or more), pirc asks once that day whether to continue there; say yes and it moves,
+with the open loops of that conversation.
 
 ## Memory
 

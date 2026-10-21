@@ -93,6 +93,16 @@ start `pirc.sqlite` migrates to schema 7: the `sources`, `source_items` and
 directory. The routes are `/api/sources` and below, reachable by device tokens
 only with the backends' management grant. Nothing changes for nodes.
 
+The brain speaks through faces (plans/rewrite/10-faces.md). On first start
+`pirc.sqlite` migrates to schema 8: `faces` gains a role, a territory, the
+host flag and archive/hide times; `project_links` is made again owned by faces
+(nothing in `pirc.sqlite` ever wrote a chat project's link, so it was empty);
+`room_messages` gains `topic`, and `room_topics` is new. An older gateway
+refuses schema 8. The routes are `/api/faces` and below; `POST
+/api/rooms/:id/move` takes an optional `topic`; the rooms' stream gains
+`face_changed` and `face_presence`, and its `ready` frame `faces`. Nothing
+changes for nodes.
+
 ## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13

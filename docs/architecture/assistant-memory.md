@@ -88,11 +88,12 @@ Search keeps `owner_user` and status filters. The brain's `memory_search` covers
 
 ## Project links
 
-Only the user edits links through authenticated `GET`/`PUT /api/workspaces/:id/links`; there is no agent operation. A chat project (not top-level `chats`) may link at most 20 directory workspaces. Links preserve their repository identity, cover other clones and may outlive a removed workspace.
+A face's territory (plans/rewrite/10-faces.md) links it to directory workspaces (`project_links`, owned by the face since the chat projects were removed): people set them on the face's page (`PATCH /api/faces/:id` `territory.workspaces`, at most 50), the brain when it makes a face someone asked for. Links preserve their repository identity, cover other clones and may outlive a removed workspace.
 
 Links are defaults and ordering, **not permissions**:
 
-- A worker always names its workspace (the brain has no project; links order nothing for it yet).
+- A worker always names its workspace; the `workers` section lists the face's linked workspaces first, marked `yours` (another clone: `a clone of yours`).
+- A topic about a linked workspace belongs in the face's rooms: the guards for suggesting a move look there.
 - Search without a workspace tries the live linked workspaces/repositories first, then everything if empty. `everywhere: true` skips that preference; results say which scope was searched.
 - Unlinked workspaces remain reachable.
 
