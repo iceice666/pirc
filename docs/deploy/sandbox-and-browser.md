@@ -92,7 +92,7 @@ Without setup, this is what works inside the sandbox:
 | --------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | git over HTTPS, public repository | Works          | Goes through the sandbox's proxy; `github.com` is in the default domains.                                                                                                                                                       |
 | git over HTTPS, private or push   | No credentials | `~/.git-credentials`, `~/.netrc` and the keychain are unreadable, and `GH_TOKEN`/`GITHUB_TOKEN` are not passed on ([Node](node.md#agent-process)).                                                                              |
-| `gh`                              | Does not start | `~/.config/gh` is unreadable. On macOS, its TLS check also needs the system trust service, which the sandbox blocks (`x509: OSStatus -26276`).                                                                                  |
+| `gh`                              | Does not start | `~/.config/gh` is unreadable. If you provide a token and writable config directory, its TLS check may still hit the sandbox's blocked macOS trust service (`x509: OSStatus -26276`).                                            |
 | git over SSH                      | Fails          | `~/.ssh` is unreadable. On macOS, the sandbox's own `GIT_SSH_COMMAND` (`nc -X 5`) cannot send the credentials its proxy requires: `This proxy requires authentication, and this client did not offer an authentication method`. |
 
 So the agent falls back to `unsandboxed_bash`, and you approve every push. Two setups make it work inside the sandbox: [HTTPS with a token](#https-with-a-token) (recommended) or [SSH with a dedicated key](#ssh-with-a-dedicated-key). Both are `env` entries in the node's `$PIRC_CONFIG_DIR/config.json`, which the agent adds to `bash` and `background_task` (also when called from a `ptc` script), hooks and teammates (not to `unsandboxed_bash`, which runs with the node account's own setup). They apply from the next agent start. Values are literal strings: `~` is not expanded there, except where the SSH command line below expands it itself.
@@ -109,7 +109,7 @@ The examples below originated with srt 0.0.78. Native sandbox coverage includes 
   "env": {
     "GH_TOKEN": "github_pat_…",
     "GH_CONFIG_DIR": "/Users/you/.local/share/pirc-sandbox/gh",
-    "SSL_CERT_FILE": "/etc/ssl/cert.pem",
+    "SSL_CERT_FILE": "/path/to/updated-ca-bundle.pem",
     "GIT_CONFIG_COUNT": "3",
     "GIT_CONFIG_KEY_0": "credential.helper",
     "GIT_CONFIG_VALUE_0": "",
@@ -123,7 +123,7 @@ The examples below originated with srt 0.0.78. Native sandbox coverage includes 
 
 - `GH_TOKEN`: `gh` uses it instead of `~/.config/gh/hosts.yml`. For a fine-grained token: Contents read/write to push, Pull requests read/write for `gh pr`, Metadata read. To keep it out of `config.json`, put it in the node's environment instead and name it in `PIRC_AGENT_ENV_ALLOW=GH_TOKEN` ([Node](node.md#agent-process)).
 - `GH_CONFIG_DIR`: the absolute path (with your home in place of `/Users/you`) of a directory the sandbox may write, outside `~/.config/gh`. It may be empty; create it once (`mkdir -p ~/.local/share/pirc-sandbox/gh`).
-- `SSL_CERT_FILE` (macOS only): makes `gh` and other Go programs verify TLS against this bundle, which macOS ships, instead of the system trust service. Other tools honour it too.
+- `SSL_CERT_FILE` (for `gh` where its Go system-root loader honors it): point this to a maintained, current CA bundle that the sandbox can read. For example, use your package manager's CA bundle and verify its actual path and update level; do not assume macOS's `/etc/ssl/cert.pem` has current distrust updates. Go clients can choose different trust paths, so this variable does not force every Go program or other TLS client to bypass its platform verifier. See the [TLS deployment note](upgrades.md#tls-trust-update-october-2026).
 - `GIT_CONFIG_*`: git configuration from the environment, so your `~/.gitconfig` (read-only in the sandbox, and shared with you) stays unchanged.
   - Key 0 clears inherited credential helpers. For example, Nix's git enables `osxkeychain`, which cannot reach the keychain and prints `failed to store: -60008`.
   - Key 1 gives git the same token through `gh`.
@@ -160,7 +160,7 @@ Add `~/.local/pirc-ssh/id_ed25519.pub` to each repository as a deploy key with w
 - [`scripts/sandbox-ssh-proxy.py`](../../scripts/sandbox-ssh-proxy.py) does what the sandbox's `nc -X 5` was meant to do, with the per-session credentials the sandbox puts in `$ALL_PROXY`. The proxy still applies the domain allowlist: `github.com` without a port allows port 22, while hosts outside the list are refused. The script relies on those details of the sandbox proxy, so check it again after a pirc upgrade changes them.
 - An `ssh-agent` instead of a key file: add its socket to `sandbox.network.allowUnixSockets`, put `SSH_AUTH_SOCK` in `env`, and drop `-i` and `IdentitiesOnly`. Agents can then use every key loaded in it. Not tested.
 - Linux: the native `GIT_SSH_COMMAND` authenticates with `pirc-node sandbox-bridge connect`, but `~/.ssh` is still unreadable, so the same setup applies. Not tested.
-- `gh` still needs the token setup; to use SSH for git and `gh` for the API, keep `GH_TOKEN`, `GH_CONFIG_DIR` and `SSL_CERT_FILE` from it and leave out `GIT_CONFIG_*`.
+- `gh` still needs the token setup; to use SSH for git and `gh` for the API, keep `GH_TOKEN`, `GH_CONFIG_DIR` and the maintained-bundle `SSL_CERT_FILE` setting from it and leave out `GIT_CONFIG_*`.
 
 ### What it does not cover
 
