@@ -48,6 +48,11 @@ the current revision, permissions and expiry again. Confirming the same card on
 two devices applies it once. `proposal_result` reports applied, rejected,
 expired or stale results; a pending proposal is not a saved event.
 
+Agent-assisted calendar management requires the updated node/agent binary as
+well as the Gateway. Older agents have no `calendar` tool. Update nodes before
+adding `calendar` to a mode's explicit feature/tool configuration; an old node
+correctly refuses a mode vocabulary it does not understand.
+
 ## Notifications and synchronization
 
 Personal reminders use the existing encrypted Web Push / Android UnifiedPush

@@ -196,6 +196,8 @@ fn message(
             "calendar": true,
             "eventId": event.id,
             "occurrenceStart": occurrence,
+            "date": start_date,
+            "startAt": start_at,
         }),
         interaction: None,
     }
@@ -349,6 +351,8 @@ mod tests {
         );
         assert_eq!(message.target["calendar"], true);
         assert_eq!(message.target["eventId"], "event-1");
+        assert_eq!(message.target["date"], "2026-10-22");
+        assert_eq!(message.target["startAt"], 1_792_619_400_000_i64);
         assert!(message.tag.contains("2026-10-22T09:00"));
     }
 
