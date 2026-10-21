@@ -35,13 +35,13 @@
 
 ## 工作項目
 
-- [ ] 狀態層重寫與事件 reducer；`fixtures/timeline/` 的 room/thread golden cases。
-- [ ] 版面與房間列表；手機 tabs。
-- [ ] 訊息列四種 kind；line 撤銷；progress 原地更新；question。
-- [ ] 討論串側欄；成員列表與面孔頁；主持人頁。
-- [ ] 引擎蓋頁與深連結；`SidePanel` 升格。
-- [ ] 設定整理；通知目標改房間。
-- [ ] 刪舊導航與元件；`mock.ts` demo。
+- [x] 狀態層重寫與事件 reducer；`fixtures/timeline/` 的 room/thread golden cases。（2026-10-21）跟計畫不同：不是重寫 `app.svelte.ts`，而是讓兩邊分家。房間的事件改成純函式 `lib/room-events.ts`（`reduceRoomEvent(view, event) → {patch, effects}`，effects 是 `mark_read` / `refresh_room` / `refresh_list` / `refresh_thread_workers`），`RoomsState` 只保存結果並執行 effects。`app.svelte.ts` 改名 `engine.svelte.ts`（`engine` 單例，只給引擎蓋用）；`MemorySettings` 改收 `revision` prop，房間頁因此不再載入引擎的狀態，`boundaries.test.ts` 走靜態 import 守住兩個方向。草稿以房間為 key（`relay.room-draft.<room>`，切房間、重載都在）。`fixtures/timeline/rooms` 的投影加了 thinking、face presence、faces、開著的討論串、loop/wake 版本與 effects，新案例 `faces-and-a-thread.json`；fixture 測試直接跑 reducer。驗證：web `vitest` 50 檔 348 個、`svelte-check` 0/0、build。
+- [x] 版面與房間列表；手機 tabs。（2026-10-21）房間列表照活動排序、未讀點、「輪到你」；封存的房間收在列表下的「Archived」摺疊（`GET /api/rooms?archived=1`，點開才載入）。`MobileTabs` 改成兩頁共用、tab 由頁面給：房間頁是 Rooms（徽章＝等你回的房間數）/ Members / Engine（連結）/ Settings，引擎蓋是 Rooms（連結）/ Engine（徽章＝等你的 session）/ Settings；手機上側欄、成員、討論串都停在 tabs 上方。驗證：`rooms.svelte.test.ts`、`Engine.test.ts` 的 tabs 案例；web `vitest` 50 檔 351 個、`svelte-check` 0/0、build。
+- [x] 訊息列四種 kind；line 撤銷；progress 原地更新；question。（2026-10-21）照決定，「正在做」由 web 自己推：reducer 從 `thread_message(_updated)` 記下每個討論串工人最後做的事（`threadActivity`，不管討論串開沒開），工作中的錨點訊息原地顯示那一行；gateway 不寫 progress（Android 照做同一推導）。`kind='progress'` 若出現就畫成原地更新的 line（`role=status`）。line 撤銷沿用 plans 03–05 的 Don't keep / loop / Cancel，另加「Details」連到引擎蓋對應分頁。還在等的問題（最新一則）釘在 composer 上方、「Show」捲過去。fixture 加 `threadActivity`。驗證：web `vitest` 50 檔 353 個、`svelte-check` 0/0、build。
+- [x] 討論串側欄；成員列表與面孔頁；主持人頁。（2026-10-21）照決定：桌面上討論串和成員列表/面孔頁共用右欄、討論串優先，手機全頁（plans 06、10 已做好的元件）；這裡補了討論串標頭到工人 session 的引擎蓋深連結（`/engine?session=`）。主持人頁就是 host 的面孔頁，偏好在上面（`MemorySettings`）。驗證：同上。
+- [x] 引擎蓋頁與深連結；`SidePanel` 升格。（2026-10-21）`/engine` 預設開首頁 `EngineOverview`：Nodes（能力、GPU、load、workspaces）、Brain（每房間 turns：原因、結果、耗時、tokens，`lib/brain.ts`）、Open loops、Wakes、Memory、Sources（健康、最後讀取、哪些房間跟），每頁 `?open=<tab>` 可深連；側欄頂的「Overview」回首頁。通知的 `{memory}` 目標改開 `?open=memory`。session 照決定唯讀：沒有 composer，底部「回房間」（工人的 session 連回它的房間）；session 只剩 rename（pin/settle、新 session、刪除都拿掉）。`SidePanel`（files/git/diff/terminal/browser/memory/context/tasks）留在 session 旁。`WorkspacePage` 搬成 `engine/WorkspaceDetail.svelte`。Loops/Wakes 設定元件改收 `revision`/`roomNames` prop，引擎蓋因此不載入房間狀態。驗證：`EngineOverview.test.ts`、`Engine.test.ts`、`boundaries.test.ts`；web `vitest` 51 檔 358 個、`svelte-check` 0/0、build。
+- [x] 設定整理；通知目標改房間。（2026-10-21）照決定只剩四個 tab：Models & sources / Devices / Notifications / About，兩頁共用同一個對話框（房間列表底部與手機 tab 開啟）；loops、wakes、記憶搬到引擎蓋，偏好在主持人頁，Devices 的節點清單改指向引擎蓋。「這個房間靜音」照決定只存在這台裝置：localStorage `relay.muted-rooms`，複製一份到 service worker 讀得到的 cache（`lib/mute.ts`），`sw.js` 收到房間通知時，靜音或正在看那個房間就不顯示；房間標頭有鈴鐺，Settings → Notifications 可解除。驗證：`service-worker-push.test.ts` 新案例、`rooms.svelte.test.ts`；web `vitest` 51 檔 360 個、`svelte-check` 0/0、build。
+- [x] 刪舊導航與元件；`mock.ts` demo。（2026-10-21）刪了 session 的 `Composer`/`ComposerSelect`、`GoalDock`/`TodoDock`/`DockSection`、`goal.ts`/`todo.ts`、`NewSessionDialog`、pin/settle（側欄、workspace 詳情、`work.ts` 的 `pinnedFirst`、Settings 的「Show done」），`engine.svelte.ts` 的 draft/upload/model/指令/分支編輯，`api.ts` 的 `command`/`createSession`/`deleteSession`/`upload`/`models` 與對應型別、session 草稿。（Chat 分支、`chats.ts`、`modes.ts` 的 Chat/Work 推導在先前的計畫已不存在。）`mock.ts` 加了房間、面孔、一則工人討論串的 demo：dev build 連不到 gateway 時 `RoomsState` 用它（不開 socket、送出只留在本機），production build 不含它；引擎的 demo session 留著（測試也用）。驗證：web `vitest` 47 檔 328 個、`svelte-check` 0/0、build，`dist` 不含 mock chunk。
 - [ ] a11y：房間列表 / 訊息列 / 討論串的鍵盤導航與 live region（沿用 `a11y.ts`）。
 - [ ] 測試：元件測試改寫；`App.test.ts` 改成 room-first 流程；`api.test.ts` 事件 normalize。
 
