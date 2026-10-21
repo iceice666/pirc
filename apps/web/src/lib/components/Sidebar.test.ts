@@ -133,7 +133,7 @@ describe('Sidebar', () => {
           kind: 'delegation',
           delegationId: 'd1',
           title: 'Fix the tests',
-          fromSessionId: 'chat',
+          roomId: 'general',
           status: 'waiting_input',
           approval,
         },

@@ -106,7 +106,9 @@ export type SessionOrigin = {
   kind: 'delegation';
   delegationId: string;
   title: string;
-  fromSessionId: string;
+  /** The room pirc called the worker in, and its thread there (plan 06). */
+  roomId: string;
+  threadId?: string;
   /** The delegation's status; absent from older gateways. */
   status?: DelegationStatus;
   /** A confirm it waits on, relayed to the chat that started it (answer it there). */

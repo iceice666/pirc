@@ -15,6 +15,7 @@
   import { rooms as defaultRooms, type RoomsState } from '../../rooms.svelte';
   import { trackViewportHeight } from '../../viewport';
   import RoomMessageRow from './RoomMessageRow.svelte';
+  import ThreadPanel from './ThreadPanel.svelte';
 
   interface Props {
     /** Tests pass their own. */
@@ -162,7 +163,7 @@
   }
 </script>
 
-<div class="rooms" class:list-open={listOpen}>
+<div class="rooms" class:list-open={listOpen} class:thread-open={!!rooms.threadId}>
   <nav class="list" aria-label="Rooms">
     <div class="list-head">
       <a class="brand" href="/" aria-label="pirc">pirc</a>
@@ -276,6 +277,7 @@
           previous={rooms.messages[index - 1]}
           onopenroom={open}
           onpin={(item, pinned) => rooms.pin(item, pinned)}
+          onopenthread={(threadId) => void rooms.openThread(threadId)}
         />
       {/each}
     </div>
@@ -351,6 +353,16 @@
       <p class="archived-note">This room is archived. Unarchive it to write here.</p>
     {/if}
   </main>
+  {#if rooms.threadId}
+    <ThreadPanel
+      threadId={rooms.threadId}
+      messages={rooms.threadMessages}
+      workers={rooms.threadWorkers}
+      error={rooms.threadError}
+      user={rooms.user}
+      onclose={() => rooms.closeThread()}
+    />
+  {/if}
 </div>
 
 <style>
@@ -359,6 +371,10 @@
     grid-template-columns: 248px 1fr;
     height: var(--viewport-height, 100dvh);
     background: var(--bg);
+  }
+  /* A worker's thread beside the room; plan 11 settles where it lives. */
+  .rooms.thread-open {
+    grid-template-columns: 248px 1fr minmax(280px, 380px);
   }
   .list {
     display: flex;
@@ -617,8 +633,14 @@
     display: none;
   }
   @media (max-width: 650px) {
-    .rooms {
+    .rooms,
+    .rooms.thread-open {
       grid-template-columns: 1fr;
+    }
+    .thread-open :global(.thread) {
+      position: fixed;
+      inset: 0;
+      z-index: 25;
     }
     .list {
       display: none;

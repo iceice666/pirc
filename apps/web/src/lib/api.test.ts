@@ -268,7 +268,7 @@ it('reads a relayed confirm, its origin approval and the chat delegations', () =
       origin: {
         kind: 'delegation',
         delegationId: 'd1',
-        fromSessionId: 'chat',
+        roomId: 'general',
         title: 'Fix the tests',
         status: 'waiting_input',
         approval: {

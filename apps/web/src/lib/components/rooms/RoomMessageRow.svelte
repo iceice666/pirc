@@ -5,6 +5,7 @@
   import { describeOrigin, forgetRemembered } from '../../memory';
   import { roomsApi, type RoomMessage } from '../../rooms';
   import { wakesApi } from '../../wakes';
+  import { statusLabel, stoppable, workersApi, type WorkerAnchor } from '../../workers';
 
   interface Props {
     message: RoomMessage;
@@ -12,9 +13,11 @@
     previous?: RoomMessage;
     onopenroom?: (roomId: string) => void;
     onpin?: (message: RoomMessage, pinned: boolean) => void;
+    /** Open a worker's thread (plan 06). */
+    onopenthread?: (threadId: string) => void;
   }
 
-  let { message, previous, onopenroom, onpin }: Props = $props();
+  let { message, previous, onopenroom, onpin, onopenthread }: Props = $props();
 
   /** Faces by id until plan 10 lists them: only the host exists. */
   const FACES: Record<string, string> = { host: 'pirc' };
@@ -98,6 +101,29 @@
     }
   }
 
+  /** A worker's anchor: its thread's latest worker, kept up to date. */
+  const anchor = $derived(
+    message.body.worker && 'title' in message.body.worker
+      ? (message.body.worker as WorkerAnchor)
+      : undefined,
+  );
+  /** A line or report about a worker: it opens the thread. */
+  const workerThread = $derived(message.threadId ?? message.body.worker?.threadId ?? undefined);
+
+  async function stopWorker() {
+    if (!anchor || forgetting) return;
+    forgetting = true;
+    forgetError = '';
+    try {
+      // The anchor and the room say how it ended.
+      await workersApi.stop(anchor.delegationId);
+    } catch (cause) {
+      forgetError = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+    } finally {
+      forgetting = false;
+    }
+  }
+
   async function dontKeep() {
     if (!remembered || forgetting) return;
     forgetting = true;
@@ -134,6 +160,11 @@
         <button type="button" class="link" disabled={forgetting} onclick={cancelWake}>Cancel</button
         >
       {/if}
+    {:else if message.body.worker && workerThread}
+      <span>{message.body.text ?? ''}</span>
+      <button type="button" class="link" onclick={() => onopenthread?.(workerThread)}
+        >Open the thread</button
+      >
     {:else if loopAction}
       <span>{message.body.text ?? ''}</span>
       {#if !loopDone}
@@ -187,6 +218,26 @@
               aria-hidden="true">▍</span
             >{/if}
         </p>
+      {/if}
+      {#if anchor}
+        <div class="worker {anchor.status}">
+          <span class="dot" aria-hidden="true"></span>
+          <span>{statusLabel(anchor.status, anchor.workers)}</span>
+          {#if anchor.note}<span class="muted">· waits for {anchor.note}</span>{/if}
+          <button type="button" class="link" onclick={() => onopenthread?.(anchor.threadId)}
+            >Thread</button
+          >
+          {#if stoppable(anchor.status)}
+            <button type="button" class="link" disabled={forgetting} onclick={stopWorker}
+              >Stop</button
+            >
+          {/if}
+        </div>
+        {#if forgetError}<p class="worker-error" role="alert">{forgetError}</p>{/if}
+      {:else if message.body.worker && 'report' in message.body.worker && workerThread}
+        <button type="button" class="link small" onclick={() => onopenthread?.(workerThread)}
+          >Open the thread</button
+        >
       {/if}
       {#each message.body.attachments ?? [] as attachment (attachment.id)}
         {#if attachment.kind === 'image'}
@@ -362,6 +413,43 @@
     font-size: 12px;
   }
   .line.error {
+    color: var(--danger);
+  }
+  .worker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 2px 10px;
+    border: 1px solid var(--line-dark);
+    border-radius: 999px;
+    font-size: 12px;
+  }
+  .worker .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .worker.running .dot,
+  .worker.waiting_input .dot {
+    background: var(--accent);
+  }
+  .worker.completed .dot {
+    background: var(--success, #2e9d5b);
+  }
+  .worker.failed .dot {
+    background: var(--danger);
+  }
+  .muted {
+    color: var(--muted);
+  }
+  .small {
+    font-size: 12px;
+  }
+  .worker-error {
+    margin: 4px 0 0;
+    font-size: 12px;
     color: var(--danger);
   }
 </style>

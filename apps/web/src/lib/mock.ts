@@ -136,7 +136,7 @@ export const demoSessions: SessionSummary[] = [
       kind: 'delegation',
       delegationId: 'dlg-1',
       title: 'Cache only hashed assets',
-      fromSessionId: 'chat-auth',
+      roomId: 'general',
     },
   },
   {

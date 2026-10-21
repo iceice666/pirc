@@ -489,13 +489,11 @@
           </div>
           <h1>{sessionState.session.name}</h1>
           {#if origin?.kind === 'delegation'}
-            <button
+            <a
               class="origin-chip"
-              type="button"
-              title="Open the chat that delegated it"
-              disabled={!app.sessions.some((item) => item.id === origin.fromSessionId)}
-              onclick={() => openSession(origin.fromSessionId)}
-              ><Forward size={13} /><span>Delegated · {origin.title}</span></button
+              href="/?room={encodeURIComponent(origin.roomId)}"
+              title="Open the room pirc called this worker in"
+              ><Forward size={13} /><span>Worker · {origin.title}</span></a
             >
           {/if}
           {#if sessionState.sandbox && !sessionState.sandbox.active}
@@ -796,6 +794,7 @@
     color: var(--text-2);
     background: var(--bg-subtle);
     font-size: 12px;
+    text-decoration: none;
   }
   .origin-chip span {
     overflow: hidden;

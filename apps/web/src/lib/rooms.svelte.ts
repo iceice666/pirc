@@ -15,6 +15,7 @@ import {
   type RoomView,
   type RoomsConnection,
 } from './rooms';
+import { workersApi, type ThreadMessage, type Worker } from './workers';
 
 /** Messages per page. */
 export const ROOM_PAGE = 50;
@@ -45,6 +46,12 @@ export class RoomsState {
   loopsRevision = $state(0);
   /** Bumped whenever a wake changes (plan 05), for lists that show them. */
   wakesRevision = $state(0);
+  /** The thread open beside the room (plan 06), its messages and workers. */
+  threadId = $state<string | undefined>();
+  threadMessages = $state<ThreadMessage[]>([]);
+  threadWorkers = $state<Worker[]>([]);
+  threadError = $state('');
+  #threadToken = 0;
 
   #stream: RoomStream | undefined;
   #lastTyping = 0;
@@ -88,6 +95,7 @@ export class RoomsState {
   /** Show a room: its latest messages, and read them. */
   async open(roomId: string, { address = true } = {}) {
     const token = ++this.#loadToken;
+    if (this.threadId && roomId !== this.currentId) this.closeThread();
     this.currentId = roomId;
     if (address) setRoomInUrl(roomId);
     try {
@@ -235,6 +243,16 @@ export class RoomsState {
       case 'wake_changed':
         this.wakesRevision++;
         break;
+      case 'thread_message':
+      case 'thread_message_updated': {
+        if (event.data.threadId !== this.threadId) break;
+        const message: ThreadMessage = event.data.message;
+        const others = this.threadMessages.filter((item) => item.id !== message.id);
+        this.threadMessages = [...others, message].sort((a, b) => a.seq - b.seq);
+        // A worker started or ended: its list says so.
+        if (message.kind === 'line') void this.#refreshThreadWorkers();
+        break;
+      }
       case 'room_changed': {
         const room: Room = event.data.room;
         if (!this.rooms.some((item) => item.id === room.id) && !room.archivedAt)
@@ -267,6 +285,48 @@ export class RoomsState {
       !last || message.seq > last.seq
         ? [...this.messages, message]
         : [...this.messages, message].sort((a, b) => a.seq - b.seq);
+  }
+
+  /** Open a thread beside the room: its messages, live from then on. */
+  async openThread(threadId: string) {
+    const token = ++this.#threadToken;
+    this.threadId = threadId;
+    this.threadError = '';
+    try {
+      const { messages, workers } = await workersApi.thread(threadId);
+      if (token !== this.#threadToken) return;
+      // Events that came meanwhile are kept.
+      const known = new Set(messages.map((item) => item.id));
+      const later = this.threadMessages.filter(
+        (item) => item.threadId === threadId && !known.has(item.id),
+      );
+      this.threadMessages = [...messages, ...later].sort((a, b) => a.seq - b.seq);
+      this.threadWorkers = workers;
+    } catch (error) {
+      if (token !== this.#threadToken) return;
+      this.threadMessages = [];
+      this.threadWorkers = [];
+      this.threadError = message(error, 'Unable to open the thread.');
+    }
+  }
+
+  closeThread() {
+    this.#threadToken++;
+    this.threadId = undefined;
+    this.threadMessages = [];
+    this.threadWorkers = [];
+    this.threadError = '';
+  }
+
+  async #refreshThreadWorkers() {
+    const threadId = this.threadId;
+    if (!threadId) return;
+    try {
+      const { workers } = await workersApi.thread(threadId);
+      if (threadId === this.threadId) this.threadWorkers = workers;
+    } catch {
+      // Kept as it was; the next line refreshes it.
+    }
   }
 
   #replace(message: RoomMessage) {

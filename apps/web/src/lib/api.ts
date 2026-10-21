@@ -82,12 +82,13 @@ function sessionSummary(raw: any): SessionSummary {
 }
 
 function sessionOrigin(raw: any): SessionOrigin | undefined {
-  if (raw?.kind === 'delegation' && typeof raw.fromSessionId === 'string')
+  if (raw?.kind === 'delegation' && typeof raw.roomId === 'string')
     return {
       kind: 'delegation',
       delegationId: String(raw.delegationId ?? ''),
       title: String(raw.title ?? ''),
-      fromSessionId: raw.fromSessionId,
+      roomId: raw.roomId,
+      ...(typeof raw.threadId === 'string' ? { threadId: raw.threadId } : {}),
       ...(['running', 'waiting_input', 'completed', 'failed'].includes(raw.status)
         ? { status: raw.status }
         : {}),
