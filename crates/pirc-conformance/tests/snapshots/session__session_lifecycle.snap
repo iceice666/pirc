@@ -9,6 +9,15 @@ expression: t.into_value()
         {
           "available": true,
           "defaults": {},
+          "displayName": "Scratch",
+          "hostId": "test",
+          "id": "test:scratch",
+          "kind": "chat",
+          "mode": "scratch"
+        },
+        {
+          "available": true,
+          "defaults": {},
           "displayName": "Test",
           "hostId": "test",
           "id": "test:test",

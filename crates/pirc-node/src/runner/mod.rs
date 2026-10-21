@@ -634,6 +634,19 @@ impl RunnerManager {
     /// 503), then `deliver`.
     /// The message runs next, after any run in progress.
     pub async fn deliver(&self, session_id: &str, delivery: &Delivery) -> ApiResult<()> {
+        // A read-only delivery makes the session read-only for good, its
+        // sandbox included (plans/rewrite/08-nodes.md): a runner started
+        // with write access is stopped first, and starts again without it.
+        if delivery.approval_mode.as_deref() == Some("read-only") {
+            let node = self.node()?;
+            let already = node.db.lock().session_read_only(session_id)?;
+            if !already {
+                node.db.lock().set_session_read_only(session_id)?;
+                if self.get(session_id).is_some_and(|runner| runner.alive()) {
+                    self.stop_session(session_id).await?;
+                }
+            }
+        }
         let lock = self.command_lock(session_id);
         let _command = lock.lock().await;
         let node = self.node()?;
@@ -802,6 +815,7 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
         let mode = node.workspace_mode(&workspace)?;
         let root = crate::util::session_root(&workspace, session_id, &mode)?;
         let ledger = workspace_ledger(node, &workspace, &root).await;
+        let read_only = node.db.lock().session_read_only(session_id)?;
         let prepared = node
             .sandbox
             .prepare(crate::sandbox::PrepareInput {
@@ -812,7 +826,7 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
                     .models
                     .inference()
                     .map(|inference| inference.socket_path.into()),
-                protected_paths: Vec::new(),
+                read_only,
                 workspace_memory_file: ledger.as_ref().map(|ledger| ledger.file.clone()),
             })
             .await?;

@@ -660,8 +660,8 @@ async fn handle(node: &Node, id: u64, registered: &mut bool, message: GatewayMes
     }
 }
 
-/// The `register` frame: protocol, role and this node's workspaces, each
-/// directory workspace with the roles its agents can start in.
+/// The `register` frame: protocol, this node's workspaces (each directory
+/// workspace with the roles its agents can start in) and its capabilities.
 async fn registration(node: &Node) -> Registration {
     let workspaces: Vec<_> = node
         .db
@@ -676,8 +676,9 @@ async fn registration(node: &Node) -> Registration {
         .map(|workspace| Some(workspace.canonical_path.clone()))
         .collect();
     let details = workspace_details(node, roots).await;
+    let capabilities = crate::capabilities::capabilities(node).await;
     Registration {
-        role: pirc_protocol::NodeRole::Node,
+        capabilities: Some(capabilities),
         modes: node.config.modes.clone(),
         protocol: Some(i64::from(NODE_PROTOCOL_VERSION)),
         workspaces: workspaces
@@ -816,13 +817,13 @@ async fn stopped(terminated: &mut watch::Receiver<bool>) {
 
 #[cfg(test)]
 mod tests {
-    use pirc_protocol::{NodeRole, Registration};
+    use pirc_protocol::Registration;
 
     use super::*;
 
     fn register() -> NodeMessage {
         NodeMessage::Register(Registration {
-            role: NodeRole::Node,
+            capabilities: None,
             modes: Vec::new(),
             protocol: Some(9),
             workspaces: Vec::new(),
@@ -840,7 +841,7 @@ mod tests {
         link.set_registered(first.id);
         assert!(link.is_registered());
         assert!(link.send_agent_frame(&NodeMessage::Heartbeat));
-        assert_eq!(link.buffered_amount(), 93);
+        assert_eq!(link.buffered_amount(), 79);
         let frame = first.recv().await.unwrap();
         assert!(frame.starts_with(r#"{"type":"register""#));
         first.written(&frame);

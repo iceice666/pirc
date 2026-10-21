@@ -35,7 +35,10 @@ CREATE TABLE sessions (
   activity_at INTEGER,
   read_at INTEGER,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  -- 1: delivered read-only (a wake's worker): its sandbox writes nothing of
+  -- the workspace, for good.
+  read_only INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE runs (

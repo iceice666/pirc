@@ -208,10 +208,12 @@ async fn a_real_agent_is_confined() {
     replies.lock().unwrap().push_back(tool_reply(&[
         ("a", "bash", json!({ "command": format!("cat {secret}") })),
         ("b", "bash", json!({ "command": "echo inside > ok.txt && cat ok.txt" })),
-        ("c", "bash", json!({ "command": format!("touch {home_probe}") })),
+        // Through a shell: auto mode refuses a write it can see is outside
+        // the workspace in every mode; the sandbox is what's tested.
+        ("c", "bash", json!({ "command": "sh -c 'touch \"$HOME/probe\"'" })),
         ("d", "read", json!({ "path": secret })),
-        ("e", "bash", json!({ "command": "echo x >> .git/config; echo x > .git/hooks/pre-commit; mkdir .pirc; echo x > .bashrc; echo status=$?" })),
-        ("f", "bash", json!({ "command": format!("(exec 3<>/dev/tcp/127.0.0.1/{port}) 2>/dev/null; echo net=$?") })),
+        ("e", "bash", json!({ "command": "sh -c 'echo x >> .git/config; echo x > .git/hooks/pre-commit; mkdir .pirc; echo x > .bashrc; echo status=$?'" })),
+        ("f", "bash", json!({ "command": format!("bash -c '(exec 3<>/dev/tcp/127.0.0.1/{port}) 2>/dev/null; echo net=$?'") })),
         ("g", "bash", json!({ "command": "echo \"backend=$PIRC_SANDBOX_BACKEND proxy=$HTTPS_PROXY\"" })),
     ]));
 

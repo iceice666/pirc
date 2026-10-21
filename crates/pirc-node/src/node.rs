@@ -16,6 +16,7 @@ pub async fn run(config: NodeConfig, env: Env) -> Result<(), String> {
         signal(SignalKind::terminate()).map_err(|error| format!("SIGTERM: {error}"))?;
     let node = Services::start(config, env).await?;
     let link = tokio::spawn(crate::link::run(node.clone()));
+    let sweeper = tokio::spawn(crate::scratch::sweep_forever(node.clone()));
     tokio::select! {
         _ = interrupt.recv() => {}
         _ = terminate.recv() => {}
@@ -30,6 +31,7 @@ pub async fn run(config: NodeConfig, env: Env) -> Result<(), String> {
         };
         std::process::exit(code);
     });
+    sweeper.abort();
     node.close().await;
     let _ = link.await;
     Ok(())

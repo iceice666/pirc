@@ -147,7 +147,7 @@ fn work_answers() -> Answerer {
 }
 
 fn work_registration() -> Value {
-    json!({ "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
+    json!({ "type": "register", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
         "workspaces": [
             { "id": "repo", "displayName": "Repo", "mode": "directory",
                 "roles": [{ "name": "general", "description": "General work" }] },

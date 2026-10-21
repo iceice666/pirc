@@ -31,7 +31,6 @@ async fn receive(socket: &mut WebSocket, what: &str) -> Value {
 fn register(protocol: Value) -> Value {
     json!({
         "type": "register",
-        "role": "node",
         "protocol": protocol,
         "modes": ["directory"],
         "workspaces": [{ "id": "ws", "displayName": "Fake workspace", "mode": "directory" }],
@@ -93,7 +92,7 @@ async fn node_link() {
         }),
         (
             "invalid registration",
-            json!({ "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION }),
+            json!({ "type": "register", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION }),
         ),
     ] {
         let mut socket = api
@@ -109,11 +108,12 @@ async fn node_link() {
         .connect("/node/connect", &node_headers(NODE_TOKEN))
         .await
         .open();
-    send(
-        &mut node,
-        &register(json!(pirc_protocol::NODE_PROTOCOL_VERSION)),
-    )
-    .await;
+    // What the machine can do (plans/rewrite/08-nodes.md).
+    let mut registration = register(json!(pirc_protocol::NODE_PROTOCOL_VERSION));
+    registration["capabilities"] = json!({ "os": "linux", "arch": "x86_64",
+        "gpus": [{ "vendor": "nvidia", "count": 1 }], "browser": false, "terminals": true,
+        "sandbox": { "backend": "srt", "status": "active", "gpu": false }, "maxRunning": 2 });
+    send(&mut node, &registration).await;
     let registered = receive(&mut node, "registered").await;
     t.note("register", registered);
     assert_eq!(receive(&mut node, "modes").await["type"], "modes");
@@ -123,6 +123,23 @@ async fn node_link() {
 
     let nodes = api.send("GET", "/api/nodes", &browser, None).await;
     t.response("list nodes", "GET /api/nodes", &nodes);
+    // Its load follows its activity: one run open.
+    send(
+        &mut node,
+        &json!({ "type": "activity", "sessions": [{ "id": "s1", "run": "running" }] }),
+    )
+    .await;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let load = loop {
+        let nodes = api.send("GET", "/api/nodes", &browser, None).await;
+        let load = nodes.body["nodes"][0]["load"].clone();
+        if load["running"] == 1 || std::time::Instant::now() > deadline {
+            break load;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    };
+    t.note("its load after its activity", load);
+    send(&mut node, &json!({ "type": "activity", "sessions": [] })).await;
     let workspaces = api.send("GET", "/api/workspaces", &browser, None).await;
     t.response("list workspaces", "GET /api/workspaces", &workspaces);
 

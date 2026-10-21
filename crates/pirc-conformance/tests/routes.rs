@@ -73,7 +73,7 @@ fn answer(request: &Value) -> Value {
 async fn serve_node(api: &Api) -> (Arc<Mutex<Vec<Value>>>, tokio::task::JoinHandle<()>) {
     let mut node: WebSocket = api.connect("/node/connect", &node_headers()).await.open();
     let register = json!({
-        "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
+        "type": "register", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
         "workspaces": [{ "id": "ws", "displayName": "Fake workspace", "mode": "directory" }],
     });
     assert_node_frame(&register);

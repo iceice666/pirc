@@ -13,14 +13,14 @@ expression: t.into_value()
   {
     "observed": {
       "closed": 4426,
-      "reason": "node protocol 9 != daemon 14"
+      "reason": "node protocol 9 != daemon 15"
     },
     "step": "older protocol"
   },
   {
     "observed": {
       "closed": 4426,
-      "reason": "node protocol 1 != daemon 14"
+      "reason": "node protocol 1 != daemon 15"
     },
     "step": "no protocol"
   },
@@ -76,13 +76,34 @@ expression: t.into_value()
     "body": {
       "nodes": [
         {
+          "capabilities": {
+            "arch": "x86_64",
+            "browser": false,
+            "gpus": [
+              {
+                "count": 1,
+                "vendor": "nvidia"
+              }
+            ],
+            "maxRunning": 2,
+            "os": "linux",
+            "sandbox": {
+              "backend": "srt",
+              "gpu": false,
+              "status": "active"
+            },
+            "terminals": true
+          },
           "connectedAt": "<epoch-ms>",
           "id": "test",
           "lastSeenAt": "<epoch-ms>",
+          "load": {
+            "max": 2,
+            "running": 0
+          },
           "modes": [
             "directory"
           ],
-          "role": "node",
           "workspaces": [
             {
               "available": true,
@@ -101,6 +122,13 @@ expression: t.into_value()
     "request": "GET /api/nodes",
     "status": 200,
     "step": "list nodes"
+  },
+  {
+    "observed": {
+      "max": 2,
+      "running": 1
+    },
+    "step": "its load after its activity"
   },
   {
     "body": {

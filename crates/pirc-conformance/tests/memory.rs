@@ -200,7 +200,7 @@ async fn memory() {
     let browser = browser_headers();
     let mut t = Transcript::new(cluster.volatile());
     let register = json!({
-        "type": "register", "role": "node", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
+        "type": "register", "protocol": pirc_protocol::NODE_PROTOCOL_VERSION,
         "modes": ["directory"],
         "workspaces": [{ "id": "repo", "displayName": "Repo", "mode": "directory",
             "repo": "github.com/me/repo" }],

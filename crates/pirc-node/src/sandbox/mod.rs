@@ -105,8 +105,9 @@ pub struct PrepareInput {
     pub session_dir: PathBuf,
     /// The node's inference socket.
     pub inference_socket: Option<PathBuf>,
-    /// Never writable from the session.
-    pub protected_paths: Vec<PathBuf>,
+    /// The session reads but writes only its own state, temp dirs and caches
+    /// (`SessionPolicyInput::read_only`; a wake's worker).
+    pub read_only: bool,
     /// The workspace-memory ledger the session may read and append to
     /// (made here when missing); the rest of the directory stays closed.
     pub workspace_memory_file: Option<PathBuf>,

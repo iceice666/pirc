@@ -31,7 +31,6 @@ async fn register(cluster: &Cluster) -> WebSocket {
         &mut node,
         json!({
             "type": "register",
-            "role": "node",
             "protocol": pirc_protocol::NODE_PROTOCOL_VERSION, "modes": ["directory"],
             "workspaces": [{ "id": "ws", "displayName": "Fake workspace", "mode": "directory" }],
         }),

@@ -607,3 +607,114 @@ async fn node_workspaces_on_node() {
 
     insta::assert_json_snapshot!("node_workspaces_on_node", t.into_value());
 }
+
+/// The brain's look into a workspace (plans/rewrite/08-nodes.md), with the
+/// test as the gateway: `POST /api/workspaces/:id/read` lists, reads,
+/// greps and shows git status inside the workspace only, never its `.git`;
+/// a per-session workspace (the node's own scratch, accepted by default)
+/// has nothing to read, and a session starts there in a fresh directory.
+#[tokio::test(flavor = "multi_thread")]
+async fn node_workspaces_read() {
+    let gateway = FakeGateway::bind().await;
+    let Some(node) = LoneNode::start(gateway.port()) else {
+        return;
+    };
+    let root = node.dir.path().canonicalize().unwrap();
+    let home = root.join("node-home");
+    let mut t = Transcript::new(node.volatile());
+    let mut ids = Ids::default();
+    let mut link = gateway.accept().await;
+    let register = link.recv().await;
+    t.note(
+        "registered with scratch and capabilities",
+        json!({
+            "modes": register["modes"],
+            "workspaces": register["workspaces"].as_array().unwrap().iter()
+                .map(|w| json!([w["id"], w["mode"]])).collect::<Vec<_>>(),
+            "capabilities": register["capabilities"].as_object()
+                .map(|caps| { let mut keys: Vec<&String> = caps.keys().collect(); keys.sort(); keys }),
+        }),
+    );
+    link.send(&json!({ "type": "registered", "nodeId": NODE_ID,
+        "models": { "providers": {} }, "mirrors": {} }))
+        .await;
+    link.send(&json!({ "type": "modes", "modes": [
+        pirc_protocol::mode::default_work(), pirc_protocol::mode::default_scratch() ] }))
+        .await;
+    fs::create_dir_all(home.join("proj/src")).unwrap();
+    fs::write(home.join("proj/README.md"), "# Project\n\nRead me.\n").unwrap();
+    fs::write(
+        home.join("proj/src/lib.rs"),
+        "// TODO: more\npub fn x() {}\n",
+    )
+    .unwrap();
+    fs::write(home.join("secret.txt"), "outside").unwrap();
+    let mut n = OnNode {
+        link,
+        t: &mut t,
+        ids: &mut ids,
+        count: 0,
+    };
+    let created = n
+        .request(
+            "add ~/proj",
+            "POST",
+            "/api/workspaces",
+            Some(json!({ "path": "~/proj", "displayName": "Project" })),
+        )
+        .await;
+    let project = created["workspace"]["id"].as_str().unwrap().to_owned();
+    let read = format!("/api/workspaces/{project}/read");
+    for (step, body) in [
+        ("list the root", json!({ "op": "list" })),
+        ("read a file", json!({ "op": "read", "path": "README.md" })),
+        (
+            "grep, case-insensitive",
+            json!({ "op": "grep", "pattern": "todo" }),
+        ),
+        (
+            "read outside: refused",
+            json!({ "op": "read", "path": "../secret.txt" }),
+        ),
+        (
+            "the repository's own files: refused",
+            json!({ "op": "read", "path": ".git/config" }),
+        ),
+        (
+            "an invalid pattern",
+            json!({ "op": "grep", "pattern": "(" }),
+        ),
+        (
+            "an unknown operation",
+            json!({ "op": "write", "path": "x" }),
+        ),
+    ] {
+        n.request(step, "POST", &read, Some(body)).await;
+    }
+    n.request(
+        "scratch has nothing of its own to read",
+        "POST",
+        "/api/workspaces/scratch/read",
+        Some(json!({ "op": "list" })),
+    )
+    .await;
+    let session = n
+        .request(
+            "a session in scratch",
+            "POST",
+            "/api/sessions",
+            Some(json!({ "workspaceId": "scratch" })),
+        )
+        .await;
+    let id = session["session"]["id"].as_str().unwrap().to_owned();
+    n.request(
+        "its files",
+        "GET",
+        &format!("/api/sessions/{id}/files"),
+        None,
+    )
+    .await;
+    let made = root.join("node-state/scratch/sessions").join(&id).is_dir();
+    t.note("its own directory, in the node's scratch", json!(made));
+    insta::assert_json_snapshot!("node_workspaces_read", t.into_value());
+}

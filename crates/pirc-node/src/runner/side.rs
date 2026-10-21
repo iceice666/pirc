@@ -532,6 +532,16 @@ impl Runner {
             }
             _ => "(no reason given)".to_owned(),
         };
+        // A read-only session (a wake's worker) neither leaves its sandbox nor
+        // reaches more hosts, whatever its agent asks.
+        let read_only = self.node().is_some_and(|node| {
+            let read_only = node.db.lock().session_read_only(&self.session_id);
+            read_only.unwrap_or(true)
+        });
+        if read_only {
+            self.sandbox_fail(&id, "denied", "This session is read-only");
+            return Ok(());
+        }
         // Only a link for the client (the ptc operation asking); it grants nothing.
         let tool_call_id = self.running_operation(message.get("toolCallId"));
         match message.get("op").and_then(Value::as_str) {

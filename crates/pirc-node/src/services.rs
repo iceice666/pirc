@@ -120,7 +120,11 @@ impl Services {
         let expected = state.join("chat").join(&workspace.id);
         let actual = std::path::Path::new(&workspace.canonical_path);
         let expected = expected.canonicalize().unwrap_or(expected);
-        let managed = actual == expected;
+        // The node's own scratch workspace lives in `<state>/scratch`
+        // (plans/rewrite/08-nodes.md).
+        let scratch = state.join(pirc_config::node::SCRATCH);
+        let managed =
+            actual == expected || (workspace.id == pirc_config::node::SCRATCH && actual == scratch);
         let compatible = match mode.workdir {
             pirc_protocol::mode::Workdir::PerSession => managed,
             pirc_protocol::mode::Workdir::Workspace => !actual.starts_with(&state),

@@ -34,19 +34,25 @@ use crate::util::{now_ms, prefix_uuid, safe_json};
 /// the node's line starts apart from both, so each is recognized.
 /// 2001: uploads record their workspace and session; `workspace_deletions`
 /// (retired with chat projects: a fresh store has none, an old one keeps it
-/// unread).
-pub const SCHEMA_VERSION: i64 = 2001;
+/// unread). 2002: `sessions.read_only` (plans/rewrite/08-nodes.md).
+pub const SCHEMA_VERSION: i64 = 2002;
 /// Upgrades from each earlier node schema, applied in order.
-const MIGRATIONS: &[(i64, &str)] = &[(
-    2001,
-    "ALTER TABLE uploads ADD COLUMN workspace_id TEXT;
+const MIGRATIONS: &[(i64, &str)] = &[
+    (
+        2001,
+        "ALTER TABLE uploads ADD COLUMN workspace_id TEXT;
      ALTER TABLE uploads ADD COLUMN session_id TEXT;
      CREATE INDEX uploads_workspace ON uploads(workspace_id);
      CREATE TABLE workspace_deletions (
        workspace_id TEXT PRIMARY KEY, owner_user TEXT NOT NULL,
        status TEXT NOT NULL, created_at INTEGER NOT NULL
      );",
-)];
+    ),
+    (
+        2002,
+        "ALTER TABLE sessions ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0;",
+    ),
+];
 /// The first node schema.
 const FIRST_SCHEMA_VERSION: i64 = 2000;
 /// The Rust gateway's `user_version`.
@@ -518,6 +524,9 @@ pub trait Store {
     fn session_deletion(&self, session_id: &str) -> ApiResult<Option<SessionDeletion>>;
     /// 409 `conflict` "This chat is being deleted. Retry Delete to finish cleanup."
     fn require_session_available(&self, session_id: &str) -> ApiResult<()>;
+    /// Delivered read-only once (`sessions.read_only`): it stays so.
+    fn session_read_only(&self, session_id: &str) -> ApiResult<bool>;
+    fn set_session_read_only(&self, session_id: &str) -> ApiResult<()>;
     fn begin_session_deletion(&self, session_id: &str, user: &str) -> ApiResult<()>;
     /// Delete the session's rows (fenced first, else an internal error).
     fn finish_session_deletion(&self, session_id: &str) -> ApiResult<()>;
@@ -1026,6 +1035,22 @@ impl Store for Connection {
                 "This chat is being deleted. Retry Delete to finish cleanup.",
             ));
         }
+        Ok(())
+    }
+
+    fn session_read_only(&self, session_id: &str) -> ApiResult<bool> {
+        Ok(self
+            .query_row(
+                "SELECT read_only FROM sessions WHERE id=?1",
+                [session_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+            .is_some_and(|flag| flag != 0))
+    }
+
+    fn set_session_read_only(&self, session_id: &str) -> ApiResult<()> {
+        self.execute("UPDATE sessions SET read_only=1 WHERE id=?1", [session_id])?;
         Ok(())
     }
 
@@ -1701,6 +1726,15 @@ mod tests {
         let first = SCHEMA.replace(
             "  kind TEXT NOT NULL DEFAULT 'image',\n  -- Where it was uploaded; it is usable in that workspace only and is\n  -- deleted with it. NULL for uploads older than schema 2001.\n  workspace_id TEXT,\n  session_id TEXT\n);\nCREATE INDEX uploads_workspace ON uploads(workspace_id);",
             "  kind TEXT NOT NULL DEFAULT 'image'\n);",
+        )
+        // Nor (2002) read-only sessions.
+        .replace(
+            "  updated_at INTEGER NOT NULL,\n  -- 1: delivered read-only (a wake's worker): its sandbox writes nothing of\n  -- the workspace, for good.\n  read_only INTEGER NOT NULL DEFAULT 0\n);",
+            "  updated_at INTEGER NOT NULL\n);",
+        );
+        assert!(
+            !first.contains("read_only"),
+            "schema.sql changed: update this test"
         );
         assert!(
             !first.contains("workspace_deletions") && !first.contains("uploads_workspace"),

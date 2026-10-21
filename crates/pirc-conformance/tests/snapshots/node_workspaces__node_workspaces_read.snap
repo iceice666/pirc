@@ -1,0 +1,236 @@
+---
+source: crates/pirc-conformance/tests/node_workspaces.rs
+expression: t.into_value()
+---
+[
+  {
+    "observed": {
+      "capabilities": [
+        "arch",
+        "browser",
+        "gpus",
+        "maxRunning",
+        "os",
+        "sandbox",
+        "terminals"
+      ],
+      "modes": [
+        "directory",
+        "scratch"
+      ],
+      "workspaces": [
+        [
+          "scratch",
+          "scratch"
+        ],
+        [
+          "test",
+          "directory"
+        ]
+      ]
+    },
+    "step": "registered with scratch and capabilities"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces",
+      "response": {
+        "body": {
+          "workspace": {
+            "canonicalPath": "<tmp>/node-home/proj",
+            "defaults": {},
+            "displayName": "Project",
+            "hostId": "test",
+            "id": "<workspace:1>",
+            "mode": "directory",
+            "roles": [
+              {
+                "description": "General-purpose agent with the default model and all tools.",
+                "name": "general"
+              }
+            ]
+          }
+        },
+        "status": 201
+      }
+    },
+    "step": "add ~/proj"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces/<workspace:1>/read",
+      "response": {
+        "body": {
+          "entries": [
+            {
+              "kind": "dir",
+              "name": "src"
+            },
+            {
+              "kind": "file",
+              "name": "README.md",
+              "size": 20
+            }
+          ],
+          "path": "",
+          "truncated": false
+        },
+        "status": 200
+      }
+    },
+    "step": "list the root"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces/<workspace:1>/read",
+      "response": {
+        "body": {
+          "content": "# Project\n\nRead me.\n",
+          "offset": 0,
+          "path": "README.md",
+          "size": 20
+        },
+        "status": 200
+      }
+    },
+    "step": "read a file"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces/<workspace:1>/read",
+      "response": {
+        "body": {
+          "matches": [
+            {
+              "line": 1,
+              "path": "src/lib.rs",
+              "text": "// TODO: more"
+            }
+          ],
+          "truncated": false
+        },
+        "status": 200
+      }
+    },
+    "step": "grep, case-insensitive"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces/<workspace:1>/read",
+      "response": {
+        "body": {
+          "error": {
+            "code": "forbidden",
+            "message": "Path is outside the workspace"
+          }
+        },
+        "status": 403
+      }
+    },
+    "step": "read outside: refused"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces/<workspace:1>/read",
+      "response": {
+        "body": {
+          "error": {
+            "code": "forbidden",
+            "message": "The repository's own files are not read"
+          }
+        },
+        "status": 403
+      }
+    },
+    "step": "the repository's own files: refused"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces/<workspace:1>/read",
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Invalid pattern: found open group without closing ')'"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "an invalid pattern"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces/<workspace:1>/read",
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "Invalid request"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "an unknown operation"
+  },
+  {
+    "observed": {
+      "request": "POST /api/workspaces/scratch/read",
+      "response": {
+        "body": {
+          "error": {
+            "code": "invalid_input",
+            "message": "A per-session workspace has nothing of its own to read"
+          }
+        },
+        "status": 400
+      }
+    },
+    "step": "scratch has nothing of its own to read"
+  },
+  {
+    "observed": {
+      "request": "POST /api/sessions",
+      "response": {
+        "body": {
+          "session": {
+            "createdAt": "<epoch-ms>",
+            "id": "session_<uuid:1>",
+            "name": "New session",
+            "nameSource": "auto",
+            "nodeId": null,
+            "pinnedAt": null,
+            "runStatus": null,
+            "runnerEpoch": 0,
+            "runnerState": "stopped",
+            "settledAt": null,
+            "unread": false,
+            "updatedAt": "<epoch-ms>",
+            "workspaceId": "scratch"
+          }
+        },
+        "status": 201
+      }
+    },
+    "step": "a session in scratch"
+  },
+  {
+    "observed": {
+      "request": "GET /api/sessions/session_<uuid:1>/files",
+      "response": {
+        "body": {
+          "entries": [],
+          "path": "",
+          "truncated": false
+        },
+        "status": 200
+      }
+    },
+    "step": "its files"
+  },
+  {
+    "observed": true,
+    "step": "its own directory, in the node's scratch"
+  }
+]

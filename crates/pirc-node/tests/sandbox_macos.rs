@@ -145,6 +145,32 @@ fn sandbox_client() {
     std::process::exit(0);
 }
 
+/// The session's extra write denies, as the agent config's
+/// `sandbox.filesystem.denyWrite` (protected paths were retired with chat
+/// projects, plans/rewrite/08-nodes.md; configured denies get the same
+/// guarantees).
+fn deny_writes(config: &NodeConfig, protected: &[PathBuf]) {
+    let file = config.config_dir.join("config.json");
+    let mut value: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+    let paths: Vec<String> = protected
+        .iter()
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect();
+    let filesystem = &mut value["sandbox"]["filesystem"];
+    if filesystem.is_null() {
+        *filesystem = serde_json::json!({});
+    }
+    if paths.is_empty() {
+        if let Some(map) = filesystem.as_object_mut() {
+            map.remove("denyWrite");
+        }
+    } else {
+        filesystem["denyWrite"] = serde_json::json!(paths);
+    }
+    fs::write(&file, value.to_string()).unwrap();
+}
+
 struct Fixture {
     root: PathBuf,
     workspace: PathBuf,
@@ -263,6 +289,7 @@ impl Fixture {
         inference_socket: Option<PathBuf>,
         protected_paths: Vec<PathBuf>,
     ) -> Prepared {
+        deny_writes(&self.config, &protected_paths);
         let session_dir = self.config.sessions_dir.join(session);
         fs::create_dir_all(&session_dir).unwrap();
         self.sandbox
@@ -271,7 +298,7 @@ impl Fixture {
                 workspace_root: self.workspace.clone(),
                 session_dir,
                 inference_socket,
-                protected_paths,
+                read_only: false,
                 workspace_memory_file: None,
             })
             .await
@@ -283,7 +310,7 @@ impl Fixture {
         self.sh_protecting(script, Vec::new()).await
     }
 
-    /// [`Self::sh`] with `protected` among the session's protected paths.
+    /// [`Self::sh`] with `protected` among the session's write denies.
     async fn sh_protecting(&self, script: &str, protected: Vec<PathBuf>) -> i32 {
         let prepared = self.prepare_with("pi_sh", None, protected).await;
         let mut command = prepared.command().unwrap();
@@ -457,7 +484,7 @@ async fn opens_only_its_own_workspace_memory_ledger() {
             workspace_root: f.workspace.clone(),
             session_dir,
             inference_socket: None,
-            protected_paths: Vec::new(),
+            read_only: false,
             workspace_memory_file: Some(ledger.clone()),
         })
         .await

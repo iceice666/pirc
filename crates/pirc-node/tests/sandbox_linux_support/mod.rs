@@ -183,7 +183,7 @@ impl Fixture {
             workspace_root: self.root.join("workspace"),
             session_dir,
             inference_socket,
-            protected_paths: Vec::new(),
+            read_only: false,
             workspace_memory_file: None,
         }
     }

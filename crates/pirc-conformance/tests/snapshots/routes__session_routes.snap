@@ -897,13 +897,17 @@ expression: t.into_value()
     "body": {
       "nodes": [
         {
+          "capabilities": null,
           "connectedAt": "<epoch-ms>",
           "id": "test",
           "lastSeenAt": "<epoch-ms>",
+          "load": {
+            "max": null,
+            "running": 0
+          },
           "modes": [
             "directory"
           ],
-          "role": "node",
           "workspaces": [
             {
               "available": true,

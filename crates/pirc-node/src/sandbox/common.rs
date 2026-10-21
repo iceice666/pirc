@@ -443,7 +443,7 @@ pub fn session(
         workspace_memory_file,
         inference_socket: input.inference_socket.as_deref().map(text),
         tmp_dirs: vec![text(&tmp), "/tmp".to_owned()],
-        protected_paths: input.protected_paths.iter().map(|p| text(p)).collect(),
+        read_only: input.read_only,
         read_only_dirs: vec![text(&sandbox_bin_dir(config))],
         platform: Platform::current(),
         uid: nix::unistd::getuid().as_raw(),
@@ -580,7 +580,7 @@ pub fn readonly_session(
         workspace_memory_file: None,
         inference_socket: None,
         tmp_dirs: vec![text(&tmp)],
-        protected_paths: Vec::new(),
+        read_only: false,
         read_only_dirs: vec![text(&sandbox_bin_dir(config))],
         platform: Platform::current(),
         uid: nix::unistd::getuid().as_raw(),
@@ -713,7 +713,7 @@ mod tests {
             workspace_root: root.join("workspace"),
             session_dir: config.sessions_dir.join(name),
             inference_socket: None,
-            protected_paths: Vec::new(),
+            read_only: false,
             workspace_memory_file: None,
         };
         let a = session(&config, &env, &node_tmp, &input("pi_a")).unwrap();
@@ -773,7 +773,7 @@ mod tests {
             workspace_root: root.join("workspace"),
             session_dir: config.sessions_dir.join("pi_a"),
             inference_socket: None,
-            protected_paths: Vec::new(),
+            read_only: false,
             workspace_memory_file: None,
         };
         let temp_warning = |node_tmp: &NodeTmp| {
@@ -809,7 +809,7 @@ mod tests {
             workspace_root: root.join("workspace"),
             session_dir: config.sessions_dir.join("pi_a"),
             inference_socket: None,
-            protected_paths: Vec::new(),
+            read_only: false,
             workspace_memory_file: Some(memory.join(file)),
         };
         // Another repository's ledger (one not yet made would be writable

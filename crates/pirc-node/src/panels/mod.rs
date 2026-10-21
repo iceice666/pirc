@@ -14,6 +14,7 @@
 //! UTF-16 units, and every failure is 400 `invalid_input` "Invalid request".
 
 pub mod inspect;
+pub mod read;
 
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -41,6 +42,7 @@ use crate::store::{SessionRow, Store as _};
 /// - `GET /api/sessions/:id/browser/recording` (reads files only; no browser)
 pub fn routes() -> Vec<Route> {
     vec![
+        post("/api/workspaces/:id/read", read::read),
         get("/api/sessions/:id/git/status", |node, request| async move {
             let local = local(&node, &request)?;
             let env = child_env(&node);

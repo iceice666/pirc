@@ -63,7 +63,7 @@ mod tests {
                 workspace_root: "/w".into(),
                 session_dir: "/s".into(),
                 inference_socket: None,
-                protected_paths: Vec::new(),
+                read_only: false,
                 workspace_memory_file: None,
             })
             .await
