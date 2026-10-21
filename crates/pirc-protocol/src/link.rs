@@ -78,10 +78,10 @@ pub enum NodeMessage {
     },
 }
 
-/// The registration a node sends first.
+/// The registration a node sends first. (Protocol 15 dropped `role`, which
+/// only ever said `node`, and added [`Capabilities`].)
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Registration {
-    pub role: NodeRole,
     /// Absent from nodes before versioning (the gateway reads it as 1). Any
     /// integer parses, so another version is a mismatch, not a parse error.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -90,12 +90,55 @@ pub struct Registration {
     /// Mode ids this node is configured to accept; definitions come only
     /// from the gateway, never from this advertisement.
     pub modes: Vec<ModeId>,
+    /// What the machine can do, for choosing one for a task
+    /// (plans/rewrite/08-nodes.md). Facts, never permissions. Absent: unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<Capabilities>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum NodeRole {
-    Node,
+/// What a node's machine can do. Its load is the gateway's to count (from
+/// [`NodeMessage::Activity`]), against `max_running`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Capabilities {
+    /// `std::env::consts::OS`: `linux`, `macos`, ...
+    pub os: String,
+    /// `std::env::consts::ARCH`: `x86_64`, `aarch64`, ...
+    pub arch: String,
+    /// The GPUs the machine has (not that its sandbox reaches them: see
+    /// [`SandboxCapability::gpu`]).
+    pub gpus: Vec<Gpu>,
+    /// The node runs a browser for its agents.
+    pub browser: bool,
+    /// Side-panel terminals are on.
+    pub terminals: bool,
+    pub sandbox: SandboxCapability,
+    /// How many agents it means to run at once (`PIRC_MAX_RUNNING`): a
+    /// machine with fewer running is idle. Advisory, not enforced.
+    pub max_running: u32,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Gpu {
+    /// `nvidia`, `amd`, `intel`, `apple` or the PCI vendor id.
+    pub vendor: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    pub count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vram_mb: Option<u64>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SandboxCapability {
+    /// `bubblewrap`, `seatbelt`, `srt` or `none`.
+    pub backend: String,
+    /// `active` or `unavailable` (no agent starts then).
+    pub status: String,
+    /// Agents in its sandbox can use the GPU (plans/sandbox-gpu.md; not yet).
+    pub gpu: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -307,9 +350,13 @@ mod tests {
     #[test]
     fn round_trips_node_frames() {
         for frame in [
-            json!({ "type": "register", "role": "node", "protocol": 14, "modes": ["directory"],
+            json!({ "type": "register", "protocol": 15, "modes": ["directory"],
                 "workspaces": [{ "id": "w", "displayName": "W", "mode": "directory",
-                    "roles": [{ "name": "default", "source": "workspace" }] }] }),
+                    "roles": [{ "name": "default", "source": "workspace" }] }],
+                "capabilities": { "os": "linux", "arch": "x86_64",
+                    "gpus": [{ "vendor": "nvidia", "count": 2 }], "browser": true,
+                    "terminals": false, "sandbox": { "backend": "bubblewrap",
+                        "status": "active", "gpu": false }, "maxRunning": 4 } }),
             json!({ "type": "heartbeat" }),
             json!({ "type": "response", "requestId": "r", "data": { "status": 204 } }),
             json!({ "type": "activity", "sessions": [{ "id": "s", "run": "waiting_input" }] }),
@@ -319,6 +366,16 @@ mod tests {
         ] {
             round_trip::<NodeMessage>(&frame).unwrap_or_else(|error| panic!("{frame}: {error}"));
         }
+    }
+
+    #[test]
+    fn reads_a_registration_without_capabilities_or_with_the_old_role() {
+        let frame = json!({ "type": "register", "role": "node", "protocol": 15,
+            "modes": [], "workspaces": [] });
+        let NodeMessage::Register(registration) = serde_json::from_value(frame).unwrap() else {
+            panic!("a registration");
+        };
+        assert_eq!(registration.capabilities, None);
     }
 
     #[test]

@@ -116,6 +116,13 @@ pub struct NodeConfig {
     pub lease_ttl_ms: u64,
     pub interaction_ttl_ms: u64,
     pub shutdown_grace_ms: u64,
+    /// How many agents this machine means to run at once
+    /// (`PIRC_MAX_RUNNING`, default 4): fewer running is idle when the
+    /// gateway chooses a machine. Advisory, not enforced.
+    pub max_running: u32,
+    /// Days a scratch session's directory is kept after its last change
+    /// (`PIRC_SCRATCH_RETENTION_DAYS`, default 7; 0 keeps them).
+    pub scratch_retention_days: u64,
 }
 
 impl NodeConfig {
@@ -166,8 +173,28 @@ impl NodeConfig {
             .get("PIRC_SESSIONS_DIR")
             .map_or_else(|| dirs.state_dir.join("sessions"), |dir| env.resolve(dir));
         make_private_dir(&sessions_dir)?;
-        let workspaces = parse_workspaces(env)?;
+        let mut workspaces = parse_workspaces(env)?;
         let modes = accepted_modes(env.get("PIRC_MODES"))?;
+        // A node that accepts scratch has a scratch workspace of its own,
+        // in its state, unless one is configured (plans/rewrite/08-nodes.md).
+        let scratch = ModeId::new(SCRATCH).expect("scratch mode id");
+        if modes.contains(&scratch)
+            && !workspaces
+                .iter()
+                .any(|workspace| workspace.mode == scratch || workspace.id == SCRATCH)
+        {
+            let dir = dirs.state_dir.join(SCRATCH);
+            make_private_dir(&dir)?;
+            let path = std::fs::canonicalize(&dir)
+                .map_err(|error| ConfigError(format!("{}: {error}", dir.display())))?;
+            workspaces.push(ConfigWorkspace {
+                id: SCRATCH.to_owned(),
+                mode: scratch,
+                path,
+                display_name: "Scratch".to_owned(),
+                defaults: Map::new(),
+            });
+        }
         for workspace in &workspaces {
             if !modes.contains(&workspace.mode) {
                 return error(format!(
@@ -224,14 +251,27 @@ impl NodeConfig {
             lease_ttl_ms: integer(env.get("PIRC_LEASE_TTL_MS"), 30_000),
             interaction_ttl_ms: integer(env.get("PIRC_INTERACTION_TTL_MS"), 3_600_000),
             shutdown_grace_ms: integer(env.get("PIRC_SHUTDOWN_GRACE_MS"), 5_000),
+            max_running: u32::try_from(integer(env.get("PIRC_MAX_RUNNING"), 4).clamp(1, 64))
+                .unwrap_or(4),
+            scratch_retention_days: match env.get("PIRC_SCRATCH_RETENTION_DAYS").map(str::trim) {
+                Some("0") => 0,
+                value => integer(value, 7),
+            },
         })
     }
 }
 
-/// Accepted ids, not definitions. An explicitly empty list grants no modes.
+/// The node-managed scratch mode and workspace id.
+pub const SCRATCH: &str = "scratch";
+
+/// Accepted ids, not definitions. An explicitly empty list grants no modes;
+/// unset, a node accepts `directory` and `scratch`.
 fn accepted_modes(value: Option<&str>) -> Result<Vec<ModeId>, ConfigError> {
     let Some(value) = value else {
-        return Ok(vec![ModeId::new("directory").expect("default mode id")]);
+        return Ok(["directory", SCRATCH]
+            .into_iter()
+            .map(|id| ModeId::new(id).expect("default mode id"))
+            .collect());
     };
     if value.trim().is_empty() {
         return Ok(Vec::new());
@@ -610,13 +650,34 @@ mod tests {
                     display_name: "Named".into(),
                     defaults: serde_json::json!({ "a": 1 }).as_object().unwrap().clone(),
                 },
+                // The node's own scratch workspace, in its state.
+                ConfigWorkspace {
+                    id: "scratch".into(),
+                    mode: ModeId::new("scratch").unwrap(),
+                    path: std::fs::canonicalize(state.join("scratch")).unwrap(),
+                    display_name: "Scratch".into(),
+                    defaults: Map::new(),
+                },
             ]
         );
+        // Not when the node does not accept scratch.
+        let env = node_env(
+            state.to_str().unwrap(),
+            &[("PIRC_WORKSPACES", &value), ("PIRC_MODES", "directory")],
+        );
+        assert_eq!(NodeConfig::load(&env).unwrap().workspaces.len(), 2);
     }
 
     #[test]
     fn mode_acceptance_is_explicit_and_validated() {
-        assert_eq!(accepted_modes(None).unwrap()[0].as_str(), "directory");
+        assert_eq!(
+            accepted_modes(None)
+                .unwrap()
+                .iter()
+                .map(ModeId::as_str)
+                .collect::<Vec<_>>(),
+            ["directory", "scratch"]
+        );
         assert!(accepted_modes(Some("")).unwrap().is_empty());
         let ids = accepted_modes(Some("directory, review")).unwrap();
         assert_eq!(

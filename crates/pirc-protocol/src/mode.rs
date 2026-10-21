@@ -319,6 +319,35 @@ pub fn default_work() -> Mode {
     }
 }
 
+/// Source for `scratch.md` (plans/rewrite/08-nodes.md): a fresh directory
+/// per session, no repository, open to workers; and a fixture.
+pub fn default_scratch() -> Mode {
+    Mode {
+        id: ModeId::new("scratch").expect("default mode id"),
+        label: "Scratch".into(),
+        description: "One-off work in a fresh directory, without a repository.".into(),
+        ui: ModeUi {
+            icon: None,
+            noun: "session".into(),
+        },
+        workdir: Workdir::PerSession,
+        prompt: vec![
+            PromptSection::Base,
+            PromptSection::AgentsGlobal,
+            PromptSection::Body,
+        ],
+        body: "Work in this session's own directory. It is not a repository and is removed\nsome days after the work ends: report what matters, and keep nothing there\nyou need later.".into(),
+        features_off: Vec::new(),
+        features_on: Vec::new(),
+        tools: None,
+        delegate_target: true,
+        project_config: false,
+        workspace_memory: false,
+        repository: false,
+        recap: false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

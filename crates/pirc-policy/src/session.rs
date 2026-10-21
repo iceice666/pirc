@@ -9,7 +9,7 @@
 //! runner code against. srt's settings (`srtSettings`) are rendered by the
 //! node's srt backend (`pirc_node::sandbox::srt`).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -116,14 +116,15 @@ pub struct SessionPolicyInput {
     pub home: String,
     /// pirc state no agent reads: the node's state dir and what it keeps elsewhere.
     pub private_dirs: Vec<String>,
-    /// Where the agent works (the workspace, or a chat session's directory).
+    /// Where the agent works (the workspace, or a per-session mode's own
+    /// directory).
     pub workspace_root: String,
     /// Other paths the agent config allows writing (global `allowedPaths`).
     pub allowed_paths: Vec<String>,
     /// The session's own state (JSONL, team dir), inside `private_dirs`.
     pub session_dir: String,
     /// The one workspace-memory ledger the session may read and append to
-    /// (its repository's; the node creates it), or none (chat sessions,
+    /// (its repository's; the node creates it), or none (per-session modes,
     /// read-only commands). Not the directory: every repository's ledger
     /// is there.
     pub workspace_memory_file: Option<String>,
@@ -131,8 +132,11 @@ pub struct SessionPolicyInput {
     /// Shared write roots; one inside `private_dirs` (the session's own
     /// temp dir in the node's private parent) is read back as well.
     pub tmp_dirs: Vec<String>,
-    /// Files next to the session that no agent may write (a project's instructions).
-    pub protected_paths: Vec<String>,
+    /// A read-only session (a wake's worker, plans/rewrite/08-nodes.md): it
+    /// reads as any other but writes only its own state, its temp dirs and
+    /// the build caches; not the workspace, `allowedPaths`, configured
+    /// `allowWrite` entries or the workspace-memory ledger.
+    pub read_only: bool,
     /// Directories inside `private_dirs` the session may read but never write.
     pub read_only_dirs: Vec<String>,
     /// Linux adds `LINUX_HOST_SOCKETS` to `deny_read`.
@@ -710,47 +714,6 @@ pub fn deny_write_around(dir: &str, keep: &[String]) -> Vec<String> {
         .collect()
 }
 
-const PROMPT_LINKS_ERROR: &str = "Cannot safely resolve prompt configuration symlinks";
-
-/// `promptWritePaths`: `file` and, through every symlink on its way (even
-/// a dangling one), where writes to it would land, so those stay
-/// protected. Errors other than a missing component fail the policy, as
-/// TS threw them (with Rust's texts).
-fn prompt_write_paths(file: &str, seen: &mut Vec<String>) -> Result<Vec<String>, String> {
-    let absolute = absolute(file);
-    if seen.contains(&absolute) || seen.len() >= 40 {
-        return Err(PROMPT_LINKS_ERROR.to_owned());
-    }
-    seen.push(absolute.clone());
-    let parts: Vec<&str> = absolute
-        .split('/')
-        .filter(|part| !part.is_empty())
-        .collect();
-    let mut cursor = PathBuf::from("/");
-    for (index, part) in parts.iter().enumerate() {
-        cursor.push(part);
-        match std::fs::symlink_metadata(&cursor) {
-            Ok(meta) if meta.file_type().is_symlink() => {
-                let link = std::fs::read_link(&cursor).map_err(|error| error.to_string())?;
-                let parent = cursor
-                    .parent()
-                    .map_or_else(|| "/".to_owned(), |p| p.display().to_string());
-                let target = resolve_path(
-                    &resolve_path(&parent, &link.to_string_lossy()),
-                    &parts[index + 1..].join("/"),
-                );
-                let mut out = vec![absolute];
-                out.extend(prompt_write_paths(&target, seen)?);
-                return Ok(out);
-            }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
-            Err(error) => return Err(error.to_string()),
-        }
-    }
-    Ok(vec![absolute])
-}
-
 /// What resolving a path crosses ([`walk_links`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LinkWalk {
@@ -963,7 +926,7 @@ fn exists(path: &str) -> bool {
 ///
 /// [`SessionPolicy::linked_denies`] (not TS's) covers every deny entry the
 /// policy resolves: the sensitive home paths, the private dirs, the
-/// read-only dirs, the protected paths, the mode catalog and its sources,
+/// read-only dirs, the mode catalog and its sources,
 /// the agent config dir and the
 /// configured `denyRead` / `denyWrite` entries.
 pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, String> {
@@ -1028,15 +991,23 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
                 .filter(|item| exists(item)),
         ),
     );
-    let allow_write = unique(
-        [workspace.clone()]
-            .into_iter()
-            .chain(resolve_all(&input.allowed_paths))
-            .chain([session_dir.clone()])
-            .chain(memory_file.iter().cloned())
-            .chain(shared_write.iter().cloned())
-            .chain(configured(&filesystem.allow_write)),
-    );
+    let allow_write = if input.read_only {
+        unique(
+            [session_dir.clone()]
+                .into_iter()
+                .chain(shared_write.iter().cloned()),
+        )
+    } else {
+        unique(
+            [workspace.clone()]
+                .into_iter()
+                .chain(resolve_all(&input.allowed_paths))
+                .chain([session_dir.clone()])
+                .chain(memory_file.iter().cloned())
+                .chain(shared_write.iter().cloned())
+                .chain(configured(&filesystem.allow_write)),
+        )
+    };
     // What a session may write inside the node's private dirs: its own
     // state, and its own temp dir (the node keeps every session's temp dir
     // in a private parent, so sessions cannot reach each other's).
@@ -1051,13 +1022,6 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
         .chain(memory_file.iter().cloned())
         .chain(private_tmp_dirs.iter().cloned())
         .collect();
-    let mut prompt_paths = Vec::new();
-    for name in ["SOUL.md", "CHAT.md"] {
-        prompt_paths.extend(prompt_write_paths(
-            &join(&input.config_dir, name),
-            &mut Vec::new(),
-        )?);
-    }
     let mode_paths = mode_write_paths(&input.config_dir)?;
     let paths = PathPolicy {
         deny_read: unique(
@@ -1068,8 +1032,8 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
                 .chain(host_sockets)
                 .chain(configured(&filesystem.deny_read)),
         ),
-        // What the session needs back from inside the private dirs. A chat
-        // session's directory lives in the node's state.
+        // What the session needs back from inside the private dirs. A
+        // per-session mode's directory lives in the node's state.
         allow_read: unique(
             [workspace.clone(), session_dir.clone()]
                 .into_iter()
@@ -1105,9 +1069,7 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
             // User-managed global configuration stays read-only even under
             // an allowed root.
             .chain([real_resolve(&input.config_dir)])
-            .chain(prompt_paths)
             .chain(mode_paths.iter().cloned())
-            .chain(resolve_all(&input.protected_paths))
             .chain(sensitive)
             .chain(read_only_dirs)
             .chain(
@@ -1131,7 +1093,6 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
             .into_iter()
             .chain(input.private_dirs.iter().map(|dir| absolute(dir)))
             .chain(input.read_only_dirs.iter().map(|dir| absolute(dir)))
-            .chain(input.protected_paths.iter().map(|path| absolute(path)))
             .chain(mode_paths)
             .chain([config_dir.clone()])
             .chain(configured_spelled(&filesystem.deny_read))
@@ -1186,7 +1147,8 @@ mod tests {
         memory: String,
         socket: String,
         workspace: String,
-        chat: String,
+        /// A per-session mode's directory (`scratch`), in the node's state.
+        scratch: String,
         tmp: String,
     }
 
@@ -1207,7 +1169,7 @@ mod tests {
             memory: p(&state, "workspace-memory"),
             socket: p(&state, "i-abc/socket"),
             workspace: p(&root, "ws"),
-            chat: p(&state, "chat/chats/sessions/s1"),
+            scratch: p(&state, "scratch/sessions/s1"),
             tmp: p(&root, "tmp"),
             _dir: dir,
             root,
@@ -1219,7 +1181,7 @@ mod tests {
             &d.memory,
             &p(&d.state, "i-abc"),
             &d.workspace,
-            &d.chat,
+            &d.scratch,
             &d.tmp,
             &p(&d.home, ".ssh"),
             &p(&d.home, ".cache"),
@@ -1249,7 +1211,7 @@ mod tests {
             workspace_memory_file: Some(p(&d.memory, "k.jsonl")),
             inference_socket: Some(d.socket.clone()),
             tmp_dirs: vec![d.tmp.clone()],
-            protected_paths: Vec::new(),
+            read_only: false,
             read_only_dirs: Vec::new(),
             platform: Platform::current(),
             uid: 1000,
@@ -1373,36 +1335,40 @@ mod tests {
     }
 
     #[test]
-    fn lets_a_chat_session_work_in_its_directory_inside_the_nodes_state() {
+    fn lets_a_per_session_mode_work_in_its_directory_inside_the_nodes_state() {
         let d = layout();
-        let paths = policy_for(&d, &d.chat, json!({})).paths;
-        assert!(read_allowed(&paths, &p(&d.chat, "notes.md")));
-        assert!(write_allowed(&paths, &p(&d.chat, "notes.md")));
-        assert!(!read_allowed(
-            &paths,
-            &p(&d.state, "chat/chats/sessions/s2/x")
-        ));
+        let paths = policy_for(&d, &d.scratch, json!({})).paths;
+        assert!(read_allowed(&paths, &p(&d.scratch, "notes.md")));
+        assert!(write_allowed(&paths, &p(&d.scratch, "notes.md")));
+        assert!(!read_allowed(&paths, &p(&d.state, "scratch/sessions/s2/x")));
     }
 
     #[test]
-    fn never_lets_a_chat_session_touch_its_projects_instructions() {
+    fn a_read_only_session_writes_only_its_own_state_temp_dirs_and_caches() {
         let d = layout();
-        let instructions = p(&d.state, "chat/chats/instructions.md");
         let mut input = input(
             &d,
-            &d.chat,
-            json!({ "filesystem": { "allowWrite": [d.state] } }),
+            &d.workspace,
+            json!({ "filesystem": { "allowWrite": ["~/out"] } }),
         );
-        input.inference_socket = None;
-        input.protected_paths = vec![instructions.clone()];
+        input.read_only = true;
+        input.allowed_paths = vec![d.home.clone()];
         let paths = session_policy(&input).unwrap().paths;
-        assert!(!read_allowed(&paths, &instructions));
-        assert!(!write_allowed(&paths, &instructions));
-        assert!(write_allowed(&paths, &p(&d.chat, "notes.md")));
+        assert!(read_allowed(&paths, &p(&d.workspace, "src/a.ts")));
+        assert!(!write_allowed(&paths, &p(&d.workspace, "src/a.ts")));
+        assert!(!write_allowed(&paths, &p(&d.home, "notes.md")));
+        assert!(!write_allowed(&paths, &p(&d.home, "out/x")));
+        assert!(read_allowed(&paths, &p(&d.memory, "k.jsonl")));
+        assert!(!write_allowed(&paths, &p(&d.memory, "k.jsonl")));
+        assert!(write_allowed(&paths, &p(&d.session, "session.jsonl")));
+        assert!(write_allowed(&paths, &p(&d.tmp, "x")));
+        assert!(write_allowed(&paths, &p(&d.home, ".cache/bun/x")));
+        let guard = PathGuard::with_home(&d.workspace, &paths, &[], &d.home);
+        assert!(guard.resolve(&p(&d.workspace, "a.ts"), true).is_err());
     }
 
     #[test]
-    fn protects_global_prompt_configuration_inside_writable_roots_including_absent_files() {
+    fn protects_the_agent_configuration_inside_writable_roots_including_absent_files() {
         let d = layout();
         let config_dir = p(&d.tmp, "config");
         fs::create_dir(&config_dir).unwrap();
@@ -1411,28 +1377,11 @@ mod tests {
         input.allowed_paths = vec![d.root.clone()];
         input.inference_socket = None;
         let paths = session_policy(&input).unwrap().paths;
-        for name in ["SOUL.md", "CHAT.md", "config.json"] {
+        for name in ["config.json", "AGENTS.md"] {
             assert!(read_allowed(&paths, &p(&config_dir, name)));
             assert!(!write_allowed(&paths, &p(&config_dir, name)));
         }
         assert!(write_allowed(&paths, &p(&d.tmp, "ordinary.txt")));
-    }
-
-    #[test]
-    fn protects_the_prospective_targets_of_dangling_managed_prompt_symlinks() {
-        let d = layout();
-        let config_dir = p(&d.tmp, "config");
-        fs::create_dir(&config_dir).unwrap();
-        for name in ["SOUL.md", "CHAT.md"] {
-            symlink(p(&d.workspace, name), p(&config_dir, name)).unwrap();
-        }
-        let mut input = input(&d, &d.workspace, json!({}));
-        input.config_dir = config_dir;
-        input.inference_socket = None;
-        let paths = session_policy(&input).unwrap().paths;
-        for name in ["SOUL.md", "CHAT.md"] {
-            assert!(!write_allowed(&paths, &p(&d.workspace, name)));
-        }
     }
 
     #[test]
@@ -1595,9 +1544,6 @@ mod tests {
         symlink(r("state"), r("state-link")).unwrap();
         symlink(r("outside/bin"), r("bin-link")).unwrap();
         symlink(r("outside/secrets"), p(&d.home, "secrets")).unwrap();
-        let notes = p(&d.workspace, "AGENTS.md");
-        fs::write(r("outside/AGENTS.md"), "").unwrap();
-        symlink(r("outside/AGENTS.md"), &notes).unwrap();
         let mut input = input(
             &d,
             &d.workspace,
@@ -1606,7 +1552,6 @@ mod tests {
         input.allowed_paths = vec![d.home.clone()];
         input.private_dirs = vec![r("state-link")];
         input.read_only_dirs = vec![r("bin-link")];
-        input.protected_paths = vec![notes.clone()];
         let policy = session_policy(&input).unwrap();
         let linked = |spelled: &str| {
             policy
@@ -1624,7 +1569,6 @@ mod tests {
         assert_eq!(aws.target, r("outside/aws"));
         assert_eq!(linked(&r("state-link")).links, [r("state-link")]);
         assert_eq!(linked(&r("bin-link")).links, [r("bin-link")]);
-        assert_eq!(linked(&notes).links, std::slice::from_ref(&notes));
         assert_eq!(linked(&p(&d.home, "secrets")).target, r("outside/secrets"));
         assert!(
             policy
@@ -1649,18 +1593,6 @@ mod tests {
             policy_for(&plain, &plain.workspace, json!({})).linked_denies,
             []
         );
-    }
-
-    #[test]
-    fn refuses_prompt_symlink_loops() {
-        let d = layout();
-        let config_dir = p(&d.tmp, "config");
-        fs::create_dir(&config_dir).unwrap();
-        symlink(p(&config_dir, "CHAT.md"), p(&config_dir, "SOUL.md")).unwrap();
-        symlink(p(&config_dir, "SOUL.md"), p(&config_dir, "CHAT.md")).unwrap();
-        let mut input = input(&d, &d.workspace, json!({}));
-        input.config_dir = config_dir;
-        assert_eq!(session_policy(&input).unwrap_err(), PROMPT_LINKS_ERROR);
     }
 
     #[test]
@@ -1738,9 +1670,9 @@ mod tests {
         let mut denied = deny_write_around(&d.state, &[d.session.clone(), d.memory.clone()]);
         denied.sort();
         let mut expected = vec![
-            p(&d.state, "chat"),
             p(&d.state, "i-abc"),
             p(&d.state, "node.sqlite"),
+            p(&d.state, "scratch"),
         ];
         expected.sort();
         assert_eq!(denied, expected);

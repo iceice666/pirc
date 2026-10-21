@@ -18,8 +18,10 @@ use crate::{ConfigError, Env, default_config_dir};
 
 /// Human-editable initial files, also suitable for printing for comparison.
 /// The filename supplies the id; Markdown after front matter supplies the body.
-pub const DEFAULT_MODE_FILES: &[(&str, &str)] =
-    &[("directory.md", include_str!("modes/directory.md"))];
+pub const DEFAULT_MODE_FILES: &[(&str, &str)] = &[
+    ("directory.md", include_str!("modes/directory.md")),
+    ("scratch.md", include_str!("modes/scratch.md")),
+];
 
 /// A skipped file and the validation or I/O rule it failed.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -248,6 +250,10 @@ mod tests {
     #[test]
     fn default_markdown_matches_protocol_defaults_exactly() {
         assert_eq!(parse_mode("directory", WORK_FILE).unwrap(), default_work());
+        assert_eq!(
+            parse_mode("scratch", include_str!("modes/scratch.md")).unwrap(),
+            pirc_protocol::mode::default_scratch()
+        );
     }
 
     #[test]
@@ -384,7 +390,7 @@ mod tests {
         assert!(initialize_modes(&dir).unwrap());
         let catalog = load_modes(&dir).unwrap();
         assert!(catalog.warnings.is_empty());
-        assert_eq!(ids(&catalog), ["directory"]);
+        assert_eq!(ids(&catalog), ["directory", "scratch"]);
         assert_eq!(
             catalog.modes[&ModeId::new("directory").unwrap()],
             default_work()
@@ -421,7 +427,7 @@ mod tests {
         fs::remove_file(dir.join("directory.md")).unwrap();
         assert!(!initialize_modes(&dir).unwrap());
         assert!(!dir.join("directory.md").exists());
-        assert!(load_modes(&dir).unwrap().modes.is_empty());
+        assert_eq!(ids(&load_modes(&dir).unwrap()), ["scratch"]);
     }
 
     #[test]
