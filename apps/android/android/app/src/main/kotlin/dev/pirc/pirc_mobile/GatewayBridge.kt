@@ -638,10 +638,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                         } + mapOf("onboardingComplete" to activity.permissionAccess.complete, "pairLink" to activity.intent?.dataString,
                             "route" to activity.intent?.getStringExtra("gatewayRoute"), "targetSession" to activity.intent?.getStringExtra("gatewaySession"),
                             "targetRoom" to activity.intent?.getStringExtra("gatewayRoom"),
-                            "interactionId" to activity.intent?.getStringExtra("interactionId"), "interactionEpoch" to activity.intent?.getStringExtra("interactionEpoch"),
-                            "interactionPairingStamp" to activity.intent?.getStringExtra("questionPairingStamp"),
-                            "questionPairingStamp" to activity.intent?.getStringExtra("questionPairingStamp"),
-                            "answerChoice" to activity.intent?.getStringExtra("answerChoice"), "confirmQuestion" to activity.intent?.getBooleanExtra("confirmQuestion",false))
+)
                         "openContext" -> accountContextMutationLock.withLock {
                             runtime.openContext(str("contextId"), str("pairingStamp")).also {
                                 documentScripts.onPairingStampChanged(it["pairingStamp"] as? String)
@@ -970,20 +967,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                         "pushDisable" -> accountContextMutationLock.withLock {
                             PushRegistration.disable(activity, runtime.api()); null
                         }
-                        "overlay" -> {
-                            val id = str("sessionId")
-                            if (!android.provider.Settings.canDrawOverlays(activity)) {
-                                GatewayNotifications.show(activity, "pirc · 待你處理", "開啟 App 確認最新狀態", id, null, "q")
-                                "浮窗權限尚未開啟，已嘗試改用通知；也可直接在對話內回答"
-                            } else {
-                                activity.startForegroundService(Intent(activity, GatewayOverlayService::class.java)
-                                    .putExtra("sessionId", id).putExtra("interactionId", args["interactionId"] as? String)
-                                    .putExtra("interactionEpoch", args["interactionEpoch"]?.toString())
-                                    .putExtra("questionPairingStamp", args["interactionPairingStamp"] as? String ?: args["questionPairingStamp"] as? String ?: args["pairingStamp"] as? String))
-                                activity.moveTaskToBack(true)
-                                null
-                            }
-                        }
                         "openPairLink" -> {
                             val uri = Uri.parse(str("url"))
                             require(uri.scheme == "pirc" && uri.host == "pair")
@@ -1102,19 +1085,9 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                 result.error("UPLOAD", "缺少工作階段", null)
                 return
             }
-            runtime.scope.launch {
-                try {
-                    val upload = withContext(Dispatchers.IO) {
-                        val contents = when (val read = readAttachment(uri)) {
-                            is AttachmentRead.Success -> read.contents
-                            is AttachmentRead.Failure -> throw IllegalArgumentException(read.error)
-                        }
-                        val uploaded = runtime.api().upload(id, contents.bytes, contents.mimeType, contents.name)
-                        mapOf("id" to uploaded.id, "name" to contents.name, "kind" to uploaded.kind)
-                    }
-                    result.success(upload)
-                } catch (e: Exception) { result.error("UPLOAD", e.message, null) }
-            }
+            // Sessions take no files from the phone any more (decision 4):
+            // files go with a room's message.
+            result.error("UPLOAD", "Attach files in a room (session $id takes none from here).", null)
             return
         }
 
@@ -1361,9 +1334,6 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
     }
     fun route(intent: Intent) {
         runtime.emit("route", mapOf("sessionId" to intent.getStringExtra("gatewaySession"), "roomId" to intent.getStringExtra("gatewayRoom"),
-            "page" to intent.getStringExtra("gatewayRoute"), "pairLink" to intent.dataString,
-            "interactionId" to intent.getStringExtra("interactionId"), "interactionEpoch" to intent.getStringExtra("interactionEpoch"),
-            "interactionPairingStamp" to intent.getStringExtra("questionPairingStamp"), "questionPairingStamp" to intent.getStringExtra("questionPairingStamp"),
-            "answerChoice" to intent.getStringExtra("answerChoice"), "confirmQuestion" to intent.getBooleanExtra("confirmQuestion",false)), sessionId = null)
+            "page" to intent.getStringExtra("gatewayRoute"), "pairLink" to intent.dataString), sessionId = null)
     }
 }

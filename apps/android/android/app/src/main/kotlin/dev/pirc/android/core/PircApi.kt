@@ -6,9 +6,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import dev.pirc.android.core.timeline.get
-import dev.pirc.android.core.timeline.number
-import dev.pirc.android.core.timeline.text
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -78,9 +75,6 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
     /** The raw snapshot; see `snapshotState` in `core.timeline`. */
     open suspend fun snapshot(sessionId: String): JsonElement =
         get<JsonElement>("/api/sessions/${sessionId.urlSegment()}/snapshot")
-
-    /** The live event stream of one session; see [EventStream]. */
-    open fun events(sessionId: String, cursor: String?) = EventStream(this).open(sessionId, cursor)
 
     // ---- sessions and workspaces ----
 
@@ -183,9 +177,6 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
 
     // ---- acting on a session (needs the control lease) ----
 
-    open suspend fun models(sessionId: String): List<ModelOption> =
-        get<ModelsResponse>("/api/models?sessionId=${sessionId.urlSegment()}").models.map { it.option() }
-
     open suspend fun control(sessionId: String, clientId: String): ControlLease =
         ControlLease.from(send("GET", "${session(sessionId)}/control"), clientId)
 
@@ -207,64 +198,9 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
         send("POST", "${session(sessionId)}/control/release", held(clientId, generation))
     }
 
-    /**
-     * Send one command. A command the node did not accept still comes back as a
-     * receipt (with its reason), so only transport and lease errors throw.
-     */
-    open suspend fun command(sessionId: String, clientId: String, generation: Long, commandId: String, payload: JsonObject): CommandReceipt {
-        val body = buildJsonObject {
-            put("commandId", commandId)
-            put("clientId", clientId)
-            put("generation", generation)
-            put("payload", payload)
-        }
-        val reply = send("POST", "${session(sessionId)}/commands", body, acceptBody = { it["command"] != null })
-        val command = reply["command"]
-        return CommandReceipt(
-            commandId = command["id"].text ?: commandId,
-            status = command["status"].text ?: "outcome_unknown",
-            message = command["error"].text,
-        )
-    }
-
-    /**
-     * A null [generation] answers without the control lease; the gateway accepts
-     * that only for relayed (`relay.`) delegation approvals.
-     */
-    open suspend fun answer(sessionId: String, interactionId: String, clientId: String, generation: Long?, answer: InteractionAnswer) {
-        send(
-            "POST",
-            "${session(sessionId)}/interactions/${interactionId.urlSegment()}/answer",
-            buildJsonObject {
-                put("clientId", clientId)
-                if (generation != null) put("generation", generation)
-                put("answer", answer.rpc())
-            },
-        )
-    }
-
     /** Stop a delegation's run; no lease. 409 when another device controls it or nothing runs. */
     open suspend fun stopDelegation(delegationId: String): String? =
         send("POST", "/api/delegations/${delegationId.urlSegment()}/stop", buildJsonObject {})["status"].text
-
-    /**
-     * Store a file on the session's node. Images ride in the model's context;
-     * anything else is copied into the workspace for the agent's file tools —
-     * [filename] lets the node tell them apart and name the copy.
-     */
-    open suspend fun upload(sessionId: String, bytes: ByteArray, mimeType: String, filename: String? = null): Upload {
-        val query = filename?.let { "?filename=${it.urlSegment()}" } ?: ""
-        val reply = send("POST", "${session(sessionId)}/uploads$query", bytes.toRequestBody(mimeType.toMediaType()))
-        val upload = reply["upload"]
-        return readingReply {
-            Upload(
-                upload["id"].text ?: error("upload without an id"),
-                upload["mimeType"].text ?: mimeType,
-                upload["byteSize"].number ?: bytes.size.toLong(),
-                upload["kind"].text ?: "image",
-            )
-        }
-    }
 
     // ---- rooms (plans/rewrite/12-android.md): replies stay the gateway's JSON ----
 

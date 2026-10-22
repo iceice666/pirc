@@ -92,7 +92,6 @@ class MainActivity : FlutterActivity() {
         super.onResume()
         gateway?.resumeMedia()
         stopService(Intent(this, QuickReplyService::class.java))
-        stopService(Intent(this, GatewayOverlayService::class.java))
     }
 
     override fun onNewIntent(intent: Intent) {

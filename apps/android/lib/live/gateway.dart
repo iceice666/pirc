@@ -1036,12 +1036,19 @@ class LiveController extends ChangeNotifier {
     bool confirmed,
   ) async {
     final account = _accountRevision;
-    await gateway.call('answerRelayed', {
-      'sessionId': chatId,
-      'interactionId': interactionId,
-      'pairingStamp': pairingStamp,
-      'confirmed': confirmed,
-    });
+    // A relayed (`relay.`) approval is answered without the control lease:
+    // no generation goes with it.
+    if (!interactionId.startsWith('relay.')) {
+      throw StateError('Only relayed approvals are answered from the list.');
+    }
+    await gateway.request(
+      '${sessionPath(chatId)}/interactions/${enc(interactionId)}/answer',
+      method: 'POST',
+      body: {
+        'clientId': clientId,
+        'answer': {'confirmed': confirmed},
+      },
+    );
     if (account == _accountRevision && !_disposed) {
       unawaited(refreshList());
     }

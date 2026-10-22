@@ -163,7 +163,8 @@ class GatewayPushNotificationRouteTest {
         val legacyId = legacyTag.hashCode()
         val sessionId = "unpaired-session-${UUID.randomUUID()}"
         val interactionId = "memory:unpaired-${UUID.randomUUID()}"
-        val identity = QuestionNotificationIdentity.from(sessionId, interactionId, "7")!!
+        // Session questions are asked in rooms now: their pushes post nothing.
+        val questionTag = "interaction:$sessionId:$interactionId:7"
         val serviceConnected = CountDownLatch(1)
         val serviceRef = AtomicReference<GatewayPushService?>()
         val serviceConnection = object : ServiceConnection {
@@ -186,7 +187,7 @@ class GatewayPushNotificationRouteTest {
             check(preferenceStore.edit().putBoolean("q", true).putBoolean("quiet", false)
                 .putStringSet("muted", emptySet()).commit())
             notifications.cancel(legacyId)
-            notifications.cancel(identity.notificationTag, 0)
+            notifications.cancel(questionTag, 0)
             bound = context.bindService(
                 Intent(context, GatewayPushService::class.java),
                 serviceConnection,
@@ -198,7 +199,7 @@ class GatewayPushNotificationRouteTest {
             assertNotNull("SDK binder did not expose GatewayPushService", service)
 
             val legacy = """{"title":"Unpaired legacy","body":"must be ignored","tag":"$legacyTag","target":{"sessionId":"$sessionId"}}"""
-            val created = """{"kind":"interaction_created","sessionId":"$sessionId","interactionId":"$interactionId","interactionEpoch":"7","title":"Unpaired question","body":"must be ignored","tag":"${identity.notificationTag}","target":{"sessionId":"$sessionId"}}"""
+            val created = """{"kind":"interaction_created","sessionId":"$sessionId","interactionId":"$interactionId","interactionEpoch":"7","title":"Unpaired question","body":"must be ignored","tag":"${questionTag}","target":{"sessionId":"$sessionId"}}"""
             instrumentation.runOnMainSync {
                 service!!.onMessage(PushMessage(legacy.toByteArray(Charsets.UTF_8), true), "android-test")
                 service!!.onMessage(PushMessage(created.toByteArray(Charsets.UTF_8), true), "android-test")
@@ -209,11 +210,11 @@ class GatewayPushNotificationRouteTest {
                 it.id == legacyId && it.tag == null
             })
             assertTrue("An unpaired exact question callback must not post a notification", notifications.activeNotifications.none {
-                it.tag == identity.notificationTag
+                it.tag == questionTag
             })
         } finally {
             notifications.cancel(legacyId)
-            notifications.cancel(identity.notificationTag, 0)
+            notifications.cancel(questionTag, 0)
             if (bound) context.unbindService(serviceConnection)
             pairingOverride?.close()
             val pushKeys = pushStore.all.keys + savedPushValues.keys

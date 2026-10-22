@@ -2,7 +2,6 @@ package dev.pirc.pirc_mobile
 
 import android.content.Context
 import dev.pirc.android.core.*
-import dev.pirc.android.core.timeline.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.serialization.json.*
@@ -212,9 +211,9 @@ class GatewayRuntime private constructor(val context: Context) {
             if (previous != pairing) {
                 rotatePairingStamp()
                 withContext(Dispatchers.IO) { documentCookies.bind(null); documentStorage.bind(null) }
-                GatewayNotifications.clearQuestionNotifications(context)
+                GatewayNotifications.clear(context)
                 dev.pirc.android.push.PushRegistration.disable(context, activeApi ?: previous?.let { connectedApi(it) })
-                local.clearDrafts(); sessions.clearUncertain(); rooms.stop(); RoomMutes.clear(context)
+                local.clearDrafts(); rooms.stop(); RoomMutes.clear(context)
                 context.getSharedPreferences("recent_activity", Context.MODE_PRIVATE).edit().clear().apply()
             }
             withContext(Dispatchers.IO) { credentials.save(pairing) }
@@ -233,12 +232,11 @@ class GatewayRuntime private constructor(val context: Context) {
             dev.pirc.android.push.PushRegistration.disable(context, activeApi)
             val stamp = rotatePairingStamp()
             withContext(Dispatchers.IO) { documentCookies.bind(null); documentStorage.bind(null) }
-            GatewayNotifications.clearQuestionNotifications(context)
+            GatewayNotifications.clear(context)
             withContext(Dispatchers.IO) { credentials.clear() }
             retireManagement()
             activeApi = null
             local.clearDrafts()
-            sessions.clearUncertain()
             rooms.stop()
             RoomMutes.clear(context)
             contexts.bindPairingStamp(null)

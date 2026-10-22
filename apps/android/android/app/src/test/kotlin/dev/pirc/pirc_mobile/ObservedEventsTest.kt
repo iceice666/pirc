@@ -32,7 +32,7 @@ class ObservedEventsTest {
             val api = PircApi(Pairing(server.url("/").toString().trimEnd('/'), "pirc_dev_" + "c".repeat(43)))
             val signals = withTimeout(5_000) { EventStream(api, onChange = { changes.add(it) }, backoff = { 1 }).open("s", "3:6").toList() }
             assertEquals(listOf("memory_changed", "sessions_changed", "directory_changed"), changes)
-            assertEquals(listOf("3:7"), signals.filterIsInstance<StreamSignal.Event>().map { it.envelope.cursor })
+            assertEquals(listOf("3:7"), signals.filterIsInstance<StreamSignal.Event>().map { it.cursor })
             assertEquals(401, (signals.last() as StreamSignal.Closed).error.status)
             val first = server.takeRequest()
             for (name in listOf("memory", "sessions", "directory")) assertEquals("1", first.url.queryParameter(name))

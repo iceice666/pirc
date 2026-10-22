@@ -90,23 +90,6 @@ internal suspend fun GatewayRuntime.domainCall(method: String, args: CallArgs, c
     "refresh" -> sessions.snapshot(args.str("sessionId")).wire()
     "draft" -> { local.saveDraft(args.str("sessionId"), args.str("text")); null }
     "control" -> sessions.lease(args.str("sessionId"), args["acquire"] == true, args["force"] == true)
-    "commandStatus" -> sessions.unknownCommand(args.str("sessionId"))
-    "command" -> sessions.command(args.str("sessionId"), args.map("payload"), args.str("commandId"))
-    "acknowledgeCommand" -> { sessions.acknowledgeCommand(args.str("sessionId")); null }
-    "answer" -> sessions.answer(args.str("sessionId"), args.str("interactionId"), args.str("epoch"), args.str("pairingStamp"), args.map("answer"))
-    "reconcileAnswer" -> sessions.reconcileAnswer(args.str("sessionId"), args.str("interactionId"), args.str("epoch"), args.str("pairingStamp"))
-    "answerRelayed" -> sessions.answerRelayed(args.str("sessionId"), args.str("interactionId"), args.str("pairingStamp"), args.bool("confirmed"))
     "stopDelegation" -> sessions.stopDelegation(args.str("delegationId"))
-    "uploadAttachment" -> {
-        val sessionId = args.str("sessionId")
-        val name = args.str("name")
-        val mimeType = args.str("mimeType")
-        val bytes = args["bytes"] as? ByteArray ?: throw IllegalArgumentException("bytes 必須是 Uint8List")
-        require(bytes.size <= MAX_ATTACHMENT_BYTES) { "附件上限 8 MiB" }
-        withContext(Dispatchers.IO) {
-            val uploaded = api().upload(sessionId, bytes, mimeType, name)
-            mapOf("id" to uploaded.id, "name" to name, "kind" to uploaded.kind, "mimeType" to mimeType, "size" to bytes.size)
-        }
-    }
     else -> NotDomain
 }

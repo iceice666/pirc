@@ -1,8 +1,5 @@
 package dev.pirc.android.core
 
-import dev.pirc.android.core.timeline.EventEnvelope
-import dev.pirc.android.core.timeline.TimelineEvent
-import dev.pirc.android.core.timeline.normalizeEvent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
@@ -28,7 +25,8 @@ private const val STABLE_NANOS = 10_000_000_000L
 sealed interface StreamSignal {
     data object Connected : StreamSignal
     data object Reconnecting : StreamSignal
-    data class Event(val envelope: EventEnvelope) : StreamSignal
+    /** One frame of the session's stream, and where it resumes after it. */
+    data class Event(val frame: JsonObject, val cursor: String) : StreamSignal
     /** The gateway refused the stream for good; [error] says why (401: pair again). */
     data class Closed(val error: ApiException) : StreamSignal
 }
@@ -77,21 +75,21 @@ class EventStream(
 
                     override fun onMessage(webSocket: WebSocket, text: String) {
                         if (!isActive) return
-                        val envelope = try {
-                            val raw = PircJson.parseToJsonElement(text)
-                            val type = (raw as? JsonObject)?.get("type")?.jsonPrimitive?.contentOrNull
-                            if (onChange != null && type in setOf("directory_changed", "memory_changed", "sessions_changed")) {
-                                onChange.invoke(type!!)
-                                return
-                            }
-                            normalizeEvent(raw)
+                        val frame = try {
+                            PircJson.parseToJsonElement(text) as? JsonObject ?: throw IllegalArgumentException("not an object")
                         } catch (_: Exception) {
                             webSocket.close(1003, "Invalid event")
                             return
                         }
-                        cursor = envelope.cursor
-                        if (envelope.event !is TimelineEvent.Reset) delivered = true
-                        trySend(StreamSignal.Event(envelope))
+                        val type = frame["type"]?.jsonPrimitive?.contentOrNull
+                        if (onChange != null && type in setOf("directory_changed", "memory_changed", "sessions_changed")) {
+                            onChange.invoke(type!!)
+                            return
+                        }
+                        val next = frameCursor(frame)
+                        cursor = next
+                        if (type != "reset") delivered = true
+                        trySend(StreamSignal.Event(frame, next))
                     }
 
                     override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {

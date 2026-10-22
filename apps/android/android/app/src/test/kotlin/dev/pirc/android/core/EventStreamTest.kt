@@ -1,6 +1,5 @@
 package dev.pirc.android.core
 
-import dev.pirc.android.core.timeline.TimelineEvent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -52,9 +51,10 @@ class EventStreamTest {
         server.enqueue(socket(4401))
         val signals = withTimeout(5_000) { stream.open("s 1", "3:6").toList() }
 
-        val events = signals.filterIsInstance<StreamSignal.Event>().map { it.envelope }
+        val events = signals.filterIsInstance<StreamSignal.Event>()
         assertEquals(listOf("3:7", "3:8"), events.map { it.cursor })
-        assertEquals(TimelineEvent.MessageDelta("x7", thinking = false), events.first().event)
+        // A message delta changes nothing the engine shows of a session.
+        assertEquals(SessionChange.None, sessionChange(events.first().frame))
         assertTrue(signals.contains(StreamSignal.Reconnecting))
         assertEquals(401, (signals.last() as StreamSignal.Closed).error.status)
 
@@ -74,8 +74,8 @@ class EventStreamTest {
             stream.open("s1", "3:8").first { it is StreamSignal.Event }
         } as StreamSignal.Event
 
-        assertEquals("3:9", signal.envelope.cursor)
-        assertEquals(TimelineEvent.SessionDeleted, signal.envelope.event)
+        assertEquals("3:9", signal.cursor)
+        assertEquals(SessionChange.Deleted, sessionChange(signal.frame))
     }
 
     @Test
