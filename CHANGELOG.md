@@ -37,6 +37,8 @@ Planned as **0.10.0+harmony**: the rewrite on the harmony branch, which forks fr
 
 ### Fixed
 
+- The web's rooms show what pirc and its workers write as Markdown again (emphasis, lists, code, tables, math and diagrams), while what you wrote stays exactly as typed; a workspace path reads as code there rather than as a link into a Files pane the rooms do not have.
+- The web's composer takes an image pasted into it (Ctrl/⌘+V) as an attachment, once, the same way the paperclip does; words still paste as words.
 - Android scripted dialog forms close locally and preserve return values, validation and input state across view replacement.
 - Android interactive pages keep images and script-updated form values consistent when switching views.
 - Android script file selection survives document view replacement and updates the active file controls.

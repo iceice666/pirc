@@ -1,5 +1,6 @@
 /**
- * Markdown → sanitized HTML for previewed documents (the Files pane).
+ * Markdown → sanitized HTML for what models and workers write: the rooms'
+ * messages, a worker's thread, and previewed documents (the Files pane).
  *
  * - GFM (tables, task lists, strikethrough) via marked
  * - LaTeX via KaTeX: `$…$`, `\(…\)` inline; `$$…$$`, `\[…\]` display
@@ -437,17 +438,39 @@ interface EnhanceParams {
   ready: boolean;
   /** Directory relative links resolve against (a previewed document's folder). */
   linkBase?: string;
+  /**
+   * Whether workspace file links open in the Files pane. Defaults to true (the
+   * engine). The rooms have no Files pane, so there they show as plain paths
+   * rather than links that go nowhere (see {@link unlinkFileLinks}).
+   */
+  files?: boolean;
+}
+
+/**
+ * Replace workspace file links with plain code. Without a Files pane listening
+ * (the rooms, plan 11), following a `data-file-link` anchor is swallowed and
+ * previews nothing; the path itself is still what the reader needs.
+ */
+function unlinkFileLinks(root: HTMLElement) {
+  for (const link of root.querySelectorAll<HTMLAnchorElement>('a[data-file-link]')) {
+    const code = document.createElement('code');
+    code.className = 'file-path';
+    code.textContent = link.textContent ?? '';
+    link.replaceWith(code);
+  }
 }
 
 /**
  * Svelte action: copy buttons on code blocks, workspace file links (opened in
- * the Files pane) and lazy Mermaid rendering.
+ * the Files pane, unless `files` is false) and lazy Mermaid rendering.
  * Diagrams render only once `ready` is true (i.e. the text stopped streaming),
  * since a half-written diagram cannot be parsed.
  */
 export function enhanceMarkdown(node: HTMLElement, params: EnhanceParams) {
   let linkBase = params.linkBase ?? '';
+  let files = params.files ?? true;
   const openFileLink = (event: MouseEvent) => {
+    if (!files) return false;
     const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[data-file-link]');
     if (!link || !node.contains(link)) return false;
     event.preventDefault();
@@ -472,12 +495,15 @@ export function enhanceMarkdown(node: HTMLElement, params: EnhanceParams) {
   node.addEventListener('click', onClick);
   node.addEventListener('auxclick', onAuxClick);
   const run = (next: { ready: boolean }) => {
+    // Before anything listens to a click: no anchor to swallow it.
+    if (!files) unlinkFileLinks(node);
     if (next.ready) void renderMermaidBlocks(node);
   };
   run(params);
   return {
     update: (next: EnhanceParams) => {
       linkBase = next.linkBase ?? '';
+      files = next.files ?? true;
       queueMicrotask(() => run(next));
     },
     destroy: () => {

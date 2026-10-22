@@ -3,7 +3,9 @@
    * The top level (plans/rewrite/01-rooms.md): the rooms at `/`, and the
    * engine (workspaces, sessions, the work behind the rooms) at `/engine`.
    * Moving between them loads a new page, so each is its own chunk: the
-   * rooms do not download the engine's panels, terminal and markdown.
+   * rooms do not download the engine's panels and terminal. Both render
+   * Markdown, so marked and DOMPurify are a chunk the two share, and KaTeX,
+   * highlight.js and Mermaid still load only once a message needs them.
    */
   import { isEnginePath } from './lib/routes';
 

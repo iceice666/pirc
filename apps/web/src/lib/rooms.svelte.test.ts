@@ -134,6 +134,8 @@ beforeEach(() => {
       const found = listed.find((item) => item.id === id);
       if (!found) return reply({ error: { code: 'not_found', message: 'Room not found' } }, 404);
       if (!rest && method === 'GET') return reply({ room: found, pinned: [] });
+      if (rest === 'uploads' && method === 'POST')
+        return reply({ upload: { id: `up_${url.searchParams.get('filename')}` } }, 201);
       if (rest === 'messages' && method === 'GET')
         return reply({ messages: pages[id!] ?? [], hasMore: false });
       if (rest === 'messages') {
@@ -518,6 +520,101 @@ describe('rooms page', () => {
     await vi.waitFor(() => expect(target.querySelectorAll('article .text')).toHaveLength(4));
   });
 
+  it('takes an image pasted into the composer, once, and lets words paste as words', async () => {
+    await show();
+    const box = target.querySelector('textarea')!;
+    const attached = () =>
+      [...target.querySelectorAll('.files li')].map((item) => item.textContent?.trim());
+    const paste = (files: File[], text = '') => {
+      const event = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', {
+        value: {
+          items: files.map((file) => ({ kind: 'file', type: file.type, getAsFile: () => file })),
+          getData: (type: string) => (type === 'text/plain' ? text : ''),
+        },
+      });
+      box.dispatchEvent(event);
+      flushSync();
+      return event;
+    };
+    const shot = new File([new Uint8Array([1, 2, 3])], 'shot.png', {
+      type: 'image/png',
+      lastModified: 1,
+    });
+
+    // An image alone becomes an attachment; there is no text for the textarea.
+    const image = paste([shot]);
+    expect(image.defaultPrevented).toBe(true);
+    expect(attached()).toEqual(['shot.png']);
+    // The same picture pasted again is a new File with a new timestamp: one attachment.
+    paste([new File([new Uint8Array([1, 2, 3])], 'shot.png', { type: 'image/png' })]);
+    expect(attached()).toEqual(['shot.png']);
+    // A clipboard with words too (a copied page and its picture): both land,
+    // and the words are the browser's to paste.
+    const both = paste([shot], 'look at this');
+    expect(both.defaultPrevented).toBe(false);
+    // Nothing but words: left alone.
+    const words = paste([], 'plain words');
+    expect(words.defaultPrevented).toBe(false);
+    expect(attached()).toEqual(['shot.png']);
+
+    const diagram = new File([new Uint8Array([9, 9])], 'diagram.png', {
+      type: 'image/png',
+      lastModified: 2,
+    });
+    paste([diagram]);
+    expect(attached()).toEqual(['shot.png', 'diagram.png']);
+
+    box.value = 'have a look';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await vi.waitFor(() =>
+      expect(
+        calls.filter((call) => call.method === 'POST' && call.url.endsWith('/messages')),
+      ).toHaveLength(1),
+    );
+    const sent = calls.find((call) => call.method === 'POST' && call.url.endsWith('/messages'))!;
+    expect(sent.body).toEqual({
+      text: 'have a look',
+      attachments: ['up_shot.png', 'up_diagram.png'],
+      immediate: false,
+    });
+    await vi.waitFor(() => expect(attached()).toEqual([]));
+  });
+
+  it('renders what pirc and its workers write as Markdown, and your own words as typed', async () => {
+    const store = await show();
+    store.apply(
+      event('room_message', 'general', {
+        message: {
+          ...message('general', 2, ME, 'unused'),
+          id: 'host-2',
+          speaker: 'face:host',
+          user: null,
+          body: {
+            text: '**Fixed** the lint job:\n\n```ts\nconst x = 1;\n```\n\nSee apps/web/src/App.svelte.',
+          },
+        },
+      }),
+    );
+    store.apply(
+      event('room_message', 'general', {
+        message: { ...message('general', 3, ME, 'use **stars** for emphasis'), id: 'mine-3' },
+      }),
+    );
+    await tick();
+    const host = () => target.querySelector('#message-host-2')!;
+    expect(host().querySelector('.markdown strong')?.textContent).toBe('Fixed');
+    expect(host().querySelector('.code-block code')?.textContent).toContain('const x = 1;');
+    // There is no Files pane here: the path reads as code, not a dead link.
+    expect(host().querySelector('a[data-file-link]')).toBeNull();
+    expect(host().querySelector('code.file-path')?.textContent).toBe('apps/web/src/App.svelte');
+    // Your own words are exactly as typed.
+    const mine = target.querySelector('#message-mine-3')!;
+    expect(mine.querySelector('.markdown')).toBeNull();
+    expect(mine.textContent).toContain('use **stars** for emphasis');
+  });
+
   it('shows the host thinking, its reply streaming in, and its questions', async () => {
     const store = await show();
     store.apply(event('brain_presence', 'general', { face: 'host', state: 'thinking' }, 0));
@@ -535,7 +632,8 @@ describe('rooms page', () => {
     await tick();
     const article = () => target.querySelector('article[aria-busy="true"]');
     expect(article()?.textContent).toContain('Let me');
-    expect(target.querySelector('.caret')).not.toBeNull();
+    // A face's reply streams in as Markdown, with its own caret.
+    expect(article()?.querySelector('.markdown.streaming')).not.toBeNull();
     store.apply(
       event('room_message_updated', 'general', {
         message: { ...reply, body: { text: 'Let me check.' } },
@@ -544,7 +642,7 @@ describe('rooms page', () => {
     store.apply(event('brain_presence', 'general', { face: 'host', state: 'idle' }, 0));
     await tick();
     expect(article()).toBeNull();
-    expect(target.querySelector('.caret')).toBeNull();
+    expect(target.querySelector('.markdown.streaming')).toBeNull();
     expect(target.textContent).toContain('Let me check.');
     expect(target.querySelector('.presence.thinking')).toBeNull();
     store.apply(

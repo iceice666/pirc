@@ -291,6 +291,33 @@ describe('workers in the web app', () => {
     expect(calls[calls.length - 1]?.url).toBe('/api/delegations/d1/stop');
   });
 
+  it('renders what a worker writes as Markdown, and its paths as text', async () => {
+    component = mount(ThreadPanel, {
+      target,
+      props: {
+        threadId: 'thread_1',
+        messages: [
+          said(1, { body: { text: '**Done**: edited apps/web/src/App.svelte.' } }),
+          said(2, { speaker: 'user', user: ME, body: { text: 'thanks, keep *at it*' } }),
+        ],
+        workers: [worker()],
+        user: ME,
+        onclose: () => {},
+      },
+    });
+    await flush();
+    const [fromWorker, fromYou] = target.querySelectorAll('li.item');
+    expect(fromWorker!.querySelector('.markdown strong')?.textContent).toBe('Done');
+    // No Files pane in the rooms: a path reads as code rather than a dead link.
+    expect(fromWorker!.querySelector('a[data-file-link]')).toBeNull();
+    expect(fromWorker!.querySelector('code.file-path')?.textContent).toBe(
+      'apps/web/src/App.svelte',
+    );
+    // What you said stays as typed.
+    expect(fromYou!.querySelector('.markdown')).toBeNull();
+    expect(fromYou!.textContent).toContain('thanks, keep *at it*');
+  });
+
   it('leaves acting on a worker to whom it works for', async () => {
     component = mount(ThreadPanel, {
       target,

@@ -14,9 +14,20 @@
     compact?: boolean;
     /** Directory relative file links resolve against (workspace root by default). */
     linkBase?: string;
+    /**
+     * Whether workspace file links open in the engine's Files pane. The rooms
+     * have no Files pane and pass false: a path there shows as plain code.
+     */
+    fileLinks?: boolean;
   }
 
-  let { source, streaming = false, compact = false, linkBase = '' }: Props = $props();
+  let {
+    source,
+    streaming = false,
+    compact = false,
+    linkBase = '',
+    fileLinks = true,
+  }: Props = $props();
 
   /**
    * While streaming, every delta would otherwise re-parse the whole message and
@@ -125,7 +136,7 @@
   class="markdown"
   class:compact
   class:streaming
-  use:enhanceMarkdown={{ html, ready: !streaming, linkBase }}
+  use:enhanceMarkdown={{ html, ready: !streaming, linkBase, files: fileLinks }}
 >
   {#each stableChunks as chunk, index (index)}{@html chunk}{/each}{@html html}
 </div>

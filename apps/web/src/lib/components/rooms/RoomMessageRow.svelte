@@ -16,6 +16,7 @@
     type QuestionAnswer,
     type WorkerAnchor,
   } from '../../workers';
+  import Markdown from '../Markdown.svelte';
 
   interface Props {
     message: RoomMessage;
@@ -297,12 +298,24 @@
         </header>
       {/if}
       {#if message.body.text || message.body.streaming}
-        <p class="text">
-          {message.body.text ?? ''}{#if message.body.streaming}<span
-              class="caret"
-              aria-hidden="true">▍</span
-            >{/if}
-        </p>
+        {#if isFace}
+          <!-- What pirc and its workers write is Markdown: code, lists, tables.
+               Nothing here is a Files pane, so a workspace path shows as code
+               instead of a link that would go nowhere. -->
+          <Markdown
+            source={message.body.text ?? ''}
+            streaming={!!message.body.streaming}
+            fileLinks={false}
+          />
+        {:else}
+          <!-- Your own words stay as typed, as in the old transcript. -->
+          <p class="text">
+            {message.body.text ?? ''}{#if message.body.streaming}<span
+                class="caret"
+                aria-hidden="true">▍</span
+              >{/if}
+          </p>
+        {/if}
       {/if}
       {#if question}
         {#if question.status === 'pending'}

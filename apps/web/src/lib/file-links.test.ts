@@ -89,6 +89,32 @@ describe('file links in markdown', () => {
     expect(html).toContain('href="https://example.com" target="_blank"');
   });
 
+  it('shows a path as text where no Files pane listens (the rooms)', () => {
+    const node = document.createElement('div');
+    node.innerHTML = renderMarkdown(
+      'see apps/web/src/App.svelte:12, `src/a.ts:3` and [the log](logs/run.txt)',
+    );
+    document.body.append(node);
+    const listener = vi.fn();
+    const stop = onFilePreviewRequest(listener);
+    const action = enhanceMarkdown(node, { html: node.innerHTML, ready: false, files: false });
+    // Nothing left to click into a pane that is not there.
+    expect(node.querySelector('a[data-file-link]')).toBeNull();
+    expect([...node.querySelectorAll('code.file-path')].map((code) => code.textContent)).toEqual([
+      'apps/web/src/App.svelte:12',
+      'src/a.ts:3',
+      // A link keeps the words it was written with.
+      'the log',
+    ]);
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+    node.querySelector('code.file-path')!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(listener).not.toHaveBeenCalled();
+    action.destroy();
+    stop();
+    node.remove();
+  });
+
   it('turns a click into a preview request', () => {
     const node = document.createElement('div');
     node.innerHTML = renderMarkdown('see [a](docs/a.md#L2)');

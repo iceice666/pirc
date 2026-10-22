@@ -293,6 +293,42 @@
   }
 
   /**
+   * Every file in the composer once: the same file twice is still one
+   * attachment. A picture pasted again arrives as a new File (with a new
+   * timestamp), so name, size and type are what identify it.
+   */
+  const fileKey = (file: File) => `${file.name}:${file.size}:${file.type}`;
+  function addFiles(more: File[]) {
+    const known = new Set(files.map(fileKey));
+    const fresh = more.filter((file) => {
+      const key = fileKey(file);
+      if (known.has(key)) return false;
+      known.add(key);
+      return true;
+    });
+    if (fresh.length) files = [...files, ...fresh];
+  }
+
+  /**
+   * ⌘/Ctrl+V in the composer: an image on the clipboard becomes an attachment,
+   * the same way the paperclip does. Words still paste as words — a clipboard
+   * with both (a copied page and its picture) keeps the words too — and an
+   * image pasted twice is one attachment.
+   */
+  function onPaste(event: ClipboardEvent) {
+    const data = event.clipboardData;
+    if (!data) return;
+    const images = [...data.items]
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => !!file);
+    if (!images.length) return;
+    addFiles(images);
+    // Only the image was on the clipboard: there is no text to paste.
+    if (!data.getData('text/plain').trim()) event.preventDefault();
+  }
+
+  /**
    * Messages go out one after another in the order they were written: people
    * send several short ones in a row (decision #16), so the composer clears
    * at once and never waits for the previous one.
@@ -620,7 +656,7 @@
             multiple
             bind:this={fileInput}
             onchange={(event) => {
-              files = [...files, ...(event.currentTarget.files ?? [])];
+              addFiles([...(event.currentTarget.files ?? [])]);
               event.currentTarget.value = '';
             }}
           />
@@ -638,6 +674,7 @@
             onkeyup={trackCaret}
             onclick={trackCaret}
             onkeydown={onKeydown}
+            onpaste={onPaste}
             aria-autocomplete="list"
           ></textarea>
           <button

@@ -14,6 +14,7 @@
     type ThreadMessage,
     type Worker,
   } from '../../workers';
+  import Markdown from '../Markdown.svelte';
 
   interface Props {
     threadId: string;
@@ -204,14 +205,17 @@
               </form>
             {/if}
           </div>
-        {:else}
+        {:else if message.speaker === 'user'}
           <span class="text">{message.body.text ?? ''}</span>
-          {#if message.body.context}
-            <details>
-              <summary>What it was given</summary>
-              <pre>{message.body.context}</pre>
-            </details>
-          {/if}
+        {:else}
+          <!-- A worker writes Markdown; there is no Files pane here either. -->
+          <Markdown source={message.body.text ?? ''} compact fileLinks={false} />
+        {/if}
+        {#if message.body.context}
+          <details>
+            <summary>What it was given</summary>
+            <pre>{message.body.context}</pre>
+          </details>
         {/if}
         <time datetime={new Date(message.createdAt).toISOString()}>{time(message.createdAt)}</time>
       </li>
