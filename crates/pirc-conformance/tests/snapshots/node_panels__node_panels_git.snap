@@ -55,7 +55,7 @@ expression: p.into_value()
     "body": {
       "error": {
         "code": "invalid_input",
-        "message": "    --diff-filter [(A|C|D|M|R|T|U|X|B)...[*]]\n                          select files by diff type\n    --output <file>       output to a specific file"
+        "message": "<git diff usage>"
       }
     },
     "headers": {

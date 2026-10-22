@@ -119,10 +119,12 @@ impl Panel {
 
     /// Record a response, condensed and masked.
     pub fn record(&mut self, step: &str, request: &str, response: &Response) {
+        let mut body = response.body.clone();
+        stable_git_usage(request, response.status, &mut body);
         let condensed = Response {
             status: response.status,
             headers: response.headers.clone(),
-            body: self.mask(condense(response.body.clone())),
+            body: self.mask(condense(body)),
         };
         let request = self.mask_text(request);
         self.t.response(step, &request, &condensed);
@@ -321,4 +323,68 @@ pub fn encode(value: &str) -> String {
         }
     }
     out
+}
+
+/// Git's last three usage lines change between releases. Normalize only that
+/// recognized diagnostic on the diff route; keep every authorization failure.
+fn stable_git_usage(request: &str, status: u16, body: &mut Value) {
+    let diff = request
+        .split_whitespace()
+        .nth(1)
+        .and_then(|url| url.split('?').next())
+        .is_some_and(|path| path.ends_with("/git/diff"));
+    let usage = body["error"]["message"].as_str().is_some_and(|message| {
+        message.lines().count() == 3
+            && message.contains("select files by diff type")
+            && message.lines().last().is_some_and(|line| {
+                line.trim() == "--output <file>       output to a specific file"
+            })
+    });
+    if diff && status == 400 && body["error"]["code"] == "invalid_input" && usage {
+        body["error"]["message"] = json!("<git diff usage>");
+    }
+}
+
+#[cfg(test)]
+mod git_usage_tests {
+    use super::*;
+    const OLD: &str = "    --diff-filter [(A|C|D|M|R|T|U|X|B)...[*]]\n                          select files by diff type\n    --output <file>       output to a specific file";
+    const NEW: &str = "                          select files by diff type\n    --max-depth <depth>   maximum tree depth to recurse\n    --output <file>       output to a specific file";
+
+    #[test]
+    fn git_diff_usage_is_stable_across_git_versions() {
+        for message in [OLD, NEW] {
+            let mut body = json!({"error":{"code":"invalid_input","message":message}});
+            stable_git_usage(
+                "GET /api/sessions/test/git/diff?path=README.md",
+                400,
+                &mut body,
+            );
+            assert_eq!(
+                body,
+                json!({"error":{"code":"invalid_input","message":"<git diff usage>"}})
+            );
+        }
+    }
+
+    #[test]
+    fn git_diff_usage_preserves_authorization_and_unrelated_errors() {
+        for (request, status, code, message) in [
+            ("GET /api/sessions/test/git/diff", 403, "forbidden", NEW),
+            ("GET /api/sessions/test/git/diff", 401, "unauthorized", NEW),
+            ("GET /api/sessions/test/git/diff", 400, "forbidden", NEW),
+            ("GET /api/sessions/test/files", 400, "invalid_input", NEW),
+            (
+                "GET /api/sessions/test/git/diff",
+                400,
+                "invalid_input",
+                "Permission denied",
+            ),
+        ] {
+            let original = json!({"error":{"code":code,"message":message}});
+            let mut body = original.clone();
+            stable_git_usage(request, status, &mut body);
+            assert_eq!(body, original);
+        }
+    }
 }
