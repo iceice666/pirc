@@ -84,7 +84,7 @@ class LiveController extends ChangeNotifier {
       if (!rooms.started) {
         unawaited(rooms.start(roomId));
       } else if (roomId != null) {
-        unawaited(rooms.open(roomId));
+        unawaited(rooms.reveal(roomId));
       }
       unawaited(rooms.setVisible(_appVisible));
     }
@@ -349,6 +349,8 @@ class LiveController extends ChangeNotifier {
           origin != null && data['targetSession'] == null && pairLink == null;
       booting = false;
       changed();
+      // A notification about a room opens on it.
+      if (origin != null && data['targetRoom'] is String) showing = 'rooms';
       if (origin != null &&
           showing == 'rooms' &&
           data['targetSession'] == null) {
@@ -887,6 +889,10 @@ class LiveController extends ChangeNotifier {
       final data = obj(event['data']);
       pairLink = data['pairLink'];
       routePage = data['page'];
+      if (data['roomId'] is String && origin != null) {
+        showRooms(roomId: data['roomId'] as String);
+        return;
+      }
       if (data['sessionId'] != null && origin != null) {
         unawaited(_openNotificationTarget(data));
       }

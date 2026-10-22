@@ -637,6 +637,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             htmlMedia.closeStalePairingStamp(it["pairingStamp"] as? String)
                         } + mapOf("onboardingComplete" to activity.permissionAccess.complete, "pairLink" to activity.intent?.dataString,
                             "route" to activity.intent?.getStringExtra("gatewayRoute"), "targetSession" to activity.intent?.getStringExtra("gatewaySession"),
+                            "targetRoom" to activity.intent?.getStringExtra("gatewayRoom"),
                             "interactionId" to activity.intent?.getStringExtra("interactionId"), "interactionEpoch" to activity.intent?.getStringExtra("interactionEpoch"),
                             "interactionPairingStamp" to activity.intent?.getStringExtra("questionPairingStamp"),
                             "questionPairingStamp" to activity.intent?.getStringExtra("questionPairingStamp"),
@@ -1359,7 +1360,8 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
         }
     }
     fun route(intent: Intent) {
-        runtime.emit("route", mapOf("sessionId" to intent.getStringExtra("gatewaySession"), "page" to intent.getStringExtra("gatewayRoute"), "pairLink" to intent.dataString,
+        runtime.emit("route", mapOf("sessionId" to intent.getStringExtra("gatewaySession"), "roomId" to intent.getStringExtra("gatewayRoom"),
+            "page" to intent.getStringExtra("gatewayRoute"), "pairLink" to intent.dataString,
             "interactionId" to intent.getStringExtra("interactionId"), "interactionEpoch" to intent.getStringExtra("interactionEpoch"),
             "interactionPairingStamp" to intent.getStringExtra("questionPairingStamp"), "questionPairingStamp" to intent.getStringExtra("questionPairingStamp"),
             "answerChoice" to intent.getStringExtra("answerChoice"), "confirmQuestion" to intent.getBooleanExtra("confirmQuestion",false)), sessionId = null)

@@ -55,6 +55,8 @@ class RoomsRuntime internal constructor(
     private val publish: (type: String, data: Any?) -> Unit,
     private val stream: (PircApi) -> Flow<RoomSignal> = { RoomStream(it).open() },
     private val clock: () -> Long = System::currentTimeMillis,
+    /** A room is on screen with the app in front: its notification is read. */
+    private val onShowing: (roomId: String) -> Unit = {},
     /** Coalesces bursts of events into one snapshot; 0 publishes at once (tests). */
     private val publishDelayMs: Long = 32,
 ) {
@@ -286,8 +288,12 @@ class RoomsRuntime internal constructor(
         scope.launch { quietly { api().json("POST", "/api/rooms/${roomId.urlSegment()}/typing") } }
     }
 
+    /** Whether [roomId] is on screen now (its pushes are not notified). */
+    fun isShowing(roomId: String): Boolean = visible && view?.currentId == roomId
+
     /** Read the open room up to its newest message, while the app is in front. */
     suspend fun markRead() {
+        if (visible) view?.currentId?.let(onShowing)
         val room = view?.current ?: return
         val lastSeq = room.field("lastSeq").long ?: 0
         if (!visible || (room.field("readSeq").long ?: 0) >= lastSeq) return

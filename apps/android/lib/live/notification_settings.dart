@@ -216,7 +216,7 @@ class _NotificationSettingsState extends State<NativeNotificationSettings>
     divider: true,
     children: [
       const AssistantParagraph(
-        'Sessions waiting for your answer and finished delegations.',
+        'New messages in your rooms, and questions waiting for you.',
       ),
       if (status == 'loading')
         const AssistantParagraph('Checking notifications…', live: true)
@@ -355,6 +355,33 @@ class _NotificationSettingsState extends State<NativeNotificationSettings>
           ),
         ],
       ],
+      // Muted here only (decision 1): the rooms still show their messages.
+      ListenableBuilder(
+        listenable: c.rooms,
+        builder: (context, _) {
+          final muted = c.rooms.muted.toList()..sort();
+          if (muted.isEmpty) return const SizedBox.shrink();
+          String name(String id) =>
+              [...c.rooms.rooms, ...?c.rooms.archived]
+                  .where((room) => room['id'] == id)
+                  .map((room) => '#${room['name']}')
+                  .firstOrNull ??
+              '#$id';
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 12),
+              const AssistantParagraph('Muted on this phone:'),
+              for (final id in muted)
+                row(
+                  name(id),
+                  'Unmute',
+                  () => act(() => c.rooms.setMuted(id, false)),
+                ),
+            ],
+          );
+        },
+      ),
     ],
   );
 }

@@ -50,6 +50,7 @@
         <service android:name=".GatewayOverlayService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-requested visible quick reply to a pending pirc agent question; stops when dismissed." />
         </service>
+        <receiver android:name=".RoomReplyReceiver" android:exported="false" />
         <service android:name=".GatewayPushService" android:exported="false">
             <intent-filter><action android:name="org.unifiedpush.android.connector.PUSH_EVENT" /></intent-filter>
         </service>

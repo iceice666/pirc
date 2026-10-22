@@ -13,26 +13,39 @@ import kotlinx.serialization.json.jsonPrimitive
  * notification) and what to open.
  */
 sealed interface PushTarget {
+    /** A room (`{roomId}`): most notifications are about one. */
+    data class OpenRoom(val roomId: String) : PushTarget
+
+    /** A session, in the engine (`{sessionId}`). */
     data class OpenSession(val sessionId: String) : PushTarget
+
+    /** What pirc remembers, in the engine (`{memory: true}`). */
+    data object OpenMemory : PushTarget
 
     companion object {
         private const val SESSION = "dev.pirc.android.target.session"
+        private const val ROOM = "dev.pirc.android.target.room"
 
         fun from(json: JsonElement?): PushTarget? {
             val target = json as? JsonObject ?: return null
-            val sessionId = runCatching { target["sessionId"]?.jsonPrimitive?.content }.getOrNull()
-            return if (sessionId.isNullOrEmpty()) null else OpenSession(sessionId)
+            fun text(key: String) = runCatching { target[key]?.jsonPrimitive?.content }.getOrNull()?.takeIf { it.isNotEmpty() }
+            text("roomId")?.let { return OpenRoom(it) }
+            text("sessionId")?.let { return OpenSession(it) }
+            return if (text("memory") == "true") OpenMemory else null
         }
 
         /** What a notification's intent asks to open. */
         fun from(intent: Intent?): PushTarget? {
             intent ?: return null
+            intent.getStringExtra(ROOM)?.let { return OpenRoom(it) }
             return intent.getStringExtra(SESSION)?.let { OpenSession(it) }
         }
 
         fun Intent.putTarget(target: PushTarget): Intent = apply {
             when (target) {
+                is OpenRoom -> putExtra(ROOM, target.roomId)
                 is OpenSession -> putExtra(SESSION, target.sessionId)
+                OpenMemory -> Unit
             }
         }
     }

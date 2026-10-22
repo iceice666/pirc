@@ -79,11 +79,14 @@ class DartScopedGateway extends Gateway {
     'roomsCloseThread',
     'roomDraft',
     'saveRoomDraft',
+    'roomsMuted',
+    'roomsSetMuted',
   };
 
   static const Set<String> _rootBootRouteFields = <String>{
     'route',
     'targetSession',
+    'targetRoom',
     'interactionId',
     'answerChoice',
     'confirmQuestion',

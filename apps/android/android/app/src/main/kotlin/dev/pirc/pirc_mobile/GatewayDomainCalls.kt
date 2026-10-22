@@ -74,6 +74,8 @@ internal suspend fun GatewayRuntime.domainCall(method: String, args: CallArgs, c
     "roomsOpenThread" -> { rooms.openThread(args.str("threadId")); null }
     "roomsCloseThread" -> { rooms.closeThread(); null }
     "roomDraft" -> local.roomDraft(args.str("roomId"))
+    "roomsMuted" -> RoomMutes.muted(context).sorted()
+    "roomsSetMuted" -> RoomMutes.set(context, args.str("roomId"), args.bool("muted")).sorted()
     "saveRoomDraft" -> { local.saveRoomDraft(args.str("roomId"), args.str("text")); null }
 
     // ---- sessions ----

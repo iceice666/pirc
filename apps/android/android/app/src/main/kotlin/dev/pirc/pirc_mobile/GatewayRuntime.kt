@@ -107,9 +107,11 @@ class GatewayRuntime private constructor(val context: Context) {
     val sessions = SessionRuntime(this)
 
     /** The rooms' domain: what the room pages show, published as `rooms` events. */
-    val rooms = RoomsRuntime(scope, ::api, publish = { type, data ->
-        emitEvent(type, data, sessionId = null, scopeName = "rooms")
-    })
+    val rooms = RoomsRuntime(
+        scope, ::api,
+        publish = { type, data -> emitEvent(type, data, sessionId = null, scopeName = "rooms") },
+        onShowing = { RoomNotifications.cancel(context, it) },
+    )
 
     init {
         // One process-scoped collector belongs to this runtime singleton, not to
@@ -212,7 +214,7 @@ class GatewayRuntime private constructor(val context: Context) {
                 withContext(Dispatchers.IO) { documentCookies.bind(null); documentStorage.bind(null) }
                 GatewayNotifications.clearQuestionNotifications(context)
                 dev.pirc.android.push.PushRegistration.disable(context, activeApi ?: previous?.let { connectedApi(it) })
-                local.clearDrafts(); sessions.clearUncertain(); rooms.stop()
+                local.clearDrafts(); sessions.clearUncertain(); rooms.stop(); RoomMutes.clear(context)
                 context.getSharedPreferences("recent_activity", Context.MODE_PRIVATE).edit().clear().apply()
             }
             withContext(Dispatchers.IO) { credentials.save(pairing) }
@@ -238,6 +240,7 @@ class GatewayRuntime private constructor(val context: Context) {
             local.clearDrafts()
             sessions.clearUncertain()
             rooms.stop()
+            RoomMutes.clear(context)
             contexts.bindPairingStamp(null)
             emitAccount("pairingChanged", mapOf(
                 "origin" to null,

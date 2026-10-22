@@ -76,6 +76,10 @@ class RoomsGateway extends FakeGateway {
     'threadActivity': {},
   };
   final roomDrafts = <String, String>{};
+  final mutedRooms = <String>{};
+
+  /// A notification about this room launched the app.
+  String? targetRoom;
 
   void publishRooms() =>
       stream.add({'type': 'rooms', 'scope': 'rooms', 'data': view});
@@ -83,8 +87,26 @@ class RoomsGateway extends FakeGateway {
   @override
   dynamic normal(String method, Json args) {
     switch (method) {
+      case 'boot':
+        return {...super.normal(method, args), 'targetRoom': ?targetRoom};
       case 'roomsStart':
+        if (args['roomId'] != null) {
+          view = {
+            ...view,
+            'currentId': args['roomId'],
+            'current': room('${args['roomId']}'),
+          };
+        }
         return view;
+      case 'roomsMuted':
+        return mutedRooms.toList();
+      case 'roomsSetMuted':
+        if (args['muted'] == true) {
+          mutedRooms.add('${args['roomId']}');
+        } else {
+          mutedRooms.remove(args['roomId']);
+        }
+        return mutedRooms.toList();
       case 'roomDraft':
         return roomDrafts[args['roomId']] ?? '';
       case 'saveRoomDraft':
@@ -112,11 +134,15 @@ class RoomsGateway extends FakeGateway {
   int count(String method) => calls.where((call) => call.$1 == method).length;
 }
 
-Future<RoomsGateway> pumpRooms(WidgetTester t, {double width = 390}) async {
+Future<RoomsGateway> pumpRooms(
+  WidgetTester t, {
+  double width = 390,
+  RoomsGateway? gateway,
+}) async {
   t.view.devicePixelRatio = 1;
   t.view.physicalSize = Size(width, 844);
   addTearDown(t.view.reset);
-  final g = RoomsGateway();
+  final g = gateway ?? RoomsGateway();
   final c = LiveController(g);
   await t.pumpWidget(MobileApp(theme: theme, controller: c));
   await t.pumpAndSettle();
@@ -239,6 +265,50 @@ void main() {
     expect(find.byType(RoomsPage), findsOneWidget);
     // Started once: coming back only shows them again.
     expect(g.count('roomsStart'), 1);
+  });
+
+  testWidgets('a notification that launched the app opens its room', (t) async {
+    final g = await pumpRooms(t, gateway: RoomsGateway()..targetRoom = 'slime');
+    final start = g.calls.firstWhere((call) => call.$1 == 'roomsStart');
+    expect(start.$2['roomId'], 'slime');
+    // The room, not the list.
+    expect(find.byTooltip('Rooms'), findsOneWidget);
+    expect(find.byType(MobileTabs), findsNothing);
+  });
+
+  testWidgets('a notification tapped while the app runs opens its room', (
+    t,
+  ) async {
+    final g = await pumpRooms(t);
+    final c = t.widget<MobileApp>(find.byType(MobileApp)).controller;
+    c.showEngine();
+    await t.pumpAndSettle();
+    g.stream.add({
+      'type': 'route',
+      'data': {'roomId': 'slime'},
+    });
+    await t.pumpAndSettle();
+    expect(c.showing, 'rooms');
+    expect(
+      g.calls.lastWhere((call) => call.$1 == 'roomsOpen').$2['roomId'],
+      'slime',
+    );
+    expect(find.byTooltip('Rooms'), findsOneWidget);
+  });
+
+  testWidgets('a room is muted on this phone and says so in the list', (
+    t,
+  ) async {
+    final g = await pumpRooms(t);
+    await t.tap(find.text('general'));
+    await t.pumpAndSettle();
+    await t.tap(find.byTooltip('Mute this room on this phone'));
+    await t.pumpAndSettle();
+    expect(g.mutedRooms, {'general'});
+    expect(find.byTooltip('Unmute this room on this phone'), findsOneWidget);
+    await t.tap(find.byTooltip('Rooms'));
+    await t.pumpAndSettle();
+    expect(find.bySemanticsLabel(RegExp('Muted')), findsOneWidget);
   });
 
   testWidgets('a wide screen shows the list, the room and the members', (

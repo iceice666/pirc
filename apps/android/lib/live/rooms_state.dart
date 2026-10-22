@@ -65,6 +65,19 @@ class RoomsController extends ChangeNotifier {
   /// The last action that failed (sending, creating a room), to show.
   String? actionError;
 
+  /// Rooms muted on this phone: they do not notify here (decision 1).
+  Set<String> muted = {};
+
+  /// A room a notification or link asked to show; the page opens it once.
+  String? _reveal;
+
+  /// Take the room to reveal, if any (the page shows it instead of the list).
+  String? takeReveal() {
+    final room = _reveal;
+    _reveal = null;
+    return room;
+  }
+
   /// Files to send with the next message: `{name, mimeType, bytes}`.
   List<Json> files = [];
 
@@ -82,6 +95,8 @@ class RoomsController extends ChangeNotifier {
       if (event['type'] == 'rooms') apply(event['data']);
     });
     started = true;
+    if (roomId != null) _reveal = roomId;
+    unawaited(_loadMuted());
     try {
       apply(await gateway.call('roomsStart', {'roomId': ?roomId}));
     } catch (e) {
@@ -216,6 +231,36 @@ class RoomsController extends ChangeNotifier {
     _draftSave = null;
     final roomId = _draftRoom;
     if (roomId != null) await _saveDraft(roomId, draft);
+  }
+
+  Future<void> _loadMuted() async {
+    final rooms = await _quietly('roomsMuted');
+    if (rooms is List) {
+      muted = {for (final room in rooms) '$room'};
+      _changed();
+    }
+  }
+
+  /// Mute or unmute a room on this phone.
+  Future<void> setMuted(String roomId, bool mute) async {
+    try {
+      final rooms = await gateway.call('roomsSetMuted', {
+        'roomId': roomId,
+        'muted': mute,
+      });
+      muted = {for (final room in rooms is List ? rooms : const []) '$room'};
+      actionError = null;
+    } catch (e) {
+      actionError = LiveController.describe(e);
+    }
+    _changed();
+  }
+
+  /// Show [roomId] from outside the page (a notification, a link).
+  Future<void> reveal(String roomId) async {
+    _reveal = roomId;
+    _changed();
+    await open(roomId);
   }
 
   Future<void> open(String roomId) async {

@@ -183,6 +183,18 @@ class RoomsRuntimeTest {
     }
 
     @Test
+    fun aRoomIsShowingOnlyOpenAndInFront() = roomsTest { h ->
+        h.runtime.start("general")
+        advanceUntilIdle()
+        assertTrue(!h.runtime.isShowing("general"))
+        h.runtime.setVisible(true)
+        assertTrue(h.runtime.isShowing("general"))
+        assertTrue(!h.runtime.isShowing("slime"))
+        h.runtime.setVisible(false)
+        assertTrue(!h.runtime.isShowing("general"))
+    }
+
+    @Test
     fun stopForgetsTheAccountsRooms() = roomsTest { h ->
         h.runtime.start(null)
         advanceUntilIdle()

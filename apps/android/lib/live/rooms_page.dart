@@ -76,6 +76,11 @@ class RoomsPageState extends State<RoomsPage> {
 
   void _update() {
     if (!mounted) return;
+    // A notification or link asked for a room: show it, not the list.
+    if (rooms.takeReveal() != null) {
+      listOpen = false;
+      membersOpen = false;
+    }
     if (composer.text != rooms.draft) {
       composer.value = TextEditingValue(
         text: rooms.draft,
@@ -436,6 +441,16 @@ class RoomsPageState extends State<RoomsPage> {
                     ),
                   ),
                 ),
+                if (rooms.muted.contains(id))
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Icon(
+                      LucideIcons.bellOff,
+                      size: 13,
+                      color: colors['text.muted'],
+                      semanticLabel: 'Muted',
+                    ),
+                  ),
                 if (room['waiting'] == true)
                   Container(
                     margin: const EdgeInsets.only(left: 6),
@@ -538,6 +553,24 @@ class RoomsPageState extends State<RoomsPage> {
                 if (archived) _badge(colors, 'Archived'),
                 if (rooms.connection != 'connected' && !rooms.loading)
                   _badge(colors, rooms.connection),
+                IconButton(
+                  tooltip: rooms.muted.contains(rooms.currentId)
+                      ? 'Unmute this room on this phone'
+                      : 'Mute this room on this phone',
+                  isSelected: rooms.muted.contains(rooms.currentId),
+                  onPressed: () => unawaited(
+                    rooms.setMuted(
+                      rooms.currentId,
+                      !rooms.muted.contains(rooms.currentId),
+                    ),
+                  ),
+                  icon: Icon(
+                    rooms.muted.contains(rooms.currentId)
+                        ? LucideIcons.bellOff
+                        : LucideIcons.bell,
+                    size: 20,
+                  ),
+                ),
                 IconButton(
                   tooltip: 'Members',
                   isSelected: membersOpen,

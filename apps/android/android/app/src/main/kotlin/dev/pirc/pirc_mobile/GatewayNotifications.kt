@@ -275,6 +275,27 @@ class GatewayPushService : PushService() {
     override fun onMessage(message: PushMessage, instance: String) {
         if (!message.decrypted || !PushRegistration.acceptsMessage(applicationContext, instance)) return
         val note = PushNote.parse(message.content) ?: return
+        val runtimeForRooms = GatewayRuntime.get(applicationContext)
+        when (val target = note.target) {
+            // A room: notified unless muted here or on screen (decision 1).
+            is PushTarget.OpenRoom -> {
+                runtimeForRooms.scope.launch {
+                    runtimeForRooms.withCurrentPairingStampForPush {
+                        if (!PushRegistration.acceptsMessage(applicationContext, instance)) return@withCurrentPairingStampForPush
+                        RoomNotifications.show(applicationContext, note, target.roomId, runtimeForRooms.rooms.isShowing(target.roomId))
+                    }
+                }
+                return
+            }
+            // What pirc remembered: the engine's memory page.
+            PushTarget.OpenMemory -> {
+                if (note.kind == null) {
+                    GatewayNotifications.show(applicationContext, note.title, note.body, null, "memory", tag = note.tag)
+                    return
+                }
+            }
+            else -> Unit
+        }
         val pushedInteraction = note.interaction
         val session = pushedInteraction?.sessionId ?: note.sessionId ?: (note.target as? PushTarget.OpenSession)?.sessionId
         val identity = pushedInteraction?.let {
