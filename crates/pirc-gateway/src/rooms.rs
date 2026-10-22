@@ -49,7 +49,6 @@ impl Typing {
 
     /// The user's latest keystroke in the room still within
     /// [`TYPING_TTL_MS`] of `now`, on any device.
-    #[allow(dead_code, reason = "plan 02's typing debounce reads it")]
     pub fn last_keystroke(&self, room_id: &str, user: &str, now: i64) -> Option<i64> {
         self.lock()
             .iter()

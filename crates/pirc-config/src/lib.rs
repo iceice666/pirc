@@ -256,7 +256,9 @@ pub struct GatewayConfig {
     pub memory_budget_user: usize,
     /// Exa key for agents' web_search (EXA_API_KEY); without it web search is off.
     pub exa_api_key: Option<String>,
-    /// Default IANA time zone of schedules agents create (`PIRC_TIMEZONE`, else the system's).
+    /// The household's IANA time zone (`PIRC_TIMEZONE`, else the system's): the
+    /// brain's day for its wake quota and move suggestions, and loop times
+    /// given without a zone.
     pub timezone: String,
     /// Contact for push services (`PIRC_VAPID_SUBJECT`, default the first allowed origin).
     pub vapid_subject: String,
