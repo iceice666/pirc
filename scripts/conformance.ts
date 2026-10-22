@@ -20,13 +20,16 @@ if (process.platform !== 'linux') {
   process.exit(0);
 }
 
-const run = Bun.spawnSync(['cargo', 'test', '--locked', '-p', 'pirc-conformance'], {
-  env: {
-    ...process.env,
-    PIRC_CONFORMANCE_REQUIRED: '1',
-    PIRC_CONFORMANCE_BIN_DIR: 'target/release',
-    INSTA_UPDATE: record ? 'always' : 'no',
+const run = Bun.spawnSync(
+  ['cargo', 'test', '--locked', '-p', 'pirc-conformance', '--no-fail-fast'],
+  {
+    env: {
+      ...process.env,
+      PIRC_CONFORMANCE_REQUIRED: '1',
+      PIRC_CONFORMANCE_BIN_DIR: 'target/release',
+      INSTA_UPDATE: record ? 'always' : 'no',
+    },
+    stdio: ['inherit', 'inherit', 'inherit'],
   },
-  stdio: ['inherit', 'inherit', 'inherit'],
-});
+);
 process.exit(run.exitCode ?? 1);

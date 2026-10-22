@@ -136,22 +136,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"todo\", {\"action\":\"add\",\"items\":[{\"text\":\"write code\",\"activeForm\":\"Writing code\"},{\"text\":\"test it\",\"blockedBy\":[1],\"category\":\"qa\"}]});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "t1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "add",
           "items": [
             {
@@ -591,22 +575,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"todo\", {\"action\":\"update\",\"id\":1,\"status\":\"in_progress\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "t2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "update",
           "id": 1,
           "status": "in_progress"
@@ -1035,22 +1003,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"todo\", {\"action\":\"update\",\"id\":2,\"status\":\"in_progress\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "t3",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "update",
           "id": 2,
           "status": "in_progress"
@@ -1447,22 +1399,6 @@ expression: r.into_value()
         "toolCallId": "t4",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"todo\", {\"action\":\"update\",\"id\":1,\"status\":\"completed\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "t4",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -1894,22 +1830,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"todo\", {\"action\":\"list\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "t5",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "list"
         },
         "parentToolCallId": "t5",
@@ -2324,22 +2244,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"todo\", {\"action\":\"update\",\"id\":2,\"blockedBy\":[2]});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "t6",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "update",
           "blockedBy": [
             2
@@ -2741,22 +2645,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"todo\", {\"action\":\"remove\",\"id\":1});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "t7",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "remove",
           "id": 1
         },
@@ -3152,22 +3040,6 @@ expression: r.into_value()
         "toolCallId": "t8",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"todo\", {\"action\":\"add\",\"items\":[{\"text\":\"x\"}],\"text\":\"y\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "t8",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -3571,22 +3443,6 @@ expression: r.into_value()
         "toolCallId": "t9",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"todo\", {\"action\":\"update\",\"id\":2,\"category\":\"  \"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "t9",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -4014,22 +3870,6 @@ expression: r.into_value()
         "toolCallId": "t10",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"todo\", {\"action\":\"prune\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "t10",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {

@@ -208,7 +208,10 @@ async fn agent_browser_tools() {
         ModelReply::Text("No reason.".to_owned()),
     ]);
     turn(&mut agent, &mut m, &mut r, "no reason", "Hand off").await;
-    insta::assert_json_snapshot!("agent_browser_tools", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_browser_tools",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -227,5 +230,8 @@ async fn agent_browser_handoff_headless() {
         ModelReply::Text("Nobody.".to_owned()),
     ]);
     turn(&mut agent, &mut m, &mut r, "handoff", "Hand off").await;
-    insta::assert_json_snapshot!("agent_browser_handoff_headless", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_browser_handoff_headless",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }

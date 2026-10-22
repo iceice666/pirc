@@ -126,22 +126,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const out = [];\nout.push(await tools.call(\"browser_navigate\", {\"url\":\"https://example.com/\"}));\nout.push(await tools.call(\"browser_snapshot\", {}));\nout.push(await tools.call(\"browser_click\", {\"ref\":\"e9\",\"element\":\"Go button\"}));\nout.push(await tools.call(\"browser_type\", {\"ref\":\"e1\",\"text\":\"hello\",\"submit\":true,\"snapshot\":false}));\nout.push(await tools.call(\"browser_screenshot\", {\"fullPage\":true}));\nout.push(await tools.call(\"browser_tabs\", {\"action\":\"list\"}));\nout.push(await tools.call(\"browser_tabs\", {\"action\":\"close\",\"index\":0}));\nout.push(await tools.call(\"browser_record\", {\"action\":\"start\",\"name\":\"demo\"}));\nout.push(await tools.call(\"browser_record\", {\"action\":\"stop\"}));\nreturn JSON.stringify(out.map((r) => r.ok ? { data: r.data, attachments: r.attachments } : { error: r.error }));"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "b1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "url": "https://example.com/"
         },
         "parentToolCallId": "b1",
@@ -2388,22 +2372,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const out = [];\nout.push(await tools.call(\"browser_handoff\", {\"reason\":\"  請登入 / Please log in  \"}));\nreturn JSON.stringify(out.map((r) => r.ok ? { data: r.data, attachments: r.attachments } : { error: r.error }));"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "h1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "reason": "  請登入 / Please log in  "
         },
         "parentToolCallId": "h1",
@@ -3883,22 +3851,6 @@ expression: r.into_value()
         "toolCallId": "h1",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const out = [];\nout.push(await tools.call(\"browser_handoff\", {\"reason\":\"  請登入 / Please log in  \"}));\nreturn JSON.stringify(out.map((r) => r.ok ? { data: r.data, attachments: r.attachments } : { error: r.error }));"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "h1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -5671,22 +5623,6 @@ expression: r.into_value()
         "toolCallId": "h1",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const out = [];\nout.push(await tools.call(\"browser_handoff\", {\"reason\":\"  請登入 / Please log in  \"}));\nreturn JSON.stringify(out.map((r) => r.ok ? { data: r.data, attachments: r.attachments } : { error: r.error }));"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "h1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -7732,22 +7668,6 @@ expression: r.into_value()
         "toolCallId": "h2",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const out = [];\nout.push(await tools.call(\"browser_handoff\", {\"reason\":\"   \"}));\nreturn JSON.stringify(out.map((r) => r.ok ? { data: r.data, attachments: r.attachments } : { error: r.error }));"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "h2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {

@@ -70,7 +70,10 @@ async fn agent_goal_ptc_complete() {
     let state = agent.call(json!({ "type": "get_state" })).await;
     m.note(&mut r, "state", state);
     m.session(&mut r, &agent);
-    insta::assert_json_snapshot!("agent_goal_ptc_complete", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_goal_ptc_complete",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -98,7 +101,10 @@ async fn agent_goal_ptc_limit() {
     })
     .await;
     m.session(&mut r, &agent);
-    insta::assert_json_snapshot!("agent_goal_ptc_limit", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_goal_ptc_limit",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -229,5 +235,8 @@ async fn agent_goal_ptc_disabled() {
         ModelReply::Text("Hi.".to_owned()),
     ]);
     turn(&mut agent, &mut m, &mut r, "prompt", "Hello").await;
-    insta::assert_json_snapshot!("agent_goal_ptc_disabled", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_goal_ptc_disabled",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }

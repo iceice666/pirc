@@ -133,22 +133,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"create_goal\", {\"objective\":\"Ship feature X\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "c1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "objective": "Ship feature X"
         },
         "parentToolCallId": "c1",
@@ -698,22 +682,6 @@ expression: r.into_value()
         "toolCallId": "u1",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const g = await tools.get_goal({});\nconst r = await tools.update_goal({ goal_id: g.goal.id, revision: g.goal.revision, action: 'complete' });\nreturn r.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "u1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {},

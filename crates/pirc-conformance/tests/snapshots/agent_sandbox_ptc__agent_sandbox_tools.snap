@@ -126,22 +126,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const out = [];\nout.push(await tools.call(\"sandbox_allow_domains\", {\"domains\":[\"api.example.com\"],\"reason\":\"docs\"}));\nout.push(await tools.call(\"sandbox_allow_domains\", {\"domains\":[\"a.example\",\"b.example\"],\"reason\":\"both\"}));\nout.push(await tools.call(\"sandbox_allow_domains\", {\"domains\":[\"d.example\"],\"reason\":\"free\"}));\nout.push(await tools.call(\"sandbox_allow_domains\", {\"domains\":[\"bad domain\"],\"reason\":\"error\"}));\nreturn JSON.stringify(out);"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "domains": [
             "api.example.com"
           ],
@@ -964,22 +948,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const out = [];\nout.push(await tools.call(\"sandbox_allow_domains\", {\"domains\":[\"c.example\"],\"reason\":\"refused\"}));\nreturn JSON.stringify(out);"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "domains": [
             "c.example"
           ],
@@ -1391,22 +1359,6 @@ expression: r.into_value()
         "toolCallId": "x1",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const out = [];\nout.push(await tools.call(\"unsandboxed_bash\", {\"command\":\"nix build\",\"reason\":\"daemon\",\"cwd\":\"sub\",\"timeout\":30}));\nout.push(await tools.call(\"unsandboxed_bash\", {\"command\":\"false\",\"reason\":\"fails\"}));\nout.push(await tools.call(\"unsandboxed_bash\", {\"command\":\"sleep 99\",\"reason\":\"slow\"}));\nout.push(await tools.call(\"unsandboxed_bash\", {\"command\":\"yes\",\"reason\":\"aborted\"}));\nout.push(await tools.call(\"unsandboxed_bash\", {\"command\":\"true\",\"reason\":\"no channel\"}));\nout.push(await tools.call(\"unsandboxed_bash\", {\"command\":\"rm -rf /\",\"reason\":\"refused\"}));\nreturn JSON.stringify(out);"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "x1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -4062,22 +4014,6 @@ expression: r.into_value()
         "toolCallId": "x2",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const out = [];\nout.push(await tools.call(\"unsandboxed_bash\", {\"command\":\"touch x\",\"reason\":\"lease\"}));\nreturn JSON.stringify(out);"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "x2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {

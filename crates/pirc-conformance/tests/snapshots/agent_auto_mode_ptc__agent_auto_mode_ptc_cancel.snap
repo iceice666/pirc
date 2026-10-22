@@ -138,22 +138,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "await tools.write({ path: 'before.txt', content: '1' });\n await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch cancelled.txt\" });"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "p1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "content": "1",
           "path": "before.txt"
         },

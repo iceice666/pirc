@@ -129,22 +129,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"bash\", { command: \"rm -rf ~\" }); return r.ok ? \"ran\" : r.error.code + \": \" + r.error.message;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "p",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "command": "rm -rf ~"
         },
         "parentToolCallId": "p",

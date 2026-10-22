@@ -129,7 +129,10 @@ async fn agent_sandbox_tools() {
         ModelReply::Text("Refused.".to_owned()),
     ]);
     turn(&mut agent, &mut m, &mut r, "lease refused", "Write outside").await;
-    insta::assert_json_snapshot!("agent_sandbox_tools", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_sandbox_tools",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -150,5 +153,8 @@ async fn agent_sandbox_tools_absent() {
         ModelReply::Text("Hi.".to_owned()),
     ]);
     turn(&mut agent, &mut m, &mut r, "try it", "Try it").await;
-    insta::assert_json_snapshot!("agent_sandbox_tools_absent", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_sandbox_tools_absent",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }

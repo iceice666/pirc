@@ -742,3 +742,45 @@ async fn agent_ptc_large_values() {
     r.note("exit code", json!(agent.finish().await));
     insta::assert_json_snapshot!("agent_ptc_large_values", r.into_value());
 }
+
+/// Progress cadence is timing-dependent, but updates must remain inside the
+/// parent tool's lifetime. Feature snapshots validate operation events/results.
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_ptc_progress_stays_inside_tool_lifetime() {
+    let Some(mut agent) = AgentRun::start(AgentOptions::default()).await else {
+        return;
+    };
+    agent.push([
+        ModelReply::tool("progress", "ptc", code(
+            "await tools.call('bash', {command: 'sleep 0.2; printf progress-complete'}); return 'done';"
+        )),
+        ModelReply::Text("done".to_owned()),
+    ]);
+    agent
+        .call(json!({"type":"prompt","message":"run the slow operation"}))
+        .await;
+    let events = agent.settle().await;
+    let outer = |event: &Value| event["toolCallId"] == "progress" && event["toolName"] == "ptc";
+    let started = events
+        .iter()
+        .position(|e| outer(e) && e["type"] == "tool_execution_start")
+        .unwrap();
+    let ended = events
+        .iter()
+        .position(|e| outer(e) && e["type"] == "tool_execution_end")
+        .unwrap();
+    let updates: Vec<_> = events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| outer(e) && e["type"] == "tool_execution_update")
+        .collect();
+    assert!(!updates.is_empty(), "missing PTC progress: {events:?}");
+    assert!(updates.iter().all(|(i, _)| started < *i && *i < ended));
+    assert!(updates.iter().any(|(_, e)| {
+        e["partialResult"]["content"][0]["text"]
+            .as_str()
+            .is_some_and(|s| s.contains("1 completed"))
+    }));
+    assert_eq!(events[ended]["isError"], false);
+    assert_eq!(agent.finish().await, Some(0));
+}

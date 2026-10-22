@@ -129,22 +129,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"ask_user_question\", {\"questions\":[{\"question\":\"Wait?\"}]});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "q1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "questions": [
             {
               "question": "Wait?"

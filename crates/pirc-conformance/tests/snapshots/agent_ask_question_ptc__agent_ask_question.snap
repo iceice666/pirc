@@ -129,22 +129,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"ask_user_question\", {\"questions\":[{\"question\":\"Which DB?\",\"header\":\"DB\",\"options\":[{\"label\":\"sqlite\",\"description\":\"embedded\"},{\"label\":\"postgres\"}]},{\"question\":\"Anything else?\"}]});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "q1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "questions": [
             {
               "header": "DB",
@@ -600,22 +584,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"ask_user_question\", {\"questions\":[{\"question\":\"Pick\",\"multiSelect\":true,\"options\":[{\"label\":\"a\"},{\"label\":\"b\"}]}]});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "q2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "questions": [
             {
               "multiSelect": true,
@@ -1053,22 +1021,6 @@ expression: r.into_value()
         "toolCallId": "q3",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"ask_user_question\", {\"questions\":[{\"question\":\"First?\"},{\"question\":\"Second?\"}]});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "q3",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {

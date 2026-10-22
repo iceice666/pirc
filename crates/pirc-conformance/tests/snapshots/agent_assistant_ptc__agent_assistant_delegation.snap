@@ -135,22 +135,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"delegate\", {\"workspace\":\"work:test\",\"task\":\"Fix the build.\",\"title\":\"Fix build\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "d1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "task": "Fix the build.",
           "title": "Fix build",
           "workspace": "work:test"
@@ -571,22 +555,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"delegate\", {\"task\":\"Somewhere.\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "d2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "task": "Somewhere."
         },
         "parentToolCallId": "d2",
@@ -1004,22 +972,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"delegate\", {\"follows\":\"d12345678\",\"task\":\"Now review it.\",\"role\":\"reviewer\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "d3",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "follows": "d12345678",
           "role": "reviewer",
           "task": "Now review it."
@@ -1430,22 +1382,6 @@ expression: log.into_value()
         "toolCallId": "d4",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"delegate\", {\"workspace\":\"nowhere\",\"task\":\"x\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "d4",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -1868,22 +1804,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"delegate\", {\"workspace\":\"work:test\",\"task\":\"  \"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "d5",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "task": "  ",
           "workspace": "work:test"
         },
@@ -2285,22 +2205,6 @@ expression: log.into_value()
         "toolCallId": "s1",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"delegation_status\", {});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "s1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {},
@@ -2705,22 +2609,6 @@ expression: log.into_value()
         "toolCallId": "s2",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"delegation_status\", {\"id\":\"d12345678\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "s2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -3132,22 +3020,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"delegation_status\", {\"id\":\"d12345678\",\"offset\":5});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "s3",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "id": "d12345678",
           "offset": 5
         },
@@ -3555,22 +3427,6 @@ expression: log.into_value()
         "toolCallId": "s4",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"delegation_status\", {});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "s4",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {},

@@ -135,22 +135,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_search\", {\"query\":\"staging\",\"limit\":3});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "q1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "limit": 3,
           "query": "staging"
         },
@@ -574,22 +558,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_search\", {\"query\":\"nothing\",\"workspace\":\" pirc \",\"limit\":99.7});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "q2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "limit": 99.7,
           "query": "nothing",
           "workspace": " pirc "
@@ -1003,22 +971,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_search\", {\"query\":\"  \"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "q3",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "query": "  "
         },
         "parentToolCallId": "q3",
@@ -1425,22 +1377,6 @@ expression: log.into_value()
         "toolCallId": "r1",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"recall\", {\"id\":\"abcdefabcdef\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "r1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -1853,22 +1789,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"recall\", {\"id\":\"000000000000\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "r2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "id": "000000000000"
         },
         "parentToolCallId": "r2",
@@ -2275,22 +2195,6 @@ expression: log.into_value()
         "toolCallId": "r3",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"recall\", {\"id\":\"111111111111\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "r3",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {

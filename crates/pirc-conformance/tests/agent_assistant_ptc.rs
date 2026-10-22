@@ -8,6 +8,8 @@
 
 mod memory_support;
 
+mod feature_support;
+
 use memory_support::*;
 use pirc_conformance::{AgentOptions, AgentRun, ModelReply};
 use serde_json::{Value, json};
@@ -204,7 +206,10 @@ async fn agent_assistant_notes_and_proposals() {
     log.turn(&mut agent, "prompt", "Please call me Ice from now on.")
         .await;
     log.session(&agent);
-    insta::assert_json_snapshot!("agent_assistant_notes_and_proposals", log.into_value());
+    insta::assert_json_snapshot!(
+        "agent_assistant_notes_and_proposals",
+        feature_support::without_ptc_progress(log.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -253,7 +258,10 @@ async fn agent_assistant_revisions_after_restart() {
     ]);
     log.turn(&mut agent, "second process", "fix it").await;
     log.session(&agent);
-    insta::assert_json_snapshot!("agent_assistant_revisions_after_restart", log.into_value());
+    insta::assert_json_snapshot!(
+        "agent_assistant_revisions_after_restart",
+        feature_support::without_ptc_progress(log.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -349,7 +357,10 @@ async fn agent_assistant_delegation() {
     ]);
     log.turn(&mut agent, "prompt", "get the build fixed over there")
         .await;
-    insta::assert_json_snapshot!("agent_assistant_delegation", log.into_value());
+    insta::assert_json_snapshot!(
+        "agent_assistant_delegation",
+        feature_support::without_ptc_progress(log.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -408,7 +419,10 @@ async fn agent_assistant_search_and_recall() {
     ]);
     log.turn(&mut agent, "prompt", "what did we decide about deploys?")
         .await;
-    insta::assert_json_snapshot!("agent_assistant_search_and_recall", log.into_value());
+    insta::assert_json_snapshot!(
+        "agent_assistant_search_and_recall",
+        feature_support::without_ptc_progress(log.into_value())
+    );
 }
 
 /// In a project linked to workspaces: the list marks them, `delegate` may
@@ -466,5 +480,8 @@ async fn agent_assistant_project_links() {
     ]);
     log.turn(&mut agent, "prompt", "fix the build of this project")
         .await;
-    insta::assert_json_snapshot!("agent_assistant_project_links", log.into_value());
+    insta::assert_json_snapshot!(
+        "agent_assistant_project_links",
+        feature_support::without_ptc_progress(log.into_value())
+    );
 }

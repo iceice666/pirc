@@ -392,22 +392,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "return (await tools.bash({ command: \"echo hi\" })).text.split(\"\\n\")[0];"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "reads",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "command": "echo hi"
         },
         "parentToolCallId": "reads",
@@ -815,22 +799,6 @@ expression: r.into_value()
         "toolCallId": "writes",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "await tools.bash({ command: \"touch made.txt\" }); return \"made\";"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "writes",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {

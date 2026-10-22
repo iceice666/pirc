@@ -6,6 +6,8 @@
 //! script, so these transcripts replay only on an agent with the PTC
 //! runtime (docs/architecture/ptc.md).
 
+mod feature_support;
+
 use std::collections::VecDeque;
 
 use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder};
@@ -120,7 +122,10 @@ async fn agent_ask_question() {
     ]);
     turn(&mut agent, &mut r, "answered", "ask me").await;
     session(&agent, &mut r);
-    insta::assert_json_snapshot!("agent_ask_question", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_ask_question",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -152,7 +157,10 @@ async fn agent_ask_question_invalid() {
         text("gave up"),
     ]);
     turn(&mut agent, &mut r, "invalid questionnaires", "ask badly").await;
-    insta::assert_json_snapshot!("agent_ask_question_invalid", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_ask_question_invalid",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -175,7 +183,10 @@ async fn agent_ask_question_abort() {
     r.note("abort", abort);
     let events = agent.settle().await;
     record(&agent, &mut r, "aborted", events);
-    insta::assert_json_snapshot!("agent_ask_question_abort", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_ask_question_abort",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -191,5 +202,8 @@ async fn agent_ask_question_headless() {
     let mut r = Recorder::new(&agent);
     agent.push([ask("q4", json!([{ "question": "x" }])), text("ok")]);
     turn(&mut agent, &mut r, "unavailable", "go").await;
-    insta::assert_json_snapshot!("agent_ask_question_headless", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_ask_question_headless",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }

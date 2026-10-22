@@ -4,6 +4,8 @@
 //! the PTC runtime (docs/architecture/ptc.md). The slash commands are in
 //! `agent_todo.rs`.
 
+mod feature_support;
+
 use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder};
 use serde_json::{Value, json};
 
@@ -124,7 +126,10 @@ async fn agent_todo_tool() {
     ]);
     turn(&mut agent, &mut r, "plan", "plan").await;
     session(&agent, &mut r);
-    insta::assert_json_snapshot!("agent_todo_tool", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_todo_tool",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -166,7 +171,10 @@ async fn agent_todo_tool_after_restart() {
         text("hi"),
     ]);
     turn(&mut agent, &mut r, "second process", "continue").await;
-    insta::assert_json_snapshot!("agent_todo_tool_after_restart", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_todo_tool_after_restart",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -185,5 +193,8 @@ async fn agent_todo_tool_in_chat() {
         text("ok"),
     ]);
     turn(&mut agent, &mut r, "not available", "list").await;
-    insta::assert_json_snapshot!("agent_todo_tool_in_chat", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_todo_tool_in_chat",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }

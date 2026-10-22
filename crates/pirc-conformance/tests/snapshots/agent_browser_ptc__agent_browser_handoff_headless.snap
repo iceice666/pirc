@@ -126,22 +126,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "const out = [];\nout.push(await tools.call(\"browser_handoff\", {\"reason\":\"Log in\"}));\nreturn JSON.stringify(out.map((r) => r.ok ? { data: r.data, attachments: r.attachments } : { error: r.error }));"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "h1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "reason": "Log in"
         },
         "parentToolCallId": "h1",

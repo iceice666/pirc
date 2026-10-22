@@ -192,7 +192,10 @@ async fn agent_background_tool() {
     let (lines, code) = agent.close().await;
     run.note("shutdown", json!(lines));
     run.note("exit code", json!(code));
-    insta::assert_json_snapshot!("agent_background_tool", run.r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_background_tool",
+        feature_support::without_ptc_progress(run.r.into_value())
+    );
 }
 
 /// `agent-background.test.ts`: "wakes the idle agent once when background
@@ -219,7 +222,10 @@ async fn agent_background_tool_wake() {
     settle(&mut agent, &mut run, "finished").await;
     tokio::time::sleep(Duration::from_millis(300)).await;
     run.note("later requests", json!(agent.pending_requests()));
-    insta::assert_json_snapshot!("agent_background_tool_wake", run.r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_background_tool_wake",
+        feature_support::without_ptc_progress(run.r.into_value())
+    );
 }
 
 /// `agent-background.test.ts`: "does not wake the agent for tasks it
@@ -244,7 +250,10 @@ async fn agent_background_tool_waited() {
     turn(&mut agent, &mut run, "quick task", "quick task").await;
     tokio::time::sleep(Duration::from_millis(300)).await;
     run.note("later requests", json!(agent.pending_requests()));
-    insta::assert_json_snapshot!("agent_background_tool_waited", run.r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_background_tool_waited",
+        feature_support::without_ptc_progress(run.r.into_value())
+    );
 }
 
 /// `agent-background.test.ts`: "wakes the agent with matched output and
@@ -285,7 +294,10 @@ async fn agent_background_tool_tty() {
     let (lines, code) = agent.close().await;
     run.note("shutdown", json!(lines));
     run.note("exit code", json!(code));
-    insta::assert_json_snapshot!("agent_background_tool_tty", run.r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_background_tool_tty",
+        feature_support::without_ptc_progress(run.r.into_value())
+    );
 }
 
 /// `agent-background.test.ts`: "reports output lines that match the
@@ -362,5 +374,8 @@ async fn agent_background_tool_monitor() {
     let events = agent.until(|line| line["type"] == "agent_settled").await;
     run.note("the busy run: events", json!(events));
     settle(&mut agent, &mut run, "the wake-up").await;
-    insta::assert_json_snapshot!("agent_background_tool_monitor", run.r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_background_tool_monitor",
+        feature_support::without_ptc_progress(run.r.into_value())
+    );
 }

@@ -37,6 +37,16 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
+      # The Azure mirror can throttle browser/ffmpeg dependencies for many
+      # minutes. Use Ubuntu's upstream archive with the same signed packages.
+      - name: Use Ubuntu archive for browser dependencies
+        run: |
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            if [ -f "$source" ]; then
+              sudo sed -E -i 's|https?://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+            fi
+          done
+
       # The browser conformance scenarios (crates/pirc-conformance/tests/node_browser.rs)
       # and the pirc-node browser tests need a Chromium and, for recordings,
       # ffmpeg; they skip without them, except under PIRC_BROWSER_REQUIRED=1

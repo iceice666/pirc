@@ -135,22 +135,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"add\",\"content\":\"Fact.\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "add",
           "content": "Fact."
         },
@@ -1057,22 +1041,6 @@ expression: log.into_value()
         "toolCallId": "n2",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"replace\",\"id\":\"n55555555\",\"content\":\"Better fact.\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {

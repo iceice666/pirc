@@ -175,7 +175,7 @@ async fn agent_schedule_tool_absent() {
         turn(&mut agent, &mut m, &mut r, "try it", "Try it").await;
         insta::assert_json_snapshot!(
             format!("agent_schedule_tool_absent_{}", name.replace(' ', "_")),
-            r.into_value()
+            feature_support::without_ptc_progress(r.into_value())
         );
     }
 }

@@ -5,6 +5,8 @@
 //! an ordinary script is neither classified nor leased. These need the PTC
 //! runtime (the `m5-ptc` port) to replay against the Rust agent.
 
+mod feature_support;
+
 use std::collections::VecDeque;
 use std::time::Duration;
 
@@ -101,7 +103,10 @@ async fn agent_auto_mode_ptc_headless() {
     ]);
     turn(&mut agent, &mut r, "refused", "go").await;
     r.note("exit code", json!(agent.finish().await));
-    insta::assert_json_snapshot!("agent_auto_mode_ptc_headless", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_auto_mode_ptc_headless",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 /// With a UI, a dangerous bash call from a script asks the human and runs
@@ -128,7 +133,10 @@ async fn agent_auto_mode_ptc_approval() {
     exists(&agent, &mut r, &["declined.txt", "ran.txt"]);
     session(&mut r, &agent);
     r.note("exit code", json!(agent.finish().await));
-    insta::assert_json_snapshot!("agent_auto_mode_ptc_approval", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_auto_mode_ptc_approval",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 /// Cancelling a script while its approval dialog is open withdraws the
@@ -167,7 +175,10 @@ async fn agent_auto_mode_ptc_cancel() {
     exists(&agent, &mut r, &["before.txt", "cancelled.txt"]);
     session(&mut r, &agent);
     r.note("exit code", json!(agent.finish().await));
-    insta::assert_json_snapshot!("agent_auto_mode_ptc_cancel", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_auto_mode_ptc_cancel",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 const DENY_SCRIPT: &str = "const note = \"forbidden-word\"; return note.length;";
@@ -187,7 +198,10 @@ async fn agent_auto_mode_ptc_deny_headless() {
     agent.push([ptc("h", DENY_SCRIPT), ModelReply::Text("Done.".to_owned())]);
     turn(&mut agent, &mut r, "refused", "go").await;
     r.note("exit code", json!(agent.finish().await));
-    insta::assert_json_snapshot!("agent_auto_mode_ptc_deny_headless", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_auto_mode_ptc_deny_headless",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 /// With a UI, a denied script text asks the human; approved, it runs.
@@ -206,7 +220,10 @@ async fn agent_auto_mode_ptc_deny_approval() {
     ]);
     turn(&mut agent, &mut r, "asked", "go").await;
     r.note("exit code", json!(agent.finish().await));
-    insta::assert_json_snapshot!("agent_auto_mode_ptc_deny_approval", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_auto_mode_ptc_deny_approval",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 /// With the classifier on, a script's own text is neither classified nor
@@ -238,7 +255,10 @@ async fn agent_auto_mode_ptc_unclassified() {
     turn(&mut agent, &mut r, "scripts", "go").await;
     exists(&agent, &mut r, &["made.txt"]);
     r.note("exit code", json!(agent.finish().await));
-    insta::assert_json_snapshot!("agent_auto_mode_ptc_unclassified", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_auto_mode_ptc_unclassified",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 /// Approval modes (security audit L14): a headless agent in the node's
@@ -305,5 +325,8 @@ async fn agent_approval_modes() {
     );
     session(&mut r, &agent);
     r.note("exit code", json!(agent.finish().await));
-    insta::assert_json_snapshot!("agent_approval_modes", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_approval_modes",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }

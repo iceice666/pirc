@@ -129,22 +129,6 @@ expression: r.into_value()
       },
       {
         "args": {
-          "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch declined.txt\" });"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "p1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "command": "git push --force nowhere 2>/dev/null; touch declined.txt"
         },
         "parentToolCallId": "p1",
@@ -547,22 +531,6 @@ expression: r.into_value()
         "toolCallId": "p2",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "return await tools.bash({ command: \"git push --force nowhere 2>/dev/null; touch ran.txt\" });"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "p2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {

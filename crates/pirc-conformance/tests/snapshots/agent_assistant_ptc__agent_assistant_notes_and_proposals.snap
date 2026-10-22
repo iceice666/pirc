@@ -135,22 +135,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_propose_user\", {\"action\":\"add\",\"content\":\"Wants to be called Ice.\",\"quote\":\"“Call me  Ice”\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "p1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "add",
           "content": "Wants to be called Ice.",
           "quote": "“Call me  Ice”"
@@ -571,22 +555,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_propose_user\", {\"action\":\"add\",\"content\":\"Is called Bob.\",\"quote\":\"call me Bob\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "p2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "add",
           "content": "Is called Bob.",
           "quote": "call me Bob"
@@ -989,22 +957,6 @@ expression: log.into_value()
         "toolCallId": "p3",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_propose_user\", {\"action\":\"replace\",\"id\":\"u1\",\"content\":\"Ice.\",\"quote\":\"call me ice\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "p3",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -1424,22 +1376,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_propose_user\", {\"action\":\"remove\",\"quote\":\"call me ice\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "p4",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "remove",
           "quote": "call me ice"
         },
@@ -1841,22 +1777,6 @@ expression: log.into_value()
         "toolCallId": "p5",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_propose_user\", {\"action\":\"rename\",\"quote\":\"x\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "p5",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -2264,22 +2184,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"read\", {\"path\":\"plan.txt\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "r1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "path": "plan.txt"
         },
         "parentToolCallId": "r1",
@@ -2672,22 +2576,6 @@ expression: log.into_value()
         "toolCallId": "n1",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"add\",\"content\":\"The plan is in plan.txt.\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -3103,22 +2991,6 @@ expression: log.into_value()
         "toolCallId": "n2",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"replace\",\"id\":\"n33333333\",\"content\":\"Plan moved.\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -3548,22 +3420,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"replace\",\"id\":\"n33333333\",\"content\":\"Plan moved.\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n3",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "replace",
           "content": "Plan moved.",
           "id": "n33333333"
@@ -3979,22 +3835,6 @@ expression: log.into_value()
         "toolCallId": "n4",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"add\",\"content\":\"The plan is in plan.txt.\",\"quote\":\"Please call me Ice\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n4",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -4418,22 +4258,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"remove\",\"id\":\" n44444444 \"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n5",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "remove",
           "id": " n44444444 "
         },
@@ -4847,22 +4671,6 @@ expression: log.into_value()
         "toolCallId": "n6",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"add\",\"content\":\"Key sk-xxxxxxxxxxxxxxxxxxxxxxxx\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n6",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -5288,22 +5096,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"add\",\"content\":\"Forgotten thing.\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n7",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "add",
           "content": "Forgotten thing."
         },
@@ -5723,22 +5515,6 @@ expression: log.into_value()
         "toolCallId": "n8",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"add\",\"content\":\"Too much.\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n8",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -6164,22 +5940,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"add\",\"content\":\"x\",\"quote\":\"never said\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n9",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "add",
           "content": "x",
           "quote": "never said"
@@ -6582,22 +6342,6 @@ expression: log.into_value()
         "toolCallId": "n10",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"replace\",\"content\":\"x\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n10",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -7005,22 +6749,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"add\",\"content\":\"  \"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n11",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "action": "add",
           "content": "  "
         },
@@ -7422,22 +7150,6 @@ expression: log.into_value()
         "toolCallId": "n12",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_note\", {\"action\":\"edit\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "n12",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {

@@ -135,22 +135,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"delegate\", {\"task\":\"Fix the build.\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "d1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "task": "Fix the build."
         },
         "parentToolCallId": "d1",
@@ -567,22 +551,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_search\", {\"query\":\"build\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "q1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "query": "build"
         },
         "parentToolCallId": "q1",
@@ -992,22 +960,6 @@ expression: log.into_value()
         "toolCallId": "q2",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_search\", {\"query\":\"postgres\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "q2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -1423,22 +1375,6 @@ expression: log.into_value()
       },
       {
         "args": {
-          "code": "const r = await tools.call(\"memory_search\", {\"query\":\"redis\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "q3",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
-        "args": {
           "query": "redis"
         },
         "parentToolCallId": "q3",
@@ -1845,22 +1781,6 @@ expression: log.into_value()
         "toolCallId": "q4",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"memory_search\", {\"query\":\"redis\",\"everywhere\":true});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "q4",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
