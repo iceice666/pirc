@@ -149,12 +149,12 @@ fn serve_inference(
                         .find_map(|line| line.strip_prefix("Authorization: Bearer "))
                         .unwrap_or_default();
                     writes
-                        .apply(
+                        .apply_response(
                             token,
                             serde_json::from_slice(&buffer[head_end..head_end + length]).unwrap(),
                         )
-                        .unwrap();
-                    "{\"ok\":true}".to_owned()
+                        .unwrap()
+                        .to_string()
                 } else {
                     let reply = replies
                         .lock()
@@ -172,6 +172,48 @@ fn serve_inference(
             });
         }
     });
+}
+
+/// The synthetic peer must preserve session proofs, including when bwrap is
+/// unavailable: an agent rejects an otherwise successful reply without its hash.
+#[tokio::test]
+async fn persistence_transport_preserves_session_snapshot_hashes() {
+    let root = tempfile::tempdir().unwrap();
+    let socket = root.path().join("socket");
+    let writes = Arc::new(pirc_node::persistence::Writes::default());
+    let lease = writes
+        .register(socket.to_str().unwrap(), root.path(), None)
+        .unwrap();
+    serve_inference(
+        &socket,
+        models(&socket),
+        Arc::new(Mutex::new(VecDeque::new())),
+        writes,
+    );
+    for op in ["session_open", "session_snapshot"] {
+        let body = json!({"op": op, "path": root.path().join("session.jsonl")}).to_string();
+        let mut stream = tokio::net::UnixStream::connect(&socket).await.unwrap();
+        stream
+            .write_all(
+                format!(
+                    "POST /persistence HTTP/1.1\r\nAuthorization: Bearer {}\r\nContent-Length: {}\r\n\r\n{body}",
+                    lease.config.token, body.len()
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut response = String::new();
+        tokio::time::timeout(TIMEOUT, stream.read_to_string(&mut response))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(response.starts_with("HTTP/1.1 200 OK\r\n"), "{response}");
+        let (_, body) = response.split_once("\r\n\r\n").unwrap();
+        let reply: Value = serde_json::from_str(body).unwrap();
+        assert_eq!(reply["ok"], true);
+        assert_eq!(reply["hash"], pirc_agent::journal::digest(&[]), "{op}");
+    }
 }
 
 /// bash for the agent's `bash` tool, which runs `/bin/bash`: on hosts
