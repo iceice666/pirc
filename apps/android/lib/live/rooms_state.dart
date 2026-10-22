@@ -50,6 +50,10 @@ class RoomsController extends ChangeNotifier {
   Map<String, Json> facePresence = {};
   int loopsRevision = 0, wakesRevision = 0;
 
+  /// Bumped when an open loop (or a wake) changes: the engine's lists reload.
+  final loopsChanged = ValueNotifier<int>(0),
+      wakesChanged = ValueNotifier<int>(0);
+
   /// The thread open beside the room.
   String? threadId, threadError;
   List<Json> threadMessages = [], threadWorkers = [];
@@ -180,8 +184,12 @@ class RoomsController extends ChangeNotifier {
     facePresence = obj(
       data['facePresence'],
     ).map((id, p) => MapEntry(id, obj(p)));
-    loopsRevision = (data['loopsRevision'] as num?)?.toInt() ?? 0;
-    wakesRevision = (data['wakesRevision'] as num?)?.toInt() ?? 0;
+    final loops = (data['loopsRevision'] as num?)?.toInt() ?? 0;
+    final wakes = (data['wakesRevision'] as num?)?.toInt() ?? 0;
+    if (loops != loopsRevision) loopsChanged.value++;
+    if (wakes != wakesRevision) wakesChanged.value++;
+    loopsRevision = loops;
+    wakesRevision = wakes;
     threadId = data['threadId'] as String?;
     threadMessages = rows(data['threadMessages']);
     threadWorkers = rows(data['threadWorkers']);
@@ -523,6 +531,8 @@ class RoomsController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _draftSave?.cancel();
+    loopsChanged.dispose();
+    wakesChanged.dispose();
     unawaited(_events?.cancel());
     super.dispose();
   }

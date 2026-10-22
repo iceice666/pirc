@@ -17,6 +17,7 @@ import 'permissions.dart';
 import 'pairing_scanner.dart';
 import 'mobile_tabs.dart';
 import 'rooms_page.dart';
+import 'engine_overview.dart';
 import 'session_sidebar.dart';
 import 'workspace_page.dart';
 import 'conversation_header.dart';
@@ -256,6 +257,19 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
         identity == _documents.accountIdentity;
     _documentRouting = true;
     try {
+      // A room or the engine: their own pages, not the session list.
+      final target = route.target;
+      if (target is NativeAppRoomRouteTarget) {
+        c.showRooms(roomId: target.roomId);
+        return;
+      }
+      if (target is NativeAppEngineRouteTarget) {
+        c.showEngine(section: target.section);
+        return;
+      }
+      if (target is NativeAppSessionRouteTarget && c.showing != 'engine') {
+        c.showEngine();
+      }
       await c.flushDraft();
       if (!current() || navigation != c.sessionNavigationRevision) return;
       await c.refreshList();
@@ -378,6 +392,14 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
 
   void _update() {
     if (!mounted || !_inTree) return;
+    // A room line's "Details" (or a link) asked for an engine section.
+    final asked = c.engineSection;
+    if (asked != null && c.showing == 'engine' && c.origin != null) {
+      c.engineSection = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _page('overview:$asked');
+      });
+    }
     if (!c.booting && !layoutLoaded) {
       layoutLoaded = true;
       sidebarCollapsed = c.preferences['sidebarCollapsed'] == true;
@@ -656,6 +678,25 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       c.showRooms();
       return;
     }
+    if (name == 'overview' || name.startsWith('overview:')) {
+      final section = name.startsWith('overview:')
+          ? name.substring(9)
+          : 'nodes';
+      unawaited(
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => EngineOverview(
+              gateway: c.gateway,
+              section: section,
+              roomId: c.rooms.currentId,
+              loopsRevision: c.rooms.loopsChanged,
+              wakesRevision: c.rooms.wakesChanged,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     if (!documentRoute && name != 'settings' && name != 'memory') {
       _documentRouteTicket++;
       _documentRouting = false;
@@ -877,12 +918,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
             rooms: c.rooms,
             onEngine: c.showEngine,
             onSettings: () => _page('settings'),
-            onDetails: (section) {
-              c.showEngine(section: section);
-              // The engine's own pages come with plan 12's engine step;
-              // until then memory opens where it lives today.
-              if (section == 'memory') _page('memory');
-            },
+            onDetails: (section) => c.showEngine(section: section),
           )
         : LayoutBuilder(
             builder: (context, size) {

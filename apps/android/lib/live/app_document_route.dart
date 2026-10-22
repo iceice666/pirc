@@ -52,6 +52,30 @@ final class NativeAppMemoryRouteTarget extends NativeAppDocumentRouteTarget {
   const NativeAppMemoryRouteTarget();
 }
 
+/// A room (`/?room=<id>`): the rooms page, on that room.
+final class NativeAppRoomRouteTarget extends NativeAppDocumentRouteTarget {
+  const NativeAppRoomRouteTarget(this.roomId);
+
+  final String roomId;
+}
+
+/// The engine (`/engine?open=<section>`): one of its six sections.
+final class NativeAppEngineRouteTarget extends NativeAppDocumentRouteTarget {
+  const NativeAppEngineRouteTarget(this.section);
+
+  final String section;
+}
+
+/// The engine's sections a link may open (the web's `OVERVIEW_SECTIONS`).
+const _engineSections = {
+  'nodes',
+  'brain',
+  'loops',
+  'wakes',
+  'memory',
+  'sources',
+};
+
 /// One decoded query entry, retaining its original encoded spelling and order.
 class NativeAppDocumentQueryParameter {
   const NativeAppDocumentQueryParameter({
@@ -93,7 +117,12 @@ class NativeAppDocumentRoute {
     required this.workspaceId,
   });
 
-  static const _knownQueryNames = <String>{'session', 'workspace', 'open'};
+  static const _knownQueryNames = <String>{
+    'session',
+    'workspace',
+    'open',
+    'room',
+  };
 
   /// Parses a canonical absolute URL only when it names [appRootUrl] or its
   /// `index.html` alias, unless [allowSpaFallback] enables app-prefix paths.
@@ -154,7 +183,11 @@ class NativeAppDocumentRoute {
         relativePath != null &&
         relativePath.isNotEmpty &&
         !inApiNamespace;
-    if (!isRootPath && !isIndexAlias && !isSpaFallbackPath) return null;
+    // The engine is a page of its own (plans/rewrite/11-web.md).
+    final isEnginePath = relativePath == 'engine' || relativePath == 'engine/';
+    if (!isRootPath && !isIndexAlias && !isSpaFallbackPath && !isEnginePath) {
+      return null;
+    }
 
     final parts = _UrlParts.read(canonicalUrl);
     if (parts == null) return null;
@@ -170,10 +203,17 @@ class NativeAppDocumentRoute {
     final session = firstValue('session');
     final open = firstValue('open');
     final workspace = firstValue('workspace');
+    final room = firstValue('room');
 
     final NativeAppDocumentRouteTarget? target;
     if (session != null && session.isNotEmpty) {
       target = NativeAppSessionRouteTarget(session);
+    } else if (isEnginePath) {
+      target = NativeAppEngineRouteTarget(
+        _engineSections.contains(open) ? open! : 'nodes',
+      );
+    } else if (room != null && room.isNotEmpty && room.length <= 100) {
+      target = NativeAppRoomRouteTarget(room);
     } else if (open == 'memory') {
       target = const NativeAppMemoryRouteTarget();
     } else {

@@ -506,6 +506,13 @@ class _SessionSidebarState extends State<SessionSidebar> {
                         ).copyWith(letterSpacing: -.16),
                       ),
                       const Spacer(),
+                      // Wide screens have it in the footer.
+                      if (phone)
+                        WebIconButton(
+                          LucideIcons.gauge,
+                          'Engine overview',
+                          onPressed: () => widget.onPage('overview'),
+                        ),
                       if (!phone)
                         WebIconButton(
                           LucideIcons.panelLeftClose,
@@ -723,6 +730,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       footerEntry('Rooms', LucideIcons.house, 'rooms'),
+                      footerEntry('Overview', LucideIcons.gauge, 'overview'),
                       footerEntry('Settings', LucideIcons.settings, 'settings'),
                     ],
                   ),
