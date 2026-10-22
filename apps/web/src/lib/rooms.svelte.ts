@@ -37,40 +37,42 @@ export const ROOM_PAGE = 50;
 export const TYPING_THROTTLE_MS = 3_000;
 
 export class RoomsState {
-  rooms = $state<RoomView[]>([]);
+  // Raw state: the reducer (room-events.ts) never mutates, it replaces whole
+  // values, so deep proxies would only cost.
+  rooms = $state.raw<RoomView[]>([]);
   /** Archived rooms, once the list's fold is opened. */
-  archived = $state<RoomView[]>([]);
+  archived = $state.raw<RoomView[]>([]);
   #archivedLoaded = false;
   /** The asking user (the gateway says who): their own messages are read. */
   user = $state('');
   currentId = $state<string>('general');
   /** The open room when it is not in the list (archived, opened by URL). */
-  #detached = $state<RoomView | undefined>();
-  messages = $state<RoomMessage[]>([]);
-  pinned = $state<RoomMessage[]>([]);
+  #detached = $state.raw<RoomView | undefined>();
+  messages = $state.raw<RoomMessage[]>([]);
+  pinned = $state.raw<RoomMessage[]>([]);
   hasMore = $state(false);
   loading = $state(true);
   error = $state('');
   connection = $state<RoomsConnection>('connecting');
   /** Others typing in each room: user → when their signal lapses. */
-  typing = $state<Record<string, Record<string, number>>>({});
+  typing = $state.raw<Record<string, Record<string, number>>>({});
   /** Faces thinking in each room now: room → face ids. */
-  thinking = $state<Record<string, string[]>>({});
+  thinking = $state.raw<Record<string, string[]>>({});
   /** Every face (plan 10), hidden ones too: old messages still name them. */
-  faces = $state<Face[]>([]);
+  faces = $state.raw<Face[]>([]);
   /** What each face is doing now: face id → its presence. */
-  facePresence = $state<Record<string, FaceState>>({});
+  facePresence = $state.raw<Record<string, FaceState>>({});
   /** Bumped whenever an open loop changes (plan 04), for lists that show them. */
   loopsRevision = $state(0);
   /** Bumped whenever a wake changes (plan 05), for lists that show them. */
   wakesRevision = $state(0);
   /** The thread open beside the room (plan 06), its messages and workers. */
   threadId = $state<string | undefined>();
-  threadMessages = $state<ThreadMessage[]>([]);
-  threadWorkers = $state<Worker[]>([]);
+  threadMessages = $state.raw<ThreadMessage[]>([]);
+  threadWorkers = $state.raw<Worker[]>([]);
   threadError = $state('');
   /** What each thread's workers did last (plan 11: the anchor's progress). */
-  threadActivity = $state<Record<string, ThreadActivity>>({});
+  threadActivity = $state.raw<Record<string, ThreadActivity>>({});
   #threadToken = 0;
 
   /** Offline demo data (dev builds without a gateway): nothing is sent anywhere. */

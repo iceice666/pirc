@@ -13,16 +13,8 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function snapshotFor(
-  session: SessionSummary,
-  interactions = [] as SessionSnapshot['interactions'],
-) {
-  return {
-    ...demoSnapshot,
-    session,
-    messages: [],
-    interactions,
-  } satisfies SessionSnapshot;
+function snapshotFor(session: SessionSummary, run: SessionSnapshot['run'] = null) {
+  return { ...demoSnapshot, session, run } satisfies SessionSnapshot;
 }
 
 class TestWebSocket extends EventTarget {
@@ -46,44 +38,35 @@ const workspace: Workspace = {
   defaults: {},
 };
 
-const questionCreated = normalizeEvent({
-  sessionId: 's1',
-  epoch: 'demo-epoch',
-  sequence: 2,
-  type: 'interaction_created',
-  data: {
-    id: 'interaction:q0',
-    runnerEpoch: 0,
-    kind: 'confirm',
-    status: 'pending',
-    request: {
-      title: 'Continue?',
-      message: 'The agent asks.',
-      confirmLabel: 'Yes',
-      cancelLabel: 'No',
-    },
-  },
-});
-if (questionCreated.event.type !== 'interaction_updated')
-  throw new Error('Expected an interaction.');
-const questionInteraction = questionCreated.event.interaction;
+describe('the open session’s stream', () => {
+  const state = () => fromSnapshot(snapshotFor({ ...demoSnapshot.session, id: 's1' }));
+  const event = (raw: Record<string, unknown>) =>
+    normalizeEvent({ sessionId: 's1', epoch: 'demo-epoch', sequence: 7, ...raw });
 
-it('keeps a newer interaction when a legacy removal has no row epoch', () => {
-  const session = { ...demoSnapshot.session, id: 's-legacy-event' };
-  const newer = { ...questionInteraction, id: 'interaction:reused', runnerEpoch: '5' };
-  const state = fromSnapshot(snapshotFor(session, [newer]));
-  const legacyRemoval = normalizeEvent({
-    sessionId: session.id,
-    epoch: state.runnerEpoch,
-    sequence: 1,
-    type: 'interaction_answered',
-    data: { interactionId: newer.id },
+  it('asks for a fresh snapshot when a question is asked or answered, keeping none', () => {
+    for (const raw of [
+      { type: 'interaction_created', data: { id: 'q0', runnerEpoch: 0, kind: 'confirm' } },
+      { type: 'interaction_answered', data: { interactionId: 'q0', interactionEpoch: 0 } },
+    ]) {
+      const updated = reduceEvent(state(), event(raw));
+      expect(updated.needsSnapshot).toBe(true);
+      expect(updated).not.toHaveProperty('interactions');
+    }
   });
 
-  const updated = reduceEvent(state, legacyRemoval);
-
-  expect(updated.interactions).toEqual([newer]);
-  expect(updated.needsSnapshot).toBe(true);
+  it('only moves the cursor for what the agent says (no conversation here)', () => {
+    for (const raw of [
+      { type: 'pi_event', data: { type: 'message_update', assistantMessageEvent: {} } },
+      { type: 'pi_event', data: { type: 'tool_execution_start', toolCallId: 't1' } },
+      { type: 'notification', data: { method: 'notify', message: 'hi' } },
+      { type: 'delegations_changed', data: { delegations: [] } },
+    ]) {
+      const updated = reduceEvent(state(), event(raw));
+      expect(updated.needsSnapshot).toBe(false);
+      expect(updated.cursor).toBe('demo-epoch:7');
+      expect(updated).not.toHaveProperty('messages');
+    }
+  });
 });
 
 beforeEach(() => {
@@ -108,7 +91,6 @@ afterEach(() => {
   engine.sessions = [];
   engine.workspaces = [];
   engine.pageError = '';
-  engine.interactionNotice = '';
   engine.answeringInteractionIds = [];
   globalThis.localStorage?.clear();
   vi.restoreAllMocks();
@@ -151,64 +133,6 @@ describe('app asynchronous refreshes', () => {
     expect(engine.sessions.map((session) => session.id)).toEqual(['s-newer']);
   });
 
-  it.each([
-    {
-      name: 'an approval while an older snapshot is loading',
-      initial: [questionInteraction],
-      incoming: normalizeEvent({
-        sessionId: 's1',
-        epoch: 'demo-epoch',
-        sequence: 3,
-        type: 'interaction_answered',
-        data: {
-          interactionId: 'interaction:q0',
-          interactionEpoch: questionInteraction.runnerEpoch,
-        },
-      }),
-      stale: [questionInteraction],
-      fresh: [],
-      expected: [],
-    },
-    {
-      name: 'a new question while an older snapshot is loading',
-      initial: [],
-      incoming: questionCreated,
-      stale: [],
-      fresh: [questionInteraction],
-      expected: ['interaction:q0'],
-    },
-  ])('$name', async ({ initial, incoming, stale, fresh, expected }) => {
-    engine.demo = undefined;
-    const session = { ...demoSnapshot.session, id: 's1' };
-    engine.activeSessionId = session.id;
-    engine.sessions = [session];
-    engine.sessionState = fromSnapshot(snapshotFor(session, initial));
-
-    const first = deferred<SessionSnapshot>();
-    const correction = deferred<SessionSnapshot>();
-    const snapshot = vi
-      .spyOn(api, 'snapshot')
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(correction.promise);
-    const loading = engine.refreshSnapshot();
-    expect(snapshot).toHaveBeenCalledTimes(1);
-
-    engine.sessionState = reduceEvent(engine.sessionState!, incoming);
-    if (engine.sessionState.needsSnapshot) void engine.refreshSnapshot();
-    expect(engine.sessionState.interactions.map((item) => item.id)).toEqual(
-      incoming.event.type === 'interaction_removed' ? [] : ['interaction:q0'],
-    );
-
-    first.resolve(snapshotFor(session, stale));
-    await loading;
-    expect(snapshot).toHaveBeenCalledTimes(2);
-    correction.resolve(snapshotFor(session, fresh));
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(engine.sessionState?.interactions.map((item) => item.id)).toEqual(expected);
-  });
-
   it('lets a new session reconcile after an older session snapshot is pending', async () => {
     vi.stubGlobal('WebSocket', TestWebSocket);
     engine.demo = undefined;
@@ -242,198 +166,13 @@ describe('app asynchronous refreshes', () => {
 
     oldSnapshot.resolve(snapshotFor(oldSession));
     await oldRefresh;
-    newRefresh.resolve(snapshotFor(newSession, [questionInteraction]));
+    newRefresh.resolve(snapshotFor(newSession, { id: 'run-2', status: 'succeeded' }));
     await Promise.resolve();
     await Promise.resolve();
 
     expect(engine.activeSessionId).toBe(newSession.id);
     expect(engine.sessionState?.session.id).toBe(newSession.id);
-    expect(engine.sessionState?.interactions.map((item) => item.id)).toEqual(['interaction:q0']);
-  });
-
-  it('confirms a stale answer as handled only after the exact question disappears from a fresh snapshot', async () => {
-    engine.demo = undefined;
-    const session = { ...demoSnapshot.session, id: 's-answer' };
-    const interaction = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '4' };
-    engine.activeSessionId = session.id;
-    engine.sessionState = {
-      ...fromSnapshot(snapshotFor(session, [interaction])),
-      control: { heldByCurrentClient: true, generation: 7 },
-    };
-    const answer = vi
-      .spyOn(api, 'answerInteraction')
-      .mockRejectedValueOnce(new ApiError('Already answered', 409, 'stale_interaction'));
-    vi.spyOn(api, 'snapshot').mockResolvedValue(snapshotFor(session, []));
-
-    await engine.answerInteraction(interaction.id, { action: 'answer', value: true });
-
-    expect(answer).toHaveBeenCalledTimes(1);
-    expect(engine.interactionNotice).toBe('This request has already been handled.');
-    expect(engine.sessionState?.interactions).toEqual([]);
-  });
-
-  it('keeps a conflicting answer available when the exact question is still pending', async () => {
-    engine.demo = undefined;
-    const session = { ...demoSnapshot.session, id: 's-answer' };
-    const interaction = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '4' };
-    engine.activeSessionId = session.id;
-    engine.sessionState = {
-      ...fromSnapshot(snapshotFor(session, [interaction])),
-      control: { heldByCurrentClient: true, generation: 7 },
-    };
-    const answer = vi
-      .spyOn(api, 'answerInteraction')
-      .mockRejectedValueOnce(new ApiError('Control changed', 409, 'lost_control'));
-    vi.spyOn(api, 'snapshot').mockResolvedValue(snapshotFor(session, [interaction]));
-    vi.spyOn(api, 'heartbeatControl').mockResolvedValue({ heldByCurrentClient: false });
-
-    await engine.answerInteraction(interaction.id, { action: 'answer', value: true });
-
-    expect(answer).toHaveBeenCalledTimes(1);
-    expect(engine.interactionNotice).toBe(
-      'This request is still waiting. Take control to answer it.',
-    );
-    expect(engine.sessionState?.interactions).toEqual([interaction]);
-  });
-
-  it('does not claim an answer was handled when the authoritative check fails', async () => {
-    engine.demo = undefined;
-    const session = { ...demoSnapshot.session, id: 's-answer' };
-    const interaction = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '4' };
-    engine.activeSessionId = session.id;
-    engine.sessionState = {
-      ...fromSnapshot(snapshotFor(session, [interaction])),
-      control: { heldByCurrentClient: true, generation: 7 },
-    };
-    const answer = vi
-      .spyOn(api, 'answerInteraction')
-      .mockRejectedValueOnce(new ApiError('Stale', 409, 'stale_interaction'));
-    vi.spyOn(api, 'snapshot').mockRejectedValueOnce(new Error('offline'));
-
-    await engine.answerInteraction(interaction.id, { action: 'answer', value: true });
-
-    expect(answer).toHaveBeenCalledTimes(1);
-    expect(engine.interactionNotice).toContain('couldn’t verify');
-    expect(engine.sessionState?.interactions).toEqual([interaction]);
-  });
-
-  it('recognizes a stale card callback after remote removal without touching a reused id', async () => {
-    engine.demo = undefined;
-    const session = { ...demoSnapshot.session, id: 's-answer' };
-    const oldQuestion = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '4' };
-    const newQuestion = { ...questionInteraction, id: oldQuestion.id, runnerEpoch: '5' };
-    engine.activeSessionId = session.id;
-    engine.sessionState = fromSnapshot(snapshotFor(session, [oldQuestion]));
-    const oldState = engine.sessionState;
-    engine.sessionState = reduceEvent(
-      oldState,
-      normalizeEvent({
-        sessionId: session.id,
-        epoch: oldState.runnerEpoch,
-        sequence: 1,
-        type: 'interaction_answered',
-        data: { interactionId: oldQuestion.id, interactionEpoch: oldQuestion.runnerEpoch },
-      }),
-    );
-    engine.sessionState = reduceEvent(engine.sessionState, {
-      sessionId: session.id,
-      runnerEpoch: oldState.runnerEpoch,
-      sequence: 2,
-      cursor: 'new-question',
-      event: { type: 'interaction_updated', interaction: newQuestion },
-    });
-    const answer = vi.spyOn(api, 'answerInteraction');
-    vi.spyOn(api, 'snapshot').mockResolvedValue(snapshotFor(session, [newQuestion]));
-
-    await engine.answerInteraction(
-      oldQuestion.id,
-      { action: 'answer', value: true },
-      oldQuestion.runnerEpoch,
-    );
-
-    expect(answer).not.toHaveBeenCalled();
-    expect(engine.interactionNotice).toBe('This request has already been handled.');
-    expect(engine.sessionState?.interactions).toEqual([newQuestion]);
-  });
-
-  it('reports a duplicate callback as processing instead of submitting twice', async () => {
-    engine.demo = undefined;
-    const session = { ...demoSnapshot.session, id: 's-answer' };
-    const interaction = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '4' };
-    engine.activeSessionId = session.id;
-    engine.sessionState = {
-      ...fromSnapshot(snapshotFor(session, [interaction])),
-      control: { heldByCurrentClient: true, generation: 7 },
-    };
-    const pending = deferred<void>();
-    const answer = vi.spyOn(api, 'answerInteraction').mockReturnValueOnce(pending.promise);
-
-    const first = engine.answerInteraction(
-      interaction.id,
-      { action: 'answer', value: true },
-      interaction.runnerEpoch,
-    );
-    await Promise.resolve();
-    await engine.answerInteraction(
-      interaction.id,
-      { action: 'answer', value: true },
-      interaction.runnerEpoch,
-    );
-
-    expect(answer).toHaveBeenCalledTimes(1);
-    expect(engine.interactionNotice).toBe('This request is already being processed.');
-    pending.resolve();
-    await first;
-  });
-
-  it('answers a relayed confirm without holding the control lease', async () => {
-    engine.demo = undefined;
-    const session = { ...demoSnapshot.session, id: 's-chat' };
-    const relayed = { ...questionInteraction, id: 'relay.d1.interaction_1', runnerEpoch: '0' };
-    const local = { ...questionInteraction, id: 'interaction:q1', runnerEpoch: '0' };
-    engine.activeSessionId = session.id;
-    engine.sessionState = {
-      ...fromSnapshot(snapshotFor(session, [relayed, local])),
-      control: { heldByCurrentClient: false, holderClientId: 'other', generation: 3 },
-    };
-    const answer = vi.spyOn(api, 'answerInteraction').mockResolvedValue();
-    const takeControl = vi.spyOn(api, 'takeControl');
-
-    await engine.answerInteraction(relayed.id, { action: 'answer', value: false }, '0');
-
-    expect(answer).toHaveBeenCalledWith(
-      session.id,
-      relayed.id,
-      { action: 'answer', value: false },
-      undefined,
-    );
-    expect(takeControl).not.toHaveBeenCalled();
-    expect(engine.sessionState?.interactions).toEqual([local]);
-  });
-
-  it('applies delegations_changed to the open chat', () => {
-    const session = { ...demoSnapshot.session, id: 's-chat' };
-    const state = fromSnapshot(snapshotFor(session));
-    const delegation = {
-      id: 'd1',
-      title: 'Fix the tests',
-      workspace: 'repo on node',
-      status: 'running',
-      dispatch: 'approved',
-      targetSessionId: 'worker',
-    };
-    const updated = reduceEvent(
-      state,
-      normalizeEvent({
-        sessionId: session.id,
-        epoch: state.runnerEpoch,
-        sequence: 1,
-        type: 'delegations_changed',
-        data: { delegations: [delegation] },
-      }),
-    );
-    expect(updated.delegations).toEqual([delegation]);
-    expect(updated.needsSnapshot).toBe(false);
+    expect(engine.sessionState?.run?.status).toBe('succeeded');
   });
 
   it('answers a delegated approval from "Needs you" in the chat that holds it', async () => {

@@ -2,7 +2,7 @@
  * Session lists: the sidebar's rows under each workspace, and the workspace
  * pages. Pure functions, shared by the components and tests.
  */
-import type { ConversationMessage, SessionSummary, ToolCall } from './types';
+import type { SessionSummary } from './types';
 
 /** A run is open and working (waiting for an answer is "Needs you" instead). */
 export const isRunning = (session: SessionSummary) =>
@@ -28,118 +28,4 @@ export function sidebarSessions(
       session.workspaceId === workspaceId &&
       (session.id === activeId || (session.unread && !(skipWaiting && needsInput(session)))),
   );
-}
-
-/** A write refused because another session holds the lease (node/runner.ts `grantWrite`). */
-export interface WriteBlock {
-  path: string;
-  holderName: string;
-}
-
-const WRITE_BLOCKED =
-  /(\S+) is being written by session "(.+?)" \([^)]*\); wait until its run finishes/;
-
-export function writeBlock(tool: Pick<ToolCall, 'status' | 'output'>): WriteBlock | undefined {
-  if (tool.status !== 'failed' || !tool.output) return undefined;
-  const match = WRITE_BLOCKED.exec(tool.output);
-  return match ? { path: match[1]!, holderName: match[2]! } : undefined;
-}
-
-/** The session named in a refusal: one holding a lease now, else any of that name. */
-export function blockingSession(
-  sessions: SessionSummary[],
-  name: string,
-): SessionSummary | undefined {
-  return (
-    sessions.find((session) => session.writeLease && session.name === name) ??
-    sessions.find((session) => session.name === name)
-  );
-}
-
-/** An assistant turn that only called tools: no text, error or images. */
-export const toolsOnly = (message: ConversationMessage) =>
-  message.role === 'assistant' &&
-  !message.content &&
-  !message.stopReason &&
-  !message.errorMessage &&
-  !message.images?.length &&
-  !!message.tools?.length;
-
-export type TimelineItem =
-  | { kind: 'message'; message: ConversationMessage }
-  /** Consecutive tool-only assistant turns, shown as one run card. */
-  | { kind: 'run'; id: string; messages: ConversationMessage[] };
-
-/** Group consecutive tool-only turns (two or more) into run cards. */
-export function timelineItems(messages: ConversationMessage[]): TimelineItem[] {
-  const items: TimelineItem[] = [];
-  let run: ConversationMessage[] = [];
-  const flush = () => {
-    if (run.length > 1) items.push({ kind: 'run', id: `run:${run[0]!.id}`, messages: run });
-    else if (run.length) items.push({ kind: 'message', message: run[0]! });
-    run = [];
-  };
-  for (const message of messages) {
-    if (toolsOnly(message)) run.push(message);
-    else {
-      flush();
-      items.push({ kind: 'message', message });
-    }
-  }
-  flush();
-  return items;
-}
-
-export interface RunSummary {
-  count: number;
-  status: 'running' | 'failed' | 'succeeded';
-  /** Milliseconds from the first start to the last end, when known. */
-  durationMs: number | undefined;
-  /** File names the tools read or changed, in order, without repeats. */
-  files: string[];
-}
-
-const FILE_TOOLS = new Set(['read', 'edit', 'write']);
-
-/**
- * The calls behind some tool calls: a `ptc` script stands for the operations
- * it ran (none yet: the script itself), and capability lookups are left out.
- */
-export function effectiveTools(tools: ToolCall[]): ToolCall[] {
-  const calls = tools.flatMap((tool) =>
-    tool.name === 'ptc_docs' ? [] : tool.operations?.length ? tool.operations : [tool],
-  );
-  return calls.length ? calls : tools;
-}
-
-/** A script's operations in a few words: names in first-use order, with counts. */
-export function operationsSummary(operations: ToolCall[]): string {
-  const counts = new Map<string, number>();
-  for (const operation of operations)
-    counts.set(operation.name, (counts.get(operation.name) ?? 0) + 1);
-  return [...counts].map(([name, count]) => (count > 1 ? `${name} ×${count}` : name)).join(', ');
-}
-
-export function summarizeRun(tools: ToolCall[]): RunSummary {
-  const status = tools.some((tool) => tool.status === 'failed')
-    ? 'failed'
-    : tools.some((tool) => tool.status === 'running')
-      ? 'running'
-      : 'succeeded';
-  const starts = tools.map((tool) => Date.parse(tool.startedAt ?? '')).filter(Number.isFinite);
-  const ends = tools.map((tool) => Date.parse(tool.endedAt ?? '')).filter(Number.isFinite);
-  const durationMs =
-    starts.length && ends.length && status !== 'running'
-      ? Math.max(0, Math.max(...ends) - Math.min(...starts))
-      : undefined;
-  const files: string[] = [];
-  const calls = effectiveTools(tools);
-  for (const tool of calls) {
-    const path = (tool.input as { path?: unknown } | undefined)?.path;
-    if (!FILE_TOOLS.has(tool.name) || typeof path !== 'string' || !path) continue;
-    const parts = path.split('/').filter(Boolean);
-    const name = parts[parts.length - 1] ?? path;
-    if (!files.includes(name)) files.push(name);
-  }
-  return { count: calls.length, status, durationMs, files };
 }

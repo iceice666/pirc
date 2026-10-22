@@ -13,9 +13,6 @@ const snapshot: SessionSnapshot = {
   },
   runnerStatus: 'ready',
   run: { id: 'r1', status: 'running' },
-  messages: [],
-  interactions: [],
-  queue: [],
   control: { heldByCurrentClient: true, generation: 2 },
   cursor: '1',
   runnerEpoch: 'epoch-a',
@@ -26,155 +23,6 @@ function envelope(event: EventEnvelope['event'], cursor = '2'): EventEnvelope {
 }
 
 describe('session event reducer', () => {
-  it('streams into a partial message and replaces it on completion', () => {
-    let state = fromSnapshot(snapshot);
-    state = reduceEvent(
-      state,
-      envelope({
-        type: 'message_started',
-        message: {
-          id: 'm1',
-          role: 'assistant',
-          content: 'Hello',
-          createdAt: '2025-01-01T00:00:01Z',
-          isPartial: true,
-        },
-      }),
-    );
-    state = reduceEvent(
-      state,
-      envelope({ type: 'message_delta', messageId: 'm1', delta: ' world' }, '3'),
-    );
-    expect(state.messages[0]?.content).toBe('Hello world');
-    expect(state.messages[0]?.isPartial).toBe(true);
-
-    state = reduceEvent(
-      state,
-      envelope(
-        {
-          type: 'message_completed',
-          message: {
-            id: 'm1',
-            role: 'assistant',
-            content: 'Hello world!',
-            createdAt: '2025-01-01T00:00:01Z',
-          },
-        },
-        '4',
-      ),
-    );
-    expect(state.messages).toHaveLength(1);
-    expect(state.messages[0]?.content).toBe('Hello world!');
-    expect(state.messages[0]?.isPartial).toBeUndefined();
-  });
-
-  it('keeps a notice that arrives mid-stream above the finished reply', () => {
-    let state = fromSnapshot(snapshot);
-    state = reduceEvent(
-      state,
-      envelope({
-        type: 'message_started',
-        message: {
-          id: 'm1',
-          role: 'assistant',
-          content: '',
-          createdAt: '2025-01-01T00:00:01Z',
-          isPartial: true,
-        },
-      }),
-    );
-    state = reduceEvent(
-      state,
-      envelope(
-        {
-          type: 'message_completed',
-          message: {
-            id: 'notice-1',
-            role: 'system',
-            systemKind: 'notice',
-            content: 'Observational memory: recorded 1 observation(s)',
-            createdAt: '2025-01-01T00:00:02Z',
-          },
-        },
-        '3',
-      ),
-    );
-    state = reduceEvent(
-      state,
-      envelope(
-        {
-          type: 'message_completed',
-          message: {
-            id: 'm1',
-            role: 'assistant',
-            content: 'Final answer',
-            createdAt: '2025-01-01T00:00:01Z',
-          },
-        },
-        '4',
-      ),
-    );
-    expect(state.messages.map((message) => message.id)).toEqual(['notice-1', 'm1']);
-  });
-
-  it('upserts tool updates without duplicating tools', () => {
-    let state = fromSnapshot({
-      ...snapshot,
-      messages: [{ id: 'm1', role: 'assistant', content: '', createdAt: '2025-01-01T00:00:01Z' }],
-    });
-    state = reduceEvent(
-      state,
-      envelope({
-        type: 'tool_updated',
-        messageId: 'm1',
-        tool: { id: 't1', name: 'bash', status: 'running' },
-      }),
-    );
-    state = reduceEvent(
-      state,
-      envelope({
-        type: 'tool_updated',
-        messageId: 'm1',
-        tool: { id: 't1', name: 'bash', status: 'succeeded', output: 'ok' },
-      }),
-    );
-    expect(state.messages[0]?.tools).toEqual([
-      { id: 't1', name: 'bash', status: 'succeeded', output: 'ok' },
-    ]);
-  });
-
-  it('nests ptc operations under their ptc call, wherever the call is', () => {
-    let state = fromSnapshot({
-      ...snapshot,
-      messages: [
-        {
-          id: 'm1',
-          role: 'assistant',
-          content: '',
-          createdAt: '2025-01-01T00:00:01Z',
-          tools: [{ id: 'p1', name: 'ptc', status: 'running' }],
-        },
-        { id: 'm2', role: 'user', content: 'meanwhile', createdAt: '2025-01-01T00:00:02Z' },
-      ],
-    });
-    for (const tool of [
-      { id: 'o1', name: 'read', status: 'running' as const, parentId: 'p1' },
-      { id: 'o1', status: 'succeeded' as const, output: 'text', parentId: 'p1' },
-      { id: 'p1', status: 'running' as const, output: '1 operation' },
-    ])
-      state = reduceEvent(state, envelope({ type: 'tool_updated', tool }));
-    expect(state.messages[0]?.tools).toEqual([
-      {
-        id: 'p1',
-        name: 'ptc',
-        status: 'running',
-        output: '1 operation',
-        operations: [{ id: 'o1', name: 'read', status: 'succeeded', output: 'text' }],
-      },
-    ]);
-    expect(state.messages[1]?.tools).toBeUndefined();
-  });
-
   it('requires a fresh snapshot after reset or epoch mismatch', () => {
     const state = fromSnapshot(snapshot);
     expect(
@@ -182,7 +30,7 @@ describe('session event reducer', () => {
     ).toBe(true);
     expect(
       reduceEvent(state, {
-        ...envelope({ type: 'queue_updated', queue: [] }),
+        ...envelope({ type: 'noop' }),
         runnerEpoch: 'epoch-b',
       }).needsSnapshot,
     ).toBe(true);
@@ -214,64 +62,5 @@ describe('session event reducer', () => {
     const state = reduceEvent(fromSnapshot(snapshot), wire);
     expect(state.needsSnapshot).toBe(false);
     expect(state.cursor).toBe(wire.cursor);
-  });
-
-  it('applies interaction events immediately and requests snapshot reconciliation', () => {
-    const requested = normalizeEvent({
-      sessionId: 's1',
-      epoch: 'epoch-a',
-      sequence: 2,
-      type: 'interaction_created',
-      data: {
-        id: 'interaction:q0',
-        runnerEpoch: 0,
-        kind: 'confirm',
-        status: 'pending',
-        request: {
-          title: 'Continue?',
-          message: 'The agent asks.',
-          confirmLabel: 'Yes',
-          cancelLabel: 'No',
-        },
-      },
-    });
-    const answered = normalizeEvent({
-      sessionId: 's1',
-      epoch: 'epoch-a',
-      sequence: 3,
-      type: 'interaction_answered',
-      data: { interactionId: 'interaction:q0', interactionEpoch: 0 },
-    });
-
-    let state = reduceEvent(fromSnapshot(snapshot), requested);
-    expect(state.interactions.map((item) => item.id)).toEqual(['interaction:q0']);
-    expect(state.needsSnapshot).toBe(true);
-
-    state = reduceEvent(state, answered);
-    expect(state.interactions).toEqual([]);
-    expect(state.needsSnapshot).toBe(true);
-  });
-
-  it('keeps epoch-less legacy removals for snapshot reconciliation', () => {
-    const interaction = {
-      id: 'interaction:q1',
-      runnerEpoch: '5',
-      kind: 'confirm' as const,
-      status: 'pending' as const,
-      title: 'Continue?',
-    };
-    const state = fromSnapshot({ ...snapshot, interactions: [interaction] });
-    const legacyAnswered = normalizeEvent({
-      sessionId: 's1',
-      epoch: 'epoch-a',
-      sequence: 3,
-      type: 'interaction_answered',
-      data: { interactionId: interaction.id },
-    });
-
-    const updated = reduceEvent(state, legacyAnswered);
-
-    expect(updated.interactions).toEqual([interaction]);
-    expect(updated.needsSnapshot).toBe(true);
   });
 });

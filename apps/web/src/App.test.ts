@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // @vitest-environment-options {"url":"http://localhost/"}
 import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
 import { engine } from './lib/engine.svelte';
 import { stubMatchMedia } from './lib/testing/engine-state';
@@ -15,6 +15,12 @@ class FakeSocket extends EventTarget {
   static OPEN = 1;
   close() {}
 }
+
+// The pages are loaded on demand (App.svelte); transforming them the first
+// time takes longer than a waitFor, so it happens before the tests.
+beforeAll(async () => {
+  await Promise.all([import('./Engine.svelte'), import('./lib/components/rooms/Rooms.svelte')]);
+}, 60_000);
 
 beforeEach(() => {
   stubMatchMedia(false, true);

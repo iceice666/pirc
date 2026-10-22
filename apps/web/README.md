@@ -21,7 +21,7 @@ Vite proxies `/api` and WebSocket upgrades to `http://localhost:8787` in develop
 Two pages, room-first ([plans/rewrite/11-web.md](../../plans/rewrite/README.md)):
 
 - **Rooms** (`/`, `?room=<id>`): the room list (archived ones folded under it), the open room's messages and composer, and a right column with the members, a face's page or a worker's thread (the thread wins; on a phone each is a full page). Bottom tabs on a phone: Rooms, Members, Engine, Settings. State: `src/lib/rooms.svelte.ts`, which applies the room stream through the pure reducer `src/lib/room-events.ts`.
-- **Engine** (`/engine`): a front page (`?open=nodes|brain|loops|wakes|memory|sources`), the workspace/session tree, a workspace's details (`?workspace=`) and a session (`?session=`), read-only with its side panel. Sessions can only be renamed. State: `src/lib/engine.svelte.ts`.
+- **Engine** (`/engine`): a front page (`?open=nodes|brain|loops|wakes|memory|sources`), the workspace/session tree, a workspace's details (`?workspace=`) and a session (`?session=`), which shows only its panes (Files, Git, Memory, Context, Tasks, Terminal, Browser): no conversation, people talk to pirc in the rooms (plan 12 decision 4). Sessions can only be renamed. State: `src/lib/engine.svelte.ts`.
 
 The two states never import each other (`src/lib/boundaries.test.ts`); links carry the user between them. Settings (models & sources, devices, notifications, about) is one dialog both pages open.
 
@@ -30,10 +30,10 @@ Keyboard: arrows move through the room list; the message log and a thread are ta
 ## Runtime behavior
 
 - Fetch requests include forward-auth cookies with `credentials: include`.
-- Room events are reduced by `room-events.ts` and session events by `state.ts`; both are held to golden cases in [`fixtures/timeline`](../../fixtures/timeline/README.md) that the Android client shares. What a working worker does (shown on its anchor message) is derived here from its thread's messages; the gateway writes no progress messages.
+- Room events are reduced by `room-events.ts`, held to golden cases in [`fixtures/timeline/rooms`](../../fixtures/timeline/README.md) that the Android client shares. Session events (`state.ts`) only move the cursor, rename the session or ask for a fresh snapshot: the engine keeps a session's record, run and control lease, not its history. What a working worker does (shown on its anchor message) is derived here from its thread's messages; the gateway writes no progress messages.
 - Drafts are kept per room in local storage. They are never sent automatically.
 - A room can be muted on this device (its header's bell): the list lives in local storage and is copied to a cache the service worker reads, so that device shows no notifications from it. Other devices keep their own choice.
-- Only hashed Vite assets below `/assets/` are cached by the hand-written service worker. HTML, API responses, conversations, uploads, and credentials are never cached. Notifications open their room (`/?room=`) or the engine (`/engine?session=`, `/engine?open=memory`), and are not shown for the room or session on screen.
+- Only hashed Vite assets below `/assets/` are cached by the hand-written service worker. HTML, API responses, messages, uploads, and credentials are never cached. Notifications open their room (`/?room=`) or the engine (`/engine?session=`, `/engine?open=memory`), and are not shown for the room or session on screen.
 - A waiting service worker shows an update prompt and does not force a page reload.
 - If the API is unavailable in development, both pages load local demo data (`src/lib/mock.ts`: rooms, faces and a worker's thread; the engine's sessions) so the full layout remains reviewable. Production builds leave it out.
 

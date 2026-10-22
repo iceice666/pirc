@@ -5,7 +5,7 @@
  * `[x](src/x.ts#L10)`, `file:///…`) or as bare text / inline code
  * (`src/x.ts:10`, which the renderer turns into links; see {@link FILE_PATH_SOURCE}).
  * Followed as URLs they 404 against the web app, so {@link enhanceMarkdown}
- * intercepts them and asks the side panel to preview the file instead.
+ * intercepts them and asks the Files pane to preview the file instead.
  */
 
 /** A file to preview, optionally at a line range (1-based, inclusive). */
@@ -67,8 +67,7 @@ function lines(start?: string, end?: string): Pick<FileTarget, 'line' | 'endLine
  * The file an `href` points at, or undefined for web links, anchors and
  * other schemes. Line suffixes `:12`, `:12:3`, `:12-20`, `#L12`, `#L12-L20`
  * become a line range. A relative path resolves against `base` (the
- * directory of the document it appears in; the workspace root for
- * conversation messages).
+ * directory of the document it appears in; the workspace root otherwise).
  */
 export function parseFileLink(href: string | null | undefined, base = ''): FileTarget | undefined {
   let value = (href ?? '').trim();

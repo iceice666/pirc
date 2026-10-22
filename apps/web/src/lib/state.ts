@@ -1,20 +1,13 @@
-import { mergeTool, withOperation } from './pi-messages';
-import type {
-  ClientSessionState,
-  ConversationMessage,
-  EventEnvelope,
-  SessionSnapshot,
-  ToolCall,
-} from './types';
+/**
+ * The open session as the engine keeps it: its record, run, runner, cursor
+ * and control lease (types.ts `SessionSnapshot`). There is no conversation
+ * (plan 12 decision 4): the stream only moves the cursor, renames the
+ * session, or asks for a fresh snapshot.
+ */
+import type { ClientSessionState, EventEnvelope, SessionSnapshot } from './types';
 
 export function fromSnapshot(snapshot: SessionSnapshot): ClientSessionState {
-  const messages = snapshot.partialMessage
-    ? [
-        ...snapshot.messages.filter((message) => message.id !== snapshot.partialMessage?.id),
-        snapshot.partialMessage,
-      ]
-    : snapshot.messages;
-  return { ...snapshot, messages, needsSnapshot: false };
+  return { ...snapshot, needsSnapshot: false };
 }
 
 export function reduceEvent(
@@ -30,219 +23,11 @@ export function reduceEvent(
   switch (event.type) {
     case 'reset':
       return { ...base, needsSnapshot: true };
-    case 'session_deleted': // The app closes the session and returns to its chat list.
+    case 'session_deleted': // The app closes the session and shows its workspace.
     case 'noop':
     case 'panel_changed':
       return base;
-    case 'widget_updated': {
-      const widgets = { ...(state.widgets ?? {}) };
-      if (event.lines?.length) widgets[event.key] = event.lines;
-      else delete widgets[event.key];
-      return { ...base, widgets };
-    }
-    case 'status_updated': {
-      const statuses = { ...(state.statuses ?? {}) };
-      if (event.text) statuses[event.key] = event.text;
-      else delete statuses[event.key];
-      return { ...base, statuses };
-    }
-    case 'message_started': {
-      // Replace a stale partial with the same id; never clobber a finished message.
-      const messages = state.messages.filter(
-        (message) => !(message.id === event.message.id && message.isPartial),
-      );
-      return {
-        ...base,
-        messages: [
-          ...messages,
-          { ...event.message, id: uniqueId(messages, event.message.id, envelope) },
-        ],
-      };
-    }
-    case 'message_delta': {
-      let messages = state.messages;
-      let index = event.messageId
-        ? messages.findIndex((message) => message.id === event.messageId)
-        : findLastIndex(messages, (message) => message.role === 'assistant' && !!message.isPartial);
-      if (index === -1) {
-        if (event.messageId) return base;
-        // Joined mid-stream without a message_start: open a live partial.
-        messages = [
-          ...messages,
-          {
-            id: uniqueId(messages, 'assistant-live', envelope),
-            role: 'assistant',
-            content: '',
-            createdAt: new Date().toISOString(),
-            isPartial: true,
-          },
-        ];
-        index = messages.length - 1;
-      }
-      return {
-        ...base,
-        messages: messages.map((message, position) =>
-          position !== index
-            ? message
-            : event.channel === 'thinking'
-              ? { ...message, thinking: (message.thinking ?? '') + event.delta, isPartial: true }
-              : { ...message, content: message.content + event.delta, isPartial: true },
-        ),
-      };
-    }
-    case 'message_completed': {
-      const incoming = event.message;
-      let index = state.messages.findIndex(
-        (message) => message.id === incoming.id && message.isPartial,
-      );
-      // The agent may omit timestamps on partials; the newest partial of the same role is the one ending.
-      if (index === -1 && incoming.role === 'assistant')
-        index = findLastIndex(
-          state.messages,
-          (message) => message.role === 'assistant' && !!message.isPartial,
-        );
-      if (index === -1) {
-        if (state.messages.some((message) => message.id === incoming.id && !message.isPartial)) {
-          // Same message delivered twice (replay after reconnect): keep the newest copy.
-          return {
-            ...base,
-            messages: state.messages.map((message) =>
-              message.id === incoming.id ? withTools(incoming, message) : message,
-            ),
-          };
-        }
-        return { ...base, messages: appendCompleted(state.messages, incoming) };
-      }
-      const previous = state.messages[index]!;
-      return {
-        ...base,
-        messages: state.messages.map((message, position) =>
-          position === index ? { ...withTools(incoming, previous), id: previous.id } : message,
-        ),
-      };
-    }
-    case 'tool_updated': {
-      const tool = event.tool;
-      // A ptc operation goes under its ptc call.
-      if (tool.parentId) {
-        const parentId = tool.parentId;
-        const owner = findLastIndex(
-          state.messages,
-          (message) => !!message.tools?.some((item) => item.id === parentId),
-        );
-        if (owner !== -1)
-          return {
-            ...base,
-            messages: state.messages.map((message, position) =>
-              position === owner
-                ? { ...message, tools: withOperation(message.tools ?? [], parentId, tool)! }
-                : message,
-            ),
-          };
-      }
-      let index = event.messageId
-        ? state.messages.findIndex((message) => message.id === event.messageId)
-        : findLastIndex(
-            state.messages,
-            (message) => !!message.tools?.some((item) => item.id === tool.id),
-          );
-      if (index === -1 && !event.messageId)
-        index = findLastIndex(state.messages, (message) => message.role === 'assistant');
-      if (index === -1) return base;
-      return {
-        ...base,
-        messages: state.messages.map((message, position) =>
-          position === index
-            ? { ...message, tools: upsertTool(message.tools ?? [], tool) }
-            : message,
-        ),
-      };
-    }
-    case 'run_updated':
-      return { ...base, run: event.run, runnerStatus: event.runnerStatus ?? state.runnerStatus };
-    case 'interaction_updated':
-      return {
-        ...base,
-        interactions: state.interactions.some((item) => item.id === event.interaction.id)
-          ? state.interactions.map((item) =>
-              item.id === event.interaction.id ? event.interaction : item,
-            )
-          : [...state.interactions, event.interaction],
-        // Interactions are sent as incremental events, but a concurrent
-        // snapshot may have been captured before this event. Keep
-        // the immediate update and ask the app to reconcile with a fresh view.
-        needsSnapshot: true,
-      };
-    case 'interaction_removed':
-      // Legacy events do not carry the interaction row's runner epoch. An id
-      // can be reused by a later runner, so an epoch-less removal must never
-      // erase a newer question from the current snapshot.
-      if (event.runnerEpoch === undefined) return { ...base, needsSnapshot: true };
-      return {
-        ...base,
-        interactions: state.interactions.filter(
-          (item) => item.id !== event.interactionId || item.runnerEpoch !== event.runnerEpoch,
-        ),
-        needsSnapshot: true,
-      };
-    case 'queue_updated':
-      return { ...base, queue: event.queue };
-    case 'delegations_changed':
-      return { ...base, delegations: event.delegations };
-    case 'approval_mode_changed':
-      return { ...base, approvalMode: event.mode };
-    case 'control_updated':
-      return { ...base, control: event.control };
-    case 'session_updated':
-      return { ...base, session: event.session };
     case 'session_renamed':
       return { ...base, session: { ...state.session, name: event.name } };
   }
-}
-
-/**
- * Append a finished entry. A notice raised while an assistant turn is still
- * streaming goes above that turn: the partial is replaced in place when it
- * completes, so appending would leave the earlier notice stuck below the final
- * reply. Snapshots order it the same way (see `interleave`).
- */
-function appendCompleted(
-  messages: ConversationMessage[],
-  incoming: ConversationMessage,
-): ConversationMessage[] {
-  const last = messages[messages.length - 1];
-  if (incoming.systemKind === 'notice' && last?.role === 'assistant' && last.isPartial)
-    return [...messages.slice(0, -1), incoming, last];
-  return [...messages, incoming];
-}
-
-function upsertTool(tools: ToolCall[], tool: Pick<ToolCall, 'id'> & Partial<ToolCall>): ToolCall[] {
-  return tools.some((item) => item.id === tool.id)
-    ? tools.map((item) => (item.id === tool.id ? mergeTool(item, tool) : item))
-    : [...tools, mergeTool(undefined, tool)];
-}
-
-/** Carry live tool results onto the final message, which only knows the calls. */
-function withTools(
-  incoming: ConversationMessage,
-  previous: ConversationMessage,
-): ConversationMessage {
-  if (!previous.tools?.length) return incoming;
-  const known = new Map(previous.tools.map((tool) => [tool.id, tool]));
-  const tools = (incoming.tools ?? []).map((tool) => {
-    const existing = known.get(tool.id);
-    known.delete(tool.id);
-    return existing ? mergeTool(existing, { ...tool, status: existing.status }) : tool;
-  });
-  return { ...incoming, tools: [...tools, ...known.values()] };
-}
-
-function uniqueId(messages: ConversationMessage[], id: string, envelope: EventEnvelope): string {
-  return messages.some((message) => message.id === id) ? `${id}-${envelope.cursor}` : id;
-}
-
-function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
-  for (let index = items.length - 1; index >= 0; index -= 1)
-    if (predicate(items[index]!)) return index;
-  return -1;
 }

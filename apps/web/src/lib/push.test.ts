@@ -2,14 +2,7 @@
 // @vitest-environment-options {"url":"http://localhost"}
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { engine } from './engine.svelte';
-import {
-  currentSubscriptionId,
-  disablePush,
-  enablePush,
-  interactionFromUrl,
-  pushState,
-  targetFromUrl,
-} from './push';
+import { currentSubscriptionId, disablePush, enablePush, pushState, targetFromUrl } from './push';
 
 const response = (value: unknown, status = 200) =>
   new Response(value === undefined ? null : JSON.stringify(value), { status });
@@ -131,22 +124,6 @@ describe('where a notification leads', () => {
     expect(at('?session=s%201')).toEqual({ sessionId: 's 1' });
     expect(at('?open=memory')).toEqual({ memory: true });
     expect(at('')).toBeUndefined();
-  });
-
-  it('reads only a complete exact interaction tuple from a clicked notification URL', () => {
-    expect(
-      interactionFromUrl(
-        new URL('https://pirc.example/?session=s1&interactionId=q1&interactionEpoch=42'),
-      ),
-    ).toEqual({ sessionId: 's1', interactionId: 'q1', interactionEpoch: '42' });
-    expect(
-      interactionFromUrl(
-        new URL('https://pirc.example/?session=s1&interactionId=q1&interactionEpoch=042'),
-      ),
-    ).toBeUndefined();
-    expect(
-      interactionFromUrl(new URL('https://pirc.example/?session=s1&interactionId=q1')),
-    ).toBeUndefined();
   });
 
   it('opens the memory on the engine’s front page', async () => {

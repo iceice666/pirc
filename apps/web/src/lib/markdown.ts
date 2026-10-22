@@ -1,5 +1,5 @@
 /**
- * Markdown → sanitized HTML for conversation content.
+ * Markdown → sanitized HTML for previewed documents (the Files pane).
  *
  * - GFM (tables, task lists, strikethrough) via marked
  * - LaTeX via KaTeX: `$…$`, `\(…\)` inline; `$$…$$`, `\[…\]` display
@@ -237,7 +237,7 @@ function purifier() {
     });
     DOMPurify.addHook('afterSanitizeAttributes', (node) => {
       if (node.tagName !== 'A' || !node.getAttribute('href')) return;
-      // Workspace file links open in the side panel (see enhanceMarkdown), not a new tab.
+      // Workspace file links open in the Files pane (see enhanceMarkdown), not a new tab.
       if (localFilePath(node.getAttribute('href'))) {
         node.removeAttribute('target');
         node.setAttribute('data-file-link', '');
@@ -310,16 +310,9 @@ export function renderMarkdownChecked(
  */
 export const MAX_HIGHLIGHT = 200_000;
 
-/** Highlight a standalone snippet (tool input/output). Returns sanitized HTML. */
+/** Highlight a standalone snippet (a previewed file). Returns sanitized HTML. */
 export function highlightCode(code: string, language?: string): string {
   return code.length > MAX_HIGHLIGHT ? escapeHtml(code) : highlight(code, language ?? '');
-}
-
-/** At most `MAX_HIGHLIGHT` characters of `text`, with a note of how much was cut. */
-export function clipText(text: string): string {
-  if (text.length <= MAX_HIGHLIGHT) return text;
-  const rest = text.length - MAX_HIGHLIGHT;
-  return `${text.slice(0, MAX_HIGHLIGHT)}\n… ${rest.toLocaleString('en')} more characters not shown`;
 }
 
 const EXTENSION_LANGUAGES: Record<string, string> = {
@@ -448,8 +441,8 @@ interface EnhanceParams {
 
 /**
  * Svelte action: copy buttons on code blocks, workspace file links (opened in
- * the side panel) and lazy Mermaid rendering.
- * Diagrams render only once `ready` is true (i.e. the message stopped streaming),
+ * the Files pane) and lazy Mermaid rendering.
+ * Diagrams render only once `ready` is true (i.e. the text stopped streaming),
  * since a half-written diagram cannot be parsed.
  */
 export function enhanceMarkdown(node: HTMLElement, params: EnhanceParams) {

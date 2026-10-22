@@ -1,10 +1,10 @@
 <script lang="ts">
   /**
-   * Right-hand side panel, Codex/ChatGPT style: a tab strip over Files, Git,
-   * Memory, Tasks, Terminal and Browser. A tab mounts on first visit and then stays
-   * mounted (hidden) so its folder, open file, diff and scroll position survive
-   * tab switches; each tab loads and refreshes its own data while it is shown.
-   * The left edge is a drag handle that resizes the panel.
+   * A session's page: its panes (plan 12 decision 4, no conversation). A tab
+   * strip over Files, Git, Memory, Context, Tasks, Terminal and Browser. A tab
+   * mounts on first visit and then stays mounted (hidden) so its folder, open
+   * file, diff and scroll position survive tab switches; each tab loads and
+   * refreshes its own data while it is shown.
    */
   import {
     Brain,
@@ -31,28 +31,10 @@
   import './panel.css';
 
   interface Props {
-    open?: boolean;
     tab?: PanelTab;
-    /** Current width in px; the drag handle reports new widths through `onresize`. */
-    width?: number;
-    minWidth?: number;
-    maxWidth?: number;
-    defaultWidth?: number;
-    onresize?: (width: number) => void;
-    /** True while the edge is being dragged (the parent disables width transitions). */
-    resizing?: boolean;
   }
 
-  let {
-    open = true,
-    tab = $bindable('files'),
-    width = 360,
-    minWidth = 280,
-    maxWidth = 900,
-    defaultWidth = 360,
-    onresize = () => {},
-    resizing = $bindable(false),
-  }: Props = $props();
+  let { tab = $bindable('files') }: Props = $props();
 
   let openRequest: (FileTarget & { seq: number }) | undefined = $state();
   let openSeq = 0;
@@ -94,7 +76,7 @@
     if (!shownTabs.some((item) => item.id === tab)) tab = 'files';
   });
   $effect.pre(() => {
-    if (open) mounted.add(tab);
+    mounted.add(tab);
   });
 
   function openFile(target: string | FileTarget) {
@@ -102,47 +84,8 @@
     openRequest = { ...(typeof target === 'string' ? { path: target } : target), seq: ++openSeq };
     tab = 'files';
   }
-  // File links in the conversation (and in previewed documents) open here.
+  // File links in previewed documents (and Git, Context) open here.
   onDestroy(onFilePreviewRequest(openFile));
-
-  let dragStartX = 0;
-  let dragStartWidth = 0;
-  const clampWidth = (value: number) => Math.round(Math.min(maxWidth, Math.max(minWidth, value)));
-
-  function startResize(event: PointerEvent) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    dragStartX = event.clientX;
-    dragStartWidth = width;
-    resizing = true;
-  }
-  function moveResize(event: PointerEvent) {
-    // The handle sits on the panel's left edge, so dragging left widens it.
-    if (resizing) onresize(clampWidth(dragStartWidth + dragStartX - event.clientX));
-  }
-  function endResize(event: PointerEvent) {
-    if (!resizing) return;
-    resizing = false;
-    const handle = event.currentTarget as HTMLElement;
-    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
-  }
-  function keyResize(event: KeyboardEvent) {
-    const step = event.shiftKey ? 64 : 16;
-    const next =
-      event.key === 'ArrowLeft'
-        ? width + step
-        : event.key === 'ArrowRight'
-          ? width - step
-          : event.key === 'Home'
-            ? maxWidth
-            : event.key === 'End'
-              ? minWidth
-              : undefined;
-    if (next === undefined) return;
-    event.preventDefault();
-    onresize(clampWidth(next));
-  }
 
   const badge = $derived({
     tasks: (engine.panel.value?.backgroundTasks ?? []).filter((task) => task.status === 'running')
@@ -151,32 +94,11 @@
   } as Record<string, number>);
 </script>
 
-<aside class:open class="details side-panel" aria-label="Session side panel">
-  <!-- A focusable separator is an interactive ARIA widget (WAI-ARIA window splitter). -->
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-  <div
-    class="panel-resizer"
-    class:active={resizing}
-    role="separator"
-    aria-orientation="vertical"
-    aria-label="Resize side panel"
-    aria-valuenow={width}
-    aria-valuemin={minWidth}
-    aria-valuemax={maxWidth}
-    tabindex={open ? 0 : -1}
-    title="Drag to resize · double-click to reset"
-    onpointerdown={startResize}
-    onpointermove={moveResize}
-    onpointerup={endResize}
-    onpointercancel={endResize}
-    onlostpointercapture={() => (resizing = false)}
-    ondblclick={() => onresize(clampWidth(defaultWidth))}
-    onkeydown={keyResize}
-  ></div>
+<section class="session-panes" aria-label="Session">
   <div
     class="panel-tabs"
     role="tablist"
-    aria-label="Side panel"
+    aria-label="Panes"
     use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
   >
     {#each shownTabs as item (item.id)}
@@ -214,28 +136,28 @@
             aria-labelledby="panel-tab-{item.id}"
           >
             {#if item.id === 'files'}
-              <FilesTab {sessionId} {openRequest} active={open && tab === 'files'} />
+              <FilesTab {sessionId} {openRequest} active={tab === 'files'} />
             {:else if item.id === 'git'}
-              <GitTab {sessionId} active={open && tab === 'git'} onopenfile={openFile} />
+              <GitTab {sessionId} active={tab === 'git'} onopenfile={openFile} />
             {:else if item.id === 'memory'}
-              <MemoryTab active={open && tab === 'memory'} />
+              <MemoryTab active={tab === 'memory'} />
             {:else if item.id === 'context'}
-              <ContextTab {sessionId} active={open && tab === 'context'} onopenfile={openFile} />
+              <ContextTab {sessionId} active={tab === 'context'} onopenfile={openFile} />
             {:else if item.id === 'tasks'}
-              <TasksTab {sessionId} active={open && tab === 'tasks'} />
+              <TasksTab {sessionId} active={tab === 'tasks'} />
             {:else if item.id === 'browser'}
               <BrowserTab
                 {sessionId}
                 generation={engine.generation}
                 hasControl={engine.hasControl}
-                active={open && tab === 'browser'}
+                active={tab === 'browser'}
               />
             {:else}
               <TerminalTab
                 {sessionId}
                 generation={engine.generation}
                 hasControl={engine.hasControl}
-                active={open && tab === 'terminal'}
+                active={tab === 'terminal'}
               />
             {/if}
           </div>
@@ -243,69 +165,24 @@
       {/each}
     {/if}
   </div>
-</aside>
+</section>
 
 <style>
-  /* ───────────── Right details panel ───────────── */
-  .details {
-    position: relative;
-    /* Keeps its width while the track animates closed; the grid clips the rest. */
-    width: var(--panel-width, 360px);
+  .session-panes {
+    flex: 1 1 0;
     min-width: 0;
-    overflow-y: auto;
-    padding: 8px 12px 16px;
-    border-left: 1px solid var(--line);
-    background: var(--bg-sidebar);
-    transition:
-      opacity var(--layout-duration) var(--ease),
-      visibility var(--layout-duration);
-  }
-  .details:not(.open) {
-    visibility: hidden;
-    opacity: 0;
-  }
-  /* ───────────── Side panel (tabs) ───────────── */
-  .side-panel {
+    min-height: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding: 0;
-    container: side-panel / inline-size;
-  }
-  .panel-resizer {
-    position: absolute;
-    z-index: 5;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: 7px;
-    cursor: col-resize;
-    touch-action: none;
-  }
-  .panel-resizer::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: 2px;
-    background: transparent;
-    transition: background 0.15s var(--ease);
-  }
-  .panel-resizer:hover::after,
-  .panel-resizer:focus-visible::after,
-  .panel-resizer.active::after {
-    background: var(--accent);
-  }
-  .panel-resizer:focus-visible {
-    outline: 0;
+    container: session-panes / inline-size;
   }
   .panel-tabs {
     flex: none;
     display: flex;
     align-items: center;
     gap: 2px;
-    padding: 8px 8px 6px;
+    padding: 4px 16px 6px;
     overflow-x: auto;
     border-bottom: 1px solid var(--line);
     scrollbar-width: none;
@@ -339,7 +216,7 @@
     color: var(--ink);
     background: var(--bg-active);
   }
-  @container side-panel (max-width: 459px) {
+  @container session-panes (max-width: 459px) {
     .panel-tabs > button[role='tab']:not(.active) .tab-label {
       display: none;
     }
@@ -367,52 +244,19 @@
     position: absolute;
     inset: 0;
     overflow-y: auto;
-    padding: 4px 12px 16px;
+    padding: 8px 20px 16px;
   }
   /* Not display:none, which would lose the scroll offset; skips rendering instead. */
   .tab-slot.hidden {
     visibility: hidden;
     content-visibility: hidden;
   }
-  @media (max-width: 860px) {
-    .panel-resizer {
-      display: none;
-    }
-    .details {
-      position: fixed;
-      z-index: 25;
-      top: calc(56px + env(safe-area-inset-top));
-      right: 8px;
-      bottom: max(8px, env(safe-area-inset-bottom));
-      width: min(420px, calc(100% - 16px));
-      border: 0;
-      border-radius: var(--radius-xl);
-      background: var(--bg-layer);
-      box-shadow: var(--shadow-pop);
-      visibility: hidden;
-      transform: translateX(calc(100% + 16px));
-      opacity: 0;
-      transition:
-        transform 0.2s var(--ease),
-        opacity 0.2s var(--ease),
-        visibility 0.2s;
-    }
-    .details.open {
-      visibility: visible;
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
   @media (max-width: 650px) {
-    .details {
-      right: 0;
-      bottom: 0;
-      width: 100%;
-      padding-bottom: env(safe-area-inset-bottom);
-      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    .panel-tabs {
+      padding-inline: 8px;
     }
-    .panel-tabs .tab-label {
-      display: none;
+    .tab-slot {
+      padding: 4px 12px calc(16px + env(safe-area-inset-bottom));
     }
   }
   .tab-slot:has(> :global(.terminal-tab)) {

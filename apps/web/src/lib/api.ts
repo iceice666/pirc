@@ -1,38 +1,24 @@
-import {
-  interleave,
-  piHistory,
-  piMessage,
-  piNotification,
-  piPartialMessage,
-  toolResultFields,
-} from './pi-messages';
 import { ApiError, request } from './http';
 import { getClientId } from './storage';
 import type {
-  ApprovalMode,
   BackendModel,
   BackendPreset,
   BackendProbeInput,
   BackendProviderInput,
   BackendSettingsSnapshot,
-  ChatDelegation,
   ConnectionTestResult,
   DiscoveredModel,
   ProviderAuthSession,
   ControlLease,
   EventEnvelope,
   GatewayEvent,
-  InteractionAnswer,
   ModeInfo,
   NewWorkspace,
   NodeSummary,
-  PendingInteraction,
-  QueueItem,
   SessionOrigin,
   SessionSnapshot,
   SessionSummary,
   SessionUpdateInput,
-  ThinkingLevel,
   Workspace,
 } from './types';
 
@@ -103,73 +89,6 @@ function sessionOrigin(raw: any): SessionOrigin | undefined {
   return undefined;
 }
 
-/** A chat's active delegations (snapshot `delegations`, `delegations_changed`); malformed items dropped. */
-function chatDelegations(raw: unknown): ChatDelegation[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter(
-      (item: any) =>
-        typeof item?.id === 'string' &&
-        typeof item.targetSessionId === 'string' &&
-        (item.status === 'running' || item.status === 'waiting_input'),
-    )
-    .map((item: any) => ({
-      id: item.id,
-      title: String(item.title ?? ''),
-      workspace: String(item.workspace ?? ''),
-      status: item.status,
-      dispatch: item.dispatch === 'auto' ? 'auto' : 'approved',
-      targetSessionId: item.targetSessionId,
-    }));
-}
-
-function interaction(raw: any): PendingInteraction {
-  const request = raw.request ?? {};
-  const base = {
-    id: raw.id,
-    runnerEpoch: String(raw.runnerEpoch),
-    ...(typeof request.toolCallId === 'string' ? { toolCallId: request.toolCallId } : {}),
-    title: request.title ?? 'The agent needs your input',
-    description: request.message,
-    ...(typeof raw.expiresAt === 'number' ? { expiresAt: iso(raw.expiresAt) } : {}),
-    status: raw.status ?? 'pending',
-  } as const;
-  if (raw.kind === 'select')
-    return {
-      ...base,
-      kind: 'select',
-      ...(request.multiple ? { multiple: true } : {}),
-      options: (request.options ?? []).map((value: string, index: number) => ({
-        value,
-        label: value,
-        ...(request.optionDescriptions?.[index]
-          ? { description: request.optionDescriptions[index] }
-          : {}),
-      })),
-    };
-  if (raw.kind === 'confirm')
-    return {
-      ...base,
-      kind: 'confirm',
-      ...(typeof request.confirmLabel === 'string' ? { confirmLabel: request.confirmLabel } : {}),
-      ...(typeof request.cancelLabel === 'string' ? { cancelLabel: request.cancelLabel } : {}),
-      ...(request.allowAgain === true ? { allowAgain: true } : {}),
-      ...(typeof request.relayed?.sessionId === 'string'
-        ? {
-            relayed: {
-              sessionId: request.relayed.sessionId,
-              sessionName: String(request.relayed.sessionName ?? ''),
-              workspace: String(request.relayed.workspace ?? ''),
-              delegationId: String(request.relayed.delegationId ?? ''),
-            },
-          }
-        : {}),
-    };
-  if (raw.kind === 'editor')
-    return { ...base, kind: 'editor', initialValue: request.prefill ?? '' };
-  return { ...base, kind: 'input', placeholder: request.placeholder };
-}
-
 function controlLease(raw: any, clientId = getClientId()): ControlLease {
   const lease = raw?.lease ?? raw;
   if (!lease) return { heldByCurrentClient: false };
@@ -188,11 +107,10 @@ async function normalizeSnapshot(raw: any): Promise<SessionSnapshot> {
 }
 
 /**
- * A gateway snapshot (plus its control lease) as client state. Pure, so the
- * shared timeline fixtures (`fixtures/timeline`) can pin it for every client.
+ * A gateway snapshot (plus its control lease) as what the engine keeps of a
+ * session: no history, questions or queues (plan 12 decision 4).
  */
 export function snapshotFromRaw(raw: any, lease: unknown): SessionSnapshot {
-  const partial = piPartialMessage(raw.partialMessage);
   return {
     session: sessionSummary(raw.session),
     runnerStatus: raw.session.runnerState ?? 'stopped',
@@ -205,21 +123,9 @@ export function snapshotFromRaw(raw: any, lease: unknown): SessionSnapshot {
           failureReason: raw.run.failureReason ?? undefined,
         }
       : null,
-    messages: interleave(
-      piHistory(raw.history ?? [], Array.isArray(raw.operations) ? raw.operations : []),
-      (raw.notifications ?? [])
-        .filter((item: any) => item?.method === 'notify')
-        .map(piNotification),
-    ),
-    partialMessage: partial,
-    interactions: (raw.interactions ?? []).map(interaction),
-    ...(Array.isArray(raw.delegations) ? { delegations: chatDelegations(raw.delegations) } : {}),
-    queue: queueItems(raw.queue ?? {}, iso(undefined)),
     control: controlLease(lease),
     cursor: `${raw.watermark?.epoch ?? 0}:${raw.watermark?.sequence ?? 0}`,
     runnerEpoch: String(raw.watermark?.epoch ?? raw.session.runnerEpoch ?? 0),
-    widgets: raw.widgets ?? {},
-    statuses: raw.statuses ?? {},
     ...(typeof raw.sandbox?.active === 'boolean'
       ? {
           sandbox: {
@@ -228,45 +134,8 @@ export function snapshotFromRaw(raw: any, lease: unknown): SessionSnapshot {
           },
         }
       : {}),
-    ...(raw.agent?.model?.id ? { selectedModelId: raw.agent.model.id } : {}),
-    ...(raw.agent?.model?.provider ? { selectedModelProvider: raw.agent.model.provider } : {}),
-    ...(thinkingLevels.includes(raw.agent?.thinkingLevel)
-      ? { thinkingLevel: raw.agent.thinkingLevel as ThinkingLevel }
-      : {}),
-    ...(approvalModes.includes(raw.agent?.approvalMode)
-      ? { approvalMode: raw.agent.approvalMode as ApprovalMode }
-      : {}),
-    ...(approvalModes.includes(raw.agent?.defaultApprovalMode)
-      ? { defaultApprovalMode: raw.agent.defaultApprovalMode as ApprovalMode }
-      : {}),
   };
 }
-
-/** Pi's steering and follow-up queues (snapshot or `queue_update`) as queue items. */
-function queueItems(
-  raw: { steering?: string[]; followUp?: string[] },
-  createdAt: string,
-): QueueItem[] {
-  return [
-    ...(raw.steering ?? []).map((content, index) => ({
-      id: `steer-${index}`,
-      kind: 'steer' as const,
-      index,
-      content,
-      createdAt,
-    })),
-    ...(raw.followUp ?? []).map((content, index) => ({
-      id: `follow-${index}`,
-      kind: 'follow_up' as const,
-      index,
-      content,
-      createdAt,
-    })),
-  ];
-}
-
-const thinkingLevels: unknown[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
-const approvalModes: unknown[] = ['read-only', 'auto', 'full-access'];
 
 /** Settings never use browser caches or expose upstream error bodies. */
 function backendRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -403,33 +272,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ clientId: getClientId(), generation }),
     }),
-  answerInteraction: (
-    sessionId: string,
-    interactionId: string,
-    answer: InteractionAnswer,
-    /** Omitted for a relayed (`relay.`) interaction: it needs no control lease. */
-    generation?: number,
-  ) => {
-    const rpcAnswer =
-      answer.action === 'cancel'
-        ? { cancelled: true }
-        : typeof answer.value === 'boolean'
-          ? { confirmed: answer.value, ...(answer.value && answer.again ? { again: true } : {}) }
-          : Array.isArray(answer.value)
-            ? { value: answer.value.join(', '), values: answer.value }
-            : { value: answer.value };
-    return request<void>(
-      `/api/sessions/${encodeURIComponent(sessionId)}/interactions/${encodeURIComponent(interactionId)}/answer`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          clientId: getClientId(),
-          ...(generation !== undefined ? { generation } : {}),
-          answer: rpcAnswer,
-        }),
-      },
-    );
-  },
   /**
    * Allow or deny a delegated session's confirm relayed to the chat that
    * started it (`relay.` ids). No control lease: the gateway answers it
@@ -468,105 +310,19 @@ const SNAPSHOT_EVENTS = new Set([
 ]);
 /** Agent lifecycle events that change run status. */
 const RUN_EVENTS = new Set(['agent_start', 'agent_end', 'agent_settled']);
+/**
+ * What the agent says, its widgets and the delegations a chat started: the
+ * engine shows no conversation (plan 12 decision 4), so they only move the cursor.
+ */
+const CONVERSATION_EVENTS = new Set(['notification', 'delegations_changed', 'runner_stderr']);
 
-/** A `ptc` operation's link to its `ptc` call. */
-const parentOf = (pi: any): { parentId?: string } =>
-  typeof pi.parentToolCallId === 'string' ? { parentId: pi.parentToolCallId } : {};
-
-function piEvent(pi: any, timestamp: unknown): GatewayEvent {
-  switch (pi.type) {
-    case 'message_start': {
-      if (pi.message?.role !== 'assistant') return { type: 'noop' };
-      const message = piMessage(pi.message);
-      return message
-        ? { type: 'message_started', message: { ...message, isPartial: true } }
-        : { type: 'noop' };
-    }
-    case 'message_update': {
-      const delta = pi.assistantMessageEvent ?? {};
-      if (delta.type === 'text_delta' || delta.type === 'thinking_delta')
-        return {
-          type: 'message_delta',
-          delta: delta.delta ?? '',
-          channel: delta.type === 'thinking_delta' ? 'thinking' : 'text',
-        };
-      if (delta.type === 'toolcall_start' && delta.id)
-        return {
-          type: 'tool_updated',
-          tool: { id: delta.id, name: delta.toolName ?? 'tool', status: 'running' },
-        };
-      if (delta.type === 'toolcall_end' && delta.toolCall?.id)
-        return {
-          type: 'tool_updated',
-          tool: {
-            id: delta.toolCall.id,
-            name: delta.toolCall.name ?? 'tool',
-            input: delta.toolCall.arguments,
-            status: 'running',
-          },
-        };
-      return { type: 'noop' };
-    }
-    case 'message_end': {
-      const raw = pi.message;
-      if (raw?.role === 'toolResult')
-        return {
-          type: 'tool_updated',
-          tool: {
-            id: raw.toolCallId,
-            name: raw.toolName,
-            status: raw.isError ? 'failed' : 'succeeded',
-            ...toolResultFields(raw),
-          },
-        };
-      const message = piMessage(raw);
-      return message ? { type: 'message_completed', message } : { type: 'noop' };
-    }
-    case 'tool_execution_start':
-      return {
-        type: 'tool_updated',
-        tool: {
-          id: pi.toolCallId,
-          name: pi.toolName,
-          input: pi.args,
-          status: 'running',
-          startedAt: iso(timestamp),
-          ...parentOf(pi),
-        },
-      };
-    case 'tool_execution_update':
-      return {
-        type: 'tool_updated',
-        tool: { id: pi.toolCallId, ...toolResultFields(pi.partialResult), ...parentOf(pi) },
-      };
-    case 'tool_execution_end':
-      return {
-        type: 'tool_updated',
-        tool: {
-          id: pi.toolCallId,
-          name: pi.toolName,
-          status: pi.isError ? 'failed' : 'succeeded',
-          endedAt: iso(timestamp),
-          ...toolResultFields(pi.result),
-          ...parentOf(pi),
-        },
-      };
-    case 'queue_update':
-      return { type: 'queue_updated', queue: queueItems(pi, iso(timestamp)) };
-    case 'approval_mode_changed':
-      return approvalModes.includes(pi.mode)
-        ? { type: 'approval_mode_changed', mode: pi.mode as ApprovalMode }
-        : { type: 'noop' };
-    case 'panel_changed':
-      return {
-        type: 'panel_changed',
-        sections: Array.isArray(pi.sections) ? pi.sections.map(String) : [],
-      };
-    default:
-      return RUN_EVENTS.has(pi.type)
-        ? { type: 'reset', reason: 'cursor_expired' }
-        : { type: 'noop' };
-  }
+function piEvent(pi: any): GatewayEvent {
+  if (pi.type === 'panel_changed')
+    return {
+      type: 'panel_changed',
+      sections: Array.isArray(pi.sections) ? pi.sections.map(String) : [],
+    };
+  return RUN_EVENTS.has(pi.type) ? { type: 'reset', reason: 'cursor_expired' } : { type: 'noop' };
 }
 
 export function normalizeEvent(raw: any): EventEnvelope {
@@ -574,43 +330,10 @@ export function normalizeEvent(raw: any): EventEnvelope {
   let event: GatewayEvent = { type: 'reset', reason: 'epoch_changed' };
   if (raw.type === 'reset') event = { type: 'reset', reason: raw.reason ?? 'cursor_expired' };
   else if (raw.type === 'session_deleted') event = { type: 'session_deleted' };
-  else if (raw.type === 'interaction_created' && typeof raw.data?.id === 'string')
-    event = { type: 'interaction_updated', interaction: interaction(raw.data) };
-  else if (raw.type === 'interaction_answered' && typeof raw.data?.interactionId === 'string') {
-    const epoch = raw.data.interactionEpoch ?? raw.data.runnerEpoch;
-    event = {
-      type: 'interaction_removed',
-      interactionId: raw.data.interactionId,
-      ...(typeof epoch === 'string' || (typeof epoch === 'number' && Number.isSafeInteger(epoch))
-        ? { runnerEpoch: String(epoch) }
-        : {}),
-    };
-  } else if (raw.type === 'pi_event') event = piEvent(raw.data ?? {}, raw.timestamp);
-  else if (raw.type === 'notification')
-    event =
-      raw.data?.method === 'notify'
-        ? {
-            type: 'message_completed',
-            message: piNotification({ ...raw.data, receivedAt: raw.timestamp }),
-          }
-        : raw.data?.method === 'setWidget'
-          ? {
-              type: 'widget_updated',
-              key: String(raw.data.widgetKey ?? ''),
-              ...(Array.isArray(raw.data.widgetLines) ? { lines: raw.data.widgetLines } : {}),
-            }
-          : raw.data?.method === 'setStatus'
-            ? {
-                type: 'status_updated',
-                key: String(raw.data.statusKey ?? ''),
-                ...(typeof raw.data.statusText === 'string' ? { text: raw.data.statusText } : {}),
-              }
-            : { type: 'noop' };
+  else if (raw.type === 'pi_event') event = piEvent(raw.data ?? {});
   else if (raw.type === 'session_renamed' && typeof raw.data?.name === 'string')
     event = { type: 'session_renamed', name: raw.data.name };
-  else if (raw.type === 'delegations_changed' && Array.isArray(raw.data?.delegations))
-    event = { type: 'delegations_changed', delegations: chatDelegations(raw.data.delegations) };
-  else if (raw.type === 'runner_stderr') event = { type: 'noop' };
+  else if (CONVERSATION_EVENTS.has(raw.type)) event = { type: 'noop' };
   else if (SNAPSHOT_EVENTS.has(raw.type)) event = { type: 'reset', reason: 'cursor_expired' };
   return {
     sessionId: raw.sessionId ?? '',

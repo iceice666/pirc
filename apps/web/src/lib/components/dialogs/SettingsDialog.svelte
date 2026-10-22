@@ -36,7 +36,7 @@
     roomNames?: Record<string, string>;
     /** The model backends changed (the engine reloads its model list). */
     onmodelschanged?: () => void;
-    /** The engine's layout (sidebar, side panel) back to its defaults. */
+    /** The engine's layout (its sidebar) back to its defaults. */
     onresetlayout?: () => void;
   }
 
@@ -163,7 +163,7 @@
           <section class="settings-section">
             <h3>Layout</h3>
             <div class="settings-row">
-              <span>Restore the engine's sidebar and side panel to their default size.</span>
+              <span>Show the engine's sidebar again if it was collapsed.</span>
               <button class="button ghost" type="button" onclick={onresetlayout}>Reset</button>
             </div>
           </section>

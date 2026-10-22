@@ -127,18 +127,6 @@ export interface RelayedApproval {
   message?: string;
 }
 
-/** A running or waiting delegation a chat started (its snapshot and `delegations_changed`). */
-export interface ChatDelegation {
-  id: string;
-  title: string;
-  /** Label such as "repo on node". */
-  workspace: string;
-  status: 'running' | 'waiting_input';
-  /** `auto`: started without asking (the workspace's delegation approval policy). */
-  dispatch: 'auto' | 'approved';
-  targetSessionId: string;
-}
-
 /** A delegation's status once its session exists. */
 export type DelegationStatus = 'running' | 'waiting_input' | 'completed' | 'failed';
 
@@ -148,151 +136,6 @@ export interface RunState {
   startedAt?: string;
   endedAt?: string;
   failureReason?: string;
-}
-
-export interface InlineImage {
-  mimeType: string;
-  url: string;
-}
-
-export interface ToolCall {
-  id: string;
-  name: string;
-  title?: string;
-  status: 'running' | 'succeeded' | 'failed';
-  input?: unknown;
-  output?: string;
-  /** Unified diff reported by edit-style tools. */
-  diff?: string;
-  images?: InlineImage[];
-  /** A saved browser recording (`browser_record` stop), relative to the session's workspace. */
-  recording?: string;
-  startedAt?: string;
-  endedAt?: string;
-  /**
-   * A `ptc` operation: the id of the `ptc` call it ran in. Live updates carry
-   * it so the reducer can nest the operation under that call.
-   */
-  parentId?: string;
-  /** The operations a `ptc` call ran, in start order (each a capability call). */
-  operations?: ToolCall[];
-}
-
-/**
- * Non-conversational entries that share the timeline with user/assistant turns.
- * - notice: extension notifications and gateway/runner diagnostics
- * - compaction / branch: agent context summaries
- * - bash: `!command` executions typed by the user
- * - custom: extension-injected messages
- */
-export type SystemKind =
-  | 'notice'
-  | 'compaction'
-  | 'branch'
-  | 'bash'
-  | 'custom'
-  | 'team'
-  | 'background';
-export type NoticeLevel = 'info' | 'warning' | 'error';
-
-export interface ConversationMessage {
-  id: string;
-  /** Persisted session-tree entry, unlike the timestamp-based display id. */
-  entryId?: string;
-  branches?: Array<{ entryId: string; text: string; selected: boolean }>;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  createdAt: string;
-  /** When a streamed assistant message finished; orders notices raised meanwhile. */
-  completedAt?: string;
-  isPartial?: boolean;
-  thinking?: string;
-  thinkingRedacted?: boolean;
-  /** Assistant turn ended with an error or was aborted. */
-  stopReason?: 'error' | 'aborted';
-  errorMessage?: string;
-  model?: string;
-  tools?: ToolCall[];
-  attachments?: Attachment[];
-  images?: InlineImage[];
-  systemKind?: SystemKind;
-  level?: NoticeLevel;
-  /** Short heading for system entries (e.g. extension custom type, bash command). */
-  label?: string;
-  /** Secondary detail for system entries (e.g. exit code, token count). */
-  meta?: string;
-}
-
-export interface Attachment {
-  id: string;
-  name: string;
-  mimeType: string;
-  size: number;
-  url?: string;
-  /** Images ride in the model's context; other files are copied into the workspace for tools to read. */
-  kind?: 'image' | 'file';
-}
-
-interface InteractionBase {
-  id: string;
-  runnerEpoch: string;
-  /** The `ptc` operation that asks (shown as waiting on it); absent for anything else. */
-  toolCallId?: string;
-  title: string;
-  description?: string;
-  expiresAt?: string;
-  status: 'pending' | 'answered' | 'cancelled' | 'expired';
-}
-
-export interface SelectInteraction extends InteractionBase {
-  kind: 'select';
-  options: Array<{ value: string; label: string; description?: string }>;
-  multiple?: boolean;
-}
-
-export interface ConfirmInteraction extends InteractionBase {
-  kind: 'confirm';
-  confirmLabel?: string;
-  cancelLabel?: string;
-  /** A red line (plan 07) that may be allowed again for the session. */
-  allowAgain?: boolean;
-  /**
-   * A delegated session's confirm, relayed to the chat that started it. Its
-   * id starts with `relay.`; answering needs no control lease.
-   */
-  relayed?: {
-    sessionId: string;
-    sessionName: string;
-    workspace: string;
-    delegationId: string;
-  };
-}
-
-export interface InputInteraction extends InteractionBase {
-  kind: 'input';
-  placeholder?: string;
-  initialValue?: string;
-}
-
-export interface EditorInteraction extends InteractionBase {
-  kind: 'editor';
-  language?: string;
-  initialValue?: string;
-}
-
-export type PendingInteraction =
-  | SelectInteraction
-  | ConfirmInteraction
-  | InputInteraction
-  | EditorInteraction;
-
-export interface QueueItem {
-  id: string;
-  kind: 'steer' | 'follow_up';
-  /** Position among the user messages of its queue; `send_now` addresses it by this. */
-  index: number;
-  content: string;
-  createdAt: string;
 }
 
 export interface ControlLease {
@@ -305,36 +148,21 @@ export interface ControlLease {
   expiresAt?: string;
 }
 
+/**
+ * What the engine keeps of a session (plan 12 decision 4: no conversation):
+ * its record, run, runner and stream cursor, and the control lease its panes
+ * (terminal, browser) need. The snapshot's history and questions are not read.
+ */
 export interface SessionSnapshot {
   session: SessionSummary;
   runnerStatus: RunnerStatus;
   run: RunState | null;
-  messages: ConversationMessage[];
-  partialMessage?: ConversationMessage;
-  interactions: PendingInteraction[];
-  /** Delegations this chat started that still run or wait; absent from older gateways. */
-  delegations?: ChatDelegation[];
-  queue: QueueItem[];
   control: ControlLease;
   cursor: string;
   runnerEpoch: string;
-  selectedModelId?: string;
-  /** Several backends can expose the same model ID; the provider disambiguates. */
-  selectedModelProvider?: string;
-  thinkingLevel?: ThinkingLevel;
-  /** The session's approval mode as the node reports it; absent from older nodes. */
-  approvalMode?: ApprovalMode;
-  /** What the node starts sessions in. */
-  defaultApprovalMode?: ApprovalMode;
-  /** Extension panels (e.g. the todo list), keyed by extension. */
-  widgets?: Record<string, string[]>;
-  statuses?: Record<string, string>;
   /** The running agent's OS sandbox; absent with no runner. */
   sandbox?: { active: boolean; reason?: string };
 }
-
-/** A delegated session's confirm relayed to its chat: answered without the control lease. */
-export const isRelayed = (interactionId: string) => interactionId.startsWith('relay.');
 
 /** Public gateway settings metadata. Credentials are deliberately never returned. */
 export interface BackendModel {
@@ -452,10 +280,6 @@ export interface SessionUpdateInput {
   name?: string;
 }
 
-export type InteractionAnswer =
-  /** `again`: a confirm allowed again for the rest of the session. */
-  { action: 'answer'; value: string | string[] | boolean; again?: boolean } | { action: 'cancel' };
-
 export interface EventEnvelope<T extends GatewayEvent = GatewayEvent> {
   sessionId: string;
   runnerEpoch: string;
@@ -466,34 +290,7 @@ export interface EventEnvelope<T extends GatewayEvent = GatewayEvent> {
 
 export type GatewayEvent =
   | { type: 'session_deleted' }
-  | { type: 'message_started'; message: ConversationMessage }
-  | {
-      type: 'message_delta';
-      /** Omitted for live agent streams: applies to the newest partial assistant message. */
-      messageId?: string;
-      delta: string;
-      channel?: 'text' | 'thinking';
-    }
-  | { type: 'message_completed'; message: ConversationMessage }
-  | {
-      type: 'tool_updated';
-      /** Omitted when the owner is resolved by tool id. */
-      messageId?: string;
-      /** Fields merge into any existing tool with the same id. */
-      tool: Pick<ToolCall, 'id'> & Partial<ToolCall>;
-    }
   | { type: 'noop' }
-  | { type: 'run_updated'; run: RunState | null; runnerStatus?: RunnerStatus }
-  | { type: 'interaction_updated'; interaction: PendingInteraction }
-  | { type: 'interaction_removed'; interactionId: string; runnerEpoch?: string }
-  | { type: 'queue_updated'; queue: QueueItem[] }
-  /** The chat's full current list of active delegations. */
-  | { type: 'delegations_changed'; delegations: ChatDelegation[] }
-  | { type: 'approval_mode_changed'; mode: ApprovalMode }
-  | { type: 'widget_updated'; key: string; lines?: string[] }
-  | { type: 'status_updated'; key: string; text?: string }
-  | { type: 'control_updated'; control: ControlLease }
-  | { type: 'session_updated'; session: SessionSummary }
   | { type: 'session_renamed'; name: string }
   /** Side-panel data changed (memory, background, team, git); refetch lazily. */
   | { type: 'panel_changed'; sections: string[] }

@@ -1,13 +1,15 @@
 <script lang="ts">
+  /**
+   * The engine at `/engine`: workspaces, nodes and sessions. A session shows
+   * its panes (files, Git, terminal…), not a conversation: people talk to pirc
+   * in the rooms, and pirc to its workers (plan 12 decision 4).
+   */
   import {
-    ArrowDown,
     CircleAlert,
     CloudOff,
     Forward,
     Download,
     PanelLeftOpen,
-    PanelRightClose,
-    PanelRightOpen,
     Radio,
     RefreshCw,
     ShieldCheck,
@@ -15,32 +17,23 @@
     Sparkles,
     X,
   } from '@lucide/svelte';
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import { engine } from './lib/engine.svelte';
-  import InteractionCard from './lib/components/InteractionCard.svelte';
-  import { isRelayed } from './lib/types';
   import JobsMenu from './lib/components/JobsMenu.svelte';
-  import Message from './lib/components/Message.svelte';
   import MobileTabs, { type MobileTab, type MobileTabId } from './lib/components/MobileTabs.svelte';
-  import RunCard from './lib/components/RunCard.svelte';
   import WorkspaceDetail from './lib/components/engine/WorkspaceDetail.svelte';
   import EngineOverview from './lib/components/engine/EngineOverview.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
-  import { timelineItems } from './lib/work';
   import NewWorkspaceDialog from './lib/components/dialogs/NewWorkspaceDialog.svelte';
   import SettingsDialog, { type SettingsTab } from './lib/components/dialogs/SettingsDialog.svelte';
   import NativeManagementConsent from './lib/components/dialogs/NativeManagementConsent.svelte';
-  import SidePanel from './lib/components/panel/SidePanel.svelte';
+  import SessionPanes from './lib/components/panel/SessionPanes.svelte';
   import type { PanelTab } from './lib/panel-api';
-  import { onFilePreviewRequest } from './lib/file-links';
-  import { loadHighlighter } from './lib/markdown';
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { loadLayout, saveLayout } from './lib/storage';
-  import { MESSAGE_PAGE } from './lib/engine.svelte';
   import { motion } from './lib/motion';
   import { trackViewportHeight } from './lib/viewport';
-  import { watch } from './lib/watch.svelte';
 
   /**
    * Phone: the session list (a full page above the bottom tabs) is showing.
@@ -51,25 +44,6 @@
   );
   /** Desktop: left sidebar collapsed out of the grid. */
   let sidebarCollapsed = $state(loadLayout('sidebarCollapsed', false));
-  /**
-   * Up to this width the side panel is an overlay above the conversation
-   * instead of a column beside it.
-   */
-  const PANEL_OVERLAY_MAX = 860;
-  /**
-   * Right side panel starts hidden until the user opens it (then the choice is
-   * remembered). The remembered choice only applies where the panel is a
-   * column: a phone must not start with the conversation covered.
-   */
-  let detailsOpen = $state(
-    window.innerWidth > PANEL_OVERLAY_MAX && loadLayout('detailsOpen', false),
-  );
-  const PANEL_MIN = 280;
-  const PANEL_DEFAULT = 360;
-  /** Room the conversation column keeps when the side panel is dragged wide. */
-  const CONVERSATION_MIN = 380;
-  let panelWidth = $state(loadLayout('panelWidth', PANEL_DEFAULT));
-  let panelResizing = $state(false);
   let viewportWidth = $state(window.innerWidth);
   let panelTab: PanelTab = $state('files');
   let settingsOpen = $state(false);
@@ -81,7 +55,7 @@
       : undefined,
   );
   const onOverview = $derived(engine.view === 'overview');
-  /** A page in the main column (not a conversation): the phone keeps its bottom tabs. */
+  /** A page in the main column (not a session): the phone keeps its bottom tabs. */
   const onPage = $derived(!!pageWorkspace || onOverview);
   // A page replaces the phone's list.
   $effect(() => {
@@ -106,7 +80,6 @@
   let newWorkspaceOpen = $state(false);
   let newWorkspaceNodeId = $state('');
   let updateRegistration: ServiceWorkerRegistration | undefined = $state();
-  let timeline: HTMLElement | undefined = $state();
 
   const sessionState = $derived(engine.sessionState);
   // This consent URL is an additive overlay. The normal app bootstrap still runs on mount.
@@ -115,178 +88,11 @@
   const hasControl = $derived(engine.hasControl);
   const connection = $derived(engine.connection);
 
-  let panelMax = $derived(
-    Math.max(PANEL_MIN, viewportWidth - (sidebarCollapsed ? 0 : 264) - CONVERSATION_MIN),
-  );
-  let panelShownWidth = $derived(Math.min(Math.max(panelWidth, PANEL_MIN), panelMax));
   $effect(() => saveLayout('sidebarCollapsed', sidebarCollapsed));
-  $effect(() => {
-    if (viewportWidth > PANEL_OVERLAY_MAX) saveLayout('detailsOpen', detailsOpen);
-  });
-  /** The panel covers the conversation: scrim, Escape closes it, the rest is inert. */
-  const panelOverlay = $derived(detailsOpen && viewportWidth <= PANEL_OVERLAY_MAX);
-  let detailsToggle: HTMLButtonElement | undefined = $state();
-
-  function closePanel() {
-    const panel = document.querySelector('.side-panel');
-    const hadFocus = !!panel?.contains(document.activeElement);
-    detailsOpen = false;
-    // Focus would be lost in the hidden panel; return it to the toggle.
-    if (hadFocus) detailsToggle?.focus();
-  }
-
-  watch(
-    () => panelOverlay,
-    async (overlay) => {
-      if (!overlay) return;
-      await tick();
-      document.querySelector<HTMLElement>('.side-panel [role="tab"][tabindex="0"]')?.focus();
-    },
-  );
 
   function onWindowKeydown(event: KeyboardEvent) {
-    if (event.key !== 'Escape' || event.defaultPrevented) return;
-    if (sidebarOpen) {
-      sidebarOpen = false;
-      return;
-    }
-    const target = event.target instanceof Element ? event.target : undefined;
-    // A dialog closes itself, and Escape belongs to programs in the terminal.
-    if (panelOverlay && !target?.closest('dialog, .terminal-tab')) closePanel();
+    if (event.key === 'Escape' && !event.defaultPrevented && sidebarOpen) sidebarOpen = false;
   }
-
-  function resizePanel(width: number) {
-    panelWidth = width;
-    saveLayout('panelWidth', width);
-  }
-
-  let revealingEarlier = false;
-  let visibleMessages = $derived(
-    sessionState
-      ? sessionState.messages.slice(Math.min(engine.hiddenMessages, sessionState.messages.length))
-      : [],
-  );
-  /** Consecutive tool-only turns fold into one run card. */
-  let visibleItems = $derived(timelineItems(visibleMessages));
-
-  async function showEarlier() {
-    if (!engine.hiddenMessages || revealingEarlier) return;
-    revealingEarlier = true;
-    const previousHeight = timeline?.scrollHeight ?? 0;
-    const previousTop = timeline?.scrollTop ?? 0;
-    engine.hiddenMessages = Math.max(0, engine.hiddenMessages - MESSAGE_PAGE);
-    await tick();
-    // Keep the entry the reader was looking at in place.
-    if (timeline) timeline.scrollTop = previousTop + (timeline.scrollHeight - previousHeight);
-    revealingEarlier = false;
-  }
-
-  /** Reveal the previous page when the top of the transcript scrolls into view. */
-  function revealEarlier(node: HTMLElement) {
-    if (typeof IntersectionObserver === 'undefined') return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) void showEarlier();
-      },
-      { root: node.closest('.timeline'), rootMargin: '200px 0px 0px' },
-    );
-    observer.observe(node);
-    return { destroy: () => observer.disconnect() };
-  }
-
-  /**
-   * Whether new content keeps the newest entry in view. Updated from scroll
-   * events only (scrolling up detaches, reaching the bottom re-attaches), so
-   * streamed deltas never measure the layout.
-   */
-  let following = $state(true);
-  /** Content arrived while the reader was scrolled up: offer a way back down. */
-  let unseenContent = $state(false);
-  let lastScrollTop = 0;
-  function onTimelineScroll() {
-    if (!timeline) return;
-    const top = timeline.scrollTop;
-    const nearBottom = timeline.scrollHeight - top - timeline.clientHeight < 80;
-    if (top < lastScrollTop - 1) following = nearBottom;
-    else if (nearBottom) following = true;
-    if (following) unseenContent = false;
-    lastScrollTop = top;
-  }
-
-  /**
-   * Keep the bottom in view while following, whatever made the transcript grow
-   * (a throttled Markdown render, a tool card, an image) or the timeline shrink
-   * (the soft keyboard, a taller composer). ResizeObserver runs after layout,
-   * once per frame, so this never forces an extra layout.
-   */
-  function followContent(node: HTMLElement) {
-    const observer = new ResizeObserver(() => {
-      if (following && timeline) timeline.scrollTop = timeline.scrollHeight;
-    });
-    observer.observe(node);
-    if (node.parentElement) observer.observe(node.parentElement);
-    return { destroy: () => observer.disconnect() };
-  }
-
-  // A new or growing last entry, or a new question, while scrolled up.
-  const markUnseen = () => {
-    if (!following) unseenContent = true;
-  };
-  watch(() => sessionState?.messages[sessionState.messages.length - 1], markUnseen);
-  watch(
-    () => engine.pendingInteractions.length,
-    (count, previous) => count > (previous ?? 0) && markUnseen(),
-  );
-
-  /**
-   * Screen readers hear finished replies and new questions once, from a
-   * separate live region, instead of every streamed delta of the transcript.
-   */
-  let announcement = $state('');
-  const lastReply = $derived.by(() => {
-    const messages = sessionState?.messages ?? [];
-    for (let index = messages.length - 1; index >= 0; index--) {
-      const message = messages[index]!;
-      if (message.role === 'assistant' && !message.isPartial) return message;
-    }
-    return undefined;
-  });
-  watch(
-    () => lastReply?.id,
-    (id, previous) => {
-      // Not on the first load of a session, only for replies that arrive later.
-      if (!id || !previous || sessionState?.session.id !== announcedSession) return;
-      const text = lastReply?.content.trim();
-      announcement = text
-        ? `Agent replied: ${text.length > 280 ? `${text.slice(0, 280)}…` : text}`
-        : 'Agent finished a step.';
-    },
-  );
-  watch(
-    () => engine.pendingInteractions.length,
-    (count, previous) => {
-      if (count > (previous ?? 0) && sessionState?.session.id === announcedSession)
-        announcement = 'The agent needs your input.';
-    },
-  );
-  let announcedSession: string | undefined;
-  watch(
-    () => sessionState?.session.id,
-    (id) => {
-      announcedSession = id;
-      announcement = '';
-    },
-    { immediate: true },
-  );
-
-  engine.scroller = {
-    toLatest: async (smooth = true) => {
-      following = true;
-      unseenContent = false;
-      await tick();
-      timeline?.scrollTo({ top: timeline.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-    },
-  };
 
   onMount(() => {
     const removePwa = registerPwa((registration) => (updateRegistration = registration));
@@ -294,24 +100,11 @@
     void engine.bootstrap();
     // A notification clicked while this window is open (public/sw.js).
     const onWorkerMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'OPEN_TARGET') {
-        sidebarOpen = false;
-        void engine.openNotificationTarget(event.data.target ?? undefined, event.data.interaction);
-      } else if (
-        event.data?.type === 'INTERACTION_REFRESH' &&
-        event.data.sessionId === engine.activeSessionId
-      ) {
-        void engine.refreshSnapshot();
-      }
+      if (event.data?.type !== 'OPEN_TARGET') return;
+      sidebarOpen = false;
+      void engine.openTarget(event.data.target ?? undefined);
     };
     navigator.serviceWorker?.addEventListener('message', onWorkerMessage);
-    // A file link in the conversation previews the file in the side panel.
-    const removeFileLinks = onFilePreviewRequest(() => (detailsOpen = true));
-    // Code blocks are common; fetch the highlighter once the first paint is done.
-    // KaTeX is rarer and loads on first use instead.
-    const warm = () => void loadHighlighter();
-    if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 3000 });
-    else setTimeout(warm, 1000);
     /*
      * Visible: renew the lease every 10 s. Node and workspace changes arrive
      * over the event stream; a slow 60 s refresh is only a fallback. Hidden:
@@ -354,7 +147,6 @@
       removePwa();
       navigator.serviceWorker?.removeEventListener('message', onWorkerMessage);
       removeViewport();
-      removeFileLinks();
     };
   });
 
@@ -375,8 +167,6 @@
 
   function resetLayout() {
     sidebarCollapsed = false;
-    detailsOpen = false;
-    resizePanel(PANEL_DEFAULT);
   }
 
   function showNewWorkspace(nodeId: string) {
@@ -400,12 +190,7 @@
   ></svelte:head
 >
 
-<div
-  class="app-shell"
-  class:sidebar-collapsed={sidebarCollapsed}
-  class:resizing={panelResizing}
-  style:--panel-width="{panelShownWidth}px"
->
+<div class="app-shell" class:sidebar-collapsed={sidebarCollapsed}>
   <Sidebar
     bind:open={sidebarOpen}
     collapsed={sidebarCollapsed}
@@ -422,11 +207,7 @@
   />
 
   <!-- The open phone drawer is modal: the page behind it is inert. -->
-  <main
-    class:details-collapsed={!detailsOpen}
-    class="workspace"
-    inert={sidebarOpen && viewportWidth <= 650}
-  >
+  <main class="workspace" inert={sidebarOpen && viewportWidth <= 650}>
     {#if onOverview}
       <EngineOverview
         section={engine.overviewSection}
@@ -481,7 +262,7 @@
             >
           {/if}
           {#if sessionState.sandbox && !sessionState.sandbox.active}
-            <!-- Stays while this agent runs: the timeline warning scrolls away. -->
+            <!-- Stays while this agent runs. -->
             <span
               class="origin-chip unsandboxed"
               role="status"
@@ -509,17 +290,6 @@
           {:else}
             <span class="control-pill"><ShieldCheck size={14} /> In control</span>
           {/if}
-          <button
-            bind:this={detailsToggle}
-            class="icon-button details-toggle"
-            type="button"
-            aria-label={detailsOpen ? 'Hide side panel' : 'Show side panel'}
-            title={detailsOpen ? 'Hide side panel' : 'Show side panel'}
-            aria-expanded={detailsOpen}
-            onclick={() => (detailsOpen ? closePanel() : (detailsOpen = true))}
-          >
-            {#if detailsOpen}<PanelRightClose size={19} />{:else}<PanelRightOpen size={19} />{/if}
-          </button>
         </div>
       </header>
 
@@ -532,9 +302,6 @@
           >
         </div>
       {/if}
-      {#if engine.interactionNotice}
-        <div class="viewer-banner" role="status">{engine.interactionNotice}</div>
-      {/if}
       {#if !hasControl}
         <div class="viewer-banner">
           <span
@@ -544,95 +311,7 @@
         </div>
       {/if}
 
-      <div class="content-grid">
-        <section class="conversation" aria-label="Conversation" inert={panelOverlay}>
-          <div class="timeline" bind:this={timeline} onscroll={onTimelineScroll}>
-            <div class="timeline-inner" use:followContent>
-              {#if engine.hiddenMessages > 0}
-                <button
-                  type="button"
-                  class="earlier-messages"
-                  use:revealEarlier
-                  onclick={showEarlier}
-                >
-                  Show earlier messages ({engine.hiddenMessages} more)
-                </button>
-              {/if}
-              {#each visibleItems as item (item.kind === 'run' ? item.id : item.message.id)}
-                {#if item.kind === 'run'}
-                  <RunCard tools={item.messages.flatMap((message) => message.tools ?? [])}>
-                    {#each item.messages as message (message.id)}<Message
-                        {message}
-                        grouped
-                      />{/each}
-                  </RunCard>
-                {:else}<Message message={item.message} />{/if}
-              {/each}
-              {#each engine.pendingInteractions as interaction (interaction.id)}
-                <!-- A relayed confirm needs no control lease. -->
-                <InteractionCard
-                  {interaction}
-                  disabled={(!engine.canCommand && !isRelayed(interaction.id)) ||
-                    engine.answeringInteractionIds.includes(interaction.id)}
-                  onanswer={(answer) =>
-                    engine.answerInteraction(interaction.id, answer, interaction.runnerEpoch)}
-                  onopen={openSession}
-                />
-              {/each}
-              {#if unseenContent && !following}
-                <div class="jump-latest">
-                  <button
-                    type="button"
-                    transition:fade={{ duration: motion(120) }}
-                    onclick={() => engine.scroller?.toLatest()}
-                    ><ArrowDown size={15} /> New messages</button
-                  >
-                </div>
-              {/if}
-              {#if sessionState.messages.length === 0}
-                <div class="empty-conversation">
-                  <h2>Nothing here yet</h2>
-                  <p>What this session's agent does shows up here as it works.</p>
-                </div>
-              {/if}
-            </div>
-          </div>
-          <!-- Read-only: people talk to pirc in the rooms, and pirc to its workers. -->
-          <footer class="read-only" role="note">
-            {#if origin?.kind === 'delegation'}
-              <span>pirc runs this worker from a room. Talk to it there.</span>
-              <a href="/?room={encodeURIComponent(origin.roomId)}"
-                ><Forward size={14} /> Open the room</a
-              >
-            {:else}
-              <span>Sessions are read-only here. Conversations happen in the rooms.</span>
-              <a href="/"><Forward size={14} /> Rooms</a>
-            {/if}
-          </footer>
-          <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
-        </section>
-
-        {#if panelOverlay}
-          <button
-            class="panel-scrim"
-            type="button"
-            tabindex="-1"
-            aria-label="Close side panel"
-            transition:fade={{ duration: motion(160) }}
-            onclick={closePanel}
-          ></button>
-        {/if}
-        <SidePanel
-          open={detailsOpen}
-          bind:tab={panelTab}
-          bind:resizing={panelResizing}
-          width={panelShownWidth}
-          minWidth={PANEL_MIN}
-          maxWidth={panelMax}
-          defaultWidth={PANEL_DEFAULT}
-          onresize={resizePanel}
-        />
-      </div>
+      <SessionPanes bind:tab={panelTab} />
     {:else}
       <div class="loading-state">
         <CircleAlert size={24} />
@@ -690,10 +369,6 @@
     background: var(--bg);
     transition: grid-template-columns var(--layout-duration) var(--ease);
   }
-  .app-shell.resizing {
-    cursor: col-resize;
-    user-select: none;
-  }
   @media (min-width: 651px) {
     .app-shell.sidebar-collapsed {
       grid-template-columns: 0 minmax(0, 1fr);
@@ -710,10 +385,6 @@
     display: flex;
     flex-direction: column;
     background: var(--bg);
-  }
-  .workspace > .content-grid {
-    flex: 1 1 0;
-    min-height: 0;
   }
   .topbar {
     min-width: 0;
@@ -875,126 +546,6 @@
   .viewer-banner button {
     color: var(--accent);
   }
-  .content-grid {
-    min-height: 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--panel-width, 360px);
-    overflow: hidden;
-    transition: grid-template-columns var(--layout-duration) var(--ease);
-  }
-  .workspace.details-collapsed .content-grid {
-    grid-template-columns: minmax(0, 1fr) 0;
-  }
-  /* Dragging the panel edge must track the pointer, not ease towards it. */
-  .app-shell.resizing .content-grid {
-    transition: none;
-  }
-  .conversation {
-    min-width: 0;
-    min-height: 0;
-    display: grid;
-    /* An explicit column lets composer controls shrink instead of widening the column. */
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto auto;
-    background: var(--bg);
-  }
-  .timeline {
-    min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-  }
-  .timeline-inner {
-    width: min(780px, 100%);
-    min-height: 100%;
-    margin: 0 auto;
-    padding: 16px 32px 32px;
-    display: flex;
-    flex-direction: column;
-  }
-  .earlier-messages {
-    align-self: center;
-    margin: 0 0 16px;
-    padding: 6px 12px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--bg-layer);
-    color: var(--muted);
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-  }
-  .earlier-messages:hover {
-    background: var(--bg-hover);
-    color: var(--ink);
-  }
-  /* Sticks to the bottom of the timeline without taking room in the transcript. */
-  .jump-latest {
-    position: sticky;
-    z-index: 3;
-    bottom: 12px;
-    height: 0;
-    display: flex;
-    justify-content: center;
-    order: 1;
-  }
-  .jump-latest button {
-    height: 36px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0 14px;
-    border: 0;
-    border-radius: 999px;
-    color: var(--ink);
-    background: var(--bg-layer);
-    box-shadow: var(--shadow-pop);
-    font-size: 13px;
-    font-weight: 500;
-    transform: translateY(-100%);
-  }
-  .jump-latest button:hover {
-    background: var(--bg-subtle);
-  }
-  .read-only {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 12px;
-    margin: 0 auto;
-    width: min(100%, 860px);
-    padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--line);
-    color: var(--muted);
-    font-size: 13px;
-  }
-  .read-only a {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--accent);
-    text-decoration: none;
-  }
-  .empty-conversation {
-    flex: 1;
-    min-height: 300px;
-    display: grid;
-    place-items: center;
-    align-content: center;
-    text-align: center;
-  }
-  .empty-conversation h2 {
-    margin: 16px 0 6px;
-    font-size: 22px;
-    font-weight: 600;
-  }
-  .empty-conversation p {
-    max-width: 400px;
-    margin: 0;
-    color: var(--muted);
-    font-size: 14px;
-    line-height: 1.6;
-  }
   .loading-state {
     flex: 1;
     display: grid;
@@ -1061,31 +612,9 @@
     place-items: center;
     padding: 6px;
   }
-  @media (max-width: 1100px) {
-    .timeline-inner {
-      padding-inline: 24px;
-    }
-  }
-  .panel-scrim {
-    display: none;
-  }
   @media (max-width: 860px) {
     .app-shell {
       --sidebar-width: 232px;
-    }
-    .panel-scrim {
-      position: fixed;
-      z-index: 24;
-      inset: calc(56px + env(safe-area-inset-top)) 0 0;
-      display: block;
-      padding: 0;
-      border: 0;
-      background: rgb(0 0 0 / 25%);
-      cursor: default;
-    }
-    .content-grid,
-    .workspace.details-collapsed .content-grid {
-      grid-template-columns: minmax(0, 1fr);
     }
   }
   @media (max-width: 650px) {
@@ -1113,10 +642,6 @@
     .topbar-actions {
       gap: 2px;
     }
-    .topbar-actions .icon-button {
-      width: 40px;
-      height: 40px;
-    }
     /* Only a coloured dot: the state is still announced by the pill's text. */
     .connection-pill {
       width: 28px;
@@ -1134,9 +659,6 @@
       height: 36px;
       padding: 0;
       font-size: 0;
-    }
-    .timeline-inner {
-      padding: 8px 14px 20px;
     }
     .update-toast {
       right: 8px;

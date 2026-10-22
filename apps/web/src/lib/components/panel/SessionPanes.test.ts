@@ -4,7 +4,7 @@ import { afterEach, expect, it } from 'vitest';
 import { engine } from '../../engine.svelte';
 import { demoModes } from '../../mock';
 import type { ModeInfo } from '../../types';
-import SidePanel from './SidePanel.svelte';
+import SessionPanes from './SessionPanes.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement | undefined;
@@ -13,6 +13,7 @@ afterEach(async () => {
   component = undefined;
   target?.remove();
   engine.sessionState = undefined;
+  engine.demo = undefined;
   engine.workspaces = [];
   engine.modeCatalog = [];
 });
@@ -24,9 +25,11 @@ function render(workspaceId: string) {
     { id: 'node:checkout', hostId: 'node', displayName: 'Checkout', mode: 'plain' } as never,
   ];
   engine.sessionState = { session: { id: 's', workspaceId } } as never;
+  // The tab strip is what this checks: demo mode leaves the panes themselves out.
+  engine.demo = {} as never;
   target = document.createElement('div');
   document.body.append(target);
-  component = mount(SidePanel, { target, props: { open: false, tab: 'terminal' } });
+  component = mount(SessionPanes, { target, props: { tab: 'terminal' } });
   flushSync();
   const tabs = Array.from(target.querySelectorAll('[role="tab"]'));
   return {
