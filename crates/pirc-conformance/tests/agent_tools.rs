@@ -5,7 +5,7 @@
 
 use std::collections::VecDeque;
 
-use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder};
+use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder, write_executable};
 use serde_json::{Value, json};
 
 fn tools(calls: &[(&str, &str, Value)]) -> ModelReply {
@@ -75,10 +75,25 @@ async fn agent_hooks() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn agent_auto_mode() {
-    let options = AgentOptions {
+    // This policy scenario records a missing interpreter, independent of whether
+    // the host has Python installed. Keep the command and historical transcript.
+    let bin = tempfile::tempdir().unwrap();
+    write_executable(
+        &bin.path().join("python3"),
+        "#!/bin/sh\nprintf '%s\\n' '/bin/bash: line 1: python3: command not found' >&2\nexit 127\n",
+    );
+    let mut options = AgentOptions {
         config: json!({ "features": { "autoMode": { "deny": ["deploy-prod", "rm -rf ("] } } }),
         ..AgentOptions::default()
     };
+    options.env.push((
+        "PATH".to_owned(),
+        format!(
+            "{}:{}",
+            bin.path().display(),
+            std::env::var("PATH").unwrap_or_default()
+        ),
+    ));
     let Some(mut agent) = AgentRun::start(options).await else {
         return;
     };
