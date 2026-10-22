@@ -22,7 +22,8 @@
 
 ### 先做：從 main cherry-pick（決定 3）
 
-- [ ] 依決定 3 的清單照順序 cherry-pick；renderer 程式碼在分支上沒動過（`git merge-tree` 只在 `CHANGELOG.md`、`docs/deploy/upgrades.md`、`plans/mobile.md` 衝突）。驗證：`flutter analyze`、`flutter test` 與 plan 12 結束時的基線相同（+4961 ~2 -362）。
+- [x] 依決定 3 的清單照順序 cherry-pick；renderer 程式碼在分支上沒動過（`git merge-tree` 只在 `CHANGELOG.md`、`docs/deploy/upgrades.md`、`plans/mobile.md` 衝突）。驗證：`flutter analyze`、`flutter test` 與 plan 12 結束時的基線相同（+4961 ~2 -362）。
+      **2026-10-22 完成**：32 個 commit 以 `-x` 撿進來。CHANGELOG 與 `plans/mobile.md` 的衝突取分支版，之後一次補上：CHANGELOG 收進 main 的 Unreleased Fixed 共 24 條，`mobile.md` 用三方合併，renderer 段取 main 版、rooms 段取分支版，並刪掉已退場的 project deletion 驗收。`apps/android/lib/rendering`、`apps/android/assets`、`.github` 與 `origin/main` 逐位元相同。`pubspec.lock` 補上 plan 12 漏改的 `plugin_platform_interface`（dev dependency）。`flutter analyze` 0 issues。`flutter test` +7275 ~11 -437；用 JSON 結果和 `4fce23c` 逐項比對（同樣是 +4961 ~2 -362），沒有任何原本通過的測試變成失敗，另有 9 個原本失敗的現在通過。新增的失敗是 main 帶來的 84 個測試，原因是本機沒有 `node`（`tool/parity/document_vm_host.mjs`）；把 bun 當 `node` 跑這 6 個檔案時 84 個全部通過。多出的 9 個 skip 是 main 的 PingFang/macOS 字型測試。Kotlin 沒動到。
 
 ### 重寫
 
