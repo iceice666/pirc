@@ -7,7 +7,7 @@ import java.util.Calendar
 class NotificationPreferences(context: Context) {
     private val prefs = context.getSharedPreferences("notification_preferences", Context.MODE_PRIVATE)
     private val defaults = mapOf("rooms" to true, "q" to true, "deleg" to true,
-        "done" to false, "live" to true, "popup" to true, "rich" to true, "recall" to true, "quiet" to false)
+        "done" to false, "live" to true, "quiet" to false)
     private val layoutKeys = setOf("goalExpanded", "todoExpanded", "showSettled", "detailsOpen", "sidebarCollapsed")
     fun enabled(key: String) = prefs.getBoolean(key, defaults[key] ?: false)
     val lock get() = prefs.getString("lock", "hide")!!

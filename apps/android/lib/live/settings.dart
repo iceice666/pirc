@@ -759,26 +759,6 @@ class _PushSettingsState extends State<PushSettings>
                   ),
                 ]),
                 group('樣式', [
-                  toggle(
-                    'popup',
-                    '下方快速回應視窗',
-                    permission['overlay'] == true
-                        ? '從通知開啟，在其他 App 上層確認並回答'
-                        : '尚未授權浮窗；通知仍可開啟完整對話',
-                  ),
-                  if (permission['overlay'] != true)
-                    _SettingsOptionRow(
-                      title: '授權浮窗',
-                      subtitle: '顯示在其他應用程式上層',
-                      trailing: const Icon(LucideIcons.chevronRight, size: 16),
-                      onTap: actionBusy
-                          ? null
-                          : () => perform(
-                              () async => c.gateway.call('requestOverlay'),
-                            ),
-                    ),
-                  toggle('rich', '大型互動通知', '顯示最多三個選項；點選後仍須確認'),
-                  toggle('recall', '處理後自動收回', '收到最新狀態時，收回已處理的問題通知'),
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(

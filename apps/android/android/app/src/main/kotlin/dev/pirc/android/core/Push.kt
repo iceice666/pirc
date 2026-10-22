@@ -51,58 +51,24 @@ sealed interface PushTarget {
     }
 }
 
-/** One interaction's out-of-band notification state. The epoch is the
- * interaction row's epoch, not the daemon event-stream epoch. */
-data class PushInteraction(
-    val kind: String,
-    val sessionId: String,
-    val interactionId: String,
-    val interactionEpoch: String,
-) {
-    val isResolved: Boolean get() = kind == "interaction_answered"
-    val isCreated: Boolean get() = kind == "interaction_created"
-}
-
-/** One notification, as the gateway sent it. */
+/** One notification, as the gateway sent it (`crates/pirc-gateway/src/push.rs`). */
 data class PushNote(
     val title: String,
     val body: String,
     val tag: String,
     val target: PushTarget?,
-    val kind: String? = null,
-    val sessionId: String? = null,
-    val interactionId: String? = null,
-    val interactionEpoch: String? = null,
 ) {
-    /** Null for legacy/session notices and malformed or unknown event kinds. */
-    val interaction: PushInteraction?
-        get() {
-            val eventKind = kind?.takeIf { it == "interaction_created" || it == "interaction_answered" } ?: return null
-            val session = sessionId?.takeIf { it.isNotBlank() } ?: return null
-            val id = interactionId?.takeIf { it.isNotBlank() } ?: return null
-            val epoch = interactionEpoch?.takeIf { it.isNotBlank() } ?: return null
-            if (epoch != "0" && !epoch.matches(Regex("[1-9][0-9]*"))) return null
-            return PushInteraction(eventKind, session, id, epoch)
-        }
-    val isInteractionRefresh: Boolean get() = kind == "interaction_refresh" && !sessionId.isNullOrBlank()
-
     companion object {
         /** The decrypted message; null when it is not one of the gateway's. */
         fun parse(bytes: ByteArray): PushNote? = runCatching {
             val json = PircJson.parseToJsonElement(bytes.toString(Charsets.UTF_8)) as JsonObject
-            val kind = json["kind"]?.jsonPrimitive?.content
-            val interactionControl = kind in setOf("interaction_answered", "interaction_refresh")
             val title = json["title"]?.jsonPrimitive?.content.orEmpty()
-            if (title.isBlank() && !interactionControl) return null
+            if (title.isBlank()) return null
             PushNote(
                 title = title,
                 body = json["body"]?.jsonPrimitive?.content.orEmpty(),
                 tag = json["tag"]?.jsonPrimitive?.content ?: title,
                 target = PushTarget.from(json["target"]),
-                kind = kind,
-                sessionId = json["sessionId"]?.jsonPrimitive?.content,
-                interactionId = json["interactionId"]?.jsonPrimitive?.content,
-                interactionEpoch = json["interactionEpoch"]?.jsonPrimitive?.content,
             )
         }.getOrNull()
     }

@@ -33,6 +33,7 @@ Planned as **0.10.0+harmony**: the rewrite on the harmony branch, which forks fr
 - Talking to a session directly: neither the web nor the Android app shows a session's conversation, composer or question cards any more; the engine shows a session's panes (files, Git, terminal and the rest), and you talk to workers in their threads.
 - Starting a session from the engine: Android loses **New session** (the web already had none); pirc starts workers from rooms. `POST /api/sessions` stays.
 - Session question pushes: the gateway no longer sends "… is waiting for you", nor the silent pushes that withdrew them once answered (they were sent for every answered worker question too). A worker's questions still push from its room. The engine's **Needs you** loses Allow / Deny for relayed confirms, which the gateway no longer reports.
+- Android notification settings lose the quick-reply overlay, large interactive notification and auto-withdraw switches (and the overlay permission prompt beside them); they only applied to session questions.
 
 ### Fixed
 

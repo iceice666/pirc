@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/markdown_image.dart';
-import 'package:pirc_mobile/live/timeline_attachment_image.dart';
 import 'live_test.dart' show FakeGateway, theme;
 
 final fixture =
@@ -74,57 +73,42 @@ void main() {
         }
       },
     );
-    for (final path in ['markdown', 'attachment']) {
-      testWidgets('${item['id']} $path displays the next animation frame', (
-        t,
-      ) async {
-        final g = FakeGateway();
-        Widget content = path == 'markdown'
-            ? NativeMarkdownImage(
-                gateway: g,
-                source: Uri.dataFromBytes(
-                  bytes,
-                  mimeType: item['mimeType'] as String,
-                ),
-                alt: 'animated fixture',
-                borderRadius: 0,
-              )
-            : TimelineAttachmentImage(
-                entry: {
-                  'kind': 'image',
-                  'mimeType': item['mimeType'],
-                  'base64': item['base64'],
-                },
-                label: 'animated fixture',
-                gateway: g,
-              );
-        await t.pumpWidget(
-          MaterialApp(
-            theme: theme.build(Brightness.light),
-            home: Scaffold(body: content),
-          ),
-        );
-        var firstSeen = false;
-        for (var i = 0; i < 60 && !firstSeen; i++) {
-          final p = await displayed(t);
-          firstSeen = p.isNotEmpty && red(p);
-        }
-        expect(firstSeen, isTrue, reason: 'first frame is actually displayed');
-        var secondSeen = false;
-        for (var i = 0; i < 30 && !secondSeen; i++) {
-          final p = await displayed(t, step: const Duration(milliseconds: 20));
-          secondSeen = p.isNotEmpty && blue(p);
-        }
-        expect(
-          secondSeen,
-          isTrue,
-          reason: 'widget playback must not freeze at first frame',
-        );
-        expect(t.takeException(), isNull);
-        await t.pumpWidget(const SizedBox());
-        await t.pump();
-        await g.stream.close();
-      });
-    }
+    testWidgets('${item['id']} markdown displays the next animation frame', (
+      t,
+    ) async {
+      final g = FakeGateway();
+      final content = NativeMarkdownImage(
+        gateway: g,
+        source: Uri.dataFromBytes(bytes, mimeType: item['mimeType'] as String),
+        alt: 'animated fixture',
+        borderRadius: 0,
+      );
+      await t.pumpWidget(
+        MaterialApp(
+          theme: theme.build(Brightness.light),
+          home: Scaffold(body: content),
+        ),
+      );
+      var firstSeen = false;
+      for (var i = 0; i < 60 && !firstSeen; i++) {
+        final p = await displayed(t);
+        firstSeen = p.isNotEmpty && red(p);
+      }
+      expect(firstSeen, isTrue, reason: 'first frame is actually displayed');
+      var secondSeen = false;
+      for (var i = 0; i < 30 && !secondSeen; i++) {
+        final p = await displayed(t, step: const Duration(milliseconds: 20));
+        secondSeen = p.isNotEmpty && blue(p);
+      }
+      expect(
+        secondSeen,
+        isTrue,
+        reason: 'widget playback must not freeze at first frame',
+      );
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+      await t.pump();
+      await g.stream.close();
+    });
   }
 }

@@ -19,7 +19,6 @@ class RoomNotificationsTest {
         assertEquals(PushTarget.OpenRoom("general"), pushed.target)
         assertEquals("room:general", pushed.tag)
         assertEquals(RoomNotifications.tag("general"), pushed.tag)
-        assertNull(pushed.interaction)
     }
 
     @Test

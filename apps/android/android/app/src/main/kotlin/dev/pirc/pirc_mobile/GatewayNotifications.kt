@@ -100,10 +100,7 @@ class GatewayPushService : PushService() {
                     PushTarget.OpenMemory ->
                         GatewayNotifications.show(applicationContext, note.title, note.body, null, "memory", tag = note.tag)
                     else -> {
-                        val session = (target as? PushTarget.OpenSession)?.sessionId ?: note.sessionId
-                        // Session questions are asked in rooms now; their pushes say nothing here.
-                        if (note.kind != null && note.kind.startsWith("interaction_")) return@withCurrentPairingStampForPush
-                        if (note.title.isBlank()) return@withCurrentPairingStampForPush
+                        val session = (target as? PushTarget.OpenSession)?.sessionId
                         if (shouldSuppressVisibleSessionPush(session, runtime.sessions::hasVisibleSessionSubscriber)) {
                             return@withCurrentPairingStampForPush
                         }
