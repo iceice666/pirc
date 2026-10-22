@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'work_index.dart';
 import 'modes.dart';
-import 'attention.dart';
 import 'panel_resource.dart';
 import 'rooms_state.dart';
 
@@ -59,9 +58,7 @@ class ReadingState {
 }
 
 class LiveController extends ChangeNotifier {
-  LiveController(this.gateway, {this.showing = 'rooms'}) {
-    attention.addListener(changed);
-  }
+  LiveController(this.gateway, {this.showing = 'rooms'});
 
   /// Which page the app shows: `rooms` (the default: the conversations) or
   /// `engine` (sessions, nodes and the rest of the machinery).
@@ -106,7 +103,6 @@ class LiveController extends ChangeNotifier {
     if (origin != null && showing == 'rooms') await rooms.start();
   }
 
-  late final AttentionState attention = AttentionState(gateway);
   int get attentionCount => sessions.where(isWaiting).length;
   final Gateway gateway;
   String? origin, clientId, sessionId, error, actionError, pairLink, routePage;
@@ -332,7 +328,6 @@ class LiveController extends ChangeNotifier {
     _poll ??= Timer.periodic(const Duration(seconds: 20), (_) {
       if (active && origin != null) {
         unawaited(refreshList());
-        unawaited(attention.refresh());
       }
     });
     try {
@@ -359,7 +354,7 @@ class LiveController extends ChangeNotifier {
       if (origin != null) {
         final account = _accountRevision;
         final navigation = _navigationIntent;
-        await Future.wait([refreshList(), attention.refresh()]);
+        await refreshList();
         if (account != _accountRevision || _disposed) return;
         if (data['targetSession'] != null &&
             navigation == _navigationIntent &&
@@ -451,7 +446,6 @@ class LiveController extends ChangeNotifier {
     _selectFirstSessionOnRefresh = false;
     _retryListOnNetwork = false;
     _deleted.clear();
-    attention.reset();
     _selection++;
     loading = false;
     busy = true;
@@ -475,7 +469,7 @@ class LiveController extends ChangeNotifier {
       _selectFirstSessionOnRefresh = true;
       changed();
       unawaited(_restartRooms());
-      await Future.wait([refreshList(), attention.refresh()]);
+      await refreshList();
     } catch (e) {
       error = describe(e);
     } finally {
@@ -494,7 +488,6 @@ class LiveController extends ChangeNotifier {
       _selectFirstSessionOnRefresh = false;
       _retryListOnNetwork = false;
       _deleted.clear();
-      attention.reset();
       _selection++;
       loading = false;
       await flushDraft();
@@ -803,7 +796,6 @@ class LiveController extends ChangeNotifier {
       await gateway.call('draft', {'sessionId': id, 'text': ''});
     });
     _draftWrites = clear.catchError((Object _) {});
-    unawaited(attention.memoryChanged());
     changed();
     return _draftWrites;
   }
@@ -829,7 +821,6 @@ class LiveController extends ChangeNotifier {
         } else {
           unawaited(refreshList());
         }
-        unawaited(attention.refresh());
       }
       return;
     }
@@ -871,12 +862,11 @@ class LiveController extends ChangeNotifier {
       loading = false;
       initializing = origin != null;
       // Reset notifies listeners: publish the complete new identity/state first.
-      attention.reset();
       changed();
       unawaited(_restartRooms());
       final account = _accountRevision;
       unawaited(
-        Future.wait([refreshList(), attention.refresh()]).whenComplete(() {
+        refreshList().whenComplete(() {
           if (!_disposed && account == _accountRevision) {
             initializing = false;
             changed();
@@ -912,9 +902,7 @@ class LiveController extends ChangeNotifier {
           final changes = Set<String>.of(_indexChanges);
           _indexChanges.clear();
           if (!active || origin == null) return;
-          if (changes.contains('memory_changed')) {
-            unawaited(attention.memoryChanged());
-          }
+          if (changes.contains('memory_changed')) {}
           if (changes.contains('directory_changed') ||
               changes.contains('sessions_changed')) {
             unawaited(refreshList());
@@ -930,7 +918,6 @@ class LiveController extends ChangeNotifier {
         if (connection == 'live') _everLive = true;
         if (reconnect) {
           unawaited(refreshList());
-          unawaited(attention.refresh());
         }
       case 'control':
         control = obj(event['data']);
@@ -1015,10 +1002,7 @@ class LiveController extends ChangeNotifier {
       // visible polling through `active == false`.
       if (_documentDepth > 0) await gateway.call('unwatch');
     } else {
-      await Future.wait([
-        refreshList(),
-        attention.refresh(preserveUnchangedMemory: preserveUnchangedMemory),
-      ]);
+      await refreshList();
       if (current() && sessionId != null) {
         await gateway.call('watch', {'sessionId': sessionId});
       }
@@ -1060,7 +1044,6 @@ class LiveController extends ChangeNotifier {
     });
     if (account == _accountRevision && !_disposed) {
       unawaited(refreshList());
-      unawaited(attention.refresh());
     }
   }
 
@@ -1439,8 +1422,6 @@ class LiveController extends ChangeNotifier {
     _disposed = true;
     rooms.dispose();
     _panelData?.dispose();
-    attention.removeListener(changed);
-    attention.dispose();
     _events?.cancel();
     _poll?.cancel();
     _indexRefresh?.cancel();

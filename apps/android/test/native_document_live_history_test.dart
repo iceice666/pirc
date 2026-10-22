@@ -11,6 +11,7 @@ import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/rendering/html_buttons.dart';
 import 'package:pirc_mobile/rendering/html_document_urls.dart';
 import 'app_document_live_routes_test.dart' show RouteGateway, scope;
+import 'session_documents.dart';
 import 'live_test.dart' show theme;
 
 final _pircShell = File('../web/index.html').readAsStringSync();
@@ -149,12 +150,7 @@ void main() {
         sourceUrl,
         'https://gateway.example/conversations/latest?session=session-latest',
       );
-      await tester.enterText(
-        find.byKey(const Key('live-draft')),
-        'App draft to restore',
-      );
-      await tester.pump();
-      expect(controller.draft, 'App draft to restore');
+      await openSessionDocument(tester, 'source-form');
 
       await _tapHtmlButton(tester);
       expect(find.byType(NativeDocumentWorkspace), findsOneWidget);
@@ -186,7 +182,6 @@ void main() {
       await _tapHtmlButton(tester);
       expect(find.byType(NativeDocumentWorkspace), findsNothing);
       expect(controller.sessionId, 'session-second');
-      expect(controller.draft, 'Second session saved draft');
       expect(controller.active, isTrue);
       expect(window.history, hasLength(2));
       expect(window.currentAppRoute, isNotNull);
@@ -236,7 +231,6 @@ void main() {
       expect(window.index, -1);
       expect(find.byType(NativeDocumentWorkspace), findsNothing);
       expect(controller.sessionId, 'session-latest');
-      expect(controller.draft, 'App draft to restore');
       expect(controller.active, isTrue);
       expect(scope(tester).documentUrl, sourceUrl);
       expect(gateway.documentRequests, hasLength(2));
@@ -266,7 +260,6 @@ void main() {
       expect(window.currentAppRoute, isNotNull);
       expect(find.byType(NativeDocumentWorkspace), findsNothing);
       expect(controller.sessionId, 'session-second');
-      expect(controller.draft, 'Second session saved draft');
       expect(controller.active, isTrue);
       expect(
         scope(tester).documentUrl,

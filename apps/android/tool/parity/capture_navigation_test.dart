@@ -6,7 +6,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/app.dart';
 import 'package:pirc_mobile/live/gateway.dart';
-import 'package:pirc_mobile/live/memory_settings.dart';
 import '../../test/live_test.dart' show FakeGateway, theme;
 import 'capture_fonts.dart';
 
@@ -26,7 +25,7 @@ class _FixtureGateway extends FakeGateway {
 }
 
 void main() {
-  for (final kind in ['navigation', 'workspace', 'memory']) {
+  for (final kind in ['navigation', 'workspace']) {
     for (final brightness in Brightness.values) {
       testWidgets('shared $kind fixture ${brightness.name}', (t) async {
         final fixture = obj(
@@ -44,23 +43,12 @@ void main() {
         addTearDown(t.view.reset);
         addTearDown(t.platformDispatcher.clearPlatformBrightnessTestValue);
         final g = _FixtureGateway(fixture);
-        final c = LiveController(g);
+        final c = LiveController(g, showing: 'engine');
         final key = GlobalKey();
         await t.pumpWidget(
           RepaintBoundary(
             key: key,
-            child: kind == 'memory'
-                ? MaterialApp(
-                    debugShowCheckedModeBanner: false,
-                    theme: theme.build(brightness),
-                    home: Scaffold(
-                      body: SingleChildScrollView(
-                        padding: const EdgeInsets.all(20),
-                        child: MemorySettings(controller: c),
-                      ),
-                    ),
-                  )
-                : MobileApp(theme: theme, controller: c),
+            child: MobileApp(theme: theme, controller: c),
           ),
         );
         await t.pumpAndSettle();

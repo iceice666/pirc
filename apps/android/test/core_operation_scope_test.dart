@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/gateway.dart';
-import 'package:pirc_mobile/live/conversation_composer.dart';
-import 'live_test.dart' show FakeGateway, theme;
+import 'live_test.dart' show FakeGateway;
 import 'attachment_upload_test.dart' show file;
 
 void main() {
@@ -86,70 +84,6 @@ void main() {
     expect(completed, isTrue);
   });
 
-  for (final width in [390.0, 768.0]) {
-    for (final brightness in Brightness.values) {
-      testWidgets(
-        'Stop remains actionable during pending steer at $width in ${brightness.name}',
-        (t) async {
-          t.view.devicePixelRatio = 1;
-          t.view.physicalSize = Size(width, 900);
-          addTearDown(t.view.reset);
-          final g = FakeGateway(),
-              c = LiveController(g, showing: 'engine')
-                ..sessionId = 's'
-                ..connection = 'live'
-                ..control = {'held': true}
-                ..state = {
-                  'run': {'status': 'running'},
-                }
-                ..draft = 'steer';
-          final steer = Completer<Json>();
-          g.handler = (method, args) async {
-            if (method == 'command' &&
-                (args['payload'] as Json)['type'] == 'steer') {
-              return steer.future;
-            }
-            return g.normal(method, args);
-          };
-          final sending = c.send('steer');
-          final text = TextEditingController(text: c.draft);
-          await t.pumpWidget(
-            MaterialApp(
-              theme: theme.build(brightness),
-              home: Scaffold(
-                body: AnimatedBuilder(
-                  animation: c,
-                  builder: (_, _) =>
-                      ConversationComposer(controller: c, text: text),
-                ),
-              ),
-            ),
-          );
-          await t.pump();
-          await t.tap(find.byTooltip('Stop run'));
-          await t.pump();
-          final stopped = g.calls
-              .where(
-                (call) =>
-                    call.$1 == 'command' &&
-                    (call.$2['payload'] as Json)['type'] == 'stop',
-              )
-              .length;
-          final stillBusy = c.busy;
-          steer.complete({'status': 'accepted'});
-          await sending;
-          final done = !c.busy;
-          await t.pumpWidget(const SizedBox());
-          text.dispose();
-          c.dispose();
-          await g.stream.close();
-          expect(stopped, 1);
-          expect(stillBusy, isTrue);
-          expect(done, isTrue);
-        },
-      );
-    }
-  }
   test('Stop still requires a live connection and held control', () async {
     final g = FakeGateway(),
         c = LiveController(g, showing: 'engine')

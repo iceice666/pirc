@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../theme.dart';
@@ -12,7 +10,6 @@ import 'common.dart';
 import 'panels.dart';
 import 'settings.dart';
 import 'settings_dialog.dart';
-import 'interaction.dart';
 import 'permissions.dart';
 import 'pairing_scanner.dart';
 import 'mobile_tabs.dart';
@@ -20,13 +17,9 @@ import 'rooms_page.dart';
 import 'engine_overview.dart';
 import 'session_sidebar.dart';
 import 'workspace_page.dart';
-import 'conversation_header.dart';
+
+import 'session_view.dart';
 import 'conversation_empty.dart';
-import 'conversation_composer.dart';
-import 'conversation_timeline.dart';
-import 'conversation_jump_latest.dart';
-import 'conversation_earlier_messages.dart';
-import 'timeline_models.dart';
 import 'side_panel.dart';
 import 'document_navigation_state.dart';
 import 'document_navigation.dart';
@@ -173,63 +166,54 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     panelKind: panelKind,
     panelWidth: panelWidth,
     sidebarCollapsed: sidebarCollapsed,
-    scrollOffset: chatScroll.hasClients ? chatScroll.offset : 0,
+    scrollOffset: 0,
   );
 
-  Future<void> _restoreDocumentAppState(Object value) => guarded(
-    context,
-    () async {
-      if (value is! _AppDocumentViewSnapshot ||
-          !mounted ||
-          value.surfaceOwner != _surfaceOwner) {
-        return;
-      }
-      final ticket = ++_documentRouteTicket;
-      final account = _documents.accountIdentity;
-      bool current() =>
-          mounted &&
-          ticket == _documentRouteTicket &&
-          account == _documents.accountIdentity;
-      _documentRouting = true;
-      try {
-        await c.flushDraft();
-        if (!current()) return;
-        if (value.sessionId != c.sessionId) {
-          if (value.sessionId == null) {
-            await c.home();
-          } else {
-            await c.open(value.sessionId!, reveal: false);
+  Future<void> _restoreDocumentAppState(Object value) =>
+      guarded(context, () async {
+        if (value is! _AppDocumentViewSnapshot ||
+            !mounted ||
+            value.surfaceOwner != _surfaceOwner) {
+          return;
+        }
+        final ticket = ++_documentRouteTicket;
+        final account = _documents.accountIdentity;
+        bool current() =>
+            mounted &&
+            ticket == _documentRouteTicket &&
+            account == _documents.accountIdentity;
+        _documentRouting = true;
+        try {
+          await c.flushDraft();
+          if (!current()) return;
+          if (value.sessionId != c.sessionId) {
+            if (value.sessionId == null) {
+              await c.home();
+            } else {
+              await c.open(value.sessionId!, reveal: false);
+            }
+          }
+          if (!current() || value.sessionId != c.sessionId) return;
+          setState(() {
+            _appSurfaceIdentity = value.surfaceIdentity;
+            _documentRouteUrl = value.url;
+            section = value.section;
+            listOpen = value.listOpen;
+            panelOpen = value.panelOpen;
+            panelKind = value.panelKind;
+            panelWidth = value.panelWidth;
+            sidebarCollapsed = value.sidebarCollapsed;
+          });
+          if (value.panelOpen && value.sessionId != null) {
+            _panel(value.panelKind ?? 'files', remember: false);
+          }
+        } finally {
+          if (ticket == _documentRouteTicket) {
+            _documentRouting = false;
+            if (mounted) _update();
           }
         }
-        if (!current() || value.sessionId != c.sessionId) return;
-        setState(() {
-          _appSurfaceIdentity = value.surfaceIdentity;
-          _documentRouteUrl = value.url;
-          section = value.section;
-          listOpen = value.listOpen;
-          panelOpen = value.panelOpen;
-          panelKind = value.panelKind;
-          panelWidth = value.panelWidth;
-          sidebarCollapsed = value.sidebarCollapsed;
-        });
-        if (value.panelOpen && value.sessionId != null) {
-          _panel(value.panelKind ?? 'files', remember: false);
-        }
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (current() && chatScroll.hasClients) {
-            chatScroll.jumpTo(
-              value.scrollOffset.clamp(0, chatScroll.position.maxScrollExtent),
-            );
-          }
-        });
-      } finally {
-        if (ticket == _documentRouteTicket) {
-          _documentRouting = false;
-          if (mounted) _update();
-        }
-      }
-    },
-  );
+      });
 
   void _replaceDocumentAddress(String key, String id) {
     final current = _currentDocumentUrl;
@@ -320,19 +304,9 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
   final scaffold = GlobalKey<ScaffoldState>();
   final paneKey = GlobalKey();
   final sidebarKey = GlobalKey();
-  final chatKey = GlobalKey();
   final panelCache = <String, Widget>{};
   final panelCounts = <String, int>{};
   final paneHistory = <Widget>[];
-  String? highlightedMessage;
-  String? readingMessage;
-  Timer? highlightTimer;
-  final chatScroll = ScrollController();
-  bool _revealingEarlier = false, _earlierCheckScheduled = false;
-  bool _following = true;
-  double _lastScrollTop = 0;
-  final _earlierButtonKey = GlobalKey();
-  final composer = TextEditingController();
   final search = TextEditingController();
   Widget? pane;
   String? seenSession;
@@ -345,13 +319,10 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
   StreamSubscription<Json>? panelEvents;
   String? seenOrigin, seenClient, previousRun;
   Future<void> layoutWrite = Future.value();
-  String seenContent = '';
-  bool newContent = false;
   bool listOpen = true;
   bool sidebarCollapsed = false;
   bool? phoneLayout;
   String? section;
-  bool _syncing = false;
   bool _platformVisible = true;
   int seenNavigationRevision = 0;
   @override
@@ -372,8 +343,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     c.addListener(_update);
     c.panelData.addListener(_syncPanelCounts);
-    composer.addListener(_typed);
-    chatScroll.addListener(_onTimelineScroll);
     panelEvents = c.gateway.events.listen((event) {
       if (event['sessionId'] == c.sessionId && event['type'] == 'panelChange') {
         countRefresh?.cancel();
@@ -384,10 +353,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       }
     });
     unawaited(_bootView());
-  }
-
-  void _typed() {
-    if (!_syncing) c.editDraft(composer.text);
   }
 
   void _update() {
@@ -441,10 +406,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       seenOrigin = c.origin;
       seenClient = c.clientId;
       seenSession = c.sessionId;
-      seenContent = '';
-      newContent = false;
-      _following = true;
-      _lastScrollTop = 0;
     }
     c.sessionVisible =
         c.active &&
@@ -468,119 +429,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     final run = obj(c.state['run'])['status'] as String?;
     if (previousRun == 'running' && run != 'running') unawaited(_panelCounts());
     previousRun = run;
-    if (composer.text != c.draft) {
-      _syncing = true;
-      composer.value = TextEditingValue(
-        text: c.draft,
-        selection: TextSelection.collapsed(offset: c.draft.length),
-      );
-      _syncing = false;
-    }
-    final last = c.messages.lastOrNull;
-    final fingerprint = '${jsonEncode(last)}:${c.questions.length}';
-    if (fingerprint != seenContent) {
-      final bottom = _following || !chatScroll.hasClients;
-      seenContent = fingerprint;
-      if (bottom) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted &&
-              _following &&
-              !_revealingEarlier &&
-              chatScroll.hasClients) {
-            chatScroll.jumpTo(chatScroll.position.maxScrollExtent);
-          }
-        });
-      } else {
-        newContent = true;
-      }
-    }
-    if (c.notificationQuestion != null &&
-        c.sessionId != null &&
-        c.state.isNotEmpty &&
-        !c.initializing &&
-        c.onboardingComplete) {
-      final intent = c.notificationQuestion!;
-      c.notificationQuestion = null;
-      final interactionId = intent['interactionId'];
-      final interactionEpoch = intent['interactionEpoch'] ?? intent['epoch'];
-      final rawNotificationPairingStamp =
-          intent['interactionPairingStamp'] ?? intent['questionPairingStamp'];
-      final notificationPairingStamp = rawNotificationPairingStamp is String
-          ? rawNotificationPairingStamp
-          : null;
-      final pairingMismatch =
-          notificationPairingStamp != null &&
-          notificationPairingStamp != c.pairingStamp;
-      final q = interactionId == null || pairingMismatch
-          ? null
-          : rows(c.state['interactions'])
-                .where(
-                  (q) =>
-                      q['id'] == interactionId &&
-                      (interactionEpoch == null ||
-                          '${q['epoch']}' == '$interactionEpoch'),
-                )
-                .firstOrNull;
-      final account = _documents.accountIdentity;
-      final targetController = c;
-      final targetSessionId = c.sessionId;
-      final routedSessionId = intent['sessionId'];
-      final targetOrigin = c.origin;
-      final targetPairingStamp = c.pairingStamp;
-      final targetAccountRevision = c.accountRevision;
-      final targetNavigationRevision = c.sessionNavigationRevision;
-      bool routeStillOwnsQuestion() =>
-          mounted &&
-          identical(c, targetController) &&
-          targetSessionId != null &&
-          targetSessionId.isNotEmpty &&
-          routedSessionId == targetSessionId &&
-          c.sessionId == targetSessionId &&
-          c.origin == targetOrigin &&
-          c.pairingStamp == targetPairingStamp &&
-          c.accountRevision == targetAccountRevision &&
-          c.sessionNavigationRevision == targetNavigationRevision &&
-          account == _documents.accountIdentity;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!routeStillOwnsQuestion()) return;
-        if (widget.documentWindow == null) {
-          await _documentHost.currentState?.selectWindow(null);
-          if (!routeStillOwnsQuestion()) return;
-        }
-        await WidgetsBinding.instance.endOfFrame;
-        if (!routeStillOwnsQuestion()) return;
-        final appContext = _appSurface.currentState?.appContext;
-        if (appContext != null && appContext.mounted) {
-          showModalBottomSheet<void>(
-            context: appContext,
-            isScrollControlled: true,
-            useSafeArea: true,
-            builder: (_) => QuestionSheet(
-              controller: targetController,
-              question:
-                  q ??
-                  {
-                    'id': interactionId,
-                    'epoch': interactionEpoch,
-                    'title': '確認通知狀態',
-                  },
-              requiresManualReview:
-                  interactionId == null ||
-                  interactionEpoch == null ||
-                  notificationPairingStamp == null,
-              notificationPairingStamp: notificationPairingStamp,
-              initialChoice:
-                  interactionId != null &&
-                      interactionEpoch != null &&
-                      notificationPairingStamp != null &&
-                      !pairingMismatch
-                  ? intent['answerChoice'] as String?
-                  : null,
-            ),
-          );
-        }
-      });
-    }
     if (c.routePage != null &&
         c.origin != null &&
         !c.initializing &&
@@ -644,14 +492,11 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       _saveLayout({'panelWidth': panelWidth.round()});
     }
     c.dispose();
-    highlightTimer?.cancel();
     resizeSave?.cancel();
     countRefresh?.cancel();
     unawaited(panelEvents?.cancel());
     panelToggleFocus.dispose();
-    composer.dispose();
     search.dispose();
-    chatScroll.dispose();
     super.dispose();
   }
 
@@ -799,14 +644,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       panelOpen = false;
       _rememberPanel();
       panelToggleFocus.requestFocus();
-      if (readingMessage != null) {
-        highlightedMessage = readingMessage;
-        readingMessage = null;
-        highlightTimer?.cancel();
-        highlightTimer = Timer(const Duration(seconds: 1), () {
-          if (mounted) setState(() => highlightedMessage = null);
-        });
-      }
     });
   }
 
@@ -825,14 +662,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     if (MediaQuery.sizeOf(context).width > 860) {
       _saveLayout({'detailsOpen': panelOpen});
     }
-  }
-
-  void _resizePanel(double width) {
-    setState(() => panelWidth = width);
-    resizeSave?.cancel();
-    resizeSave = Timer(const Duration(milliseconds: 150), () {
-      if (mounted) _saveLayout({'panelWidth': panelWidth.round()});
-    });
   }
 
   void _sidebarCollapsed(bool value) {
@@ -862,7 +691,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     unawaited(_panelCounts());
     setState(() {
       paneHistory.clear();
-      readingMessage = null;
       panelKind = kind;
       if (path != null) panelCache.remove(kind);
       panelCache.putIfAbsent(
@@ -937,8 +765,12 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
               final overlay = size.maxWidth <= 860;
               final showList = phone && listOpen;
               final showTabs = phone && (listOpen || section != null);
+              // The panes are the session's page: back leaves a pane opened
+              // from another, then the session, not "the side panel".
               final canLeave =
-                  !panelOpen && (!phone || listOpen) && section == null;
+                  paneHistory.isEmpty &&
+                  (!phone || listOpen || c.sessionId == null) &&
+                  section == null;
               return ListenableBuilder(
                 listenable: _documents,
                 builder: (context, _) {
@@ -950,7 +782,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
                     canPop: historyOwnsBack || canLeave,
                     onPopInvokedWithResult: (didPop, result) {
                       if (didPop || historyOwnsBack) return;
-                      if (panelOpen) {
+                      if (paneHistory.isNotEmpty) {
                         _closePane();
                       } else if (phone && listOpen && section != null) {
                         _closePhoneSidebar();
@@ -1116,11 +948,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
                                   ],
                                 ),
                               ),
-                              if (overlay &&
-                                  pane != null &&
-                                  !showList &&
-                                  section == null)
-                                ..._overlayPanel(phone, size.maxWidth),
                             ],
                           ),
                         ),
@@ -1216,39 +1043,18 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     _update();
   }
 
-  Widget _header() => ConversationHeader(
+  Widget _header() => SessionHeader(
     controller: c,
     sidebarCollapsed: sidebarCollapsed,
-    panelOpen: panelOpen,
-    panelFocus: panelToggleFocus,
     onBack: _showList,
     onExpand: () => _sidebarCollapsed(false),
-    onPanel: () => panelOpen ? _closePane() : _panel(panelKind ?? 'files'),
     onWorkspace: () {
       final id = obj(c.state['session'])['workspaceId'];
       if (id != null) _openWorkspace('$id');
     },
-    onOrigin: (origin) => _openSession('${origin['fromSessionId']}'),
   );
 
   Widget _conversationArea(bool overlay, bool phone, double viewport) {
-    final width = panelWidth
-        .clamp(280.0, sidePanelMax(viewport, sidebarCollapsed))
-        .toDouble();
-    Widget contents() => ExcludeFocus(
-      excluding: overlay && panelOpen,
-      child: ExcludeSemantics(
-        excluding: overlay && panelOpen,
-        child: IgnorePointer(
-          ignoring: overlay && panelOpen,
-          child: Column(
-            key: chatKey,
-            children: [Expanded(child: _chat())],
-          ),
-        ),
-      ),
-    );
-
     if (c.initializing ||
         (c.sessionId != null && c.state.isEmpty && c.error == null)) {
       return const AppLoadingState();
@@ -1256,162 +1062,53 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     if (c.sessionId == null || c.state.isEmpty) {
       return const AppNoSessionState();
     }
+    // A session is shown by its panes (decision 4): no transcript, no
+    // composer. The panes take the whole page.
+    if (pane == null || !panelOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && c.sessionId != null && (pane == null || !panelOpen)) {
+          _panel(panelKind ?? 'files', remember: false);
+        }
+      });
+    }
     return Column(
       children: [
         _header(),
         if (c.error != null) ConversationErrorBanner(controller: c),
-        if (c.sessionId != null &&
-            c.state.isNotEmpty &&
-            c.control['held'] != true)
-          ConversationViewerBanner(controller: c),
         Expanded(
-          child: Stack(
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: contents()),
-                  if (!overlay && pane != null)
-                    Offstage(
-                      offstage: !panelOpen,
-                      child: SizedBox(
-                        width: width,
-                        child: _panelBody(
-                          overlay,
-                          width,
-                          sidePanelMax(viewport, sidebarCollapsed),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
+          child: pane == null
+              ? const AppLoadingState()
+              : LayoutBuilder(
+                  builder: (context, size) => NativeSidePanel(
+                    tab: panelKind ?? 'files',
+                    git: c.sessionPanel('git'),
+                    terminal: c.sessionPanel('terminals'),
+                    open: true,
+                    overlay: false,
+                    width: size.maxWidth,
+                    maxWidth: size.maxWidth,
+                    activity: panelCounts,
+                    onSelect: _panel,
+                    onResize: (_) {},
+                    child: paneHistory.isEmpty
+                        ? pane!
+                        : Column(
+                            children: [
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: IconButton(
+                                  tooltip: 'Back to side panel',
+                                  onPressed: _closePane,
+                                  icon: const Icon(LucideIcons.arrowLeft),
+                                ),
+                              ),
+                              Expanded(child: pane!),
+                            ],
+                          ),
+                  ),
+                ),
         ),
       ],
-    );
-  }
-
-  Widget _panelBody(bool overlay, double width, double maxWidth) => Offstage(
-    offstage: !panelOpen,
-    child: TickerMode(
-      enabled: panelOpen,
-      child: Focus(
-        onKeyEvent: (_, event) {
-          if (overlay &&
-              panelOpen &&
-              panelKind != 'terminals' &&
-              event is KeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.escape) {
-            _closePane();
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        },
-        child: ExcludeFocus(
-          excluding: !panelOpen,
-          child: _pane(overlay, width, maxWidth),
-        ),
-      ),
-    ),
-  );
-  List<Widget> _overlayPanel(bool phone, double viewport) => [
-    if (panelOpen)
-      Positioned.fill(
-        top: 56,
-        child: ModalBarrier(
-          key: const Key('panel-scrim'),
-          color: Colors.black.withValues(alpha: .25),
-          dismissible: true,
-          semanticsLabel: 'Close side panel',
-          onDismiss: _closePane,
-        ),
-      ),
-    if (pane != null)
-      Positioned(
-        top: 56,
-        bottom: phone
-            ? 0
-            : MediaQuery.paddingOf(context).bottom.clamp(8, double.infinity),
-        right: phone ? 0 : 8,
-        width: phone ? viewport : (viewport - 16).clamp(0, 420),
-        child: Offstage(
-          offstage: !panelOpen,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.vertical(
-                top: const Radius.circular(20),
-                bottom: Radius.circular(phone ? 0 : 20),
-              ),
-              boxShadow: [
-                BoxShadow(color: palette(context)['web.line'], spreadRadius: 1),
-                BoxShadow(
-                  color: Colors.black.withValues(
-                    alpha: Theme.of(context).brightness == Brightness.dark
-                        ? .45
-                        : .12,
-                  ),
-                  offset: const Offset(0, 12),
-                  blurRadius: 40,
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.vertical(
-                top: const Radius.circular(20),
-                bottom: Radius.circular(phone ? 0 : 20),
-              ),
-              child: ColoredBox(
-                color: palette(context)['web.bg-layer'],
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    bottom: phone ? MediaQuery.paddingOf(context).bottom : 0,
-                  ),
-                  child: _panelBody(
-                    true,
-                    panelWidth,
-                    sidePanelMax(viewport, sidebarCollapsed),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-  ];
-  Widget _pane(bool overlay, double width, double maxWidth) {
-    if (panelKind != null && paneHistory.isEmpty) {
-      return NativeSidePanel(
-        key: paneKey,
-        tab: panelKind!,
-        git: c.sessionPanel('git'),
-        terminal: c.sessionPanel('terminals'),
-        open: panelOpen,
-        overlay: overlay,
-        width: width,
-        maxWidth: maxWidth,
-        activity: panelCounts,
-        onSelect: _panel,
-        onResize: _resizePanel,
-        child: pane!,
-      );
-    }
-    return Material(
-      key: paneKey,
-      color: palette(context)['web.bg-layer'],
-      child: Column(
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: IconButton(
-              tooltip: 'Back to side panel',
-              onPressed: _closePane,
-              icon: const Icon(LucideIcons.arrowLeft),
-            ),
-          ),
-          Expanded(child: pane!),
-        ],
-      ),
     );
   }
 
@@ -1453,245 +1150,6 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     onPage: _page,
     onCollapse: () => _sidebarCollapsed(true),
   );
-
-  void _onTimelineScroll() {
-    if (!chatScroll.hasClients) return;
-    final position = chatScroll.position;
-    final top = position.pixels;
-    final nearBottom = position.extentAfter < 80;
-    if (top < _lastScrollTop - 1) {
-      _following = nearBottom;
-    } else if (nearBottom) {
-      _following = true;
-    }
-    if (_following && newContent) setState(() => newContent = false);
-    _lastScrollTop = top;
-    _scheduleEarlierCheck();
-  }
-
-  void _scheduleEarlierCheck() {
-    if (_earlierCheckScheduled || _revealingEarlier || c.hiddenMessages == 0) {
-      return;
-    }
-    _earlierCheckScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _earlierCheckScheduled = false;
-      if (!mounted || _revealingEarlier || !chatScroll.hasClients) return;
-      final button = _earlierButtonKey.currentContext?.findRenderObject();
-      final viewport = button is RenderBox
-          ? RenderAbstractViewport.maybeOf(button)
-          : null;
-      if (button is! RenderBox || viewport == null) return;
-      final offset = viewport.getOffsetToReveal(button, 0).offset;
-      final position = chatScroll.position;
-      // IntersectionObserver uses a 200px top root margin on .timeline.
-      if (offset + button.size.height >= position.pixels - 200 &&
-          offset <= position.pixels + position.viewportDimension) {
-        _showEarlier();
-      }
-    });
-  }
-
-  void _showEarlier() {
-    if (_revealingEarlier || c.hiddenMessages == 0 || !chatScroll.hasClients) {
-      return;
-    }
-    final session = c.sessionId;
-    final navigation = c.sessionNavigationRevision;
-    final previousExtent = chatScroll.position.maxScrollExtent;
-    final previousTop = chatScroll.offset;
-    _revealingEarlier = true;
-    c.revealEarlierMessages();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (session == c.sessionId &&
-          navigation == c.sessionNavigationRevision &&
-          chatScroll.hasClients) {
-        final position = chatScroll.position;
-        chatScroll.jumpTo(
-          (previousTop + position.maxScrollExtent - previousExtent).clamp(
-            position.minScrollExtent,
-            position.maxScrollExtent,
-          ),
-        );
-      }
-      _revealingEarlier = false;
-      _scheduleEarlierCheck();
-    });
-  }
-
-  void _keepBottomAfterLayout() {
-    if (_revealingEarlier || !_following || !chatScroll.hasClients) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted &&
-          _following &&
-          !_revealingEarlier &&
-          chatScroll.hasClients) {
-        chatScroll.jumpTo(chatScroll.position.maxScrollExtent);
-      }
-    });
-  }
-
-  Widget _chat() {
-    _scheduleEarlierCheck();
-    _keepBottomAfterLayout();
-    return LayoutBuilder(
-      builder: (context, bounds) => Column(
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                CustomScrollView(
-                  controller: chatScroll,
-                  slivers: [
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        (bounds.maxWidth - bounds.maxWidth.clamp(0, 780)) / 2 +
-                            (MediaQuery.sizeOf(context).width <= 650
-                                ? 14
-                                : MediaQuery.sizeOf(context).width <= 1100
-                                ? 24
-                                : 32),
-                        MediaQuery.sizeOf(context).width <= 650 ? 8 : 16,
-                        (bounds.maxWidth - bounds.maxWidth.clamp(0, 780)) / 2 +
-                            (MediaQuery.sizeOf(context).width <= 650
-                                ? 14
-                                : MediaQuery.sizeOf(context).width <= 1100
-                                ? 24
-                                : 32),
-                        c.messages.isEmpty
-                            ? 0
-                            : MediaQuery.sizeOf(context).width <= 650
-                            ? 20
-                            : 32,
-                      ),
-                      sliver: SliverMainAxisGroup(
-                        slivers: [
-                          SliverToBoxAdapter(
-                            child:
-                                NotificationListener<
-                                  SizeChangedLayoutNotification
-                                >(
-                                  onNotification: (_) {
-                                    _keepBottomAfterLayout();
-                                    _scheduleEarlierCheck();
-                                    return false;
-                                  },
-                                  child: SizeChangedLayoutNotifier(
-                                    child: Column(
-                                      children: [
-                                        if (c.hiddenMessages > 0)
-                                          ConversationEarlierMessages(
-                                            buttonKey: _earlierButtonKey,
-                                            hiddenCount: c.hiddenMessages,
-                                            onPressed: _showEarlier,
-                                          ),
-                                        ConversationTimeline(
-                                          controller: c,
-                                          onFile: (path) =>
-                                              _panel('files', path: path),
-                                          highlightedMessage:
-                                              highlightedMessage,
-                                        ),
-                                        for (final q
-                                            in timelineInteractionsNotEmbedded(
-                                              c.visibleMessages,
-                                              c.questions,
-                                            ))
-                                          QuestionSheet(
-                                            key: ValueKey(
-                                              '${c.sessionId}:${q['id']}:${q['epoch']}',
-                                            ),
-                                            controller: c,
-                                            question: q,
-                                            embedded: true,
-                                            onLayout: _keepBottomAfterLayout,
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                          ),
-                          if (c.messages.isEmpty)
-                            SliverFillRemaining(
-                              hasScrollBody: false,
-                              // Include the trailing inset in the fill extent:
-                              // outer sliver padding otherwise adds scroll room
-                              // below an already viewport-filling empty state.
-                              child: Padding(
-                                padding: EdgeInsets.only(
-                                  bottom:
-                                      MediaQuery.sizeOf(context).width <= 650
-                                      ? 20
-                                      : 32,
-                                ),
-                                child: const ConversationEmptyState(),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                if (newContent)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 12,
-                    child: Center(
-                      child: ConversationJumpLatest(
-                        onPressed: () {
-                          _following = true;
-                          setState(() => newContent = false);
-                          chatScroll.animateTo(
-                            chatScroll.position.maxScrollExtent,
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeOut,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                // Composer.svelte's ::before overlays the preceding 24px of
-                // transcript without taking layout space or pointer events.
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: 24,
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      key: const Key('conversation-composer-fade'),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            palette(
-                              context,
-                            )['surface.page'].withValues(alpha: 0),
-                            palette(context)['surface.page'],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: bounds.maxHeight),
-            child: _composer(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _composer() => ConversationComposer(controller: c, text: composer);
 }
 
 class _IndependentAppWindow extends StatefulWidget {

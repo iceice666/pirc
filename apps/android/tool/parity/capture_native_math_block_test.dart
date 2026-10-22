@@ -26,10 +26,9 @@ void main() {
           .cast<Map<String, dynamic>>()
           .where((item) => item['mode'] == 'display')
           .toList(growable: false);
-      final bodyFontSize =
-          (fixture['capture']['paragraphFontSize'] as num).toDouble();
-      final mathScale =
-          (fixture['capture']['mathFontScale'] as num).toDouble();
+      final bodyFontSize = (fixture['capture']['paragraphFontSize'] as num)
+          .toDouble();
+      final mathScale = (fixture['capture']['mathFontScale'] as num).toDouble();
       final measurements = <Map<String, Object?>>[];
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(900, 1800);
@@ -81,10 +80,7 @@ void main() {
             Text(
               'Following paragraph',
               key: paragraphKey,
-              style: TextStyle(
-                fontSize: bodyFontSize,
-                height: 1.65,
-              ),
+              style: TextStyle(fontSize: bodyFontSize, height: 1.65),
             ),
           );
         }
@@ -121,9 +117,7 @@ void main() {
           final id = item['id'] as String;
           final blockFinder = find.byKey(ValueKey('block-$scale-$id'));
           final mathFinder = find.byKey(ValueKey('math-$scale-$id'));
-          final paragraphFinder = find.byKey(
-            ValueKey('paragraph-$scale-$id'),
-          );
+          final paragraphFinder = find.byKey(ValueKey('paragraph-$scale-$id'));
           final lineBoxFinder = find.descendant(
             of: blockFinder,
             matching: find.byType(NativeMathLineBox),
@@ -183,9 +177,9 @@ void main() {
         });
       }
 
-      final output =
-          File('build/parity/native-tex/native-math-block-native.json')
-            ..parent.createSync(recursive: true);
+      final output = File(
+        'build/parity/native-tex/native-math-block-native.json',
+      )..parent.createSync(recursive: true);
       output.writeAsStringSync(
         const JsonEncoder.withIndent('  ').convert({
           'renderer': 'NativeMathDisplayBlock + NativeMathTex',

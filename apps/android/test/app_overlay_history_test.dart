@@ -13,6 +13,7 @@ import 'package:pirc_mobile/rendering/html_buttons.dart';
 
 import 'app_document_live_routes_test.dart' show scope;
 import 'live_test.dart' show theme;
+import 'session_documents.dart';
 import 'native_document_live_history_test.dart' show LiveHistoryGateway;
 
 final _pircShell = File('../web/index.html').readAsStringSync();
@@ -158,6 +159,7 @@ Future<void> _pumpApp(
   await tester.pumpWidget(MobileApp(theme: theme, controller: controller));
   await tester.pumpAndSettle();
   expect(controller.sessionId, 'session-latest');
+  await openSessionDocument(tester, 'overlay-source');
 }
 
 void _disposeAfterTest(

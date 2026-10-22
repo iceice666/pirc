@@ -27,11 +27,6 @@ const kinds = [
   'files',
   'streaming',
   'jobs',
-  'interactions',
-  'timeline',
-  'docks',
-  'composer',
-  'memory',
   'workspace',
   'navigation',
 ];
@@ -152,37 +147,7 @@ const server = await createServer({
       </script></body></html>`);
             return;
           }
-          if (kind === 'interactions') {
-            await send(`<!doctype html><html><head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{font-family:Arial!important;--font-mono:Menlo,monospace!important}body{overflow:auto!important}#fixture{padding:14px;display:flex;flex-direction:column}</style></head><body><div id="fixture"></div><script type="module">
-        import '/src/app.css'; import {mount,tick} from 'svelte'; import InteractionCard from '/src/lib/components/InteractionCard.svelte';
-        const fixture=${source}; const originalFetch=window.fetch.bind(window);
-        window.fetch=(input,init)=>String(input).endsWith('/api/models')?Promise.resolve(new Response(JSON.stringify({models:fixture.models}),{headers:{'Content-Type':'application/json'}})):originalFetch(input,init);
-        for(const interaction of fixture.questions)mount(InteractionCard,{target:document.querySelector('#fixture'),props:{interaction,onanswer:()=>{}}});
-        await new Promise(resolve=>setTimeout(resolve,100));await tick();await document.fonts.ready;window.captureReady=true;
-      </script></body></html>`);
-            return;
-          }
-          if (kind === 'timeline') {
-            await send(`<!doctype html><html><head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{font-family:Arial!important;--font-mono:Menlo,monospace!important}body{overflow:auto!important}#fixture{width:min(780px,100%);margin:0 auto;padding:16px 32px 32px;display:flex;flex-direction:column}@media(max-width:1100px){#fixture{padding-inline:24px}}@media(max-width:650px){#fixture{padding:8px 14px 20px}}</style></head><body><div id="fixture"></div><script type="module">
-        import '/src/app.css'; import '/src/markdown.css'; import {mount,tick,createRawSnippet,unmount} from 'svelte';
-        import Message from '/src/lib/components/Message.svelte'; import RunCard from '/src/lib/components/RunCard.svelte';
-        import {timelineItems} from '/src/lib/work.ts'; import {app} from '/src/lib/app.svelte.ts';
-        import {highlighterReady,highlightCode} from '/src/lib/markdown.ts';
-        const fixture=${source};
-        const target=document.querySelector('#fixture'); app.sessions=[];
-        for(const item of timelineItems(fixture.messages)) {
-          if(item.kind==='run') {
-            const children=createRawSnippet(()=>({render:()=>'<div></div>',setup:(node)=>{const components=item.messages.map(message=>mount(Message,{target:node,props:{message,grouped:true}}));return()=>components.forEach(unmount);}}));
-            mount(RunCard,{target,props:{tools:item.messages.flatMap(m=>m.tools??[]),children}});
-          } else mount(Message,{target,props:{message:item.message}});
-        }
-        highlightCode('const x = 1','javascript');
-        for(let i=0;i<100 && !highlighterReady();i++) await new Promise(resolve=>setTimeout(resolve,10));
-        await tick(); await document.fonts.ready; window.captureReady=true;
-      </script></body></html>`);
-            return;
-          }
-          if (kind === 'composer' || kind === 'docks' || kind === 'attachments') {
+          if (kind === 'attachments') {
             await send(`<!doctype html><html><head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{font-family:Arial!important}#fixture{height:100dvh;display:flex;flex-direction:column;justify-content:flex-end}</style></head><body><div id="fixture"></div><script type="module">
         import '/src/app.css'; import { mount, tick } from 'svelte';
         import { app } from '/src/lib/app.svelte.ts';
@@ -333,19 +298,6 @@ const server = await createServer({
         document.querySelector('#fixture').innerHTML=window.htmlCases.map(item=>'<section class="markdown html-case" data-case="'+item.id+'">'+item.html+'</section>').join('');
         await Promise.all([...document.images].map(i=>i.decode().catch(()=>{})));
         await document.fonts.ready;window.captureReady=true;
-      </script></body></html>`);
-            return;
-          }
-          if (kind === 'memory') {
-            await send(`<!doctype html><html><head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{font-family:Arial!important}body{overflow:auto!important}#fixture{padding:20px}#fixture h3${h3Rule}#fixture p${pRule}#fixture p${pMargins}</style></head><body><div id="fixture"></div><script type="module">
-        import '/src/app.css'; import { mount, tick } from 'svelte';
-        import MemorySettings from '/src/lib/components/MemorySettings.svelte';
-        const fixture=${source}; const originalFetch=window.fetch.bind(window);
-        window.fetch=(input,init)=>String(input).endsWith('/api/memory') ? Promise.resolve(new Response(JSON.stringify(fixture.memory),{headers:{'Content-Type':'application/json'}})) : originalFetch(input,init);
-        mount(MemorySettings,{target:document.querySelector('#fixture'),props:{onopenchat:()=>{}}});
-        for(let n=0;n<100 && !document.querySelector('.memory-usage');n++) {await new Promise(resolve=>setTimeout(resolve,10));await tick();}
-        if(!document.querySelector('.memory-usage'))throw new Error('Memory fixture did not load');
-        await document.fonts.ready; window.captureReady=true;
       </script></body></html>`);
             return;
           }

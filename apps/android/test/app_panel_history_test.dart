@@ -12,6 +12,7 @@ import 'package:pirc_mobile/live/side_panel.dart';
 import 'package:pirc_mobile/rendering/html_buttons.dart';
 
 import 'app_document_live_routes_test.dart' show scope;
+import 'session_documents.dart';
 import 'live_test.dart' show theme;
 import 'native_document_live_history_test.dart' show LiveHistoryGateway;
 
@@ -36,8 +37,7 @@ void _setDesktopViewport(WidgetTester tester) {
 }
 
 Future<void> _selectMemoryPanel(WidgetTester tester) async {
-  await tester.tap(find.byTooltip('Show side panel'));
-  await tester.pumpAndSettle();
+  // The panes are the session's page: no side panel to show first.
   await tester.tap(find.byKey(const ValueKey('panel-tab-memory')));
   await tester.pumpAndSettle();
 }
@@ -89,8 +89,9 @@ void main() {
       await tester.pumpWidget(MobileApp(theme: theme, controller: controller));
       await tester.pumpAndSettle();
       expect(controller.sessionId, 'session-latest');
-      await _selectMemoryPanel(tester);
-      _expectPanelKind(tester, 'memory');
+      // The source document is a file of the session's workspace now.
+      await openSessionDocument(tester, 'open-shell');
+      _expectPanelKind(tester, 'files');
 
       await _tapHtmlButton(tester);
 
@@ -111,7 +112,7 @@ void main() {
         scope(tester).documentUrl,
         'https://gateway.example/?session=session-latest',
       );
-      _expectPanelKind(tester, 'memory');
+      _expectPanelKind(tester, 'files');
       expect(gateway.documentRequests, hasLength(1));
       expect(tester.takeException(), isNull);
     },

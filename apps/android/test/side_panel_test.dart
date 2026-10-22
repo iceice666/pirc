@@ -34,60 +34,6 @@ class PanelGateway extends FakeGateway {
 }
 
 void main() {
-  for (final width in [390.0, 651.0, 1280.0]) {
-    testWidgets(
-      'saved panel layout at $width respects overlay and safe areas',
-      (t) async {
-        t.view.devicePixelRatio = 1;
-        t.view.physicalSize = Size(width, 900);
-        t.view.padding = const FakeViewPadding(top: 24, bottom: 24);
-        addTearDown(t.view.reset);
-        final g = PanelGateway()
-          ..prefs = {
-            'panelWidth': 512,
-            'detailsOpen': true,
-            'sidebarCollapsed': false,
-          };
-        final c = LiveController(g, showing: 'engine');
-        await t.pumpWidget(MobileApp(theme: theme, controller: c));
-        await t.pumpAndSettle();
-        await c.open('s');
-        g.publish('s');
-        await t.pumpAndSettle();
-        if (width <= 860) {
-          expect(find.byType(NativeSidePanel), findsNothing);
-          await t.tap(find.byTooltip('Show side panel'));
-          await t.pumpAndSettle();
-        }
-        final panel = find.byType(NativeSidePanel);
-        expect(t.getTopLeft(panel).dy, 80);
-        expect(
-          t.getSize(panel).width,
-          width == 390
-              ? 390
-              : width == 651
-              ? 420
-              : 512,
-        );
-        if (width == 651) expect(t.getTopLeft(panel).dx, 223);
-        expect(
-          find.byKey(const ValueKey('panel-tab-files')).hitTestable(),
-          findsOneWidget,
-        );
-        if (width <= 860) {
-          expect(
-            g.prefs['detailsOpen'],
-            true,
-            reason: 'overlay toggles do not overwrite desktop preference',
-          );
-        }
-        expect(t.takeException(), isNull);
-        await t.pumpWidget(const SizedBox());
-        await g.stream.close();
-      },
-    );
-  }
-
   testWidgets(
     'tabs follow viewport/container rules, roving focus and resize keyboard/drag/reset',
     (t) async {
@@ -182,52 +128,31 @@ void main() {
       expect(t.takeException(), isNull);
     },
   );
-  testWidgets(
-    'actual shell starts Files, keeps mounted contents closed, restores focus and persists wide layout',
-    (t) async {
-      t.view.devicePixelRatio = 1;
-      t.view.physicalSize = const Size(1280, 900);
-      addTearDown(t.view.reset);
-      final g = PanelGateway(), c = LiveController(g, showing: 'engine');
-      await t.pumpWidget(MobileApp(theme: theme, controller: c));
-      await t.pumpAndSettle();
-      await c.open('s');
-      g.publish('s');
-      await t.pumpAndSettle();
-      await t.tap(find.byTooltip('Show side panel'));
-      await t.pumpAndSettle();
-      final pane = t.state(find.byType(FilesPane));
-      expect(g.prefs['detailsOpen'], true);
-      expect(t.getTopLeft(find.byType(NativeSidePanel)).dy, 56);
-      await t.tap(find.byTooltip('Hide side panel'));
-      await t.pumpAndSettle();
-      expect(find.byType(FilesPane), findsNothing);
-      expect(find.byType(FilesPane, skipOffstage: false), findsOneWidget);
-      expect(g.prefs['detailsOpen'], false);
-      await t.tap(find.byTooltip('Show side panel'));
-      await t.pumpAndSettle();
-      expect(t.state(find.byType(FilesPane)), same(pane));
-      t.view.physicalSize = const Size(768, 900);
-      await t.pumpAndSettle();
-      expect(find.byKey(const Key('panel-resizer')), findsNothing);
-      await t.sendKeyEvent(LogicalKeyboardKey.escape);
-      await t.pumpAndSettle();
-      expect(find.byType(NativeSidePanel), findsNothing);
-      expect(
-        t
-            .widget<IconButton>(
-              find.byWidgetPredicate(
-                (w) => w is IconButton && w.tooltip == 'Show side panel',
-              ),
-            )
-            .focusNode!
-            .hasFocus,
-        true,
-      );
-      await t.pumpWidget(const SizedBox());
-      await g.stream.close();
-    },
-  );
+  testWidgets('actual shell shows a session as its Files pane across widths', (
+    t,
+  ) async {
+    t.view.devicePixelRatio = 1;
+    t.view.physicalSize = const Size(1280, 900);
+    addTearDown(t.view.reset);
+    final g = PanelGateway(), c = LiveController(g, showing: 'engine');
+    await t.pumpWidget(MobileApp(theme: theme, controller: c));
+    await t.pumpAndSettle();
+    await c.open('s');
+    g.publish('s');
+    await t.pumpAndSettle();
+    // A session is its panes (decision 4): Files first, under the
+    // session's header, kept as the window narrows; Escape leaves it.
+    final pane = t.state(find.byType(FilesPane));
+    expect(t.getTopLeft(find.byType(NativeSidePanel)).dy, 56);
+    t.view.physicalSize = const Size(768, 900);
+    await t.pumpAndSettle();
+    expect(t.state(find.byType(FilesPane)), same(pane));
+    await t.sendKeyEvent(LogicalKeyboardKey.escape);
+    await t.pumpAndSettle();
+    expect(find.byType(NativeSidePanel), findsOneWidget);
+    await t.pumpWidget(const SizedBox());
+    await g.stream.close();
+  });
   testWidgets(
     'Context preserves exact sections, copies only system text and opens source; hidden reads cannot replace another account',
     (t) async {

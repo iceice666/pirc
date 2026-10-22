@@ -2,43 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:pirc_mobile/live/conversation_empty.dart';
-import 'package:pirc_mobile/live/app.dart';
-import 'package:pirc_mobile/live/gateway.dart';
 
-import 'live_test.dart' show FakeGateway, theme;
+import 'live_test.dart' show theme;
 
 void main() {
-  testWidgets(
-    'empty conversation scrolls above keyboard and disappears on a message',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(390, 700);
-      tester.view.viewInsets = const FakeViewPadding(bottom: 250);
-      addTearDown(tester.view.reset);
-      final gateway = FakeGateway();
-      gateway.snapshot = {...gateway.snapshot, 'messages': <Json>[]};
-      final controller = LiveController(gateway, showing: 'engine');
-      await tester.pumpWidget(MobileApp(theme: theme, controller: controller));
-      await tester.pumpAndSettle();
-      await controller.open('s');
-      gateway.publish('s');
-      await tester.pumpAndSettle();
-      final empty = find.byType(ConversationEmptyState);
-      expect(empty, findsOneWidget);
-      expect(tester.getSize(empty).height, greaterThanOrEqualTo(300));
-      expect(find.byKey(const Key('live-draft')), findsOneWidget);
-      await tester.drag(empty, const Offset(0, -150));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      gateway.publish('s', text: 'The first reply');
-      await tester.pumpAndSettle();
-      expect(empty, findsNothing);
-      expect(find.textContaining('The first reply'), findsWidgets);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-      await gateway.stream.close();
-    },
-  );
   for (final fixture in [
     (
       name: 'phone',

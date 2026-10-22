@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/app.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/mobile_tabs.dart';
-import 'package:pirc_mobile/live/conversation_timeline.dart';
+import 'package:pirc_mobile/live/side_panel.dart';
 import 'package:pirc_mobile/live/session_sidebar.dart';
 import 'live_test.dart' show FakeGateway, theme;
 
@@ -29,9 +29,7 @@ class NavigationGateway extends FakeGateway {
 
 void main() {
   for (final width in [390.0, 650.0, 651.0, 768.0, 860.0, 861.0, 1024.0]) {
-    testWidgets('web breakpoint $width preserves navigation and draft', (
-      t,
-    ) async {
+    testWidgets('web breakpoint $width preserves navigation', (t) async {
       t.view.devicePixelRatio = 1;
       t.view.physicalSize = Size(width, 900);
       addTearDown(t.view.reset);
@@ -48,10 +46,6 @@ void main() {
       g.publish('s');
       await t.pumpAndSettle();
       expect(find.byType(MobileTabs), findsNothing);
-      await t.enterText(
-        find.byKey(const Key('live-draft')),
-        'draft survives list and settings',
-      );
       if (width <= 650) {
         await t.tap(find.byTooltip('Back to the list'));
         await t.pumpAndSettle();
@@ -71,7 +65,7 @@ void main() {
         await t.pump(const Duration(milliseconds: 350));
         g.publish('s');
         await t.pumpAndSettle();
-        expect(find.text('draft survives list and settings'), findsOneWidget);
+        expect(c.sessionId, 's');
       }
       if (width > 650) {
         await t.tap(find.text('Workspace').first);
@@ -87,87 +81,15 @@ void main() {
         g.publish('s');
         await t.pumpAndSettle();
       }
-      await t.tap(find.byTooltip('Show side panel'));
-      await t.pumpAndSettle();
+      // A session is its panes, the whole page at every width (decision 4).
       expect(t.takeException(), isNull);
-      final barriers = find.byKey(const Key('panel-scrim'));
-      expect(barriers, width <= 860 ? findsOneWidget : findsNothing);
-      await t.tap(find.byTooltip('Hide side panel'));
-      await t.pumpAndSettle();
-      expect(find.text('draft survives list and settings'), findsOneWidget);
+      expect(find.byType(NativeSidePanel), findsOneWidget);
+      expect(find.byKey(const Key('panel-scrim')), findsNothing);
       expect(g.calls.where((call) => call.$1 == 'command'), isEmpty);
       await t.pumpWidget(const SizedBox());
       await g.stream.close();
     });
   }
-  testWidgets(
-    'phone list retains both pages and makes the covered page inert',
-    (t) async {
-      t.view.devicePixelRatio = 1;
-      t.view.physicalSize = const Size(390, 844);
-      addTearDown(t.view.reset);
-      final g = NavigationGateway();
-      final c = LiveController(g, showing: 'engine');
-      await t.pumpWidget(MobileApp(theme: theme, controller: c));
-      await t.pumpAndSettle();
-      final sidebarState = t.state(find.byType(SessionSidebar));
-      final searchField = find.descendant(
-        of: find.byType(SessionSidebar),
-        matching: find.byType(TextField),
-      );
-      await t.enterText(searchField, '測試');
-      await c.open('s');
-      g.publish('s');
-      await t.pumpAndSettle();
-      expect(
-        t.state(find.byType(SessionSidebar, skipOffstage: false)),
-        same(sidebarState),
-      );
-      final messageState = t.state(find.byType(TimelineMessage).first);
-      final draft = find.byKey(const Key('live-draft'));
-      await t.enterText(draft, 'a retained draft');
-      final editable = t.widget<EditableText>(
-        find.descendant(of: draft, matching: find.byType(EditableText)),
-      );
-      editable.controller.selection = const TextSelection(
-        baseOffset: 2,
-        extentOffset: 10,
-      );
-      final timeline = t.widget<CustomScrollView>(
-        find.byType(CustomScrollView),
-      );
-      timeline.controller!.jumpTo(100);
-      await t.pump();
-      final scrollOffset = timeline.controller!.offset;
-
-      await t.tap(find.byTooltip('Back to the list'));
-      await t.pumpAndSettle();
-      expect(find.byType(TimelineMessage), findsNothing);
-      expect(
-        t.state(find.byType(TimelineMessage, skipOffstage: false).first),
-        same(messageState),
-      );
-      expect(editable.focusNode.hasFocus, isFalse);
-      editable.focusNode.requestFocus();
-      await t.pump();
-      expect(editable.focusNode.hasFocus, isFalse);
-      expect(find.text('測試'), findsOneWidget);
-      expect(c.sessionVisible, isFalse);
-
-      await c.open('s');
-      await t.pumpAndSettle();
-      expect(t.state(find.byType(TimelineMessage).first), same(messageState));
-      expect(
-        editable.controller.selection,
-        const TextSelection(baseOffset: 2, extentOffset: 10),
-      );
-      expect(timeline.controller!.offset, scrollOffset);
-      expect(c.draft, 'a retained draft');
-      expect(t.takeException(), isNull);
-      await t.pumpWidget(const SizedBox());
-      await g.stream.close();
-    },
-  );
 
   testWidgets('Escape closes the phone list without stealing a dialog Escape', (
     t,

@@ -9,9 +9,7 @@ import 'package:pirc_mobile/rendering/markdown_syntax.dart';
 import 'package:pirc_mobile/rendering/native_markdown.dart';
 import 'package:pirc_mobile/rendering/native_math_paragraph.dart';
 import 'package:pirc_mobile/rendering/native_tex_adapter.dart';
-import 'package:pirc_mobile/live/app.dart';
-import 'package:pirc_mobile/live/gateway.dart';
-import 'live_test.dart' show theme, FakeGateway;
+import 'live_test.dart' show theme;
 
 List<md.Node> parse(String source) => md.Document(
   extensionSet: md.ExtensionSet.gitHubFlavored,
@@ -315,25 +313,4 @@ void main() {
       },
     );
   }
-  testWidgets(
-    'long assistant content stays inline instead of being replaced by a preview',
-    (t) async {
-      final g = FakeGateway();
-      final c = LiveController(g, showing: 'engine');
-      final content = 'START\n\n${'full message text ' * 100}\n\nEND';
-      await t.pumpWidget(MobileApp(theme: theme, controller: c));
-      await t.pumpAndSettle();
-      await c.open('s');
-      g.publish('s', text: content);
-      await t.pumpAndSettle();
-      expect(
-        find.byWidgetPredicate(
-          (w) => w is NativeMarkdown && w.source == content,
-        ),
-        findsOneWidget,
-      );
-      await t.pumpWidget(const SizedBox());
-      await g.stream.close();
-    },
-  );
 }

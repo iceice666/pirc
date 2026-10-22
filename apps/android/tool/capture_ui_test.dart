@@ -13,7 +13,7 @@ import 'package:pirc_mobile/live/settings.dart';
 import 'package:pirc_mobile/live/artifacts.dart';
 import 'package:pirc_mobile/live/terminal_pane.dart';
 import '../test/live_test.dart' show theme, FakeGateway;
-import '../test/completion_test.dart' show CompleteGateway;
+
 import '../test/permissions_test.dart' show PermissionGateway;
 
 void main() {
@@ -94,7 +94,7 @@ void main() {
           'terminalFull',
         ].contains(screen);
         final FakeGateway g = live
-            ? CompleteGateway()
+            ? FakeGateway()
             : (PermissionGateway()..complete = screen != 'permissions');
         final c = LiveController(g)
           ..workspaces = [

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/app.dart';
 import 'package:pirc_mobile/live/gateway.dart';
+import 'package:pirc_mobile/live/session_view.dart';
 import 'package:pirc_mobile/live/common.dart';
 import 'live_test.dart' show FakeGateway, theme;
 import 'permissions_test.dart' show PermissionGateway;
@@ -35,7 +36,7 @@ void main() {
       expect(find.byType(PairingScreen), findsNothing);
       g.publish('s');
       await t.pumpAndSettle();
-      expect(find.byKey(const Key('live-draft')), findsOneWidget);
+      expect(find.byType(SessionHeader), findsOneWidget);
       await t.pumpWidget(const SizedBox());
       await g.stream.close();
     },
@@ -109,7 +110,7 @@ void main() {
     g.publish('s');
     await t.pumpAndSettle();
     expect(c.sessionId, 's');
-    expect(find.byKey(const Key('live-draft')), findsOneWidget);
+    expect(find.byType(SessionHeader), findsOneWidget);
     expect(find.text('Create a session'), findsNothing);
     expect(g.calls.where((x) => x.$1 == 'command'), isEmpty);
     await t.pumpWidget(const SizedBox());

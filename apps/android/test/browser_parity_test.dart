@@ -8,7 +8,6 @@ import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/browser_state.dart';
 import 'package:pirc_mobile/live/browser_pane.dart';
 import 'package:pirc_mobile/live/recording_player.dart';
-import 'package:pirc_mobile/live/timeline_tools.dart';
 import 'live_test.dart' show FakeGateway, theme;
 
 final Json browserFixture = obj(
@@ -648,61 +647,4 @@ void main() {
     await t.pumpWidget(const SizedBox());
     await g.stream.close();
   });
-  testWidgets(
-    'tool recording remains inline when collapsed and limits tall video height',
-    (t) async {
-      final g = FakeGateway();
-      final controller = LiveController(g, showing: 'engine')..sessionId = 's';
-      g.handler = (_, _) async => {
-        'id': 12,
-        'width': 320,
-        'height': 1000,
-        'duration': 3000,
-        'position': 0,
-        'playing': false,
-      };
-      await t.pumpWidget(
-        MaterialApp(
-          theme: theme.build(Brightness.light),
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: TimelineTool(
-                controller: controller,
-                tool: {
-                  'id': 'record',
-                  'name': 'browser_record',
-                  'status': 'done',
-                  'input': {'action': 'stop'},
-                  'recording': '.pirc/recordings/a.webm',
-                },
-              ),
-            ),
-          ),
-        ),
-      );
-      await t.pump();
-      expect(find.byType(Texture), findsOneWidget);
-      expect(find.text('Play recording'), findsNothing);
-      expect(find.text('.pirc/recordings/a.webm'), findsNothing);
-      expect(
-        t.getSize(find.byType(NativeRecordingPlayer)).height,
-        lessThanOrEqualTo(420),
-      );
-      await t.tap(find.byTooltip('Play recording'));
-      await t.pump();
-      expect(
-        g.calls.where((x) => x.$1 == 'recordingControl').last.$2['action'],
-        'play',
-      );
-      expect(
-        g.calls.any((x) => x.$1 == 'recording' || x.$1 == 'external'),
-        false,
-      );
-      await t.pumpWidget(const SizedBox());
-      await t.pump();
-      expect(g.calls.last.$1, 'recordingClose');
-      controller.dispose();
-      await g.stream.close();
-    },
-  );
 }

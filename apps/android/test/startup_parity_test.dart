@@ -3,13 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/app.dart';
-import 'package:pirc_mobile/live/common.dart';
 import 'package:pirc_mobile/live/conversation_empty.dart';
 import 'package:pirc_mobile/live/gateway.dart';
-import 'package:pirc_mobile/live/interaction.dart';
 import 'package:pirc_mobile/live/mobile_tabs.dart';
-import 'package:pirc_mobile/live/permissions.dart';
 import 'package:pirc_mobile/live/session_sidebar.dart';
+import 'package:pirc_mobile/live/session_view.dart';
 import 'live_test.dart' show FakeGateway, theme;
 
 Json sessionRow(String id, {bool unread = false}) => {
@@ -174,13 +172,8 @@ void main() {
 
     expect(controller.sessionId, 's');
     expect(controller.state['session'], isNotEmpty);
-    expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is RichTextBody && widget.text == 'Startup snapshot for s',
-      ),
-      findsOneWidget,
-    );
+    // The session's page: its header and panes (decision 4).
+    expect(find.byType(SessionHeader), findsOneWidget);
     expect(_readRequests(gateway), ['/api/sessions/s/read']);
     expect(controller.sessions.single['unread'], isFalse);
 
@@ -209,14 +202,7 @@ void main() {
     );
     expect(find.byType(MobileTabs), findsNothing);
     expect(find.byType(SessionSidebar), findsNothing);
-    expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is RichTextBody &&
-            widget.text == 'Startup snapshot for requested',
-      ),
-      findsOneWidget,
-    );
+    expect(find.byType(SessionHeader), findsOneWidget);
 
     await _disposeApp(tester, gateway);
   });
@@ -334,87 +320,6 @@ void main() {
 
     await _disposeApp(tester, gateway);
   });
-
-  testWidgets('notification question waits until first-run onboarding ends', (
-    tester,
-  ) async {
-    _setSize(tester, 390);
-    final gateway = StartupGateway(
-      targetSession: 's',
-      onboardingComplete: false,
-    );
-    gateway.snapshot['interactions'] = [
-      {
-        'id': 'question-1',
-        'epoch': 'e',
-        'kind': 'confirm',
-        'title': 'Confirm the operation?',
-        'status': 'pending',
-      },
-    ];
-    final controller = LiveController(gateway, showing: 'engine');
-    await _showApp(tester, controller);
-    await tester.pumpAndSettle();
-
-    expect(find.byType(PermissionPage), findsOneWidget);
-    expect(controller.notificationQuestion?['interactionId'], 'question-1');
-    expect(find.byType(QuestionSheet), findsNothing);
-
-    await _finishOnboarding(tester);
-    await tester.pumpAndSettle();
-
-    expect(controller.notificationQuestion, isNull);
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is QuestionSheet && !widget.embedded,
-      ),
-      findsOneWidget,
-    );
-
-    await _disposeApp(tester, gateway);
-  });
-
-  testWidgets(
-    'stale notification is dropped after navigation to another session',
-    (tester) async {
-      _setSize(tester, 390);
-      final gateway = StartupGateway(
-        sessions: [sessionRow('s'), sessionRow('other')],
-      );
-      gateway.snapshot['interactions'] = [
-        {
-          'id': 'question-1',
-          'epoch': 'e',
-          'kind': 'confirm',
-          'title': 'Confirm the operation?',
-          'status': 'pending',
-        },
-      ];
-      final controller = LiveController(gateway, showing: 'engine');
-      await _showApp(tester, controller);
-      await tester.pumpAndSettle();
-      expect(controller.sessionId, 's');
-
-      controller.notificationQuestion = {
-        'sessionId': 's',
-        'interactionId': 'question-1',
-        'interactionEpoch': 'e',
-        'confirmQuestion': true,
-      };
-      await controller.open('other');
-      await tester.pumpAndSettle();
-
-      expect(controller.sessionId, 'other');
-      expect(
-        find.byWidgetPredicate(
-          (widget) => widget is QuestionSheet && !widget.embedded,
-        ),
-        findsNothing,
-      );
-
-      await _disposeApp(tester, gateway);
-    },
-  );
 
   testWidgets('deleted route event refresh keeps the current recent session', (
     tester,
@@ -650,17 +555,3 @@ List<String> _readRequests(StartupGateway gateway) => gateway.calls
     )
     .map((call) => '${call.$2['path']}')
     .toList();
-
-Future<void> _finishOnboarding(WidgetTester tester) async {
-  final button = find.byKey(const Key('finish-onboarding'));
-  await tester.scrollUntilVisible(
-    button,
-    300,
-    scrollable: find.byType(Scrollable).first,
-  );
-  await tester.pumpAndSettle();
-  await tester.ensureVisible(button);
-  await tester.pumpAndSettle();
-  await tester.tap(button);
-  await tester.pumpAndSettle();
-}

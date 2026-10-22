@@ -30,18 +30,14 @@ import { cleanGitFixture } from './git_fixture_cleanup.ts';
 import { startFakeLlm, type FakeLlm, type Reply } from './fake_llm.ts';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-const historyMode = process.argv.includes('--history-stopped');
-if (process.argv.includes('--history')) {
+if (process.argv.includes('--history') || process.argv.includes('--history-stopped')) {
   throw new Error(
-    'The public Rust session API cannot leave a user-only final message idle. Use --history-stopped for the real 146-message stopped transcript; the pinned 145-message idle fixture is unsupported.',
+    'The session transcript is not shown on Android any more (plans/rewrite/12-android.md, decision 4): its history fixture and test are gone.',
   );
 }
+const historyMode = false;
 const observationalMemoryMode = process.argv.includes('--observational-memory');
-const historyFixtureMessages: Array<{ id: string; role: string; content: string }> = historyMode
-  ? JSON.parse(
-      readFileSync(path.join(repo, 'fixtures/mobile-parity/conversation-history.json'), 'utf8'),
-    ).messages
-  : [];
+const historyFixtureMessages: Array<{ id: string; role: string; content: string }> = [];
 const fixtureModeConflicts = [
   '--history',
   '--history-stopped',

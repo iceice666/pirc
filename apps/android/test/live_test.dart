@@ -1,13 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pirc_mobile/live/app.dart';
 import 'package:pirc_mobile/live/gateway.dart';
-import 'package:pirc_mobile/live/interaction.dart';
-import 'package:pirc_mobile/live/common.dart';
 import 'package:pirc_mobile/theme.dart';
 
 class FakeGateway extends Gateway {
@@ -38,6 +34,13 @@ class FakeGateway extends Gateway {
     if (handler != null) return handler!(method, args);
     return normal(method, args);
   }
+
+  /// The snapshot's assistant messages as `<id>.md` files.
+  Map<String, String> sessionDocuments() => {
+    for (final message in rows(snapshot['messages']))
+      if (message['role'] == 'assistant')
+        '${message['id']}.md': '${message['content'] ?? ''}',
+  };
 
   dynamic normal(String method, Json args) {
     switch (method) {
@@ -78,6 +81,24 @@ class FakeGateway extends Gateway {
           };
         }
         if (path == '/api/nodes') return {'nodes': []};
+        // The session's workspace holds its documents: each assistant
+        // message of the snapshot is a Markdown file the Files pane renders
+        // (the engine shows sessions by their panes, plan 12 decision 4).
+        final documents = sessionDocuments();
+        final uri = Uri.parse('$path');
+        if (uri.path.endsWith('/files') && documents.isNotEmpty) {
+          return {
+            'path': uri.queryParameters['path'] ?? '',
+            'entries': [
+              for (final entry in documents.entries)
+                {'name': entry.key, 'kind': 'file', 'size': entry.value.length},
+            ],
+          };
+        }
+        final document = documents[uri.queryParameters['path']];
+        if (uri.path.endsWith('/files/content') && document != null) {
+          return {'path': uri.queryParameters['path'], 'content': document};
+        }
         if ('$path'.startsWith('/api/models')) {
           return {
             'models': [
@@ -339,106 +360,6 @@ void main() {
     c.control = {'held': false};
     await c.sendCommand({'type': 'stop'});
     expect(g.calls.where((x) => x.$1 == 'command'), isEmpty);
-    c.dispose();
-    await g.stream.close();
-  });
-  for (final width in [390.0, 507.0, 600.0, 768.0, 840.0, 1024.0]) {
-    testWidgets('live $width width, 2x text, keyboard and long widget fit', (
-      tester,
-    ) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = Size(width, 1000);
-      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
-      tester.platformDispatcher.textScaleFactorTestValue = 2;
-      addTearDown(tester.view.reset);
-      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      final g = FakeGateway();
-      final c = LiveController(g, showing: 'engine');
-      g.snapshot['widgets'] = {'goal': List.filled(20, '處理目標中')};
-      await tester.pumpWidget(MobileApp(theme: theme, controller: c));
-      await tester.pumpAndSettle();
-      await c.open('s');
-      g.publish('s');
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const Key('live-draft')), '測試中文草稿');
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(tester.takeException(), isNull);
-      expect(
-        tester.getRect(find.byKey(const Key('live-draft'))).bottom,
-        lessThanOrEqualTo(700),
-      );
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
-      await g.stream.close();
-    });
-  }
-  testWidgets(
-    'full answer stays inline across resize and streamed replacement',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1024, 900);
-      addTearDown(tester.view.reset);
-      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
-      await tester.pumpWidget(MobileApp(theme: theme, controller: c));
-      await tester.pumpAndSettle();
-      await c.open('s');
-      g.publish('s');
-      await tester.pumpAndSettle();
-      final original = c.messages.first['content'];
-      expect(
-        tester
-            .widgetList<RichTextBody>(find.byType(RichTextBody))
-            .any((w) => w.text == original),
-        isTrue,
-      );
-      expect(find.text('開啟閱讀'), findsNothing);
-      await tester.enterText(find.byKey(const Key('live-draft')), '草稿不變');
-      tester.view.physicalSize = const Size(390, 844);
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      expect(find.text('草稿不變'), findsOneWidget);
-      g.publish('s', text: '# 新版完成\n\n新版內容');
-      await tester.pumpAndSettle();
-      expect(
-        tester
-            .widgetList<RichTextBody>(find.byType(RichTextBody))
-            .any((w) => w.text == '# 新版完成\n\n新版內容'),
-        isTrue,
-      );
-      expect(find.byTooltip('Copy message'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
-      await g.stream.close();
-    },
-  );
-  testWidgets('answered question refresh removes submission choices', (
-    tester,
-  ) async {
-    final g = FakeGateway();
-    final c = LiveController(g, showing: 'engine')
-      ..sessionId = 's'
-      ..origin = 'https://gateway.example'
-      ..pairingStamp = 'test-pairing';
-    final q = {
-      'id': 'q',
-      'epoch': 'e',
-      'kind': 'confirm',
-      'title': '確定？',
-      'status': 'answered',
-    };
-    g.snapshot['interactions'] = [q];
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: theme.build(Brightness.light),
-        home: Scaffold(
-          body: QuestionSheet(controller: c, question: q),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('此問題已處理'), findsOneWidget);
-    expect(find.text('Yes, continue'), findsNothing);
-    await tester.pumpWidget(const SizedBox());
     c.dispose();
     await g.stream.close();
   });
