@@ -522,9 +522,9 @@ in
       defaultText = literalExpression "config.time.timeZone";
       example = "Asia/Taipei";
       description = ''
-        IANA time zone for schedules an agent creates without naming one
-        (`PIRC_TIMEZONE`). The web and Android apps default to the device's
-        zone. Null: the system's.
+        IANA time zone of the household (`PIRC_TIMEZONE`): the brain's day for
+        its wake quota, open-loop times without a zone and one move suggestion
+        a day. Null: the system's.
       '';
     };
 

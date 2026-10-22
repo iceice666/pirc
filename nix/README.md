@@ -35,8 +35,10 @@ identity, Host, Origin and trusted-proxy allowlists are required. nginx can serv
 the web output behind forward auth; device tokens and remote-node routing remain
 explicit opt-ins. Keep credentials out of Nix expressions/store paths.
 
-`localNode.enable = false` makes a routing-only gateway. Chat nodes require empty
-`workspaces`; coding nodes use the explicit workspace allowlist. `extraPackages`
+`localNode.enable = false` makes a routing-only gateway. There is no chat node:
+the brain runs in the gateway, and its prompts come from `soulPrompt` /
+`chatPrompt`. The local node uses the explicit workspace allowlist and accepts
+the `directory` and `scratch` modes by default. `extraPackages`
 provides programs for tools; browser Chromium and ffmpeg packages are configurable.
 The native sandbox is mandatory. Linux needs unprivileged user namespaces;
 side-panel terminals are not sandboxed. `MemoryDenyWriteExecute` remains off for
@@ -44,6 +46,8 @@ Chromium/user tools, not because the servers embed a JIT.
 
 ## Cutover and dependency hashes
 
+**The rewrite (0.10.0+harmony) starts a new gateway database** and leaves the
+old `gateway.sqlite` in place; see [Upgrades](../docs/deploy/upgrades.md).
 **0.4.0 requires fresh state**, including when using Nix generations. Choose a new
 `stateDirectory` and retain the old release/state for rollback. Never switch an
 old binary onto the new databases. See [Upgrades](../docs/deploy/upgrades.md).
