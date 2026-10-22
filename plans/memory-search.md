@@ -1,10 +1,10 @@
 # Workspace-memory search quality
 
-[Plans](README.md) · [Assistant memory](../docs/architecture/assistant-memory.md)
+[Plans](README.md) · [Memory](../docs/architecture/memory.md)
 
-Goal: `memory_search` finds the notes and delegation reports a chat is looking for, including Chinese queries without spaces and paraphrases, without changing who can see what. The gateway stays on SQLite.
+Goal: the brain's `memory_search` and its automatic recall before each turn find the facts, repository notes and worker reports it is looking for, including Chinese queries without spaces and paraphrases, without changing who can see what. Since the rewrite, facts stay out of the prompt and are found only by search, so search quality decides what pirc remembers ([rewrite §3](rewrite/existing-plans.md)). The gateway stays on SQLite.
 
-This file is the work queue for the change, not authorization: each phase needs the user's go-ahead. Phase 2 also needs a decision on where embeddings come from, because it sends note text to an embeddings endpoint.
+This file is the work queue for the change, not authorization: each phase needs the user's go-ahead. Phase 2 also needs a choice of embeddings endpoint, because it sends note and fact text there.
 
 ## Today
 
@@ -127,7 +127,7 @@ CREATE TABLE search_index_meta (singleton INTEGER PRIMARY KEY CHECK (singleton =
 ### Docs and prompts
 
 - `pirc-agent/prompts/tools/memory_search.md`: replace "Each word matches anywhere… notes holding more of the words come first" with the new behavior (words and Chinese phrases, ranked by relevance).
-- Update `docs/architecture/assistant-memory.md` (the `LIKE` paragraph), the module comment at the top of `memory_records.rs`, and `CHANGELOG.md`.
+- Update `docs/architecture/memory.md` (the `LIKE` paragraph), the module comment at the top of `memory_records.rs`, and `CHANGELOG.md`.
 
 ### Validation
 
@@ -141,17 +141,15 @@ CREATE TABLE search_index_meta (singleton INTEGER PRIMARY KEY CHECK (singleton =
 
 Off by default. Without configuration, search is exactly Phase 1.
 
-### Embedding source (decision needed before starting)
+### Embedding source
 
-An OpenAI-compatible `POST {base}/embeddings` called by the gateway only, like `web_search` and its `EXA_API_KEY`, so the key never reaches a node:
+An OpenAI-compatible `POST {base}/embeddings` called by the gateway only, like `web_search` and its `EXA_API_KEY`, so the key never reaches a node. Where it is configured is decided (rewrite decision #6, credentials on the same page as the backends): an embeddings entry in **Settings → Models & sources**, stored with the backends, not environment variables. The endpoint itself is the user's choice:
 
-- `PIRC_EMBEDDINGS_URL`, `PIRC_EMBEDDINGS_MODEL`, optional `PIRC_EMBEDDINGS_DIMENSIONS`, and `PIRC_EMBEDDINGS_API_KEY`. The key is added to the secret list in `pirc-config/src/env_allowlist.rs` and parsed next to `exa_api_key` in `pirc-config/src/lib.rs`.
 - The recommended deployment is a local server on the private network (for example Ollama with a multilingual model such as `bge-m3`). A hosted API sends every note and query to that provider; the deploy docs must say so.
-- Alternative to decide: an `embeddings` entry in `models.json` / Settings instead of environment variables.
 
 The subscription backends (Claude, Copilot, ChatGPT/Codex) do not offer embeddings.
 
-### Storage (migration 1006)
+### Storage (the next `pirc.sqlite` schema)
 
 ```sql
 CREATE TABLE search_embeddings (
@@ -192,7 +190,7 @@ The linked-first scope logic is unchanged: "found nothing in linked workspaces" 
   - `docs/deploy/gateway.md`: the variables and the data-leaves-the-gateway warning.
   - `nix/module.nix`: options/`environmentFile`.
   - `docs/deploy/backup-and-recovery.md`: vectors are derived from notes and are as sensitive.
-  - `docs/architecture/assistant-memory.md`, the tool prompt and `CHANGELOG.md`.
+  - `docs/architecture/memory.md`, the tool prompt and `CHANGELOG.md`.
 
 ### Validation
 
