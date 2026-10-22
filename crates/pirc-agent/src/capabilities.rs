@@ -36,6 +36,25 @@ impl Capabilities {
         )
     }
 
+    /// A refresh may update explicit booleans; absent or malformed fields retain policy.
+    /// Initial decoding keeps its historical missing-flags-allow contract.
+    pub fn refreshed(&self, value: &Value) -> Self {
+        Self(
+            self.0
+                .iter()
+                .map(|(name, allowed)| {
+                    (
+                        *name,
+                        value
+                            .get(*name)
+                            .and_then(Value::as_bool)
+                            .unwrap_or(*allowed),
+                    )
+                })
+                .collect(),
+        )
+    }
+
     pub fn allows(&self, capability: &str) -> bool {
         self.0
             .iter()
@@ -80,5 +99,26 @@ mod tests {
         );
         assert_eq!(capability_for_tool("schedule"), Some("schedules"));
         assert_eq!(capability_for_tool("read"), None);
+    }
+}
+
+#[cfg(test)]
+mod refresh_tests {
+    use super::*;
+    #[test]
+    fn incomplete_refresh_retains_denials_and_accepts_only_explicit_booleans() {
+        let old = Capabilities::from_value(&json!({"remote_recall":false,"memory_search":false}));
+        for reply in [
+            Value::Null,
+            json!({}),
+            json!({"remote_recall":"true","memory_search":null}),
+        ] {
+            let next = old.refreshed(&reply);
+            assert!(!next.allows("remote_recall") && !next.allows("memory_search"));
+            assert!(next.allows("web_search"));
+        }
+        let next = old.refreshed(&json!({"remote_recall":true,"web_search":false}));
+        assert!(next.allows("remote_recall"));
+        assert!(!next.allows("memory_search") && !next.allows("web_search"));
     }
 }

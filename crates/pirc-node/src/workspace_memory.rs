@@ -166,6 +166,9 @@ fn read_source(row: &SessionRow) -> ApiResult<(std::sync::Arc<Vec<SessionEntry>>
     branch.reverse();
     Ok((std::sync::Arc::new(branch), Fingerprint::of(&before)))
 }
+fn source_available(db: &impl Store, row: &SessionRow, owner: &str) -> ApiResult<bool> {
+    Ok(row.owner_user.as_deref() == Some(owner) && db.session_deletion(&row.id)?.is_none())
+}
 fn rows(node: &Node, s: &Scope) -> ApiResult<Vec<SessionRow>> {
     let workspaces = node.db.lock().list_workspaces()?;
     let mut result = Vec::new();
@@ -183,13 +186,18 @@ fn rows(node: &Node, s: &Scope) -> ApiResult<Vec<SessionRow>> {
         if key != s.key || root != s.root {
             continue;
         }
-        result.extend(
-            node.db
-                .lock()
-                .workspace_sessions(&w.id)?
+        let sessions = {
+            let db = node.db.lock();
+            db.workspace_sessions(&w.id)?
                 .into_iter()
-                .filter(|r| r.owner_user.as_deref() == Some(&s.owner)),
-        );
+                .filter_map(|row| match source_available(&*db, &row, &s.owner) {
+                    Ok(true) => Some(Ok(row)),
+                    Ok(false) => None,
+                    Err(e) => Some(Err(e)),
+                })
+                .collect::<ApiResult<Vec<_>>>()?
+        };
+        result.extend(sessions);
         if result.len() > 10000 {
             return Err(unavailable("workspace_source_limit"));
         }
@@ -473,14 +481,20 @@ fn next_job(view: &View, state: &Snapshot, catchup: bool) -> ApiResult<Value> {
     if state.control.is_none() {
         return Err(unavailable("workspace_cold_cutover_required"));
     }
+    let mut blocked_sources = false;
     for row in &view.rows {
         let branch = view.source(row)?;
         let sid = history::header_id(&branch).map_err(err)?;
+        let positions: std::collections::HashMap<_, _> = branch
+            .iter()
+            .enumerate()
+            .map(|(at, entry)| (entry.id.as_str(), at))
+            .collect();
         let index = |id: Option<&str>| -> ApiResult<Option<usize>> {
             id.map(|id| {
-                branch
-                    .iter()
-                    .position(|e| e.id == id)
+                positions
+                    .get(id)
+                    .copied()
                     .ok_or_else(|| unavailable("workspace_source_gap"))
             })
             .transpose()
@@ -519,15 +533,63 @@ fn next_job(view: &View, state: &Snapshot, catchup: bool) -> ApiResult<Value> {
                 ));
             }
         }
+        // Classify once: tool safety and evidence eligibility share provenance,
+        // but revoking an old admission must not revoke a newer human admission.
+        let Ok(history) = handoff::source_history(&branch) else {
+            // An unbounded provenance error cannot be called "no work".
+            // Continue looking for safe work in other authorized sessions.
+            blocked_sources = true;
+            continue;
+        };
+        let safe = &history.boundaries;
+        let mut revoked = HashSet::new();
+        for receipt in state
+            .forgotten_ranges
+            .iter()
+            .filter(|r| r.session_id == sid)
+        {
+            let from = index(Some(&receipt.from_entry_id))?.unwrap();
+            let through = index(Some(&receipt.through_entry_id))?.unwrap();
+            for (at, entry) in branch.iter().enumerate().take(through + 1).skip(from) {
+                if matches!(entry.data, EntryData::Message(Message::User { .. })) {
+                    revoked.insert(at);
+                }
+            }
+        }
+        let legacy = pirc_agent::features::memory::ledger::fold_ledger(&branch);
+        let forgotten_observations: HashSet<_> = legacy
+            .reflections
+            .iter()
+            .filter(|r| state.legacy_forgotten.contains(&r.id))
+            .flat_map(|r| r.supporting_observation_ids.iter())
+            .collect();
+        for observation in &legacy.observations {
+            if state.legacy_forgotten.contains(&observation.id)
+                || forgotten_observations.contains(&observation.id)
+            {
+                for id in &observation.source_entry_ids {
+                    if let Some(admission) = history.origins.get(id) {
+                        revoked.insert(*admission);
+                    }
+                }
+            }
+        }
+        blocked_sources |= history.blocked.iter().any(|at| {
+            *at < upper
+                && (catchup || boundary.is_none_or(|boundary| *at > boundary))
+                && !revoked.contains(at)
+                && matches!(branch[*at].data, EntryData::Message(Message::User { .. }))
+        });
         let starts: Vec<_> = branch
             .iter()
             .enumerate()
             .filter_map(|(i, e)| {
-                matches!(&e.data, EntryData::Message(Message::User { .. })).then_some(i)
+                (safe.contains(&i) && matches!(&e.data, EntryData::Message(Message::User { .. })))
+                    .then_some(i)
             })
             .collect();
         for (number, &from) in starts.iter().enumerate() {
-            if (!catchup && boundary.is_some_and(|i| from <= i)) || from >= upper {
+            if from >= upper {
                 continue;
             }
             let end = starts
@@ -535,48 +597,48 @@ fn next_job(view: &View, state: &Snapshot, catchup: bool) -> ApiResult<Value> {
                 .copied()
                 .unwrap_or(branch.len())
                 .min(upper);
-            let Some(through) = branch[from..end]
+            let through = branch[from..end]
                 .iter()
-                .rposition(|e| matches!(e.data, EntryData::Message(_)))
+                .rposition(handoff::public)
                 .map(|i| i + from)
-            else {
+                .unwrap();
+            if !safe.contains(&(through + 1)) {
+                continue;
+            }
+            let eligible = |admission: usize| {
+                admission >= from
+                    && admission < end
+                    && (catchup || boundary.is_none_or(|i| admission > i))
+                    && !revoked.contains(&admission)
+                    && !history.blocked.contains(&admission)
+            };
+            let Some(admitted_from) = (from..end).find(|&at| {
+                eligible(at) && matches!(branch[at].data, EntryData::Message(Message::User { .. }))
+            }) else {
                 continue;
             };
-            if !matches!(&branch[through].data,EntryData::Message(Message::Assistant(a))if a.stop_reason==StopReason::Stop)
+            let Some(last_message) = branch[from..end].iter().rev().find(|entry| {
+                matches!(entry.data, EntryData::Message(_))
+                    && history
+                        .origins
+                        .get(&entry.id)
+                        .is_some_and(|admission| eligible(*admission))
+            }) else {
+                continue;
+            };
+            if !matches!(&last_message.data,EntryData::Message(Message::Assistant(a))if a.stop_reason==StopReason::Stop)
             {
                 continue;
             }
-            if processed.contains(&(branch[from].id.as_str(), branch[through].id.as_str())) {
-                continue;
-            }
-            if state.forgotten_ranges.iter().any(|r| {
-                // A completed interaction may gain a later assistant continuation.
-                // Its original human start still identifies the forgotten evidence.
-                r.session_id == sid && r.from_entry_id == branch[from].id
-            }) {
+            if processed.contains(&(
+                branch[admitted_from].id.as_str(),
+                branch[through].id.as_str(),
+            )) {
                 continue;
             }
             let raw = &branch[from..=through];
-            let legacy = pirc_agent::features::memory::ledger::fold_ledger(&branch);
-            let forgotten_observations: HashSet<_> = legacy
-                .reflections
-                .iter()
-                .filter(|r| state.legacy_forgotten.contains(&r.id))
-                .flat_map(|r| r.supporting_observation_ids.iter())
-                .collect();
-            if legacy.observations.iter().any(|o| {
-                (state.legacy_forgotten.contains(&o.id) || forgotten_observations.contains(&o.id))
-                    && o.source_entry_ids
-                        .iter()
-                        .any(|id| raw.iter().any(|e| e.id == *id))
-            }) {
-                continue;
-            }
-
-            if handoff::boundaries(raw).is_err() {
-                continue;
-            }
-            let sources:Vec<_>=handoff::sources(raw).into_iter().map(|e|json!({"sessionId":sid,"entryId":e.entry_id,"role":e.role,"text":e.text,"derived":e.derived,"timestamp":e.timestamp})).collect();
+            let sources: Vec<_> = history.sources(|at, admission| at >= from && at <= through && eligible(admission))
+                .into_iter().map(|source| json!({"sessionId":sid,"entryId":source.entry_id,"role":source.role,"text":source.text,"derived":source.derived,"timestamp":source.timestamp})).collect();
             if serde_json::to_vec(&sources).unwrap().len() > 128 * 1024 {
                 return Err(unavailable("workspace_turn_too_large"));
             }
@@ -586,9 +648,16 @@ fn next_job(view: &View, state: &Snapshot, catchup: bool) -> ApiResult<Value> {
                     .as_bytes(),
             );
             return Ok(
-                json!({"jobId":format!("w_{}",&job[..48]),"control":public_control(view,state)?,"sessionId":sid,"fromEntryId":branch[from].id,"throughEntryId":branch[through].id,"sourceHash":pirc_agent::journal::digest(serde_json::to_vec(raw).unwrap().as_slice()),"sources":sources,"catchup":catchup}),
+                json!({"jobId":format!("w_{}",&job[..48]),"control":public_control(view,state)?,"sessionId":sid,"fromEntryId":branch[admitted_from].id,"throughEntryId":branch[through].id,"sourceHash":pirc_agent::journal::digest(serde_json::to_vec(raw).unwrap().as_slice()),"sources":sources,"catchup":catchup}),
             );
         }
+    }
+    if blocked_sources {
+        return Err(ApiError::new(
+            409,
+            "workspace_source_blocked",
+            "Repository memory extraction is blocked for some sources: tool provenance is incomplete or ambiguous. Independent safe interactions can still be processed.",
+        ));
     }
     Ok(Value::Null)
 }

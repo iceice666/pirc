@@ -35,6 +35,7 @@ pub mod signal;
 pub mod skills;
 pub mod state_io;
 pub mod stream;
+pub mod tool_history;
 pub mod tools;
 pub mod ui;
 

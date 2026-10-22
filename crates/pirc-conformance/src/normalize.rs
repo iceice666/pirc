@@ -124,6 +124,24 @@ impl Normalizer {
                 text = text.replace(value.as_str(), placeholder);
             }
         }
+        // Canonical macOS aliases can add a redundant path to an otherwise
+        // identical denial. Keep distinct symlink targets and the denial itself.
+        static DENIAL: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"Path ([^\n]*?) \(([^\n]*?)\) is outside the writable paths").unwrap()
+        });
+        text = DENIAL
+            .replace_all(&text, |c: &regex::Captures<'_>| {
+                let same = c[1] == c[2]
+                    || (cfg!(target_os = "macos")
+                        && c[1].starts_with("/etc/")
+                        && c[2].strip_prefix("/private") == Some(&c[1]));
+                if same {
+                    format!("Path {} is outside the writable paths", &c[1])
+                } else {
+                    c[0].to_owned()
+                }
+            })
+            .into_owned();
         // An untrusted fence's random nonce (`<<<PTC_RESULT id=…>>>`).
         static FENCE: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"(PTC_RESULT|WEB_RESULTS) id=([0-9a-f]{12})\b").unwrap());
@@ -332,6 +350,27 @@ mod tests {
             json!([{ "step": "bad", "request": "POST /api/sessions", "status": 400,
                 "headers": { "cache-control": "no-store" },
                 "body": { "error": { "code": "invalid_input", "message": "Invalid request" } } }])
+        );
+    }
+
+    #[test]
+    fn canonical_denials_keep_refusal_and_distinct_symlink_targets() {
+        let mut n = Normalizer::new([
+            ("/tmp/example".into(), "<tmp>"),
+            ("/private/tmp/example".into(), "<tmp>"),
+        ]);
+        assert_eq!(n.text("Path /tmp/example/home/outside.txt (/private/tmp/example/home/outside.txt) is outside the writable paths (/private/tmp/example/workspace)"),"Path <tmp>/home/outside.txt is outside the writable paths (<tmp>/workspace)");
+        let escape = "Path <tmp>/link (/another-owner/secret) is outside the writable paths (<tmp>/workspace)";
+        assert_eq!(n.text(escape), escape);
+        assert_eq!(
+            n.text(
+                "Path /etc/example (/private/etc/example) is outside the writable paths (<tmp>)"
+            ),
+            if cfg!(target_os = "macos") {
+                "Path /etc/example is outside the writable paths (<tmp>)"
+            } else {
+                "Path /etc/example (/private/etc/example) is outside the writable paths (<tmp>)"
+            }
         );
     }
 

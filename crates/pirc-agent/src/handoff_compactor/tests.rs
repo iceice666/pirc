@@ -20,6 +20,7 @@ enum Action {
     SwitchInvalid,
     SwitchTimeout,
     Abort,
+    LateOperation,
 }
 struct Model {
     action: Cell<Action>,
@@ -44,6 +45,12 @@ impl StreamFn for Model {
             match self.action.get() {
                 Action::SwitchError | Action::SwitchInvalid | Action::SwitchTimeout => {
                     agent.set_model("fake", "other").unwrap();
+                }
+                Action::LateOperation if self.calls.get() == 1 => {
+                    agent.append_entry(EntryData::Custom {
+                        custom_type: "ptc.operation".into(),
+                        data: json!({"parentToolCallId":"same","toolCallId":"old:op1","toolName":"read","content":[{"type":"text","text":"late original evidence"}]}),
+                    }).unwrap();
                 }
                 Action::Abort => {
                     self.parent.borrow().as_ref().unwrap().abort();
@@ -328,4 +335,386 @@ async fn route_changes_invalidate_calibration_but_prefix_changes_preserve_scale(
                 .collect::<Vec<_>>()
         )
     );
+}
+
+#[tokio::test]
+async fn scheduled_and_delegated_tasks_without_human_messages_compact_and_reopen() {
+    for kind in ["scheduled-run", "assistant-delegation"] {
+        let dir = tempfile::tempdir().unwrap();
+        let (agent, _) = make(
+            dir.path(),
+            Action::Valid,
+            json!({"keepRecentTokens":1000000}),
+        );
+        let add = |text: String| {
+            EntryData::Message(Message::Custom {
+                custom_type: kind.into(),
+                content: text,
+                display: true,
+                details: None,
+                timestamp: 1,
+            })
+        };
+        agent
+            .append_entry(add("Original task evidence ".repeat(1000)))
+            .unwrap();
+        agent
+            .append_entry(EntryData::Message(Message::Assistant(
+                agent.empty_assistant(),
+            )))
+            .unwrap();
+        let kept = agent
+            .append_entry(add("Continue next task".into()))
+            .unwrap();
+        let result = run(
+            &agent,
+            CompactionReason::Manual,
+            &AbortSignal::never(),
+            None,
+            &settings(&agent),
+        )
+        .await
+        .unwrap();
+        assert!(result.ok, "{:?}", result.error);
+        assert!(agent.context_entries().iter().any(|(id, _)| *id == kept.id));
+        agent.reopen_session().unwrap();
+        assert_eq!(handoff::valid_snapshots(&agent.branch()).len(), 1);
+    }
+}
+#[tokio::test]
+async fn crash_with_open_tool_call_can_compact_after_restart_without_inventing_success() {
+    let dir = tempfile::tempdir().unwrap();
+    let (agent, _) = make(dir.path(), Action::Valid, json!({}));
+    agent
+        .append_entry(EntryData::Message(Message::User {
+            content: UserContent::Text("Inspect original repository evidence ".repeat(1000)),
+            timestamp: 1,
+        }))
+        .unwrap();
+    let mut call = agent.empty_assistant();
+    call.stop_reason = StopReason::ToolUse;
+    call.content = vec![AssistantContent::ToolCall {
+        id: "interrupted".into(),
+        name: "bash".into(),
+        arguments: json!({"command":"inspect"}).as_object().unwrap().clone(),
+        thought_signature: None,
+    }];
+    agent
+        .append_entry(EntryData::Message(Message::Assistant(call)))
+        .unwrap();
+    drop(agent);
+    let (agent, _) = make(dir.path(), Action::Valid, json!({}));
+    let kept = agent
+        .append_entry(EntryData::Message(Message::User {
+            content: UserContent::Text("Resume after crash".into()),
+            timestamp: 2,
+        }))
+        .unwrap();
+    let branch = agent.branch();
+    let cut = branch.iter().position(|e| e.id == kept.id).unwrap();
+    let sources = handoff::sources_before(&branch[..cut], &branch[cut..]);
+    assert!(sources.iter().any(|s| s.text.contains("outcome unknown")));
+    let result = run(
+        &agent,
+        CompactionReason::Manual,
+        &AbortSignal::never(),
+        None,
+        &settings(&agent),
+    )
+    .await
+    .unwrap();
+    assert!(result.ok, "{:?}", result.error);
+    agent.reopen_session().unwrap();
+    assert_eq!(handoff::valid_snapshots(&agent.branch()).len(), 1);
+    assert!(!agent.branch().iter().any(|e|matches!(e.message(),Some(Message::ToolResult{tool_call_id,..}) if tool_call_id=="interrupted")));
+}
+
+#[tokio::test]
+async fn ptc_interleaving_uses_raw_operation_boundaries_when_recent_budget_prefers_an_unsafe_cut() {
+    let dir = tempfile::tempdir().unwrap();
+    let (agent, _) = make(dir.path(), Action::Valid, json!({}));
+    agent
+        .append_entry(EntryData::Message(Message::User {
+            content: UserContent::Text("original repository evidence ".repeat(100)),
+            timestamp: 1,
+        }))
+        .unwrap();
+    let mut call = agent.empty_assistant();
+    call.stop_reason = pirc_protocol::StopReason::ToolUse;
+    call.content = vec![AssistantContent::ToolCall {
+        id: "ptc_parent".into(),
+        name: "ptc".into(),
+        arguments: Default::default(),
+        thought_signature: None,
+    }];
+    agent
+        .append_entry(EntryData::Message(Message::Assistant(call)))
+        .unwrap();
+    let unsafe_id = agent
+        .append_entry(EntryData::Message(Message::User {
+            content: UserContent::Text("interleaved task ".repeat(100)),
+            timestamp: 2,
+        }))
+        .unwrap();
+    agent.append_entry(EntryData::Custom { custom_type:"ptc.operation".into(), data:json!({"parentToolCallId":"ptc_parent","toolCallId":"nested","toolName":"read","content":[{"type":"text","text":"recorded evidence"}],"isError":false}) }).unwrap();
+    let kept = agent
+        .append_entry(EntryData::Message(Message::User {
+            content: UserContent::Text("Continue".into()),
+            timestamp: 3,
+        }))
+        .unwrap();
+    assert_eq!(
+        compaction::find_cut_point(&agent.context_entries(), 100.0),
+        Some(unsafe_id.id)
+    );
+    let mut s = settings(&agent);
+    s.keep_recent_tokens = 100.0;
+    let result = run(
+        &agent,
+        CompactionReason::Manual,
+        &AbortSignal::never(),
+        None,
+        &s,
+    )
+    .await
+    .unwrap();
+    assert!(result.ok, "{:?}", result.error);
+    let branch = agent.branch();
+    let snapshots = handoff::valid_snapshots(&branch);
+    assert_eq!(snapshots.len(), 1);
+    assert!(
+        matches!(&snapshots[0].data, EntryData::Compaction { first_kept_entry_id, .. } if first_kept_entry_id == &kept.id)
+    );
+    let reopened = SessionStore::open(dir.path().join("session"), "/").unwrap();
+    assert_eq!(reopened.context_entries(), agent.context_entries());
+}
+
+#[tokio::test]
+async fn an_empty_session_keeps_the_public_nothing_to_compact_result() {
+    let dir = tempfile::tempdir().unwrap();
+    let (agent, model) = make(dir.path(), Action::Valid, json!({}));
+    let result = run(
+        &agent,
+        CompactionReason::Manual,
+        &AbortSignal::never(),
+        None,
+        &settings(&agent),
+    )
+    .await
+    .unwrap();
+    assert!(!result.ok);
+    assert_eq!(result.error.as_deref(), Some("Nothing to compact"));
+    assert_eq!(model.calls.get(), 0);
+}
+
+#[tokio::test]
+async fn a_late_execution_reopens_an_earlier_snapshot_and_recovers_without_losing_raw_sources() {
+    let dir = tempfile::tempdir().unwrap();
+    let (agent, _) = make(dir.path(), Action::Valid, json!({}));
+    let first = agent
+        .append_entry(EntryData::Message(Message::User {
+            content: UserContent::Text("Original evidence ".repeat(200)),
+            timestamp: 1,
+        }))
+        .unwrap();
+    let mut call = agent.empty_assistant();
+    call.stop_reason = StopReason::ToolUse;
+    call.content = vec![AssistantContent::ToolCall {
+        id: "same".into(),
+        name: "ptc".into(),
+        arguments: Default::default(),
+        thought_signature: None,
+    }];
+    agent
+        .append_entry(EntryData::Message(Message::Assistant(call.clone())))
+        .unwrap();
+    agent
+        .append_entry(EntryData::Message(Message::ToolResult {
+            tool_call_id: "same".into(),
+            tool_name: "ptc".into(),
+            content: vec![],
+            details: Some(json!({"executionId":"old"})),
+            is_error: true,
+            timestamp: 1,
+        }))
+        .unwrap();
+    agent
+        .append_entry(EntryData::Message(Message::User {
+            content: UserContent::Text("Next interaction".into()),
+            timestamp: 2,
+        }))
+        .unwrap();
+    let mut limits = settings(&agent);
+    limits.keep_recent_tokens = 0.0;
+    let initial = run(
+        &agent,
+        CompactionReason::Manual,
+        &AbortSignal::never(),
+        None,
+        &limits,
+    )
+    .await
+    .unwrap();
+    assert!(initial.ok, "{:?}", initial.error);
+    assert_eq!(handoff::valid_snapshots(&agent.branch()).len(), 1);
+    assert!(
+        !agent
+            .context_entries()
+            .iter()
+            .any(|(id, _)| id == &first.id)
+    );
+    // The earlier source was compacted before this late evidence existed.
+    agent
+        .append_entry(EntryData::Message(Message::Assistant(call)))
+        .unwrap();
+    let late = agent.append_entry(EntryData::Custom {custom_type:"ptc.operation".into(),data:json!({"parentToolCallId":"same","toolCallId":"old:op1","toolName":"read","content":[{"type":"text","text":"late original evidence"}],"isError":false})}).unwrap();
+    agent
+        .append_entry(EntryData::Message(Message::User {
+            content: UserContent::Text("Continue with all evidence".into()),
+            timestamp: 3,
+        }))
+        .unwrap();
+    assert!(handoff::valid_snapshots(&agent.branch()).is_empty());
+    assert!(
+        agent
+            .context_entries()
+            .iter()
+            .any(|(id, _)| id == &first.id)
+    );
+    agent.reopen_session().unwrap();
+    assert!(handoff::valid_snapshots(&agent.branch()).is_empty());
+    let recovery = run(
+        &agent,
+        CompactionReason::Manual,
+        &AbortSignal::never(),
+        None,
+        &limits,
+    )
+    .await
+    .unwrap();
+    assert!(recovery.ok, "{:?}", recovery.error);
+    let branch = agent.branch();
+    let snapshots = handoff::valid_snapshots(&branch);
+    assert_eq!(snapshots.len(), 1);
+    let snapshot = snapshots[0];
+    let EntryData::Compaction {
+        first_kept_entry_id,
+        ..
+    } = &snapshot.data
+    else {
+        panic!()
+    };
+    let cut = branch
+        .iter()
+        .position(|e| &e.id == first_kept_entry_id)
+        .unwrap();
+    assert!(branch[..cut].iter().any(|e| e.id == late.id));
+    let reopened = SessionStore::open(dir.path().join("session"), "/").unwrap();
+    assert_eq!(reopened.context_entries(), agent.context_entries());
+}
+
+#[tokio::test]
+async fn a_late_operation_during_inference_rejects_the_cut_before_commit_and_recovers() {
+    let dir = tempfile::tempdir().unwrap();
+    let (agent, model) = make(dir.path(), Action::LateOperation, json!({}));
+    let first = agent
+        .append_entry(EntryData::Message(Message::User {
+            content: UserContent::Text("Original evidence ".repeat(200)),
+            timestamp: 1,
+        }))
+        .unwrap();
+    let mut call = agent.empty_assistant();
+    call.stop_reason = StopReason::ToolUse;
+    call.content = vec![AssistantContent::ToolCall {
+        id: "same".into(),
+        name: "ptc".into(),
+        arguments: Default::default(),
+        thought_signature: None,
+    }];
+    agent
+        .append_entry(EntryData::Message(Message::Assistant(call)))
+        .unwrap();
+    agent
+        .append_entry(EntryData::Message(Message::ToolResult {
+            tool_call_id: "same".into(),
+            tool_name: "ptc".into(),
+            content: vec![],
+            details: Some(json!({"executionId":"old"})),
+            is_error: true,
+            timestamp: 1,
+        }))
+        .unwrap();
+    agent
+        .append_entry(EntryData::Message(Message::User {
+            content: UserContent::Text("Retained interaction".into()),
+            timestamp: 2,
+        }))
+        .unwrap();
+    let mut limits = settings(&agent);
+    limits.keep_recent_tokens = 0.0;
+    let result = run(
+        &agent,
+        CompactionReason::Manual,
+        &AbortSignal::never(),
+        None,
+        &limits,
+    )
+    .await
+    .unwrap();
+    assert!(!result.ok);
+    assert_eq!(result.error.as_deref(), Some("handoff_source_changed"));
+    assert!(
+        !agent
+            .branch()
+            .iter()
+            .any(|e| matches!(e.data, EntryData::Compaction { .. }))
+    );
+    assert!(
+        agent
+            .context_entries()
+            .iter()
+            .any(|(id, _)| id == &first.id)
+    );
+    agent.reopen_session().unwrap();
+    assert!(
+        agent
+            .context_entries()
+            .iter()
+            .any(|(id, _)| id == &first.id)
+    );
+    let late = agent.branch().iter().find(|e|matches!(&e.data,EntryData::Custom {custom_type,..} if custom_type=="ptc.operation")).unwrap().id.clone();
+    model.action.set(Action::Valid);
+    agent
+        .append_entry(EntryData::Message(Message::User {
+            content: UserContent::Text("Next safe interaction".into()),
+            timestamp: 3,
+        }))
+        .unwrap();
+    let result = run(
+        &agent,
+        CompactionReason::Manual,
+        &AbortSignal::never(),
+        None,
+        &limits,
+    )
+    .await
+    .unwrap();
+    assert!(result.ok, "{:?}", result.error);
+    let branch = agent.branch();
+    let snapshots = handoff::valid_snapshots(&branch);
+    assert_eq!(snapshots.len(), 1);
+    let EntryData::Compaction {
+        first_kept_entry_id,
+        ..
+    } = &snapshots[0].data
+    else {
+        panic!()
+    };
+    let cut = branch
+        .iter()
+        .position(|e| &e.id == first_kept_entry_id)
+        .unwrap();
+    assert!(branch[..cut].iter().any(|e| e.id == late));
+    let reopened = SessionStore::open(dir.path().join("session"), "/").unwrap();
+    assert_eq!(reopened.context_entries(), agent.context_entries());
 }

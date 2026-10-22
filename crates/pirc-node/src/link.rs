@@ -653,7 +653,8 @@ async fn handle(node: &Node, id: u64, registered: &mut bool, message: GatewayMes
         GatewayMessage::MemoryMirrorAck {
             ledger_key,
             watermark,
-        } => node.mirror.receive(&ledger_key, watermark),
+            rejected_end,
+        } => node.mirror.receive(&ledger_key, watermark, rejected_end),
         GatewayMessage::HeartbeatAck
         | GatewayMessage::RegistrationError { .. }
         | GatewayMessage::Registered { .. } => {}

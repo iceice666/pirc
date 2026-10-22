@@ -192,6 +192,9 @@ pub enum GatewayMessage {
     MemoryMirrorAck {
         ledger_key: String,
         watermark: u64,
+        /// Quota rejection of this exact endpoint; older gateways omit this hint.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rejected_end: Option<u64>,
     },
     Models {
         models: Models,

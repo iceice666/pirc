@@ -354,3 +354,1129 @@ async fn forgotten_interaction_stays_suppressed_after_assistant_continuation_and
     assert!(f.context()["items"].as_array().unwrap().is_empty());
     f.node.close().await;
 }
+
+#[tokio::test]
+async fn deleting_source_is_excluded_and_invalidates_another_callers_captured_job() {
+    let f = Fixture::new().await;
+    f.mutate("workspace.cold", json!({})).unwrap();
+    f.turn("Never extract deleted evidence");
+    let caller_dir = f.dir.parent().unwrap().join("caller_b");
+    SessionStore::open(caller_dir.clone(), "/").unwrap();
+    let caller = f
+        .node
+        .db
+        .lock()
+        .create_session("repo", caller_dir.to_str().unwrap(), "alice")
+        .unwrap();
+    let caller_scope = scope(&f.node, &caller.id, &f.mode, 0, true).unwrap();
+    let mut captured = View::new(&f.node, &caller_scope, true).unwrap();
+    let job = execute(&captured, "workspace.next", &json!({})).unwrap();
+    assert!(!job.is_null());
+    let revision = captured.state.control.as_ref().unwrap().revision;
+    f.node
+        .db
+        .lock()
+        .begin_session_deletion(&f.current, "alice")
+        .unwrap();
+    assert!(f.dir.join(session_store::SESSION_FILE).exists());
+    assert!(captured.revalidate(true).is_err());
+    let fresh = View::new(&f.node, &caller_scope, true).unwrap();
+    assert!(
+        execute(&fresh, "workspace.next", &json!({}))
+            .unwrap()
+            .is_null()
+    );
+    let mut args = job.as_object().unwrap().clone();
+    for key in ["epoch", "generation", "revision"] {
+        args.insert(key.into(), job["control"][key].clone());
+    }
+    args.insert("items".into(), json!([]));
+    args.insert("retire".into(), json!([]));
+    assert!(execute(&captured, "workspace.commit", &Value::Object(args)).is_err());
+    assert_eq!(
+        snapshot(&f.node, &caller_scope)
+            .unwrap()
+            .control
+            .unwrap()
+            .revision,
+        revision
+    );
+    f.node.close().await;
+}
+
+/// An actual agent speaks RPC to the actual host journal. Only transport delivery
+/// is controlled here: the first successful durable ACK is never delivered.
+#[tokio::test(flavor = "multi_thread")]
+async fn committed_clear_and_forget_survive_lost_ack_resend_and_confirmation() {
+    use pirc_conformance::{AgentOptions, AgentRun};
+    use std::time::Duration;
+    for action in ["clear", "forget"] {
+        let options = AgentOptions {
+            env: vec![("PIRC_GATEWAY".into(), "1".into())],
+            config: json!({"features":{"workspaceMemory":{"passive":true}}}),
+            ..Default::default()
+        }
+        .features("workspace-memory");
+        let Some(mut agent) = AgentRun::start(options).await else {
+            return;
+        };
+        let mut f = Fixture::new().await;
+        f.mutate("workspace.cold", json!({})).unwrap();
+        f.turn("Original repository knowledge");
+        f.commit(false);
+        let note = f.context()["items"][0]["id"].as_str().unwrap().to_owned();
+        let caller = f
+            .node
+            .db
+            .lock()
+            .create_session("repo", agent.session_dir.to_str().unwrap(), "alice")
+            .unwrap();
+        f.scope = scope(&f.node, &caller.id, &f.mode, 0, true).unwrap();
+        for op in [
+            "workspace.open",
+            "workspace.context",
+            "workspace.clear",
+            "workspace.forget",
+        ] {
+            agent
+                .answers
+                .lock()
+                .unwrap()
+                .gateway
+                .insert(op.into(), json!({"hold":true}));
+        }
+        let command = format!(
+            "/om:workspace {action}{}",
+            if action == "forget" {
+                format!(" {note}")
+            } else {
+                String::new()
+            }
+        );
+        let op = format!("workspace.{action}");
+        let first = host_command(&f, &mut agent, &command, Some((&op, true))).await;
+        let original = first
+            .iter()
+            .find(|e| e["type"] == "gateway_request" && e["op"] == op)
+            .unwrap()["args"]
+            .clone();
+        assert!(first.iter().any(|e| {
+            e["method"] == "notify"
+                && e["message"]
+                    .as_str()
+                    .is_some_and(|s| s.contains("outcome may be unknown"))
+        }));
+        let pending = agent.call(json!({"type":"get_panel_state"})).await;
+        assert_eq!(pending["data"]["workspaceMemory"]["pendingMutations"], 1);
+        let path = ledger(&f.node, &f.scope);
+        let committed = std::fs::read(&path).unwrap();
+        let revision = f.context()["control"]["revision"].clone();
+        let cutoffs = f.context()["control"]["clearCutoffs"].clone();
+        assert!(f.context()["items"].as_array().unwrap().is_empty());
+        // Sources advance after the transaction: a retry must not recapture them.
+        f.turn("A new interaction after the durable mutation");
+        let retry = host_command(&f, &mut agent, &command, Some((&op, false))).await;
+        let resent = retry
+            .iter()
+            .find(|e| e["type"] == "gateway_request" && e["op"] == op)
+            .unwrap()["args"]
+            .clone();
+        assert_eq!(resent, original);
+        assert_eq!(std::fs::read(&path).unwrap(), committed);
+        assert_eq!(f.context()["control"]["revision"], revision);
+        assert_eq!(f.context()["control"]["clearCutoffs"], cutoffs);
+        // Losing authority while an ACK is unknown must not expose notes or confirm a job.
+        f.node
+            .db
+            .lock()
+            .execute(
+                "UPDATE sessions SET owner_user='bob' WHERE id=?",
+                [&caller.id],
+            )
+            .unwrap();
+        let denied = host_command(&f, &mut agent, "/om:workspace view", None).await;
+        assert!(denied.iter().any(|e| {
+            e["method"] == "notify"
+                && e["message"]
+                    .as_str()
+                    .is_some_and(|s| s.contains("authority changed"))
+        }));
+        assert_eq!(
+            agent.call(json!({"type":"get_panel_state"})).await["data"]["workspaceMemory"]["pendingMutations"],
+            1
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), committed);
+        f.node
+            .db
+            .lock()
+            .execute(
+                "UPDATE sessions SET owner_user='alice' WHERE id=?",
+                [&caller.id],
+            )
+            .unwrap();
+        let confirmation = host_command(&f, &mut agent, "/om:workspace view", None).await;
+        let query = confirmation
+            .iter()
+            .find(|e| e["type"] == "gateway_request" && e["op"] == "workspace.context")
+            .unwrap();
+        assert_eq!(
+            query["args"]["pendingJobs"][0],
+            json!({"jobId":original["jobId"],"epoch":original["epoch"],"generation":original["generation"],"revision":original["revision"]})
+        );
+        let proof = execute(&f.view(), "workspace.context", &query["args"]).unwrap();
+        assert_eq!(proof["jobs"][0]["proof"]["status"], "committed");
+        let pending = agent.call(json!({"type":"get_panel_state"})).await;
+        assert_eq!(pending["data"]["workspaceMemory"]["pendingMutations"], 0);
+        assert_eq!(std::fs::read(&path).unwrap(), committed);
+        // Confirmed retries are still idempotent at the host, even after reopening.
+        open_writer(&f.node, &f.scope, &json!({}), true).unwrap();
+        execute(&f.view(), &op, &original).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), committed);
+        agent.finish().await;
+        f.node.close().await;
+    }
+
+    async fn host_command(
+        f: &Fixture,
+        agent: &mut AgentRun,
+        text: &str,
+        lost: Option<(&str, bool)>,
+    ) -> Vec<Value> {
+        agent.command(json!({"type":"prompt","message":text})).await;
+        let mut events = Vec::new();
+        loop {
+            let e = agent.next().await.expect("agent exited");
+            if e["type"] == "gateway_request" {
+                let op = e["op"].as_str().unwrap();
+                let result = host_result(f, &e);
+                let result = match result {
+                    Ok(result) => result,
+                    Err(error) => {
+                        agent.send(json!({"type":"gateway_response","id":e["id"],"ok":false,"error":{"code":error.code,"message":error.message,"status":error.status}})).await;
+                        events.push(e);
+                        continue;
+                    }
+                };
+                if lost.is_some_and(|(target, _)| target == op) {
+                    assert_eq!(result["committed"], true);
+                    if lost.unwrap().1 {
+                        // Let the real production 20s timeout run. No ACK/error is sent.
+                        tokio::time::sleep(Duration::from_secs(21)).await;
+                    } else {
+                        // A repeated durable result is again lost with a transport failure.
+                        agent.send(json!({"type":"gateway_response","id":e["id"],"ok":false,"error":{"code":"transport_closed","message":"ACK delivery failed after durable commit","status":503}})).await;
+                    }
+                } else {
+                    agent.send(json!({"type":"gateway_response","id":e["id"],"ok":true,"result":result})).await;
+                }
+            }
+            let done = e["type"] == "extension_ui_request" && e["method"] == "notify";
+            events.push(e);
+            if done {
+                return events;
+            }
+        }
+    }
+}
+
+fn host_result(f: &Fixture, event: &Value) -> ApiResult<Value> {
+    let op = event["op"].as_str().unwrap();
+    let args = &event["args"];
+    let current = scope(&f.node, &f.scope.caller, &f.mode, 0, true)?;
+    if current != f.scope {
+        return Err(ApiError::forbidden("Memory authority changed"));
+    }
+    if matches!(
+        op,
+        "workspace.open" | "workspace.clear" | "workspace.forget"
+    ) {
+        open_writer(&f.node, &f.scope, args, op == "workspace.open")?;
+    }
+    let mut view = f.view();
+    let result = execute(&view, op, args)?;
+    view.revalidate(true)?;
+    Ok(result)
+}
+async fn host_answer(
+    agent: &mut pirc_conformance::AgentRun,
+    event: &Value,
+    result: ApiResult<Value>,
+) {
+    match result {
+        Ok(value)=>agent.send(json!({"type":"gateway_response","id":event["id"],"ok":true,"result":value})).await,
+        Err(error)=>agent.send(json!({"type":"gateway_response","id":event["id"],"ok":false,"error":{"code":error.code,"message":error.message,"status":error.status}})).await,
+    }
+}
+/// Hold a real request before its host transaction, reject a simultaneous resend,
+/// then prove that rejection of a retry cannot settle the original unknown job.
+#[tokio::test(flavor = "multi_thread")]
+async fn parallel_resend_and_reversible_retry_rejection_preserve_unknown_original() {
+    use pirc_conformance::{AgentOptions, AgentRun};
+    for action in ["clear", "forget"] {
+        let options = AgentOptions {
+            env: vec![("PIRC_GATEWAY".into(), "1".into())],
+            config: json!({"features":{"workspaceMemory":{"passive":true}}}),
+            ..Default::default()
+        }
+        .features("workspace-memory");
+        let Some(mut agent) = AgentRun::start(options).await else {
+            return;
+        };
+        let mut f = Fixture::new().await;
+        f.mutate("workspace.cold", json!({})).unwrap();
+        f.turn("Original knowledge");
+        f.commit(false);
+        let note = f.context()["items"][0]["id"].as_str().unwrap().to_owned();
+        let caller = f
+            .node
+            .db
+            .lock()
+            .create_session("repo", agent.session_dir.to_str().unwrap(), "alice")
+            .unwrap();
+        f.scope = scope(&f.node, &caller.id, &f.mode, 0, true).unwrap();
+        for op in [
+            "workspace.open",
+            "workspace.context",
+            "workspace.clear",
+            "workspace.forget",
+        ] {
+            agent
+                .answers
+                .lock()
+                .unwrap()
+                .gateway
+                .insert(op.into(), json!({"hold":true}));
+        }
+        let text = format!(
+            "/om:workspace {action}{}",
+            if action == "forget" {
+                format!(" {note}")
+            } else {
+                String::new()
+            }
+        );
+        let op = format!("workspace.{action}");
+        let path = ledger(&f.node, &f.scope);
+        let before = std::fs::read(&path).unwrap();
+        agent.command(json!({"type":"prompt","message":text})).await;
+        let held = loop {
+            let event = agent.next().await.unwrap();
+            if event["type"] != "gateway_request" {
+                continue;
+            }
+            if event["op"] == op {
+                break event;
+            }
+            host_answer(&mut agent, &event, host_result(&f, &event)).await;
+        };
+        agent.command(json!({"type":"prompt","message":text})).await;
+        loop {
+            let event = agent.next().await.unwrap();
+            if event["type"] == "gateway_request" {
+                assert_ne!(event["op"], op, "overlapping resend reached host");
+                host_answer(&mut agent, &event, host_result(&f, &event)).await;
+            }
+            if event["method"] == "notify" {
+                assert!(
+                    event["message"]
+                        .as_str()
+                        .unwrap()
+                        .contains("already running"),
+                    "{event}"
+                );
+                break;
+            }
+        }
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert_eq!(
+            agent.call(json!({"type":"get_panel_state"})).await["data"]["workspaceMemory"]["pendingMutations"],
+            1
+        );
+        // The original production RPC expires without reaching the host transaction.
+        tokio::time::sleep(std::time::Duration::from_secs(21)).await;
+        let timeout = agent.until(|e| e["method"] == "notify").await;
+        assert!(
+            timeout.last().unwrap()["message"]
+                .as_str()
+                .unwrap()
+                .contains("outcome may be unknown")
+        );
+        let extra = if action == "clear" {
+            let dir = f._dir.path().join("temporary-source");
+            std::fs::create_dir(&dir).unwrap();
+            SessionStore::open(dir.clone(), f._dir.path().join("repo").to_str().unwrap()).unwrap();
+            Some(
+                f.node
+                    .db
+                    .lock()
+                    .create_session("repo", dir.to_str().unwrap(), "alice")
+                    .unwrap(),
+            )
+        } else {
+            None
+        };
+        // Retry has the original immutable identity, but this attempt cannot commit.
+        agent.command(json!({"type":"prompt","message":text})).await;
+        loop {
+            let event = agent.next().await.unwrap();
+            if event["type"] == "gateway_request" {
+                if event["op"] == op {
+                    assert_eq!(event["args"], held["args"]);
+                    let rejected = if action == "clear" {
+                        host_result(&f, &event)
+                    } else {
+                        Err(ApiError::forbidden("Authority temporarily unavailable"))
+                    };
+                    if action == "clear" {
+                        assert_eq!(
+                            rejected.as_ref().unwrap_err().code,
+                            "workspace_source_changed"
+                        );
+                    }
+                    host_answer(&mut agent, &event, rejected).await;
+                } else {
+                    host_answer(&mut agent, &event, host_result(&f, &event)).await;
+                }
+            }
+            if event["method"] == "notify" {
+                break;
+            }
+        }
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert_eq!(
+            agent.call(json!({"type":"get_panel_state"})).await["data"]["workspaceMemory"]["pendingMutations"],
+            1
+        );
+        // Same CAS and no durable job is still pending, never evidence of failure.
+        agent
+            .command(json!({"type":"prompt","message":"/om:workspace view"}))
+            .await;
+        loop {
+            let event = agent.next().await.unwrap();
+            if event["type"] == "gateway_request" {
+                let result = host_result(&f, &event);
+                if event["op"] == "workspace.context" {
+                    assert_eq!(
+                        result.as_ref().unwrap()["jobs"][0]["proof"]["status"],
+                        "pending"
+                    );
+                }
+                host_answer(&mut agent, &event, result).await;
+            }
+            if event["method"] == "notify" {
+                assert!(event["message"].as_str().unwrap().contains("still unknown"));
+                break;
+            }
+        }
+        if let Some(row) = extra {
+            f.node
+                .db
+                .lock()
+                .execute("DELETE FROM sessions WHERE id=?", [row.id])
+                .unwrap();
+        }
+        // Restore the original source set, then the timed-out original actually commits late.
+        let committed = host_result(&f, &held).unwrap();
+        assert_eq!(committed["committed"], true);
+        // A delayed response for the expired request is ignored; only a new proof settles it.
+        host_answer(&mut agent, &held, Ok(committed)).await;
+        assert_eq!(
+            agent.call(json!({"type":"get_panel_state"})).await["data"]["workspaceMemory"]["pendingMutations"],
+            1
+        );
+        let bytes = std::fs::read(&path).unwrap();
+        agent
+            .command(json!({"type":"prompt","message":"/om:workspace view"}))
+            .await;
+        loop {
+            let event = agent.next().await.unwrap();
+            if event["type"] == "gateway_request" {
+                let result = host_result(&f, &event);
+                if event["op"] == "workspace.context" {
+                    assert_eq!(
+                        result.as_ref().unwrap()["jobs"][0]["proof"]["status"],
+                        "committed"
+                    );
+                }
+                host_answer(&mut agent, &event, result).await;
+            }
+            if event["method"] == "notify" {
+                assert_eq!(event["message"], "[]");
+                break;
+            }
+        }
+        assert_eq!(
+            agent.call(json!({"type":"get_panel_state"})).await["data"]["workspaceMemory"]["pendingMutations"],
+            0
+        );
+        host_result(&f, &held).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        agent.finish().await;
+        f.node.close().await;
+    }
+}
+
+async fn memory_request(
+    f: &Fixture,
+    agent: &mut pirc_conformance::AgentRun,
+    target: &str,
+) -> Value {
+    loop {
+        let event = agent.next().await.expect("agent exited before request");
+        if event["type"] == "gateway_request" {
+            if event["op"] == target {
+                return event;
+            }
+            host_answer(agent, &event, host_result(f, &event)).await;
+        }
+        assert_ne!(
+            event["method"], "notify",
+            "unexpected notice before {target}: {event}"
+        );
+    }
+}
+async fn memory_notice(f: &Fixture, agent: &mut pirc_conformance::AgentRun) -> String {
+    loop {
+        let event = agent.next().await.expect("agent exited before notice");
+        if event["type"] == "gateway_request" {
+            host_answer(agent, &event, host_result(f, &event)).await;
+        }
+        if event["method"] == "notify" {
+            return event["message"].as_str().unwrap().into();
+        }
+    }
+}
+#[tokio::test(flavor = "multi_thread")]
+async fn late_views_after_clear_forget_and_newer_unknown_ack_proofs_never_show_old_notes() {
+    use pirc_conformance::{AgentOptions, AgentRun};
+    for action in ["clear", "forget"] {
+        for late_commit in [false, true] {
+            let options = AgentOptions {
+                env: vec![("PIRC_GATEWAY".into(), "1".into())],
+                config: json!({"features":{"workspaceMemory":{"passive":true}}}),
+                ..Default::default()
+            }
+            .features("workspace-memory");
+            let Some(mut agent) = AgentRun::start(options).await else {
+                return;
+            };
+            let mut f = Fixture::new().await;
+            f.mutate("workspace.cold", json!({})).unwrap();
+            f.turn("Original fact");
+            f.commit(false);
+            let note = f.context()["items"][0]["id"].as_str().unwrap().to_owned();
+            let caller = f
+                .node
+                .db
+                .lock()
+                .create_session("repo", agent.session_dir.to_str().unwrap(), "alice")
+                .unwrap();
+            f.scope = scope(&f.node, &caller.id, &f.mode, 0, true).unwrap();
+            for op in [
+                "workspace.open",
+                "workspace.context",
+                "workspace.clear",
+                "workspace.forget",
+            ] {
+                agent
+                    .answers
+                    .lock()
+                    .unwrap()
+                    .gateway
+                    .insert(op.into(), json!({"hold":true}));
+            }
+            let command = format!(
+                "/om:workspace {action}{}",
+                if action == "forget" {
+                    format!(" {note}")
+                } else {
+                    String::new()
+                }
+            );
+            let delayed = if late_commit {
+                agent
+                    .command(json!({"type":"prompt","message":command}))
+                    .await;
+                let request = memory_request(&f, &mut agent, &format!("workspace.{action}")).await;
+                host_answer(
+                    &mut agent,
+                    &request,
+                    Err(ApiError::new(503, "transport_closed", "ACK unavailable")),
+                )
+                .await;
+                assert!(memory_notice(&f, &mut agent).await.contains("original job"));
+                Some(request)
+            } else {
+                None
+            };
+            agent
+                .command(json!({"type":"prompt","message":"/om:workspace view"}))
+                .await;
+            let held = memory_request(&f, &mut agent, "workspace.context").await;
+            let old = host_result(&f, &held).unwrap();
+            assert!(!old["items"].as_array().unwrap().is_empty());
+            if let Some(request) = delayed {
+                assert_eq!(old["jobs"][0]["proof"]["status"], "pending");
+                assert_eq!(host_result(&f, &request).unwrap()["committed"], true);
+                // No client RPC finishes now: a newer proof is the only local invalidation.
+                agent
+                    .command(json!({"type":"prompt","message":"/om:workspace view"}))
+                    .await;
+                assert_eq!(memory_notice(&f, &mut agent).await, "[]");
+            } else {
+                agent
+                    .command(json!({"type":"prompt","message":command}))
+                    .await;
+                assert!(
+                    memory_notice(&f, &mut agent)
+                        .await
+                        .contains("transaction committed")
+                );
+            }
+            let after = std::fs::read(ledger(&f.node, &f.scope)).unwrap();
+            host_answer(&mut agent, &held, Ok(old)).await;
+            let notice = memory_notice(&f, &mut agent).await;
+            assert!(notice.contains("changed while reading"), "{notice}");
+            assert!(!notice.contains("Use SQLite"));
+            assert_eq!(
+                agent.call(json!({"type":"get_panel_state"})).await["data"]["workspaceMemory"]["pendingMutations"],
+                0
+            );
+            agent
+                .command(json!({"type":"prompt","message":"/om:workspace view"}))
+                .await;
+            assert_eq!(memory_notice(&f, &mut agent).await, "[]");
+            assert_eq!(std::fs::read(ledger(&f.node, &f.scope)).unwrap(), after);
+            agent.finish().await;
+            f.node.close().await;
+        }
+    }
+}
+#[tokio::test(flavor = "multi_thread")]
+async fn a_real_late_ptc_hook_keeps_its_execution_across_reused_parent_ids_and_restart() {
+    use pirc_agent::{handoff, session_store::SessionEntry};
+    use pirc_conformance::{AgentOptions, AgentRun, ModelReply};
+    let options = AgentOptions {
+        config: json!({"hooks":{"beforeTool":[{"matcher":"read","timeoutMs":20000,"command":"if [ ! -f first-started ]; then touch first-started; while [ ! -f release-old ]; do sleep 0.05; done; else touch second-started; while [ ! -f release-new ]; do sleep 0.05; done; fi"}]}}),
+        files: vec![("a.txt".into(), "evidence".into())],
+        ..Default::default()
+    };
+    let Some(mut agent) = AgentRun::start(options).await else {
+        return;
+    };
+    let tools = |timeout: f64| {
+        ModelReply::Tools(vec![(
+            "same".into(),
+            "ptc".into(),
+            json!({"code":"return await tools.read({path:'a.txt'});","timeout":timeout}),
+        )])
+    };
+    agent.push([tools(0.5), ModelReply::Text("First script ended".into())]);
+    agent
+        .call(json!({"type":"prompt","message":"first interaction"}))
+        .await;
+    agent.settle().await;
+    assert!(agent.workspace.join("first-started").exists());
+    let raw = agent.session_entries();
+    let outer = raw
+        .iter()
+        .find(|e| e["message"]["role"] == "toolResult" && e["message"]["toolCallId"] == "same")
+        .unwrap();
+    let execution = outer["message"]["details"]["executionId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(!raw.iter().any(|e| e["customType"] == "ptc.operation"));
+    agent.push([tools(15.0), ModelReply::Text("Second script ended".into())]);
+    agent
+        .call(json!({"type":"prompt","message":"second interaction"}))
+        .await;
+    agent
+        .until(|e| {
+            e["type"] == "tool_execution_start"
+                && e["toolName"] == "read"
+                && e["parentToolCallId"] == "same"
+        })
+        .await;
+    std::fs::write(agent.workspace.join("release-old"), "").unwrap();
+    agent
+        .until(|e| {
+            e["type"] == "tool_execution_end"
+                && e["parentToolCallId"] == "same"
+                && e["toolCallId"]
+                    .as_str()
+                    .is_some_and(|id| id.starts_with(&execution))
+        })
+        .await;
+    std::fs::write(agent.workspace.join("release-new"), "").unwrap();
+    agent.settle().await;
+    let raw = agent.session_entries();
+    let late = raw
+        .iter()
+        .position(|e| {
+            e["customType"] == "ptc.operation"
+                && e["data"]["toolCallId"]
+                    .as_str()
+                    .is_some_and(|id| id.starts_with(&execution))
+        })
+        .unwrap();
+    let calls: Vec<_> = raw
+        .iter()
+        .enumerate()
+        .filter_map(|(i, e)| {
+            (e["message"]["content"][0]["type"] == "toolCall"
+                && e["message"]["content"][0]["id"] == "same")
+                .then_some(i)
+        })
+        .collect();
+    assert_eq!(calls.len(), 2);
+    assert!(late > calls[1]);
+    let branch: Vec<SessionEntry> = raw
+        .into_iter()
+        .map(|e| serde_json::from_value(e).unwrap())
+        .collect();
+    assert!(handoff::boundaries(&branch).is_ok());
+    assert!(handoff::boundaries_before(&branch[..late], &branch[late..]).is_err());
+    assert!(
+        handoff::sources(&branch)
+            .iter()
+            .any(|s| s.entry_id == branch[late].id && s.role == "operation:read")
+    );
+    let Some(mut agent) = agent.restart(AgentOptions::default()).await else {
+        panic!("agent failed to restart")
+    };
+    let reopened: Vec<SessionEntry> = agent
+        .session_entries()
+        .into_iter()
+        .map(|e| serde_json::from_value(e).unwrap())
+        .collect();
+    assert!(handoff::boundaries(&reopened).is_ok());
+    assert!(handoff::boundaries_before(&reopened[..late], &reopened[late..]).is_err());
+    agent.push([ModelReply::Text("Resumed".into())]);
+    agent
+        .call(json!({"type":"prompt","message":"Continue after restart"}))
+        .await;
+    agent.settle().await;
+    let requests = agent.take_requests();
+    let messages = requests.last().unwrap()["messages"].as_array().unwrap();
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|m| m["role"] == "toolResult" && m["toolCallId"] == "same")
+            .count(),
+        2
+    );
+    agent.finish().await;
+}
+#[tokio::test]
+async fn work_extraction_keeps_late_ptc_evidence_in_a_complete_range_and_respects_clear() {
+    let f = Fixture::new().await;
+    f.mutate("workspace.cold", json!({})).unwrap();
+    let mut store = SessionStore::open(f.dir.clone(), "/").unwrap();
+    let user = |text: &str| {
+        EntryData::Message(Message::User {
+            content: UserContent::Text(text.into()),
+            timestamp: 1,
+        })
+    };
+    let assistant = |content: Value, reason: &str| {
+        EntryData::Message(serde_json::from_value(json!({"role":"assistant","content":content,"api":"x","provider":"x","model":"x","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0},"stopReason":reason,"timestamp":1})).unwrap())
+    };
+    let first = store.append(user("first")).unwrap();
+    store
+        .append(assistant(
+            json!([{"type":"toolCall","id":"same","name":"ptc","arguments":{}}]),
+            "toolUse",
+        ))
+        .unwrap();
+    store
+        .append(EntryData::Message(Message::ToolResult {
+            tool_call_id: "same".into(),
+            tool_name: "ptc".into(),
+            content: vec![],
+            details: Some(json!({"executionId":"old"})),
+            is_error: true,
+            timestamp: 1,
+        }))
+        .unwrap();
+    store
+        .append(assistant(
+            json!([{"type":"text","text":"first completed"}]),
+            "stop",
+        ))
+        .unwrap();
+    store.append(user("second")).unwrap();
+    store.append(EntryData::Custom{custom_type:"ptc.operation".into(),data:json!({"parentToolCallId":"same","toolCallId":"old:op1","toolName":"read","content":[{"type":"text","text":"late evidence"}]})}).unwrap();
+    let last = store
+        .append(assistant(
+            json!([{"type":"text","text":"second completed"}]),
+            "stop",
+        ))
+        .unwrap();
+    let job = execute(&f.view(), "workspace.next", &json!({})).unwrap();
+    assert_eq!(job["fromEntryId"], first.id);
+    assert_eq!(job["throughEntryId"], last.id);
+    assert!(
+        job["sources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["role"] == "operation:read")
+    );
+    f.commit(true);
+    assert!(
+        execute(&f.view(), "workspace.next", &json!({}))
+            .unwrap()
+            .is_null()
+    );
+    f.mutate(
+        "workspace.clear",
+        json!({"boundaries":f.context()["boundaries"]}),
+    )
+    .unwrap();
+    assert!(
+        execute(&f.view(), "workspace.next", &json!({}))
+            .unwrap()
+            .is_null()
+    );
+    f.node.close().await;
+}
+
+#[tokio::test]
+async fn clear_and_forget_keep_new_admissions_while_fencing_late_revoked_operations() {
+    for action in ["clear", "forget"] {
+        let f = Fixture::new().await;
+        f.mutate("workspace.cold", json!({})).unwrap();
+        let mut store = SessionStore::open(f.dir.clone(), "/").unwrap();
+        let user = |text: &str| {
+            EntryData::Message(Message::User {
+                content: UserContent::Text(text.into()),
+                timestamp: 1,
+            })
+        };
+        let assistant = |content: Value, reason: &str| {
+            EntryData::Message(serde_json::from_value(json!({"role":"assistant","content":content,"api":"x","provider":"x","model":"x","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0},"stopReason":reason,"timestamp":1})).unwrap())
+        };
+        let old_source = store.append(user("old source")).unwrap();
+        store
+            .append(assistant(
+                json!([{"type":"toolCall","id":"same","name":"ptc","arguments":{}}]),
+                "toolUse",
+            ))
+            .unwrap();
+        store
+            .append(EntryData::Message(Message::ToolResult {
+                tool_call_id: "same".into(),
+                tool_name: "ptc".into(),
+                content: vec![],
+                details: Some(json!({"executionId":"old"})),
+                is_error: true,
+                timestamp: 1,
+            }))
+            .unwrap();
+        store
+            .append(assistant(
+                json!([{"type":"text","text":"old range completed"}]),
+                "stop",
+            ))
+            .unwrap();
+        f.commit(false);
+        let c = f.context();
+        let id = c["items"][0]["id"].clone();
+        f.mutate(
+            &format!("workspace.{action}"),
+            json!({"id":id,"boundaries":c["boundaries"]}),
+        )
+        .unwrap();
+        let fresh_source = store
+            .append(user("New repository convention: use PostgreSQL"))
+            .unwrap();
+        store.append(EntryData::Custom{custom_type:"ptc.operation".into(),data:json!({"parentToolCallId":"same","toolCallId":"old:op1","toolName":"read","content":[{"type":"text","text":"revoked old evidence"}]})}).unwrap();
+        store
+            .append(assistant(
+                json!([{"type":"text","text":"interleaved completed"}]),
+                "stop",
+            ))
+            .unwrap();
+        let job = execute(&f.view(), "workspace.next", &json!({})).unwrap();
+        assert_eq!(job["fromEntryId"], fresh_source.id);
+        let sources = job["sources"].to_string();
+        assert!(sources.contains("New repository convention"));
+        assert!(!sources.contains("old source"));
+        assert!(!sources.contains("revoked old evidence"));
+        assert!(!sources.contains("operation:read"));
+        let mut args = job.as_object().unwrap().clone();
+        args.remove("control");
+        args.remove("sources");
+        for key in ["epoch", "generation", "revision"] {
+            args.insert(key.into(), job["control"][key].clone());
+        }
+        let candidate = |id: &str| json!([{"content":"Use PostgreSQL for new repository work","sources":[{"sessionId":job["sessionId"],"entryId":id}]}]);
+        args.insert("items".into(), candidate(&old_source.id));
+        let before = std::fs::read(ledger(&f.node, &f.scope)).unwrap();
+        assert!(execute(&f.view(), "workspace.commit", &Value::Object(args.clone())).is_err());
+        assert_eq!(std::fs::read(ledger(&f.node, &f.scope)).unwrap(), before);
+        args.insert("items".into(), candidate(&fresh_source.id));
+        execute(&f.view(), "workspace.commit", &Value::Object(args)).unwrap();
+        assert_eq!(
+            f.context()["items"][0]["content"],
+            "Use PostgreSQL for new repository work"
+        );
+        drop(store);
+        SessionStore::open(f.dir.clone(), "/").unwrap();
+        assert!(
+            execute(&f.view(), "workspace.next", &json!({}))
+                .unwrap()
+                .is_null()
+        );
+        f.turn("independent fresh source");
+        let job = execute(&f.view(), "workspace.next", &json!({})).unwrap();
+        assert!(!job.is_null());
+        assert!(!job["sources"].to_string().contains("revoked old evidence"));
+        f.node.close().await;
+    }
+}
+
+#[tokio::test]
+async fn cold_and_clear_filter_late_results_and_operations_by_original_admission() {
+    for action in ["cold", "clear"] {
+        let f = Fixture::new().await;
+        if action == "clear" {
+            f.mutate("workspace.cold", json!({})).unwrap();
+        }
+        let mut store = SessionStore::open(f.dir.clone(), "/").unwrap();
+        store
+            .append(EntryData::Message(Message::User {
+                content: UserContent::Text("pre-boundary evidence".into()),
+                timestamp: 1,
+            }))
+            .unwrap();
+        let call = serde_json::from_value(json!({"role":"assistant","content":[{"type":"toolCall","id":"old","name":"ptc","arguments":{}}],"api":"x","provider":"x","model":"x","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0},"stopReason":"toolUse","timestamp":1})).unwrap();
+        store.append(EntryData::Message(call)).unwrap();
+        f.mutate(&format!("workspace.{action}"), json!({})).unwrap();
+        let fresh = store
+            .append(EntryData::Message(Message::User {
+                content: UserContent::Text("New independent repository evidence".into()),
+                timestamp: 1,
+            }))
+            .unwrap();
+        let done = serde_json::from_value(json!({"role":"assistant","content":[{"type":"text","text":"New interaction completed"}],"api":"x","provider":"x","model":"x","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0},"stopReason":"stop","timestamp":1})).unwrap();
+        store.append(EntryData::Message(done)).unwrap();
+        store
+            .append(EntryData::Message(Message::ToolResult {
+                tool_call_id: "old".into(),
+                tool_name: "ptc".into(),
+                content: vec![pirc_protocol::UserBlock::Text {
+                    text: "late old result".into(),
+                    text_signature: None,
+                }],
+                details: Some(json!({"executionId":"old"})),
+                is_error: true,
+                timestamp: 1,
+            }))
+            .unwrap();
+        let late = store.append(EntryData::Custom {custom_type:"ptc.operation".into(),data:json!({"parentToolCallId":"old","toolCallId":"old:op1","toolName":"read","content":[{"type":"text","text":"late old operation"}]})}).unwrap();
+        let job = execute(&f.view(), "workspace.next", &json!({})).unwrap();
+        assert_eq!(job["fromEntryId"], fresh.id);
+        let sources = job["sources"].to_string();
+        assert!(sources.contains("New independent"));
+        assert!(!sources.contains("pre-boundary"));
+        assert!(!sources.contains("late old"));
+        assert!(!sources.contains(&late.id));
+        f.commit(true);
+        assert!(
+            execute(&f.view(), "workspace.next", &json!({}))
+                .unwrap()
+                .is_null()
+        );
+        f.node.close().await;
+    }
+}
+
+fn ambiguous_legacy_ptc(store: &mut SessionStore, completed: bool) -> (String, String) {
+    let user = |text: &str| {
+        EntryData::Message(Message::User {
+            content: UserContent::Text(text.into()),
+            timestamp: 1,
+        })
+    };
+    let call = || {
+        EntryData::Message(serde_json::from_value(json!({"role":"assistant","content":[{"type":"toolCall","id":"reused","name":"ptc","arguments":{}}],"api":"x","provider":"x","model":"x","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0},"stopReason":"toolUse","timestamp":1})).unwrap())
+    };
+    let result = || {
+        EntryData::Message(Message::ToolResult {
+            tool_call_id: "reused".into(),
+            tool_name: "ptc".into(),
+            content: vec![],
+            details: None,
+            is_error: true,
+            timestamp: 1,
+        })
+    };
+    let first = store
+        .append(user("Legacy source that must not be guessed"))
+        .unwrap();
+    store.append(call()).unwrap();
+    store.append(result()).unwrap();
+    store
+        .append(user("Second legacy source without execution metadata"))
+        .unwrap();
+    store.append(call()).unwrap();
+    let operation = store.append(EntryData::Custom {custom_type:"ptc.operation".into(),data:json!({"parentToolCallId":"reused","toolCallId":"missing:op1","toolName":"read","content":[{"type":"text","text":"Ambiguous legacy evidence"}]})}).unwrap();
+    if completed {
+        store.append(result()).unwrap();
+    }
+    (first.id, operation.id)
+}
+
+#[tokio::test]
+async fn permanent_ptc_ambiguity_blocks_only_related_sources_and_is_reported() {
+    for completed in [true, false] {
+        let f = Fixture::new().await;
+        f.mutate("workspace.cold", json!({})).unwrap();
+        let mut store = SessionStore::open(f.dir.clone(), "/").unwrap();
+        let (old, operation) = ambiguous_legacy_ptc(&mut store, completed);
+        drop(store);
+        f.turn("Fresh independent fact: use SQLite for repository state");
+        let job = execute(&f.view(), "workspace.next", &json!({})).unwrap();
+        assert!(
+            !job.is_null(),
+            "independent sources must not disappear behind old ambiguity"
+        );
+        let sources = job["sources"].to_string();
+        assert!(sources.contains("Fresh independent fact"));
+        assert!(!sources.contains("Legacy source"));
+        assert!(!sources.contains("Ambiguous legacy evidence"));
+        assert!(!sources.contains(&old));
+        assert!(!sources.contains(&operation));
+        let mut invalid = job.as_object().unwrap().clone();
+        invalid.remove("control");
+        invalid.remove("sources");
+        for key in ["epoch", "generation", "revision"] {
+            invalid.insert(key.into(), job["control"][key].clone());
+        }
+        invalid.insert("items".into(),json!([{"content":"Must not promote ambiguous evidence","sources":[{"sessionId":job["sessionId"],"entryId":operation}]}]));
+        let before = std::fs::read(ledger(&f.node, &f.scope)).unwrap();
+        assert_eq!(
+            execute(&f.view(), "workspace.commit", &Value::Object(invalid))
+                .unwrap_err()
+                .code,
+            "invalid_input"
+        );
+        assert_eq!(std::fs::read(ledger(&f.node, &f.scope)).unwrap(), before);
+        f.commit(false);
+        let bytes = std::fs::read(ledger(&f.node, &f.scope)).unwrap();
+        let blocked = execute(&f.view(), "workspace.next", &json!({})).unwrap_err();
+        assert_eq!(blocked.code, "workspace_source_blocked");
+        assert!(blocked.message.contains("blocked"));
+        assert_eq!(std::fs::read(ledger(&f.node, &f.scope)).unwrap(), bytes);
+        assert_eq!(
+            f.context()["control"]["receipts"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(
+            f.context()["control"]["receipts"][0]["fromEntryId"],
+            job["fromEntryId"]
+        );
+        SessionStore::open(f.dir.clone(), "/").unwrap();
+        f.turn("Another independent admission");
+        f.commit(true);
+        assert_eq!(
+            execute(&f.view(), "workspace.next", &json!({}))
+                .unwrap_err()
+                .code,
+            "workspace_source_blocked"
+        );
+        assert_eq!(f.context()["items"].as_array().unwrap().len(), 1);
+        f.node.close().await;
+    }
+}
+
+#[tokio::test]
+async fn pre_cutover_ptc_ambiguity_does_not_block_new_work_but_catchup_reports_it() {
+    let f = Fixture::new().await;
+    let mut store = SessionStore::open(f.dir.clone(), "/").unwrap();
+    let (_, operation) = ambiguous_legacy_ptc(&mut store, true);
+    let before = std::fs::read(f.dir.join(session_store::SESSION_FILE)).unwrap();
+    drop(store);
+    f.mutate("workspace.cold", json!({})).unwrap();
+    f.turn("First post-cutover independent fact");
+    let job = execute(&f.view(), "workspace.next", &json!({})).unwrap();
+    assert!(!job.is_null());
+    assert!(job["sources"].to_string().contains("First post-cutover"));
+    assert!(!job["sources"].to_string().contains(&operation));
+    f.commit(false);
+    assert!(
+        execute(&f.view(), "workspace.next", &json!({}))
+            .unwrap()
+            .is_null()
+    );
+    let blocked = execute(&f.view(), "workspace.next", &json!({"catchup":true})).unwrap_err();
+    assert_eq!(blocked.code, "workspace_source_blocked");
+    let after = std::fs::read(f.dir.join(session_store::SESSION_FILE)).unwrap();
+    assert!(after.starts_with(&before));
+    SessionStore::open(f.dir.clone(), "/").unwrap();
+    f.turn("Second post-cutover independent fact");
+    f.commit(true);
+    assert!(
+        execute(&f.view(), "workspace.next", &json!({}))
+            .unwrap()
+            .is_null()
+    );
+    assert_eq!(
+        execute(&f.view(), "workspace.next", &json!({"catchup":true}))
+            .unwrap_err()
+            .code,
+        "workspace_source_blocked"
+    );
+    assert_eq!(
+        f.context()["control"]["receipts"].as_array().unwrap().len(),
+        2
+    );
+    f.node.close().await;
+}
+
+#[tokio::test]
+async fn unbounded_ptc_ambiguity_reports_blocked_without_starving_other_authorized_sessions() {
+    let f = Fixture::new().await;
+    f.mutate("workspace.cold", json!({})).unwrap();
+    let mut store = SessionStore::open(f.dir.clone(), "/").unwrap();
+    store.append(EntryData::Custom {custom_type:"ptc.operation".into(),data:json!({"parentToolCallId":"unknown","toolCallId":"foreign:op1","toolName":"read"})}).unwrap();
+    drop(store);
+    f.turn("Source with an unclassifiable earlier operation");
+    assert_eq!(
+        execute(&f.view(), "workspace.next", &json!({}))
+            .unwrap_err()
+            .code,
+        "workspace_source_blocked"
+    );
+    let dir = f._dir.path().join("independent-source");
+    let mut store = SessionStore::open(dir.clone(), "/").unwrap();
+    store
+        .append(EntryData::Message(Message::User {
+            content: UserContent::Text("Another authorized session's independent source".into()),
+            timestamp: 1,
+        }))
+        .unwrap();
+    store.append(EntryData::Message(serde_json::from_value(json!({"role":"assistant","content":[{"type":"text","text":"Verified"}],"api":"x","provider":"x","model":"x","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0},"stopReason":"stop","timestamp":1})).unwrap())).unwrap();
+    f.node
+        .db
+        .lock()
+        .create_session("repo", dir.to_str().unwrap(), "alice")
+        .unwrap();
+    let job = execute(&f.view(), "workspace.next", &json!({})).unwrap();
+    assert!(!job.is_null());
+    assert!(
+        job["sources"]
+            .to_string()
+            .contains("Another authorized session")
+    );
+    f.commit(true);
+    assert_eq!(
+        execute(&f.view(), "workspace.next", &json!({}))
+            .unwrap_err()
+            .code,
+        "workspace_source_blocked"
+    );
+    f.node.close().await;
+}

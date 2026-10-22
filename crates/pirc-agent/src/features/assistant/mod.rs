@@ -648,7 +648,7 @@ async fn fresh_sections(
     if full.is_some()
         && let Some(policy) = context.get("capabilities").filter(|v| v.is_object())
     {
-        agent.set_capabilities(Capabilities::from_value(policy));
+        agent.set_capabilities(agent.capabilities().refreshed(policy));
     }
     let enabled = js::truthy(context.get("enabled"));
     if full.is_some() {

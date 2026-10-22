@@ -29,6 +29,20 @@ use crate::error::{ApiError, ApiResult};
 use crate::util::{now_ms, uuid};
 use crate::ws::{Outbox, Received, receive};
 
+/// Preserve the legacy ACK shape except for a bounded, endpoint-specific quota hint.
+pub(crate) fn mirror_ack(key: &str, offset: u64, end: u64, result: ApiResult<u64>) -> Value {
+    let rejected = result
+        .as_ref()
+        .err()
+        .is_some_and(|e| e.code == "memory_mirror_quota_exceeded");
+    let mut ack =
+        json!({"type":"memory_mirror_ack","ledgerKey":key,"watermark":result.unwrap_or(offset)});
+    if rejected {
+        ack["rejectedEnd"] = json!(end);
+    }
+    ack
+}
+
 /// Requests waiting on one node; each node has its own allowance, so a
 /// busy or stalled node cannot starve the others (security audit L7).
 const MAX_PENDING_REQUESTS: usize = 100;
@@ -924,21 +938,15 @@ impl LinkSession {
                 reset,
                 lines,
             } => {
-                let watermark = app
-                    .on_mirror(
-                        node_id,
-                        &ledger_key,
-                        offset,
-                        end,
-                        reset.unwrap_or(false),
-                        &lines,
-                    )
-                    .unwrap_or(offset);
-                self.send(json!({
-                    "type": "memory_mirror_ack",
-                    "ledgerKey": ledger_key,
-                    "watermark": watermark,
-                }));
+                let result = app.on_mirror(
+                    node_id,
+                    &ledger_key,
+                    offset,
+                    end,
+                    reset.unwrap_or(false),
+                    &lines,
+                );
+                self.send(mirror_ack(&ledger_key, offset, end, result));
             }
             NodeMessage::TerminalFrame { stream_id, frame } => {
                 let handlers = app
@@ -1241,5 +1249,24 @@ mod tests {
         assert_eq!(state.requests_on("b"), 1);
         assert_eq!(state.requests_on("c"), 0);
         assert_eq!(state.streams_on("a"), 0);
+    }
+    #[test]
+    fn mirror_quota_hint_is_optional_and_only_identifies_the_rejected_endpoint() {
+        let legacy = json!({"type":"memory_mirror_ack","ledgerKey":"key","watermark":10});
+        assert_eq!(mirror_ack("key", 0, 10, Ok(10)), legacy);
+        let ack: pirc_protocol::GatewayMessage = serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(serde_json::to_value(ack).unwrap(), legacy);
+        let ordinary = mirror_ack("key", 10, 20, Err(ApiError::invalid_input()));
+        assert!(ordinary.get("rejectedEnd").is_none());
+        let quota = mirror_ack(
+            "key",
+            10,
+            20,
+            Err(ApiError::new(413, "memory_mirror_quota_exceeded", "quota")),
+        );
+        assert_eq!(quota["watermark"], 10);
+        assert_eq!(quota["rejectedEnd"], 20);
+        let decoded: pirc_protocol::GatewayMessage = serde_json::from_value(quota.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), quota);
     }
 }

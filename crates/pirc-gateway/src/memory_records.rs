@@ -43,6 +43,8 @@ struct Quota {
     max_rows: u64,
     max_bytes: u64,
     refused: u64,
+    /// Integrity frames are bounded input and check their final SQL state atomically.
+    deferred: bool,
 }
 
 impl Quota {
@@ -58,6 +60,7 @@ impl Quota {
             max_rows,
             max_bytes,
             refused: 0,
+            deferred: false,
         })
     }
 
@@ -69,7 +72,7 @@ impl Quota {
     /// Take room for one row of `bytes` content, or count it refused.
     fn admit(&mut self, bytes: usize) -> bool {
         let bytes = bytes as u64;
-        if self.rows >= self.max_rows || self.bytes + bytes > self.max_bytes {
+        if !self.deferred && (self.rows >= self.max_rows || self.bytes + bytes > self.max_bytes) {
             self.refused += 1;
             return false;
         }
@@ -207,12 +210,14 @@ fn ingest_within(
             return Ok(if reset { 0 } else { current });
         }
         let mut quota = Quota::of(conn, node_id, max_rows, max_bytes)?;
+        quota.deferred = integrity;
         for line in lines {
             if let Some(line) = Line::parse(line) {
                 apply(conn, node_id, ledger_key, line, &mut quota)?;
             }
         }
-        if integrity && quota.refused > 0 {
+        let final_quota = Quota::of(conn, node_id, max_rows, max_bytes)?;
+        if integrity && (final_quota.rows > max_rows || final_quota.bytes > max_bytes) {
             return Err(ApiError::new(
                 413,
                 "memory_mirror_quota_exceeded",
@@ -343,7 +348,9 @@ fn apply(
                 "DELETE FROM memory_records WHERE node_id=? AND ledger_key=? AND status!='forgotten'",
                 [node_id, key],
             )?;
+            let deferred = quota.deferred;
             *quota = Quota::of(conn, node_id, quota.max_rows, quota.max_bytes)?.with(quota.refused);
+            quota.deferred = deferred;
         }
         Line::Retired { ids, forgotten } => {
             for id in ids {

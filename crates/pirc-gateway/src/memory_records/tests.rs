@@ -707,3 +707,136 @@ fn versioned_mirror_rejects_invalid_and_over_quota_batches_atomically() {
     assert!(all(&app)[0].starts_with("old:active:"));
     assert_eq!(watermarks(&app, "n1")[KEY], 10);
 }
+
+#[test]
+fn quota_rejection_then_clear_or_forget_recovers_atomically_without_replaying_old_prefix() {
+    for clear in [false, true] {
+        let (app, _dir) = setup();
+        let old = "old".repeat(25);
+        let new = "new".repeat(25);
+        ingest_within(
+            &app,
+            "n1",
+            KEY,
+            (0, 10, false),
+            &[json!({"type":"recorded","items":[item(&old,json!({}))]})],
+            (3, 100),
+        )
+        .unwrap();
+        let marker = json!({"type":"integrity","version":2,"end":20,"digest":"b".repeat(64),"previousDigest":null,"legacyProjection":projection(&app.db.lock(),"n1",KEY).unwrap()});
+        let addition = json!({"type":"recorded","items":[item(&new,json!({}))]});
+        assert_eq!(
+            ingest_within(
+                &app,
+                "n1",
+                KEY,
+                (10, 20, false),
+                &[addition.clone(), marker.clone()],
+                (3, 100)
+            )
+            .unwrap_err()
+            .code,
+            "memory_mirror_quota_exceeded"
+        );
+        assert_eq!(watermarks(&app, "n1")[KEY], 10);
+        let revoke = if clear {
+            json!({"type":"cleared"})
+        } else {
+            json!({"type":"retired","reason":"forgotten","ids":[hash_id(&old)]})
+        };
+        let mut marker = marker;
+        marker["end"] = json!(30);
+        assert_eq!(
+            ingest_within(
+                &app,
+                "n1",
+                KEY,
+                (10, 30, false),
+                &[addition, revoke, marker],
+                (3, 100)
+            )
+            .unwrap(),
+            30
+        );
+        assert!(
+            !all(&app)
+                .iter()
+                .any(|s| s.starts_with(&format!("{old}:active:")))
+        );
+        if clear {
+            assert!(all(&app).is_empty());
+        } else {
+            assert!(
+                all(&app)
+                    .iter()
+                    .any(|s| s.starts_with(&format!("{new}:active:")))
+            );
+        }
+        // A stale sender cannot restore the pre-revocation projection after reconnect.
+        assert_eq!(
+            ingest_within(
+                &app,
+                "n1",
+                KEY,
+                (0, 10, true),
+                &[json!({"type":"recorded","items":[item(&old,json!({}))]})],
+                (3, 100)
+            )
+            .unwrap(),
+            30
+        );
+        assert!(
+            !all(&app)
+                .iter()
+                .any(|s| s.starts_with(&format!("{old}:active:")))
+        );
+    }
+}
+
+#[test]
+fn quota_rejected_later_recovery_can_ack_an_earlier_clear_then_resume() {
+    let (app, _dir) = setup();
+    ingest_within(
+        &app,
+        "n1",
+        KEY,
+        (0, 10, false),
+        &[json!({"type":"recorded","items":[item("x",json!({}))]})],
+        (3, 1),
+    )
+    .unwrap();
+    let marker = |end, digest: &str, previous: Value| json!({"type":"integrity","version":2,"end":end,"digest":digest.repeat(64),"previousDigest":previous,"legacyProjection":projection(&app.db.lock(),"n1",KEY).unwrap()});
+    let later = vec![
+        json!({"type":"cleared"}),
+        json!({"type":"recorded","items":[item("new1",json!({}))]}),
+        json!({"type":"retired","reason":"forgotten","ids":[hash_id("new2")]}),
+        marker(30, "c", Value::Null),
+    ];
+    let refusal = ingest_within(&app, "n1", KEY, (10, 30, false), &later, (3, 1));
+    assert_eq!(
+        refusal.as_ref().unwrap_err().code,
+        "memory_mirror_quota_exceeded"
+    );
+    assert_eq!(
+        crate::nodes::mirror_ack(KEY, 10, 30, refusal)["rejectedEnd"],
+        30
+    );
+    assert_eq!(watermarks(&app, "n1")[KEY], 10);
+    assert!(all(&app)[0].starts_with("x:active:"));
+    let early = [json!({"type":"cleared"}), marker(20, "b", Value::Null)];
+    assert_eq!(
+        ingest_within(&app, "n1", KEY, (10, 20, false), &early, (3, 1)).unwrap(),
+        20
+    );
+    assert!(all(&app).is_empty());
+    let resume = [
+        later[1].clone(),
+        later[2].clone(),
+        marker(30, "c", json!("b".repeat(64))),
+    ];
+    assert_eq!(
+        ingest_within(&app, "n1", KEY, (20, 30, false), &resume, (3, 100)).unwrap(),
+        30
+    );
+    assert!(all(&app).iter().any(|s| s.starts_with("new1:active:")));
+}

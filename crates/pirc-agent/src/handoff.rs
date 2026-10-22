@@ -1,6 +1,6 @@
 //! Validated session-local handoffs. Legacy summaries remain inherited evidence.
 use crate::session_store::{EntryData, SessionEntry};
-use pirc_protocol::{AssistantContent, Message, StopReason, UserBlock, UserContent};
+use pirc_protocol::{Message, UserBlock, UserContent};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -240,7 +240,7 @@ pub fn valid_snapshots(branch: &[SessionEntry]) -> Vec<&SessionEntry> {
             continue;
         }
         let from = positions[h.source_from_entry_id.as_str()];
-        if boundaries(&branch[from..cut]).is_err() {
+        if boundaries_before(&branch[from..cut], &branch[cut..]).is_err() {
             continue;
         }
         let inherited: HashSet<_> = previous
@@ -263,68 +263,68 @@ pub fn public(e: &SessionEntry) -> bool {
     matches!(&e.data, EntryData::Message(_))
         || matches!(&e.data,EntryData::Custom{custom_type,..}if custom_type=="ptc.operation")
 }
-pub fn issued(message: &Message) -> Vec<(&str, &str)> {
-    match message {
-        Message::Assistant(m) if m.stop_reason == StopReason::ToolUse => m
-            .content
-            .iter()
-            .filter_map(|p| {
-                if let AssistantContent::ToolCall { id, name, .. } = p {
-                    Some((id.as_str(), name.as_str()))
-                } else {
-                    None
-                }
-            })
-            .collect(),
-        _ => Vec::new(),
-    }
+pub use crate::tool_history::issued;
+fn inspect(
+    entries: &[SessionEntry],
+    following: &[SessionEntry],
+) -> Result<(HashSet<usize>, crate::tool_history::Groups), String> {
+    inspect_classified(entries, following, false)
 }
-pub fn boundaries(entries: &[SessionEntry]) -> Result<HashSet<usize>, String> {
-    let mut pending = HashMap::<String, String>::new();
-    let mut seen = HashSet::new();
-    let mut operations = HashSet::new();
+fn inspect_classified(
+    entries: &[SessionEntry],
+    following: &[SessionEntry],
+    exclude_ambiguity: bool,
+) -> Result<(HashSet<usize>, crate::tool_history::Groups), String> {
+    let mut groups = crate::tool_history::Groups::for_entries(entries.iter().chain(following));
     let mut safe = HashSet::new();
     for (i, e) in entries.iter().enumerate() {
-        if pending.is_empty() {
+        let before = groups.idle();
+        let is_safe = match &e.data {
+            EntryData::Message(m) => groups.message(m)?,
+            EntryData::Custom { custom_type, data } if custom_type == "ptc.operation" => {
+                if exclude_ambiguity {
+                    groups.source_operation(data)?;
+                } else {
+                    groups.operation(data)?;
+                }
+                before
+            }
+            _ => {
+                groups.other();
+                before
+            }
+        };
+        if is_safe {
             safe.insert(i);
         }
-        if let EntryData::Message(m) = &e.data {
-            for (id, name) in issued(m) {
-                if !seen.insert(id.to_owned()) {
-                    return Err("handoff_duplicate_tool_call".into());
-                }
-                pending.insert(id.to_owned(), name.to_owned());
-            }
-            if let Message::ToolResult {
-                tool_call_id,
-                tool_name,
-                ..
-            } = m
-                && pending.remove(tool_call_id).as_deref() != Some(tool_name)
-            {
-                return Err("handoff_unmatched_tool_result".into());
-            }
-        }
-        if let EntryData::Custom { custom_type, data } = &e.data
-            && custom_type == "ptc.operation"
-        {
-            let parent = data["parentToolCallId"]
-                .as_str()
-                .ok_or("handoff_unmatched_operation")?;
-            let id = data["toolCallId"]
-                .as_str()
-                .ok_or("handoff_unmatched_operation")?;
-            if pending.get(parent).map(String::as_str) != Some("ptc")
-                || !operations.insert(id.to_owned())
-            {
-                return Err("handoff_unmatched_operation".into());
-            }
-        }
     }
-    if !pending.is_empty() {
+    // A task closes only calls without a matching recorded result in the retained tail.
+    if following
+        .first()
+        .and_then(SessionEntry::message)
+        .is_some_and(crate::tool_history::task_start)
+    {
+        groups.interrupt();
+    }
+    if groups.idle() {
+        safe.insert(entries.len());
+    }
+    Ok((safe, groups))
+}
+pub fn candidate_boundaries(entries: &[SessionEntry]) -> Result<HashSet<usize>, String> {
+    inspect(entries, &[]).map(|(safe, _)| safe)
+}
+pub fn boundaries(entries: &[SessionEntry]) -> Result<HashSet<usize>, String> {
+    boundaries_before(entries, &[])
+}
+pub fn boundaries_before(
+    entries: &[SessionEntry],
+    following: &[SessionEntry],
+) -> Result<HashSet<usize>, String> {
+    let (safe, groups) = inspect(entries, following)?;
+    if !groups.idle() {
         return Err("handoff_incomplete_tool_group".into());
     }
-    safe.insert(entries.len());
     Ok(safe)
 }
 #[derive(Clone, Debug, Serialize)]
@@ -367,10 +367,75 @@ fn text_parts(value: &Value) -> String {
         .unwrap_or_default()
 }
 pub fn sources(branch: &[SessionEntry]) -> Vec<Source> {
+    sources_before(branch, &[])
+}
+pub fn sources_before(branch: &[SessionEntry], following: &[SessionEntry]) -> Vec<Source> {
+    let groups = inspect(branch, following).ok().map(|(_, groups)| groups);
+    sources_with_groups(branch, groups.as_ref(), |_| true)
+}
+/// One classification supplies both compression boundaries and Work evidence origins.
+/// A late result/operation belongs to the human admission that issued its parent.
+/// This is a read-time view; no source or coverage metadata is persisted.
+pub struct SourceHistory<'a> {
+    pub boundaries: HashSet<usize>,
+    pub origins: HashMap<String, usize>,
+    pub blocked: HashSet<usize>,
+    branch: &'a [SessionEntry],
+    groups: crate::tool_history::Groups,
+}
+impl SourceHistory<'_> {
+    pub fn sources(&self, include: impl Fn(usize, usize) -> bool) -> Vec<Source> {
+        sources_with_groups(self.branch, Some(&self.groups), |at| {
+            let admission = self.origins[&self.branch[at].id];
+            !self.blocked.contains(&admission) && include(at, admission)
+        })
+    }
+}
+pub fn source_history(branch: &[SessionEntry]) -> Result<SourceHistory<'_>, String> {
+    let (boundaries, groups) = inspect_classified(branch, &[], true)?;
+    let mut admissions = Vec::with_capacity(branch.len());
+    let mut admission = 0;
+    for (at, entry) in branch.iter().enumerate() {
+        if matches!(entry.data, EntryData::Message(Message::User { .. })) {
+            admission = at;
+        }
+        admissions.push(admission);
+    }
+    // Exclude whole admissions from the earliest possible parent through the
+    // ambiguous operation. Later independent admissions retain their own evidence.
+    let blocked = groups
+        .ambiguous_spans()
+        .flat_map(|span| admissions[span].iter().copied())
+        .collect();
+    let origins = branch
+        .iter()
+        .enumerate()
+        .map(|(at, entry)| {
+            let origin = groups.source_parent(at).map_or(at, |(parent, _)| parent);
+            (entry.id.clone(), admissions[origin])
+        })
+        .collect();
+    Ok(SourceHistory {
+        boundaries,
+        origins,
+        blocked,
+        branch,
+        groups,
+    })
+}
+fn sources_with_groups(
+    branch: &[SessionEntry],
+    groups: Option<&crate::tool_history::Groups>,
+    include: impl Fn(usize) -> bool,
+) -> Vec<Source> {
     branch
         .iter()
-        .filter_map(|e| {
-            let (role, text, derived) = match &e.data {
+        .enumerate()
+        .filter_map(|(entry_at, e)| {
+            if !include(entry_at) {
+                return None;
+            }
+            let (role, mut text, derived) = match &e.data {
                 EntryData::Message(m) => {
                     let v = serde_json::to_value(m).ok()?;
                     match m {
@@ -402,11 +467,13 @@ pub fn sources(branch: &[SessionEntry]) -> Vec<Source> {
                 }
                 EntryData::Custom { custom_type, data } if custom_type == "ptc.operation" => {
                     let name = data["toolName"].as_str()?;
+                    let parent = groups.and_then(|g| g.source_parent(entry_at)).and_then(|(at,_)| branch.get(at)).map(|e| format!("; parent entry: {}", e.id)).unwrap_or_default();
                     (
                         format!("operation:{name}"),
                         format!(
-                            "[parent tool call: {}; operation: {}]\n{}\n{}",
+                            "[parent tool call: {}{}; operation: {}]\n{}\n{}",
                             data["parentToolCallId"].as_str()?,
+                            parent,
                             data["toolCallId"].as_str()?,
                             data.get("args").unwrap_or(&Value::Null),
                             text_parts(&data["content"])
@@ -418,6 +485,13 @@ pub fn sources(branch: &[SessionEntry]) -> Vec<Source> {
                 }
                 _ => return None,
             };
+            if let EntryData::Message(m) = &e.data {
+                for (call_at, (id,_)) in issued(m).into_iter().enumerate() {
+                    if groups.is_some_and(|g| g.interrupted.contains(&(entry_at, call_at))) {
+                        text.push_str(&format!("\n[Tool call {id} was interrupted before a recorded result; outcome unknown. No successful action is established.]"));
+                    }
+                }
+            }
             Some(Source {
                 entry_id: e.id.clone(),
                 role,

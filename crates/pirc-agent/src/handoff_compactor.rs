@@ -98,19 +98,12 @@ async fn build_snapshot(
     let branch = agent.branch();
     let previous = handoff::valid_snapshots(&branch).last().copied();
     let entries = agent.context_entries();
-    let cut_id = compaction::find_cut_point(
-        &entries,
-        if reason == CompactionReason::Overflow {
-            0.0
-        } else {
-            settings.keep_recent_tokens
-        },
-    )
-    .ok_or("Nothing to compact")?;
-    let cut = branch
+    if entries
         .iter()
-        .position(|e| e.id == cut_id)
-        .ok_or("handoff_source_gap")?;
+        .all(|(_, m)| matches!(m, Message::CompactionSummary { .. }))
+    {
+        return Err("Nothing to compact".into());
+    }
     let from_id = match previous.map(|e| &e.data) {
         Some(EntryData::Compaction {
             first_kept_entry_id,
@@ -131,10 +124,24 @@ async fn build_snapshot(
         .iter()
         .position(|e| e.id == from_id)
         .ok_or("handoff_source_gap")?;
+    let cut_id = compaction::find_cut_point_in_branch(
+        &entries,
+        &branch[from..],
+        if reason == CompactionReason::Overflow {
+            0.0
+        } else {
+            settings.keep_recent_tokens
+        },
+    )?
+    .ok_or("Nothing to compact")?;
+    let cut = branch
+        .iter()
+        .position(|e| e.id == cut_id)
+        .ok_or("handoff_source_gap")?;
     if from >= cut {
         return Err("handoff_source_gap".into());
     }
-    handoff::boundaries(&branch[from..cut])?;
+    handoff::boundaries_before(&branch[from..cut], &branch[cut..])?;
     let raw: Vec<_> = branch[from..cut]
         .iter()
         .filter(|e| handoff::public(e))
@@ -216,7 +223,7 @@ async fn build_snapshot(
                 .collect()
         })
         .unwrap_or_default();
-    let sources = handoff::sources(&branch[from..cut]);
+    let sources = handoff::sources_before(&branch[from..cut], &branch[cut..]);
     let page_chars = (budget.handoff_input as usize * 2).clamp(256, 16000);
     let mut pages = Vec::new();
     for source in sources {
@@ -395,6 +402,7 @@ async fn build_snapshot(
                 .collect::<Vec<_>>(),
         ) != source_hash
         || now[hi] != branch[cut]
+        || handoff::boundaries_before(&now[lo..hi], &now[hi..]).is_err()
     {
         return Err("handoff_source_changed".into());
     }

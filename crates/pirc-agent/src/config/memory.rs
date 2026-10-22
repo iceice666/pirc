@@ -6,29 +6,7 @@ use serde_json::{Map, Value};
 
 use super::schema::{Checker, Issue, IssueKind, PathPart};
 
-const THINKING_CHOICES: [&str; 7] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-const MEMORY_KEYS: [&str; 18] = [
-    "enabled",
-    "passive",
-    "observeAfterTokens",
-    "reflectAfterTokens",
-    "observerChunkMaxTokens",
-    "compactAfterTokens",
-    "compactAfterTokensMode",
-    "compactAfterTokensRatio",
-    "observationsPoolMaxTokens",
-    "observationsPoolTargetTokens",
-    "agentMaxTurns",
-    "agentMaxTokens",
-    "model",
-    "fallbackModels",
-    "missingModelPolicy",
-    "rateLimitCooldownMs",
-    "showWorkerNotifications",
-    "workspace",
-];
-const MODEL_KEYS: [&str; 3] = ["provider", "id", "thinking"];
-const WORKSPACE_KEYS: [&str; 3] = ["enabled", "maxTokens", "shutdownTimeoutMs"];
+use crate::features::memory::config::{MEMORY_KEYS, MODEL_KEYS, THINKING_CHOICES, WORKSPACE_KEYS};
 
 /// `modelChoice`.
 fn model_choice(checker: &mut Checker, value: Option<&Value>) {
@@ -42,6 +20,33 @@ fn model_choice(checker: &mut Checker, value: Option<&Value>) {
             c.enumeration(v, &THINKING_CHOICES);
         }
     });
+}
+
+fn workspace_fields(c: &mut Checker, value: Option<&Value>) {
+    let Some(map) = c.object(value) else { return };
+    for key in WORKSPACE_KEYS {
+        c.key(map, key, |c, v| {
+            if v.is_none() {
+                return;
+            }
+            match key {
+                "enabled" | "passive" => {
+                    c.boolean(v);
+                }
+                "model" => model_choice(c, v),
+                "fallbackModels" => {
+                    if let Some(items) = c.array(v) {
+                        for (i, item) in items.iter().enumerate() {
+                            c.at(PathPart::Index(i), |c| model_choice(c, Some(item)));
+                        }
+                    }
+                }
+                _ => {
+                    c.positive_int(v, None);
+                }
+            }
+        });
+    }
 }
 
 /// `memorySchema.safeParse(raw)`: its issues, in zod's order.
@@ -83,13 +88,7 @@ fn memory_issues(raw: Option<&Value>) -> Vec<Issue> {
                 }
             }),
             "workspace" => optional(c, v, &|c, v| {
-                if let Some(workspace) = c.object(v) {
-                    c.key(workspace, "enabled", |c, v| optional(c, v, &boolean));
-                    c.key(workspace, "maxTokens", |c, v| optional(c, v, &positive));
-                    c.key(workspace, "shutdownTimeoutMs", |c, v| {
-                        optional(c, v, &positive)
-                    });
-                }
+                workspace_fields(c, v);
             }),
             _ => optional(c, v, &positive),
         });
@@ -155,7 +154,7 @@ pub fn memory_config_warning(features: &Map<String, Value>) -> Option<String> {
     let empty = Value::Object(Map::new());
     let raw = raw.unwrap_or(&empty);
     let issues = memory_issues(Some(raw));
-    let parsed = issues.is_empty();
+    let mut parsed = issues.is_empty();
     let mut diagnostics: Vec<String> = issues
         .iter()
         .map(|issue| format!("{}: {}", field_path(&issue.path), reason(issue)))
@@ -199,6 +198,31 @@ pub fn memory_config_warning(features: &Map<String, Value>) -> Option<String> {
             &WORKSPACE_KEYS,
             &[PathPart::Key("workspace".into())],
         );
+    }
+    if let Some(canonical) = features.get("workspaceMemory") {
+        let mut checker = Checker::default();
+        workspace_fields(&mut checker, Some(canonical));
+        parsed &= checker.issues.is_empty();
+        for issue in checker.issues {
+            let suffix = field_path(&issue.path)
+                .trim_start_matches("features.observationalMemory")
+                .to_owned();
+            diagnostics.push(format!(
+                "features.workspaceMemory{suffix}: {}",
+                reason(&issue)
+            ));
+        }
+        if let Some(map) = canonical.as_object() {
+            for key in map
+                .keys()
+                .filter(|key| !WORKSPACE_KEYS.contains(&key.as_str()))
+            {
+                diagnostics.push(format!(
+                    "features.workspaceMemory[{}]: unknown field (ignored)",
+                    crate::messages::js::string_literal(key)
+                ));
+            }
+        }
     }
     if diagnostics.is_empty() {
         return None;
@@ -297,5 +321,28 @@ mod tests {
         }
         let text = warning(json!({"fallbackModels": [{"provider": "fake"}]})).unwrap();
         assert!(text.contains("fallbackModels[0].id: expected string"));
+    }
+}
+
+#[cfg(test)]
+mod workspace_diagnostics_tests {
+    use super::*;
+    #[test]
+    fn legacy_and_canonical_workspace_choices_share_validation() {
+        let settings = serde_json::json!({"enabled":false,"passive":true,"model":{"provider":"p","id":"m","thinking":"max"},"fallbackModels":[{"provider":"p","id":"f"}],"maxTokens":40000});
+        for features in [
+            serde_json::json!({"workspaceMemory":settings}),
+            serde_json::json!({"observationalMemory":{"workspace":settings}}),
+        ] {
+            assert_eq!(memory_config_warning(features.as_object().unwrap()), None);
+        }
+        let warning=memory_config_warning(serde_json::json!({"workspaceMemory":{"passive":"private-value","fallbackModels":[{"provider":"p","id":"private-model","thinking":"private-thinking"}]}}).as_object().unwrap()).unwrap();
+        assert!(warning.contains("features.workspaceMemory.passive"));
+        assert!(warning.contains("features.workspaceMemory.fallbackModels[0].thinking"));
+        assert!(
+            !warning.contains("private-value")
+                && !warning.contains("private-model")
+                && !warning.contains("private-thinking")
+        );
     }
 }

@@ -15,8 +15,7 @@
 //! the frames go out before the link's `activity` (recorded).
 
 use std::collections::HashMap;
-use std::io::{Read as _, Seek as _, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -49,13 +48,20 @@ struct State {
     connected: bool,
     acked: HashMap<String, u64>,
     /// Ledgers with a frame on its way, and when it was sent.
-    sent: HashMap<String, (Instant, u64)>,
+    sent: HashMap<String, Flight>,
     timer: Option<tokio::task::JoinHandle<()>>,
     /// Session directory → node session id, or `None` when no session of
     /// this node wrote it. Never invalidated (TS), so a session created
     /// later keeps `None` for its directory until the node restarts.
     sessions: HashMap<String, Option<String>>,
     verified: HashMap<String, (u64, String)>,
+}
+
+/// Endpoint-bound feedback lives only as long as the existing in-flight frame.
+struct Flight {
+    at: Instant,
+    end: u64,
+    retry_before: Option<u64>,
 }
 
 /// What a pass reads and sends with: the node's in production, stand-ins
@@ -114,10 +120,7 @@ impl MemoryMirror {
     pub fn connect(&self, mirrors: IndexMap<String, u64>) {
         {
             let mut state = self.lock();
-            state.connected = true;
-            state.acked = mirrors.into_iter().collect();
-            state.sent.clear();
-            state.verified.clear();
+            state.resume(mirrors.into_iter().collect());
             if state.timer.is_none()
                 && let Some(node) = self.node.upgrade()
             {
@@ -142,8 +145,8 @@ impl MemoryMirror {
 
     /// `memory_mirror_ack`: the gateway stored up to `watermark`; send what
     /// follows, if anything.
-    pub fn receive(&self, ledger_key: &str, watermark: u64) {
-        self.with_io(|state, io| state.receive(io, ledger_key, watermark));
+    pub fn receive(&self, ledger_key: &str, watermark: u64, rejected_end: Option<u64>) {
+        self.with_io(|state, io| state.receive(io, ledger_key, watermark, rejected_end));
     }
 
     /// Mirror every ledger that has something new.
@@ -154,8 +157,7 @@ impl MemoryMirror {
     /// The link dropped or the node closes: stop scanning.
     pub fn disconnect(&self) {
         let mut state = self.lock();
-        state.connected = false;
-        state.sent.clear();
+        state.suspend();
         if let Some(timer) = state.timer.take() {
             timer.abort();
         }
@@ -163,17 +165,49 @@ impl MemoryMirror {
 }
 
 impl State {
-    fn receive(&mut self, io: &Io<'_>, key: &str, watermark: u64) {
+    fn resume(&mut self, acked: HashMap<String, u64>) {
+        // Only a known quota retreat survives a transport reconnect, at the
+        // same acknowledged base. Preserve its deadline rather than restarting it.
+        self.sent.retain(|key, flight| {
+            flight.retry_before.is_some()
+                && self.acked.get(key).copied().unwrap_or(0) == acked.get(key).copied().unwrap_or(0)
+        });
+        self.verified.retain(|key, _| self.sent.contains_key(key));
+        self.acked = acked;
+        self.connected = true;
+    }
+    fn suspend(&mut self) {
+        self.connected = false;
+        self.sent.retain(|_, flight| flight.retry_before.is_some());
+        self.verified.retain(|key, _| self.sent.contains_key(key));
+    }
+    fn receive(&mut self, io: &Io<'_>, key: &str, watermark: u64, rejected_end: Option<u64>) {
         let previous = self.acked.get(key).copied().unwrap_or(0);
         if watermark < previous {
             return;
+        }
+        // A delayed rejection must not constrain a different frame or acknowledge bytes.
+        if let Some(end) = rejected_end {
+            if watermark == previous
+                && let Some(flight) = self.sent.get_mut(key)
+                && end == flight.end
+                && end > watermark
+            {
+                flight.retry_before = Some(end);
+            }
+            return;
+        }
+        if watermark > previous
+            && let Some(flight) = self.sent.get_mut(key)
+        {
+            flight.retry_before = None;
         }
         self.acked.insert(key.to_owned(), watermark);
         // A non-advancing/rejected frame waits for the existing retry timer; no immediate loop.
         if self
             .sent
             .get(key)
-            .is_some_and(|(_, expected)| watermark < *expected)
+            .is_some_and(|flight| watermark < flight.end)
         {
             return;
         }
@@ -205,7 +239,7 @@ impl State {
             || self
                 .sent
                 .get(key)
-                .is_some_and(|sent| sent.0.elapsed() < ACK_TIMEOUT)
+                .is_some_and(|sent| sent.at.elapsed() < ACK_TIMEOUT)
         {
             return;
         }
@@ -240,33 +274,68 @@ impl State {
             return;
         }
 
-        let Ok(bytes) = read(&file, from, (size - from).min(MIRROR_CHUNK_BYTES as u64)) else {
-            return;
+        let retry_before = self
+            .sent
+            .get(key)
+            .and_then(|flight| flight.retry_before)
+            .filter(|_| {
+                self.verified.get(key).is_some_and(|(size, hash)| {
+                    raw.get(..*size as usize)
+                        .is_some_and(|prefix| pirc_agent::journal::digest(prefix) == *hash)
+                })
+            });
+        let prefix = std::str::from_utf8(&raw[..from as usize]).ok();
+        let tail = std::str::from_utf8(&raw[from as usize..]).ok();
+        // Recovery uses the validated snapshot before ordinary line-size limits.
+        // A large legacy line must not hide a later bounded clear/forget.
+        let recovery = if snapshot.control.is_some() {
+            prefix.zip(tail).and_then(|(prefix, tail)| {
+                recovery_end(
+                    prefix,
+                    tail,
+                    pirc_protocol::NODE_FRAME_MAX_BYTES - 4096,
+                    retry_before
+                        .and_then(|end| end.checked_sub(from))
+                        .map(|n| n as usize),
+                    |item| self.item(io, item).to_string().len(),
+                )
+            })
+        } else {
+            None
         };
-        // Complete lines only: one being written now goes with a later scan.
-        let mut end = bytes
-            .iter()
-            .rposition(|b| *b == b'\n')
-            .map_or(0, |at| at + 1);
-        let mut text = String::from_utf8_lossy(&bytes[..end]).into_owned();
-        if end == 0 && bytes.len() == MIRROR_CHUNK_BYTES {
-            let Ok(whole) = read(&file, from, (size - from).min(LINE_MAX_BYTES as u64)) else {
-                return;
-            };
-            end = whole
+        let (mut lines, end_offset) = if let Some(end) = recovery {
+            (
+                coalesce(prefix.unwrap(), &tail.unwrap()[..end])
+                    .iter()
+                    .map(|line| self.convert(io, line))
+                    .collect::<Vec<_>>(),
+                from + end as u64,
+            )
+        } else {
+            // Ordinary chunks share the same bytes that were validated above.
+            let tail = &raw[from as usize..];
+            let bytes = &tail[..tail.len().min(MIRROR_CHUNK_BYTES)];
+            let mut end = bytes
                 .iter()
-                .position(|b| *b == b'\n')
+                .rposition(|b| *b == b'\n')
                 .map_or(0, |at| at + 1);
-            text = String::from_utf8_lossy(&whole[..end]).into_owned();
-        }
-        if end == 0 && size != from && !reset {
-            return;
-        }
-        let mut lines: Vec<Value> = parse_lines(&text)
-            .iter()
-            .map(|line| self.convert(io, line))
-            .collect();
-        let end_offset = from + end as u64;
+            if end == 0 && bytes.len() == MIRROR_CHUNK_BYTES {
+                end = tail[..tail.len().min(LINE_MAX_BYTES)]
+                    .iter()
+                    .position(|b| *b == b'\n')
+                    .map_or(0, |at| at + 1);
+            }
+            if end == 0 && size != from {
+                return;
+            }
+            (
+                parse_lines(&String::from_utf8_lossy(&tail[..end]))
+                    .iter()
+                    .map(|line| self.convert(io, line))
+                    .collect::<Vec<_>>(),
+                from + end as u64,
+            )
+        };
         if raw.len() < end_offset as usize || raw.len() < from as usize {
             return;
         }
@@ -275,19 +344,29 @@ impl State {
         };
         let marker = json!({"type":"integrity","version":2,"end":end_offset,"digest":pirc_agent::journal::digest(&raw[..end_offset as usize]),"previousDigest":pirc_agent::journal::digest(&raw[..from as usize]),"legacyProjection":legacy});
         lines.push(marker);
-        self.sent
-            .insert(key.to_owned(), (Instant::now(), end_offset));
+        self.sent.insert(
+            key.to_owned(),
+            Flight {
+                at: Instant::now(),
+                end: end_offset,
+                retry_before: retry_before.filter(|bound| end_offset < *bound),
+            },
+        );
         let delivered = (io.send)(&NodeMessage::MemoryMirror {
             ledger_key: key.to_owned(),
             offset: from,
-            end: from + end as u64,
+            end: end_offset,
             reset: reset.then_some(true),
             lines,
         });
-        if !delivered {
-            self.sent.remove(key);
-        } else {
+        if delivered {
             self.verified.insert(key.into(), (size, hash));
+        } else if retry_before.is_some() {
+            // A refused local send is not a new gateway outcome. Keep the
+            // retreat for reconnect, with the ordinary bounded retry interval.
+            self.sent.get_mut(key).unwrap().retry_before = retry_before;
+        } else {
+            self.sent.remove(key);
         }
     }
 
@@ -410,13 +489,224 @@ fn parse_lines(text: &str) -> Vec<Line> {
     out
 }
 
-/// Up to `length` bytes of `file` from `from` (fewer at its end).
-fn read(file: &PathBuf, from: u64, length: u64) -> std::io::Result<Vec<u8>> {
-    let mut handle = std::fs::File::open(file)?;
-    handle.seek(SeekFrom::Start(from))?;
-    let mut bytes = Vec::with_capacity(length as usize);
-    handle.take(length).read_to_end(&mut bytes)?;
-    Ok(bytes)
+/// Request-local net changes. Accounting uses the same public item encoding as
+/// transport, so choosing an earlier checkpoint takes one pass over the tail.
+#[derive(Default)]
+struct Coalescer {
+    records: std::collections::BTreeMap<String, Record>,
+    cleared: bool,
+    costs: [Cost; 3], // added notes, superseded IDs, forgotten IDs
+}
+struct Record {
+    item: Option<WorkspaceItem>,
+    status: &'static str,
+    added: bool,
+    touched: bool,
+    size: usize,
+}
+#[derive(Default)]
+struct Cost {
+    count: usize,
+    bytes: usize,
+}
+impl Coalescer {
+    fn account(&mut self, id: &str, add: bool) {
+        let Some(r) = self.records.get(id) else {
+            return;
+        };
+        let mut adjust = |slot: usize, bytes: usize| {
+            let c = &mut self.costs[slot];
+            if add {
+                c.count += 1;
+                c.bytes += bytes;
+            } else {
+                c.count -= 1;
+                c.bytes -= bytes;
+            }
+        };
+        if r.added && r.item.is_some() {
+            adjust(0, r.size);
+        }
+        if (r.added || r.touched) && r.status != "active" {
+            adjust(
+                if r.status == "forgotten" { 2 } else { 1 },
+                json!(id).to_string().len(),
+            );
+        }
+    }
+    fn apply(&mut self, line: Line, delta: bool, size: &mut impl FnMut(&WorkspaceItem) -> usize) {
+        match line {
+            Line::Cleared => {
+                self.records.retain(|_, r| r.status == "forgotten");
+                self.cleared |= delta;
+                self.costs = Default::default();
+                let ids: Vec<_> = self.records.keys().cloned().collect();
+                for id in ids {
+                    self.account(&id, true);
+                }
+            }
+            Line::Recorded(items) => {
+                for item in items {
+                    if self.records.contains_key(&item.id) {
+                        continue;
+                    }
+                    let id = item.id.clone();
+                    let bytes = if delta { size(&item) } else { 0 };
+                    self.records.insert(
+                        id.clone(),
+                        Record {
+                            item: Some(item),
+                            status: "active",
+                            added: delta,
+                            touched: false,
+                            size: bytes,
+                        },
+                    );
+                    self.account(&id, true);
+                }
+            }
+            Line::Retired { ids, forgotten } => {
+                for id in ids
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                {
+                    self.account(id, false);
+                    if forgotten {
+                        self.records.insert(
+                            id.into(),
+                            Record {
+                                item: None,
+                                status: "forgotten",
+                                added: delta,
+                                touched: delta,
+                                size: 0,
+                            },
+                        );
+                    } else if let Some(r) = self.records.get_mut(id) {
+                        r.touched |= delta;
+                        if r.status == "active" {
+                            r.status = "superseded";
+                        }
+                    }
+                    self.account(id, true);
+                }
+            }
+        }
+    }
+    fn encoded_len(&self) -> usize {
+        let bases = [
+            json!({"type":"recorded","items":[]}).to_string().len(),
+            json!({"type":"retired","ids":[],"reason":"superseded"})
+                .to_string()
+                .len(),
+            json!({"type":"retired","ids":[],"reason":"forgotten"})
+                .to_string()
+                .len(),
+        ];
+        let mut bytes = if self.cleared {
+            json!({"type":"cleared"}).to_string().len()
+        } else {
+            0
+        };
+        let mut lines = usize::from(self.cleared);
+        for (cost, base) in self.costs.iter().zip(bases) {
+            let chunks = cost.count.div_ceil(2000);
+            bytes += cost.bytes + cost.count - chunks + chunks * base;
+            lines += chunks;
+        }
+        2 + bytes + lines.saturating_sub(1)
+    }
+    fn lines(self) -> Vec<Line> {
+        let mut out = Vec::new();
+        if self.cleared {
+            out.push(Line::Cleared);
+        }
+        let mut items = Vec::new();
+        let mut retired = Vec::new();
+        let mut forgotten = Vec::new();
+        for (id, r) in self.records {
+            if r.added
+                && let Some(item) = r.item
+            {
+                items.push(item);
+            }
+            if (r.added || r.touched) && r.status != "active" {
+                if r.status == "forgotten" {
+                    forgotten.push(id);
+                } else {
+                    retired.push(id);
+                }
+            }
+        }
+        for chunk in items.chunks(2000) {
+            out.push(Line::Recorded(chunk.to_vec()));
+        }
+        for (ids, forgotten) in [(retired, false), (forgotten, true)] {
+            for chunk in ids.chunks(2000) {
+                out.push(Line::Retired {
+                    ids: json!(chunk),
+                    forgotten,
+                });
+            }
+        }
+        out
+    }
+}
+fn recovery_end(
+    prefix: &str,
+    tail: &str,
+    max_bytes: usize,
+    before: Option<usize>,
+    mut size: impl FnMut(&WorkspaceItem) -> usize,
+) -> Option<usize> {
+    // Ordinary additions need no recovery projection or public-item lookups.
+    // Build the net state lazily when a revocation is actually encountered.
+    let mut state: Option<Coalescer> = None;
+    let mut offset = 0;
+    let mut selected = None;
+    let mut latest = None;
+    for raw in tail.split_inclusive('\n') {
+        let start = offset;
+        offset += raw.len();
+        let lines = parse_lines(raw);
+        let revoked = lines.iter().any(|line| matches!(line, Line::Cleared)
+            || matches!(line, Line::Retired { forgotten: true, ids } if ids.as_array().is_some_and(|a| !a.is_empty())));
+        if state.is_none() && !revoked {
+            continue;
+        }
+        let state = state.get_or_insert_with(|| {
+            let mut state = Coalescer::default();
+            for (delta, text) in [(false, prefix), (true, &tail[..start])] {
+                for line in parse_lines(text) {
+                    state.apply(line, delta, &mut size);
+                }
+            }
+            state
+        });
+        for line in lines {
+            state.apply(line, true, &mut size);
+        }
+        if revoked && state.encoded_len() < max_bytes {
+            latest = Some(offset);
+            if before.is_none_or(|end| offset < end) {
+                selected = Some(offset);
+            }
+        }
+    }
+    // Cycle when every candidate has been refused: capacity may have changed.
+    selected.or(latest)
+}
+/// Equivalent tail projection; raw bytes and their checkpoint stay authoritative.
+fn coalesce(prefix: &str, tail: &str) -> Vec<Line> {
+    let mut state = Coalescer::default();
+    for (delta, text) in [(false, prefix), (true, tail)] {
+        for line in parse_lines(text) {
+            state.apply(line, delta, &mut |_| 0);
+        }
+    }
+    state.lines()
 }
 
 #[cfg(test)]

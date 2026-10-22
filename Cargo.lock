@@ -2068,6 +2068,7 @@ dependencies = [
  "nix",
  "pirc-agent",
  "pirc-config",
+ "pirc-conformance",
  "pirc-policy",
  "pirc-protocol",
  "pirc-ptc",

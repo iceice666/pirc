@@ -229,36 +229,64 @@ pub fn context_tokens(entries: &[(String, Message)]) -> u64 {
     tokens
 }
 
-/// `findCutPoint`: the first entry kept verbatim, at the start of a user
-/// turn; the latest user turn is always kept.
+/// Keep complete tool groups and the latest human or admitted task turn.
 pub fn find_cut_point(entries: &[(String, Message)], keep_recent_tokens: f64) -> Option<String> {
-    let is_turn_start = |message: &Message| matches!(message, Message::User { .. });
+    let safe = crate::tool_history::message_boundaries(entries).ok()?;
+    select_cut_point(entries, keep_recent_tokens, &safe)
+}
+/// The raw branch includes PTC operations omitted from provider messages.
+pub(crate) fn find_cut_point_in_branch(
+    entries: &[(String, Message)],
+    branch: &[crate::session_store::SessionEntry],
+    keep_recent_tokens: f64,
+) -> Result<Option<String>, String> {
+    let safe = crate::handoff::candidate_boundaries(branch)?;
+    let ids: std::collections::HashSet<_> = safe
+        .into_iter()
+        .filter_map(|i| branch.get(i).map(|e| e.id.as_str()))
+        .collect();
+    let safe = entries
+        .iter()
+        .enumerate()
+        .filter_map(|(i, (id, _))| ids.contains(id.as_str()).then_some(i))
+        .collect();
+    Ok(select_cut_point(entries, keep_recent_tokens, &safe))
+}
+fn select_cut_point(
+    entries: &[(String, Message)],
+    keep_recent_tokens: f64,
+    safe: &std::collections::HashSet<usize>,
+) -> Option<String> {
+    let latest = entries
+        .iter()
+        .rposition(|(_, m)| crate::tool_history::task_start(m));
+    let candidates: Vec<_> = entries
+        .iter()
+        .enumerate()
+        .filter_map(|(i, (_, m))| {
+            (safe.contains(&i)
+                && latest.is_none_or(|last| i <= last)
+                && matches!(m, Message::User { .. } | Message::Custom { .. }))
+            .then_some(i)
+        })
+        .collect();
     let mut kept = 0;
-    let mut cut = entries.len();
-    for index in (0..entries.len()).rev() {
-        kept += estimate_tokens(&entries[index].1);
-        cut = index;
-        if kept as f64 >= keep_recent_tokens && is_turn_start(&entries[index].1) {
+    let mut cut = None;
+    for (i, (_, m)) in entries.iter().enumerate().rev() {
+        kept += estimate_tokens(m);
+        if kept as f64 >= keep_recent_tokens && candidates.binary_search(&i).is_ok() {
+            cut = Some(i);
             break;
         }
     }
-    while cut > 0 && !is_turn_start(&entries[cut].1) {
-        cut -= 1;
+    if cut.is_none() || cut == Some(0) {
+        cut = candidates.last().copied();
     }
-    if cut == 0 {
-        // The whole context is smaller than the keep budget: keep the last turn.
-        cut = entries.len().saturating_sub(1);
-        while cut > 0 && !is_turn_start(&entries[cut].1) {
-            cut -= 1;
-        }
-    }
-    let summarizable = entries[..cut.min(entries.len())]
+    let cut = cut?;
+    entries[..cut]
         .iter()
-        .any(|(_, message)| !matches!(message, Message::CompactionSummary { .. }));
-    if !summarizable || cut >= entries.len() {
-        return None;
-    }
-    Some(entries[cut].0.clone())
+        .any(|(_, m)| !matches!(m, Message::CompactionSummary { .. }))
+        .then(|| entries[cut].0.clone())
 }
 
 /// The outcome of [`run_compaction`].

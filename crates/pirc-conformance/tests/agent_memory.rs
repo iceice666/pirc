@@ -170,3 +170,158 @@ async fn independent_extraction_uses_one_call_and_rate_limit_falls_back_on_the_n
             .any(|e| e["type"] == "compaction" || e["customType"] == "om.observations.recorded")
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejected_retirement_recovers_but_ambiguous_postcommit_failure_stays_withheld() {
+    for code in [
+        "workspace_invalid_retirement",
+        "workspace_source_blocked",
+        "forbidden",
+    ] {
+        let options = AgentOptions {
+            env: vec![("PIRC_GATEWAY".into(), "1".into())],
+            ..Default::default()
+        }
+        .features("workspace-memory");
+        let Some(mut agent) = AgentRun::start(options).await else {
+            return;
+        };
+        let job = json!({"jobId":"original_job","control":{"epoch":"e","generation":"g","revision":1},"sessionId":"s","fromEntryId":"a","throughEntryId":"b","sourceHash":"f".repeat(64),"sources":[{"sessionId":"s","entryId":"a","role":"user","text":"verified convention","derived":false}],"catchup":false});
+        {
+            let mut answers = agent.answers.lock().unwrap();
+            answers.gateway.insert("workspace.context".into(),json!({"ok":true,"result":{"items":[{"id":"aaaaaaaaaaaa","content":"Existing authorized knowledge"}]}}));
+            answers.gateway_queue.insert(
+                "workspace.next".into(),
+                [
+                    json!({"ok":true,"result":job.clone()}),
+                    json!({"ok":true,"result":job}),
+                    json!({"ok":true,"result":null}),
+                ]
+                .into(),
+            );
+            answers.gateway_queue.insert("workspace.commit".into(),[json!({"ok":false,"error":{"code":code,"message":"rejected or delivery revoked","status":409}}),json!({"ok":true,"result":{"committed":true}})].into());
+        }
+        agent.push([
+            ModelReply::Text("First".into()),
+            ModelReply::Text("{\"items\":[],\"retire\":[]}".into()),
+        ]);
+        agent.call(json!({"type":"prompt","message":"First"})).await;
+        agent.settle().await;
+        agent.drain(Duration::from_millis(100)).await;
+        agent.take_requests();
+        agent.push([
+            ModelReply::Text("Second".into()),
+            ModelReply::Text("{\"items\":[],\"retire\":[]}".into()),
+        ]);
+        agent
+            .call(json!({"type":"prompt","message":"Second"}))
+            .await;
+        agent.settle().await;
+        let events = agent.drain(Duration::from_millis(100)).await;
+        let requests = agent.take_requests();
+        let shown = requests[0]["systemPrompt"]
+            .as_str()
+            .unwrap()
+            .contains("Existing authorized knowledge");
+        assert_eq!(shown, code != "forbidden", "{code}: {requests:?}");
+        assert_eq!(
+            events.iter().any(|e| e["op"] == "workspace.commit"),
+            code != "forbidden"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn legacy_global_passive_and_forced_passive_never_start_automatic_work_extraction() {
+    for forced in [false, true] {
+        let mut env = vec![("PIRC_GATEWAY".into(), "1".into())];
+        if forced {
+            env.push(("PIRC_MEMORY_PASSIVE".into(), "true".into()));
+        }
+        let features = if forced {
+            json!({"workspaceMemory":{"passive":false}})
+        } else {
+            json!({"observationalMemory":{"passive":true,"workspace":{"passive":false}},"workspaceMemory":{"maxTokens":40000}})
+        };
+        let Some(mut agent) = AgentRun::start(
+            AgentOptions {
+                env,
+                config: json!({"features":features}),
+                ..Default::default()
+            }
+            .features("workspace-memory"),
+        )
+        .await
+        else {
+            return;
+        };
+        agent.answers.lock().unwrap().gateway.insert(
+            "workspace.context".into(),
+            json!({"ok":true,"result":{"legacy":true,"items":[]}}),
+        );
+        agent.push([ModelReply::Text("Main reply".into())]);
+        agent
+            .call(json!({"type":"prompt","message":"Inspect repository"}))
+            .await;
+        agent.settle().await;
+        let events = agent.drain(Duration::from_millis(100)).await;
+        assert_eq!(agent.take_requests().len(), 1);
+        assert!(
+            !events
+                .iter()
+                .any(|e| e["op"] == "workspace.next" || e["op"] == "workspace.commit")
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn blocked_sources_are_visible_without_claiming_extraction_or_starting_retries() {
+    let options = AgentOptions {
+        env: vec![("PIRC_GATEWAY".into(), "1".into())],
+        config: json!({"features":{"workspaceMemory":{"passive":true}}}),
+        ..Default::default()
+    }
+    .features("workspace-memory");
+    let Some(mut agent) = AgentRun::start(options).await else {
+        return;
+    };
+    let message = "Repository memory extraction is blocked for some sources: tool provenance is incomplete or ambiguous.";
+    agent.answers.lock().unwrap().gateway.insert("workspace.next".into(),json!({"ok":false,"error":{"status":409,"code":"workspace_source_blocked","message":message}}));
+    let id = agent
+        .command(json!({"type":"prompt","message":"/om:workspace sync"}))
+        .await;
+    let mut answered = false;
+    let mut notified = false;
+    let mut next_requests = 0;
+    while !answered || !notified {
+        let event = agent
+            .next()
+            .await
+            .expect("agent exited before reporting blocked sources");
+        answered |= event["type"] == "response" && event["id"] == id;
+        if event["op"] == "workspace.next" {
+            next_requests += 1;
+        }
+        if event["type"] == "extension_ui_request" && event["method"] == "notify" {
+            assert_eq!(event["notifyType"], "error");
+            assert_eq!(event["message"], message);
+            notified = true;
+        }
+        assert_ne!(event["op"], "workspace.commit");
+    }
+    assert_eq!(next_requests, 1);
+    let panel = agent.call(json!({"type":"get_panel_state"})).await;
+    assert_eq!(
+        panel["data"]["workspaceMemory"]["errors"]["extraction"],
+        message
+    );
+    assert_eq!(panel["data"]["workspaceMemory"]["pendingMutations"], 0);
+    assert!(agent.take_requests().is_empty());
+    assert!(
+        !agent
+            .session_entries()
+            .iter()
+            .any(|e| e["type"] == "compaction")
+    );
+    agent.finish().await;
+}

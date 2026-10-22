@@ -251,63 +251,7 @@ pub type ScriptCapabilities = Rc<RefCell<Vec<String>>>;
 /// `sanitizeHistory`: every tool call has a result and no result is
 /// orphaned, so providers accept the history.
 pub fn sanitize_history(messages: &[Message]) -> Vec<Message> {
-    let mut out = Vec::with_capacity(messages.len());
-    let mut open: IndexMap<String, String> = IndexMap::new();
-    let mut deferred = Vec::new();
-    let flush = |out: &mut Vec<Message>,
-                 open: &mut IndexMap<String, String>,
-                 deferred: &mut Vec<Message>| {
-        for (id, name) in open.drain(..) {
-            out.push(Message::ToolResult {
-                tool_call_id: id,
-                tool_name: name,
-                content: vec![UserBlock::Text {
-                    text: "Tool call was interrupted before producing a result.".into(),
-                    text_signature: None,
-                }],
-                details: None,
-                is_error: true,
-                timestamp: now_ms(),
-            });
-        }
-        out.append(deferred);
-    };
-    for message in messages {
-        if let Message::ToolResult { tool_call_id, .. } = message {
-            if open.shift_remove(tool_call_id).is_some() {
-                out.push(message.clone());
-            }
-            if open.is_empty() {
-                out.append(&mut deferred);
-            }
-            continue;
-        }
-        if matches!(message, Message::Custom { .. }) && !open.is_empty() {
-            deferred.push(message.clone());
-            continue;
-        }
-        flush(&mut out, &mut open, &mut deferred);
-        let mut projected = message.clone();
-        if let Message::Assistant(assistant) = &mut projected {
-            if assistant.stop_reason == StopReason::ToolUse {
-                assistant.content.retain(|part| match part {
-                    AssistantContent::ToolCall { id, name, .. } if !open.contains_key(id) => {
-                        open.insert(id.clone(), name.clone());
-                        true
-                    }
-                    AssistantContent::ToolCall { .. } => false,
-                    _ => true,
-                });
-            } else {
-                assistant
-                    .content
-                    .retain(|part| !matches!(part, AssistantContent::ToolCall { .. }));
-            }
-        }
-        out.push(projected);
-    }
-    flush(&mut out, &mut open, &mut deferred);
-    out
+    crate::tool_history::project(messages)
 }
 
 /// JavaScript's `String.prototype.length` slicing, by UTF-16 units.

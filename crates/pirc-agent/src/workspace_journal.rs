@@ -64,6 +64,22 @@ pub struct Snapshot {
     pub hash: String,
     pub bytes: usize,
 }
+/// Errors that establish that the immutable mutation cannot commit at its original CAS.
+/// Permission/readback/sync/transport failures can occur after commit and stay unknown.
+pub fn mutation_rejected(code: &str) -> bool {
+    matches!(
+        code,
+        "invalid_input"
+            | "workspace_stale"
+            | "workspace_job_conflict"
+            | "workspace_cold_cutover_required"
+            | "workspace_source_changed"
+            | "workspace_source_blocked"
+            | "workspace_invalid_retirement"
+            | "workspace_already_active"
+    )
+}
+
 pub fn id(s: &str) -> bool {
     s.len() == 12
         && s.bytes()
@@ -504,5 +520,25 @@ mod recovery_tests {
         Journal::at_path(&path, validate_values).unwrap();
         assert!(read(&path).unwrap().control.is_some());
         assert!(std::fs::read(&path).unwrap().ends_with(b"\n"));
+    }
+}
+
+#[cfg(test)]
+mod outcome_tests {
+    use super::*;
+    #[test]
+    fn mutation_rejections_never_include_ambiguous_delivery_or_lock_errors() {
+        assert!(mutation_rejected("workspace_invalid_retirement"));
+        assert!(mutation_rejected("workspace_source_blocked"));
+        for code in [
+            "forbidden",
+            "not_found",
+            "writer_busy",
+            "journal_sync_unknown",
+            "workspace_authority_unavailable",
+            "internal_error",
+        ] {
+            assert!(!mutation_rejected(code), "{code}");
+        }
     }
 }

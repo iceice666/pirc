@@ -31,7 +31,18 @@ fn memory(extra: Value) -> Value {
         "usage": { "user": { "used": 0, "max": 2000 }, "note": { "used": 0, "max": 8000 } },
         "pendingProposals": 0 });
     for (key, value) in extra.as_object().unwrap() {
-        out[key] = value.clone();
+        if key == "capabilities" {
+            // Normal gateway context returns a complete policy. Individual scenarios
+            // change one flag without depending on omitted flags granting permission.
+            let mut policy = json!({"delegation":true,"memory_search":true,"remote_recall":true,"schedules":true,"web_search":true});
+            policy
+                .as_object_mut()
+                .unwrap()
+                .extend(value.as_object().unwrap().clone());
+            out[key] = policy;
+        } else {
+            out[key] = value.clone();
+        }
     }
     out
 }
@@ -387,4 +398,37 @@ async fn agent_assistant_chat_without_gateway() {
     agent.push([text("Hi.")]);
     log.turn(&mut agent, "prompt", "hello").await;
     insta::assert_json_snapshot!("agent_assistant_chat_without_gateway", log.into_value());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn partial_policy_refresh_never_reenables_denied_memory_tools() {
+    let Some(mut agent) = AgentRun::start(chat()).await else {
+        return;
+    };
+    answer(
+        &agent,
+        "assistant.context",
+        [
+            ok(
+                json!({"enabled":true,"user":[],"notes":[],"capabilities":{"memory_search":false,"remote_recall":false,"delegation":false}}),
+            ),
+            ok(json!({"enabled":true,"user":[],"notes":[],"capabilities":{}})),
+            ok(
+                json!({"enabled":true,"user":[],"notes":[],"capabilities":{"memory_search":"true","remote_recall":null}}),
+            ),
+        ],
+    );
+    for n in 0..3 {
+        agent.push([pirc_conformance::ModelReply::Text("Done".into())]);
+        agent
+            .call(json!({"type":"prompt","message":format!("Turn {n}")}))
+            .await;
+        agent.settle().await;
+        agent.drain(Duration::from_millis(30)).await;
+        let requests = agent.take_requests();
+        assert_eq!(requests.len(), 1);
+        let tools = requests[0]["tools"].to_string();
+        assert!(!tools.contains("memory_search"), "{tools}");
+        assert!(!tools.contains("delegation_status"), "{tools}");
+    }
 }

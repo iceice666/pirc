@@ -1,12 +1,43 @@
 //! Observational memory settings (`features/memory/config.ts`
 //! `memoryConfigFrom`): `features.observationalMemory` with its defaults.
-//! Settings that do not fit the schema count as the defaults, all of them
-//! (the startup warning, `config::memory_config_warning`, says so).
+//! Fields are parsed independently; malformed control flags fail closed.
 
 use pirc_protocol::ThinkingLevel;
 use serde_json::{Map, Value};
 
 use crate::config::thinking_level;
+
+pub(crate) const THINKING_CHOICES: [&str; 7] =
+    ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+pub(crate) const MEMORY_KEYS: [&str; 18] = [
+    "enabled",
+    "passive",
+    "observeAfterTokens",
+    "reflectAfterTokens",
+    "observerChunkMaxTokens",
+    "compactAfterTokens",
+    "compactAfterTokensMode",
+    "compactAfterTokensRatio",
+    "observationsPoolMaxTokens",
+    "observationsPoolTargetTokens",
+    "agentMaxTurns",
+    "agentMaxTokens",
+    "model",
+    "fallbackModels",
+    "missingModelPolicy",
+    "rateLimitCooldownMs",
+    "showWorkerNotifications",
+    "workspace",
+];
+pub(crate) const MODEL_KEYS: [&str; 3] = ["provider", "id", "thinking"];
+pub(crate) const WORKSPACE_KEYS: [&str; 6] = [
+    "enabled",
+    "passive",
+    "model",
+    "fallbackModels",
+    "maxTokens",
+    "shutdownTimeoutMs",
+];
 
 /// `ModelChoice`.
 #[derive(Clone, Debug, PartialEq)]
@@ -86,7 +117,7 @@ impl Default for MemoryConfig {
 
 /// A model choice of valid settings; `max` (accepted for configs carried
 /// over from Pi) is the highest level.
-fn model_choice(value: &Value) -> ModelChoice {
+pub(crate) fn model_choice(value: &Value) -> ModelChoice {
     let text = |key: &str| value[key].as_str().unwrap_or_default().to_owned();
     ModelChoice {
         provider: text("provider"),
@@ -101,6 +132,13 @@ fn model_choice(value: &Value) -> ModelChoice {
     }
 }
 
+fn valid_model(v: &Value) -> bool {
+    v["provider"].as_str().is_some_and(|s| !s.is_empty())
+        && v["id"].as_str().is_some_and(|s| !s.is_empty())
+        && v.get("thinking")
+            .is_none_or(|t| t.as_str().is_some_and(|s| THINKING_CHOICES.contains(&s)))
+}
+
 /// `validateMemoryConfig(features).config`.
 pub fn parse_memory_config(features: &Map<String, Value>) -> MemoryConfig {
     let empty = Value::Object(Map::new());
@@ -110,10 +148,15 @@ pub fn parse_memory_config(features: &Map<String, Value>) -> MemoryConfig {
         .unwrap_or(&empty);
     let mut config = MemoryConfig::default();
     let boolean = |value: &Value, key: &str, out: &mut bool| {
-        if let Some(value) = value.get(key).and_then(Value::as_bool) {
-            *out = value;
+        if let Some(value) = value.get(key) {
+            *out = value.as_bool().unwrap_or(key == "passive");
         }
     };
+    if !raw.is_object() {
+        config.enabled = false;
+        config.passive = true;
+        config.workspace.enabled = false;
+    }
     let number = |value: &Value, key: &str| {
         value
             .get(key)
@@ -152,15 +195,14 @@ pub fn parse_memory_config(features: &Map<String, Value>) -> MemoryConfig {
         number(raw, "observationsPoolTargetTokens").map(|n| n as u64);
     positive(raw, "agentMaxTurns", &mut config.agent_max_turns);
     positive(raw, "agentMaxTokens", &mut config.agent_max_tokens);
-    let valid_model = |v: &&Value| {
-        v["provider"].as_str().is_some_and(|s| !s.is_empty())
-            && v["id"].as_str().is_some_and(|s| !s.is_empty())
-    };
-    config.model = raw.get("model").filter(valid_model).map(model_choice);
+    config.model = raw
+        .get("model")
+        .filter(|v| valid_model(v))
+        .map(model_choice);
     if let Some(models) = raw.get("fallbackModels").and_then(Value::as_array) {
         config.fallback_models = models
             .iter()
-            .filter(valid_model)
+            .filter(|v| valid_model(v))
             .map(model_choice)
             .collect();
     }
@@ -171,6 +213,9 @@ pub fn parse_memory_config(features: &Map<String, Value>) -> MemoryConfig {
         &mut config.rate_limit_cooldown_ms,
     );
     if let Some(workspace) = raw.get("workspace") {
+        if !workspace.is_object() {
+            config.workspace.enabled = false;
+        }
         boolean(workspace, "enabled", &mut config.workspace.enabled);
         positive(workspace, "maxTokens", &mut config.workspace.max_tokens);
         positive(
@@ -180,7 +225,10 @@ pub fn parse_memory_config(features: &Map<String, Value>) -> MemoryConfig {
         );
     }
     // Explicit canonical fields override legacy workspace fields individually.
-    if let Some(workspace) = features.get("workspaceMemory").filter(|v| v.is_object()) {
+    if let Some(workspace) = features.get("workspaceMemory") {
+        if !workspace.is_object() {
+            config.workspace.enabled = false;
+        }
         boolean(workspace, "enabled", &mut config.workspace.enabled);
         positive(workspace, "maxTokens", &mut config.workspace.max_tokens);
         positive(
@@ -219,27 +267,33 @@ pub fn workspace_config_from(features: &Map<String, Value>) -> MemoryConfig {
             .and_then(|v| v.get(key))
             .or_else(|| legacy.and_then(|v| v.get(key)))
     };
-    if let Some(passive) = field("passive").and_then(Value::as_bool) {
-        config.passive = passive;
-    }
+    let legacy_passive = config.passive
+        || legacy.is_some_and(|v| !v.is_object())
+        || legacy
+            .and_then(|v| v.get("passive"))
+            .is_some_and(|v| v.as_bool().unwrap_or(true));
+    config.passive = if features
+        .get("workspaceMemory")
+        .is_some_and(|v| !v.is_object())
+    {
+        true
+    } else {
+        canonical
+            .and_then(|c| c.get("passive"))
+            .map_or(legacy_passive, |v| v.as_bool().unwrap_or(true))
+    };
     if std::env::var("PIRC_MEMORY_PASSIVE").ok().is_some_and(|s| {
         ["1", "true", "yes", "on"].contains(&s.trim().to_ascii_lowercase().as_str())
     }) {
         config.passive = true;
     }
-    if let Some(model) = field("model").filter(|v| {
-        v["provider"].as_str().is_some_and(|s| !s.is_empty())
-            && v["id"].as_str().is_some_and(|s| !s.is_empty())
-    }) {
+    if let Some(model) = field("model").filter(|v| valid_model(v)) {
         config.model = Some(model_choice(model));
     }
     if let Some(models) = field("fallbackModels").and_then(Value::as_array) {
         config.fallback_models = models
             .iter()
-            .filter(|v| {
-                v["provider"].as_str().is_some_and(|s| !s.is_empty())
-                    && v["id"].as_str().is_some_and(|s| !s.is_empty())
-            })
+            .filter(|v| valid_model(v))
             .map(model_choice)
             .collect();
     }
@@ -289,7 +343,8 @@ mod tests {
             }]
         );
         for value in [json!(false), json!([]), json!("private-whole-object")] {
-            assert_eq!(parse(value), MemoryConfig::default());
+            let config = parse(value);
+            assert!(!config.enabled && !config.workspace.enabled && config.passive);
         }
         let ratio = parse(json!({ "compactAfterTokensMode": "ratio",
             "compactAfterTokensRatio": 0.5, "observationsPoolTargetTokens": 7,
@@ -308,5 +363,90 @@ mod tests {
         // Anything else is invalid: the whole object is the defaults.
         let invalid = parse(json!({ "missingModelPolicy": "strict", "enabled": false }));
         assert!(!invalid.enabled);
+    }
+}
+
+#[cfg(test)]
+mod compatibility_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn legacy_global_passive_survives_workspace_false_and_canonical_fields_are_independent() {
+        let features = json!({"observationalMemory":{"passive":true,"workspace":{"passive":false,"maxTokens":40000}},"workspaceMemory":{"model":{"provider":"p","id":"m"}}});
+        let config = workspace_config_from(features.as_object().unwrap());
+        assert!(config.passive);
+        assert_eq!(config.workspace.max_tokens, 40000);
+        assert_eq!(config.model.unwrap().id, "m");
+        // Test precedence without mutating the process environment used by parallel tests.
+        let mut features = features;
+        features["workspaceMemory"]["passive"] = json!(false);
+        let forced = std::env::var("PIRC_MEMORY_PASSIVE").ok().is_some_and(|s| {
+            ["1", "true", "yes", "on"].contains(&s.trim().to_ascii_lowercase().as_str())
+        });
+        assert_eq!(
+            workspace_config_from(features.as_object().unwrap()).passive,
+            forced
+        );
+        features["observationalMemory"]["enabled"] = json!(false);
+        assert!(
+            !workspace_config_from(features.as_object().unwrap())
+                .workspace
+                .enabled
+        );
+        features["workspaceMemory"]["enabled"] = json!(true);
+        assert!(
+            workspace_config_from(features.as_object().unwrap())
+                .workspace
+                .enabled
+        );
+    }
+    #[test]
+    fn malformed_control_flags_fail_closed_without_resetting_valid_fields() {
+        for input in [
+            json!({"workspaceMemory":{"enabled":"bad","maxTokens":123}}),
+            json!({"observationalMemory":{"enabled":"bad","observeAfterTokens":123}}),
+        ] {
+            let config = workspace_config_from(input.as_object().unwrap());
+            assert!(!config.workspace.enabled);
+        }
+        for input in [
+            json!({"observationalMemory":{"passive":"bad"}}),
+            json!({"observationalMemory":{"workspace":{"passive":"bad"}}}),
+            json!({"workspaceMemory":{"passive":"bad"}}),
+            json!({"workspaceMemory":false}),
+        ] {
+            assert!(workspace_config_from(input.as_object().unwrap()).passive);
+        }
+        let c=parse_memory_config(json!({"observationalMemory":{"enabled":false,"observeAfterTokens":123,"workspace":{"enabled":false,"maxTokens":999}}}).as_object().unwrap());
+        assert!(!c.enabled && !c.workspace.enabled);
+        assert_eq!(c.observe_after_tokens, 123);
+        assert_eq!(c.workspace.max_tokens, 999);
+    }
+}
+
+#[cfg(test)]
+mod precedence_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn explicit_work_fields_override_malformed_legacy_aliases_individually() {
+        let forced = std::env::var("PIRC_MEMORY_PASSIVE").ok().is_some_and(|s| {
+            ["1", "true", "yes", "on"].contains(&s.trim().to_ascii_lowercase().as_str())
+        });
+        for legacy in [Value::Null, json!(false), json!([]), json!("invalid")] {
+            let mut features = json!({"observationalMemory":{"enabled":false,"workspace":legacy},"workspaceMemory":{"enabled":true,"passive":false,"maxTokens":777,"model":{"provider":"fake","id":"m"}}});
+            let c = workspace_config_from(features.as_object().unwrap());
+            assert!(c.workspace.enabled);
+            assert_eq!(c.passive, forced);
+            assert_eq!(c.workspace.max_tokens, 777);
+            assert_eq!(c.model.as_ref().unwrap().id, "m");
+            features["workspaceMemory"]
+                .as_object_mut()
+                .unwrap()
+                .remove("passive");
+            assert!(workspace_config_from(features.as_object().unwrap()).passive);
+            features["workspaceMemory"]["passive"] = json!("bad");
+            assert!(workspace_config_from(features.as_object().unwrap()).passive);
+        }
     }
 }
